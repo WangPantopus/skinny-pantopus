@@ -66,6 +66,7 @@ private val LOGO_PROTRUDE = 34.dp
  * @param logoInitials Logo monogram. Falls back to initials derived from [name].
  * @param logoIcon Optional glyph rendered in the logo instead of initials.
  * @param verified Shows the logo verified disc + "· Verified" chip suffix.
+ * @param chipIcon Icon on the identity chip; null shows the label alone.
  * @param status Optional Open / Closed chip.
  */
 @Composable
@@ -79,6 +80,9 @@ fun BizBannerHeader(
     logoIcon: PantopusIcon? = null,
     verified: Boolean = true,
     status: BizStatusBadge? = null,
+    // Icon on the identity chip. Callers showing an unverified business pass
+    // null: the shield reads as a verification mark.
+    chipIcon: PantopusIcon? = PantopusIcon.ShieldCheck,
 ) {
     Column(
         modifier =
@@ -172,7 +176,7 @@ fun BizBannerHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Chip(
-                    icon = PantopusIcon.ShieldCheck,
+                    icon = chipIcon,
                     dot = null,
                     text = if (verified) "${identity.displayName} · Verified" else identity.displayName,
                     background = identity.backgroundColor,

@@ -56,6 +56,9 @@ public struct MailItemDetailShell<
     private let attachments: AttachmentsRowContent?
     private let senderContent: Sender
     private let actionsContent: Actions
+    /// Measured height of the sticky actions shelf; the scroll content leaves at least this much room below the last
+    /// card so it can scroll clear of the shelf.
+    @State private var actionsShelfHeight: CGFloat = 0
 
     public init(
         topBar: MailTopBarConfig,
@@ -106,6 +109,11 @@ public struct MailItemDetailShell<
                 .background(Theme.Color.appBg)
             }
             actionsShelf
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { height in
+                    actionsShelfHeight = height
+                }
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("mailItemDetailShell")
@@ -155,9 +163,10 @@ public struct MailItemDetailShell<
     }
 
     /// Leave room below the last card so the sticky actions shelf
-    /// doesn't cover content. Zero when there's no shelf.
+    /// doesn't cover content: the shelf's measured height (a tall shelf
+    /// used to hide the sender card), or a small gap when there's no shelf.
     private var actionsBottomInset: CGFloat {
-        Actions.self == EmptyView.self ? Spacing.s4 : Spacing.s16
+        Actions.self == EmptyView.self ? Spacing.s4 : max(Spacing.s16, actionsShelfHeight)
     }
 }
 

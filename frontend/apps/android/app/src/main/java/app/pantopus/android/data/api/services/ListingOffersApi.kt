@@ -3,6 +3,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.listing_offers.CounterListingOfferBody
+import app.pantopus.android.data.api.models.listing_offers.CreateListingOfferBody
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferResponseEnvelope
 import app.pantopus.android.data.api.models.listing_offers.ListingOffersResponse
 import retrofit2.http.Body
@@ -25,6 +26,16 @@ interface ListingOffersApi {
     suspend fun listOffers(
         @Path("listingId") listingId: String,
     ): ListingOffersResponse
+
+    /**
+     * `POST /api/listings/:listingId/offers` — route `backend/routes/listingOffers.js:58`. The buyer's offer; the
+     * seller sees it under "View offers" and is notified.
+     */
+    @POST("api/listings/{listingId}/offers")
+    suspend fun createOffer(
+        @Path("listingId") listingId: String,
+        @Body body: CreateListingOfferBody,
+    ): ListingOfferResponseEnvelope
 
     /**
      * `POST /api/listings/:listingId/offers/:offerId/accept` — route

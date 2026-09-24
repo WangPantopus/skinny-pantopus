@@ -43,10 +43,12 @@ function BookingRow({
   booking,
   et,
   tz,
+  readOnly,
 }: {
   booking: Booking;
   et?: EventTypeLite;
   tz?: string | null;
+  readOnly?: boolean;
 }) {
   const mode = et?.location_mode ?? "video";
   const Icon = LOCATION_ICON[mode] ?? CalendarClock;
@@ -55,11 +57,7 @@ function BookingRow({
   const title = et?.name ?? "Booking";
   const dur = durationLabel(booking.start_at, booking.end_at);
 
-  return (
-    <Link
-      href={`/app/scheduling/bookings/${booking.id}`}
-      className="block rounded-xl border border-app-border bg-app-surface p-3 shadow-sm transition-colors hover:bg-app-hover"
-    >
+  const content = (
       <div className="flex items-start gap-3">
         <div
           className={clsx(
@@ -100,7 +98,10 @@ function BookingRow({
           </div>
         </div>
       </div>
-    </Link>
+  );
+  const className = "block rounded-xl border border-app-border bg-app-surface p-3 shadow-sm transition-colors hover:bg-app-hover";
+  return readOnly ? <div className={className}>{content}</div> : (
+    <Link href={`/app/scheduling/bookings/${booking.id}`} className={className}>{content}</Link>
   );
 }
 
@@ -109,11 +110,13 @@ export default function AgendaSection({
   eventTypes,
   tz,
   paused,
+  readOnly,
 }: {
   bookings: Booking[];
   eventTypes: EventTypeLite[];
   tz?: string | null;
   paused?: boolean;
+  readOnly?: boolean;
 }) {
   const etMap = new Map(eventTypes.map((e) => [e.id, e]));
 
@@ -144,13 +147,13 @@ export default function AgendaSection({
         <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-app-text-secondary">
           Today &amp; upcoming
         </h2>
-        <Link
+        {!readOnly && <Link
           href="/app/scheduling/bookings"
           className="inline-flex items-center gap-0.5 text-xs font-semibold text-app-personal"
         >
           See all bookings
           <ChevronRight className="h-3 w-3" aria-hidden />
-        </Link>
+        </Link>}
       </div>
 
       {paused && (
@@ -190,6 +193,7 @@ export default function AgendaSection({
                   booking={b}
                   et={etMap.get(b.event_type_id ?? "")}
                   tz={tz}
+                  readOnly={readOnly}
                 />
               ))}
             </div>

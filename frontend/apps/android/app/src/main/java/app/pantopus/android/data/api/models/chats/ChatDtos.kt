@@ -48,7 +48,16 @@ data class ChatOtherIdentity(
     @Json(name = "avatarUrl") val avatarUrl: String? = null,
     @Json(name = "identity_kind") val identityKind: String? = null,
     val verified: Boolean? = null,
-)
+    val badges: List<String>? = null,
+) {
+    /**
+     * The serializer reports verification as a `verified_resident` badge
+     * (hidden when the person turns the badge off); an explicit `verified`
+     * flag wins when present.
+     */
+    val isVerified: Boolean
+        get() = verified ?: (badges?.contains("verified_resident") == true)
+}
 
 /**
  * One row in the unified-conversations response. Hetero by `_type`:

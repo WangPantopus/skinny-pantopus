@@ -480,13 +480,13 @@ class PrivacySettingsViewModel
         }
 
         fun onTapRow(rowId: String) {
-            // "appLockOpenSettings" is handled in the screen (needs Context).
-            // Download your data / What we collect open dedicated GDPR flows
-            // tracked outside this package.
+            // "appLockOpenSettings", "downloadData" and "whatWeCollect" are
+            // handled in the screen (they need Context or navigation).
             if (rowId == ROW_DELETE_ACCOUNT) {
                 _deleteAccountError.value = null
                 _deleteSheetVisible.value = true
             }
+            if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
         }
 
         fun consumeToast() {
@@ -699,25 +699,34 @@ class PrivacySettingsViewModel
          * Radio labels + helper copy are RN's
          * (`settings/privacy.tsx:20-33`, `:476-556`) word for word.
          */
-        private fun searchPrivacyGroup(): GroupedListGroup =
-            GroupedListGroup(
+        private fun searchPrivacyGroup(): GroupedListGroup {
+            // The card has no pull-to-refresh; after a failed load this row is the way back.
+            val retry =
+                GroupedListRow(
+                    id = ROW_SEARCH_PRIVACY_RETRY,
+                    label = "Try again",
+                    control = RowControl.Chevron,
+                    testTag = "search-privacy-retry",
+                ).takeIf { searchPrivacyLoadFailed }
+            return GroupedListGroup(
                 id = PrivacyCatalog.SEARCH_PRIVACY,
                 overline = "Find me in search",
                 helper =
                     if (searchPrivacyLoadFailed) {
-                        "Search privacy could not load. Pull to refresh before changing this setting."
+                        "Search privacy could not load. Try again before changing this setting."
                     } else {
                         PrivacyCatalog.searchVisibilityHelp[searchVisibility]
                     },
                 rows =
-                    PrivacyCatalog.searchVisibilityOptions.map { option ->
-                        GroupedListRow(
-                            id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
-                            label = option.label,
-                            control = RowControl.Radio(option.key == searchVisibility),
-                            testTag = "search-visibility-${option.key}",
-                        )
-                    } +
+                    listOfNotNull(retry) +
+                        PrivacyCatalog.searchVisibilityOptions.map { option ->
+                            GroupedListRow(
+                                id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
+                                label = option.label,
+                                control = RowControl.Radio(option.key == searchVisibility),
+                                testTag = "search-visibility-${option.key}",
+                            )
+                        } +
                         GroupedListRow(
                             id = ROW_FINDABLE_BY_NAME,
                             label = "Find me by real name",
@@ -728,6 +737,7 @@ class PrivacySettingsViewModel
                             testTag = "findable-by-name-switch",
                         ),
             )
+        }
 
         private fun biometricSecurityGroup(): GroupedListGroup {
             val label = appLock.biometricLabel.value
@@ -779,7 +789,9 @@ class PrivacySettingsViewModel
                         GroupedListRow(
                             id = "downloadData",
                             label = "Download your data",
-                            subtext = "ZIP of profile, tasks, messages — emailed to you",
+                            // Export is by request (the Data export screen emails
+                            // the privacy team); there is no automated ZIP yet.
+                            subtext = "Request a copy by email",
                             control = RowControl.Chevron,
                             leadingIcon = PantopusIcon.Download,
                         ),
@@ -822,6 +834,7 @@ internal const val PASSWORDLESS_DELETE_HELP =
     "Biometric verification isn't set up on this device. Sign in again with Google or Apple, then try again."
 private const val ROW_FINDABLE_BY_NAME = "findableByName"
 private const val ROW_DELETE_ACCOUNT = "deleteAccount"
+private const val ROW_SEARCH_PRIVACY_RETRY = "searchPrivacyRetry"
 
 /**
  * A14.7 privacy catalog — the search-visibility options and helper copy.

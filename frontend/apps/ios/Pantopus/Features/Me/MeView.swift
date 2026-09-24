@@ -140,10 +140,13 @@ public struct MeView: View {
                     }
                     if let progress = viewModel.inviteProgress {
                         InviteProgressCard(
-                            progress: progress
-                        ) { systemSheet = .share(items: [viewModel.inviteShareMessage]) }
-                            .padding(.horizontal, Spacing.s4)
-                            .padding(.top, Spacing.s4)
+                            progress: progress,
+                            onShare: viewModel.inviteShareMessage.map { message in
+                                { @MainActor in systemSheet = .share(items: [message]) }
+                            }
+                        )
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s4)
                     }
                 }
                 ForEach(active.sections) { section in

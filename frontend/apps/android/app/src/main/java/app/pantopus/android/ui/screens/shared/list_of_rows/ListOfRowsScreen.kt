@@ -19,6 +19,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -77,6 +79,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
@@ -231,16 +234,20 @@ fun ListOfRowsScreen(
                     ListOfRowsUiState.Loading -> LoadingRows()
                     is ListOfRowsUiState.Loaded -> LoadedList(state, banner, listingContext, monoFooter, onEndReached)
                     is ListOfRowsUiState.Empty ->
-                        EmptyState(
-                            icon = state.icon,
-                            headline = state.headline,
-                            subcopy = state.subcopy,
-                            ctaTitle = state.ctaTitle,
-                            onCta = state.onCta,
-                            tint = state.tint ?: PantopusColors.personalBg,
-                            accent = state.accent ?: PantopusColors.primary600,
-                        )
-                    is ListOfRowsUiState.Error -> ErrorBanner(state.message, onRetry = onRefresh)
+                        RefreshableFill { minHeight ->
+                            EmptyState(
+                                icon = state.icon,
+                                headline = state.headline,
+                                subcopy = state.subcopy,
+                                modifier = Modifier.heightIn(min = minHeight),
+                                ctaTitle = state.ctaTitle,
+                                onCta = state.onCta,
+                                tint = state.tint ?: PantopusColors.personalBg,
+                                accent = state.accent ?: PantopusColors.primary600,
+                            )
+                        }
+                    is ListOfRowsUiState.Error ->
+                        RefreshableFill { ErrorBanner(state.message, onRetry = onRefresh) }
                 }
                 PullRefreshIndicator(
                     refreshing = state is ListOfRowsUiState.Loading,
@@ -249,6 +256,21 @@ fun ListOfRowsScreen(
                     contentColor = PantopusColors.primary600,
                 )
             }
+        }
+    }
+}
+
+/**
+ * `pullRefresh` only reacts to nested scroll, so a state that doesn't scroll
+ * (empty, error) ignored the pull. This gives it a scroll container the
+ * height of the viewport; [content] gets that height to keep centred layouts.
+ */
+@Composable
+private fun RefreshableFill(content: @Composable (minHeight: Dp) -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val minHeight = maxHeight
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            content(minHeight)
         }
     }
 }

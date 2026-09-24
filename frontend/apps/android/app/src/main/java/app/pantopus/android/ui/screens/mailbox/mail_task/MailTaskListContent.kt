@@ -71,4 +71,6 @@ enum class MailTaskListMode { List, Create }
 data class MailTaskListAlert(
     val title: String,
     val message: String,
+    /** When set, the alert's button is "Open task" and opens this task. */
+    val openTaskId: String? = null,
 )

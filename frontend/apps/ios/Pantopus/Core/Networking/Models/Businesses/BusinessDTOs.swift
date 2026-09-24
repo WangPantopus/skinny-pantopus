@@ -209,15 +209,27 @@ public struct BusinessUserDetailDTO: Decodable, Sendable, Hashable, Identifiable
     }
 }
 
-/// Geo point projection — `[longitude, latitude]` or `{lat, lng}` shape
-/// (the backend normalises PostGIS into `{lat, lng}` via
-/// `parsePostGISPoint`).
+/// Geo point projection. The backend's `parsePostGISPoint`
+/// (`backend/routes/businesses.js`) sends `{longitude, latitude}`; the older
+/// `{lat, lng}` shape is still accepted.
 public struct BusinessGeoPoint: Decodable, Sendable, Hashable {
     public let lat: Double
     public let lng: Double
 
     private enum CodingKeys: String, CodingKey {
-        case lat, lng
+        case lat, lng, latitude, longitude
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let latitude = try c.decodeIfPresent(Double.self, forKey: .latitude),
+           let longitude = try c.decodeIfPresent(Double.self, forKey: .longitude) {
+            lat = latitude
+            lng = longitude
+        } else {
+            lat = try c.decode(Double.self, forKey: .lat)
+            lng = try c.decode(Double.self, forKey: .lng)
+        }
     }
 }
 
@@ -341,6 +353,9 @@ public struct BusinessProfileDetailDTO: Decodable, Sendable, Hashable {
     public let isPublished: Bool?
     public let publishedAt: String?
     public let verificationStatus: String?
+    /// `bi0_unverified` … `bi4_authority`; the verified mark and claims
+    /// follow this, as on My businesses and the owner header.
+    public let identityVerificationTier: String?
     public let primaryLocation: BusinessLocationDTO?
     /// Free-form profile attributes (e.g. `price_level`).
     public let attributes: [String: JSONValue]?
@@ -366,6 +381,7 @@ public struct BusinessProfileDetailDTO: Decodable, Sendable, Hashable {
         case isPublished = "is_published"
         case publishedAt = "published_at"
         case verificationStatus = "verification_status"
+        case identityVerificationTier = "identity_verification_tier"
         case primaryLocation = "primary_location"
         case attributes
         case socialLinks = "social_links"

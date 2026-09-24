@@ -681,11 +681,12 @@ public struct ChatConversationView: View {
         }
     }
 
-    /// A15 `.empty .trust` — "Private between verified neighbors" pill.
+    /// A15 `.empty .trust` pill. It doesn't claim either side is verified:
+    /// the thread doesn't know the viewer's own verification.
     private var emptyTrustPill: some View {
         HStack(spacing: 5) {
             Icon(.shieldCheck, size: 11, strokeWidth: 2.5, color: Theme.Color.success)
-            Text("Private between verified neighbors")
+            Text("Private conversation")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
@@ -710,7 +711,7 @@ extension ChatConversationView {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.top, 16)
-                Text("I use your verified neighbors, tasks, and mailbox to give answers that fit your block.")
+                Text("I can draft tasks, listings, and posts, and I use your saved places to fit answers to your area.")
                     .font(.system(size: 13))
                     .lineSpacing(5)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -813,7 +814,7 @@ extension ChatConversationView {
                     Text("Hi — I'm Pantopus AI")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
-                    Text("I can use your verified neighbors, tasks, and mailbox to help.")
+                    Text("I can draft tasks, listings, and posts, and use your saved places to help.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1654,10 +1655,12 @@ private struct ChatConversationHeader: View {
             return creatorContext.fanSubtitle
         }
         switch counterparty {
-        case let .person(_, _, locality, _, online):
-            let prefix = online ? "Active now" : "Verified neighbor"
-            if let locality { return "\(prefix) · \(locality)" }
-            return prefix
+        case let .person(_, _, locality, verified, online):
+            // "Verified neighbor" only when the person's verified badge
+            // says so; otherwise the locality alone, or no subtitle.
+            let status: String? = online ? "Active now" : (verified ? "Verified neighbor" : nil)
+            let parts = [status, locality].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
         case let .group(_, memberCount):
             return memberCount.map { "\($0) members" }
         case .ai:

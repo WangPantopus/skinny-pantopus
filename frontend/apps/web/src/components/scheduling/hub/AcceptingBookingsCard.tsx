@@ -31,7 +31,7 @@ export default function AcceptingBookingsCard({
         <IconTile icon={CalendarCheck} pillar={pillar} />
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold text-app-text">
-            Accepting bookings
+            {page.is_paused ? "Bookings are paused" : "Accepting bookings"}
           </p>
           <p className="mt-0.5 text-[11.5px] text-app-text-secondary">
             Managed by the owner

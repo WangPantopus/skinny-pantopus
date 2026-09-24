@@ -67,6 +67,7 @@ public struct BizStatusBadge: Hashable, Sendable {
 ///   - logoInitials: Logo monogram. Falls back to initials derived from `name`.
 ///   - logoIcon: Optional glyph rendered in the logo instead of initials.
 ///   - verified: Shows the logo verified disc + "· Verified" chip suffix.
+///   - chipIcon: Icon on the identity chip; `nil` shows the label alone.
 ///   - status: Optional Open / Closed chip.
 @MainActor
 public struct BizBannerHeader: View {
@@ -78,6 +79,9 @@ public struct BizBannerHeader: View {
     private let logoIcon: PantopusIcon?
     private let verified: Bool
     private let status: BizStatusBadge?
+    /// Icon on the identity chip. Callers showing an unverified business
+    /// pass `nil`: the shield reads as a verification mark.
+    private let chipIcon: PantopusIcon?
 
     public init(
         identity: IdentityPillar = .business,
@@ -87,7 +91,8 @@ public struct BizBannerHeader: View {
         logoInitials: String? = nil,
         logoIcon: PantopusIcon? = nil,
         verified: Bool = true,
-        status: BizStatusBadge? = nil
+        status: BizStatusBadge? = nil,
+        chipIcon: PantopusIcon? = .shieldCheck
     ) {
         self.identity = identity
         self.name = name
@@ -97,6 +102,7 @@ public struct BizBannerHeader: View {
         self.logoIcon = logoIcon
         self.verified = verified
         self.status = status
+        self.chipIcon = chipIcon
     }
 
     public var body: some View {
@@ -214,7 +220,7 @@ public struct BizBannerHeader: View {
 
     private var verifiedChip: some View {
         chip(
-            icon: .shieldCheck,
+            icon: chipIcon,
             dot: nil,
             text: verified ? "\(identity.displayName) · Verified" : identity.displayName,
             background: identity.backgroundColor,

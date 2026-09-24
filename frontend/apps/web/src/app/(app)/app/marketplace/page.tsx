@@ -225,7 +225,6 @@ export default function MarketplacePage() {
       switch (f) {
         case 'free': params.is_free = true; break;
         case 'wanted': params.is_wanted = true; break;
-        case 'trusted': params.trust_only = true; break;
         case 'nearby':
           if (userLocation) {
             const nearBounds = boundsFromCenter(userLocation.latitude, userLocation.longitude, 1);
