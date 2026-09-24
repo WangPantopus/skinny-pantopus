@@ -107,6 +107,7 @@ fun FeedScreen(
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
+    val loadMoreError by viewModel.loadMoreError.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     // The VM is configured in a LaunchedEffect, so the host's `surface`
     // argument stays authoritative for the chrome that must not flash
@@ -309,6 +310,8 @@ fun FeedScreen(
                             isRefreshing = isRefreshing,
                             onRefresh = viewModel::refresh,
                             isLoadingMore = isLoadingMore,
+                            loadMoreError = loadMoreError,
+                            onRetryLoadMore = viewModel::retryLoadMore,
                             onRowAppeared = viewModel::loadMoreIfNeeded,
                             searchActive = searchText.isNotBlank(),
                             rowActions =
@@ -1020,6 +1023,8 @@ private fun PopulatedFrame(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     isLoadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onRetryLoadMore: () -> Unit = {},
     onRowAppeared: (String) -> Unit = {},
     searchActive: Boolean = false,
     rowActions: PulseFeedRowActions = PulseFeedRowActions(),
@@ -1068,6 +1073,25 @@ private fun PopulatedFrame(
                         contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    }
+                }
+            }
+            loadMoreError?.let { message ->
+                item {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(Spacing.s3)
+                                .testTag("pulseFeedLoadMoreError"),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = message,
+                            color = PantopusColors.appTextSecondary,
+                            textAlign = TextAlign.Center,
+                        )
+                        TextButton(onClick = onRetryLoadMore) { Text("Try again") }
                     }
                 }
             }

@@ -187,6 +187,8 @@ class PulseFeedViewModel
         /** True while a next-page fetch is in flight (drives the list footer). */
         private val _isLoadingMore = MutableStateFlow(false)
         val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+        private val _loadMoreError = MutableStateFlow<String?>(null)
+        val loadMoreError: StateFlow<String?> = _loadMoreError.asStateFlow()
 
         /** Client-side search over the loaded pages. */
         private val _searchText = MutableStateFlow("")
@@ -471,9 +473,14 @@ class PulseFeedViewModel
          * No-ops while a fetch is in flight or when the feed is exhausted.
          */
         fun loadMoreIfNeeded(rowId: String) {
-            if (!hasMore || _isLoadingMore.value || loading) return
+            if (!hasMore || _isLoadingMore.value || loading || _loadMoreError.value != null) return
             val lastId = visiblePosts().lastOrNull()?.id ?: return
             if (rowId != lastId) return
+            fetchNextPage()
+        }
+
+        fun retryLoadMore() {
+            if (!hasMore || _isLoadingMore.value || loading) return
             fetchNextPage()
         }
 
@@ -730,6 +737,7 @@ class PulseFeedViewModel
             val cursorCreatedAt = nextCursorCreatedAt ?: return
             val cursorId = nextCursorId ?: return
             val generation = fetchGeneration
+            _loadMoreError.value = null
             _isLoadingMore.value = true
             viewModelScope.launch {
                 try {
@@ -758,7 +766,10 @@ class PulseFeedViewModel
                             applyPagination(result.data.pagination)
                             rebuildLoadedState()
                         }
-                        is NetworkResult.Failure -> Unit // keep the loaded rows; retry on next appear
+                        is NetworkResult.Failure -> {
+                            if (generation != fetchGeneration) return@launch
+                            _loadMoreError.value = result.error.displayMessage("Couldn't load more posts.")
+                        }
                     }
                 } finally {
                     if (generation == fetchGeneration) _isLoadingMore.value = false
@@ -810,6 +821,7 @@ class PulseFeedViewModel
         private fun fetch(isRefresh: Boolean = false) {
             val generation = ++fetchGeneration
             _isLoadingMore.value = false
+            _loadMoreError.value = null
             loading = true
             if (isRefresh) _isRefreshing.value = true
             if (_state.value !is PulseFeedUiState.Loaded) {
