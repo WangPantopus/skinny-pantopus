@@ -74,7 +74,7 @@ export function LinksWell({ links }: { links: BallotOfficialLink[] }) {
 export function NoticeWell({ lead, detail }: { lead: string; detail?: string | null }) {
   return (
     <div className="flex items-center gap-[10px] rounded-[14px] bg-app-warning-bg px-3 py-[10px] text-app-warning">
-      <Calendar size={18} strokeWidth={2} className="min-w-0" aria-hidden="true" />
+      <Calendar size={18} strokeWidth={2} className="shrink-0" aria-hidden="true" />
       <span className="text-[13.5px] leading-[19px]">
         <strong className="font-semibold">{lead}</strong>
         {detail ? ` ${detail}` : null}

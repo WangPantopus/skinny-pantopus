@@ -55,7 +55,7 @@ export default function BallotTodayCard({ data, ballotHref }: BallotTodayCardPro
           rel="noopener noreferrer"
           className="flex items-center gap-[10px] rounded-xl bg-app-warning-bg px-[14px] py-3 text-app-warning no-underline hover:text-app-warning"
         >
-          <Calendar size={18} strokeWidth={2} className="min-w-0" aria-hidden="true" />
+          <Calendar size={18} strokeWidth={2} className="shrink-0" aria-hidden="true" />
           <span className="text-[13.5px] leading-[19px]">
             {mover.text} {daysLeft(mover.days_left)}
           </span>

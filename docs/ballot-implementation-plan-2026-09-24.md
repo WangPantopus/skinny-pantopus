@@ -156,7 +156,7 @@ The teaser is a card under the aha card (guide 5.8). The frame matches the Place
 - The overline "On record for this address" in green (11/16, 600, 0.07em tracking).
 - An h1 at 24/30, 700, −0.015em.
 - The stack SVG (196×168, section 6.4 geometry, scale 0.45, gap 14, stroke 1.25) beside the legend column (13/18, gap 12).
-- The needs-action well: `#fffbeb` / `#9a4a08`, radius 14, padding 10×12, an 18 calendar icon, 13.5/19 text with the lead sentence at 600.
+- The needs-action well: `#fffbeb` / `#9a4a08`, radius 14, padding 10×12, an 18 calendar icon, 13.5/19 text with the lead sentence at 600. The icon never shrinks. The canvas's flex row squeezed it to about 12 beside two lines of text, where it read as a bullet. Decided September 24: it stays 18 on every well (one text line tall, the size of the 16 link icons and 19 glyph near it), and the boards now pin it too.
 - A primary button 46 tall, then the source line (12.5/18 muted).
 
 In P0:
