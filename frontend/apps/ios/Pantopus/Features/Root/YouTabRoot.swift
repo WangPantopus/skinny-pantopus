@@ -1373,6 +1373,18 @@ public struct YouTabRoot: View {
                     Task { @MainActor in
                         path.append(.editListing(listingId: dto.id, jumpToStep: nil))
                     }
+                },
+                onFindSimilar: {
+                    Task { @MainActor in
+                        // Back to the marketplace this listing was opened from, else open it.
+                        if path.contains(.marketplace) {
+                            while let last = path.last, last != .marketplace {
+                                path.removeLast()
+                            }
+                        } else {
+                            path.append(.marketplace)
+                        }
+                    }
                 }
             )
         case let .listingOffers(listingId, titleHint):

@@ -54,6 +54,15 @@ public enum CheckoutOutcome: Sendable, Equatable {
 
 @MainActor
 public final class CheckoutCoordinator {
+    /// A submitted sheet can precede its webhook. Retain IDs across screen re-entry,
+    /// never an inferred paid state or any provider credentials.
+    private struct ListingConfirmation: Hashable {
+        let userId: String
+        let listingId: String
+        let offerId: String
+    }
+
+    private static var pendingListingConfirmations: Set<ListingConfirmation> = []
     private let api: APIClient
     private let presenter: any PaymentSheetPresenting
 
@@ -64,6 +73,22 @@ public final class CheckoutCoordinator {
     init(api: APIClient, presenter: any PaymentSheetPresenting) {
         self.api = api
         self.presenter = presenter
+    }
+
+    public func markListingConfirmationPending(userId: String, listingId: String, offerId: String) {
+        Self.pendingListingConfirmations.insert(.init(userId: userId, listingId: listingId, offerId: offerId))
+    }
+
+    public func isListingConfirmationPending(userId: String?, listingId: String) -> Bool {
+        Self.pendingListingConfirmations.contains { $0.userId == userId && $0.listingId == listingId }
+    }
+
+    public func reconcileListingConfirmation(userId: String, listingId: String, offer: ListingOfferDTO) {
+        guard let summary = offer.checkout else { return }
+        let resolved = ["authorized", "processing", "paid", "refund_pending", "partially_refunded", "refunded", "disputed"]
+        let retry = summary.state == "retry" && summary.canContinue && summary.paymentStatus == "authorization_failed"
+        guard resolved.contains(summary.state) || retry else { return }
+        Self.pendingListingConfirmations.remove(.init(userId: userId, listingId: listingId, offerId: offer.id))
     }
 
     /// Create a PaymentIntent for the order, then present PaymentSheet.

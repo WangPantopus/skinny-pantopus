@@ -29,6 +29,18 @@ async function fetchTrade(tradeId) {
 
 // ─── Public API ──────────────────────────────────────────────
 
+// Put listings held by this accept attempt (pending_pickup) back on sale when it can't finish.
+// A failed rollback is logged, since the caller is already failing.
+async function releaseHeldListings(listingIds) {
+  if (!listingIds || listingIds.length === 0) return;
+  const { error } = await supabaseAdmin
+    .from('Listing')
+    .update({ status: 'active', updated_at: new Date().toISOString() })
+    .in('id', listingIds)
+    .eq('status', 'pending_pickup');
+  if (error) logger.error('trade.release_listings_error', { error: error.message, listingIds });
+}
+
 async function proposeTrade({ targetListingId, proposerId, offeredListingIds, message, cashSupplement }) {
   // 1. Fetch target listing — verify active and open to trades
   const { data: targetListing, error: listingErr } = await supabaseAdmin
@@ -148,6 +160,25 @@ async function respondToTrade({ tradeId, targetUserId, action }) {
   }
 
   if (action === 'accept') {
+    // Hold every listing in the trade first: active -> pending_pickup (the listing_status enum has no
+    // 'reserved'). Only active listings match, so a listing already promised elsewhere stops the accept, and a
+    // failed write fails it instead of leaving the listings on sale.
+    const listingIds = [trade.target_listing_id, ...(trade.offered_listing_ids || [])];
+    const { data: held, error: holdErr } = await supabaseAdmin
+      .from('Listing')
+      .update({ status: 'pending_pickup', updated_at: new Date().toISOString() })
+      .in('id', listingIds)
+      .eq('status', 'active')
+      .select('id');
+
+    if (holdErr) throw new Error(`Failed to hold the trade's listings: ${holdErr.message}`);
+    if (!held || held.length !== listingIds.length) {
+      await releaseHeldListings((held || []).map(l => l.id));
+      const err = new Error('A listing in this trade is no longer available');
+      err.status = 409;
+      throw err;
+    }
+
     // Update trade status
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('ListingTrade')
@@ -156,20 +187,9 @@ async function respondToTrade({ tradeId, targetUserId, action }) {
       .select()
       .single();
 
-    if (updateErr) throw new Error(`Failed to accept trade: ${updateErr.message}`);
-
-    // Reserve target listing
-    await supabaseAdmin
-      .from('Listing')
-      .update({ status: 'reserved' })
-      .eq('id', trade.target_listing_id);
-
-    // Reserve all offered listings
-    if (trade.offered_listing_ids && trade.offered_listing_ids.length > 0) {
-      await supabaseAdmin
-        .from('Listing')
-        .update({ status: 'reserved' })
-        .in('id', trade.offered_listing_ids);
+    if (updateErr) {
+      await releaseHeldListings(listingIds);
+      throw new Error(`Failed to accept trade: ${updateErr.message}`);
     }
 
     // Notify proposer (non-blocking)
@@ -232,18 +252,21 @@ async function completeTrade({ tradeId, userId }) {
 
   if (updateErr) throw new Error(`Failed to complete trade: ${updateErr.message}`);
 
-  // Mark target listing as traded
-  await supabaseAdmin
+  // Mark every listing in the trade as gone: 'sold' (the listing_status enum has no 'traded').
+  const tradedIds = [trade.target_listing_id, ...(trade.offered_listing_ids || [])];
+  const now = new Date().toISOString();
+  const { error: soldErr } = await supabaseAdmin
     .from('Listing')
-    .update({ status: 'traded' })
-    .eq('id', trade.target_listing_id);
+    .update({ status: 'sold', sold_at: now, updated_at: now })
+    .in('id', tradedIds);
 
-  // Mark all offered listings as traded
-  if (trade.offered_listing_ids && trade.offered_listing_ids.length > 0) {
-    await supabaseAdmin
-      .from('Listing')
-      .update({ status: 'traded' })
-      .in('id', trade.offered_listing_ids);
+  if (soldErr) {
+    const { error: revertErr } = await supabaseAdmin
+      .from('ListingTrade')
+      .update({ status: 'accepted', completed_at: null, updated_at: new Date().toISOString() })
+      .eq('id', tradeId);
+    if (revertErr) logger.error('trade.complete.revert_error', { error: revertErr.message, tradeId });
+    throw new Error(`Failed to mark the trade's listings sold: ${soldErr.message}`);
   }
 
   // Notify both parties (non-blocking)
@@ -285,13 +308,8 @@ async function cancelTrade({ tradeId, userId }) {
 
   if (updateErr) throw new Error(`Failed to cancel trade: ${updateErr.message}`);
 
-  // Revert any reserved listings back to active (safety — shouldn't happen for 'proposed' trades)
-  const allListingIds = [trade.target_listing_id, ...(trade.offered_listing_ids || [])];
-  await supabaseAdmin
-    .from('Listing')
-    .update({ status: 'active' })
-    .in('id', allListingIds)
-    .eq('status', 'reserved');
+  // A proposed trade owns no listing hold. A listing may now be held for a different accepted
+  // trade or offer, so cancelling this proposal must leave every listing's status unchanged.
 
   return { trade: updated };
 }

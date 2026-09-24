@@ -4637,6 +4637,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEditListing = { dto ->
                             navController.navigate(ChildRoutes.editListing(dto.id))
                         },
+                        onFindSimilar = {
+                            // Back to the marketplace this listing was opened from, else open it.
+                            if (!navController.popBackStack(ChildRoutes.MARKETPLACE, inclusive = false)) {
+                                navController.navigate(ChildRoutes.MARKETPLACE)
+                            }
+                        },
                     )
                 }
                 composable(

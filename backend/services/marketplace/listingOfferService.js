@@ -10,6 +10,8 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
+const { PAYMENT_STATES } = require('../../stripe/paymentStateMachine');
+const stripeService = require('../../stripe/stripeService');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -46,6 +48,72 @@ async function getUserName(userId) {
   if (data.first_name) return data.first_name;
   if (data.username) return data.username;
   return 'Someone';
+}
+
+// Safe display state for the buyer's existing checkout. Intent creation still
+// revalidates identity, amount, listing and payment terms in routes/pays.js.
+async function buyerCheckoutSummary({ offer, listing, buyerId }) {
+  if (offer.buyer_id !== buyerId || offer.status !== 'accepted') return undefined;
+  const amount = Math.round(Number(offer.amount) * 100);
+  if (listing.is_free || listing.listing_type === 'free_item' || !Number.isSafeInteger(amount) || amount < 50) {
+    return { state: 'not_payable', can_continue: false };
+  }
+  const unavailable = { state: 'unavailable', can_continue: false };
+  if (offer.seller_id !== listing.user_id || !['active', 'pending_pickup'].includes(listing.status)) return unavailable;
+  const metadata = { type: 'listing_offer_checkout', listing_id: offer.listing_id, offer_id: offer.id };
+  const { data, error } = await supabaseAdmin.from('Payment')
+    .select('payment_type, gig_id, payer_id, payee_id, amount_total, currency, payment_status, stripe_payment_intent_id, stripe_customer_id, metadata')
+    .eq('payment_type', 'gig_payment').is('gig_id', null).contains('metadata', metadata)
+    .order('created_at', { ascending: false }).limit(10);
+  if (error) {
+    logger.warn('Could not read listing checkout state', { offerId: offer.id });
+    return unavailable;
+  }
+  // Same matching/ignored-state rules as resolveExistingCheckoutIntent. Never
+  // choose a convenient row while another active row conflicts with the order.
+  const active = (data || []).filter(payment =>
+    Object.entries(metadata).every(([key, value]) => String(payment.metadata?.[key] || '') === String(value))
+    && ![PAYMENT_STATES.CANCELED, 'failed'].includes(String(payment.payment_status || '').toLowerCase()));
+  if (active.some(payment => String(payment.payer_id) !== String(buyerId)
+      || String(payment.payee_id) !== String(offer.seller_id) || Number(payment.amount_total) !== amount)) return unavailable;
+  const knownStatuses = new Set([
+    PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.AUTHORIZATION_FAILED,
+    PAYMENT_STATES.CAPTURE_PENDING, PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED,
+    PAYMENT_STATES.TRANSFER_PENDING, PAYMENT_STATES.TRANSFERRED, PAYMENT_STATES.REFUND_PENDING,
+    PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL, PAYMENT_STATES.DISPUTED,
+    'pending', 'requires_payment_method', 'requires_confirmation', 'processing', 'succeeded', 'refunded', 'partially_refunded',
+  ]);
+  if (active.some(payment => !knownStatuses.has(String(payment.payment_status || '').toLowerCase()))) return unavailable;
+  const payment = active[0];
+  if (!payment) return { state: 'ready', can_continue: true };
+  const status = String(payment.payment_status || '').toLowerCase();
+  const summary = (state, canContinue = false) => ({ state, can_continue: canContinue, payment_status: status });
+  if (status === PAYMENT_STATES.AUTHORIZATION_FAILED) return summary('retry', true);
+  if ([PAYMENT_STATES.AUTHORIZE_PENDING, 'pending', 'requires_payment_method', 'requires_confirmation'].includes(status)) {
+    if (!payment.stripe_payment_intent_id) return unavailable;
+    try {
+      const intent = await stripeService.readListingCheckoutIntent(payment);
+      if (['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(intent.status)) {
+        return summary('pending', true);
+      }
+      if (intent.status === 'requires_capture') return summary('authorized');
+      // A provider result cannot establish recorded settlement. Wait for the
+      // existing webhook before projecting a durable paid state.
+      if (['processing', 'succeeded'].includes(intent.status)) return summary('processing');
+    } catch (_error) {
+      logger.warn('Could not verify listing checkout state', { offerId: offer.id });
+    }
+    return unavailable;
+  }
+  if (status === PAYMENT_STATES.AUTHORIZED) return summary('authorized');
+  if ([PAYMENT_STATES.CAPTURE_PENDING, 'processing'].includes(status)) return summary('processing');
+  if ([PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED, PAYMENT_STATES.TRANSFER_PENDING,
+    PAYMENT_STATES.TRANSFERRED, 'succeeded'].includes(status)) return summary('paid');
+  if (status === PAYMENT_STATES.REFUND_PENDING) return summary('refund_pending');
+  if ([PAYMENT_STATES.REFUNDED_PARTIAL, 'partially_refunded'].includes(status)) return summary('partially_refunded');
+  if ([PAYMENT_STATES.REFUNDED_FULL, 'refunded'].includes(status)) return summary('refunded');
+  if (status === PAYMENT_STATES.DISPUTED) return summary('disputed');
+  return unavailable;
 }
 
 // ─── createOffer ─────────────────────────────────────────────
@@ -216,11 +284,31 @@ async function acceptOffer({ offerId, userId }) {
   // 0. Verify listing is still active
   const { data: offerListing } = await supabaseAdmin
     .from('Listing')
-    .select('status')
+    .select('status, active_offer_count')
     .eq('id', offer.listing_id)
     .single();
 
-  if (!offerListing || (offerListing.status !== 'active' && offerListing.status !== 'reserved')) {
+  if (!offerListing || offerListing.status !== 'active') {
+    const err = new Error('Listing is no longer available');
+    err.status = 409;
+    throw err;
+  }
+
+  // 0b. Hold the listing for this buyer: active -> pending_pickup ("promised to a buyer, awaiting handoff"; the
+  // listing_status enum has no 'reserved'). The update only matches an active listing, so two accepts can't both
+  // win, and a failed write fails the accept instead of leaving the listing on sale.
+  const { data: held, error: holdErr } = await supabaseAdmin
+    .from('Listing')
+    .update({ status: 'pending_pickup', active_offer_count: 0, updated_at: new Date().toISOString() })
+    .eq('id', offer.listing_id)
+    .eq('status', 'active')
+    .select('id');
+
+  if (holdErr) {
+    logger.error('Failed to hold listing for accepted offer', { error: holdErr.message, offerId });
+    throw holdErr;
+  }
+  if (!held || held.length === 0) {
     const err = new Error('Listing is no longer available');
     err.status = 409;
     throw err;
@@ -246,14 +334,17 @@ async function acceptOffer({ offerId, userId }) {
 
   if (updateErr) {
     logger.error('Failed to accept offer', { error: updateErr.message, offerId });
+    // Give the listing back so it isn't left on hold for an offer that wasn't accepted.
+    const { error: releaseErr } = await supabaseAdmin
+      .from('Listing')
+      .update({ status: 'active', active_offer_count: offerListing.active_offer_count || 0, updated_at: new Date().toISOString() })
+      .eq('id', offer.listing_id)
+      .eq('status', 'pending_pickup');
+    if (releaseErr) logger.error('Failed to release listing after a failed accept', { error: releaseErr.message, offerId });
     throw updateErr;
   }
 
-  // 2. Reserve the listing and reset offer count (all others will be declined)
-  await supabaseAdmin
-    .from('Listing')
-    .update({ status: 'reserved', active_offer_count: 0, updated_at: new Date().toISOString() })
-    .eq('id', offer.listing_id);
+  // 2. (The listing was held above, with its offer count reset: all other offers are declined next.)
 
   // 3. Decline all other pending offers on the same listing
   const { data: otherOffers } = await supabaseAdmin
@@ -265,7 +356,7 @@ async function acceptOffer({ offerId, userId }) {
 
   if (otherOffers && otherOffers.length > 0) {
     const otherIds = otherOffers.map((o) => o.id);
-    await supabaseAdmin
+    const { error: declineErr } = await supabaseAdmin
       .from('ListingOffer')
       .update({
         status: 'declined',
@@ -273,6 +364,10 @@ async function acceptOffer({ offerId, userId }) {
         updated_at: new Date().toISOString(),
       })
       .in('id', otherIds);
+    if (declineErr) {
+      // The accept stands and the listing is on hold, so these offers can no longer be accepted.
+      logger.error('Failed to decline the other offers after an accept', { error: declineErr.message, offerId });
+    }
 
     // Fetch listing title for notifications
     const { data: listing } = await supabaseAdmin
@@ -380,13 +475,14 @@ async function declineOffer({ offerId, sellerId }) {
     .eq('id', offer.listing_id)
     .single();
 
-  await supabaseAdmin
+  const { error: countErr } = await supabaseAdmin
     .from('Listing')
     .update({
       active_offer_count: Math.max((listing?.active_offer_count || 1) - 1, 0),
       updated_at: new Date().toISOString(),
     })
     .eq('id', offer.listing_id);
+  if (countErr) logger.error('Failed to update the listing offer count', { error: countErr.message, offerId });
 
   // Notify buyer
   const { data: listingData } = await supabaseAdmin
@@ -449,13 +545,14 @@ async function withdrawOffer({ offerId, buyerId }) {
     .eq('id', offer.listing_id)
     .single();
 
-  await supabaseAdmin
+  const { error: countErr } = await supabaseAdmin
     .from('Listing')
     .update({
       active_offer_count: Math.max((listing?.active_offer_count || 1) - 1, 0),
       updated_at: new Date().toISOString(),
     })
     .eq('id', offer.listing_id);
+  if (countErr) logger.error('Failed to update the listing offer count', { error: countErr.message, offerId });
 
   return { offer: updated };
 }
@@ -497,10 +594,20 @@ async function completeTransaction({ offerId, completedBy }) {
   }
 
   // 2. Mark listing as sold
-  await supabaseAdmin
+  const { error: soldErr } = await supabaseAdmin
     .from('Listing')
     .update({ status: 'sold', sold_at: now, updated_at: now })
     .eq('id', offer.listing_id);
+
+  if (soldErr) {
+    logger.error('Failed to mark listing sold', { error: soldErr.message, offerId });
+    const { error: revertErr } = await supabaseAdmin
+      .from('ListingOffer')
+      .update({ status: 'accepted', completed_at: null, updated_at: new Date().toISOString() })
+      .eq('id', offerId);
+    if (revertErr) logger.error('Failed to reopen offer after a failed sale', { error: revertErr.message, offerId });
+    throw soldErr;
+  }
 
   // 3. Notify both parties to review
   const [buyerName, sellerName] = await Promise.all([
@@ -614,6 +721,7 @@ async function expireStaleOffers() {
 // ─── Exports ─────────────────────────────────────────────────
 
 module.exports = {
+  buyerCheckoutSummary,
   createOffer,
   counterOffer,
   acceptOffer,
