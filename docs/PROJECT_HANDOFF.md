@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T04:03:21Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T04:14:45Z (active Codex coordinator)
 
-Batch7 PR404/393/403 merged after reviewed evidence and green CI; fetched master5cf4a26c35f79e04503a2e734ef6a1582e90af24. Original155 now68fixed/merged,25inflight,62notstarted (87unfinished≈56%, not app coverage); broad80 remains13closed/67partial. Root Android326b follow-up build active, earlier pagination/race/Support copied-link actuals passed. Home actual iOS checks underway; S3 summary fit passed but new Business return recovery repair awaits build/afters. S1 checkout405 and offers406 published;405 backend CI failure under investigation,406 full review pending. Fresh full-app sweep remains ahead. Exact receipts/queues/limits in [live hub](workstreams/README.md); founder§7/A17 reserved.
+Master5cf4a26c35f79e04503a2e734ef6a1582e90af24; batch7 merged. Original155 is68fixed/merged,25inflight,62notstarted; broad80 is13closed/67partial, not app coverage.405/a31 and406/ef769 pre-reviewed with real-app evidence/manifests/sourcebindings; required CI still running, no nextbatch published. Root Android326b actual area/headerRetry and changed-query paging/stale-error gates passed. iOS326b build passed but install/afters wait HomeUI. Home iOS vacation failure/recovery passed; remaining privacy/navigation gates continue. S3 Me build has heavy; next S1 onewebsession. New scheduling cancellation notification/copy mismatch has bounded Android followup approval, no money-policy change. Fresh full-app sweep remains ahead. Details in [live hub](workstreams/README.md); founder§7/A17 reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
