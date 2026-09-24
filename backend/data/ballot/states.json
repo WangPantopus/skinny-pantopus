@@ -1,0 +1,91 @@
+{
+  "version": "2026-09-24",
+  "notes": "Ballot reference data (docs/ballot-implementation-plan-2026-09-24.md §5.1). 'supported' states carry person-checked dates and links; every other state is 'links_only' and shows the election date plus Vote.gov. Territories are absent on purpose: Ballot hides there. Release check 1: a person opens every url below before ballot_p0 is enabled.",
+  "links_only": {
+    "official_links": [
+      { "key": "registration", "label": "Registration and deadlines", "owner": "Vote.gov", "url": "https://vote.gov/", "phases": ["far", "in_season", "election_day"] }
+    ],
+    "note": "Pantopus doesn’t have this state’s deadlines yet. Its election office does.",
+    "source_line": "Election date: federal law"
+  },
+  "states": {
+    "AL": { "name": "Alabama", "timezone": "America/Chicago", "coverage": "links_only" },
+    "AK": { "name": "Alaska", "timezone": "America/Anchorage", "coverage": "links_only" },
+    "AZ": { "name": "Arizona", "timezone": "America/Phoenix", "coverage": "links_only" },
+    "AR": { "name": "Arkansas", "timezone": "America/Chicago", "coverage": "links_only" },
+    "CA": { "name": "California", "timezone": "America/Los_Angeles", "coverage": "links_only" },
+    "CO": { "name": "Colorado", "timezone": "America/Denver", "coverage": "links_only" },
+    "CT": { "name": "Connecticut", "timezone": "America/New_York", "coverage": "links_only" },
+    "DE": { "name": "Delaware", "timezone": "America/New_York", "coverage": "links_only" },
+    "DC": { "name": "District of Columbia", "timezone": "America/New_York", "coverage": "links_only" },
+    "FL": { "name": "Florida", "timezone": "America/New_York", "coverage": "links_only" },
+    "GA": { "name": "Georgia", "timezone": "America/New_York", "coverage": "links_only" },
+    "HI": { "name": "Hawaii", "timezone": "Pacific/Honolulu", "coverage": "links_only" },
+    "ID": { "name": "Idaho", "timezone": "America/Boise", "coverage": "links_only" },
+    "IL": { "name": "Illinois", "timezone": "America/Chicago", "coverage": "links_only" },
+    "IN": { "name": "Indiana", "timezone": "America/Indiana/Indianapolis", "coverage": "links_only" },
+    "IA": { "name": "Iowa", "timezone": "America/Chicago", "coverage": "links_only" },
+    "KS": { "name": "Kansas", "timezone": "America/Chicago", "coverage": "links_only" },
+    "KY": { "name": "Kentucky", "timezone": "America/New_York", "coverage": "links_only" },
+    "LA": { "name": "Louisiana", "timezone": "America/Chicago", "coverage": "links_only" },
+    "ME": { "name": "Maine", "timezone": "America/New_York", "coverage": "links_only" },
+    "MD": { "name": "Maryland", "timezone": "America/New_York", "coverage": "links_only" },
+    "MA": { "name": "Massachusetts", "timezone": "America/New_York", "coverage": "links_only" },
+    "MI": { "name": "Michigan", "timezone": "America/Detroit", "coverage": "links_only" },
+    "MN": { "name": "Minnesota", "timezone": "America/Chicago", "coverage": "links_only" },
+    "MS": { "name": "Mississippi", "timezone": "America/Chicago", "coverage": "links_only" },
+    "MO": { "name": "Missouri", "timezone": "America/Chicago", "coverage": "links_only" },
+    "MT": { "name": "Montana", "timezone": "America/Denver", "coverage": "links_only" },
+    "NE": { "name": "Nebraska", "timezone": "America/Chicago", "coverage": "links_only" },
+    "NV": { "name": "Nevada", "timezone": "America/Los_Angeles", "coverage": "links_only" },
+    "NH": { "name": "New Hampshire", "timezone": "America/New_York", "coverage": "links_only" },
+    "NJ": { "name": "New Jersey", "timezone": "America/New_York", "coverage": "links_only" },
+    "NM": { "name": "New Mexico", "timezone": "America/Denver", "coverage": "links_only" },
+    "NY": { "name": "New York", "timezone": "America/New_York", "coverage": "links_only" },
+    "NC": { "name": "North Carolina", "timezone": "America/New_York", "coverage": "links_only" },
+    "ND": { "name": "North Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
+    "OH": { "name": "Ohio", "timezone": "America/New_York", "coverage": "links_only" },
+    "OK": { "name": "Oklahoma", "timezone": "America/Chicago", "coverage": "links_only" },
+    "OR": { "name": "Oregon", "timezone": "America/Los_Angeles", "coverage": "links_only" },
+    "PA": { "name": "Pennsylvania", "timezone": "America/New_York", "coverage": "links_only" },
+    "RI": { "name": "Rhode Island", "timezone": "America/New_York", "coverage": "links_only" },
+    "SC": { "name": "South Carolina", "timezone": "America/New_York", "coverage": "links_only" },
+    "SD": { "name": "South Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
+    "TN": { "name": "Tennessee", "timezone": "America/Chicago", "coverage": "links_only" },
+    "TX": { "name": "Texas", "timezone": "America/Chicago", "coverage": "links_only" },
+    "UT": { "name": "Utah", "timezone": "America/Denver", "coverage": "links_only" },
+    "VT": { "name": "Vermont", "timezone": "America/New_York", "coverage": "links_only" },
+    "VA": { "name": "Virginia", "timezone": "America/New_York", "coverage": "links_only" },
+    "WA": {
+      "name": "Washington",
+      "timezone": "America/Los_Angeles",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Washington Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/helpful-information/current-election-information", "phases": ["far", "in_season"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/data-research/election-data-and-maps/election-results-and-voters-pamphlets", "phases": ["after"] }
+      ],
+      "counties": {
+        "53011": {
+          "name": "Clark County",
+          "election_office": "Clark County Elections",
+          "official_links": [
+            { "key": "drop_boxes", "label": "Find a drop box", "owner": "Clark County Elections", "url": "https://clark.wa.gov/elections/drop-box-locator", "phases": ["in_season", "election_day"] },
+            { "key": "results", "label": "Election results", "owner": "Clark County Elections", "url": "https://clark.wa.gov/elections/results", "phases": ["after"] }
+          ]
+        }
+      },
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates match the review's reading of the Secretary of State page (Sep 23), the RCW sections cited per deadline, and Secretary of State pages found by search on Sep 24. The build container could not open sos.wa.gov, votewa.gov or clark.wa.gov directly."
+      }
+    },
+    "WV": { "name": "West Virginia", "timezone": "America/New_York", "coverage": "links_only" },
+    "WI": { "name": "Wisconsin", "timezone": "America/Chicago", "coverage": "links_only" },
+    "WY": { "name": "Wyoming", "timezone": "America/Denver", "coverage": "links_only" }
+  }
+}

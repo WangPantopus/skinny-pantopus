@@ -32,6 +32,8 @@ const { readThrough } = require('./placeSectionCache');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { buildHeatColdOutlook } = require('./heatColdEngine');
+const featureFlagService = require('./featureFlagService');
+const ballotSummary = require('./ballot/summary');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -870,7 +872,32 @@ function electionMatchesState(election, stateAbbr) {
   return Boolean(name && ocd.includes(`state:${stateAbbr.toLowerCase()}`));
 }
 
-async function composeCivicElection(home) {
+// Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): behind the
+// `ballot_p0` flag the section gains the "Your ballot" card fields from
+// person-checked reference data. Flag off, or no election in the card's
+// window: the pre-Ballot behavior below, unchanged.
+async function composeBallotElection(home, userId) {
+  if (!userId) return null;
+  try {
+    if (!(await featureFlagService.isFeatureEnabled('ballot_p0', userId))) return null;
+    const data = await ballotSummary.summaryForHome(home);
+    if (!data) return null;
+    return [serializePlaceSection('civic_election', {
+      asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
+      status: 'ready',
+      source: data.source_line,
+      coverage: data.coverage === 'supported' ? 'full' : 'partial',
+      data,
+    })];
+  } catch (err) {
+    logger.warn('placeSections: ballot summary failed', { homeId: home.id, error: err.message });
+    return null;
+  }
+}
+
+async function composeCivicElection(home, { userId = null } = {}) {
+  const ballot = await composeBallotElection(home, userId);
+  if (ballot) return ballot;
   const apiKey = process.env.GOOGLE_CIVIC_API_KEY;
   if (!apiKey) {
     return [serializePlaceSection('civic_election', {

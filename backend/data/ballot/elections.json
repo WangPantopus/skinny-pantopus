@@ -1,0 +1,97 @@
+{
+  "version": "2026-09-24",
+  "notes": "One entry per election (docs/ballot-implementation-plan-2026-09-24.md §5.1). Display labels are never identifiers: every deadline has a stable key. Dates are calendar dates in the state's timezone; time_local is wall-clock time there.",
+  "elections": [
+    {
+      "id": "2026-11-03-general",
+      "date": "2026-11-03",
+      "name": "November 3 general election",
+      "kind": "general",
+      "applies_to": "all_states",
+      "source": "Federal Election Day, 2 U.S.C. § 7",
+      "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title2-section7&num=0&edition=prelim",
+      "states": {
+        "WA": {
+          "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it by mail with a Nov 3 postmark, or in a drop box by 8 p.m.",
+          "ballot_week": {
+            "body": "Return yours by mail with a Nov 3 postmark, or in a drop box by 8 p.m.",
+            "election_day_title": "Election Day. Return by 8 p.m. today.",
+            "election_day_body": "Drop box by 8 p.m., or mail it with today’s postmark."
+          },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Drop box by 8 p.m., or mail it with today’s postmark." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-16",
+              "time_local": null,
+              "cutoff": "mailed_by",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties mail ballots at least 18 days before Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/elections-calendar/dates-and-deadlines",
+              "law": "RCW 29A.40.070",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.40.070"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-26",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["online", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Online or by mail. In person through Election Day.",
+              "teaser_lead": "Register or update by Oct 26.",
+              "teaser_detail": "In person through Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/elections-calendar/dates-and-deadlines",
+              "law": "RCW 29A.08.140",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.08.140"
+            },
+            {
+              "key": "register_in_person",
+              "label": "Register in person",
+              "date": "2026-11-03",
+              "time_local": "20:00",
+              "cutoff": "in_person_by",
+              "methods": ["in_person"],
+              "needs_action": true,
+              "timeline": false,
+              "detail": "At a county voting center, through 8 p.m. on Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington",
+              "law": "RCW 29A.08.140",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.08.140"
+            },
+            {
+              "key": "return_by",
+              "label": "By 8 p.m.",
+              "date": "2026-11-03",
+              "time_local": "20:00",
+              "cutoff": "drop_box_by_or_postmarked_by",
+              "methods": ["drop_box", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Drop box by 8 p.m., or mail it postmarked by Election Day.",
+              "teaser_lead": "Return by 8 p.m. Nov 3.",
+              "teaser_detail": "Drop box by 8 p.m., or mail it postmarked by Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/elections-calendar/dates-and-deadlines",
+              "law": "RCW 29A.40.091",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.40.091"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json WA.checked."
+          }
+        }
+      }
+    }
+  ]
+}

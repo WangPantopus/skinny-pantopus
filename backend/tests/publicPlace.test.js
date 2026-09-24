@@ -757,3 +757,86 @@ test('the money lead is always whole dollars, even from fractional premiums', as
   expect(lead.headline).not.toMatch(/\.\d/);
   expect(lead.headline).toMatch(/\$481–\$1,244 a year/);
 });
+
+// ── Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3) ──
+// Anonymous, so it follows the flag's global switch only. It uses the
+// coordinates, calls the geocoder live and writes nothing.
+describe('the Ballot P0 teaser', () => {
+  const featureFlagService = require('../services/featureFlagService');
+  const CAMAS = {
+    latitude: 45.5871, longitude: -122.3995, city: 'Camas', state: 'WA', zipcode: '98607', address: '415 NE Everett St',
+  };
+  const WA_GEOGRAPHIES = {
+    result: {
+      geographies: {
+        'Census Tracts': [{ GEOID: '53011040910', STATE: '53', COUNTY: '011', TRACT: '040910' }],
+        States: [{ GEOID: '53', NAME: 'Washington', STATE: '53' }],
+        Counties: [{ GEOID: '53011', NAME: 'Clark County', STATE: '53', COUNTY: '011' }],
+        'Incorporated Places': [{ GEOID: '5310180', NAME: 'Camas city' }],
+        'Unified School Districts': [{ GEOID: '5301410', NAME: 'Camas School District' }],
+        '119th Congressional Districts': [{ NAME: 'Congressional District 3', BASENAME: '3' }],
+      },
+    },
+  };
+  const enableGlobally = () => seedTable('FeatureFlag', [{
+    flag_name: 'ballot_p0', enabled_globally: true, enabled_for_internal_team: false, beta_user_ids: [],
+  }]);
+
+  beforeEach(() => {
+    featureFlagService.invalidateFlagCache();
+    jest.useFakeTimers({ now: new Date('2026-09-24T19:00:00.000Z'), advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('is absent while the flag is off', async () => {
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('ballot_teaser');
+  });
+
+  it('Washington: a minimum count, the next deadline and an official source, with no new cache row', async () => {
+    enableGlobally();
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS });
+    const base = global.fetch;
+    global.fetch = jest.fn((url) => (String(url).includes('geocoding.geo.census.gov')
+      ? Promise.resolve(mockResp(WA_GEOGRAPHIES))
+      : base(url)));
+
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '415 NE Everett St, Camas' });
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.ballot_teaser).toMatchObject({
+      coverage: 'supported',
+      state: 'WA',
+      headline: 'Your address sits inside at least 5 governments.',
+      next_deadline: { key: 'register_online_mail', lead: 'Register or update by Oct 26.', days_left: 32, detail: 'In person through Election Day.' },
+      primary_action: { kind: 'governments', label: 'See your governments' },
+      source_line: 'Dates: Washington Secretary of State · Boundaries: Census Bureau',
+    });
+    expect(res.body.ballot_teaser.governments.items.map((g) => g.name)).toEqual([
+      'United States', 'Washington', 'Clark County', 'Camas School District', 'City of Camas',
+    ]);
+    // The teaser's lookup is live: no home-keyed row and nothing that
+    // carries the typed address.
+    for (const row of getTable('PlaceSectionCache')) {
+      expect(row.section_id).not.toBe('_ballot_governments');
+      expect(row.cache_key).not.toContain('home:');
+      expect(row.cache_key.toLowerCase()).not.toContain('everett');
+    }
+  });
+
+  it('outside the pilot: the election date and Vote.gov, never a count', async () => {
+    enableGlobally();
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.body.ballot_teaser).toMatchObject({
+      coverage: 'links_only',
+      state: 'OR',
+      headline: 'The general election is November 3.',
+      governments: null,
+      next_deadline: null,
+      primary_action: { kind: 'link', label: 'Check your registration', url: 'https://vote.gov/' },
+    });
+  });
+});

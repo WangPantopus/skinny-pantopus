@@ -18,6 +18,8 @@ const placePreviewService = require('../services/placePreviewService');
 const { foundingSlotsOpen } = require('../services/place/foundingWindow');
 const { recordFunnelEvent, CLIENT_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { resolveUsState } = require('../utils/usState');
+const featureFlagService = require('../services/featureFlagService');
+const ballotSummary = require('../services/ballot/summary');
 
 // ============================================================
 // Public Preview Endpoints
@@ -472,6 +474,26 @@ async function readDensityBucket(geohash) {
   }
 }
 
+// Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
+// Anonymous, so it follows the flag's GLOBAL switch only. Coordinates only;
+// its geocoder call is live and writes nothing. Degrades to null on the
+// preview's per-section time budget. `undefined` = flag off (key omitted).
+async function ballotTeaserFor(place) {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_p0');
+    if (!flag || !flag.enabled_globally) return undefined;
+    const [teaser] = await placePreviewService.withBudget(
+      async () => [await ballotSummary.teaserForPoint({ lat: place.lat, lng: place.lng, state: place.state })],
+      placePreviewService.sectionBudgetMs(),
+      () => [null],
+    );
+    return teaser || null;
+  } catch (err) {
+    console.warn('[public/place] ballot teaser failed:', err.message);
+    return null;
+  }
+}
+
 router.get('/place', async (req, res) => {
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
@@ -533,7 +555,7 @@ router.get('/place', async (req, res) => {
       return tractPromise;
     };
 
-    const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
+    const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled, ballotSettled] = await Promise.allSettled([
       fetchFloodCached(place.lat, place.lng),
       fetchCensusTeaserCached(place.lat, place.lng, resolveTract),
       readDensityBucket(geohash),
@@ -547,6 +569,7 @@ router.get('/place', async (req, res) => {
       // Are Founding Neighbor slots genuinely open in this cell? A boolean,
       // never a count — it only chooses the density card's invitation line.
       foundingSlotsOpen(geohash),
+      ballotTeaserFor(place),
     ]);
 
     const flood = floodSettled.status === 'fulfilled' ? floodSettled.value : null;
@@ -555,6 +578,7 @@ router.get('/place', async (req, res) => {
     const money = moneySettled.status === 'fulfilled' ? moneySettled.value : null;
     const remote = remoteSettled.status === 'fulfilled' ? remoteSettled.value : [];
     const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
+    const ballotTeaser = ballotSettled.status === 'fulfilled' ? ballotSettled.value : null;
 
     const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
     const aha = placePreviewService.pickAha(sections);
@@ -612,6 +636,7 @@ router.get('/place', async (req, res) => {
       },
       aha,
       sections,
+      ...(ballotTeaser !== undefined ? { ballot_teaser: ballotTeaser } : {}),
       locked: LOCKED_SECTIONS,
       disclaimer: 'A free, one-time look at what\'s public. Claim this address to save it and get it every morning.',
     });
