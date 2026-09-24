@@ -33,7 +33,7 @@ const pacificNoon = (day) => at(`${day}T19:00:00.000Z`);
 const CAMAS_GOVERNMENTS = {
   items: [
     { level: 'federal', geoid: 'us', name: 'United States' },
-    { level: 'state', geoid: '53', name: 'Washington' },
+    { level: 'state', geoid: '53', name: 'The state' },
     { level: 'county', geoid: '53011', name: 'Clark County' },
     { level: 'school', geoid: '5301410', name: 'Camas School District' },
     { level: 'city', geoid: '5310180', name: 'City of Camas' },

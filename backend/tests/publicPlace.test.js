@@ -816,7 +816,7 @@ describe('the Ballot P0 teaser', () => {
       source_line: 'Dates: Washington Secretary of State · Boundaries: Census Bureau',
     });
     expect(res.body.ballot_teaser.governments.items.map((g) => g.name)).toEqual([
-      'United States', 'Washington', 'Clark County', 'Camas School District', 'City of Camas',
+      'United States', 'The state', 'Clark County', 'Camas School District', 'City of Camas',
     ]);
     // The teaser's lookup is live: no home-keyed row and nothing that
     // carries the typed address.
