@@ -46,6 +46,21 @@ export function readPendingPlace(id: string): PlaceDraft | null {
   } catch { remove(id); return null; }
 }
 
+/**
+ * A typeahead suggestion's center as the coordinates a draft keeps, or null.
+ * /api/geo/autocomplete sends GeoJSON `[lng, lat]`; a `{ lat, lng }` object
+ * is accepted too. Same bounds as readPendingPlace, so a selection can be kept.
+ */
+export function suggestionCoordinates(center: unknown): { latitude: number; longitude: number } | null {
+  const point = center as { lat?: unknown; lng?: unknown } | null | undefined;
+  const [longitude, latitude]: unknown[] = Array.isArray(center) ? center : [point?.lng, point?.lat];
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
+    typeof longitude !== 'number' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
 /** Returns null if storage is blocked; the caller must keep the preview visible. */
 export function stashPendingPlace(place: PendingPlace): string | null {
   try {

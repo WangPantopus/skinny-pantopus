@@ -5,7 +5,11 @@ export type GeoSuggestion = {
   primary_text: string;
   secondary_text: string;
   label: string;
-  center: { lat: number; lng: number };
+  /**
+   * GeoJSON order, `[lng, lat]` — the route's back-compat shape, which the
+   * iOS and Android clients decode as an array. Not `{ lat, lng }`.
+   */
+  center?: [number, number];
   kind: string;
 };
 

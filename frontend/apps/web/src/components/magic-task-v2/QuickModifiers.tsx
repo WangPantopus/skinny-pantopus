@@ -209,9 +209,8 @@ export default function QuickModifiers({
       try {
         const data = await api.geo.autocomplete(addr);
         const best = data?.suggestions?.[0];
-        if (best?.center && Number.isFinite(best.center.lat) && Number.isFinite(best.center.lng)) {
-          latitude = best.center.lat;
-          longitude = best.center.lng;
+        if (best?.center && Number.isFinite(best.center[0]) && Number.isFinite(best.center[1])) {
+          [longitude, latitude] = best.center;
           usedFallbackGeocode = true;
         }
       } catch {
@@ -391,10 +390,11 @@ export default function QuickModifiers({
       }
       const resolved = await api.geo.resolve(best.suggestion_id);
       const n = resolved.normalized;
+      const [lng, lat] = best.center;
       onSelectedLocationChange({
         mode: 'current',
-        latitude: n.latitude ?? best.center.lat,
-        longitude: n.longitude ?? best.center.lng,
+        latitude: n.latitude ?? lat,
+        longitude: n.longitude ?? lng,
         address: n.address || best.label,
         city: n.city || null,
         state: n.state || null,

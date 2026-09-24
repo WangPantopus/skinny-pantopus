@@ -43,12 +43,13 @@ function renderFunnel() {
   );
 }
 
+// The wire shape: /api/geo/autocomplete sends center as GeoJSON [lng, lat].
 const SUGGESTION = {
   suggestion_id: 's1',
   primary_text: '4080 NE Tacoma Ct',
   secondary_text: 'Camas, WA 98607',
   label: '4080 NE Tacoma Ct, Camas, WA 98607',
-  center: { lat: 45.6087, lng: -122.389 },
+  center: [-122.389, 45.6087],
   kind: 'address',
 };
 

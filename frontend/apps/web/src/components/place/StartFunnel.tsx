@@ -53,7 +53,7 @@ import { PantopusLockup } from '@/components/brand/PantopusMark';
 import { renderSection } from '@/components/place/presentation';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { getStoreDownloadCta } from '@/lib/publicShare';
-import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
+import { clearPendingPlaces, stashPendingPlace, suggestionCoordinates } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
@@ -644,10 +644,9 @@ export default function StartFunnel() {
         const res = await api.geo.autocompleteWithAbort(address, new AbortController().signal);
         const first = res?.suggestions?.[0];
         if (cancelled || !first) return;
-        const lat = first.center?.lat;
-        const lng = first.center?.lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return;
-        setSelected({ label: first.label, latitude: lat, longitude: lng });
+        const coords = suggestionCoordinates(first.center);
+        if (!coords) return;
+        setSelected({ label: first.label, ...coords });
         setSubmitted(first.label);
       } catch {
         /* a bad deep link simply lands on the hero */

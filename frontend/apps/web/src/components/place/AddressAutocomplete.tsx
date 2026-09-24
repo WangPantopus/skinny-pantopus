@@ -3,8 +3,8 @@
 //
 // Uses api.geo (services/geo, country=us) which is public — unlike
 // check-address/property-suggestions, which require auth. Each
-// suggestion already carries its center {lat,lng}, so selecting one
-// gives us the coords we need to save the place after sign-up.
+// suggestion already carries its center ([lng, lat] on the wire), so
+// selecting one gives us the coords we need to save the place after sign-up.
 // ============================================================
 
 'use client';
@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MapPin, CornerDownLeft, Loader2 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { GeoSuggestion } from '@pantopus/api';
+import { suggestionCoordinates } from './pendingPlace';
 
 export interface SelectedAddress {
   label: string;
@@ -98,11 +99,13 @@ export default function AddressAutocomplete({
   };
 
   const choose = (s: GeoSuggestion) => {
+    const coords = suggestionCoordinates(s.center);
     setQuery(s.label);
-    setSelected(true);
+    setSelected(coords !== null);
     setOpen(false);
     setSuggestions([]);
-    onSelect({ label: s.label, latitude: s.center.lat, longitude: s.center.lng });
+    // Without a usable center there is nothing to save after sign-up.
+    if (coords) onSelect({ label: s.label, ...coords });
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

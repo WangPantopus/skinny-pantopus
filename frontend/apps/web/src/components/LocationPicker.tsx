@@ -198,8 +198,7 @@ export default function LocationPicker({ value, onChange, className }: Props) {
         const data = await api.geo.autocomplete(addr);
         const best = (data?.suggestions || [])[0];
         if (best?.center) {
-          longitude = best.center.lng;
-          latitude = best.center.lat;
+          [longitude, latitude] = best.center;
 
           // Save coordinates back to the home so this doesn't happen again
           try {
@@ -292,11 +291,12 @@ export default function LocationPicker({ value, onChange, className }: Props) {
       // Resolve the best suggestion to get structured address fields
       const resolved = await api.geo.resolve(best.suggestion_id);
       const n = resolved.normalized;
+      const [lng, lat] = best.center;
 
       onChange({
         mode: 'current',
-        latitude: n.latitude ?? best.center.lat,
-        longitude: n.longitude ?? best.center.lng,
+        latitude: n.latitude ?? lat,
+        longitude: n.longitude ?? lng,
         address: n.address || best.label,
         city: n.city || null,
         state: n.state || null,
