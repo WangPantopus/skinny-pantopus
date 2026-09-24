@@ -357,6 +357,7 @@ export default function MarketplacePage() {
     activeFilters.length === 0 &&
     debouncedSearch.trim().length === 0 &&
     !loading &&
+    !browseQuery.isError &&
     userLocation != null;
   const radiusSuggestion = useRadiusSuggestion(
     visibleListingCount,
