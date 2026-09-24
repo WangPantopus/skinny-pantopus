@@ -775,7 +775,7 @@ export default function MarketplacePage() {
               userLocation={userLocation}
               onOpenCategoryModal={() => setShowCategoryModal(true)}
               onOpenCreateModal={() => setShowCreateModal(true)}
-              totalCount={totalInBounds}
+              totalCount={visibleListingCount}
               onSave={handleSave}
               nearestActivityCenter={nearestActivityCenter}
             />
@@ -977,7 +977,7 @@ export default function MarketplacePage() {
 
             {!loading && !hasMore && gridListings.length > 0 && (
               <p className="text-center text-sm text-app-text-muted py-4">
-                Showing {gridListings.length} of {totalInBounds} listings
+                Showing {gridListings.length} listings
               </p>
             )}
           </>
