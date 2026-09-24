@@ -199,7 +199,10 @@ class MarketplaceViewModel
             return location.cachedCoordinate() ?: location.requestCurrent(timeoutMillis = 4_000L)
         }
 
-        private suspend fun nearbyPage(center: UserCoordinate, offset: Int): NetworkResult<ListingsNearbyResponse> {
+        private suspend fun nearbyPage(
+            center: UserCoordinate,
+            offset: Int,
+        ): NetworkResult<ListingsNearbyResponse> {
             val category = _activeCategory.value
             return repo.nearby(
                 latitude = center.latitude,

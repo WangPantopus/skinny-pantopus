@@ -2,10 +2,10 @@
 
 package app.pantopus.android.ui.screens.marketplace
 
-import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.data.api.models.listings.ListingsNearbyResponse
 import app.pantopus.android.data.api.models.listings.ListingsPagination
+import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.listings.ListingsRepository
