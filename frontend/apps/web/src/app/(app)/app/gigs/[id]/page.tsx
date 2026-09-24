@@ -428,7 +428,12 @@ export default function GigDetailsPage() {
   }
 
   if (loadError) {
-    return <ErrorState message={loadError} onRetry={() => void init()} />;
+    return (
+      <>
+        <ErrorState message={loadError} onRetry={() => void init()} />
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
+      </>
+    );
   }
 
   if (!gig) {
