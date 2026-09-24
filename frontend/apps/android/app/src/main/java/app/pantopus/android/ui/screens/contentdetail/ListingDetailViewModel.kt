@@ -51,6 +51,8 @@ class ListingDetailViewModel
         private var acceptedOffer: ListingOfferDto? = null
         private var checkoutReadFailed = false
         private var isCheckingOut = false
+        private var checkoutUserId: String? = null
+        private var checkoutOfferId: String? = null
         private var readInFlight = false
 
         private val _saved = MutableStateFlow(false)
@@ -126,21 +128,29 @@ class ListingDetailViewModel
             val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return
             if (isOwnedByMe() || isSold()) return
             when (val offers = offersRepo.listOffers(listingId)) {
-                is NetworkResult.Success ->
-                    acceptedOffer =
-                        offers.data.offers.firstOrNull {
-                            it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
-                        }
+                is NetworkResult.Success -> {
+                    acceptedOffer = offers.data.offers.firstOrNull {
+                        it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                    }
+                    acceptedOffer?.let { paymentsRepo.reconcileListingConfirmation(viewerId, listingId, it) }
+                }
                 is NetworkResult.Failure -> checkoutReadFailed = true
             }
         }
 
-        fun hasCheckoutAction(): Boolean = acceptedOffer != null || checkoutReadFailed
+        private fun isAwaitingConfirmation(): Boolean =
+            paymentsRepo.isListingConfirmationPending(
+                (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id,
+                listingId,
+            )
+
+        fun hasCheckoutAction(): Boolean = acceptedOffer != null || checkoutReadFailed || isAwaitingConfirmation()
 
         private fun checkoutButton(): ContentDetailDockButton? {
             val summary = acceptedOffer?.checkout
             return when {
                 isCheckingOut -> ContentDetailDockButton("Checking payment…", PantopusIcon.Clock, enabled = false)
+                isAwaitingConfirmation() -> ContentDetailDockButton("Check payment status", PantopusIcon.Clock)
                 checkoutReadFailed -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
                 acceptedOffer == null -> null
                 summary == null -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
@@ -172,7 +182,7 @@ class ListingDetailViewModel
 
         private fun canContinueCheckout(): Boolean {
             val summary = acceptedOffer?.checkout ?: return false
-            return !checkoutReadFailed && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
+            return !checkoutReadFailed && !isAwaitingConfirmation() && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
         }
 
         private fun rebuild() {
@@ -191,10 +201,14 @@ class ListingDetailViewModel
                     refreshContent()
                     if (checkoutReadFailed || acceptedOffer?.checkout == null || acceptedOffer?.checkout?.state == "unavailable") {
                         onError("Payment status is unavailable. Please try again.")
+                    } else if (isAwaitingConfirmation()) {
+                        onError("Payment submitted. Confirmation is still pending. Check status again.")
                     }
                 }
                 return
             }
+            checkoutUserId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+            checkoutOfferId = offer.id
             isCheckingOut = true
             rebuild()
             viewModelScope.launch {
@@ -228,9 +242,17 @@ class ListingDetailViewModel
         ) {
             viewModelScope.launch {
                 if (outcome == CheckoutOutcome.Paid) {
-                    // The sheet result is not durable payment proof. Re-read server state.
+                    // Keep the submission across screen re-entry while the webhook is pending.
+                    val viewerId = checkoutUserId
+                    val offerId = checkoutOfferId
+                    if (viewerId != null && offerId != null) {
+                        paymentsRepo.markListingConfirmationPending(viewerId, listingId, offerId)
+                    }
                     refreshContent()
+                    if (isAwaitingConfirmation()) onError("Payment submitted. Confirmation is still pending. Check status again.")
                 }
+                checkoutUserId = null
+                checkoutOfferId = null
                 isCheckingOut = false
                 if (_state.value !is ContentDetailUiState.Error) rebuild()
                 if (outcome is CheckoutOutcome.Declined) onError(outcome.message ?: "Payment failed. Please try again.")

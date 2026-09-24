@@ -72,6 +72,9 @@ public final class ListingDetailViewModel {
                     acceptedOffer = response.offers.first {
                         $0.status == "accepted" && ($0.buyerId ?? $0.buyer?.id) == viewerId
                     }
+                    if let acceptedOffer {
+                        checkout.reconcileListingConfirmation(userId: viewerId, listingId: listingId, offer: acceptedOffer)
+                    }
                 } catch {
                     checkoutReadFailed = true
                 }
@@ -328,11 +331,16 @@ public final class ListingDetailViewModel {
 
 extension ListingDetailViewModel {
     public var hasCheckoutAction: Bool {
-        acceptedOffer != nil || checkoutReadFailed
+        acceptedOffer != nil || checkoutReadFailed || isAwaitingConfirmation
+    }
+
+    private var isAwaitingConfirmation: Bool {
+        checkout.isListingConfirmationPending(userId: currentUserId(), listingId: listingId)
     }
 
     private var checkoutButton: ContentDetailDockButton? {
         if isCheckingOut { return .init(label: "Checking payment…", icon: .clock, enabled: false) }
+        if isAwaitingConfirmation { return .init(label: "Check payment status", icon: .clock) }
         if checkoutReadFailed { return .init(label: "Check payment", icon: .clock) }
         guard let offer = acceptedOffer else { return nil }
         guard let summary = offer.checkout else { return .init(label: "Check payment", icon: .clock) }
@@ -362,13 +370,15 @@ extension ListingDetailViewModel {
     public func continueCheckout() async -> String? {
         guard !isCheckingOut else { return nil }
         guard let offer = acceptedOffer, let summary = offer.checkout,
-              summary.canContinue, ["ready", "retry", "pending"].contains(summary.state), !checkoutReadFailed else {
+              summary.canContinue, ["ready", "retry", "pending"].contains(summary.state), !checkoutReadFailed,
+              !isAwaitingConfirmation else {
             await load()
             if checkoutReadFailed || acceptedOffer?.checkout == nil || acceptedOffer?.checkout?.state == "unavailable" {
                 return "Payment status is unavailable. Please try again."
             }
-            return nil
+            return isAwaitingConfirmation ? "Payment submitted. Confirmation is still pending. Check status again." : nil
         }
+        let checkoutUserId = currentUserId()
         isCheckingOut = true
         rebuild()
         defer {
@@ -378,9 +388,13 @@ extension ListingDetailViewModel {
         let outcome = await checkout.pay(CheckoutRequest(listingId: listingId, offerId: offer.id))
         switch outcome {
         case .paid:
-            // The sheet result is not durable payment proof. Re-read server state.
+            // The sheet result is not durable payment proof. Keep its submission
+            // across screen re-entry until an authoritative status resolves it.
+            if let checkoutUserId {
+                checkout.markListingConfirmationPending(userId: checkoutUserId, listingId: listingId, offerId: offer.id)
+            }
             await load()
-            return nil
+            return isAwaitingConfirmation ? "Payment submitted. Confirmation is still pending. Check status again." : nil
         case .canceled: return nil
         case let .declined(message), let .failed(message): return message
         }
