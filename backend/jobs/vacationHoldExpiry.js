@@ -6,23 +6,25 @@ const logger = require('../utils/logger');
 async function vacationHoldExpiry() {
   const today = new Date().toISOString().slice(0, 10);
   try {
-    const [ending, starting] = await Promise.all([
-      supabaseAdmin.from('VacationHold').select('user_id')
-        .eq('status', 'active').lte('end_date', today),
-      supabaseAdmin.from('VacationHold').select('user_id')
-        .eq('status', 'scheduled').lte('start_date', today),
-    ]);
-    if (ending.error) throw ending.error;
-    if (starting.error) throw starting.error;
-    const userIds = [...new Set([...(ending.data || []), ...(starting.data || [])]
-      .map(hold => hold.user_id))].sort();
-    for (const userId of userIds) {
+    const userIds = new Set();
+    // Read every due row before transitions change the result set. Explicit
+    // bounded pages avoid PostgREST's default row cap starving later users.
+    for (const [status, dateColumn] of [['active', 'end_date'], ['scheduled', 'start_date']]) {
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabaseAdmin.from('VacationHold').select('id,user_id')
+          .eq('status', status).lte(dateColumn, today).order('id').range(offset, offset + 499);
+        if (error) throw error;
+        for (const hold of data || []) userIds.add(hold.user_id);
+        if ((data || []).length < 500) break;
+      }
+    }
+    for (const userId of [...userIds].sort()) {
       const { error } = await supabaseAdmin.rpc('vacation_hold_transition', {
         p_user_id: userId, p_action: 'status',
       });
       if (error) throw error;
     }
-    logger.info('[VacationHold] Complete', { users: userIds.length });
+    logger.info('[VacationHold] Complete', { users: userIds.size });
   } catch (error) {
     logger.error('[VacationHold] Reconciliation failed', { error: error.message });
     throw error;

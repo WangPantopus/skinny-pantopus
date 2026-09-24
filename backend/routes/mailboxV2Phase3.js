@@ -123,7 +123,7 @@ const dismissMemorySchema = Joi.object({
 // ── Vacation ──
 const vacationDay = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom((value, helpers) => {
   const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
+  return value.startsWith('0000-') || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
     ? helpers.error('date.base') : value;
 });
 const startVacationSchema = Joi.object({
