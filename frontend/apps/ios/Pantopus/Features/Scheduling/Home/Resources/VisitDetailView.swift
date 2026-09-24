@@ -242,7 +242,7 @@ struct VisitDetailView: View {
                 .foregroundStyle(active ? Theme.Color.homeDark : (done ? Theme.Color.appTextStrong : Theme.Color.appTextMuted))
                 .multilineTextAlignment(.center)
         }
-        .frame(width: 46)
+        .frame(minWidth: 46)
     }
 
     @ViewBuilder private var banner: some View {
@@ -331,14 +331,6 @@ struct VisitDetailView: View {
                     viewModel.bookAgain()
                 }
             }
-            // Design footer always carries a trailing `message-circle` text btn.
-            Button { viewModel.messageVisitor() } label: {
-                Icon(.messageCircle, size: 18, color: Theme.Color.appTextStrong)
-                    .frame(width: 46, height: 46)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Message")
-            .accessibilityIdentifier("scheduling.visitDetail.message")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s2)
