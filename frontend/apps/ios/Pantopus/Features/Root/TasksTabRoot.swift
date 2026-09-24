@@ -211,7 +211,7 @@ public struct TasksTabRoot: View {
             onBack: pop,
             onShare: {
                 systemSheet = .share(
-                    items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                    items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                 )
             },
             onMessageHost: { host in
