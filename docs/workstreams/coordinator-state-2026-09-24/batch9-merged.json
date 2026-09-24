@@ -1,0 +1,111 @@
+{
+  "at": "2026-09-24T08:33:30.521025+00:00",
+  "master": "91cc3b772300dffca9abae95d96a23394e4744ae",
+  "pullRequests": [
+    {
+      "headRefOid": "544d1db26ac21d145d67f683234107e7505e90b0",
+      "mergeCommit": {
+        "oid": "0596ebb8a571716ec2450bd78af34bc9d167db19"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 397,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/397",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "e426c59986074bf71a9f5aff5850ad011de269ea",
+      "mergeCommit": {
+        "oid": "1f4ad0df18fc461059c0df13186ab53744221685"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 409,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/409",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "6ae580356b2526e255d252744ffc4bd0b6945d1d",
+      "mergeCommit": {
+        "oid": "c9195fba7afee6a93eeca1cce57a1c0ea21dd448"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 412,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/412",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "34f8dbad8ff33d2b272723ba0e409cbe1e388482",
+      "mergeCommit": {
+        "oid": "6581cca0bf8bd39b2fb4d883c40ba2eb2aba9e52"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 413,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/413",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "c259c120557285ef2ee514eeb9899290e37251d7",
+      "mergeCommit": {
+        "oid": "c8b1e89a74c95d1dca08702f121b998b98772b27"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 414,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/414",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "040131672a5f9b3bc5e8c5a3fba81b687af01966",
+      "mergeCommit": {
+        "oid": "d3b40035a32ea8b514c865a8084aa7ad4bda9937"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 415,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/415",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "828119e579251bf8b51186aa7c370ac964c3cfd2",
+      "mergeCommit": {
+        "oid": "d07663cdc4ce885de0db39481b0104d5af7da83f"
+      },
+      "mergedAt": "2026-09-24T08:18:08Z",
+      "number": 416,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/416",
+      "ancestorOfMaster": true
+    },
+    {
+      "headRefOid": "d07663cdc4ce885de0db39481b0104d5af7da83f",
+      "mergeCommit": {
+        "oid": "91cc3b772300dffca9abae95d96a23394e4744ae"
+      },
+      "mergedAt": "2026-09-24T08:18:07Z",
+      "number": 419,
+      "state": "MERGED",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/419",
+      "ancestorOfMaster": true
+    }
+  ],
+  "originalIDsClosed": [
+    "C08",
+    "C09",
+    "C16",
+    "S1-03",
+    "S1-10",
+    "S1-11",
+    "S1-12",
+    "S1-14",
+    "S1-15",
+    "S1-16",
+    "S1-18",
+    "S1-23"
+  ],
+  "originalMerged": 85,
+  "originalUnfinished": 70,
+  "note": "C07 previously counted; S1-12 two PR halves count once. Whole-app acceptance unchanged13closed67partial."
+}
