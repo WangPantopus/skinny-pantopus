@@ -322,7 +322,10 @@ I signed up, confirmed the email and signed in through the web. Everything after
 
 For the local run, three Postgres 17 details were patched out of a copy of the baseline, never the repo: `transaction_timeout`, `GRANT MAINTAIN`, and the PostGIS version pin. The 92 migrations then applied cleanly, including `ballot_p0`.
 
-**Found and fixed:** the governments sheet rendered under the app shell's header, tab bar and floating buttons, so Skip and Close were covered. It now portals to the body, like `SlidePanel`.
+**Found and fixed:**
+
+- The governments sheet rendered under the app shell's header, tab bar and floating buttons, so Skip and Close were covered. It now portals to the body, like `SlidePanel`.
+- The existing Civic page (Place → Civic) shows the election that `civic_election` carries, so turning Ballot on puts it there. It read the calendar date "2026-11-03" in local time: web showed "Nov 2 · Monday, November 2, 2026" in US time zones, and iOS left the date tile blank because `parseISO` rejects a bare date. Both now read the date in UTC, as `fmtYearMonth` already does. Android parses it with `LocalDate` and was correct. Checked on web in Los Angeles and Tokyo time.
 
 **Found and left for a separate task:** `/start?address=` deep links never preview. The autocomplete API returns `center: [lng, lat]`, but the funnel reads `center.lat`. This predates Ballot.
 
