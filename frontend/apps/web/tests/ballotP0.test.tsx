@@ -19,6 +19,7 @@ jest.mock('next/navigation', () => ({
 import BallotCard from '@/components/ballot/BallotCard';
 import BallotTeaser from '@/components/ballot/BallotTeaser';
 import BallotTodayCard, { hasBallotToday } from '@/components/ballot/BallotTodayCard';
+import { GovernmentsView, storyOverline } from '@/components/ballot/GovernmentsSheet';
 import { timelineLayout } from '@/components/ballot/DeadlineTimeline';
 import { asOfLabel, daysLeft, monthDay } from '@/components/ballot/format';
 import PlaceDashboardView from '@/components/place/PlaceDashboardView';
@@ -209,6 +210,61 @@ describe('the /start teaser', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(screen.getByText('Election date: federal law · Registration and deadlines: Vote.gov.')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+});
+
+describe('the governments view (the peel)', () => {
+  const view = (props: Partial<Parameters<typeof GovernmentsView>[0]> = {}) =>
+    render(<GovernmentsView governments={GOVERNMENTS} address="415 NE Everett St" onClose={() => undefined} {...props} />);
+
+  it('plays the story: one caption per government, overline and name only, then Skip', () => {
+    const { container } = view();
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
+    const captions = container.querySelectorAll('[aria-hidden="true"]');
+    expect(Array.from(captions).map((c) => c.textContent)).toEqual(
+      GOVERNMENTS.items.map((g, i) => `${storyOverline(i + 1, 5, true)}${g.name}`),
+    );
+    // Each government takes its turn 1.2 s after the last, as on the board.
+    expect(Array.from(captions).map((c) => (c as HTMLElement).style.animationDelay)).toEqual(['0ms', '1200ms', '2400ms', '3600ms', '4800ms']);
+    expect(container.querySelectorAll('polygon')).toHaveLength(10);
+    // The finished frame is already in the document for screen readers.
+    expect(screen.getByText('You are standing in at least 5 governments.')).toBeInTheDocument();
+  });
+
+  it('Skip jumps to the finished frame, which then closes', () => {
+    const onClose = jest.fn();
+    const { container } = view({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    expect(container.querySelectorAll('polygon')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('the still frame and reduced motion start on the finished frame', () => {
+    const { unmount } = view({ animate: false });
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    unmount();
+
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'), media: query, onchange: null,
+      addEventListener: () => undefined, removeEventListener: () => undefined,
+      addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      const { container } = view();
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+      expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    } finally {
+      window.matchMedia = matchMedia;
+    }
+  });
+
+  it('a P0 count is a minimum, so the overline says so', () => {
+    expect(storyOverline(2, 5, true)).toBe('Government 2 of at least 5');
+    expect(storyOverline(2, 5, false)).toBe('Government 2 of 5');
   });
 });
 
