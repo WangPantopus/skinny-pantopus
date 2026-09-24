@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -409,7 +410,7 @@ private fun StatusTimeline(lifecycle: VisitLifecycle) {
                 val done = index < current
                 val active = index == current
                 Column(
-                    modifier = Modifier.size(width = 46.dp, height = 40.dp),
+                    modifier = Modifier.width(46.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.s1),
                 ) {
