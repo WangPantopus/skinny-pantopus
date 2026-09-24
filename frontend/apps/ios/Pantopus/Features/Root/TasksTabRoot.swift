@@ -29,6 +29,7 @@ public enum TasksRoute: Hashable {
     case myTasks
     case supportTrains
     case supportTrainDetail(supportTrainId: String)
+    case manageTrain(trainId: String)
     case placeholder(label: String)
 }
 
@@ -163,6 +164,8 @@ public struct TasksTabRoot: View {
             supportTrainsDestination()
         case let .supportTrainDetail(supportTrainId):
             supportTrainDetailDestination(supportTrainId: supportTrainId)
+        case let .manageTrain(trainId):
+            manageTrainDestination(trainId: trainId)
         }
     }
 
@@ -209,12 +212,33 @@ public struct TasksTabRoot: View {
         SupportTrainDetailView(
             viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
             onBack: pop,
-            // Keep the `onShare:` label: as a trailing closure it binds to the
-            // last closure (`onMessageHost`), so Share did nothing.
-            // swiftlint:disable:next trailing_closure
+            onOpenManage: {
+                Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) }
+            },
             onShare: {
                 systemSheet = .share(
-                    items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                    items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
+                )
+            },
+            onMessageHost: { host in
+                path.append(.chatConversation(InboxConversationDestination(
+                    mode: .person(otherUserId: host.organizerUserId ?? ""),
+                    displayName: host.organizerDisplayName,
+                    initials: host.organizerInitials,
+                    identityKind: nil,
+                    verified: false
+                )))
+            }
+        )
+    }
+
+    private func manageTrainDestination(trainId: String) -> some View {
+        ManageTrainView(
+            viewModel: ManageTrainViewModel(trainId: trainId),
+            onClose: { Task { @MainActor in pop() } },
+            onInviteHelpers: { _ in
+                systemSheet = .share(
+                    items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
                 )
             }
         )

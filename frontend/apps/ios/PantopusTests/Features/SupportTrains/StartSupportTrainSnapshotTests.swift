@@ -40,8 +40,8 @@ final class StartSupportTrainSnapshotTests: XCTestCase {
         assertRenders(StartSupportTrainWizardView(viewModel: vm))
         XCTAssertEqual(vm.chrome.primaryCTALabel, "Continue")
         XCTAssertEqual(vm.chrome.progressLabel, .stepOf(current: 1, total: 5))
-        // Mutuals strip is wired for the selected verified neighbor.
-        XCTAssertFalse(vm.recipientMutuals.isEmpty)
+        // No mutuals lookup exists yet, so no (sample) mutuals are shown.
+        XCTAssertTrue(vm.recipientMutuals.isEmpty)
         XCTAssertNil(vm.inviteCandidate)
     }
 
@@ -51,7 +51,7 @@ final class StartSupportTrainSnapshotTests: XCTestCase {
         vm.selectReason(.baby)
 
         assertRenders(StartSupportTrainWizardView(viewModel: vm))
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "Send invite & continue")
+        XCTAssertEqual(vm.chrome.primaryCTALabel, "Continue")
         XCTAssertEqual(vm.chrome.secondaryCTA?.label, "Search again")
         // Invite branch surfaces a candidate built from the typed query.
         XCTAssertEqual(vm.inviteCandidate?.typedName, StartSupportTrainSampleData.inviteQuery)

@@ -5442,28 +5442,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 },
                                 onShare = {
                                     appContext.shareText(
-                                        "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                        "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                         "Share train",
                                     )
                                 },
-                                onSignUp = {
-                                    // Slot-claim sheet lands with the
-                                    // editor surface in a P3.7 follow-up — surface
-                                    // the affordance via a placeholder for now so
-                                    // the dock CTA remains testable.
-                                    navController.navigate(ChildRoutes.placeholder("Claim a slot"))
-                                },
-                                onEditSlot = {
-                                    navController.navigate(ChildRoutes.placeholder("Edit your slot"))
-                                },
-                                onSendCard = {
-                                    navController.navigate(ChildRoutes.placeholder("Send a card"))
-                                },
-                                onJoinAsBackup = {
-                                    navController.navigate(ChildRoutes.placeholder("Join as backup"))
-                                },
-                                onMessageHost = {
-                                    navController.navigate(ChildRoutes.placeholder("Message host"))
+                                // The screen opens its own reserve sheet; pushing a
+                                // placeholder here covered it (C-16).
+                                onSignUp = {},
+                                // Edit slot, Send a card and Join as backup have no
+                                // backend route yet, so they stay unwired and hidden.
+                                onMessageHost = { host ->
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationFromPicker(
+                                            userId = host.organizerUserId.orEmpty(),
+                                            displayName = host.organizerDisplayName,
+                                            initials = host.organizerInitials,
+                                            verified = false,
+                                            locality = null,
+                                        ),
+                                    )
                                 },
                             ),
                     )
@@ -5476,12 +5473,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                             },
                         ),
-                ) {
+                ) { entry ->
+                    val trainId = entry.arguments?.getString(ChildRoutes.REVIEW_SIGNUPS_ID_KEY).orEmpty()
                     ReviewSignupsScreen(
                         onBack = { navController.popBackStack() },
                         onShareTrain = {
                             appContext.shareText(
-                                "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                 "Share train",
                             )
                         },
@@ -5517,14 +5515,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics"))
-                        },
-                        onEditDates = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates"))
-                        },
-                        onInviteHelpers = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers"))
+                        // Invite shares the train, as the detail's Share does.
+                        // Analytics and Edit dates have no backend / native
+                        // editor yet, so they aren't wired and their rows are
+                        // hidden.
+                        onInviteHelpers = { trainId ->
+                            appContext.shareText(
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
+                                "Share train",
+                            )
                         },
                     )
                 }

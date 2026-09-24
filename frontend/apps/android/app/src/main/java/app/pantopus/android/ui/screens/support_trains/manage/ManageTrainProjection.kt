@@ -86,7 +86,7 @@ object ManageTrainProjection {
                 tone = OrganizeRowTone.SKY,
                 label = "Invite more helpers",
                 meta = null,
-                sub = "Share a link or pick from neighbors who follow this train.",
+                sub = "Share a link with people you know.",
                 isDestructive = false,
             ),
             OrganizeRowContent(
