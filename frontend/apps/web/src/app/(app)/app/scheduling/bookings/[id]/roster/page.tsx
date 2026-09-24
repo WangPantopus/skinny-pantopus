@@ -52,7 +52,7 @@ export default function RosterPage() {
   const pillar = pillarForOwner(owner.ownerType);
 
   const [phase, setPhase] = useState<"loading" | "error" | "ready">("loading");
-  const [detail, setDetail] = useState<BookingDetail | null>(null);
+  const [detail, setDetail] = useState<Exclude<BookingDetail, { participant: unknown }> | null>(null);
   const [eventType, setEventType] = useState<EventType | null>(null);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [promotingId, setPromotingId] = useState<string | null>(null);
@@ -62,10 +62,13 @@ export default function RosterPage() {
     if (!id) return;
     let alive = true;
     setPhase("loading");
+    setDetail(null);
     api.scheduling
       .getBooking(id, owner)
       .then(async (d) => {
         if (!alive) return;
+        // The participant detail capability never grants roster/owner access.
+        if (d.participant) throw new Error("Owner access is required for the roster.");
         setDetail(d);
         const etId = d.booking.event_type_id;
         if (etId) {
