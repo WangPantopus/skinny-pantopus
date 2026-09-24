@@ -30,6 +30,7 @@ import { useRadiusSuggestion } from '@/hooks/useRadiusSuggestion';
 import { CATEGORIES, type MarketplaceTab, type FilterPillKey } from './constants';
 import { CategoryIcon } from './iconMap';
 import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 
 const MarketplaceMap = dynamic(() => import('./MarketplaceMap'), { ssr: false });
@@ -356,6 +357,7 @@ export default function MarketplacePage() {
     activeFilters.length === 0 &&
     debouncedSearch.trim().length === 0 &&
     !loading &&
+    !browseQuery.isError &&
     userLocation != null;
   const radiusSuggestion = useRadiusSuggestion(
     visibleListingCount,
@@ -507,8 +509,8 @@ export default function MarketplacePage() {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-          void browseQuery.fetchNextPage();
+        if (entries[0].isIntersecting && hasMore && !loading && !browseQuery.isFetching && !browseQuery.isError) {
+          void browseQuery.fetchNextPage({ cancelRefetch: false });
         }
       },
       { threshold: 0.1 }
@@ -773,11 +775,22 @@ export default function MarketplacePage() {
               loading={loading}
               userLocation={userLocation}
               onOpenCategoryModal={() => setShowCategoryModal(true)}
-              onOpenCreateModal={() => setShowCreateModal(false)}
-              totalCount={totalInBounds}
+              onOpenCreateModal={() => setShowCreateModal(true)}
+              totalCount={visibleListingCount}
               onSave={handleSave}
               nearestActivityCenter={nearestActivityCenter}
             />
+            {browseQuery.isError && browseListings.length === 0 && (
+              <div
+                role="alert"
+                className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 bg-app-surface rounded-full shadow-md border border-app-border text-sm text-app-text-strong"
+              >
+                Couldn&apos;t load listings.
+                <button type="button" onClick={() => void browseQuery.refetch()} className="font-semibold text-primary-600 hover:underline">
+                  Try again
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -889,7 +902,10 @@ export default function MarketplacePage() {
         )}
 
         {/* ── Discovery Mode: curated sections ──────────────── */}
-        {isDiscovery && (
+        {isDiscovery && discoverQuery.isError && !discoverData && (
+          <ErrorState message="Couldn't load the marketplace." onRetry={() => void discoverQuery.refetch()} />
+        )}
+        {isDiscovery && !(discoverQuery.isError && !discoverData) && (
           <MarketplaceDiscoveryFeed
             data={discoverData}
             loading={loading}
@@ -912,6 +928,8 @@ export default function MarketplacePage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <LoadingSkeleton variant="listing-card" count={8} />
               </div>
+            ) : browseQuery.isError && gridListings.length === 0 ? (
+              <ErrorState message="Couldn't load listings." onRetry={() => void browseQuery.refetch()} />
             ) : gridListings.length === 0 ? (
               <EmptyState
                 icon={Store}
@@ -934,13 +952,33 @@ export default function MarketplacePage() {
             )}
 
             <div ref={sentinelRef} className="h-4" />
+            {browseQuery.isError && gridListings.length > 0 && (
+              <div role="alert" className="my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
+                <p>{browseQuery.isFetchNextPageError ? "Couldn't load more listings." : "Couldn't refresh listings."}</p>
+                <button
+                  type="button"
+                  disabled={browseQuery.isFetching}
+                  onClick={() => {
+                    if (browseQuery.isFetching) return;
+                    if (browseQuery.isFetchNextPageError) {
+                      void browseQuery.fetchNextPage({ cancelRefetch: false });
+                    } else {
+                      void browseQuery.refetch({ cancelRefetch: false });
+                    }
+                  }}
+                  className="font-semibold text-primary-600 hover:underline disabled:opacity-50"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
             {loadingMore && (
               <div className="text-center py-6"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" /></div>
             )}
 
             {!loading && !hasMore && gridListings.length > 0 && (
               <p className="text-center text-sm text-app-text-muted py-4">
-                Showing {gridListings.length} of {totalInBounds} listings
+                Showing {gridListings.length} listings
               </p>
             )}
           </>
