@@ -1,0 +1,33 @@
+{
+ "id": "f3-household-block",
+ "name": "Who lives here with you (household block)",
+ "feature": "F3",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The place file's People section \u2014 NOT the home dashboard, which is not where anyone lands (there is no Home tab in the four-tab nav and both natives auto-land on Place).",
+ "purpose": "Ask a new resident, once, who else lives at this address, and make inviting them a two-tap job on the screen they actually see.",
+ "contents": "Title 'Who lives here with you?', the privacy sentence ('They see the same pickup day, calendar and bills. Nothing about your home is shared with anyone else.'), primary 'Invite by email', secondary 'Share a link', tertiary 'Just me'. Triggered by members_active === 1 or within 7 days of the actor's own HomeOccupancy.start_at. Dismissal persists on HomeOccupancy with an undo toast; the Members empty state can reoffer.",
+ "states": [
+  "loading",
+  "visible",
+  "dismissed with undo",
+  "permission-denied \u2014 a member without members.manage sees a read-only 'You and 2 others live here'",
+  "member count > 1 (block collapses to the roster row)",
+  "dismiss PATCH failed (keep the card, retry silently)",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place file People section",
+  "Home dashboard (mirrored, same dismissal)",
+  "Members empty state"
+ ],
+ "visualization": "A two-CTA block that survives a 320dp column with the privacy sentence intact and does not out-shout the verify banner above it. 'Just me' is a text button, not a greyed afterthought.",
+ "uxNote": "Hosting it on the place file instead of the home dashboard is the fix for the doc's biggest F3 delivery problem \u2014 as specified, the card would be seen by a minority of new residents. Also: 'Just me' must not be permanent as the acceptance criteria imply; an undo toast plus a reoffer from the roster keeps a mis-tap from being a dead end. For a co-resident who joined later, key the mover window on the viewer's own occupancy start, not the owner's move_in_date.",
+ "effortDays": 0.75
+}

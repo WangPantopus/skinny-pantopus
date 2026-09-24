@@ -33,7 +33,7 @@ final class PulseFeedViewModelTests: XCTestCase {
     )
 
     private func makeVM() -> PulseFeedViewModel {
-        PulseFeedViewModel(api: makeAPI(), locationProvider: Self.fixedLocation)
+        PulseFeedViewModel(api: makeAPI(), locationProvider: Self.fixedLocation) { nil }
     }
 
     private static let askPostJSON = """
@@ -120,6 +120,30 @@ final class PulseFeedViewModelTests: XCTestCase {
         XCTAssertEqual(vm.activeIntent, .event)
         guard case .empty = vm.state else {
             XCTFail("Expected .empty after switching to .event filter, got \(vm.state)")
+            return
+        }
+    }
+
+    /// C-17: a chip tapped while the first page is loading used to be dropped
+    /// (`fetch` returned early), leaving the old results under the new chip.
+    func testFilterTappedDuringALoadRefetchesAndKeepsTheLatest() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.feedJSON(Self.askPostJSON), gate: "first-load"),
+            .status(200, body: Self.feedJSON())
+        ]
+        let vm = makeVM()
+        let firstLoad = Task { await vm.load() }
+        let deadline = Date().addingTimeInterval(10)
+        while SequencedURLProtocol.capturedRequests.isEmpty, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        await vm.selectIntent(.event)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2, "the tap refetches")
+        SequencedURLProtocol.release("first-load")
+        await firstLoad.value
+        XCTAssertEqual(vm.activeIntent, .event)
+        guard case .empty = vm.state else {
+            XCTFail("The late All response replaced the Event results: \(vm.state)")
             return
         }
     }

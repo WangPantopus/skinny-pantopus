@@ -1,0 +1,36 @@
+{
+ "id": "f1-add-place-sheet",
+ "name": "Add a place (signed-in address search + save)",
+ "feature": "F1",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Sheet over the Place tab and over Today. iOS has SavePlaceSheet.swift already but no entry point from these surfaces; Android has SavedPlacesApi and no signed-in write path at all; web has only the signed-out /start funnel.",
+ "purpose": "Give 'Preview an address' and 'Save an address to see today here' a destination for a signed-in user who has no place \u2014 today both dead-end on Android.",
+ "contents": "Address autocomplete, the selected suggestion, a single Save action, the privacy line ('A private bookmark for your account. Nobody else can see it.'), and on success a direct hand-off to Today. Reuses the existing SavedPlaces POST with expectedUserId.",
+ "states": [
+  "idle",
+  "typing / suggestions",
+  "geocode failure ('We couldn't find that address')",
+  "unsupported region",
+  "saving",
+  "saved (sheet dismisses onto Today with the new chip)",
+  "duplicate of an existing saved place",
+  "offline",
+  "error"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Today empty state 'Preview an address'",
+  "Your places empty state and '+ Add'",
+  "Widget tap landing when there is no place",
+  "Place file address row when empty"
+ ],
+ "visualization": "A compact sheet: one focused field, suggestions as a plain list, one primary button, and a single privacy sentence \u2014 deliberately not a mini-funnel. No grades, no preview: this is 'bookmark it', and the reading happens on Today a second later.",
+ "uxNote": "Adversarial walk found this as a hard dead end: the Place launch funnel is the SIGNED-OUT root, and Android's only saved-place write reads a pending draft from the signup flow. So a signed-in Android user with no place taps 'Preview an address' and reaches nothing. Routing those CTAs to 'Claim your address' instead would be worse \u2014 claiming is a much heavier promise than the copy makes.",
+ "effortDays": 1
+}

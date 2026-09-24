@@ -1,0 +1,38 @@
+# Last review findings for f3-invite-composer (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The offline behaviour conflicts with the ChoiceChip spec: the board disables the channel and role chips offline with its own reason, while the prompt keeps the form editable.
+  - evidence: Prompt: "Offline: the form stays editable, and send is disabled with the reason." / "You're offline. You can finish this, but sending needs a connection." prompts-v3/00a-09.md R1/R2: "disabled: 'You're offline. Invites need a connection.'"
+  - fix: State on Notes that in frame 13 the chips stay enabled offline (an override of the board's disabled cell), or use the board's disabled chip state.
+- [minor] (substance) The 'Role offered' expansion goes beyond GrantLimitList's role-offered variant (V2), which shows grants only under a 'Role offered: Member' disclosure row. The prompt adds a collapsed list of the five locks labelled '(5)', a form the board does not define (its V4 uses 'Show 3 more').
+  - evidence: Prompt: "plus a collapsed 'What needs address verification (5)' that expands to the five lock rows". prompts-v3/00c-10.md V2: "under a 44pt disclosure row 'Role offered: Member' (expanded), the heading 'What you get now' and the 3 grants only."
+  - fix: List the collapsed lock list on Notes as a proposed extension of V2, or reuse V4's 'Show N more' pattern.
+- [minor] (substance) The Guest caption leaves out the relative count that the house microcopy rule and the ChoiceChip spec both include.
+  - evidence: Prompt: "Guest caption: 'Same as Member until Sun 1 Nov'". prompts-v3/00a-09.md: "Guest: 'Same as Member until Sun 1 Nov · in 13 days'". House style: "beyond tomorrow, add the relative count".
+  - fix: Use 'Same as Member until Sun 1 Nov · in 13 days', or whatever form the board settles on.
+- [minor] (substance) Frame 8 (link ready) does not list the expiry, although the InviteRow copy rule and the board require an expiry on every active link. There is also no sent string for the Username channel.
+  - evidence: Artboard 8: "'Link ready · Works once', QR, turn-off hint." component-contract.md InviteRow copyRules: "The manifest always shows the expiry." prompts-v3/00c-06.md: "The expiry is shown … on every active link."
+  - fix: Add 'Expires in 7 days · Mon 26 Oct' to frame 8. Add a Username sent line, e.g. 'Invitation sent to Priya Raman (@priyar)', and list it on Notes.
+- [minor] (substance) Some Foundations crops show this surface differently from the prompt: the ChoiceChip crop uses a primary button 'Send invite', and the InviteRow crop places a link row under the link choice on web-1440. Neither the prompt nor its Notes mentions these.
+  - evidence: prompts-v3/00a-09.md crop a: "then the primary button 'Send invite'". prompts-v3/00c-06.md crop 3: "f3-invite-composer · web-1440: V5 under the link choice." Prompt: "The form's button is always 'Review invitation'."
+  - fix: Add a Notes line: 'Foundations crops that show "Send invite" or an InviteRow under the link choice are superseded here: the form button is "Review invitation", and the active link row lives in Members.'
+- [minor] (substance) The web scope line undersells the web changes: web also gains the reissue review manifest, the Guest-passes caption link, the equal-height slots and 'Still sending…'. The reissue entry from the home dashboard after the migration is also missing.
+  - evidence: Prompt: "Web already has all three channels: change only the captions, the review step and the link limit there." derive-proposals.md f3-invite-policy-reissue entryPoints: "Home dashboard invite entry after the migration".
+  - fix: Change the web line to list every web delta, and add the dashboard entry that opens the reissue review.
+- [minor] (ux) The prompt gives 'Share instead' a text-chip look when unselected. The ChoiceChip contract and the published channel variant draw all three options with the same outlined style.
+  - evidence: Prompt: "Share instead is styled as a text chip but is the third option of the same group". component-contract.md ChoiceChip: "Unselected = border.strong outline and text.strong." 00a-09.md: "R1 channel → channel: 'Email' · 'Username' · 'Share instead'" with no separate style.
+  - fix: Either draw all three as standard ChoiceChip channel options, with Email selected by default, or keep the text style and add a Notes line: "Proposed ChoiceChip channel sub-style for 'Share instead'; confirm on Foundations."
+- [minor] (ux) The role caption differs from the published GrantLimitList role-caption variant in punctuation and in the Guest wording. The prompt's wording follows the research, but it does not say it overrides the board.
+  - evidence: Prompt: Member "Sees and edits the calendar, sees bills and who paid, sees who lives here"; Guest "Same as Member until Sun 1 Nov". 00c-10.md V5: "Sees and edits the calendar · Sees bills and who paid · Sees who lives here"; V5g: "Sees and edits the calendar".
+  - fix: Use the board's middot format for Member. Keep "Same as Member until Sun 1 Nov" for Guest, and note it on Notes as a correction to GrantLimitList V5g, per the research.
+- [minor] (ux) After an email send, the sent panel offers the invitation link and a QR code with Copy and Share, but says nothing about who the link is for. The exposure the Share instead warning exists to prevent can reappear here without notice.
+  - evidence: Prompt: Sent panel "the link in a copyable field; a QR block …; 'Copy link' and 'Share'"; INSTEAD OF: "Instead of warning about link exposure in the sent panel, draw the warning in the recipient slot".
+  - fix: Add a caption under the email sent panel's link: "This link is for priya@example.com. Share it only with Priya." List it on Notes.
+- [minor] (ux) Flow-12 step 4 says the reissue shows a new link and a new expiry. Frame 10 lists only the status text and the expiry.
+  - evidence: flows-spec.md flow-12 #4: "Dana confirms, and a new link and expiry are shown." Prompt artboard 10: "sent again, old link stopped, new expiry."
+  - fix: Change artboard 10 to: "sent again, old link stopped, the new link with Copy link / Share, new expiry, Done" (reusing the sent-panel layout).
+- [minor] (ux) Several states and strings are missing: the username 'looking up' state, the form's Close string, and the in-sheet already-member and already-pending errors. FreshnessLine is listed but nothing uses it.
+  - evidence: Prompt: "The username resolves after typing pauses and shows the person row" (no resolving state); "Close or Done is always visible" but COPY has "Close" only for permission denied; FOUNDATIONS lists "FreshnessLine".
+  - fix: Add COPY "Close" for the form and review. Add an inline resolving line "Looking up @priyar…" (text, no spinner) to frame 3's Notes. Remove FreshnessLine from FOUNDATIONS, or name its use (offline 'as of' line).
+- [minor] (ux) Three user-facing strings name the screen 'Members', which the glossary lists as a forbidden synonym for 'Your household' in user copy.
+  - evidence: Prompt: "You can turn it off in Members." · "Resend it from Members." · "You approve each person in Members." component-contract.md glossary: "Your household — … Not: … members (in user copy)".
+  - fix: Keep the strings, since they name the existing screen, and add a Notes item: "'Members' used as the screen name; glossary conflict, confirm the screen title."

@@ -1,0 +1,36 @@
+{
+ "id": "f3b-verify-address-sheet",
+ "name": "Verify this address (one sheet, many callers)",
+ "feature": "F3b",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web reuses VerifyPromptSheet from new hosts; iOS and Android have only an inline verify banner and need the sheet itself.",
+ "purpose": "One consistent place to understand what address verification adds and start it \u2014 parameterised by WHY it opened.",
+ "contents": "A reason string in the header ('To send neighbor messages\u2026', 'You've joined this household\u2026'), an identical body: the unlock list, then method cards (postcard code, document, landlord confirmation, owner attestation) each with a time-to-result and its requirement line.",
+ "states": [
+  "loading methods",
+  "method picker",
+  "a method unavailable for this address type",
+  "a method unavailable to a non-owner occupant (stated, with the owner-attestation path offered)",
+  "verification already pending (status, not a second start)",
+  "already address-verified (never opens)",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Invitation accepted screen",
+  "Any locked attested action",
+  "Place dashboard verify banner",
+  "Place file 'Proof' row",
+  "Members roster capability caption"
+ ],
+ "visualization": "Unlock list first, capped at the two people actually want, with the rest collapsed; method rows below carry an ETA chip each so the choice is 'how fast' rather than 'what is this'.",
+ "uxNote": "Two sheets would be the obvious mistake here \u2014 one for 'after you accepted' and one for 'you tried to do a thing'. One sheet plus a reason parameter keeps the body identical and the header honest.",
+ "effortDays": 1
+}

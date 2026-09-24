@@ -1,0 +1,15 @@
+{
+ "id": "f1-today-air-band",
+ "export": "docs/design/exports/f1-today-air-band/f1-today-air-band.html",
+ "manifest": 23,
+ "mode": "bundle",
+ "pages": 23,
+ "exact": 23,
+ "labelled": 23,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f1-today-air-band/pages",
+ "placeholders": []
+}

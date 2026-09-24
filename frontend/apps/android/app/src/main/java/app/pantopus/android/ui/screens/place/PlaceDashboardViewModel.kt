@@ -34,11 +34,23 @@ class PlaceDashboardViewModel
 
         private var homeId: String? = null
 
-        /** Bind the screen to a home; idempotent once loaded for that home. */
+        /** Set when a verification flow starts, so coming back reloads instead of showing the old state. */
+        private var reloadPending = false
+
+        /**
+         * Bind the screen to a home; idempotent once loaded for that home,
+         * unless a verification flow started from here since.
+         */
         fun load(homeId: String) {
-            if (this.homeId == homeId && _state.value is PlaceDashboardUiState.Loaded) return
+            if (this.homeId == homeId && _state.value is PlaceDashboardUiState.Loaded && !reloadPending) return
+            reloadPending = false
             this.homeId = homeId
             refresh()
+        }
+
+        /** A verification flow is opening on top; reload when the dashboard shows again. */
+        fun reloadOnReturn() {
+            reloadPending = true
         }
 
         fun refresh() {

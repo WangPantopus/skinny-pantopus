@@ -1,0 +1,32 @@
+# Last review findings for f3-bills-list (round 2). The fix after this round was applied but not re-verified.
+
+- [major] (substance) The race copy names Sam as another person who marked a bill paid. This prompt says only Maya can mark bills paid and draws Sam's LockedActionRow 'Maya can mark bills paid.', so the frame is impossible in this household.
+  - evidence: Prompt INTERACTION: "the row reads \"Already marked paid by you on your phone · 6:02 PM\" or \"Already marked paid by Sam · 6:02 PM\""; WHO AND WHEN: "He can see bills, but only Maya can mark them paid." f3-household-notifications prompt: "The actor is Maya because only she can mark bills paid".
+  - fix: Remove the 'by Sam' race variant, or name an invented admin and list them on Notes.
+- [minor] (substance) The fixture's HOA dues ($285, Sun 1 Nov) are left out of the list and the header total without saying why. The Foundations board draws HOA dues as a BillRow, so the two sources disagree on whether HOA dues count toward '3 upcoming · $306.17'.
+  - evidence: house-style-v2.txt FIXTURES: "HOA dues $285 due Sun 1 Nov" (listed apart from Bills); prompts-v3 Foundations bills specimen: "\"HOA dues\" $285.00 / \"Due in 13 days · Sun 1\"".
+  - fix: Add a Notes line saying HOA dues are a date, not a HomeBill, so they are not in this list, or add the row and correct the totals.
+- [minor] (substance) The member option 'I paid this' from the contract's BillRow is left out. Notes list it as an open decision, but the prompt does not say that the 'names who can act' fallback is the chosen interim. The contract variant expects that fallback at row level, and the prompt draws it only in the header.
+  - evidence: component-contract.md BillRow: "member ('I paid this' in overflow, or 'Dana or Marcus can mark this paid')"; per-surface-changes: "If the product decides against that, the member caption must name who can mark it paid".
+  - fix: State in Notes that the BillRow member variant uses the header LockedActionRow plus the row's 'Not marked paid yet' in place of 'I paid this' until the decision is made.
+- [major] (ux) The prompt drops the required state dark twin on purpose to stay within a budget that does not exist.
+  - evidence: ARTBOARDS: only "24. f3-bills-list · ios · 01-upcoming-member-dense · dark"; Notes: "the marked-paid dark twin (frame 07) omitted to stay in budget". The house-style rule sets the default at the dense frame plus one state frame.
+  - fix: Add "25. f3-bills-list · ios · 07-marked-paid-undo · dark — dark twin of 7." Renumber Notes to 26, remove the "omitted" note and change Turn 5 to "25-26".
+- [major] (ux) The race string names Sam as having marked a bill paid, but this prompt makes Maya the only person who can.
+  - evidence: WHO AND WHEN: "He can see bills, but only Maya can mark them paid." INTERACTION: "\"Already marked paid by Sam · 6:02 PM\""; COPY repeats it.
+  - fix: Remove "Already marked paid by Sam · 6:02 PM" and keep "Already marked paid by you on your phone · 6:02 PM". Note the "<name>" pattern for a future second manager on Notes.
+- [minor] (ux) The Tue 22 Sep burst includes Clark's September bill due Wed 23 Sep, which is within 3 days. Under the delivery rule in f3-household-notifications, that notice would be loud, not quiet. The dates must change in step with that prompt.
+  - evidence: CONTENT: "Clark Public Utilities $109.60 (September bill, due Wed 23 Sep) · Paid by Maya · Tue 22 Sep"; the notifications prompt says "bill_paid is loud only for a member who still sees the bill as unpaid and due within 3 days".
+  - fix: Move the burst to Thu 17 Sep ("Paid by Maya · Thu 17 Sep" on all three rows) and update the Notes assumption to match.
+- [minor] (ux) The InlineUndo wording is awkward and does not follow the glossary's "marked … paid" order. Unlike bill detail, the list also never tells Maya that the household will be told when she leaves.
+  - evidence: INTERACTION: "InlineUndo \"Marked paid Clark Public Utilities · Undo\"". The f3-bill-detail-web caption reads "We'll let Sam know when you leave this page."
+  - fix: Use "Marked Clark Public Utilities paid · Undo" with the caption "We'll let Sam know when you leave this screen." under it (omit the caption for Only-you bills). Update COPY and frame 7.
+- [minor] (ux) The header never says whether the overdue bill counts toward the window total, so the dense frame's header is ambiguous.
+  - evidence: CONTENT: "The header adds \"1 overdue\"." FIRST FIVE SECONDS: "3 upcoming · $306.17 through Mon 2 Nov".
+  - fix: State it exactly: "3 upcoming · $306.17 through Mon 2 Nov · 1 overdue ($41.18)". The overdue amount is kept out of the window total.
+- [minor] (ux) The web target size is given in native units, and the attribution wording differs from bill detail.
+  - evidence: LAYOUT: "each row has an overflow button (44pt / 48dp)" on a surface that includes web. The row reads "Paid by Maya · Tue 22 Sep", while bill detail reads "Marked paid by Maya · Mon 19 Oct".
+  - fix: Write "44pt iOS / 48dp Android / 44px web". Keep the BillRow contract string "Paid by Maya", and add a Notes line saying detail uses the longer "Marked paid by" on purpose.
+- [minor] (ux) The WHERE path is out of order.
+  - evidence: "Place tab › place file Money section › Larkspur Loop › Bills"
+  - fix: Write "Place tab › Larkspur Loop (place file) › Money section › Bills".

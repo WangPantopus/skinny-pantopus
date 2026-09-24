@@ -1,0 +1,38 @@
+{
+ "id": "f10-mail-day-triage",
+ "name": "Mail Day triage (snap-aware)",
+ "feature": "F10",
+ "disposition": "NEW_SCREEN",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web: NEW route /app/mailbox/mail-day (today the nav entry points at the SETTINGS page, so web has no triage surface at all). iOS MailDayView and Android MailDayScreen: extend.",
+ "purpose": "The one place a stack of paper mail becomes a list of decisions.",
+ "contents": "Day header, streak and last-scan chips, a PERSISTENT capture affordance (not only the empty-state CTA), 'Needs a call' rows where a snapped piece shows a thumbnail + classification + one extracted line + an 'Unconfirmed' state, 'Reviewed today' with per-item and bulk undo, the sticky Finish-day footer, the yesterday recap and setup nudges.",
+ "states": [
+  "loading",
+  "empty (hero + Scan today's stack)",
+  "populated",
+  "mid-upload rows",
+  "failed upload with inline retry",
+  "error",
+  "offline (queued snaps as pending rows)",
+  "no claimed home \u2192 'Mail snap needs a claimed address' routing to the Date sheet instead of a dead camera button",
+  "permission-denied (member without finance.view sees the piece, not payee or amount)",
+  "AI unavailable notice",
+  "undo window"
+ ],
+ "phase": "phase2",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Mailbox nav (must be repointed off the settings page or the feature is invisible on web)",
+  "Mail Day banner in the mailbox layout",
+  "Mail Day push",
+  "Place file Money section"
+ ],
+ "visualization": "One row archetype with an optional leading thumbnail rail and an optional amber unconfirmed state, so a digital routing decision and a photographed bill awaiting confirmation share a rhythm. Densest frame to draw: 9 unreviewed (3 photographed, one uploading, one failed) above 6 reviewed with a live undo countdown and the Finish footer overlapping.",
+ "uxNote": "Both natives put the scan CTA only in the EMPTY hero, so a user with one digital item already queued has no way to snap. Make the capture affordance persistent on all three platforms.",
+ "effortDays": 2
+}

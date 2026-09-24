@@ -6,15 +6,19 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.scheduling.SchedulingError
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +37,7 @@ class BookingDetailViewModel
     constructor(
         private val repo: SchedulingRepository,
         private val errors: SchedulingErrorDecoder,
+        private val auth: AuthRepository,
         ownerRelay: BookingsOwnerRelay,
         private val savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
@@ -68,6 +73,22 @@ class BookingDetailViewModel
         val toast: StateFlow<String?> = _toast.asStateFlow()
 
         private var started = false
+        private var generation = 0L
+        private var readJob: Job? = null
+        private var rsvpJob: Job? = null
+        private val _rsvp = MutableStateFlow(BookingRsvpUiState())
+        val rsvp: StateFlow<BookingRsvpUiState> = _rsvp.asStateFlow()
+
+        private fun actorId(): String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        init {
+            viewModelScope.launch {
+                auth.state.map { (it as? AuthRepository.State.SignedIn)?.user?.id }
+                    .distinctUntilChanged().collect {
+                        if (started) fetch()
+                    }
+            }
+        }
 
         fun start() {
             if (started) {
@@ -86,31 +107,70 @@ class BookingDetailViewModel
         fun refresh() = fetch()
 
         private fun fetch() {
+            generation += 1
+            val requestGeneration = generation
+            val actor = actorId()
+            readJob?.cancel()
+            rsvpJob?.cancel()
+            _rsvp.value = BookingRsvpUiState()
+            _approveDecline.value = null
+            // A refresh may revoke owner/participant access. Never retain privileged content.
+            _state.value = BookingDetailUiState.Loading
             if (bookingId.isBlank()) {
                 _state.value = BookingDetailUiState.Error("We couldn't find this booking.")
                 return
             }
-            viewModelScope.launch {
-                when (val result = repo.getBooking(owner, bookingId)) {
-                    is NetworkResult.Success ->
-                        _state.value =
-                            BookingDetailUiState.Loaded(
-                                result.data.toDetailData(owner),
-                            )
-                    is NetworkResult.Failure ->
-                        _state.value =
-                            when (errors.decode(result.error)) {
-                                is SchedulingError.Secret ->
-                                    BookingDetailUiState.Error(
-                                        "Only the owner can view this booking.",
-                                    )
-                                else ->
-                                    BookingDetailUiState.Error(
-                                        "We couldn't load this booking. Check your connection and try again.",
-                                    )
-                            }
-                }
+            if (actor == null) {
+                _state.value = BookingDetailUiState.Error("Sign in to view this booking.")
+                return
             }
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getBooking(owner, bookingId)
+                    if (generation != requestGeneration || actorId() != actor) return@launch
+                    when (result) {
+                        is NetworkResult.Success ->
+                            _state.value =
+                                BookingDetailUiState.Loaded(
+                                    result.data.toDetailData(owner),
+                                )
+                        is NetworkResult.Failure ->
+                            _state.value =
+                                when (errors.decode(result.error)) {
+                                    is SchedulingError.Secret ->
+                                        BookingDetailUiState.Error(
+                                            "You don't have access to this booking.",
+                                        )
+                                    else ->
+                                        BookingDetailUiState.Error(
+                                            "We couldn't load this booking. Check your connection and try again.",
+                                        )
+                                }
+                    }
+                }
+        }
+
+        fun respond(status: String) {
+            val data = loaded() ?: return
+            if (data.participant?.isRequired == null || !data.isActive || _rsvp.value.busy) return
+            val actor = actorId() ?: return
+            val requestGeneration = generation
+            _rsvp.value = BookingRsvpUiState(busy = true)
+            rsvpJob =
+                viewModelScope.launch {
+                    val result = repo.rsvpBooking(owner, bookingId, status)
+                    if (generation != requestGeneration || actorId() != actor) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> fetch()
+                        is NetworkResult.Failure -> {
+                            if (errors.decode(result.error) is SchedulingError.Secret) {
+                                fetch()
+                            } else {
+                                _rsvp.value = BookingRsvpUiState(error = "Couldn't save your response. Try again.")
+                            }
+                        }
+                    }
+                }
         }
 
         fun toastConsumed() {
@@ -132,6 +192,7 @@ class BookingDetailViewModel
 
         private fun sheetFor(): ApproveDeclineSheetState? {
             val data = loaded() ?: return null
+            if (data.participant != null) return null
             return ApproveDeclineSheetState(
                 pillar = data.pillar,
                 requesterName = data.requesterName,
@@ -160,6 +221,7 @@ class BookingDetailViewModel
         }
 
         fun approve() {
+            if (loaded()?.canApprove != true) return
             _approveDecline.update {
                 it?.copy(
                     approving = true,
@@ -186,6 +248,7 @@ class BookingDetailViewModel
         }
 
         fun declineConfirm() {
+            if (loaded()?.canApprove != true) return
             val sheet = _approveDecline.value ?: return
             val reason = sheet.note.ifBlank { sheet.selectedReason }
             _approveDecline.update { it?.copy(submitting = true, errorMessage = null) }

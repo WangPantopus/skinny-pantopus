@@ -3,8 +3,8 @@
 //  Pantopus
 //
 //  Stream I12 — F14 Visit Detail. Contract-first: a visit is a HomeCalendarEvent
-//  read via `GET …/events/:eventId`. Status is derived from time (Confirmed
-//  when upcoming, Done when past); Reschedule / Edit write through
+//  read via `GET …/events/:eventId`. Status is derived from time (Scheduled
+//  when upcoming, Past when elapsed); Reschedule / Edit write through
 //  `PUT …/events/:eventId`, Cancel deletes the event, Book again re-opens F13.
 //  (The design's offer/reserve/link lifecycle has no v1 backend.)
 //
@@ -28,21 +28,15 @@ final class VisitDetailViewModel {
         case done
     }
 
-    /// View-only projection of the design's 4-step status timeline
-    /// (Offered → Reserved → Confirmed → Done). The concrete-visit model only
-    /// distinguishes Confirmed (upcoming) from Done (past), so a confirmed
-    /// visit lands on step 2 (Confirmed) and a done visit on step 3 (Done);
-    /// the earlier Offered/Reserved steps render as completed. The offer/
-    /// reserve/link lifecycle the design also draws has no v1 backend.
+    /// The existing calendar record is scheduled; its end time can be past.
+    /// Neither state establishes an offer, reservation, or completion.
     var statusStep: Int {
-        lifecycle == .done ? 3 : 2
+        lifecycle == .done ? 1 : 0
     }
 
-    /// The design renders a header terminal chip in the Completed/Cancelled/
-    /// No-show states. The only terminal state this model derives is `done` →
-    /// Completed (check / success tones).
+    /// Elapsed time is displayed neutrally, without inferring attendance.
     var terminalChip: (label: String, icon: PantopusIcon)? {
-        lifecycle == .done ? ("Completed", .check) : nil
+        lifecycle == .done ? ("Past", .clock) : nil
     }
 
     // MARK: State
@@ -148,7 +142,7 @@ final class VisitDetailViewModel {
         let isPast = (end ?? now) < now
         lifecycle = isPast ? .done : .confirmed
         timeText = isPast
-            ? "Done · \(ResourceTime.shortDate(event.startAt))"
+            ? "Past · \(ResourceTime.shortDate(event.startAt))"
             : ResourceTime.longRangeLabel(startISO: event.startAt, endISO: event.endAt)
 
         let ids = event.assignedTo ?? []

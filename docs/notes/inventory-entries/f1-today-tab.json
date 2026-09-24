@@ -1,0 +1,40 @@
+{
+ "id": "f1-today-tab",
+ "name": "Today (one composition, both payloads)",
+ "feature": "F1 / F4",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web /app/today (hub/today/page.tsx). iOS TodayTabRoot / AddressTodayTabView. Android TodayTabScreen. Absorbs the content of /app/place/today, the native Screen-2 Today and the push-only briefing screen.",
+ "purpose": "Stop having three screens called Today. One composition per platform, whose sections appear or not based on data, so claiming an address reads as 'more sections appeared' rather than a layout change that loses the calendar.",
+ "contents": "Location row (address label + 'Saved place \u00b7 Only you' chip at T1 + 'Updated Nm ago'); the delivered briefing pinned as the top card when arrived from a push; weather; the pickup lead card; the 14-day address-calendar block; the air-quality band; alerts; ranked signals; 'Good day to\u2026' tiles; the briefing opt-in card; a first-14-days progress row pointing at the place file; the keeper strip slot (phase 2). Requires the address_calendar section to be emitted on the hub payload (the backend already emits pickup there as a signal of kind 'address_calendar'; the web type union is simply missing the member, which is why it currently renders with a Sparkles icon).",
+ "states": [
+  "no place at all \u2014 'Today starts with a place' (source==='none' only)",
+  "display_mode hidden (has a location \u2014 must NOT show the empty copy)",
+  "warming: location resolved, provider checks still landing \u2014 sections appear as they arrive, no all-clear claim yet",
+  "saved place (chip)",
+  "claimed home (no chip)",
+  "quiet day: 'Nothing needs your attention today' with a receipt line naming what was checked",
+  "partial: a named provider failed, Retry, the rest still rendered",
+  "alert variant",
+  "stale/offline with 'Updated 2h ago'",
+  "error + Retry",
+  "arrived from a push (briefing pinned)",
+  "arrived from the widget (refreshed in place, 'Updated just now')"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Today tab in both navs",
+  "Briefing push",
+  "Widget tap",
+  "Alert push",
+  "'See Today' on the save confirmation"
+ ],
+ "visualization": "One vertical order, identical at every tier: location row \u2192 pinned briefing (if any) \u2192 pickup lead card \u2192 14-day strip \u2192 weather \u2192 air band \u2192 alerts \u2192 signals. Quiet day is a FINISHED screen, not an empty state: the receipt line renders as four small ticked checks (weather, air, alerts, your calendar), which is what makes silence legible. The warming state renders the same skeleton shapes in place, never a full-page spinner.",
+ "uxNote": "The biggest IA fix in the pack. Today the tab and Place > Today render different payloads with different gates, and the briefing is a third Today reachable only by tapping a push \u2014 which means a native user with notifications off can never see the pickup card or the quiet-day receipt, breaking design rule 4 on two of three platforms. Collapsing to one composition deletes three duplicate entries from the original proposal and is cheaper than maintaining the split. Rename /app/place/today's residual content 'At this address' inside the Place area or delete the route.",
+ "effortDays": 3
+}

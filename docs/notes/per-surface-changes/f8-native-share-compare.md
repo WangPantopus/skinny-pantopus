@@ -1,0 +1,6 @@
+# Research-backed changes for f8-native-share-compare
+
+- Android: draw the system Sharesheet with EXTRA_TITLE 'Compare your place with mine' and a thumbnail, not an app-drawn M3 chooser. No-target case → inline 'Copy link' [share]
+- iOS: the share-sheet header is populated from LPLinkMetadata (card title and image) [share]
+- Tertiary text buttons are 44pt/48dp tall, 8dp apart; 'Link copied' is announced [a11y]
+- (research contradiction, topic share-compare-civic: shareable cards, th) v1: Android frame 8: "Material 3 bottom-sheet chooser presented". Android frame 9: an app-authored "No apps to share with." state. | research: Android developer guidance: 'Don't display your app's own list of share targets or create your own Sharesheet variations.' Use Intent.createChooser with EXTRA_TITLE and a ClipData thumbnail. The chooser callback reports only the chosen target. On iOS, LPLinkMetadata populates the share sheet's preview header. | do: Draw the system Android Sharesheet (not an app-drawn M3 sheet) with a title such as "Compare your place with mine" and the card thumbnail in its preview. Treat the no-target case as a system condition and show the fallback 'Copy link' inline. On iOS, draw the system sheet header populated from LPLinkMetadata (card title and image), not a bare URL.

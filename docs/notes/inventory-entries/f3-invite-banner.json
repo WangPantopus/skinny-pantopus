@@ -1,0 +1,32 @@
+{
+ "id": "f3-invite-banner",
+ "name": "Invitations waiting for you (single-slot landing banner)",
+ "feature": "F3",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The surface a signed-in user actually lands on: web Place dashboard / hub StatusStrip; iOS Hub banner slot; Android HubSections banner region.",
+ "purpose": "Make a waiting household invitation \u2014 and a dead one needing reissue \u2014 impossible to miss, without opening My Homes.",
+ "contents": "One row: '{Inviter} invited you to {home}' + Review, backed by GET /api/homes/invitations (a dead client on web with zero callers, and no native client at all). Two or more reads 'You have 2 invitations' and opens the decision flow's index. The sender-side twin appears here too: '2 invitations need to be sent again'. Explicit precedence, one banner maximum: invite > reissue > setup > verify.",
+ "states": [
+  "hidden (none)",
+  "one invite",
+  "multiple",
+  "expiring soon",
+  "needs reissue (sender)",
+  "fetch failed (hide silently, never a broken banner)",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place dashboard / hub on every load",
+  "Push notification for a new invitation"
+ ],
+ "visualization": "A single-line banner with the inviter's name first and one action \u2014 the same slot shape the existing 'from the card in your mailbox' pill uses, so it reads as an arrival context rather than a new component. Never stacked with the setup or verify banners; the precedence rule is enforced in code, not by hope.",
+ "uxNote": "The doc puts received invites only on My Homes, which a brand-new invitee \u2014 who usually has no home at all and lands on the Place dashboard \u2014 has no reason to open. Merging the doc's My Homes section into this banner removes a screen and fixes the entry-point bug at the same time. The sender half is what closes the INVITE_POLICY_CHANGED loop: without it the recipient is told to ask someone who can see nothing wrong.",
+ "effortDays": 1
+}

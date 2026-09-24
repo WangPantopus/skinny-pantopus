@@ -1,0 +1,15 @@
+{
+ "id": "f8-seasonal-aha",
+ "export": "docs/design/exports/f8-seasonal-aha/f8-seasonal-aha.html",
+ "manifest": 24,
+ "mode": "bundle",
+ "pages": 24,
+ "exact": 24,
+ "labelled": 24,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-seasonal-aha/pages",
+ "placeholders": []
+}

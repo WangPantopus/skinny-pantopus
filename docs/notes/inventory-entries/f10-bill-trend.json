@@ -1,0 +1,32 @@
+{
+ "id": "f10-bill-trend",
+ "name": "Bill trend vs the going rate",
+ "feature": "F10 / F3",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Bill detail, per bill_type. Data already exists: homeBillComparisonService returns own_months/amounts plus k-anonymous peer averages and an insufficientData flag \u2014 rendered as sentences on Android only, and nothing at all on web and iOS.",
+ "purpose": "Give the monthly-return step of the loop an actual payoff: is this bill normal for around here?",
+ "contents": "12 months of your amounts with the peer average as a reference line, the current month highlighted, and the k stated in the caption ('average of 14 homes nearby'). A snapped bill marks its column so the provenance block and the trend agree.",
+ "states": [
+  "12 months present",
+  "partial history",
+  "insufficientData \u2192 bars drawn, NO line, caption 'Not enough homes nearby to compare yet'",
+  "permission-denied",
+  "loading",
+  "error",
+  "offline"
+ ],
+ "phase": "phase2",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Bill detail",
+  "Place file Money section"
+ ],
+ "visualization": "A zero-based column chart of your amounts with the peer average as a single horizontal REFERENCE LINE \u2014 not a paired second series. Paired bars invite a household-versus-household reading; a baseline reads as 'here is the going rate', which is what a k-anonymous peer average actually is. The line's ABSENCE is the honest signal when k is too small; it must never degrade to a zero baseline.",
+ "uxNote": "F10 stakes the monthly return on bills and never mentions the one real time series already in the codebase. This is the cheapest genuinely new value in phase 2.",
+ "effortDays": 1
+}

@@ -1,0 +1,2092 @@
+[
+ {
+  "board": "00a",
+  "i": 0,
+  "title": "ProvenanceMark anatomy, light",
+  "label": "00a · ProvenanceMark · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/00-ProvenanceMark__01-anatomy__light.png",
+  "w": 1440,
+  "h": 4180,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 1,
+  "title": "ProvenanceMark scaling and greyscale, light",
+  "label": "00a · ProvenanceMark · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/01-ProvenanceMark__03-scaling-greyscale__light.png",
+  "w": 1440,
+  "h": 2900,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 2,
+  "title": "ProvenanceMark variants and states, light",
+  "label": "00a · ProvenanceMark · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/02-ProvenanceMark__02-variants-states__light.png",
+  "w": 2400,
+  "h": 2216,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 3,
+  "title": "ProvenanceMark anatomy, dark",
+  "label": "00a · ProvenanceMark · 01-anatomy · dark",
+  "file": "docs/design/exports/00a/png/03-ProvenanceMark__01-anatomy__dark.png",
+  "w": 1440,
+  "h": 1980,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 4,
+  "title": "ProvenanceMark variants and states, dark",
+  "label": "00a · ProvenanceMark · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/04-ProvenanceMark__02-variants-states__dark.png",
+  "w": 2400,
+  "h": 2216,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 5,
+  "title": "ProvenanceMark in context, light",
+  "label": "00a · ProvenanceMark · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/05-ProvenanceMark__04-in-context__light.png",
+  "w": 1440,
+  "h": 1560,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 6,
+  "title": "Foundations 00a Notes",
+  "label": null,
+  "file": "docs/design/exports/00a/png/06-Foundations-00a-Notes.png",
+  "w": 1440,
+  "h": 6042,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 7,
+  "title": "Foundations 00a Notes",
+  "label": null,
+  "file": "docs/design/exports/00a/png/07-Foundations-00a-Notes.png",
+  "w": 1440,
+  "h": 4114,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 8,
+  "title": "Foundations 00a Notes",
+  "label": null,
+  "file": "docs/design/exports/00a/png/08-Foundations-00a-Notes.png",
+  "w": 1440,
+  "h": 6467,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 9,
+  "title": "SourceCaption anatomy, light",
+  "label": "00a · SourceCaption · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/09-SourceCaption__01-anatomy__light.png",
+  "w": 1440,
+  "h": 3080,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 10,
+  "title": "SourceCaption variants and states, light",
+  "label": "00a · SourceCaption · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/10-SourceCaption__02-variants-states__light.png",
+  "w": 1600,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 11,
+  "title": "SourceCaption in context, light",
+  "label": "00a · SourceCaption · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/11-SourceCaption__04-in-context__light.png",
+  "w": 1440,
+  "h": 1120,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 12,
+  "title": "SourceCaption scaling and greyscale, light",
+  "label": "00a · SourceCaption · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/12-SourceCaption__03-scaling-greyscale__light.png",
+  "w": 1474,
+  "h": 2820,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 13,
+  "title": "SourceCaption variants and states, dark",
+  "label": "00a · SourceCaption · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/13-SourceCaption__02-variants-states__dark.png",
+  "w": 1600,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 14,
+  "title": "ScopeChip anatomy, light",
+  "label": "00a · ScopeChip · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/14-ScopeChip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2760,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 15,
+  "title": "ScopeChip variants and states, light",
+  "label": "00a · ScopeChip · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/15-ScopeChip__02-variants-states__light.png",
+  "w": 1440,
+  "h": 1620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 16,
+  "title": "ScopeChip in context, light",
+  "label": "00a · ScopeChip · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/16-ScopeChip__04-in-context__light.png",
+  "w": 1440,
+  "h": 1160,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 17,
+  "title": "ScopeChip scaling and greyscale, light",
+  "label": "00a · ScopeChip · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/17-ScopeChip__03-scaling-greyscale__light.png",
+  "w": 1440,
+  "h": 2760,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 18,
+  "title": "ScopeChip variants and states, dark",
+  "label": "00a · ScopeChip · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/18-ScopeChip__02-variants-states__dark.png",
+  "w": 1440,
+  "h": 1620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 19,
+  "title": "FreshnessLine anatomy, light",
+  "label": "00a · FreshnessLine · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/19-FreshnessLine__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2760,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 20,
+  "title": "FreshnessLine variants and states, light",
+  "label": "00a · FreshnessLine · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/20-FreshnessLine__02-variants-states__light.png",
+  "w": 2400,
+  "h": 2260,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 21,
+  "title": "FreshnessLine in context, light",
+  "label": "00a · FreshnessLine · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/21-FreshnessLine__04-in-context__light.png",
+  "w": 1440,
+  "h": 1000,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 22,
+  "title": "FreshnessLine scaling and greyscale, light",
+  "label": "00a · FreshnessLine · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/22-FreshnessLine__03-scaling-greyscale__light.png",
+  "w": 2400,
+  "h": 2940,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 23,
+  "title": "FreshnessLine variants and states, dark",
+  "label": "00a · FreshnessLine · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/23-FreshnessLine__02-variants-states__dark.png",
+  "w": 2400,
+  "h": 2260,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 24,
+  "title": "OfflineNotice anatomy, light",
+  "label": "00a · OfflineNotice · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/24-OfflineNotice__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2500,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 25,
+  "title": "OfflineNotice variants and states, light",
+  "label": "00a · OfflineNotice · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/25-OfflineNotice__02-variants-states__light.png",
+  "w": 2000,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 26,
+  "title": "OfflineNotice in context, light",
+  "label": "00a · OfflineNotice · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/26-OfflineNotice__04-in-context__light.png",
+  "w": 1440,
+  "h": 960,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 27,
+  "title": "OfflineNotice scaling and greyscale, light",
+  "label": "00a · OfflineNotice · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/27-OfflineNotice__03-scaling-greyscale__light.png",
+  "w": 2000,
+  "h": 2840,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 28,
+  "title": "OfflineNotice variants and states, dark",
+  "label": "00a · OfflineNotice · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/28-OfflineNotice__02-variants-states__dark.png",
+  "w": 2000,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 29,
+  "title": "StatusChip anatomy, light",
+  "label": "00a · StatusChip · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/29-StatusChip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2380,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 30,
+  "title": "StatusChip variants and states, light",
+  "label": "00a · StatusChip · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/30-StatusChip__02-variants-states__light.png",
+  "w": 1440,
+  "h": 1620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 31,
+  "title": "StatusChip in context, light",
+  "label": "00a · StatusChip · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/31-StatusChip__04-in-context__light.png",
+  "w": 1440,
+  "h": 940,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 32,
+  "title": "StatusChip scaling and greyscale, light",
+  "label": "00a · StatusChip · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/32-StatusChip__03-scaling-greyscale__light.png",
+  "w": 1440,
+  "h": 2560,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 33,
+  "title": "StatusChip variants and states, dark",
+  "label": "00a · StatusChip · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/33-StatusChip__02-variants-states__dark.png",
+  "w": 1440,
+  "h": 1620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 34,
+  "title": "KindGlyph anatomy, light",
+  "label": "00a · KindGlyph · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/34-KindGlyph__01-anatomy__light.png",
+  "w": 1440,
+  "h": 3400,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 35,
+  "title": "KindGlyph variants and states, light",
+  "label": "00a · KindGlyph · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/35-KindGlyph__02-variants-states__light.png",
+  "w": 1600,
+  "h": 3480,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 36,
+  "title": "KindGlyph variants and states, dark",
+  "label": "00a · KindGlyph · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/36-KindGlyph__02-variants-states__dark.png",
+  "w": 1600,
+  "h": 3480,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 37,
+  "title": "KindGlyph in context, light",
+  "label": "00a · KindGlyph · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/37-KindGlyph__04-in-context__light.png",
+  "w": 1600,
+  "h": 980,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 38,
+  "title": "KindGlyph scaling and greyscale, light",
+  "label": "00a · KindGlyph · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/38-KindGlyph__03-scaling-greyscale__light.png",
+  "w": 1600,
+  "h": 3620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 39,
+  "title": "AddressChip anatomy, light",
+  "label": "00a · AddressChip · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/39-AddressChip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2620,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 40,
+  "title": "ChoiceChip anatomy, light",
+  "label": "00a · ChoiceChip · 01-anatomy · light",
+  "file": "docs/design/exports/00a/png/40-ChoiceChip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2990,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 41,
+  "title": "ChoiceChip variants and states, light",
+  "label": "00a · ChoiceChip · 02-variants-states · light",
+  "file": "docs/design/exports/00a/png/41-ChoiceChip__02-variants-states__light.png",
+  "w": 2560,
+  "h": 1000,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 42,
+  "title": "ChoiceChip in context, light",
+  "label": "00a · ChoiceChip · 04-in-context · light",
+  "file": "docs/design/exports/00a/png/42-ChoiceChip__04-in-context__light.png",
+  "w": 1600,
+  "h": 1090,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 43,
+  "title": "ChoiceChip scaling and greyscale, light",
+  "label": "00a · ChoiceChip · 03-scaling-greyscale · light",
+  "file": "docs/design/exports/00a/png/43-ChoiceChip__03-scaling-greyscale__light.png",
+  "w": 1600,
+  "h": 3650,
+  "rendered": true
+ },
+ {
+  "board": "00a",
+  "i": 44,
+  "title": "ChoiceChip variants and states, dark",
+  "label": "00a · ChoiceChip · 02-variants-states · dark",
+  "file": "docs/design/exports/00a/png/44-ChoiceChip__02-variants-states__dark.png",
+  "w": 2560,
+  "h": 1000,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 0,
+  "title": "ScaleStrip anatomy",
+  "label": "00b · ScaleStrip · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/00-ScaleStrip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2100,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 1,
+  "title": "AqiBand anatomy",
+  "label": "00b · AqiBand · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/01-AqiBand__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2180,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 2,
+  "title": "FourteenDayStrip anatomy",
+  "label": "00b · FourteenDayStrip · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/02-FourteenDayStrip__01-anatomy__light.png",
+  "w": 1440,
+  "h": 2320,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 3,
+  "title": "ScaleStrip layers by state",
+  "label": "00b · ScaleStrip · 02-layers-by-state · light",
+  "file": "docs/design/exports/00b/png/03-ScaleStrip__02-layers-by-state__light.png",
+  "w": 1440,
+  "h": 3260,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 4,
+  "title": "AqiBand variants by state",
+  "label": "00b · AqiBand · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/04-AqiBand__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 3710,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 5,
+  "title": "FourteenDayStrip variants",
+  "label": "00b · FourteenDayStrip · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/05-FourteenDayStrip__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 4400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 6,
+  "title": "ScaleStrip compare",
+  "label": "00b · ScaleStrip · 03-compare · light",
+  "file": "docs/design/exports/00b/png/06-ScaleStrip__03-compare__light.png",
+  "w": 1440,
+  "h": 1852,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 7,
+  "title": "03-widget-micro",
+  "label": "00b · AqiBand · 03-widget-micro · light",
+  "file": "docs/design/exports/00b/png/07-AqiBand__03-widget-micro__light.png",
+  "w": 1440,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 8,
+  "title": "03-widget-and-window",
+  "label": "00b · FourteenDayStrip · 03-widget-and-window · light",
+  "file": "docs/design/exports/00b/png/08-FourteenDayStrip__03-widget-and-window__light.png",
+  "w": 1440,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 9,
+  "title": "ScaleStrip instrument states",
+  "label": "00b · ScaleStrip · 04-instrument-states · light",
+  "file": "docs/design/exports/00b/png/09-ScaleStrip__04-instrument-states__light.png",
+  "w": 1440,
+  "h": 2480,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 10,
+  "title": "04-ax5-200",
+  "label": "00b · AqiBand · 04-ax5-200 · light",
+  "file": "docs/design/exports/00b/png/10-AqiBand__04-ax5-200__light.png",
+  "w": 1440,
+  "h": 4175,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 11,
+  "title": "FourteenDayStrip platforms",
+  "label": "00b · FourteenDayStrip · 04-platforms-and-voiceover · light",
+  "file": "docs/design/exports/00b/png/11-FourteenDayStrip__04-platforms-and-voiceover__light.png",
+  "w": 1440,
+  "h": 2560,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 12,
+  "title": "05-og-column",
+  "label": "00b · ScaleStrip · 05-og-column · light",
+  "file": "docs/design/exports/00b/png/12-ScaleStrip__05-og-column__light.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 13,
+  "title": "05-greyscale",
+  "label": "00b · AqiBand · 05-greyscale · light",
+  "file": "docs/design/exports/00b/png/13-AqiBand__05-greyscale__light.png",
+  "w": 1440,
+  "h": 6200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 14,
+  "title": "FourteenDayStrip AX5 and 200%",
+  "label": "00b · FourteenDayStrip · 05-ax5-200 · light",
+  "file": "docs/design/exports/00b/png/14-FourteenDayStrip__05-ax5-200__light.png",
+  "w": 1440,
+  "h": 5200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 15,
+  "title": "06-ax5-200",
+  "label": "00b · ScaleStrip · 06-ax5-200 · light",
+  "file": "docs/design/exports/00b/png/15-ScaleStrip__06-ax5-200__light.png",
+  "w": 1440,
+  "h": 4620,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 16,
+  "title": "06-in-context",
+  "label": "00b · AqiBand · 06-in-context · light",
+  "file": "docs/design/exports/00b/png/16-AqiBand__06-in-context__light.png",
+  "w": 1440,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 17,
+  "title": "FourteenDayStrip greyscale",
+  "label": "00b · FourteenDayStrip · 06-greyscale · light",
+  "file": "docs/design/exports/00b/png/17-FourteenDayStrip__06-greyscale__light.png",
+  "w": 1440,
+  "h": 4700,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 18,
+  "title": "07-greyscale",
+  "label": "00b · ScaleStrip · 07-greyscale · light",
+  "file": "docs/design/exports/00b/png/18-ScaleStrip__07-greyscale__light.png",
+  "w": 1440,
+  "h": 5700,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 19,
+  "title": "01-anatomy",
+  "label": "00b · AqiBand · 01-anatomy · dark",
+  "file": "docs/design/exports/00b/png/19-AqiBand__01-anatomy__dark.png",
+  "w": 1440,
+  "h": 2180,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 20,
+  "title": "03-widget-and-window",
+  "label": "00b · FourteenDayStrip · 03-widget-and-window · dark",
+  "file": "docs/design/exports/00b/png/20-FourteenDayStrip__03-widget-and-window__dark.png",
+  "w": 1440,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 21,
+  "title": "08-in-context",
+  "label": "00b · ScaleStrip · 08-in-context · light",
+  "file": "docs/design/exports/00b/png/21-ScaleStrip__08-in-context__light.png",
+  "w": 1440,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 22,
+  "title": "02-variants-by-state",
+  "label": "00b · AqiBand · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/22-AqiBand__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 3710,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 23,
+  "title": "02-variants-by-state",
+  "label": "00b · FourteenDayStrip · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/23-FourteenDayStrip__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 4400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 24,
+  "title": "01-anatomy",
+  "label": "00b · ScaleStrip · 01-anatomy · dark",
+  "file": "docs/design/exports/00b/png/24-ScaleStrip__01-anatomy__dark.png",
+  "w": 1440,
+  "h": 2200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 25,
+  "title": "03-widget-micro",
+  "label": "00b · AqiBand · 03-widget-micro · dark",
+  "file": "docs/design/exports/00b/png/25-AqiBand__03-widget-micro__dark.png",
+  "w": 1440,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 26,
+  "title": "07-in-context",
+  "label": "00b · FourteenDayStrip · 07-in-context · light",
+  "file": "docs/design/exports/00b/png/26-FourteenDayStrip__07-in-context__light.png",
+  "w": 1440,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 27,
+  "title": "02-layers-by-state",
+  "label": "00b · ScaleStrip · 02-layers-by-state · dark",
+  "file": "docs/design/exports/00b/png/27-ScaleStrip__02-layers-by-state__dark.png",
+  "w": 1440,
+  "h": 3260,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 28,
+  "title": "03-compare",
+  "label": "00b · ScaleStrip · 03-compare · dark",
+  "file": "docs/design/exports/00b/png/28-ScaleStrip__03-compare__dark.png",
+  "w": 1440,
+  "h": 1852,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 29,
+  "title": "04-instrument-states",
+  "label": "00b · ScaleStrip · 04-instrument-states · dark",
+  "file": "docs/design/exports/00b/png/29-ScaleStrip__04-instrument-states__dark.png",
+  "w": 1440,
+  "h": 2480,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 30,
+  "title": "01-anatomy-phone",
+  "label": "00b · YearBand · 01-anatomy-phone · light",
+  "file": "docs/design/exports/00b/png/30-YearBand__01-anatomy-phone__light.png",
+  "w": 1440,
+  "h": 2600,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 31,
+  "title": "02-variants-by-state",
+  "label": "00b · YearBand · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/31-YearBand__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 6008,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 32,
+  "title": "03-desktop-exact-day",
+  "label": "00b · YearBand · 03-desktop-exact-day · light",
+  "file": "docs/design/exports/00b/png/32-YearBand__03-desktop-exact-day__light.png",
+  "w": 1440,
+  "h": 1500,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 33,
+  "title": "04-widget-large-and-gallery",
+  "label": "00b · YearBand · 04-widget-large-and-gallery · light",
+  "file": "docs/design/exports/00b/png/33-YearBand__04-widget-large-and-gallery__light.png",
+  "w": 1440,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 34,
+  "title": "05-ax5-200",
+  "label": "00b · YearBand · 05-ax5-200 · light",
+  "file": "docs/design/exports/00b/png/34-YearBand__05-ax5-200__light.png",
+  "w": 1440,
+  "h": 3784,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 35,
+  "title": "06-greyscale",
+  "label": "00b · YearBand · 06-greyscale · light",
+  "file": "docs/design/exports/00b/png/35-YearBand__06-greyscale__light.png",
+  "w": 1440,
+  "h": 6288,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 36,
+  "title": "02-variants-by-state",
+  "label": "00b · YearBand · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/36-YearBand__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 6008,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 37,
+  "title": "04-widget-large-and-gallery",
+  "label": "00b · YearBand · 04-widget-large-and-gallery · dark",
+  "file": "docs/design/exports/00b/png/37-YearBand__04-widget-large-and-gallery__dark.png",
+  "w": 1440,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 38,
+  "title": "07-in-context",
+  "label": "00b · YearBand · 07-in-context · light",
+  "file": "docs/design/exports/00b/png/38-YearBand__07-in-context__light.png",
+  "w": 1440,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 39,
+  "title": "01-anatomy",
+  "label": "00b · SlotMeter · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/39-SlotMeter__01-anatomy__light.png",
+  "w": 1440,
+  "h": 1700,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 40,
+  "title": "02-variants-by-state",
+  "label": "00b · SlotMeter · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/40-SlotMeter__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 41,
+  "title": "03-not-provenance",
+  "label": "00b · SlotMeter · 03-not-provenance · light",
+  "file": "docs/design/exports/00b/png/41-SlotMeter__03-not-provenance__light.png",
+  "w": 1440,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 42,
+  "title": "04-ax5-200-greyscale",
+  "label": "00b · SlotMeter · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00b/png/42-SlotMeter__04-ax5-200-greyscale__light.png",
+  "w": 1440,
+  "h": 2100,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 43,
+  "title": "05-in-context",
+  "label": "00b · SlotMeter · 05-in-context · light",
+  "file": "docs/design/exports/00b/png/43-SlotMeter__05-in-context__light.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 44,
+  "title": "02-variants-by-state",
+  "label": "00b · SlotMeter · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/44-SlotMeter__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 45,
+  "title": "01-anatomy",
+  "label": "00b · PublicPointMap · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/45-PublicPointMap__01-anatomy__light.png",
+  "w": 1440,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 46,
+  "title": "02-variants-by-state",
+  "label": "00b · PublicPointMap · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/46-PublicPointMap__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 4600,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 47,
+  "title": "03-cells-map-and-list",
+  "label": "00b · PublicPointMap · 03-cells-map-and-list · light",
+  "file": "docs/design/exports/00b/png/47-PublicPointMap__03-cells-map-and-list__light.png",
+  "w": 1440,
+  "h": 1300,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 48,
+  "title": "04-ax5-200-greyscale",
+  "label": "00b · PublicPointMap · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00b/png/48-PublicPointMap__04-ax5-200-greyscale__light.png",
+  "w": 1440,
+  "h": 2600,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 49,
+  "title": "05-in-context",
+  "label": "00b · PublicPointMap · 05-in-context · light",
+  "file": "docs/design/exports/00b/png/49-PublicPointMap__05-in-context__light.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 50,
+  "title": "02-variants-by-state",
+  "label": "00b · PublicPointMap · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/50-PublicPointMap__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 4600,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 51,
+  "title": "01-anatomy",
+  "label": "00b · FactCount · 01-anatomy · light",
+  "file": "docs/design/exports/00b/png/51-FactCount__01-anatomy__light.png",
+  "w": 1440,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 52,
+  "title": "02-variants-by-state",
+  "label": "00b · FactCount · 02-variants-by-state · light",
+  "file": "docs/design/exports/00b/png/52-FactCount__02-variants-by-state__light.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 53,
+  "title": "02-variants-by-state",
+  "label": "00b · FactCount · 02-variants-by-state · dark",
+  "file": "docs/design/exports/00b/png/53-FactCount__02-variants-by-state__dark.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 54,
+  "title": "03-ax5-200-greyscale",
+  "label": "00b · FactCount · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00b/png/54-FactCount__03-ax5-200-greyscale__light.png",
+  "w": 1440,
+  "h": 2400,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 55,
+  "title": "04-in-context",
+  "label": "00b · FactCount · 04-in-context · light",
+  "file": "docs/design/exports/00b/png/55-FactCount__04-in-context__light.png",
+  "w": 1440,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00b",
+  "i": 56,
+  "title": "Board notes",
+  "label": null,
+  "file": "docs/design/exports/00b/png/56-Board-notes.png",
+  "w": 1440,
+  "h": 10931,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 0,
+  "title": "DateRow anatomy",
+  "label": "00c · DateRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/00-DateRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1680,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 1,
+  "title": "DateRow grid",
+  "label": "00c · DateRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/01-DateRow__02-grid__light.png",
+  "w": 2830,
+  "h": 2270,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 2,
+  "title": "DateRow AX5 and greyscale",
+  "label": "00c · DateRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/02-DateRow__03-ax5-200-greyscale__light.png",
+  "w": 3560,
+  "h": 3064,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 3,
+  "title": "DateRow in context",
+  "label": "00c · DateRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/03-DateRow__04-in-context__light.png",
+  "w": 1880,
+  "h": 1420,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 4,
+  "title": "DateRow grid dark",
+  "label": "00c · DateRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/04-DateRow__05-grid__dark.png",
+  "w": 3560,
+  "h": 2560,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 5,
+  "title": "FactRow anatomy",
+  "label": "00c · FactRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/05-FactRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1660,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 6,
+  "title": "FactRow grid",
+  "label": "00c · FactRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/06-FactRow__02-grid__light.png",
+  "w": 1990,
+  "h": 2460,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 7,
+  "title": "FactRow AX5 and greyscale",
+  "label": "00c · FactRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/07-FactRow__03-ax5-200-greyscale__light.png",
+  "w": 2700,
+  "h": 3260,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 8,
+  "title": "FactRow in context",
+  "label": "00c · FactRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/08-FactRow__04-in-context__light.png",
+  "w": 1780,
+  "h": 1160,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 9,
+  "title": "FactRow grid dark",
+  "label": "00c · FactRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/09-FactRow__05-grid__dark.png",
+  "w": 2700,
+  "h": 2760,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 10,
+  "title": "FirstWeekRow anatomy",
+  "label": "00c · FirstWeekRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/10-FirstWeekRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1420,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 11,
+  "title": "FirstWeekRow grid",
+  "label": "00c · FirstWeekRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/11-FirstWeekRow__02-grid__light.png",
+  "w": 1980,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 12,
+  "title": "FirstWeekRow AX5 and greyscale",
+  "label": "00c · FirstWeekRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/12-FirstWeekRow__03-ax5-200-greyscale__light.png",
+  "w": 2700,
+  "h": 1880,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 13,
+  "title": "FirstWeekRow in context",
+  "label": "00c · FirstWeekRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/13-FirstWeekRow__04-in-context__light.png",
+  "w": 1440,
+  "h": 1120,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 14,
+  "title": "FirstWeekRow grid dark",
+  "label": "00c · FirstWeekRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/14-FirstWeekRow__05-grid__dark.png",
+  "w": 2700,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 15,
+  "title": "BillRow anatomy",
+  "label": "00c · BillRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/15-BillRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1480,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 16,
+  "title": "BillRow grid",
+  "label": "00c · BillRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/16-BillRow__02-grid__light.png",
+  "w": 3255,
+  "h": 1980,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 17,
+  "title": "BillRow AX5 and greyscale",
+  "label": "00c · BillRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/17-BillRow__03-ax5-200-greyscale__light.png",
+  "w": 4100,
+  "h": 2618,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 18,
+  "title": "BillRow in context",
+  "label": "00c · BillRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/18-BillRow__04-in-context__light.png",
+  "w": 1900,
+  "h": 1700,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 19,
+  "title": "BillRow grid dark",
+  "label": "00c · BillRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/19-BillRow__05-grid__dark.png",
+  "w": 4100,
+  "h": 2500,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 20,
+  "title": "MemberRow anatomy",
+  "label": "00c · MemberRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/20-MemberRow__01-anatomy__light.png",
+  "w": 2764,
+  "h": 1360,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 21,
+  "title": "MemberRow grid",
+  "label": "00c · MemberRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/21-MemberRow__02-grid__light.png",
+  "w": 1980,
+  "h": 1772,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 22,
+  "title": "MemberRow AX5 and greyscale",
+  "label": "00c · MemberRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/22-MemberRow__03-ax5-200-greyscale__light.png",
+  "w": 2900,
+  "h": 2400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 23,
+  "title": "MemberRow in context",
+  "label": "00c · MemberRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/23-MemberRow__04-in-context__light.png",
+  "w": 1800,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 24,
+  "title": "MemberRow grid dark",
+  "label": "00c · MemberRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/24-MemberRow__05-grid__dark.png",
+  "w": 2900,
+  "h": 2200,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 25,
+  "title": "InviteRow anatomy",
+  "label": "00c · InviteRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/25-InviteRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1320,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 26,
+  "title": "InviteRow grid",
+  "label": "00c · InviteRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/26-InviteRow__02-grid__light.png",
+  "w": 1980,
+  "h": 1700,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 27,
+  "title": "InviteRow AX5 and greyscale",
+  "label": "00c · InviteRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/27-InviteRow__03-ax5-200-greyscale__light.png",
+  "w": 2900,
+  "h": 2660,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 28,
+  "title": "InviteRow in context",
+  "label": "00c · InviteRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/28-InviteRow__04-in-context__light.png",
+  "w": 1800,
+  "h": 1120,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 29,
+  "title": "InviteRow grid dark",
+  "label": "00c · InviteRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/29-InviteRow__05-grid__dark.png",
+  "w": 2900,
+  "h": 2400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 30,
+  "title": "NotificationRow anatomy",
+  "label": "00c · NotificationRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/30-NotificationRow__01-anatomy__light.png",
+  "w": 2764,
+  "h": 1520,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 31,
+  "title": "NotificationRow grid",
+  "label": "00c · NotificationRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/31-NotificationRow__02-grid__light.png",
+  "w": 2830,
+  "h": 2180,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 32,
+  "title": "NotificationRow AX5 and greyscale",
+  "label": "00c · NotificationRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/32-NotificationRow__03-ax5-200-greyscale__light.png",
+  "w": 3700,
+  "h": 3080,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 33,
+  "title": "NotificationRow in context",
+  "label": "00c · NotificationRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/33-NotificationRow__04-in-context__light.png",
+  "w": 1440,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 34,
+  "title": "NotificationRow dark",
+  "label": "00c · NotificationRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/34-NotificationRow__05-grid__dark.png",
+  "w": 3700,
+  "h": 2800,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 35,
+  "title": "TextActionRow anatomy",
+  "label": "00c · TextActionRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/35-TextActionRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1340,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 36,
+  "title": "TextActionRow grid",
+  "label": "00c · TextActionRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/36-TextActionRow__02-grid__light.png",
+  "w": 2830,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 37,
+  "title": "TextActionRow AX5 and greyscale",
+  "label": "00c · TextActionRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/37-TextActionRow__03-ax5-200-greyscale__light.png",
+  "w": 3700,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 38,
+  "title": "TextActionRow in context",
+  "label": "00c · TextActionRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/38-TextActionRow__04-in-context__light.png",
+  "w": 1620,
+  "h": 1260,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 39,
+  "title": "TextActionRow dark",
+  "label": "00c · TextActionRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/39-TextActionRow__05-grid__dark.png",
+  "w": 3700,
+  "h": 1500,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 40,
+  "title": "LockedActionRow anatomy",
+  "label": "00c · LockedActionRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/40-LockedActionRow__01-anatomy__light.png",
+  "w": 1900,
+  "h": 1300,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 41,
+  "title": "LockedActionRow grid",
+  "label": "00c · LockedActionRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/41-LockedActionRow__02-grid__light.png",
+  "w": 1980,
+  "h": 1520,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 42,
+  "title": "LockedActionRow AX5 and greyscale",
+  "label": "00c · LockedActionRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/42-LockedActionRow__03-ax5-200-greyscale__light.png",
+  "w": 2900,
+  "h": 2400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 43,
+  "title": "LockedActionRow in context",
+  "label": "00c · LockedActionRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/43-LockedActionRow__04-in-context__light.png",
+  "w": 1780,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 44,
+  "title": "LockedActionRow dark",
+  "label": "00c · LockedActionRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/44-LockedActionRow__05-grid__dark.png",
+  "w": 2900,
+  "h": 2200,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 45,
+  "title": "GrantLimitList anatomy",
+  "label": "00c · GrantLimitList · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/45-GrantLimitList__01-anatomy__light.png",
+  "w": 1900,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 46,
+  "title": "GrantLimitList grid",
+  "label": "00c · GrantLimitList · 02-grid · light",
+  "file": "docs/design/exports/00c/png/46-GrantLimitList__02-grid__light.png",
+  "w": 1560,
+  "h": 1826,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 47,
+  "title": "GrantLimitList AX5 and greyscale",
+  "label": "00c · GrantLimitList · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/47-GrantLimitList__03-ax5-200-greyscale__light.png",
+  "w": 2600,
+  "h": 3400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 48,
+  "title": "GrantLimitList in context",
+  "label": "00c · GrantLimitList · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/48-GrantLimitList__04-in-context__light.png",
+  "w": 1800,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 49,
+  "title": "GrantLimitList dark",
+  "label": "00c · GrantLimitList · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/49-GrantLimitList__05-grid__dark.png",
+  "w": 2600,
+  "h": 2700,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 50,
+  "title": "InlineErrorRow anatomy",
+  "label": "00c · InlineErrorRow · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/50-InlineErrorRow__01-anatomy__light.png",
+  "w": 2764,
+  "h": 1420,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 51,
+  "title": "InlineErrorRow grid",
+  "label": "00c · InlineErrorRow · 02-grid · light",
+  "file": "docs/design/exports/00c/png/51-InlineErrorRow__02-grid__light.png",
+  "w": 1560,
+  "h": 1280,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 52,
+  "title": "InlineErrorRow AX5 and greyscale",
+  "label": "00c · InlineErrorRow · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/52-InlineErrorRow__03-ax5-200-greyscale__light.png",
+  "w": 2600,
+  "h": 2400,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 53,
+  "title": "InlineErrorRow in context",
+  "label": "00c · InlineErrorRow · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/53-InlineErrorRow__04-in-context__light.png",
+  "w": 1500,
+  "h": 1200,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 54,
+  "title": "InlineErrorRow dark",
+  "label": "00c · InlineErrorRow · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/54-InlineErrorRow__05-grid__dark.png",
+  "w": 2600,
+  "h": 2300,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 55,
+  "title": "ThumbnailRail anatomy",
+  "label": "00c · ThumbnailRail · 01-anatomy · light",
+  "file": "docs/design/exports/00c/png/55-ThumbnailRail__01-anatomy__light.png",
+  "w": 1900,
+  "h": 2084,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 56,
+  "title": "ThumbnailRail grid",
+  "label": "00c · ThumbnailRail · 02-grid · light",
+  "file": "docs/design/exports/00c/png/56-ThumbnailRail__02-grid__light.png",
+  "w": 3255,
+  "h": 1120,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 57,
+  "title": "ThumbnailRail AX5 and greyscale",
+  "label": "00c · ThumbnailRail · 03-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00c/png/57-ThumbnailRail__03-ax5-200-greyscale__light.png",
+  "w": 3700,
+  "h": 2260,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 58,
+  "title": "ThumbnailRail in context",
+  "label": "00c · ThumbnailRail · 04-in-context · light",
+  "file": "docs/design/exports/00c/png/58-ThumbnailRail__04-in-context__light.png",
+  "w": 1860,
+  "h": 1020,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 59,
+  "title": "ThumbnailRail grid dark",
+  "label": "00c · ThumbnailRail · 05-grid · dark",
+  "file": "docs/design/exports/00c/png/59-ThumbnailRail__05-grid__dark.png",
+  "w": 3700,
+  "h": 1700,
+  "rendered": true
+ },
+ {
+  "board": "00c",
+  "i": 60,
+  "title": "00c Notes",
+  "label": null,
+  "file": "docs/design/exports/00c/png/60-00c-Notes.png",
+  "w": 3240,
+  "h": 5100,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 0,
+  "title": "QuietDayReceipt anatomy",
+  "label": "00d · QuietDayReceipt · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/00-QuietDayReceipt__01-anatomy__light.png",
+  "w": 1600,
+  "h": 900,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 1,
+  "title": "QuietDayReceipt at large text and in greyscale",
+  "label": "00d · QuietDayReceipt · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/01-QuietDayReceipt__04-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 2500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 2,
+  "title": "WarmingSkeleton anatomy",
+  "label": "00d · WarmingSkeleton · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/02-WarmingSkeleton__01-anatomy__light.png",
+  "w": 1600,
+  "h": 1180,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 3,
+  "title": "QuietDayReceipt variants by states, light",
+  "label": "00d · QuietDayReceipt · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/03-QuietDayReceipt__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 1240,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 4,
+  "title": "QuietDayReceipt in context and rules",
+  "label": "00d · QuietDayReceipt · 05-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/04-QuietDayReceipt__05-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2000,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 5,
+  "title": "WarmingSkeleton variants by states, light",
+  "label": "00d · WarmingSkeleton · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/05-WarmingSkeleton__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 2280,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 6,
+  "title": "QuietDayReceipt variants by states, dark",
+  "label": "00d · QuietDayReceipt · 03-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/06-QuietDayReceipt__03-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 1280,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 7,
+  "title": "WarmingSkeleton variants by states, dark",
+  "label": "00d · WarmingSkeleton · 03-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/07-WarmingSkeleton__03-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 2340,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 8,
+  "title": "Foundations 00d notes",
+  "label": null,
+  "file": "docs/design/exports/00d/png/08-Foundations-00d-notes.png",
+  "w": 1600,
+  "h": 11400,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 9,
+  "title": "WarmingSkeleton at large text, greyscale and Reduce Motion",
+  "label": "00d · WarmingSkeleton · 04-ax5-200-greyscale-reduce-motion · light",
+  "file": "docs/design/exports/00d/png/09-WarmingSkeleton__04-ax5-200-greyscale-reduce-motion__light.png",
+  "w": 1600,
+  "h": 2500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 10,
+  "title": "WarmingSkeleton in context and rules",
+  "label": "00d · WarmingSkeleton · 05-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/10-WarmingSkeleton__05-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2250,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 11,
+  "title": "InlineUndo anatomy",
+  "label": "00d · InlineUndo · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/11-InlineUndo__01-anatomy__light.png",
+  "w": 1600,
+  "h": 1180,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 12,
+  "title": "InlineUndo variants by states, light",
+  "label": "00d · InlineUndo · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/12-InlineUndo__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 3000,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 13,
+  "title": "InlineUndo variants by states, dark",
+  "label": "00d · InlineUndo · 03-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/13-InlineUndo__03-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 3100,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 14,
+  "title": "DestructiveConfirm anatomy",
+  "label": "00d · DestructiveConfirm · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/14-DestructiveConfirm__01-anatomy__light.png",
+  "w": 1648,
+  "h": 1180,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 15,
+  "title": "DestructiveConfirm variants by states, light",
+  "label": "00d · DestructiveConfirm · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/15-DestructiveConfirm__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 2560,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 16,
+  "title": "DestructiveConfirm platforms",
+  "label": "00d · DestructiveConfirm · 03-platforms · light",
+  "file": "docs/design/exports/00d/png/16-DestructiveConfirm__03-platforms__light.png",
+  "w": 1600,
+  "h": 1500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 17,
+  "title": "LandingBannerSlot anatomy and precedence",
+  "label": "00d · LandingBannerSlot · 01-anatomy-and-precedence · light",
+  "file": "docs/design/exports/00d/png/17-LandingBannerSlot__01-anatomy-and-precedence__light.png",
+  "w": 1600,
+  "h": 1800,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 18,
+  "title": "LandingBannerSlot variants by states, light",
+  "label": "00d · LandingBannerSlot · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/18-LandingBannerSlot__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 19,
+  "title": "LandingBannerSlot variants by states, dark",
+  "label": "00d · LandingBannerSlot · 03-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/19-LandingBannerSlot__03-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 1950,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 20,
+  "title": "PushCopy anatomy and levels",
+  "label": "00d · PushCopy · 01-anatomy-and-levels · light",
+  "file": "docs/design/exports/00d/png/20-PushCopy__01-anatomy-and-levels__light.png",
+  "w": 1600,
+  "h": 1500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 21,
+  "title": "PushCopy ios variants by states, light",
+  "label": "00d · PushCopy · 02-ios-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/21-PushCopy__02-ios-variants-by-states__light.png",
+  "w": 1600,
+  "h": 3300,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 22,
+  "title": "PushCopy android variants by states, light",
+  "label": "00d · PushCopy · 03-android-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/22-PushCopy__03-android-variants-by-states__light.png",
+  "w": 1600,
+  "h": 3300,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 23,
+  "title": "PushCopy ios variants by states, dark",
+  "label": "00d · PushCopy · 04-ios-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/23-PushCopy__04-ios-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 3300,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 24,
+  "title": "ReminderLeadControl anatomy",
+  "label": "00d · ReminderLeadControl · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/24-ReminderLeadControl__01-anatomy__light.png",
+  "w": 1600,
+  "h": 1250,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 25,
+  "title": "ReminderLeadControl variants by states, light",
+  "label": "00d · ReminderLeadControl · 02-variants-by-states · light",
+  "file": "docs/design/exports/00d/png/25-ReminderLeadControl__02-variants-by-states__light.png",
+  "w": 1600,
+  "h": 2100,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 26,
+  "title": "ReminderLeadControl variants by states, dark",
+  "label": "00d · ReminderLeadControl · 03-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/26-ReminderLeadControl__03-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 2100,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 27,
+  "title": "InlineUndo at large text and across platforms",
+  "label": "00d · InlineUndo · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/27-InlineUndo__04-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 2733,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 28,
+  "title": "InlineUndo in context and rules",
+  "label": "00d · InlineUndo · 05-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/28-InlineUndo__05-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2600,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 29,
+  "title": "DestructiveConfirm variants by states, dark",
+  "label": "00d · DestructiveConfirm · 04-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/29-DestructiveConfirm__04-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 2620,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 30,
+  "title": "DestructiveConfirm at large text and in greyscale",
+  "label": "00d · DestructiveConfirm · 05-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/30-DestructiveConfirm__05-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 2756,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 31,
+  "title": "DestructiveConfirm in context and rules",
+  "label": "00d · DestructiveConfirm · 06-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/31-DestructiveConfirm__06-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2350,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 32,
+  "title": "LandingBannerSlot at large text and across platforms",
+  "label": "00d · LandingBannerSlot · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/32-LandingBannerSlot__04-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 33,
+  "title": "LandingBannerSlot in context and rules",
+  "label": "00d · LandingBannerSlot · 05-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/33-LandingBannerSlot__05-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2250,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 34,
+  "title": "PushCopy android variants by states, dark",
+  "label": "00d · PushCopy · 05-android-variants-by-states · dark",
+  "file": "docs/design/exports/00d/png/34-PushCopy__05-android-variants-by-states__dark.png",
+  "w": 1600,
+  "h": 3300,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 35,
+  "title": "PushCopy at large text and in greyscale",
+  "label": "00d · PushCopy · 06-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/35-PushCopy__06-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 1900,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 36,
+  "title": "PushCopy in context and rules",
+  "label": "00d · PushCopy · 07-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/36-PushCopy__07-in-context-and-rules__light.png",
+  "w": 2896,
+  "h": 2500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 37,
+  "title": "ReminderLeadControl at large text and in greyscale",
+  "label": "00d · ReminderLeadControl · 04-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/37-ReminderLeadControl__04-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 2617,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 38,
+  "title": "ReminderLeadControl in context and rules",
+  "label": "00d · ReminderLeadControl · 05-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/38-ReminderLeadControl__05-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2600,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 39,
+  "title": "NotificationAsk anatomy",
+  "label": "00d · NotificationAsk · 01-anatomy · light",
+  "file": "docs/design/exports/00d/png/39-NotificationAsk__01-anatomy__light.png",
+  "w": 1600,
+  "h": 1500,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 40,
+  "title": "NotificationAsk card-row states, light",
+  "label": "00d · NotificationAsk · 02-card-row-states · light",
+  "file": "docs/design/exports/00d/png/40-NotificationAsk__02-card-row-states__light.png",
+  "w": 2400,
+  "h": 1400,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 41,
+  "title": "NotificationAsk primers and denials, light",
+  "label": "00d · NotificationAsk · 03-primer-and-denial-by-platform · light",
+  "file": "docs/design/exports/00d/png/41-NotificationAsk__03-primer-and-denial-by-platform__light.png",
+  "w": 1600,
+  "h": 2150,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 42,
+  "title": "NotificationAsk card-row states, dark",
+  "label": "00d · NotificationAsk · 04-card-row-states · dark",
+  "file": "docs/design/exports/00d/png/42-NotificationAsk__04-card-row-states__dark.png",
+  "w": 2400,
+  "h": 1450,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 43,
+  "title": "NotificationAsk primers and denials, dark",
+  "label": "00d · NotificationAsk · 05-primer-and-denial-by-platform · dark",
+  "file": "docs/design/exports/00d/png/43-NotificationAsk__05-primer-and-denial-by-platform__dark.png",
+  "w": 1600,
+  "h": 2150,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 44,
+  "title": "NotificationAsk at large text and in greyscale",
+  "label": "00d · NotificationAsk · 06-ax5-200-greyscale · light",
+  "file": "docs/design/exports/00d/png/44-NotificationAsk__06-ax5-200-greyscale__light.png",
+  "w": 1600,
+  "h": 2700,
+  "rendered": true
+ },
+ {
+  "board": "00d",
+  "i": 45,
+  "title": "NotificationAsk in context and rules",
+  "label": "00d · NotificationAsk · 07-in-context-and-rules · light",
+  "file": "docs/design/exports/00d/png/45-NotificationAsk__07-in-context-and-rules__light.png",
+  "w": 1600,
+  "h": 2500,
+  "rendered": true
+ }
+]

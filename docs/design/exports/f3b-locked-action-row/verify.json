@@ -1,0 +1,15 @@
+{
+ "id": "f3b-locked-action-row",
+ "export": "docs/design/exports/f3b-locked-action-row/f3b-locked-action-row.html",
+ "manifest": 19,
+ "mode": "bundle",
+ "pages": 19,
+ "exact": 19,
+ "labelled": 19,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3b-locked-action-row/pages",
+ "placeholders": []
+}

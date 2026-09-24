@@ -1,0 +1,19 @@
+{
+ "id": "f3-household-calendar",
+ "export": "docs/design/exports/f3-household-calendar/f3-household-calendar.html",
+ "manifest": 21,
+ "mode": "bundle",
+ "pages": 21,
+ "exact": 20,
+ "labelled": 21,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f3-household-calendar \u00b7 Notes"
+ ],
+ "extra": [
+  null
+ ],
+ "pagesDir": "docs/design/exports/f3-household-calendar/pages",
+ "placeholders": []
+}

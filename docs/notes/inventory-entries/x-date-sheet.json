@@ -1,0 +1,39 @@
+{
+ "id": "x-date-sheet",
+ "name": "The Date sheet (one sheet, three modes, ten kinds)",
+ "feature": "F5 (+F2, F4, F6, F12)",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Presented over the Today tab, over the place file, and from a reminder deep link. Web: SlidePanel pattern. iOS: .sheet. Android: ModalBottomSheet.",
+ "purpose": "'Tell the app a date' is one job. Today it is specified as seven separate sheets; this is the one component that creates, shows, edits, reminds about and deletes every dated fact at an address.",
+ "contents": "Modes: CREATE, VIEW-MINE (edit / remind / delete), VIEW-SEEDED (read-only, source, remind, dispute). Kinds: pickup day (with the recurrence branch \u2014 weekday, frequency not_set/weekly/biweekly, explicit next recycling date, never inferred), lease ends, notice deadline, insurance renews, warranty ends, HOA dues, property-tax appeal, voter-registration deadline (seeded, state-scoped), and bill (phase 2, pre-filled from OCR). Fields: kind, date picker (must accept ~2 years out), optional title, 'Remind me' 60/30/7/1 days. Scope ('home' | 'saved_place') is a prop, not a second component: it changes the footer line \u2014 'Only you will see this.' vs 'Everyone in this household will see this.' \u2014 and nothing else. Seeded mode adds plain-language explanation ('Your county lets you challenge the assessed value your tax is based on'), the per-method dates for voter registration, and 'I did this' as a labelled self-report.",
+ "states": [
+  "create",
+  "already-set collision \u2014 shows the existing row's TITLE and date, not just the kind, with Replace / Add as a separate calendar event (T3) / Cancel",
+  "saving",
+  "saved",
+  "validation: past date; lead longer than the distance to the date",
+  "permission-denied (household member without calendar.edit)",
+  "seeded read-only",
+  "deleted with Undo toast (no confirm dialog)",
+  "offline \u2014 save disabled, 'You're offline'",
+  "AI/manual fallback for bill mode"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place file: any missing-fact row CTA",
+  "Place file: any known-fact row tap (edit)",
+  "Today 14-day strip row tap",
+  "Today pickup card 'Not my schedule' / 'Set your pickup day'",
+  "Reminder push deep link (?rule=<id>)",
+  "Civic section registration block"
+ ],
+ "visualization": "Kind picker as a two-column grid of glyph tiles (one tap, no wizard step) above a native date control; the 'Remind me' row is a four-segment control where the chosen lead renders as a small leader line back to the date, so the reminder is visibly earlier than the event rather than an abstract number. Seeded mode shows the hollow provenance mark beside the date and the authority as a caption. The collision warning renders the conflicting row inline, marked, so the user sees exactly which warranty they are about to overwrite.",
+ "uxNote": "The critiques split on whether pickup day is its own control. It is not: making it a kind with a recurrence branch is what unblocks F2's checklist row at T1 (where no pickup control exists at all today) and gives F4's push caveat a one-tap destination. Two backend blockers must ship with this or the sheet silently lies: (1) SCOPE_RANK in addressCalendarService.js:25 has no 'saved_place', so a T1 user's confirmed pickup day is dropped whenever a city rule exists for that kind \u2014 their correction is invisible; (2) the lead_days CHECK is 0\u201330 and the only value anyone picks for a lease notice is 60. Delete-with-Undo replaces all three proposed destructive dialogs (the pattern already ships at Android SavedPlacesScreen.kt:85-90).",
+ "effortDays": 2.5
+}

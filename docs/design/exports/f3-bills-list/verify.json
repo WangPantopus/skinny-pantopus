@@ -1,0 +1,15 @@
+{
+ "id": "f3-bills-list",
+ "export": "docs/design/exports/f3-bills-list/f3-bills-list.html",
+ "manifest": 26,
+ "mode": "bundle",
+ "pages": 26,
+ "exact": 26,
+ "labelled": 0,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3-bills-list/pages",
+ "placeholders": []
+}

@@ -1,0 +1,15 @@
+{
+ "id": "f1-today-tab",
+ "export": "docs/design/exports/f1-today-tab/f1-today-tab.html",
+ "manifest": 23,
+ "mode": "bundle",
+ "pages": 23,
+ "exact": 23,
+ "labelled": 23,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f1-today-tab/pages",
+ "placeholders": []
+}

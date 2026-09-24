@@ -1,0 +1,37 @@
+{
+ "id": "f4-today-pickup-card",
+ "name": "Tomorrow's pickup (push landing + confirm/correct)",
+ "feature": "F4",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Today, directly above the 14-day strip. Also the landing content for the night-before push and the notifications-off equivalent.",
+ "purpose": "State tomorrow's pickup, say how confident we are, and let one tap turn a guessed city schedule into the household's own confirmed day.",
+ "contents": "Kind glyph (garbage / recycling / both / bulk), headline 'Recycling and garbage tomorrow', line 'Bins out tonight.', the source with its confidence, and the paired actions 'That's my day' (confirms \u2014 writes the rule, the caveat disappears, the row flips to 'You \u00b7 Tuesday') and 'Not my schedule' (opens the provenance sheet's report, then the Date sheet). The push itself rides the evening briefing: title = the headline (not 'Your Evening Briefing'), the unconfirmed caveat as a title suffix so truncation cannot eat it, one push per trigger per day.",
+ "states": [
+  "confirmed rule (no caveat, shows who set it)",
+  "unverified city rule (hollow mark + confirm/correct pair)",
+  "T1 saved place (writes a saved_place rule \u2014 see the SCOPE_RANK blocker)",
+  "nothing tomorrow (card absent)",
+  "no pickup rule at all (card reads 'Set your pickup day' as a demoted single line)",
+  "confirming / saving",
+  "confirmed just now",
+  "error",
+  "stale/offline",
+  "suppressed (low-signal day, no push)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Today (always, notifications on or off)",
+  "Night-before evening-briefing push",
+  "Place file pickup row",
+  "14-day strip tonight cell"
+ ],
+ "visualization": "One emphasis card: kind glyph, one-line headline, one-line instruction, and the confidence expressed as the same hollow/filled mark used everywhere \u2014 with the words appearing once ('City schedule, not yet confirmed') rather than per row. The two actions are peers, equal weight: confirming and correcting are both good outcomes, and making 'That's my day' primary would bias the honesty counter.",
+ "uxNote": "The doc calls F4 backend-only 'with no client work beyond copy'; that is its largest error. This card is the notifications-off equivalent design rule 4 promises, and today it is unreachable on two platforms. Two hard dependencies: a T1 pickup confirmation is silently dropped by applyPrecedence (no 'saved_place' in SCOPE_RANK) and hasHouseholdPickup only matches scope 'home', so the user confirms and the guessed city day keeps rendering \u2014 ship the backend fix in the same PR or do not push unverified pickups to saved-place users at all.",
+ "effortDays": 1.5
+}

@@ -52,6 +52,7 @@ object SupportTrainDetailProjection {
                 slotsTotal = total,
                 contributors = contributors(organizers),
                 extraCount = maxOf(0, covered - minOf(organizers.size, 4)),
+                status = dto.status,
             )
         val isFull = typeDates.isFullyCovered
         val mineSlotIds = reservations.mapNotNull { it.slotId }.toSet()
@@ -224,7 +225,7 @@ object SupportTrainDetailProjection {
                     millis in mineDates -> SlotCalendarState.Mine
                     millis in coveredDates -> SlotCalendarState.Filled
                     millis in openDates -> SlotCalendarState.Open
-                    else -> SlotCalendarState.Past // no slot that future day — inert/muted tile
+                    else -> SlotCalendarState.Unscheduled // no slot that future day — inert/muted tile
                 }
             SlotCalendarDay(id = "day-$idx", date = date, dayNumber = cal.get(Calendar.DAY_OF_MONTH), state = state)
         }

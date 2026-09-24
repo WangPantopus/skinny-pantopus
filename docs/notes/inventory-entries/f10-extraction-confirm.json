@@ -1,0 +1,36 @@
+{
+ "id": "f10-extraction-confirm",
+ "name": "Confirm what we read (extraction review)",
+ "feature": "F10",
+ "disposition": "NEW_SCREEN",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "A full-screen step in a capture \u2192 confirm \u2192 next loop over Mail Day, and re-openable from any Unconfirmed row.",
+ "purpose": "Make the machine's guess into the user's confirmed fact before anything reaches bills, the calendar or a reminder.",
+ "contents": "The photo pinned; the classification; editable payee, amount, due date, account ending, kind \u2014 each showing what was read and each independently correctable; per-field confidence; the same 'Remind me' control the Date sheet uses; two explicit commits, 'Add to bills' and 'Just file it'; and the confirmation 'Added to your calendar. We'll remind you {lead} before.' \u2014 never the word 'Paid'.",
+ "states": [
+  "extracting",
+  "extracted, high confidence",
+  "extracted, low confidence (uncertain fields flagged; commit still available)",
+  "AI unavailable \u2192 same screen, blank fields, 'We couldn't read this one automatically'",
+  "unreadable photo \u2192 retake or manual",
+  "duplicate suspected (same payee + amount + due date already on the list)",
+  "permission-denied (member can 'Just file it'; 'Add to bills' disabled with the reason)",
+  "no claimed home \u2192 routed to the Date sheet",
+  "saving",
+  "error (typed values preserved)",
+  "offline"
+ ],
+ "phase": "phase2",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Upload completion in the capture tray",
+  "Any Unconfirmed row on Mail Day"
+ ],
+ "visualization": "Photo BESIDE fields, not photo-then-fields \u2014 the user is proofreading, so source and extracted value must be visible together; highlight the region a tapped field came from where OCR gives boxes. Confidence is expressed per FIELD (a hollow mark on the uncertain one), never as a single percentage score.",
+ "uxNote": "The doc's 'editable chips (Due Oct 12 \u00b7 $142 \u00b7 Clark PUD \u00b7 Confirm)' is F10's clumsiest choice: a currency, a date and a payee each want a different keyboard and a different control, and a chip row hides which value the model was unsure about. Chips stay only as the collapsed Mail Day row summary. Done N times per stack, this is a screen, not a sheet.",
+ "effortDays": 2
+}

@@ -5,13 +5,23 @@ package app.pantopus.android.ui.screens.homes.property_details
 import app.pantopus.android.ui.components.SourcePillTone
 import app.pantopus.android.ui.theme.PantopusIcon
 
-/** Address and static-map coordinate for the property hero. */
+private const val MAX_LATITUDE = 90.0
+private const val MAX_LONGITUDE = 180.0
+
+/** Address and optional static-map coordinate for the property hero. */
 data class PropertyAddress(
     val line1: String,
     val line2: String,
-    val latitude: Double,
-    val longitude: Double,
-)
+    val latitude: Double?,
+    val longitude: Double?,
+) {
+    val hasMapLocation: Boolean
+        get() {
+            val lat = latitude ?: return false
+            val lon = longitude ?: return false
+            return lat.isFinite() && lon.isFinite() && lat in -MAX_LATITUDE..MAX_LATITUDE && lon in -MAX_LONGITUDE..MAX_LONGITUDE
+        }
+}
 
 /** Single read-only fact row shown in the Property / Records sections. */
 data class PropertyFactRow(

@@ -1,0 +1,32 @@
+# Last review findings for f3b-owner-attestation (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The push's group and level are left open, yet the prompt uses the household hidden-preview placeholder while the Notes say the push is not household activity.
+  - evidence: WHERE: "(hidden-preview placeholder \"Household update\")". Notes: "their group (with requests addressed to you, not household activity, which is off by default; a product decision to confirm)". The brief's groups: Household activity is Passive/LOW; Account & security is Time Sensitive/HIGH.
+  - fix: In Notes, name the proposed group and its iOS and Android levels, and pick a placeholder that matches that group.
+- [minor] (substance) The accessibility reading order puts 'Not now' last, although it sits visually first in the header, so focus order and visual order disagree.
+  - evidence: ACCESSIBILITY: "reading order is title, person, ... Confirm, Don't confirm, then Not now." LAYOUT: "header (Not now, title)".
+  - fix: Either read Not now first with the header, or state why it is deliberately last (WCAG 2.4.3 requires a meaningful order).
+- [minor] (substance) The prompt never says what Sam receives in-app after 'Don't confirm'. Only the confirmed row is given, although the flow requires Sam to see the decline.
+  - evidence: WHERE: "Sam gets the in-app row \"Maya confirmed you live at Larkspur Loop\"". flows-spec: "Dana declines the attestation ... Sam's sheet must show 'Dana didn't confirm' with the postcard path".
+  - fix: Add the decline NotificationRow text (e.g. "Maya didn't confirm your address") and list it as invented.
+- [minor] (substance) The inventory's hard-prerequisite warning is softened to 'needs sign-off'.
+  - evidence: inventory uxNote: "if none do, this sheet is a hard prerequisite for F3b." FINAL open question: "F3b must not ship until it exists". Notes: "needing sign-off before build".
+  - fix: In Notes, add: "If no other method accepts a non-owner occupant, F3b's gate must not ship without this sheet."
+- [major] (ux) The attestation push is placed in an invented group ('requests addressed to you') and uses the Household activity placeholder, with no interruption level. The brief fixes exactly five groups. The flow depends on this push reaching Maya, and if it falls into Household activity, which is off by default, Sam waits a week.
+  - evidence: Frame 25 Notes: "their group (with requests addressed to you, not household activity, which is off by default; a product decision to confirm)". WHERE IT LIVES: "hidden-preview placeholder 'Household update'". ux-research-brief.md §3: "Five groups, fixed before the first Android build ... each name is permanent" and "| Account & security | Sign-in, invitations to you | ... | On |".
+  - fix: Specify: "The push belongs to the Account & security group (invitations and requests to you), on by default, at that group's level; hidden-preview placeholder 'Request for you'." Draw PushCopy with those values in frame 13 and list 'Request for you' among the invented strings. Keep the level question on Notes only as an open decision, and put the group itself in the spec.
+- [minor] (ux) The header control stays 'Not now' in the result and non-actionable states. There it is meaningless, and the house style requires a visible Close or Done.
+  - evidence: PLATFORMS: "draw 'Not now' in the header as the sheet's close control". COPY Confirmed/Access ended/etc. each end in "Done". house-style-v2.txt: "Every sheet has a visible Close or Done".
+  - fix: Add: "The header reads 'Not now' only while a decision is open (frames 1–3, 11, 12). In every other state it reads 'Close'."
+- [minor] (ux) The commit moment is defined only as sheet close. If Maya backgrounds the app, loses the session or navigates away, it is unclear whether Sam is told.
+  - evidence: INTERACTION: "Sam is told, and his unlock applies, only when the sheet closes."
+  - fix: Change it to "only when the sheet closes, or when Maya leaves the screen or the app goes to the background".
+- [minor] (ux) The prompt claims the grants use the verify sheet's tick glyph, but the verify prompt names no glyph. It also never says whether 'Don't confirm' needs the box ticked.
+  - evidence: LAYOUT: "Grant rows use the same tick glyph, 44pt row height, body type and row order as the verify sheet's 'What this unlocks' list". INTERACTION says only that ticking enables Confirm.
+  - fix: Write: "Grant rows use the GrantLimitList success tick, with the same strings, row height and order as the verify sheet's list." Add: "'Don't confirm' is always enabled and does not need the box."
+- [minor] (ux) The reading order puts 'Not now' last even though it sits first visually in the header. That breaks meaningful sequence, and native nav-bar items are read first anyway.
+  - evidence: ACCESSIBILITY: "reading order is title, person, ... Confirm, Don't confirm, then Not now."
+  - fix: Write: "reading order is Not now (close), title, person, address, scope, grants, checkbox with hint, Confirm, Don't confirm. Initial focus goes to the title, not to Not now."
+- [minor] (ux) The NotificationRow twin is listed as an entry and a component, but no frame draws it.
+  - evidence: FOUNDATIONS: "NotificationRow (the in-app twin)". Frame 13: "the PushCopy preview beside the roster pending row".
+  - fix: Extend frame 13 to: "the PushCopy preview, the NotificationRow 'Sam asked you to confirm he lives here · Mon 19 Oct', and the roster pending row, each with an arrow to the sheet".

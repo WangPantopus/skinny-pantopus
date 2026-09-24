@@ -1,0 +1,29 @@
+{
+ "id": "f8-positioning-copy",
+ "name": "Positioning line + contrast line",
+ "feature": "F8",
+ "disposition": "COPY_ONLY",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Five hard-coded copies: /start page metadata, StartFunnel H1, marketing HeroSection, PlaceLaunchView.swift:128, PlaceLaunchScreen.kt:143 \u2014 plus the new OG footer.",
+ "purpose": "Say in one sentence what Pantopus is and, under it, what it is not, so a stranger from a friend's card knows in two lines why this is not another neighborhood app.",
+ "contents": "POSITIONING_LINE unchanged in text but promoted to one constant; POSITIONING_CONTRAST ('Nextdoor is what your neighbors say. Pantopus is what's on record about your address.') as a caption under the hero lede on all three platforms and in the OG footer.",
+ "states": [
+  "default",
+  "narrow viewport (wraps without pushing the address field off-screen)",
+  "compare arrival (contrast line moves BELOW the address field so the sender card and the input keep the first viewport)"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "/start hero (all platforms)",
+  "Marketing homepage",
+  "OG card footer"
+ ],
+ "visualization": "Caption weight, clearly subordinate to the H1 and typographically distinct from the lede \u2014 one line at \u2265640px \u2014 or the hero becomes three competing paragraphs.",
+ "uxNote": "Build note the doc misses: frontend/packages/types/src/copy.ts does not exist, so 'one constant per platform' is a new module plus a types rebuild across every consumer, not a five-file find-and-replace.",
+ "effortDays": 0.5
+}

@@ -1,0 +1,37 @@
+{
+ "id": "f3-household-calendar",
+ "name": "Household calendar (give the built screen an entry point)",
+ "feature": "F3 / F5",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web /app/homes/[id]/calendar \u2192 HomeAgenda, which is fully built with a gated read-only mode and linked from NOWHERE in the app; iOS HomeCalendarViewModel; Android HomeCalendarScreen.",
+ "purpose": "Deliver F3's promise that a co-resident can read and edit the household calendar, and make the T3 toast ('Saved to your household calendar') true.",
+ "contents": "Add the missing links (Home header tab + dashboard Calendar card 'Open calendar' + the place file's Dates section). Turn on member editing now that calendar.edit is a member default. Plot AddressCalendarRule occurrences \u2014 the user's dates and pickup \u2014 alongside home events and the derived task/bill/package due dates, read-only here (editing goes back to the Date sheet, one write path). DELETE the dashboard's separate HouseholdCalendar 7-day aggregate; two calendars with no cross-links is the inconsistency this feature is meant to fix.",
+ "states": [
+  "loading",
+  "agenda with events",
+  "empty",
+  "member with calendar.edit",
+  "legacy member read-only (explained)",
+  "derived items hidden per their own permissions",
+  "create-event sheet",
+  "a month with one annual date and nothing else (must not look broken)",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Home header tab",
+  "Dashboard Calendar card",
+  "Place file Dates section ('Everyone here can see these \u2192')",
+  "home_event_created notification"
+ ],
+ "visualization": "The agenda already mixes four item types; address rules become a fifth with a visual rule for 'annual, self-entered' vs 'this week, derived' so a lease end does not read like an overdue task. Rows carry the same filled/hollow/tick provenance marks as Today.",
+ "uxNote": "The cheapest win in F3: the screen exists, works, and has zero links, so F3's calendar acceptance criterion fails on web for a reason that costs a day. Android needs a /homes/:id/calendar router branch or the notification lands on the dashboard.",
+ "effortDays": 1
+}

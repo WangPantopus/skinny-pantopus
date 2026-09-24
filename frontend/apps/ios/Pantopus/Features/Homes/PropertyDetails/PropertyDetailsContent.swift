@@ -15,10 +15,15 @@ import SwiftUI
 public struct PropertyAddress: Sendable, Hashable {
     public let line1: String
     public let line2: String
-    public let latitude: Double
-    public let longitude: Double
+    public let latitude: Double?
+    public let longitude: Double?
 
-    public init(line1: String, line2: String, latitude: Double, longitude: Double) {
+    public var hasMapLocation: Bool {
+        guard let latitude, let longitude, latitude.isFinite, longitude.isFinite else { return false }
+        return (-90...90).contains(latitude) && (-180...180).contains(longitude)
+    }
+
+    public init(line1: String, line2: String, latitude: Double?, longitude: Double?) {
         self.line1 = line1
         self.line2 = line2
         self.latitude = latitude

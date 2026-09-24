@@ -7,11 +7,13 @@ import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -31,6 +33,7 @@ class HomeTabHostViewModel
         val landing = _landing.asStateFlow()
         private val _arrival = MutableStateFlow(PlaceArrivalState())
         val arrival = _arrival.asStateFlow()
+        private var resolveJob: Job? = null
         private val userId: String? get() = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         init {
@@ -38,6 +41,7 @@ class HomeTabHostViewModel
         }
 
         fun resolve() {
+            if (resolveJob?.isActive == true) return
             val draft = userId?.let { PlacePendingStore.bind(it) }
             if (draft != null) {
                 _arrival.value = PlaceArrivalState(draft = draft)
@@ -46,17 +50,19 @@ class HomeTabHostViewModel
                 return
             }
             _landing.value = HomeLanding.Loading
-            viewModelScope.launch {
-                _landing.value =
-                    when (val result = homesRepository.myHomes()) {
-                        is NetworkResult.Success -> {
-                            val homes = result.data.sharedHomes
-                            val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
-                            if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
+            resolveJob =
+                viewModelScope.launch {
+                    _landing.value =
+                        when (val result = homesRepository.myHomes()) {
+                            is NetworkResult.Success -> {
+                                val homes = result.data.sharedHomes
+                                val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+                                if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
+                            }
+                            is NetworkResult.Failure ->
+                                HomeLanding.Error(result.error.displayMessage("Couldn't load your place. Please try again."))
                         }
-                        is NetworkResult.Failure -> HomeLanding.Hub
-                    }
-            }
+                }
         }
 
         fun loadPreview() {
@@ -128,6 +134,8 @@ sealed interface HomeLanding {
     data object Loading : HomeLanding
 
     data object Review : HomeLanding
+
+    data class Error(val message: String) : HomeLanding
 
     data class PlaceDashboard(val homeId: String) : HomeLanding
 

@@ -1,0 +1,35 @@
+# Last review findings for f9-founding-meter-preview (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The persona clashes with the PLACE B fixture. In the house fixtures, Jordan Lee saved PLACE B on Sat 10 Oct, so on Mon 19 Oct it is not an address 'someone new' is seeing for the first time while signed out.
+  - evidence: House style FIXTURES: "PLACE B (saved, 'Saved place · Only you'): 1107 NE Birchfield Ct ... Saved by Jordan Lee ... saved it on Sat 10 Oct." Prompt: "Someone new to PLACE B, 1107 NE Birchfield Ct, Camas, WA 98607, not signed in".
+  - fix: Say "A signed-out visitor who types PLACE B's address (the same address Jordan saved; this visitor has no account)", or list the viewer as a fixture delta.
+- [minor] (substance) The 'what you keep without a slot' message sits behind the disclosure. The research change asks for it next to the badge statement. The caption also asserts "No fees change" without the pricing-model founder check that the sibling prompt requires for the same claim.
+  - evidence: per-surface: "State what the slot is and what you keep without it: 'A badge — no money or fee change. You can still claim this address'". Prompt caption: "A badge for the first 5 homes here to verify. No fees change." with "You can claim this address whether or not a slot is open" only inside "What's this?". f9-verification-promise-copy flags: "confirm ... 'doesn't change any fees' are true in the pricing model".
+  - fix: Change the caption to "A badge for the first 5 homes here to verify. No fees change, and you can claim either way." Add the fee-claim confirmation to the founder flags.
+- [minor] (substance) The placement statement ignores native. It says the surface is outside the four tabs, but on native the signed-out preview opens from the Place launch, which is the Place tab root with the tab bar visible (per f8-positioning-copy).
+  - evidence: Prompt: "Before sign-in and outside the four tabs; add no tab or nav entry." f8 prompt: "On native, the Place launch is the Place tab's root for someone with no place; keep the tab bar exactly as the screenshot shows."
+  - fix: Add: "On iOS and Android the preview sits inside the Place tab launch; keep the tab bar as the screenshot shows."
+- [minor] (substance) The derive guard 'never derive the line from a count of verified homes' is not stated for the wall line or the slot numbers.
+  - evidence: Design doc F8: "pass `{open, slots_open, ends_at}` into the density envelope (never a verified-home count)". derive f8-8: "Never derive the line from a count of verified homes."
+  - fix: Add under LAYOUT: "Slot numbers come only from the window's slots_open and ends_at, never from the density bucket or a verified-home count."
+- [major] (ux) The prompt tells Claude Design to draw the web CTA "Claim this address and be one of the first here" in the hero frames, yet its own Notes advise against it. In the fixture there are 6 days left and a postcard takes 5–7 days, so the hero frame shows a promise the prompt admits may be false. That contradicts the prompt's job of failing closed and never over-promising.
+  - evidence: COPY: "Web CTA when open: \"Claim this address and be one of the first here\""; WHO AND WHEN: "this person may not verify before the window closes; the copy must not imply otherwise"; Notes flag (a): "recommend plain 'Claim this address' everywhere".
+  - fix: Draw "Claim this address" in every state, and move the "be one of the first here" variant onto Notes as a founder option. If it's kept, the rule is "only when 8 or more days remain", and frame 10 shows the closing-today card with the plain CTA.
+- [major] (ux) "The wall stays one line at 390" can't be met. At body size, "3 Founding Neighbor slots are still open on this block." (56 characters) won't fit beside a Continue button in 358px. Claude Design would have to truncate, which the house style forbids, or shrink the text below the type scale.
+  - evidence: "The wall stays one line at 390 and reserves scroll padding." House style: "text wraps instead of truncating"; "Use only the type scale below".
+  - fix: Replace with: "The wall line is bodySmall 14/20 text.primary and may wrap to two lines at 390; the bar grows and reserves matching scroll padding; Continue stays 44px and on its own row if needed." Update Notes to match.
+- [minor] (ux) Showing the line only on same-block compare arrivals still tells the viewer that the sender lives on that block. The prompt knows this and parks it as a founder flag, yet frames 6 and 19 still build the leaky version.
+  - evidence: Notes flag (c): "the line appearing only on same-block compare arrivals itself hints that the sender lives nearby"; inventory uxNote: "never about the sender".
+  - fix: Draw frames 6 and 19 with the rule "any wall where the typed address's block has open slots", and record the doc's same-block rule on Notes as the alternative the founder can restore.
+- [minor] (ux) The hatch isn't specified. At about 10pt tall, a default diagonal hatch can blur into a grey fill and read as 'solid' in greyscale.
+  - evidence: "Open = diagonal hatch in text.secondary ink"; "about 10pt tall".
+  - fix: Add: "hatch at 45°, 1.5px strokes, 4px pitch, clipped to the capsule, on surface.base".
+- [minor] (ux) The "worst case" long address isn't long; it's the HOME A fixture.
+  - evidence: "the long address \"2418 NE Larkspur Loop, Vancouver, WA 98684\""
+  - fix: Use "12004 NE Pacific Crest Heights Loop, Unit 1402, Vancouver, WA 98684" and list it on Notes.
+- [minor] (ux) The caption brings up fees with a stranger who has never heard of any, and the fee claim isn't flagged for founder confirmation the way the sibling prompt flags it. The research asks that "claiming still works without it" be visible, but here it sits behind the disclosure.
+  - evidence: Caption: "A badge for the first 5 homes here to verify. No fees change."; f9-verification Notes: "confirm ... 'doesn't change any fees' are true ... drop either row if uncertain"; research: "The copy says what the slot is and that claiming still works without it."
+  - fix: Caption: "A badge for the first 5 homes here to verify. You can claim this address either way." Keep the fee sentence out, or add it to the founder flag list.
+- [minor] (ux) The native fail-closed states (zero slots, lookup failed) are drawn only on web, although the density card change ships on iOS and Android too.
+  - evidence: Artboards 12–16 show only open, offline and large-text states on native.
+  - fix: Add one iOS artboard "ios · NN-lookup-failed · light" (no card, gap closed), or state on Notes that native degrades identically to frames 4–5.

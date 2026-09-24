@@ -1,0 +1,32 @@
+{
+ "id": "f4-notification-settings",
+ "name": "Notifications (one page, four groups)",
+ "feature": "F1 / F3 / F4 / F5",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web /app/settings/notifications; iOS NotificationSettingsViewModel; Android NotificationSettingsViewModel. Absorbs the fake per-home toggles at /app/homes/[id]/settings:157-167.",
+ "purpose": "One honest place to control every push this design introduces \u2014 including the alert pushes, which today have no switch anywhere.",
+ "contents": "Four groups: BRIEFINGS (morning toggle + time, evening toggle + time, timezone caption, and a pickup-status row 'Pickup day \u2014 Tuesday (confirmed by Sam)' / 'Not set \u00b7 Set it'); HOUSEHOLD ACTIVITY (bills paid, tasks completed, events added); DATES AND BILLS (renamed from 'Home Reminders', which misdescribes the toggle for a user with no home; split so a user can mute date reminders without losing bill reminders); AIR AND WEATHER ALERTS (on/off plus a severity threshold). The MailPreferences master gate is surfaced here as the visible top-level switch instead of hiding in the Mail area. The per-home toggles are DELETED, not wired.",
+ "states": [
+  "loading",
+  "saved",
+  "save error",
+  "OS permission denied banner at the top (explaining that in-app rows continue)",
+  "no location (captions must not promise a briefing that will skip)",
+  "timezone caption"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Settings",
+  "Briefing opt-in card 'More options'",
+  "Any push's in-app row overflow ('Turn these off')"
+ ],
+ "visualization": "Four labelled groups with helper text under each master, and one permission banner pinned at the top when the OS is denying. The silence contract for the evening briefing is stated in its own row caption, because the people who come here are people who stopped getting pushes and want to know whether they are still on.",
+ "uxNote": "The proposal edited adjacent rows of this page from four separate feature entries and added a fifth settings surface; that is how preference pages rot. The per-home toggles look real and persist nothing ('real impl would persist') \u2014 shipping three new notification types behind a control that pretends to save is worse than shipping no control. Per-kind mute belongs on the date row itself ('Remind me: never'), not as new settings rows.",
+ "effortDays": 1
+}

@@ -60,6 +60,8 @@ object DeepLinkRouter {
 
         data object Home : Destination
 
+        data object Nearby : Destination
+
         data object Notifications : Destination
 
         data object Connections : Destination
@@ -317,6 +319,25 @@ object DeepLinkRouter {
          */
         data class InvoiceDetail(val invoiceId: String) : Destination
 
+        /**
+         * `/app/audience/inbox/:membershipId` — a fan's persona DM to the
+         * creator (`persona_dm_received_creator`). Opens the Creator Inbox; the
+         * link names a membership, not a thread.
+         */
+        data object CreatorInbox : Destination
+
+        /**
+         * `/app/audience/membership/:personaId/inbox` — the creator's reply to a
+         * fan (`persona_dm_reply_fan`). Opens that persona's fan inbox.
+         */
+        data class FanInbox(val personaId: String) : Destination
+
+        /**
+         * `/app/persona?tab=followers` — `persona_follow_request` and
+         * `persona_follow`. Opens "Your audience" (requests and members).
+         */
+        data object CreatorAudienceMembers : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -536,6 +557,7 @@ object DeepLinkRouter {
                 }
             }
             "home" -> Destination.Home
+            "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "hub-today", "hub_today", "today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
@@ -588,6 +610,11 @@ object DeepLinkRouter {
                     else -> Destination.SupportTrain(id)
                 }
             }
+            // Stored Support Train notices used the API-style activities prefix.
+            "activities" ->
+                segments.getOrNull(2)
+                    ?.takeIf { segments.size == 3 && segments[1] == "support-trains" && MAIL_UUID.matches(it) }
+                    ?.let { Destination.SupportTrain(it) } ?: Destination.Unknown(raw)
             // `/broadcast/:id` aliases Pulse/persona post detail (RN parity).
             "post", "posts", "broadcast", "broadcasts" -> {
                 val id = segments.getOrNull(1)
@@ -600,6 +627,21 @@ object DeepLinkRouter {
             "listing", "listings" -> {
                 val id = segments.getOrNull(1)
                 if (id.isNullOrBlank()) Destination.Unknown(raw) else Destination.Listing(id)
+            }
+            "marketplace" -> {
+                // The web listing path `/marketplace/:listingId` (address_revealed).
+                val id = HomeTaskNotificationRoute.canonicalId(segments.getOrNull(1))
+                if (id == null) Destination.Unknown(raw) else Destination.Listing(id)
+            }
+            "audience" -> {
+                // Persona DM notifications: `/audience/inbox/:membershipId` and
+                // `/audience/membership/:personaId/inbox`.
+                val rest = segments.drop(1)
+                when {
+                    rest.size == 2 && rest[0] == "inbox" -> Destination.CreatorInbox
+                    rest.size == 3 && rest[0] == "membership" && rest[2] == "inbox" -> Destination.FanInbox(rest[1])
+                    else -> Destination.Unknown(raw)
+                }
             }
             "homes" -> {
                 val id = segments.getOrNull(1)
@@ -692,7 +734,12 @@ object DeepLinkRouter {
             }
             "persona" -> {
                 val handle = segments.getOrNull(1)
-                if (handle.isNullOrBlank()) Destination.Unknown(raw) else Destination.BeaconProfile(handle)
+                when {
+                    !handle.isNullOrBlank() -> Destination.BeaconProfile(handle)
+                    // `/app/persona?tab=followers` — follow and follow-request notifications.
+                    tabQuery?.lowercase() == "followers" -> Destination.CreatorAudienceMembers
+                    else -> Destination.Unknown(raw)
+                }
             }
             "join" -> {
                 val code = segments.getOrNull(1)
@@ -823,16 +870,17 @@ object DeepLinkRouter {
     }
 
     /**
-     * Server notification links are web paths. The `new_follower` link is the
-     * web's canonical profile URL `/<username>`, which has no native route
-     * (unknown paths are deliberately discarded); rewrite just that type to the
-     * native short profile form `/u/<username>`.
+     * Server notification links are web paths. The `new_follower` and
+     * `connection_accepted` links are the web's canonical profile URL
+     * `/<username>`, which has no native route (unknown paths are deliberately
+     * discarded); rewrite just those types to the native short profile form
+     * `/u/<username>`.
      */
     fun notificationPath(
         type: String?,
         link: String?,
     ): String? {
-        if (type != "new_follower" || link == null) return link
+        if ((type != "new_follower" && type != "connection_accepted") || link == null) return link
         val trimmed = link.removePrefix("/")
         val single = trimmed.isNotEmpty() && !trimmed.contains('/') && !trimmed.contains('?') && !trimmed.startsWith("@")
         return if (single) "/u/$trimmed" else link
