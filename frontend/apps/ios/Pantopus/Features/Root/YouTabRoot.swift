@@ -1666,7 +1666,7 @@ public struct YouTabRoot: View {
                     supportTrainId: supportTrainId,
                     onShareTrain: {
                         systemSheet = .share(
-                            items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                         )
                     },
                     onConfirm: { reservationId in
@@ -1709,7 +1709,7 @@ public struct YouTabRoot: View {
                 // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
                     systemSheet = .share(
-                        items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                        items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
                     )
                 }
             )
