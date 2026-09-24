@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T03:09:11Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T03:29:17Z (active Codex coordinator)
 
-Master remains2768759bd845a8582583688eb53671a65ba3c45d. Reviewed Shells PR403 CI is green; package PR393 final CI is pending, prepared batch7 not created/queued. Home Android now visibly reports failed privacy saves and blocks settings on failed reads, with real retries verified; iOS/permission/offline gates remain. S1 iOS Decline target capture and S3 Android summary fit await their next builds. Root Shared Android/iOS helpers and isolated Support web runtime are ready; new native afters remain. Original155 is66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial. No fresh full-app sweep yet. Exact evidence/queue/limits: [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
+Master remains2768759bd845a8582583688eb53671a65ba3c45d. Reviewed package393 and Shells403 are combined in queued batch7 PR404/0d2e2c82a, waiting native CI. Home Android privacy/member/offline gates passed; final iOS app build is ready but real iOS checks still wait for S1. Stream1 maps passed bounded iOS afters; checkout/Decline remain. Stream3 functional Android afters passed; summary fit and cleanup remain. Root Shared Android997eddfa5d2c3d04641195b54ef2df3a528b1aa4 is building after two narrow lint corrections; new native recovery/share afters have not run. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 stays13closed/67partial. No fresh full-app sweep. Exact evidence/queues/limits: [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
