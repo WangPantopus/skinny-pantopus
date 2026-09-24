@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber")
+@file:Suppress("MagicNumber", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.ballot
 
