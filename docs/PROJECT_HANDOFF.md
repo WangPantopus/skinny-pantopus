@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T02:17:15Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T02:38:01Z (active Codex coordinator)
 
-Master remains `2768759bd845a8582583688eb53671a65ba3c45d`;393/397 held,46 founder-owned. S1 Android checkout restart/read guard and S3 bounded iOS scheduling afters are accepted; final counterpart-platform gates remain. Actual Home privacy403 showed default settings, and Android Pulse pagination503 had no visible retry; focused repairs are underway. Android Discover sample-content destination is newly reproduced, iOS source-only. Original155 remains66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial, not full-app coverage. Full-app sweep remains ahead. The [live hub](workstreams/README.md) records evidence, exact leases, runtime ownership and limits. Founder§7/A17 remain reserved.
+Master stays `2768759bd845a8582583688eb53671a65ba3c45d`. Bounded Shells C29/C33 is pre-reviewed PR403 atc63123f08; required native CI pending, no merge/count closure. S1 final iOS actuals are running, S3 final Android build is retrying a narrow Detekt correction, and Home privacy repair awaits final build/afters. Root reproduced and prepared Android Pulse pagination retry and Hub late-response repairs; new Discover sample-content defect remains open. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial, not full-app coverage. Full-app sweep remains ahead. Exact evidence, leases and limits are in the [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
