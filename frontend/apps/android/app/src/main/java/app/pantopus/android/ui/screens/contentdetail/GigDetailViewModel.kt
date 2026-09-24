@@ -1868,13 +1868,14 @@ class GigDetailViewModel
         /** Keep confirmed server terms visible when the following list read is unavailable. */
         private fun applyOwnerBidReceipt(receipt: GigBidDto?) {
             if (receipt == null) return
-            _bids.value = _bids.value.map { bid ->
-                if (bid.id == receipt.id) {
-                    receipt.copy(bidder = receipt.bidder ?: bid.bidder, legacyBidder = receipt.legacyBidder ?: bid.legacyBidder)
-                } else {
-                    bid
+            _bids.value =
+                _bids.value.map { bid ->
+                    if (bid.id == receipt.id) {
+                        receipt.copy(bidder = receipt.bidder ?: bid.bidder, legacyBidder = receipt.legacyBidder ?: bid.legacyBidder)
+                    } else {
+                        bid
+                    }
                 }
-            }
         }
 
         // MARK: - Phase 5 · instant accept (work item 3)
