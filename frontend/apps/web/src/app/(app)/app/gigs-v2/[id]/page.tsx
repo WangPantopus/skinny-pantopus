@@ -13,7 +13,6 @@ import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { BID_STATUS_STYLES, statusLabel } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { useBadges } from '@/contexts/BadgeContext';
@@ -131,19 +130,15 @@ function TrustCapsule({
 
 function OfferCardV2({
   offer,
-  gigStatus,
   onAccept,
   onDecline,
 }: {
   offer: any;
-  gigStatus: string;
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
 }) {
   const user = offer.user || offer.bidder || {};
   const trust = offer.trust_capsule || {};
-  const canAccept = gigStatus === 'open' && offer.status === 'pending';
-  const canDecline = gigStatus === 'open' && ['pending', 'countered'].includes(offer.status);
   const isRecommended = offer.is_recommended || offer.match_rank === 1;
   const displayName = user.first_name
     ? `${user.first_name} ${user.last_name || ''}`.trim()
@@ -189,27 +184,20 @@ function OfferCardV2({
         <p className="text-sm text-gray-500 line-clamp-2">{offer.message}</p>
       )}
 
-      <p className="text-sm text-gray-500">Status: {statusLabel(BID_STATUS_STYLES, offer.status)}</p>
-      {(canAccept || canDecline) && (
-        <div className="flex items-center gap-4">
-          {canAccept && (
-            <button
-              onClick={() => onAccept(offer.id)}
-              className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Accept
-            </button>
-          )}
-          {canDecline && (
-            <button
-              onClick={() => onDecline(offer.id)}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Decline
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => onAccept(offer.id)}
+          className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+        >
+          Accept
+        </button>
+        <button
+          onClick={() => onDecline(offer.id)}
+          className="text-sm text-gray-500 hover:text-gray-700"
+        >
+          Decline
+        </button>
+      </div>
     </div>
   );
 }
@@ -268,7 +256,6 @@ function OffersPanelV2({
           <OfferCardV2
             key={offer.id}
             offer={offer}
-            gigStatus={gig.status}
             onAccept={onAcceptOffer}
             onDecline={onDeclineOffer}
           />
