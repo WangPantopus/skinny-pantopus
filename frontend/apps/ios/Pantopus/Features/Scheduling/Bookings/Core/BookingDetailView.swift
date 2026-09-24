@@ -334,7 +334,9 @@ struct BookingDetailView: View {
         }
         .buttonStyle(.plain)
     }
+}
 
+extension BookingDetailView {
     private var loadingView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s3) {

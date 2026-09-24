@@ -142,14 +142,18 @@ public struct RootTabView: View {
         .task {
             consumeInviteDeepLinkIfNeeded(pending: router.pending)
         }
-        .fullScreenCover(isPresented: $showProfile, onDismiss: {
-            expandMonthlyReceipt = false
-            profileInitialRoute = nil
-        }) {
-            YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt, initialRoute: profileInitialRoute) {
-                showProfile = false
+        .fullScreenCover(
+            isPresented: $showProfile,
+            onDismiss: {
+                expandMonthlyReceipt = false
+                profileInitialRoute = nil
+            },
+            content: {
+                YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt, initialRoute: profileInitialRoute) {
+                    showProfile = false
+                }
             }
-        }
+        )
         .fullScreenCover(item: $pendingInviteToken) { item in
             TokenAcceptView(
                 viewModel: TokenAcceptViewModel(

@@ -105,7 +105,7 @@ public struct BookingDetailResponse: Decodable, Sendable, Hashable {
     public let booking: BookingDTO
     public let attendees: [BookingAttendeeDTO]?
     public let eventType: BookingEventTypeMetaDTO?
-    public var participant: BookingParticipantDTO? = nil
+    public var participant: BookingParticipantDTO?
 }
 
 /// A signed-in participant's own capability, separate from the full owner response.
