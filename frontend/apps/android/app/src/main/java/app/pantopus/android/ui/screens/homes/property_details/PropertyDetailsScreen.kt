@@ -38,7 +38,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.DataRow
@@ -181,7 +183,8 @@ private fun PropertyHero(
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
                 .padding(Spacing.s3)
                 .semantics {
-                    contentDescription = "${address.line1}, ${address.line2}. Household"
+                    contentDescription = "${address.line1}, ${address.line2}. Household" +
+                        if (address.hasMapLocation) "" else ". Map unavailable"
                 },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -220,12 +223,36 @@ private fun PropertyMapPreview(
     renderGoogleMap: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val latitude = address.latitude
+    val longitude = address.longitude
+    if (!address.hasMapLocation || latitude == null || longitude == null) {
+        Column(
+            modifier = modifier.background(PantopusColors.appSurfaceSunken).testTag("propertyDetails_mapUnavailable"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.MapPin,
+                contentDescription = null,
+                tint = PantopusColors.appTextMuted,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "Map unavailable",
+                style = PantopusTextStyle.caption,
+                fontSize = 10.sp,
+                color = PantopusColors.appTextSecondary,
+                textAlign = TextAlign.Center,
+            )
+        }
+        return
+    }
     if (!renderGoogleMap) {
         StaticMapPreview(modifier = modifier.testTag("propertyDetails_staticMap"))
         return
     }
 
-    val coordinate = remember(address.latitude, address.longitude) { LatLng(address.latitude, address.longitude) }
+    val coordinate = remember(latitude, longitude) { LatLng(latitude, longitude) }
     val cameraState =
         rememberCameraPositionState {
             position = CameraPosition.fromLatLngZoom(coordinate, 16f)

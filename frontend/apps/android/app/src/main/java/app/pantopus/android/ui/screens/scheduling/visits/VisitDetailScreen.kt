@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,8 +57,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
-import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillStatus
-import app.pantopus.android.ui.screens.scheduling._shared.SchedulingStatusPill
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTopBar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTopBarLeading
 import app.pantopus.android.ui.screens.scheduling.resources.CounterRow
@@ -310,7 +309,12 @@ private fun HeaderCard(loaded: VisitDetailUiState.Loaded) {
                 )
             }
             if (loaded.lifecycle == VisitLifecycle.Done) {
-                SchedulingStatusPill(status = SchedulingPillStatus.Completed)
+                RuleChipView(
+                    icon = PantopusIcon.Clock,
+                    text = "Past",
+                    foreground = PantopusColors.appTextSecondary,
+                    background = PantopusColors.appSurfaceSunken,
+                )
             }
         }
         Row(
@@ -390,15 +394,13 @@ private data class BannerSpec(
 )
 
 /**
- * 4-step status timeline (Offered → Reserved → Confirmed → Done). For a concrete
- * v1 visit, Confirmed maps to step 2 and Done to step 3; earlier steps render as
- * completed (check), the active step gets a home-accent ring, later steps stay
- * grey/numbered. (The offer/reserve lifecycle has no v1 backend.)
+ * Time-derived status for an existing calendar visit. Earlier scheduled time
+ * is not evidence that an offer, reservation, or attendance was completed.
  */
 @Composable
 private fun StatusTimeline(lifecycle: VisitLifecycle) {
-    val steps = listOf("Offered", "Reserved", "Confirmed", "Done")
-    val current = if (lifecycle == VisitLifecycle.Done) 3 else 2
+    val steps = listOf("Scheduled", "Past")
+    val current = if (lifecycle == VisitLifecycle.Done) 1 else 0
     SectionCard(overline = "Status") {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -408,7 +410,7 @@ private fun StatusTimeline(lifecycle: VisitLifecycle) {
                 val done = index < current
                 val active = index == current
                 Column(
-                    modifier = Modifier.size(width = 46.dp, height = 40.dp),
+                    modifier = Modifier.width(46.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.s1),
                 ) {

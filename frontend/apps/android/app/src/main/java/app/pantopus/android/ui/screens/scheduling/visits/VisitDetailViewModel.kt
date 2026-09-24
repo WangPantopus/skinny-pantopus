@@ -191,7 +191,7 @@ class VisitDetailViewModel
                     lifecycle = lifecycle,
                     timeText =
                         if (isPast) {
-                            "Done · ${ResourceTime.shortDate(event.startAt)}"
+                            "Past · ${ResourceTime.shortDate(event.startAt)}"
                         } else {
                             ResourceTime.longRangeLabel(event.startAt, event.endAt)
                         },
