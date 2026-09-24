@@ -326,6 +326,7 @@ For the local run, three Postgres 17 details were patched out of a copy of the b
 
 - The governments sheet rendered under the app shell's header, tab bar and floating buttons, so Skip and Close were covered. It now portals to the body, like `SlidePanel`.
 - The existing Civic page (Place → Civic) shows the election that `civic_election` carries, so turning Ballot on puts it there. It read the calendar date "2026-11-03" in local time: web showed "Nov 2 · Monday, November 2, 2026" in US time zones, and iOS left the date tile blank because `parseISO` rejects a bare date. Both now read the date in UTC, as `fmtYearMonth` already does. Android parses it with `LocalDate` and was correct. Checked on web in Los Angeles and Tokyo time.
+- In the week after the election, the Civic page still showed the November 3 election as "0 days away", because the section keeps it for the Place card's results link. On all three platforms the page now shows its existing "No upcoming election" card once `phase` is `after`. Checked on web on November 5 and on Election Day morning.
 
 **Found and left for a separate task:** `/start?address=` deep links never preview. The autocomplete API returns `center: [lng, lat]`, but the funnel reads `center.lat`. This predates Ballot.
 
