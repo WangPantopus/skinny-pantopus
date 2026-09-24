@@ -150,6 +150,7 @@ class DiscoverHubViewModel
         private var gigs: List<DiscoveryItem> = emptyList()
         private var listings: List<DiscoveryItem> = emptyList()
         private var loadedOnce: Boolean = false
+        private var magazineGeneration = 0L
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -201,17 +202,52 @@ class DiscoverHubViewModel
 
         // MARK: - A11.3 Magazine state
 
-        fun loadMagazine(scenario: DiscoverHubMagazineScenario = DiscoverHubMagazineScenario.Populated) {
+        fun loadMagazine(scenario: DiscoverHubMagazineScenario? = null) {
+            val generation = ++magazineGeneration
             _magazineState.value = DiscoverHubMagazineUiState.Loading
-            _magazineState.value =
-                when (scenario) {
-                    DiscoverHubMagazineScenario.Loading -> DiscoverHubMagazineUiState.Loading
-                    DiscoverHubMagazineScenario.Empty -> DiscoverHubMagazineUiState.Empty
-                    DiscoverHubMagazineScenario.Populated ->
-                        DiscoverHubMagazineUiState.Populated(DiscoverHubSampleData.populated)
-                    DiscoverHubMagazineScenario.Error ->
-                        DiscoverHubMagazineUiState.Error("Couldn't load discovery. Try again.")
+            if (scenario != null) {
+                _magazineState.value =
+                    when (scenario) {
+                        DiscoverHubMagazineScenario.Loading -> DiscoverHubMagazineUiState.Loading
+                        DiscoverHubMagazineScenario.Empty -> DiscoverHubMagazineUiState.Empty
+                        DiscoverHubMagazineScenario.Populated -> DiscoverHubMagazineUiState.Populated(DiscoverHubSampleData.populated)
+                        DiscoverHubMagazineScenario.Error -> DiscoverHubMagazineUiState.Error("Couldn't load discovery. Try again.")
+                    }
+                return
+            }
+            viewModelScope.launch {
+                val tasks = async { repo.discovery(filter = "gigs", limit = perTypeLimit) }
+                val items = async { repo.discovery(filter = "listings", limit = perTypeLimit) }
+                val taskResult = tasks.await()
+                val itemResult = items.await()
+                if (generation != magazineGeneration) return@launch
+                if (taskResult !is NetworkResult.Success || itemResult !is NetworkResult.Success) {
+                    _magazineState.value = DiscoverHubMagazineUiState.Error("Couldn't load discovery. Try again.")
+                    return@launch
                 }
+                _magazineState.value =
+                    DiscoverHubMagazineUiState.Populated(
+                        DiscoverHubMagazineContent(
+                            pins = emptyList(),
+                            cluster = DiscoverHubMapCluster(count = 0, x = 0f, y = 0f),
+                            tasks =
+                                taskResult.data.items.map {
+                                    DiscoverHubTaskCard(it.id, it.title, it.price ?: "See details", it.category.orEmpty(), "")
+                                },
+                            marketplace =
+                                itemResult.data.items.map {
+                                    DiscoverHubMarketplaceCard(
+                                        it.id,
+                                        it.title,
+                                        it.price ?: "See details",
+                                        it.category.orEmpty(),
+                                        iconForListingCategory(it.category),
+                                    )
+                                },
+                            posts = emptyList(),
+                        ),
+                    )
+            }
         }
 
         fun refreshMagazine() = loadMagazine()

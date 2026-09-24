@@ -93,7 +93,7 @@ fun DiscoverHubScreen(
         onSeeAllMarketplace = viewModel::seeAllMarketplace,
         onSeeAllPosts = viewModel::seeAllPosts,
         onRetry = viewModel::refreshMagazine,
-        onNotify = viewModel::notifyWhenActive,
+        onNotify = viewModel::seeAllPosts,
     )
 }
 
@@ -138,7 +138,6 @@ internal fun DiscoverHubMagazineScreen(
 
         DiscoverTopPill(
             onBack = onBack,
-            onSearch = {},
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
@@ -180,6 +179,7 @@ internal fun DiscoverHubMagazineScreen(
                 is DiscoverHubMagazineUiState.Populated ->
                     DiscoverHubRailsBody(
                         content = state.content,
+                        selectedFilter = selectedFilter,
                         onSelectTask = onSelectTask,
                         onSelectMarketplace = onSelectMarketplace,
                         onSelectPost = onSelectPost,
@@ -207,7 +207,7 @@ private fun DiscoverCompactMapPreview(
             modifier
                 .background(PantopusColors.appSurfaceSunken)
                 .clickable(onClick = onOpenMap)
-                .semantics { contentDescription = "Compact discover map. Opens Explore Map." }
+                .semantics { contentDescription = "Open Explore Map" }
                 .testTag("discoverHubMapPreview"),
     ) {
         MapBlob(modifier = Modifier.offset(x = (-28).dp, y = 32.dp).size(width = 132.dp, height = 88.dp))
@@ -232,7 +232,7 @@ private fun DiscoverCompactMapPreview(
                     ),
             )
         }
-        if (cluster != null) {
+        if (cluster != null && cluster.count > 0) {
             DiscoverMapCluster(
                 cluster = cluster,
                 modifier =
@@ -242,13 +242,6 @@ private fun DiscoverCompactMapPreview(
                     ),
             )
         }
-        DiscoverYouAreHereDot(
-            modifier =
-                Modifier.offset(
-                    x = maxWidth * 0.46f - 14.dp,
-                    y = maxHeight * 0.79f - 14.dp,
-                ),
-        )
     }
 }
 
@@ -360,33 +353,8 @@ private fun DiscoverMapCluster(
 }
 
 @Composable
-private fun DiscoverYouAreHereDot(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.size(28.dp), contentAlignment = Alignment.Center) {
-        Box(
-            modifier =
-                Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(PantopusColors.primary600.copy(alpha = 0.20f)),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .size(13.dp)
-                    .clip(CircleShape)
-                    .background(PantopusColors.primary600)
-                    .border(3.dp, PantopusColors.appSurface, CircleShape)
-                    .semantics { contentDescription = "You are here" },
-        )
-    }
-}
-
-// MARK: - Chrome
-
-@Composable
 private fun DiscoverTopPill(
     onBack: () -> Unit,
-    onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -416,12 +384,7 @@ private fun DiscoverTopPill(
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.weight(1f))
-        IconButtonLike(
-            icon = PantopusIcon.Search,
-            label = "Search discovery",
-            testTagId = "discoverHubSearch",
-            onClick = onSearch,
-        )
+        Spacer(modifier = Modifier.size(44.dp))
     }
 }
 
@@ -486,7 +449,7 @@ private fun DiscoverEntityChipRow(
     selectedFilter: DiscoverHubMapKind?,
     onSelect: (DiscoverHubMapKind?) -> Unit,
 ) {
-    val chips = listOf(null) + DiscoverHubMapKind.entries
+    val chips = listOf(null, DiscoverHubMapKind.Task, DiscoverHubMapKind.Item, DiscoverHubMapKind.Post)
     Row(
         modifier =
             Modifier
@@ -551,6 +514,7 @@ private fun DiscoverEntityChipRow(
 @Composable
 private fun DiscoverHubRailsBody(
     content: DiscoverHubMagazineContent,
+    selectedFilter: DiscoverHubMapKind?,
     onSelectTask: (String) -> Unit,
     onSelectMarketplace: (String) -> Unit,
     onSelectPost: (String) -> Unit,
@@ -565,66 +529,96 @@ private fun DiscoverHubRailsBody(
                 .verticalScroll(rememberScrollState())
                 .testTag("discoverHubRails"),
     ) {
-        DiscoverRailSectionHeader(
-            icon = PantopusIcon.Hammer,
-            color = DiscoverHubMapKind.Task.color,
-            title = "Tasks near you",
-            subcopy = "Closest first - 0.5 mi radius",
-            onSeeAll = onSeeAllTasks,
-            testTagId = "discoverHubTasksSeeAll",
-        )
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
-                    .testTag("discoverHubTasksRail"),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            content.tasks.forEach { item -> DiscoverTaskRailCard(item = item, onTap = { onSelectTask(item.id) }) }
-        }
+        if (selectedFilter == null || selectedFilter == DiscoverHubMapKind.Task) {
+            DiscoverRailSectionHeader(
+                icon = PantopusIcon.Hammer,
+                color = DiscoverHubMapKind.Task.color,
+                title = "Latest tasks",
+                subcopy = "Open tasks",
+                onSeeAll = onSeeAllTasks,
+                testTagId = "discoverHubTasksSeeAll",
+            )
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                        .testTag("discoverHubTasksRail"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                content.tasks.forEach { item -> DiscoverTaskRailCard(item = item, onTap = { onSelectTask(item.id) }) }
+            }
 
-        DiscoverRailSectionHeader(
-            icon = PantopusIcon.Tag,
-            color = DiscoverHubMapKind.Item.color,
-            title = "Marketplace picks",
-            subcopy = "Fresh listings - 4 new today",
-            onSeeAll = onSeeAllMarketplace,
-            testTagId = "discoverHubMarketplaceSeeAll",
-        )
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
-                    .testTag("discoverHubMarketplaceRail"),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            content.marketplace.forEach { item ->
-                DiscoverMarketplaceRailCard(item = item, onTap = { onSelectMarketplace(item.id) })
+            if (content.tasks.isEmpty()) {
+                Text(
+                    "No tasks to show yet.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+                )
             }
         }
+        if (selectedFilter == null || selectedFilter == DiscoverHubMapKind.Item) {
+            DiscoverRailSectionHeader(
+                icon = PantopusIcon.Tag,
+                color = DiscoverHubMapKind.Item.color,
+                title = "Marketplace picks",
+                subcopy = "Recent listings",
+                onSeeAll = onSeeAllMarketplace,
+                testTagId = "discoverHubMarketplaceSeeAll",
+            )
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                        .testTag("discoverHubMarketplaceRail"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                content.marketplace.forEach { item ->
+                    DiscoverMarketplaceRailCard(item = item, onTap = { onSelectMarketplace(item.id) })
+                }
+            }
 
-        DiscoverRailSectionHeader(
-            icon = PantopusIcon.MessageCircle,
-            color = DiscoverHubMapKind.Post.color,
-            title = "From your block",
-            subcopy = "Pulse posts - last 24h",
-            onSeeAll = onSeeAllPosts,
-            testTagId = "discoverHubPostsSeeAll",
-        )
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1, bottom = Spacing.s4)
-                    .testTag("discoverHubPostsRail"),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            content.posts.forEach { item -> DiscoverPostRailCard(item = item, onTap = { onSelectPost(item.id) }) }
+            if (content.marketplace.isEmpty()) {
+                Text(
+                    "No listings to show yet.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+                )
+            }
+        }
+        if (selectedFilter == null || selectedFilter == DiscoverHubMapKind.Post) {
+            DiscoverRailSectionHeader(
+                icon = PantopusIcon.MessageCircle,
+                color = DiscoverHubMapKind.Post.color,
+                title = "Pulse",
+                subcopy = "Browse local posts",
+                onSeeAll = onSeeAllPosts,
+                testTagId = "discoverHubPostsSeeAll",
+            )
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1, bottom = Spacing.s4)
+                        .testTag("discoverHubPostsRail"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                content.posts.forEach { item -> DiscoverPostRailCard(item = item, onTap = { onSelectPost(item.id) }) }
+            }
+            if (content.posts.isEmpty()) {
+                Text(
+                    "Choose an area in Pulse to browse local posts.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+                )
+            }
         }
     }
 }
@@ -935,7 +929,7 @@ private fun DiscoverHubEmptyBody(onNotify: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "Check back soon - as verified neighbors near you post, things will surface here grouped by category.",
+            text = "No tasks or listings to show yet. You can still browse local posts in Pulse.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -964,20 +958,20 @@ private fun DiscoverHubEmptyBody(onNotify: () -> Unit) {
                     .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                     .clickable(onClick = onNotify)
                     .padding(horizontal = Spacing.s4)
-                    .semantics { contentDescription = "Notify me when active" }
-                    .testTag("discoverHubNotify"),
+                    .semantics { contentDescription = "Browse Pulse" }
+                    .testTag("discoverHubBrowsePulse"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(
-                PantopusIcon.Bell,
+                PantopusIcon.MessageCircle,
                 contentDescription = null,
                 size = 13.dp,
                 strokeWidth = 2.2f,
                 tint = PantopusColors.appTextSecondary,
             )
             Text(
-                text = "Notify me when active",
+                text = "Browse Pulse",
                 style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appTextStrong,
             )
