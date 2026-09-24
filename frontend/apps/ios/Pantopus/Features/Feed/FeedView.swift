@@ -272,7 +272,7 @@ public struct FeedView: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             if viewModel.surface.supportsMapMode {
-                viewModeToggle
+                viewModeToggle.fixedSize(horizontal: true, vertical: false)
             }
             Button {
                 withAnimation(.easeOut(duration: 0.15)) { toggleSearch() }
