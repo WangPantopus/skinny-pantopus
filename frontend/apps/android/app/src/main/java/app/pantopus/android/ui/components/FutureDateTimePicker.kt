@@ -59,21 +59,29 @@ fun FutureDateTimePickerDialogs(
     }
 }
 
+/**
+ * Material3 date-only picker restricted to today onward, or to [earliest]
+ * onward when that is later (for a range's end date). Stage 1 of
+ * [FutureDateTimePickerDialogs]; also used alone for date fields.
+ */
 @Composable
-private fun FutureDatePickerDialog(
+fun FutureDatePickerDialog(
     initial: LocalDate?,
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
+    earliest: LocalDate? = null,
+    confirmLabel: String = "Next",
 ) {
     val initialMillis =
         (initial ?: LocalDate.now())
             .atStartOfDay(ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
+    val selectable = remember(earliest) { earliest?.let(::onOrAfterSelectableDates) ?: TodayOnwardSelectableDates }
     val state =
         rememberDatePickerState(
             initialSelectedDateMillis = initialMillis,
-            selectableDates = TodayOnwardSelectableDates,
+            selectableDates = selectable,
         )
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -90,7 +98,7 @@ private fun FutureDatePickerDialog(
                 } else {
                     onDismiss()
                 }
-            }) { Text("Next") }
+            }) { Text(confirmLabel) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -124,6 +132,22 @@ private fun TimePickerDialog(
         Box(modifier = Modifier.padding(Spacing.s4)) { TimePicker(state = state) }
     }
 }
+
+/** Selectable window: [earliest] or today (device zone), whichever is later, onward. */
+private fun onOrAfterSelectableDates(earliest: LocalDate): SelectableDates =
+    object : SelectableDates {
+        override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+            val date =
+                Instant
+                    .ofEpochMilli(utcTimeMillis)
+                    .atZone(ZoneOffset.UTC)
+                    .toLocalDate()
+            val today = LocalDate.now(ZoneId.systemDefault())
+            return !date.isBefore(if (earliest.isAfter(today)) earliest else today)
+        }
+
+        override fun isSelectableYear(year: Int): Boolean = year >= LocalDate.now(ZoneId.systemDefault()).year
+    }
 
 /** Selectable window: today (device zone) onward. */
 private val TodayOnwardSelectableDates =

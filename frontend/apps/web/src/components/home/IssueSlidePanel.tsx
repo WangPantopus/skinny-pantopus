@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import SlidePanel from './SlidePanel';
-import FileUpload from '@/components/FileUpload';
 
 const SEVERITIES = [
   { value: 'low', label: 'Low', icon: '🟢' },
@@ -39,7 +38,6 @@ export default function IssueSlidePanel({
   const [estimatedCost, setEstimatedCost] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (issue) {
@@ -48,14 +46,12 @@ export default function IssueSlidePanel({
       setSeverity(issue.severity || 'medium');
       setStatus(issue.status || 'open');
       setEstimatedCost(issue.estimated_cost ? String(issue.estimated_cost) : '');
-      setMediaFiles([]);
     } else {
       setTitle('');
       setDescription('');
       setSeverity('medium');
       setStatus('open');
       setEstimatedCost('');
-      setMediaFiles([]);
     }
     setError('');
   }, [issue, open]);
@@ -75,7 +71,6 @@ export default function IssueSlidePanel({
         description: description.trim() || undefined,
         severity,
         estimated_cost: estimatedCost ? parseFloat(estimatedCost) : undefined,
-        _mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
       };
       if (isEdit) {
         payload.status = status;
@@ -167,18 +162,6 @@ export default function IssueSlidePanel({
             className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
-
-        {/* Photos (optional) */}
-        <FileUpload
-          label="Photos (optional)"
-          accept={['image', 'video']}
-          maxFiles={10}
-          maxSize={100 * 1024 * 1024}
-          files={mediaFiles}
-          onFilesSelected={setMediaFiles}
-          helperText="Upload photos or videos showing the issue."
-          compact
-        />
 
         {/* Status (edit only) */}
         {isEdit && (

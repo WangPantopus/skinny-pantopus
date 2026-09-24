@@ -19,6 +19,12 @@ public enum ListingOffersEndpoints {
         Endpoint(method: .get, path: "/api/listings/\(listingId)/offers")
     }
 
+    /// `POST /api/listings/:listingId/offers` — the buyer's offer, which the seller sees under
+    /// "View offers". Route `backend/routes/listingOffers.js:58`.
+    public static func create(listingId: String, body: CreateListingOfferBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/listings/\(listingId)/offers", body: body)
+    }
+
     /// `POST /api/listings/:listingId/offers/:offerId/accept`. Route
     /// `backend/routes/listingOffers.js:163`.
     public static func accept(listingId: String, offerId: String) -> Endpoint {

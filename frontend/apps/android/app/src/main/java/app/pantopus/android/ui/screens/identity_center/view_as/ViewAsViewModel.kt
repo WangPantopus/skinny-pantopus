@@ -22,9 +22,9 @@ import javax.inject.Inject
  * The production path resolves the preview live from
  * `GET /api/identity-center/view-as`, which performs the per-field privacy
  * resolution server-side; [ViewAsMapper] projects it onto the design render.
- * A fetch failure falls back to the local [ViewAsSampleData] render (the
- * surface has no error state). Previews / tests drive the deterministic
- * sample matrix via the sample constructor.
+ * A fetch failure shows [ViewAsUiState.Failed] (error with Try again), never
+ * the sample render. Previews / tests drive the deterministic sample matrix
+ * via the sample constructor.
  */
 @HiltViewModel
 class ViewAsViewModel
@@ -74,14 +74,14 @@ class ViewAsViewModel
             val (surface, viewer) = ViewAsMapper.backendParams(audience)
             viewModelScope.launch {
                 val result = repository.viewAs(surface = surface, viewer = viewer)
-                val render =
+                _state.value =
                     if (result is NetworkResult.Success) {
-                        ViewAsMapper.render(result.data, audience)
+                        ViewAsUiState.Loaded(selected = audience, render = ViewAsMapper.render(result.data, audience))
                     } else {
-                        // No error state on this surface — fall back to sample.
-                        ViewAsSampleData.render(audience)
+                        // Never the sample render: its person ("Dana Okafor", ID
+                        // verified) would read as the user's own profile.
+                        ViewAsUiState.Failed
                     }
-                _state.value = ViewAsUiState.Loaded(selected = audience, render = render)
             }
         }
 
