@@ -424,7 +424,10 @@ internal fun HubPausedBanner(onResume: () -> Unit) {
 }
 
 @Composable
-internal fun HubReadOnlyStatus(pillar: SchedulingPillar, isPaused: Boolean) {
+internal fun HubReadOnlyStatus(
+    pillar: SchedulingPillar,
+    isPaused: Boolean,
+) {
     StatusCard {
         IconTile(icon = PantopusIcon.CalendarCheck, bg = pillar.accentBg, fg = pillar.accent)
         Spacer(Modifier.width(Spacing.s3))

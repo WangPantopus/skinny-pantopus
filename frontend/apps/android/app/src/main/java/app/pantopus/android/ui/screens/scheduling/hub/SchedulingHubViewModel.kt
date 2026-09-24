@@ -200,17 +200,19 @@ class SchedulingHubViewModel
                     }
                 }
             if (owner != fetchOwner) return
-            canEdit = when (fetchOwner) {
-                is SchedulingOwner.Home -> when (val access = homeAdmin.myAccess(fetchOwner.homeId)) {
-                    is NetworkResult.Success -> access.data.can("calendar.edit")
-                    is NetworkResult.Failure -> {
-                        if (owner != fetchOwner) return
-                        _state.value = SchedulingHubUiState.Error("Couldn't check your Home scheduling access. Try again.")
-                        return
-                    }
+            canEdit =
+                when (fetchOwner) {
+                    is SchedulingOwner.Home ->
+                        when (val access = homeAdmin.myAccess(fetchOwner.homeId)) {
+                            is NetworkResult.Success -> access.data.can("calendar.edit")
+                            is NetworkResult.Failure -> {
+                                if (owner != fetchOwner) return
+                                _state.value = SchedulingHubUiState.Error("Couldn't check your Home scheduling access. Try again.")
+                                return
+                            }
+                        }
+                    else -> true
                 }
-                else -> true
-            }
             if (owner != fetchOwner) return
             page = loadedPage
 

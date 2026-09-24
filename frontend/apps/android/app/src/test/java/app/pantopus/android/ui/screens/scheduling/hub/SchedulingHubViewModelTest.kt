@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.businesses.BusinessTeamMembersResponse
 import app.pantopus.android.data.api.models.businesses.BusinessUserDto
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.OccupantDto
@@ -23,7 +24,6 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
-import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
@@ -67,7 +67,8 @@ class SchedulingHubViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
-        coEvery { homeAdmin.myAccess(any()) } returns NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("calendar.view", "calendar.edit")))
+        coEvery { homeAdmin.myAccess(any()) } returns
+            NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("calendar.view", "calendar.edit")))
         coEvery { businesses.myBusinesses() } returns
             NetworkResult.Success(
                 MyBusinessesResponse(

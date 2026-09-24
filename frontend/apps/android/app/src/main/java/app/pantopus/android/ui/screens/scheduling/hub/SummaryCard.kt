@@ -279,7 +279,11 @@ private fun SummaryEmpty(
         Spacer(Modifier.width(Spacing.s3))
         Column(Modifier.weight(1f)) {
             Text("No bookings yet", color = PantopusColors.appText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text(if (readOnly) "Upcoming bookings will show up here." else "Share your link to get your first one.", color = PantopusColors.appTextSecondary, fontSize = 12.5.sp)
+            Text(
+                if (readOnly) "Upcoming bookings will show up here." else "Share your link to get your first one.",
+                color = PantopusColors.appTextSecondary,
+                fontSize = 12.5.sp,
+            )
         }
     }
     if (readOnly) return
