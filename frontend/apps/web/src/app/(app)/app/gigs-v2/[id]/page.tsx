@@ -591,6 +591,8 @@ function GigDetailV2Content() {
     if (!yes || !isSessionCurrent()) return;
     try {
       await api.gigs.rejectBid(gigId, offerId);
+      if (!isSessionCurrent()) return;
+      toast.success('Offer declined.');
       loadGig();
       loadOffers();
     } catch (err: unknown) {
