@@ -651,6 +651,7 @@ class ListingOffersViewModel
         private var loadedAtLeastOnce = false
         private var sort: ListingOffersSort = ListingOffersSort.HighestOffer
         private var pendingCheckoutOfferId: String? = null
+        private var pendingCheckoutUserId: String? = null
 
         private var nowProvider: () -> Instant = { Instant.now() }
         private var shareHandler: () -> Unit = {}
@@ -871,6 +872,7 @@ class ListingOffersViewModel
             fallback: ListingOfferDto,
         ) {
             if (!shouldCheckoutAcceptedOffer(offer, fallback)) return
+            val checkoutUserId = currentUserId()
             val result =
                 paymentsRepo.createPaymentIntent(
                     CreatePaymentIntentRequest(
@@ -882,6 +884,7 @@ class ListingOffersViewModel
             when (result) {
                 is NetworkResult.Success -> {
                     pendingCheckoutOfferId = offer.id
+                    pendingCheckoutUserId = checkoutUserId
                     _events.emit(ListingOffersEvent.PresentCheckout(result.data))
                 }
                 is NetworkResult.Failure -> Unit
@@ -891,7 +894,10 @@ class ListingOffersViewModel
         fun onCheckoutOutcome(outcome: CheckoutOutcome) {
             val offerId = pendingCheckoutOfferId ?: return
             pendingCheckoutOfferId = null
+            val viewerId = pendingCheckoutUserId
+            pendingCheckoutUserId = null
             if (outcome == CheckoutOutcome.Paid) {
+                if (viewerId != null) paymentsRepo.markListingConfirmationPending(viewerId, listingId, offerId)
                 refresh()
             } else {
                 offers.find { it.id == offerId }?.let { replaceOffer(it) }

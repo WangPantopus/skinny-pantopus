@@ -604,12 +604,17 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             let accepted = response.offer
             replace(offer: accepted)
             if shouldCheckoutAcceptedOffer(accepted, fallback: dto) {
+                let checkoutUserId = currentUserId()
+                let checkoutListingId = accepted.listingId ?? dto.listingId ?? listingId
                 let outcome = await checkout.pay(CheckoutRequest(
-                    listingId: accepted.listingId ?? dto.listingId ?? listingId,
+                    listingId: checkoutListingId,
                     offerId: accepted.id,
                     description: listing?.title ?? listingTitleHint
                 ))
                 if outcome == .paid {
+                    if let checkoutUserId {
+                        checkout.markListingConfirmationPending(userId: checkoutUserId, listingId: checkoutListingId, offerId: accepted.id)
+                    }
                     await refresh()
                 }
             }
