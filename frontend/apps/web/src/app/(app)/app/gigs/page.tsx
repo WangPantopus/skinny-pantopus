@@ -803,7 +803,7 @@ export default function GigsBrowsePage() {
                           </div>
                         )}
                       </div>
-                    ) : (
+                    ) : gigs.length > 0 ? (
                       <>
                         {/* Results count */}
                         <p className="text-xs text-app-text-muted mb-2">
@@ -839,7 +839,7 @@ export default function GigsBrowsePage() {
                           </div>
                         )}
                       </>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
