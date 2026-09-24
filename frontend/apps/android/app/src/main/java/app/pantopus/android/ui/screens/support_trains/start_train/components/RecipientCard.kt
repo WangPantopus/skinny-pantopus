@@ -67,7 +67,8 @@ internal fun StartTrainRecipientCard(
                     style = PantopusTextStyle.small.copy(fontWeight = FontWeight.Bold),
                     color = PantopusColors.appText,
                 )
-                VerifiedShieldChip()
+                // Only the server's `isVerified` may back a verified claim.
+                if (recipient.isVerified == true) VerifiedShieldChip()
             }
             Text(
                 text = metaLine(recipient),
@@ -113,21 +114,23 @@ private fun RecipientAvatar(recipient: MailRecipientDto) {
                 color = PantopusColors.personal,
             )
         }
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(18.dp)
-                    .clip(CircleShape)
-                    .background(PantopusColors.success),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.ShieldCheck,
-                contentDescription = null,
-                size = 10.dp,
-                tint = PantopusColors.appTextInverse,
-            )
+        if (recipient.isVerified == true) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(PantopusColors.success),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.ShieldCheck,
+                    contentDescription = null,
+                    size = 10.dp,
+                    tint = PantopusColors.appTextInverse,
+                )
+            }
         }
     }
 }
@@ -192,7 +195,11 @@ private fun MutualsStrip(mutuals: List<StartSupportTrainMutual>) {
 
 private fun metaLine(recipient: MailRecipientDto): String {
     val address = recipient.homeAddress
-    return if (!address.isNullOrBlank()) "Neighbor · $address" else "Verified neighbor"
+    return when {
+        !address.isNullOrBlank() -> "Neighbor · $address"
+        recipient.isVerified == true -> "Verified neighbor"
+        else -> "Neighbor"
+    }
 }
 
 private fun mutualsSummary(mutuals: List<StartSupportTrainMutual>): String {

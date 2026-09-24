@@ -299,11 +299,20 @@ public struct HostedByFooter: Equatable, Sendable {
     public let organizerInitials: String
     public let organizerDisplayName: String
     public let neighborHint: String?
+    /// The primary organizer's account, for "Message the host". Nil when
+    /// the detail read carried no organizer.
+    public let organizerUserId: String?
 
-    public init(organizerInitials: String, organizerDisplayName: String, neighborHint: String?) {
+    public init(
+        organizerInitials: String,
+        organizerDisplayName: String,
+        neighborHint: String?,
+        organizerUserId: String? = nil
+    ) {
         self.organizerInitials = organizerInitials
         self.organizerDisplayName = organizerDisplayName
         self.neighborHint = neighborHint
+        self.organizerUserId = organizerUserId
     }
 }
 

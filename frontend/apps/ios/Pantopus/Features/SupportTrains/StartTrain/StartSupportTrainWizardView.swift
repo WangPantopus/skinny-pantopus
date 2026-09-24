@@ -112,6 +112,7 @@ private struct LabeledField<Body: View>: View {
 
 private struct StartSupportTrainWhoAndWhyStep: View {
     let viewModel: StartSupportTrainWizardViewModel
+    @FocusState private var isQueryFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -156,11 +157,34 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     if !viewModel.beneficiaryResults.isEmpty {
                         resultList
                     }
-                    Text("Search verified neighbors, or type a name to invite them directly.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.Color.appTextMuted)
+                    if viewModel.beneficiarySearchFailed {
+                        searchFailedRow
+                    } else {
+                        Text("Search neighbors, or type a name to invite them directly.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
                 }
             }
+        }
+        // The no-match card waits until the name is typed (see
+        // `isEditingBeneficiaryQuery`).
+        .onChange(of: isQueryFocused) { _, focused in
+            viewModel.setEditingBeneficiaryQuery(focused)
+        }
+    }
+
+    /// A failed search found nobody, so it says so instead of "no one by
+    /// that name", and offers the search again.
+    private var searchFailedRow: some View {
+        HStack(spacing: Spacing.s1) {
+            Text("Couldn't search right now.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.Color.appTextMuted)
+            Button("Try again") { viewModel.retryBeneficiarySearch() }
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.Color.primary600)
+                .accessibilityIdentifier("startSupportTrainRecipientSearchRetry")
         }
     }
 
@@ -172,6 +196,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                 set: { viewModel.updateBeneficiaryQuery($0) }
             ))
             .font(Theme.Font.small)
+            .focused($isQueryFocused)
             .accessibilityIdentifier("startSupportTrainBeneficiaryField")
             if viewModel.isSearchingBeneficiary {
                 ProgressView().scaleEffect(0.7)
@@ -211,6 +236,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 10)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("startSupportTrainResult_\(recipient.userId)")
@@ -287,7 +313,9 @@ private struct StartSupportTrainWhoAndWhyStep: View {
             privacyToggleRow(
                 icon: .home,
                 title: "Block-visible",
-                subtitle: "Verified neighbors at 412 Elm can see and offer",
+                // The Tasks list shows block-visible trains to people nearby
+                // (about 25 mi); it doesn't check verification or a block.
+                subtitle: "People nearby on Pantopus can see and offer",
                 isOn: Binding(
                     get: { viewModel.blockVisible },
                     set: { viewModel.toggleBlockVisible($0) }
@@ -345,13 +373,11 @@ private struct StartSupportTrainWhoAndWhyStep: View {
         HStack(alignment: .top, spacing: 10) {
             Icon(.shield, size: 14, color: Theme.Color.appTextSecondary)
                 .padding(.top, 1)
-            Text(
-                "Invite-only by default. The train stays private until \(viewModel.beneficiaryQuery) accepts. " +
-                    "Other neighbors won't see it on the block."
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.Color.appTextStrong)
-            .fixedSize(horizontal: false, vertical: true)
+            // No invite goes to the recipient, so nothing is waiting on them to accept.
+            Text("Invite-only by default. Other neighbors won't see it on the block.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Spacing.s3)
         .background(Theme.Color.appSurfaceSunken)

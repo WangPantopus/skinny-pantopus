@@ -637,6 +637,17 @@ public struct YouTabRoot: View {
         }
     }
 
+    /// A one-to-one chat with a support train's organizer.
+    static func chatRoute(toHost host: HostedByFooter) -> YouRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
+    }
+
     private var navigationPathBinding: Binding<NavigationPath> {
         Binding(
             get: { path.navigationPath },
@@ -1630,10 +1641,11 @@ public struct YouTabRoot: View {
         case let .supportTrainDetail(supportTrainId):
             SupportTrainDetailView(
                 viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
-                // Keep the `onBack:` label: as a trailing closure it binds to
-                // the last closure (`onMessageHost`) and Back does nothing.
-                // swiftlint:disable:next trailing_closure
-                onBack: { Task { @MainActor in pop() } }
+                onBack: { Task { @MainActor in pop() } },
+                onOpenManage: { Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) } },
+                onMessageHost: { host in
+                    Task { @MainActor in path.append(Self.chatRoute(toHost: host)) }
+                }
             )
         case .searchSupportTrains:
             SupportTrainsSearchView(
@@ -1664,7 +1676,7 @@ public struct YouTabRoot: View {
                     supportTrainId: supportTrainId,
                     onShareTrain: {
                         systemSheet = .share(
-                            items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                         )
                     },
                     onConfirm: { reservationId in
@@ -1682,8 +1694,10 @@ public struct YouTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in path.append(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in
+                            path.append(.chatConversation(HubTabRoot.chatDestination(toHelper: reservation)))
+                        }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -1700,14 +1714,13 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
+                    )
                 }
             )
         case .identityCenter:

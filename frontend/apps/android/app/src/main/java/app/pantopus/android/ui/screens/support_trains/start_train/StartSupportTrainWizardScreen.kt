@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
@@ -35,10 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -70,6 +75,8 @@ fun StartSupportTrainWizardScreen(
     val beneficiaryResults by viewModel.beneficiaryResults.collectAsStateWithLifecycle()
     val selectedBeneficiary by viewModel.selectedBeneficiary.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    val searchFailed by viewModel.beneficiarySearchFailed.collectAsStateWithLifecycle()
+    val isEditingQuery by viewModel.isEditingBeneficiaryQuery.collectAsStateWithLifecycle()
     val launchError by viewModel.launchError.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
 
@@ -95,7 +102,8 @@ fun StartSupportTrainWizardScreen(
                     selected = selectedBeneficiary,
                     isSearching = isSearching,
                     mutuals = viewModel.recipientMutuals(),
-                    inviteCandidate = viewModel.inviteCandidate(),
+                    // The no-match card waits until the name is typed.
+                    inviteCandidate = if (isEditingQuery) null else viewModel.inviteCandidate(),
                     onQuery = viewModel::updateBeneficiaryQuery,
                     onSelectBeneficiary = viewModel::selectBeneficiary,
                     onClearBeneficiary = viewModel::clearBeneficiary,
@@ -106,6 +114,9 @@ fun StartSupportTrainWizardScreen(
                     onToggleBlockVisible = viewModel::toggleBlockVisible,
                     onSelectInviteMethod = viewModel::selectInviteMethod,
                     reasonRemaining = viewModel.reasonRemainingChars(),
+                    searchFailed = searchFailed,
+                    onRetrySearch = viewModel::retryBeneficiarySearch,
+                    onQueryFocusChanged = viewModel::setEditingBeneficiaryQuery,
                 )
             StartSupportTrainStep.WhatAndWhen ->
                 WhatAndWhenStep(
@@ -153,6 +164,9 @@ internal fun WhoAndWhyStep(
     onToggleBlockVisible: (Boolean) -> Unit,
     onSelectInviteMethod: (StartSupportTrainInviteMethod) -> Unit,
     reasonRemaining: Int,
+    searchFailed: Boolean = false,
+    onRetrySearch: () -> Unit = {},
+    onQueryFocusChanged: (Boolean) -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
         TrainChip()
@@ -190,22 +204,27 @@ internal fun WhoAndWhyStep(
                     query = form.beneficiaryQuery,
                     isSearching = isSearching,
                     onQuery = onQuery,
+                    onFocusChanged = onQueryFocusChanged,
                 )
                 if (results.isNotEmpty()) {
                     ResultList(results = results, onSelect = onSelectBeneficiary)
                 }
-                Text(
-                    text = "Search verified neighbors, or type a name to invite them directly.",
-                    style = PantopusTextStyle.caption,
-                    color = PantopusColors.appTextMuted,
-                )
+                if (searchFailed) {
+                    SearchFailedRow(onRetry = onRetrySearch)
+                } else {
+                    Text(
+                        text = "Search neighbors, or type a name to invite them directly.",
+                        style = PantopusTextStyle.caption,
+                        color = PantopusColors.appTextMuted,
+                    )
+                }
             }
         }
 
         ReasonPicker(selected = form.selectedReason, onSelect = onSelectReason)
 
         if (inviteCandidate != null) {
-            InvitePrivacyHint(query = form.beneficiaryQuery)
+            InvitePrivacyHint()
         } else {
             ContextNoteField(
                 note = form.reason,
@@ -223,12 +242,36 @@ internal fun WhoAndWhyStep(
     }
 }
 
+/** A failed search found nobody, so it says so instead of "no one by that
+ *  name", and offers the search again. */
+@Composable
+private fun SearchFailedRow(onRetry: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        Text(
+            text = "Couldn't search right now.",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextMuted,
+        )
+        Text(
+            text = "Try again",
+            style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.primary600,
+            modifier = Modifier.clickable { onRetry() }.testTag("startSupportTrainRecipientSearchRetry"),
+        )
+    }
+}
+
 @Composable
 private fun RecipientSearchField(
     query: String,
     isSearching: Boolean,
     onQuery: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
     OutlinedTextField(
         value = query,
         onValueChange = onQuery,
@@ -251,10 +294,14 @@ private fun RecipientSearchField(
             }
         },
         singleLine = true,
+        // Done ends the edit, which lets the no-match card show.
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         colors = pantopusTextFieldColors(),
         modifier =
             Modifier
                 .fillMaxWidth()
+                .onFocusChanged { onFocusChanged(it.isFocused) }
                 .testTag("startSupportTrainBeneficiaryField"),
     )
 }
@@ -340,7 +387,9 @@ private fun PrivacyToggleList(
         PrivacyToggleRow(
             icon = PantopusIcon.Home,
             title = "Block-visible",
-            subtitle = "Verified neighbors at 412 Elm can see and offer",
+            // The Tasks list shows block-visible trains to people nearby
+            // (about 25 mi); it doesn't check verification or a block.
+            subtitle = "People nearby on Pantopus can see and offer",
             checked = blockVisible,
             onToggle = onToggleBlockVisible,
             testTag = "startSupportTrainBlockVisible",
@@ -403,7 +452,7 @@ private fun PrivacyToggleRow(
 }
 
 @Composable
-private fun InvitePrivacyHint(query: String) {
+private fun InvitePrivacyHint() {
     Row(
         modifier =
             Modifier
@@ -422,7 +471,8 @@ private fun InvitePrivacyHint(query: String) {
             tint = PantopusColors.appTextSecondary,
         )
         Text(
-            text = "Invite-only by default. The train stays private until $query accepts. Other neighbors won't see it on the block.",
+            // No invite goes to the recipient, so nothing is waiting on them to accept.
+            text = "Invite-only by default. Other neighbors won't see it on the block.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextStrong,
         )

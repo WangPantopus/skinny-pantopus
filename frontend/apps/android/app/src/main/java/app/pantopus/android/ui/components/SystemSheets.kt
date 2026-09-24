@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts.PickContact
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import app.pantopus.android.BuildConfig
 
 /**
  * P6.6 — system surfaces port of iOS `Core/Design/Components/SystemSheets.swift`.
@@ -42,6 +43,9 @@ import androidx.compose.ui.platform.LocalContext
  */
 object InviteLinks {
     const val DOWNLOAD_URL = "https://pantopus.app"
+
+    /** The existing public train page, using this build's web origin. */
+    fun supportTrainUrl(trainId: String): String = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/support-trains/${Uri.encode(trainId)}"
 
     const val INVITE_MESSAGE =
         "Join me on Pantopus — your neighborhood for trusted home help, " +
