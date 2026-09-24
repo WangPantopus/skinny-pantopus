@@ -12,6 +12,12 @@ import SwiftUI
 struct PlaceCivicDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    @State private var showGovernments = false
+
+    /// Ballot P0 sends the governments all year (plan §11 item 7).
+    private var governments: BallotGovernments? {
+        vm.section(.civicDistricts, in: intel)?.civicDistricts?.governments
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,6 +26,10 @@ struct PlaceCivicDetailContent: View {
                 if let data = districts.civicDistricts, !data.districts.isEmpty {
                     DistrictsCard(districts: data.districts)
                     PlaceSourceNote(name: "District boundaries · public GIS records", asOf: "current")
+                    if let governments = data.governments {
+                        GovernmentsRow(governments: governments) { showGovernments = true }
+                            .padding(.top, 12)
+                    }
                     if !data.representatives.isEmpty {
                         PlaceDetailSectionLabel(text: "Your representatives")
                         VStack(spacing: 8) {
@@ -48,6 +58,47 @@ struct PlaceCivicDetailContent: View {
                 }
             }
         }
+        .sheet(isPresented: $showGovernments) {
+            if let governments {
+                BallotGovernmentsView(governments: governments, address: intel.place.line1) { showGovernments = false }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            }
+        }
+    }
+}
+
+/// "Your governments" (Board: P0 Civic page): opens the governments view
+/// all year, not only while the election card is up. Present only when
+/// Ballot sends the governments for this address.
+private struct GovernmentsRow: View {
+    let governments: BallotGovernments
+    let onOpen: () -> Void
+
+    private var count: String {
+        governments.countIsMinimum ? "at least \(governments.count)" : "\(governments.count)"
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            PlaceDetailCard(padding: 16) {
+                HStack(spacing: 12) {
+                    PlaceIconTile(icon: .layers, tone: .home, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Your governments")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.Color.appText)
+                        Text("This address sits inside \(count).")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
+                    Spacer(minLength: 0)
+                    PlaceChevron()
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("place.civic.governments")
     }
 }
 

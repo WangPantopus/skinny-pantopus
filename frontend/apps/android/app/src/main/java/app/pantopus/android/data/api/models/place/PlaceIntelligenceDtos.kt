@@ -830,6 +830,12 @@ data class PlaceCivicRepresentative(
 data class PlaceCivicDistrictsData(
     val districts: List<PlaceCivicDistrict> = emptyList(),
     val representatives: List<PlaceCivicRepresentative> = emptyList(),
+    /**
+     * Ballot P0 (`ballot_p0`): the governments view's data, all year; null
+     * when not sent. Read separately by [BallotGovernments.decodeIn] in
+     * `PlaceJsonAdapters`, so a malformed field never fails this section.
+     */
+    @Transient val governments: BallotGovernments? = null,
 )
 
 enum class BallotRaceType {

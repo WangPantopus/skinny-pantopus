@@ -801,7 +801,21 @@ async function lookupRepresentatives(stateAbbr, codes) {
   return reps;
 }
 
-async function composeCivicDistricts(home) {
+// Ballot P0 (plan §11 item 7): behind `ballot_p0`, the Civic page's "Your
+// governments" row opens the governments view all year, not only while an
+// election card is up. Any failure just leaves the row out.
+async function composeCivicGovernments(home, userId) {
+  if (!userId) return null;
+  try {
+    if (!(await featureFlagService.isFeatureEnabled('ballot_p0', userId))) return null;
+    return await ballotSummary.civicGovernmentsForHome(home);
+  } catch (err) {
+    logger.warn('placeSections: civic governments failed', { homeId: home.id, error: err.message });
+    return null;
+  }
+}
+
+async function composeCivicDistricts(home, { userId = null } = {}) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('civic_districts', { status: 'unavailable' })];
   try {
@@ -829,16 +843,19 @@ async function composeCivicDistricts(home) {
     // are keyless and individually cached; city/county officials have no
     // national source — the list is honestly partial.) Rows cached before
     // codes existed carry their old reps until the geo cache expires.
-    const representatives = payload.codes
-      ? await lookupRepresentatives(home.state, payload.codes)
-      : (payload.representatives || []);
+    const [representatives, governments] = await Promise.all([
+      payload.codes
+        ? lookupRepresentatives(home.state, payload.codes)
+        : Promise.resolve(payload.representatives || []),
+      composeCivicGovernments(home, userId),
+    ]);
 
     return [serializePlaceSection('civic_districts', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       source: 'U.S. Census Bureau · unitedstates/congress-legislators · OpenStates',
       coverage: representatives.length ? 'full' : 'partial',
-      data: { districts: payload.districts, representatives },
+      data: { districts: payload.districts, representatives, ...(governments ? { governments } : {}) },
     })];
   } catch (err) {
     logger.warn('placeSections: civic_districts failed', { homeId: home.id, error: err.message });

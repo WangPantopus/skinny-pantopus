@@ -991,6 +991,21 @@ public struct PlaceCivicRepresentative: Decodable, Sendable, Hashable {
 public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     public let districts: [PlaceCivicDistrict]
     public let representatives: [PlaceCivicRepresentative]
+    /// Ballot P0 (`ballot_p0`): the governments view's data, all year; nil
+    /// when not sent.
+    public let governments: BallotGovernments?
+
+    private enum CodingKeys: String, CodingKey {
+        case districts, representatives, governments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        districts = try c.decode([PlaceCivicDistrict].self, forKey: .districts)
+        representatives = try c.decode([PlaceCivicRepresentative].self, forKey: .representatives)
+        // A malformed Ballot field never blanks the districts.
+        governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
+    }
 }
 
 public enum BallotRaceType: String, Sendable, Hashable {

@@ -911,7 +911,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId }) => composeRealRent(home, tier, userId) },
-  { ids: ['civic_districts'], run: ({ home }) => placeSectionAdapters.composeCivicDistricts(home) },
+  { ids: ['civic_districts'], run: ({ home, userId }) => placeSectionAdapters.composeCivicDistricts(home, { userId }) },
   { ids: ['civic_election'], run: ({ home, userId }) => placeSectionAdapters.composeCivicElection(home, { userId }) },
 ];
 

@@ -22,7 +22,7 @@
       "election_office_phrase": "the California Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://registertovote.ca.gov/", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Where’s My Ballot?", "url": "https://wheresmyballot.sos.ca.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Where’s My Ballot?", "url": "https://wheresmyballot.sos.ca.gov/", "phases": ["in_season", "election_day", "after"] },
         { "key": "drop_boxes", "label": "Find a drop box or vote center", "owner": "Secretary of State", "url": "https://caearlyvoting.sos.ca.gov/", "phases": ["in_season", "election_day"] },
         { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026", "phases": ["far", "in_season"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.sos.ca.gov/elections", "phases": ["after"] }
@@ -42,7 +42,7 @@
       "election_office_phrase": "the Colorado Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "BallotTrax", "url": "https://ballottrax.coloradosos.gov/voter/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "BallotTrax", "url": "https://ballottrax.coloradosos.gov/voter/", "phases": ["in_season", "election_day", "after"] },
         { "key": "drop_boxes", "label": "Find a drop box or voting center", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["election_day"] },
         { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.state.co.us/pubs/elections/electionInfo.html", "phases": ["far", "in_season"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.coloradosos.gov/", "phases": ["after"] }
@@ -102,7 +102,7 @@
       "election_office_phrase": "the Nevada Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://registertovote.nv.gov/", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Secretary of State", "url": "https://www.nvsos.gov/sos/elections/voters/tracking", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Secretary of State", "url": "https://www.nvsos.gov/sos/elections/voters/tracking", "phases": ["in_season", "election_day", "after"] },
         { "key": "election_information", "label": "2026 election information", "owner": "Secretary of State", "url": "https://www.nvsos.gov/elections/election-information/2026-election-information", "phases": ["far", "in_season", "election_day"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://results.nv.gov/", "phases": ["after"] }
       ],
@@ -129,7 +129,7 @@
       "election_office_phrase": "the Oregon Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/registration.aspx", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Vote", "url": "https://sos.oregon.gov/elections/pages/myvote.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Vote", "url": "https://sos.oregon.gov/elections/pages/myvote.aspx", "phases": ["in_season", "election_day", "after"] },
         { "key": "drop_boxes", "label": "Find a drop box", "owner": "Secretary of State", "url": "https://sos.oregon.gov/voting/Pages/drop-box-locator.aspx", "phases": ["in_season", "election_day"] },
         { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/current-election.aspx", "phases": ["far", "in_season"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://results.oregonvotes.gov/", "phases": ["after"] }
@@ -155,7 +155,7 @@
       "election_office_phrase": "the Utah Lieutenant Governor’s office",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/voter-registration-portal/", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/track-my-ballot/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/track-my-ballot/", "phases": ["in_season", "election_day", "after"] },
         { "key": "election_information", "label": "Current election information", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/current-election-information/", "phases": ["far", "in_season", "election_day"] },
         { "key": "results", "label": "Election results", "owner": "Lieutenant Governor", "url": "https://electionresults.utah.gov/", "phases": ["after"] }
       ],
@@ -174,7 +174,7 @@
       "election_office_phrase": "the Vermont Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/registration", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Voter Page", "url": "https://mvp.vermont.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Voter Page", "url": "https://mvp.vermont.gov/", "phases": ["in_season", "election_day", "after"] },
         { "key": "polling_places", "label": "Find your polling place", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/polling-places", "phases": ["election_day"] },
         { "key": "election_information", "label": "Voting by mail", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/early-absentee-voting", "phases": ["far", "in_season"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/election-info-resources/elections-results-data", "phases": ["after"] }
@@ -195,7 +195,7 @@
       "election_office_phrase": "the Washington Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington", "phases": ["far", "in_season"] },
-        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day", "after"] },
         { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/helpful-information/current-election-information", "phases": ["far", "in_season"] },
         { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/data-research/election-data-and-maps/election-results-and-voters-pamphlets", "phases": ["after"] }
       ],

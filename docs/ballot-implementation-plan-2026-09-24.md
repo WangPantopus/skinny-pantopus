@@ -119,7 +119,7 @@ When `ballot_p0` is on for the user, `composeCivicElection` keeps `name`, `date`
 ```
 
 - `coverage` is `supported` (verified dates and links), `links_only` (election date and official links only), or absent (flag off: today's behavior). A provider failure never turns into "no election".
-- `phase` is `far` (61–120 days out), `in_season` (60 days out to the day before), `election_day`, `after` (days 1–7 after), or `hidden`. It is computed in the state's timezone from the local date. The phase decides layout only.
+- `phase` is `far` (61–120 days out), `in_season` (60 days out to the day before), `election_day`, `after` (through certification where the dates are checked, else days 1–7 after; `after_stage` is `counting` or `certified`), or `hidden`. It is computed in the state's timezone from the local date. The phase decides layout only.
 - `governments` appears for supported states only. It holds typed ids from the exact-point geocoder: United States, the state, the county, an incorporated place, and a school district (unified, or elementary plus secondary). Items are deduplicated by `level:geoid`. `count_is_minimum` is always true in P0, because special districts are not integrated. `on_ballot` is `true` only for the United States (every U.S. House seat is up in 2026) and `null` for the rest.
 - Old clients ignore the new fields, and the existing "Next election" row keeps working.
 
@@ -344,6 +344,12 @@ I signed up, confirmed the email and signed in through the web. Everything after
   - Oregon after the election ("the Oregon Secretary of State").
   - Washington again, in season and on Election Day, with the new mailing wording.
   - The governments line came from the stubbed Census answer for Camas, so it only checks layout for these states.
+- **After the election and all year (September 24):**
+  - A Clark County home on November 5 showed "Counting" with the results and VoteWA tracking links.
+  - On November 25 it showed "Clark County Elections certified the results on Nov 24."
+  - On December 5 there was no card.
+  - On September 24 and December 5, the Civic page's "Your governments" row opened the governments view; the story played and Done closed it.
+  - The counting and certified cards differ from the P0 after board on 0.01% of pixels.
 
 **What was controlled, and why:**
 
@@ -376,8 +382,20 @@ For the local run, three Postgres 17 details were patched out of a copy of the b
 4. **The P0 peel.** It keeps the board's motion, and each caption carries only "Government k of at least N" and the name. It plays once, holds the finished frame, and starts there under reduced motion.
 5. **Reminders.** None in P0. P0.5 adds one opt-in, off by default, at most three per election, with the copy on the proposed Pushes board.
 6. **Enabling.** `ballot_p0` goes to internal users first, then globally for the pilot. Enable it for native users only once the Ballot builds ship: older builds read `civic_election` as "the next election" and show the past election as "In 0 days" while the card is in `after`.
-7. **After the election, and all year.** Drawn on the canvas's "Proposed, September 24: after the election, and all year" boards. Not built.
-   - **Counting, then certified.** The `after` card stays until the state certifies instead of 7 days. In Washington, counting runs from Nov 3, 8 p.m. to Nov 23 and certification from Nov 24 to Dec 3. It says results can change until the county certifies, links to the official results and ballot tracking, and shows no counts. This is a backend-only change: `phase` stays `after`, and every client already renders the server's chip, note and links. Dates are from the Secretary of State's calendar (county certification Nov 24, state by Dec 3) and still need the release check-1 review.
-   - **Between elections.** From Dec 4 the card leaves Place until the next election with checked dates. In Washington that is July 5, 2027, 120 days before the November 2 general. Special elections (Feb 9 and Apr 27) and the Aug 3 primary wait for P1 contest data, which knows what is on each address's ballot.
-   - **Governments all year.** The Civic page (Place → Civic, also in the desktop Place rail) gains one row under Your districts, "Your governments", which opens the governments view. It uses the existing row pattern and the `layers` icon, which all three icon sets have. It needs the governments block outside the election window, behind the same flag.
+7. **After the election, and all year.** Approved by the founder on September 24 and built (boards: "Proposed, September 24: after the election, and all year").
+   - **Counting, then certified.** Where a state's certification dates are checked, the `after` card stays through certification instead of 7 days. Counting (chip "Counting", results and ballot-tracking links) runs through the day local results are certified: "Ballots are still being counted. Results can change until Clark County Elections certifies them on Nov 24." Certified (results link only) runs from the next day until the card leaves: "Clark County Elections certified the results on Nov 24." Without a known county the sentence says "your county". Counts never appear. `phase` stays `after`; the server sends `after_stage` and every client renders the chip, note and links it already knows. Counting ends the day after certification, not on it, because boards certify during that day (the board's date labels now read "to Nov 24" and "Nov 25 to Dec 3").
+   - **Dates per state** (`certification` in `elections.json`; the card leaves after `hide_after`):
+
+     | State | Counties certify | Card leaves after | Why that date |
+     |---|---|---|---|
+     | Washington | on Nov 24 | Dec 3 | state certifies by Dec 3 |
+     | California | by Dec 3 | Dec 11 | state certifies Dec 11 |
+     | Oregon | by Nov 30 | Dec 10 | state certifies Dec 10 |
+     | Nevada | by Nov 13 | Nov 24 | Supreme Court canvass Nov 24 |
+     | Colorado | by Nov 25 | Dec 2 | no state date checked: one week after |
+     | Utah | by Nov 17 | Nov 24 | no state date checked: one week after |
+
+     Hawaii (no date found) and Vermont (ballots must arrive by Election Day; the canvass date wasn't confirmed) keep the 7-day card. The dates came from the same search-only sources as section 5.1.1 and need release check 1.
+   - **Between elections.** From the day after `hide_after` the card leaves Place until the next election with checked dates. Washington's November 2, 2027 general is in the data (ballots mailed by Oct 15, register by Oct 25, counties certify Nov 23, the state by Dec 2; Secretary of State calendar), so the card returns July 5, 2027. It isn't a federal election, so nothing is marked on the ballot then. Special elections and primaries wait for P1 contest data.
+   - **Governments all year.** The Civic page (Place → Civic, also in the desktop Place rail) has a "Your governments" row under Your districts on web, iOS and Android, test id `place.civic.governments`. It opens the governments view with its story. `civic_districts` carries the governments block behind `ballot_p0` for a home in a supported state, outside the election window too. It uses the same exact-point lookup and cache as the card, and nothing is marked on the ballot there.
    - **Results in the app.** None in P0. Washington counts late ballots for three weeks, and P0 doesn't know which contests are on an address's ballot. With P1 contest data, show only certified outcomes per contest; the build plan leaves live results out through 2028.

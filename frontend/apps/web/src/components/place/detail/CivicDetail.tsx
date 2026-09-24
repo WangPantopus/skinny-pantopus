@@ -20,9 +20,11 @@ import type {
   PlaceCivicElectionData,
   PlaceBallotRace,
   CivicLevel,
+  BallotGovernments,
 } from '@pantopus/types';
-import { Landmark, Check, Mail, Vote, Phone, Globe, ChevronRight, CalendarCheck, Info } from 'lucide-react';
+import { Landmark, Check, Mail, Vote, Phone, Globe, ChevronRight, CalendarCheck, Info, Layers } from 'lucide-react';
 import Chip from '@/components/archetypes/primitives/Chip';
+import GovernmentsSheet from '@/components/ballot/GovernmentsSheet';
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import { statusToState } from './format';
@@ -297,8 +299,33 @@ function BallotLeaf({ data, address, onBack }: { data: PlaceCivicElectionData; a
   );
 }
 
+// ── Your governments — all year (Board: P0 Civic page) ──────
+// Opens the governments view outside election season too. Only present
+// when Ballot sends the governments for this address.
+function GovernmentsRow({ governments, onOpen }: { governments: BallotGovernments; onOpen: () => void }) {
+  const n = governments.count_is_minimum ? `at least ${governments.count}` : String(governments.count);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-testid="place.civic.governments"
+      className="w-full flex items-center gap-3 mt-3 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
+    >
+      <span className="w-10 h-10 rounded-[11px] bg-app-home-bg flex items-center justify-center shrink-0">
+        <Layers size={20} strokeWidth={2} className="text-app-home" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[15px] font-semibold text-app-text">Your governments</div>
+        <div className="text-[12.5px] text-app-text-muted mt-0.5">This address sits inside {n}.</div>
+      </div>
+      <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+    </button>
+  );
+}
+
 export default function CivicDetail({ intelligence }: { intelligence: PlaceIntelligence }) {
   const [ballotOpen, setBallotOpen] = useState(false);
+  const [governmentsOpen, setGovernmentsOpen] = useState(false);
   const districtsEnv = findPlaceSection(intelligence, 'civic_districts');
   const electionEnv = findPlaceSection(intelligence, 'civic_election');
   const address = detailAddress(intelligence.place);
@@ -306,6 +333,7 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
   const districtsReady = districtsEnv && (districtsEnv.status === 'ready' || districtsEnv.status === 'stale' || districtsEnv.status === 'partial') && districtsEnv.data;
   const districtsData = districtsReady ? (districtsEnv!.data as PlaceCivicDistrictsData) : null;
   const reps = districtsData?.representatives ?? [];
+  const governments = districtsData?.governments ?? null;
 
   const electionReady = electionEnv && (electionEnv.status === 'ready' || electionEnv.status === 'stale' || electionEnv.status === 'partial') && electionEnv.data;
   // With Ballot on, the section keeps a past election for the week after it
@@ -329,6 +357,7 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
           <SectionCard icon={Landmark} title="Your districts" state={districtsEnv ? statusToState(districtsEnv.status) : 'unavailable'} caption={districtsEnv?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
         )}
         {districtsEnv?.source ? <SourceNote name={districtsEnv.source} asOf="current" /> : null}
+        {governments ? <GovernmentsRow governments={governments} onOpen={() => setGovernmentsOpen(true)} /> : null}
 
         {reps.length > 0 ? (
           <>
@@ -353,6 +382,15 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
           Informational, drawn from public civic records for your address. Pantopus is nonpartisan and doesn&apos;t endorse candidates or measures.
         </InfoNote>
       </div>
+
+      {governments ? (
+        <GovernmentsSheet
+          open={governmentsOpen}
+          onClose={() => setGovernmentsOpen(false)}
+          governments={governments}
+          address={intelligence.place.line1 || intelligence.place.label}
+        />
+      ) : null}
     </>
   );
 }

@@ -668,6 +668,8 @@ export interface PlaceCivicRepresentative {
 export interface PlaceCivicDistrictsData {
   districts: PlaceCivicDistrict[];
   representatives: PlaceCivicRepresentative[];
+  /** Ballot P0 (`ballot_p0`): the governments view's data, all year. */
+  governments?: BallotGovernments | null;
 }
 
 export interface PlaceBallotRace {
@@ -779,6 +781,8 @@ export interface BallotSummaryFields {
   election_id?: string;
   coverage?: BallotCoverage;
   phase?: BallotPhase;
+  /** After Election Day, where certification dates are checked: counting, then certified. */
+  after_stage?: 'counting' | 'certified' | null;
   state?: string;
   state_name?: string;
   /** The state's local date the summary was composed for. */
