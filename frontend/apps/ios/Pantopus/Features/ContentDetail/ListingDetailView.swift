@@ -108,7 +108,7 @@ public struct ListingDetailView: View {
             Task {
                 switch await viewModel.continueCheckout() {
                 case .awaitingConfirmation:
-                    toast = ToastMessage(text: "Payment submitted. Confirmation is still pending. Check status again.", kind: .info)
+                    toast = ToastMessage(text: "Payment submitted. Confirmation is still pending. Check status again.", kind: .neutral)
                 case let .error(message):
                     toast = ToastMessage(text: message, kind: .error)
                 case nil: break
