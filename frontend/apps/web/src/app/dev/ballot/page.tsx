@@ -177,7 +177,12 @@ export default function DevBallotPage() {
             <BallotCard data={LINKS_ONLY} asOf={null} />
           </div>
         </Column>
-        <Column id="p0-governments" title="P0Governments · still view" bg="bg-app-surface">
+        <Column id="p0-governments" title="P0Governments · finished frame" bg="bg-app-surface">
+          <div className="h-[844px]">
+            <GovernmentsView governments={GOVERNMENTS} address="1418 Alder Crest Dr" onClose={() => undefined} animate={false} />
+          </div>
+        </Column>
+        <Column id="p0-story" title="The peel · story (plays once)" bg="bg-app-surface">
           <div className="h-[844px]">
             <GovernmentsView governments={GOVERNMENTS} address="1418 Alder Crest Dr" onClose={() => undefined} />
           </div>

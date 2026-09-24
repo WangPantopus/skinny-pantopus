@@ -1,14 +1,19 @@
 // ============================================================
-// The still stack (Boards: Overview, The peel, Web lookup). P0 draws
-// the canvas's nine decorative polygons — never real boundaries — one
-// per counted government, widest first, each placed with the canvas's
-// own transform: translate(cx, base − i·gap) scale(S) scale(1, .5)
+// The stack (Boards: Overview, The peel, Web lookup). P0 draws the
+// canvas's nine decorative polygons — never real boundaries — one per
+// counted government, widest first, each placed with the canvas's own
+// transform: translate(cx, base − i·gap) scale(S) scale(1, .5)
 // rotate(45). Layer 0 fills #eef1f5, the rest white at 94%, and a
-// dashed home-green line drops to the home dot.
+// dashed home-green line drops to the home dot. With `story`, each
+// layer lifts 8 and takes the green highlight in turn, 1.2 s apart
+// (Board: The peel).
 //
 // P0 has no verified "nothing this year" status, so every layer uses
 // the solid stroke; the dashed style waits for verified-empty data.
 // ============================================================
+
+/** One government's turn in the peel story, in milliseconds. */
+export const STORY_STEP_MS = 1200;
 
 export const STACK_POLYGONS = [
   '-144,-133 133,-144 144,130 -133,144',
@@ -42,26 +47,42 @@ export interface GovernmentStackProps {
   homeTitle?: string;
   /** The canvas lets the teaser's drawing shrink beside a long legend. */
   shrink?: boolean;
+  /** Plays the peel story: each layer lifts and highlights in turn. */
+  story?: boolean;
 }
 
-export default function GovernmentStack({ count, size, label, homeTitle, shrink = false }: GovernmentStackProps) {
+export default function GovernmentStack({ count, size, label, homeTitle, shrink = false, story = false }: GovernmentStackProps) {
   const s = SIZES[size];
   const layers = Math.max(1, Math.min(count, STACK_POLYGONS.length));
   const topY = s.base - (layers - 1) * s.gap;
 
   return (
     <svg width={s.width} height={s.height} viewBox={`0 0 ${s.width} ${s.height}`} role="img" aria-label={label} className={`block ${shrink ? 'min-w-0' : 'shrink-0'}`}>
-      {STACK_POLYGONS.slice(0, layers).map((points, i) => (
-        <g key={points} transform={`translate(${s.cx} ${s.base - i * s.gap}) scale(${s.scale}) scale(1 0.5) rotate(45)`}>
-          <polygon
-            points={points}
-            fillOpacity={i === 0 ? 1 : 0.94}
-            strokeWidth={s.stroke}
-            vectorEffect="non-scaling-stroke"
-            className={`${i === 0 ? 'fill-[#eef1f5] dark:fill-slate-700' : 'fill-white dark:fill-slate-800'} stroke-[#111827] dark:stroke-slate-200`}
-          />
-        </g>
-      ))}
+      {STACK_POLYGONS.slice(0, layers).map((points, i) => {
+        const delay = story ? { animationDelay: `${i * STORY_STEP_MS}ms` } : undefined;
+        return (
+          <g key={points} className={story ? 'motion-safe:animate-[ballotLift_1.2s_ease-out_both]' : undefined} style={delay}>
+            <g transform={`translate(${s.cx} ${s.base - i * s.gap}) scale(${s.scale}) scale(1 0.5) rotate(45)`}>
+              <polygon
+                points={points}
+                fillOpacity={i === 0 ? 1 : 0.94}
+                strokeWidth={s.stroke}
+                vectorEffect="non-scaling-stroke"
+                className={`${i === 0 ? 'fill-[#eef1f5] dark:fill-slate-700' : 'fill-white dark:fill-slate-800'} stroke-[#111827] dark:stroke-slate-200`}
+              />
+              {story ? (
+                <polygon
+                  points={points}
+                  strokeWidth={3}
+                  vectorEffect="non-scaling-stroke"
+                  className="fill-app-home-bg stroke-app-home opacity-0 motion-safe:animate-[ballotHi_1.2s_ease-out_both]"
+                  style={delay}
+                />
+              ) : null}
+            </g>
+          </g>
+        );
+      })}
       <line
         x1={s.cx}
         y1={topY - s.lineLead}

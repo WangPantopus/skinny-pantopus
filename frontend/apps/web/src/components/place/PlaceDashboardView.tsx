@@ -143,7 +143,7 @@ export default function PlaceDashboardView({
       <div className="mt-6">
         {ballot ? (
           <div className="mb-6">
-            <Overline as="div" className="mb-2 px-0.5 tracking-[0.08em]">This season</Overline>
+            <Overline as="div" className="mb-4 tracking-[0.08em]">This season</Overline>
             <BallotCard
               data={ballot}
               asOf={electionSection?.as_of ?? null}
