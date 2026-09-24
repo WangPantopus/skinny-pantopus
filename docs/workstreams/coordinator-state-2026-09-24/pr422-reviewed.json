@@ -1,0 +1,17 @@
+{
+  "at": "2026-09-24T09:02:55Z",
+  "pr": 422,
+  "head": "9164158c815e4079f28ac3b483f3546e0592565c",
+  "manifestSHA256": "fbcea869c2bc0a495daa30c04f78b280ac2188bdbdda7357968079e2c09e07d3",
+  "filesRehashed": 372,
+  "mismatches": [],
+  "fullSourceAndFinalDeltaReviewed": true,
+  "finalScreensAndCleanupReviewed": true,
+  "ci": "pending",
+  "originalIdClosure": "none before merge",
+  "limitations": [
+    "provider arrival/correction unavailable",
+    "rotation replay remains open",
+    "whole-app sweep pending"
+  ]
+}
