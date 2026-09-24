@@ -8,7 +8,7 @@ log "QUEUE START"
 while true; do
   n=$(grep -m1 -E '^[0-9]+$' $Q/queue.txt 2>/dev/null)
   [ -z "$n" ] && { log "QUEUE EMPTY"; break; }
-  deadline=$(( $(date +%s) + 14400 )); outcome=""; lastci=""
+  deadline=$(( $(date +%s) + 14400 )); outcome=""; lastci=""; lastreview=""; lastbehind=""
   while [ $(date +%s) -lt $deadline ]; do
     j=$(gh pr view $n --json state,mergeStateStatus,headRefOid 2>/dev/null) || { sleep 30; continue; }
     st=$(echo $j | python3 -c 'import json,sys;print(json.load(sys.stdin)["state"])')
@@ -16,8 +16,18 @@ while true; do
     head=$(echo $j | python3 -c 'import json,sys;print(json.load(sys.stdin)["headRefOid"])')
     [ "$st" = "MERGED" ] && { outcome="ALREADY_MERGED"; break; }
     [ "$st" = "CLOSED" ] && { outcome="CLOSED"; break; }
+    # The coordinator records a reviewed exact head for every queued PR.
+    # A branch or master update needs fresh integration review before merging.
+    reviewed=$(awk -v pr="$n" '$1 == pr { print $2; exit }' "$Q/reviewed-heads.txt" 2>/dev/null)
+    if [ -z "$reviewed" ] || [ "$head" != "$reviewed" ]; then
+      [ "$lastreview" != "$head:$reviewed" ] && log "PR$n REVIEW_REQUIRED at ${head:0:9} (waiting for coordinator)"
+      lastreview="$head:$reviewed"
+      sleep 45; continue
+    fi
     if [ "$ms" = "BEHIND" ]; then
-      gh pr update-branch $n >/dev/null 2>&1 && { log "PR$n updated (was ${head:0:9})"; sleep 25; continue; } || { outcome="UPDATE_FAILED_CONFLICT"; break; }
+      [ "$lastbehind" != "$head" ] && log "PR$n MASTER_CHANGED at ${head:0:9} (waiting for reviewed batch update)"
+      lastbehind="$head"
+      sleep 45; continue
     fi
     [ "$ms" = "DIRTY" ] && { outcome="CONFLICT"; break; }
     ci=$(gh pr checks $n --json name,bucket 2>/dev/null | python3 -c 'import json,sys
