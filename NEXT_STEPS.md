@@ -104,7 +104,8 @@ Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation
 - [ ] Founder approves the "Proposed, September 24" canvas boards and the pilot (plan §11).
 - [x] P0 backend: reference data (Washington verified, others links-only), exact-point governments, `civic_election` extension, `/start` teaser, flag row. On branch `claude/blissful-dijkstra-n8r31h`, not merged.
 - [x] P0 web: Place "Your ballot" card, governments view with the peel story, deadline timeline, `/start` teaser, Today card, "Moved this year?" line. On the branch; screenshots checked against the boards.
-- [ ] P0 iOS and Android: the same card, view and Today card. Written on the branch; they need CI compilation (`ios-ci`, `android-ci`) and a device pass.
+- [ ] P0 iOS and Android: the same card, view and Today card. On the branch; PR CI (run 1518) compiled both and passed their unit, snapshot, simulator and emulator tests. They still need a device pass.
+- [ ] After the election (plan §11 item 7, once approved): keep the card through certification with official results links, and add the year-round "Your governments" row to the Civic page.
 - [ ] Release checks: a person opens every source and link; real Clark County and out-of-state addresses through the real API; device passes.
 - [ ] P0.5: one reminder opt-in (at most three per election) and the share card, once the push copy is approved.
 - [ ] P1 only if Washington voterInfo coverage checks out against official sample ballots.
