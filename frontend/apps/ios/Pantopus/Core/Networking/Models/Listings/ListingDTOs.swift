@@ -41,6 +41,8 @@ public struct ListingDTO: Decodable, Sendable, Hashable, Identifiable {
     public let soldAt: String?
     /// When the seller archived the listing.
     public let archivedAt: String?
+    /// The seller, as the identity serializer shapes it (`GET /api/listings/:id`); nil on list rows.
+    public var creator: GigCreator?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -63,6 +65,7 @@ public struct ListingDTO: Decodable, Sendable, Hashable, Identifiable {
         case activeOfferCount = "active_offer_count"
         case soldAt = "sold_at"
         case archivedAt = "archived_at"
+        case creator
     }
 }
 

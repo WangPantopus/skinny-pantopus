@@ -185,7 +185,6 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
   return (
     <NoLandlordState
       homeId={homeId}
-      onInviteLandlord={() => router.push(`/app/homes/${homeId}/invite-landlord`)}
       onMailVerify={() => router.push(`/app/homes/${homeId}/verify-postcard`)}
       onUploadLease={() => router.push(`/app/homes/${homeId}/verify-residency`)}
       onBack={onBack}
@@ -395,13 +394,11 @@ function LandlordExistsState({
 
 function NoLandlordState({
   homeId: _homeId,
-  onInviteLandlord,
   onMailVerify,
   onUploadLease,
   onBack,
 }: {
   homeId: string;
-  onInviteLandlord: () => void;
   onMailVerify: () => void;
   onUploadLease: () => void;
   onBack?: () => void;
@@ -425,26 +422,8 @@ function NoLandlordState({
         This property doesn&apos;t have a verified landlord yet. You can still verify your tenancy using one of these options:
       </p>
 
-      {/* Three paths */}
+      {/* Verification paths. No "Invite your landlord": there is no invite page or route yet. */}
       <div className="space-y-3 mb-8">
-        {/* Path 1: Invite landlord */}
-        <button
-          type="button"
-          onClick={onInviteLandlord}
-          className="w-full flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-4 text-left hover:border-app-border hover:shadow-sm transition-all"
-        >
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-app-text">Invite your landlord</p>
-            <p className="text-xs text-app-text-secondary mt-0.5">Send them a link to verify ownership and approve you.</p>
-          </div>
-          <span className="text-app-text-muted flex-shrink-0">&rsaquo;</span>
-        </button>
-
         {/* Path 2: Mail code verification */}
         <button
           type="button"

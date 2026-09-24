@@ -9,7 +9,7 @@
 //    endpoint, same source as the Connections center).
 //  - Recent — derived from `GET /api/chat/unified-conversations` (DM
 //    peers, top 10 by `lastMessageAt`).
-//  - All verified — search-driven via `GET /api/users/search?q=…` when
+//  - People — search-driven via `GET /api/users/search?q=…` when
 //    the search query reaches the backend's 2-character minimum. With
 //    no query, this section is hidden; the Connections + Recent
 //    sections remain visible.
@@ -37,7 +37,7 @@ public final class NewMessageViewModel {
     /// frame. Pure constants for now.
     public let emptyHeadline = "Search for someone to message"
     public let emptyBody =
-        "You can message anyone with a verified Pantopus account. Search by name, " +
+        "You can message anyone on Pantopus. Search by name, " +
         "or invite someone who isn't on the platform yet."
     public let emptySearchHints = ["A neighbor's name", "Your block", "A local business"]
 
@@ -267,11 +267,11 @@ public final class NewMessageViewModel {
         // Hide the section when there's no active search query — the
         // verified directory is search-driven, not enumerated.
         guard !normalizedSearch.isEmpty else {
-            return NewMessageSection(id: .allVerified, label: "All verified", rows: [])
+            return NewMessageSection(id: .allVerified, label: "People", rows: [])
         }
         let filtered = verifiedResults.filter { !excluding.contains($0.id) }
         let rows: [NewMessageContactRow] = filtered.map { rowForVerified($0) }
-        return NewMessageSection(id: .allVerified, label: "All verified", rows: rows)
+        return NewMessageSection(id: .allVerified, label: "People", rows: rows)
     }
 
     private var normalizedSearch: String {
@@ -292,7 +292,8 @@ public final class NewMessageViewModel {
             locality: ConnectionsViewModel.localityText(user),
             sub: Self.connectionSub(for: rel),
             subIcon: Self.connectionSubIcon(for: rel),
-            verified: true,
+            // Relationship rows carry no verification, so no badge.
+            verified: false,
             identity: .personal
         )
     }
@@ -329,7 +330,8 @@ public final class NewMessageViewModel {
             locality: Self.searchLocalityText(dto),
             sub: nil,
             subIcon: nil,
-            verified: true,
+            // Search results carry no verification, so no badge.
+            verified: false,
             identity: identity
         )
     }

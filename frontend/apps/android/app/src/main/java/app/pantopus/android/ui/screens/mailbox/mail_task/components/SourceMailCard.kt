@@ -37,7 +37,7 @@ import app.pantopus.android.ui.theme.Spacing
 /**
  * A17.12 — "Pulled from this mail" card. A section overline over a
  * tappable card (orange accent strip) showing the originating mail's
- * trust + category chips, sender overline, title, snippet, and an "Open
+ * category chip, sender overline, title, snippet, and an "Open
  * original mail" footer row. The whole card taps through to the source
  * mail detail.
  */
@@ -101,23 +101,6 @@ fun SourceMailCard(
 @Composable
 private fun ChipRow(source: MailTaskSourceMail) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier =
-                Modifier
-                    .clip(CircleShape)
-                    .background(PantopusColors.successBg)
-                    .padding(horizontal = Spacing.s2, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.ShieldCheck,
-                contentDescription = null,
-                size = 11.dp,
-                tint = PantopusColors.success,
-            )
-            Text(text = "Verified", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PantopusColors.success)
-        }
         Row(
             modifier =
                 Modifier

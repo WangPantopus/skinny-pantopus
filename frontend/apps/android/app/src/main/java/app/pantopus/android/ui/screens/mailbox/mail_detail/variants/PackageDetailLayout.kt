@@ -52,7 +52,6 @@ import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.PackageBody
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.components.CarrierBadge
 import app.pantopus.android.ui.screens.mailbox.mail_detail.MailDetailContent
 import app.pantopus.android.ui.screens.mailbox.mail_detail.MailDetailKeyFact
-import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfStripContent
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AttachmentItem
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AttachmentKind
@@ -209,61 +208,11 @@ private fun makeTopBar(
             },
     )
 
-private fun makeAIElf(packageDetail: PackageBodyContent): AIElfStripContent {
-    val (headline, summary, bullets) =
-        when (packageDetail.status) {
-            PackageDeliveryStatus.Delivered ->
-                Triple(
-                    "Delivered to your porch",
-                    "Pantopus matched the carrier's proof photo to your verified address.",
-                    listOf(
-                        AIElfBullet(
-                            id = "proof-photo",
-                            icon = PantopusIcon.Camera,
-                            label = "Proof photo verified",
-                            text = packageDetail.deliveryPhoto?.location,
-                        ),
-                        AIElfBullet(
-                            id = "gps-match",
-                            icon = PantopusIcon.MapPin,
-                            label = "GPS match",
-                            text = packageDetail.deliveryPhoto?.verificationLabel ?: "verified",
-                        ),
-                        AIElfBullet(id = "signature", icon = PantopusIcon.ShieldCheck, label = "No signature required"),
-                    ),
-                )
-            PackageDeliveryStatus.OutForDelivery ->
-                Triple(
-                    "Out for delivery today",
-                    packageDetail.statusDetail,
-                    listOf(
-                        AIElfBullet(
-                            id = "carrier-moving",
-                            icon = PantopusIcon.Package,
-                            label = "Carrier is moving",
-                            text = "we'll ping when scanned",
-                        ),
-                        AIElfBullet(id = "eta", icon = PantopusIcon.Clock, label = packageDetail.etaLine ?: "ETA pending"),
-                        AIElfBullet(id = "photo", icon = PantopusIcon.ShieldCheck, label = "Delivery photo expected"),
-                    ),
-                )
-            else ->
-                Triple(
-                    "Pantopus is watching this delivery",
-                    "We'll surface scans and the ETA window as soon as the carrier hands off.",
-                    listOf(
-                        AIElfBullet(
-                            id = "status",
-                            icon = PantopusIcon.ArrowRight,
-                            label = "In transit",
-                            text = packageDetail.statusDetail,
-                        ),
-                        AIElfBullet(id = "eta", icon = PantopusIcon.Clock, label = packageDetail.etaLine ?: "ETA pending"),
-                    ),
-                )
-        }
-    return AIElfStripContent(headline = headline, summary = summary, bullets = bullets)
-}
+private fun makeAIElf(packageDetail: PackageBodyContent): AIElfStripContent =
+    AIElfStripContent(
+        headline = packageDetail.statusTitle,
+        summary = packageDetail.statusDetail,
+    )
 
 private fun makeAttachments(content: MailDetailContent): AttachmentsRowContent? {
     if (content.attachments.isEmpty()) return null

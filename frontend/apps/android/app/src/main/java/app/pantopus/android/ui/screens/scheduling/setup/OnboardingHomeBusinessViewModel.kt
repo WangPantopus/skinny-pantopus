@@ -6,10 +6,14 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.scheduling.AssigneeInput
+import app.pantopus.android.data.api.models.scheduling.AssigneesRequest
 import app.pantopus.android.data.api.models.scheduling.CreateEventTypeRequest
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingError
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
@@ -40,6 +44,20 @@ private const val MAX_SLUG_ATTEMPTS = 4
 
 enum class OnboardingFlow { Home, Business }
 
+enum class OnboardingPeopleState { Loading, Ready, Failed }
+
+/**
+ * A real household member (occupant) or teammate (business member). [id] is
+ * the user id the event type's assignees take.
+ */
+@Immutable
+data class OnboardingPerson(val id: String, val name: String, val role: String) {
+    val initials: String
+        get() =
+            name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase()
+                .ifEmpty { "?" }
+}
+
 @Immutable
 data class OnboardingUiState(
     val flow: OnboardingFlow = OnboardingFlow.Home,
@@ -47,7 +65,10 @@ data class OnboardingUiState(
     val isSubmitting: Boolean = false,
     // Home. Only the current user starts selected — adding other people to a shared
     // booking rotation is an opt-in choice, and iOS seeds the same way.
-    val selectedMembers: Set<String> = setOf("you"),
+    /** The household (Home) or team (Business) from the server; nothing is seeded. */
+    val people: List<OnboardingPerson> = emptyList(),
+    val peopleState: OnboardingPeopleState = OnboardingPeopleState.Loading,
+    val selectedMembers: Set<String> = emptySet(),
     val combineMode: String = "collective",
     val roundRobinRule: String = "balanced",
     // Business
@@ -57,7 +78,7 @@ data class OnboardingUiState(
     val duration: Int = DEFAULT_DURATION,
     val priceText: String = "120",
     // Owner-only start, matching iOS — seating teammates is an opt-in choice.
-    val seatedTeam: Set<String> = setOf("owner"),
+    val seatedTeam: Set<String> = emptySet(),
     val confirmMode: String = "approve",
     val timezoneId: String = ZoneId.systemDefault().id,
     val submitError: String? = null,
@@ -99,6 +120,8 @@ class OnboardingHomeBusinessViewModel
     constructor(
         private val repo: SchedulingRepository,
         private val homes: HomesRepository,
+        private val homeMembers: HomeMembersRepository,
+        private val businessTeam: BusinessTeamRepository,
         private val auth: AuthRepository,
         private val errors: SchedulingErrorDecoder,
         private val flags: SchedulingFeatureFlags,
@@ -183,7 +206,9 @@ class OnboardingHomeBusinessViewModel
         private fun primaryEnabled(s: OnboardingUiState): Boolean =
             when {
                 s.flow == OnboardingFlow.Business && s.stepIndex == 1 -> s.slugState is SlugFieldUiState.Available
-                s.flow == OnboardingFlow.Home && s.stepIndex == 1 -> s.selectedMembers.isNotEmpty()
+                // An empty household can still continue, as on web.
+                s.flow == OnboardingFlow.Home && s.stepIndex == 1 ->
+                    s.selectedMembers.isNotEmpty() || (s.peopleState == OnboardingPeopleState.Ready && s.people.isEmpty())
                 else -> true
             }
 
@@ -211,6 +236,52 @@ class OnboardingHomeBusinessViewModel
             val s = _state.value
             _state.value = s.copy(seatedTeam = s.seatedTeam.toggle(id))
         }
+
+        /**
+         * Loads the real household (occupants) or team (business members), the
+         * same sources web's OnboardingWizard uses, and selects everyone.
+         */
+        fun loadPeople() {
+            val flow = _state.value.flow
+            _state.value = _state.value.copy(peopleState = OnboardingPeopleState.Loading)
+            viewModelScope.launch {
+                val people: List<OnboardingPerson>? =
+                    when (val owner = resolveOwner(flow)) {
+                        is SchedulingOwner.Home ->
+                            (homeMembers.listOccupants(owner.homeId) as? NetworkResult.Success)?.data?.occupants
+                                ?.filter { it.isActive }
+                                ?.map { OnboardingPerson(it.userId, it.displayName ?: it.username ?: "Member", roleLabel(it.role)) }
+                        is SchedulingOwner.Business ->
+                            (businessTeam.members(owner.businessUserId) as? NetworkResult.Success)?.data?.members
+                                ?.mapNotNull { member ->
+                                    member.user?.let { user ->
+                                        OnboardingPerson(
+                                            id = user.id,
+                                            name = user.name ?: user.username ?: "Member",
+                                            role = member.title ?: roleLabel(member.roleBase),
+                                        )
+                                    }
+                                }
+                        else -> null
+                    }
+                val s = _state.value
+                if (s.flow != flow) return@launch
+                _state.value =
+                    if (people == null) {
+                        s.copy(peopleState = OnboardingPeopleState.Failed)
+                    } else {
+                        val ids = people.map { it.id }.toSet()
+                        if (flow == OnboardingFlow.Home) {
+                            s.copy(people = people, peopleState = OnboardingPeopleState.Ready, selectedMembers = ids)
+                        } else {
+                            s.copy(people = people, peopleState = OnboardingPeopleState.Ready, seatedTeam = ids)
+                        }
+                    }
+            }
+        }
+
+        private fun roleLabel(raw: String?): String =
+            raw?.takeIf { it.isNotBlank() }?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: "Member"
 
         fun setCombineMode(mode: String) {
             _state.value = _state.value.copy(combineMode = mode)
@@ -291,7 +362,15 @@ class OnboardingHomeBusinessViewModel
         }
 
         override fun onSecondary() {
-            val s = _state.value
+            val current = _state.value
+            // "Skip · just me" seats only the signed-in user.
+            val s =
+                if (current.flow == OnboardingFlow.Business && current.stepIndex == 3) {
+                    current.copy(seatedTeam = setOfNotNull(businessUserId()))
+                } else {
+                    current
+                }
+            _state.value = s
             when {
                 s.isSuccess -> _finished.value = true
                 s.stepIndex < s.inputSteps -> _state.value = s.copy(stepIndex = s.stepIndex + 1)
@@ -338,7 +417,24 @@ class OnboardingHomeBusinessViewModel
                 // The response carries the page's REAL slug — the Home success screen's share
                 // link derives from it (a guessed slug 404s or opens someone else's page).
                 val pageSlug = (pageResult as? NetworkResult.Success)?.data?.page?.slug
-                if (createEventTypeWithRetry(owner, s)) {
+                val eventTypeId = createEventTypeWithRetry(owner, s)
+                if (eventTypeId != null) {
+                    // The chosen members / seated teammates host the event type.
+                    // Availability for Home and Business comes from its assignees,
+                    // so without this the new event type had no bookable times.
+                    // Best effort, as on web.
+                    val hostIds = if (s.flow == OnboardingFlow.Home) s.selectedMembers else s.seatedTeam
+                    if (hostIds.isNotEmpty()) {
+                        repo.setAssignees(
+                            owner,
+                            eventTypeId,
+                            AssigneesRequest(
+                                hostIds.sorted().map {
+                                    AssigneeInput(subjectId = it, subjectType = "user", weight = 1, priority = 0, isActive = true)
+                                },
+                            ),
+                        )
+                    }
                     _state.value =
                         _state.value.copy(
                             stepIndex = s.inputSteps + 1,
@@ -352,21 +448,21 @@ class OnboardingHomeBusinessViewModel
             }
         }
 
-        /** Mirrors the iOS up-to-4-attempt slug-collision retry; returns true once an event type is created. */
+        /** Mirrors the iOS up-to-4-attempt slug-collision retry; returns the created event type's id. */
         private suspend fun createEventTypeWithRetry(
             owner: SchedulingOwner,
             s: OnboardingUiState,
-        ): Boolean {
+        ): String? {
             val base = eventTypeRequest(s)
             repeat(MAX_SLUG_ATTEMPTS) { attempt ->
                 val body = if (attempt == 0) base else base.copy(slug = "${base.slug}-${attempt + 1}")
                 when (val r = repo.createEventType(owner, body)) {
-                    is NetworkResult.Success -> return true
+                    is NetworkResult.Success -> return r.data.eventType.id
                     is NetworkResult.Failure ->
-                        if (errors.decode(r.error) !is SchedulingError.SlugTaken) return false
+                        if (errors.decode(r.error) !is SchedulingError.SlugTaken) return null
                 }
             }
-            return false
+            return null
         }
 
         private fun businessOwner(): SchedulingOwner =

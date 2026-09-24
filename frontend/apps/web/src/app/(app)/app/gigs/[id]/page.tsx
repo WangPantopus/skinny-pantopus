@@ -257,6 +257,8 @@ export default function GigDetailsPage() {
     return { min: Math.round(min), max: Math.round(max) };
   })();
   const payTypeIsOffers = ((gig as { pay_type?: string } | null)?.pay_type ?? 'fixed') === 'offers';
+  // Until a bid is accepted, an offers-priced task's stored price is only the database floor ($1).
+  const openToOffers = payTypeIsOffers && !acceptedBy;
 
   const poster = (gig?.creator ?? gig?.Creator ?? gig?.user ?? gig?.User ?? gig?.poster ?? null) as GigActorSummary | null;
   const isAnonymousPoster =
@@ -478,16 +480,16 @@ export default function GigDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-app-text-secondary mb-1">
-                    {payTypeIsOffers ? 'Open to offers' : 'Budget'}
+                    {openToOffers ? 'Open to offers' : 'Budget'}
                   </p>
-                  {payTypeIsOffers && aiBudgetRange ? (
+                  {openToOffers && aiBudgetRange ? (
                     <>
                       <p className="text-3xl font-bold text-green-600">
                         ${aiBudgetRange.min}<span className="text-xl"> – ${aiBudgetRange.max}</span>
                       </p>
                       <p className="mt-1 text-xs text-app-text-secondary">Suggested range · helpers may bid</p>
                     </>
-                  ) : (
+                  ) : openToOffers ? null : (
                     <p className="text-3xl font-bold text-green-600">
                       ${budget}
                       {budgetMax && budgetMax !== budget && <span className="text-xl"> - ${budgetMax}</span>}

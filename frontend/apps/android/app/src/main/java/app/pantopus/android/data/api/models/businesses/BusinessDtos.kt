@@ -122,14 +122,20 @@ data class BusinessUserDetailDto(
 )
 
 /**
- * Geo point projection. The backend's `parsePostGISPoint` normalises
- * PostGIS data into `{ lat, lng }`.
+ * Geo point projection. The backend's `parsePostGISPoint`
+ * (`backend/routes/businesses.js`) sends `{ longitude, latitude }`; the older
+ * `{ lat, lng }` shape is still accepted. Read [lat] / [lng].
  */
 @JsonClass(generateAdapter = true)
 data class BusinessGeoPoint(
-    val lat: Double,
-    val lng: Double,
-)
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @Json(name = "lat") val legacyLat: Double? = null,
+    @Json(name = "lng") val legacyLng: Double? = null,
+) {
+    val lat: Double? get() = latitude ?: legacyLat
+    val lng: Double? get() = longitude ?: legacyLng
+}
 
 /** A single `BusinessLocation` row. */
 @JsonClass(generateAdapter = true)
@@ -172,6 +178,9 @@ data class BusinessProfileDetailDto(
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "published_at") val publishedAt: String? = null,
     @Json(name = "verification_status") val verificationStatus: String? = null,
+    // bi0_unverified … bi4_authority: the verified mark and claims follow this,
+    // as on My businesses and the owner header.
+    @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
     @Json(name = "primary_location") val primaryLocation: BusinessLocationDto? = null,
     /**
      * Social / booking links keyed by network name. Untyped for the same

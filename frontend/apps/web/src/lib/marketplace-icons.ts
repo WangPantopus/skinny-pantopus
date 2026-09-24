@@ -58,7 +58,6 @@ export const FILTER_PILL_ICONS: Record<FilterPillKey, string> = {
   free: 'Gift',
   wanted: 'Search',
   nearby: 'MapPin',
-  trusted: 'ShieldCheck',
   new_today: 'Sparkles',
   remote: 'Globe',
   price_0_25: 'DollarSign',
