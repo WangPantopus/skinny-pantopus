@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.scheduling.bookings
 
 import app.pantopus.android.data.api.models.scheduling.BookingDetailResponse
+import app.pantopus.android.data.api.models.scheduling.BookingParticipantDto
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillStatus
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
@@ -53,9 +54,12 @@ data class BookingDetailData(
     val canReschedule: Boolean,
     val canReassign: Boolean,
     val canCancel: Boolean,
+    val participant: BookingParticipantDto? = null,
 ) {
     val isActive: Boolean get() = status == BookingStatus.Pending || status == BookingStatus.Confirmed
 }
+
+data class BookingRsvpUiState(val busy: Boolean = false, val error: String? = null)
 
 /** E2 lifecycle state. */
 sealed interface BookingDetailUiState {
@@ -163,10 +167,11 @@ fun BookingDetailResponse.toDetailData(owner: SchedulingOwner): BookingDetailDat
         // renders for paid cancelled bookings (amount deferred until pricing lands).
         refundIssued = false,
         currency = null,
-        canApprove = status == BookingStatus.Pending,
-        canReschedule = isActive,
-        canReassign = isActive && pillar != SchedulingPillar.Personal,
-        canCancel = status == BookingStatus.Confirmed,
+        canApprove = participant == null && status == BookingStatus.Pending,
+        canReschedule = participant == null && isActive,
+        canReassign = participant == null && isActive && pillar != SchedulingPillar.Personal,
+        canCancel = participant == null && status == BookingStatus.Confirmed,
+        participant = participant,
     )
 }
 

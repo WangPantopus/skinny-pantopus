@@ -89,9 +89,11 @@ const val MANAGE_TRAIN_RETRY_TAG: String = "manageTrainRetry"
 @Composable
 fun ManageTrainScreen(
     onBack: () -> Unit,
-    onOpenAnalytics: (String) -> Unit = {},
-    onEditDates: (String) -> Unit = {},
-    onInviteHelpers: (String) -> Unit = {},
+    // Organize rows. A null handler hides its row: there is no analytics
+    // backend or native date editor yet, so hosts leave those null.
+    onOpenAnalytics: ((String) -> Unit)? = null,
+    onEditDates: ((String) -> Unit)? = null,
+    onInviteHelpers: ((String) -> Unit)? = null,
     viewModel: ManageTrainViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -235,9 +237,9 @@ private fun TopBar(onBack: () -> Unit) {
 private fun Body(
     state: ManageTrainUiState,
     viewModel: ManageTrainViewModel,
-    onOpenAnalytics: (String) -> Unit,
-    onEditDates: (String) -> Unit,
-    onInviteHelpers: (String) -> Unit,
+    onOpenAnalytics: ((String) -> Unit)?,
+    onEditDates: ((String) -> Unit)?,
+    onInviteHelpers: ((String) -> Unit)?,
 ) {
     when (val s = state.state) {
         is ManageTrainState.Loading -> LoadingBody()
@@ -336,10 +338,18 @@ private fun LoadedBody(
     content: ManageTrainContent,
     ui: ManageTrainUiState,
     viewModel: ManageTrainViewModel,
-    onOpenAnalytics: (String) -> Unit,
-    onEditDates: (String) -> Unit,
-    onInviteHelpers: (String) -> Unit,
+    onOpenAnalytics: ((String) -> Unit)?,
+    onEditDates: ((String) -> Unit)?,
+    onInviteHelpers: ((String) -> Unit)?,
 ) {
+    val organizeHandler: (String) -> ((String) -> Unit)? = { id ->
+        when (id) {
+            "edit-dates" -> onEditDates
+            "invite" -> onInviteHelpers
+            "analytics" -> onOpenAnalytics
+            else -> null
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
@@ -362,6 +372,7 @@ private fun LoadedBody(
                 title = content.title,
                 dateRangeLabel = content.dateRangeLabel,
                 isActive = content.isActive,
+                statusLabel = content.status.ifBlank { "Unavailable" },
             )
             StatCellRow(
                 cells =
@@ -393,14 +404,8 @@ private fun LoadedBody(
             )
             SectionOverline("Organize")
             OrganizeSection(
-                rows = content.organizeRows,
-                onTapRow = { row ->
-                    when (row.id) {
-                        "edit-dates" -> onEditDates(content.trainId)
-                        "invite" -> onInviteHelpers(content.trainId)
-                        "analytics" -> onOpenAnalytics(content.trainId)
-                    }
-                },
+                rows = content.organizeRows.filter { organizeHandler(it.id) != null },
+                onTapRow = { row -> organizeHandler(row.id)?.invoke(content.trainId) },
             )
 
             OrganizerControls(content = content, ui = ui, viewModel = viewModel)

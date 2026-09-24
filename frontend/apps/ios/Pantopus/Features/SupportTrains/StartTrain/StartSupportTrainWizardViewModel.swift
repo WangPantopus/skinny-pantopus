@@ -26,6 +26,13 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public var beneficiaryQuery: String = ""
     public private(set) var beneficiaryResults: [MailRecipientDTO] = []
     public private(set) var isSearchingBeneficiary: Bool = false
+    /// The last recipient search failed (offline, server error). A failed
+    /// search found nobody, so the "no one by that name" branch stays hidden.
+    public private(set) var beneficiarySearchFailed: Bool = false
+    /// The recipient field is being edited. The no-match card replaces the
+    /// field, so it waits until editing ends instead of swallowing the rest
+    /// of a name mid-typing.
+    public private(set) var isEditingBeneficiaryQuery: Bool = false
     public private(set) var selectedBeneficiary: MailRecipientDTO?
     public var selectedReason: StartSupportTrainReason = .surgery
     public var reason: String = ""
@@ -89,12 +96,11 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         return "\(kind.title) for \(name)"
     }
 
-    /// Mutual connections shared with the selected verified neighbor,
-    /// surfaced as the recipient card's micro-avatar strip. The lookup is
-    /// stubbed from sample data — a real implementation would fetch the
-    /// organizer↔recipient mutuals when a beneficiary is selected.
+    /// Mutual connections shared with the selected recipient, for the
+    /// recipient card's micro-avatar strip. There is no mutuals lookup yet,
+    /// so none are shown (the sample names were shown for everyone).
     public var recipientMutuals: [StartSupportTrainMutual] {
-        selectedBeneficiary == nil ? [] : StartSupportTrainSampleData.mutuals
+        []
     }
 
     /// The Frame-2 invite candidate when the organizer typed a name that
@@ -104,11 +110,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public var inviteCandidate: StartSupportTrainInviteCandidate? {
         guard isInviteRecipientBranch else { return nil }
         let typed = beneficiaryQuery.trimmingCharacters(in: .whitespaces)
-        return StartSupportTrainInviteCandidate(
-            typedName: typed,
-            phone: StartSupportTrainSampleData.inviteCandidate.phone,
-            email: StartSupportTrainSampleData.inviteCandidate.email
-        )
+        // No contact handles: sample ones must never reach the live card.
+        return StartSupportTrainInviteCandidate(typedName: typed, phone: "", email: "")
     }
 
     // MARK: - Step 1 actions
@@ -118,6 +121,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         if let current = selectedBeneficiary, value != displayName(current) {
             selectedBeneficiary = nil
         }
+        beneficiarySearchFailed = false
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 2 else {
             searchTask?.cancel()
@@ -125,22 +129,35 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             isSearchingBeneficiary = false
             return
         }
-        searchTask?.cancel()
-        searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.searchBeneficiary(query: trimmed)
-        }
+        scheduleBeneficiarySearch(trimmed)
+    }
+
+    /// Re-runs the recipient search for the current text (the "Try again"
+    /// after a failed search).
+    public func retryBeneficiarySearch() {
+        let trimmed = beneficiaryQuery.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 2 else { return }
+        beneficiarySearchFailed = false
+        scheduleBeneficiarySearch(trimmed)
+    }
+
+    /// The recipient field gained or lost focus.
+    public func setEditingBeneficiaryQuery(_ editing: Bool) {
+        isEditingBeneficiaryQuery = editing
     }
 
     public func selectBeneficiary(_ recipient: MailRecipientDTO) {
         selectedBeneficiary = recipient
         beneficiaryQuery = displayName(recipient)
         beneficiaryResults = []
+        isEditingBeneficiaryQuery = false
     }
 
+    /// "Change" on the chosen recipient: start a fresh search. Keeping the
+    /// chosen name in the field with no results read as "no one by that
+    /// name" for a person who is on Pantopus.
     public func clearBeneficiary() {
-        selectedBeneficiary = nil
+        searchAgain()
     }
 
     public func searchAgain() {
@@ -149,6 +166,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         beneficiaryQuery = ""
         beneficiaryResults = []
         isSearchingBeneficiary = false
+        beneficiarySearchFailed = false
+        isEditingBeneficiaryQuery = false
     }
 
     public func selectReason(_ value: StartSupportTrainReason) {
@@ -282,11 +301,15 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             || beneficiaryQuery.trimmingCharacters(in: .whitespaces).count >= 2
     }
 
+    /// The typed name matched no one: shown only after a search that
+    /// worked, and once the field is no longer being edited.
     public var isInviteRecipientBranch: Bool {
         selectedBeneficiary == nil
             && beneficiaryQuery.trimmingCharacters(in: .whitespaces).count >= 2
             && beneficiaryResults.isEmpty
             && !isSearchingBeneficiary
+            && !beneficiarySearchFailed
+            && !isEditingBeneficiaryQuery
     }
 
     public var canAdvanceFromWhatAndWhen: Bool {
@@ -313,7 +336,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     private var primaryCTALabel: String {
         switch step {
-        case .whoAndWhy: isInviteRecipientBranch ? "Send invite & continue" : "Continue"
+        // No invite is sent from the wizard, so the CTA doesn't promise one.
+        case .whoAndWhy: "Continue"
         case .whatAndWhen: "Continue"
         case .reviewAndLaunch: "Launch train"
         case .success: "Open train"
@@ -352,6 +376,15 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     // MARK: - Network
 
+    private func scheduleBeneficiarySearch(_ query: String) {
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.searchBeneficiary(query: query)
+        }
+    }
+
     private func searchBeneficiary(query: String) async {
         isSearchingBeneficiary = true
         defer { isSearchingBeneficiary = false }
@@ -360,8 +393,12 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
                 MailComposeEndpoints.recipients(query: query)
             )
             beneficiaryResults = response.recipients
+            beneficiarySearchFailed = false
         } catch {
+            // A superseded search is cancelled, not failed.
+            guard !Task.isCancelled else { return }
             beneficiaryResults = []
+            beneficiarySearchFailed = true
         }
     }
 

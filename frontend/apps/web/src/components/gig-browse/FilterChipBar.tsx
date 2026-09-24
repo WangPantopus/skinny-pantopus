@@ -182,12 +182,12 @@ export default function FilterChipBar({
     [activeFilters, isChipActive, onFilterChange]
   );
 
-  // ── Category toggle (multi-select) ──
+  // ── Category toggle (single-select: the tasks API filters by one category) ──
 
   const toggleCategory = useCallback(
     (cat: string) => {
       const current = activeFilters.categories ?? [];
-      const next = current.includes(cat) ? current.filter((c) => c !== cat) : [...current, cat];
+      const next = current.includes(cat) ? [] : [cat];
       onFilterChange({ ...activeFilters, categories: next.length ? next : undefined });
     },
     [activeFilters, onFilterChange]

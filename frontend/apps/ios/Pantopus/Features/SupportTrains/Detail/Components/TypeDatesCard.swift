@@ -22,7 +22,13 @@ public struct TypeDatesCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             header
-            progressBlock
+            if content.slotsTotal > 0 {
+                progressBlock
+            } else {
+                Text("No slots scheduled yet.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
         }
         .padding(Spacing.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,7 +75,7 @@ public struct TypeDatesCard: View {
     }
 
     private var statusPill: some View {
-        Text(content.isFullyCovered ? "Covered" : "Open")
+        Text(statusLabel)
             .font(.system(size: 10.5, weight: .bold))
             .textCase(.uppercase)
             .foregroundStyle(content.isFullyCovered ? Theme.Color.success : Theme.Color.primary700)
@@ -77,6 +83,18 @@ public struct TypeDatesCard: View {
             .padding(.vertical, 3)
             .background(content.isFullyCovered ? Theme.Color.successBg : Theme.Color.primary50)
             .clipShape(Capsule())
+    }
+
+    private var statusLabel: String {
+        switch content.status {
+        case "draft": "Draft"
+        case "paused": "Paused"
+        case "completed": "Completed"
+        case "archived": "Archived"
+        case "published", "active", nil:
+            content.slotsTotal == 0 ? "No slots" : (content.isFullyCovered ? "Covered" : "Open")
+        default: "Unavailable"
+        }
     }
 
     private var progressBlock: some View {
@@ -217,7 +235,10 @@ public struct TypeDatesCard: View {
     }
 
     private var accessibilityHeadline: String {
-        "\(content.title). \(metaLine). \(content.slotsFilled) of \(content.slotsTotal) slots covered."
+        if content.slotsTotal == 0 {
+            return "\(content.title). \(statusLabel). No slots scheduled yet."
+        }
+        return "\(content.title). \(metaLine). \(content.slotsFilled) of \(content.slotsTotal) slots covered."
     }
 
     private func tone(for tone: ContributorBubble.ContributorTone) -> Color {

@@ -27,16 +27,18 @@ import SwiftUI
 public struct ManageTrainView: View {
     @State private var viewModel: ManageTrainViewModel
     private let onClose: @MainActor () -> Void
-    private let onOpenAnalytics: @MainActor (String) -> Void
-    private let onEditDates: @MainActor (String) -> Void
-    private let onInviteHelpers: @MainActor (String) -> Void
+    /// Organize rows. A nil handler hides its row: there is no analytics
+    /// backend or native date editor yet, so hosts leave those nil.
+    private let onOpenAnalytics: (@MainActor (String) -> Void)?
+    private let onEditDates: (@MainActor (String) -> Void)?
+    private let onInviteHelpers: (@MainActor (String) -> Void)?
 
     public init(
         viewModel: ManageTrainViewModel,
         onClose: @escaping @MainActor () -> Void,
-        onOpenAnalytics: @escaping @MainActor (String) -> Void = { _ in },
-        onEditDates: @escaping @MainActor (String) -> Void = { _ in },
-        onInviteHelpers: @escaping @MainActor (String) -> Void = { _ in }
+        onOpenAnalytics: (@MainActor (String) -> Void)? = nil,
+        onEditDates: (@MainActor (String) -> Void)? = nil,
+        onInviteHelpers: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onClose = onClose
@@ -198,7 +200,8 @@ public struct ManageTrainView: View {
                 TrainContextStrip(
                     title: content.title,
                     dateRangeLabel: content.dateRangeLabel,
-                    isActive: content.isActive
+                    isActive: content.isActive,
+                    statusLabel: content.status.isEmpty ? "Unavailable" : content.status.capitalized
                 )
 
                 StatCellRow(cells: [
@@ -227,13 +230,8 @@ public struct ManageTrainView: View {
                 )
 
                 sectionOverline("Organize")
-                OrganizeSection(rows: content.organizeRows) { row in
-                    switch row.id {
-                    case "edit-dates": onEditDates(content.trainId)
-                    case "invite": onInviteHelpers(content.trainId)
-                    case "analytics": onOpenAnalytics(content.trainId)
-                    default: break
-                    }
+                OrganizeSection(rows: content.organizeRows.filter { handler(forOrganizeRow: $0.id) != nil }) { row in
+                    handler(forOrganizeRow: row.id)?(content.trainId)
                 }
 
                 organizerControls(content)
@@ -381,6 +379,16 @@ public struct ManageTrainView: View {
                 )
             }
         )
+    }
+
+    /// The host's handler for an Organize row, or nil when it isn't wired.
+    private func handler(forOrganizeRow id: String) -> (@MainActor (String) -> Void)? {
+        switch id {
+        case "edit-dates": onEditDates
+        case "invite": onInviteHelpers
+        case "analytics": onOpenAnalytics
+        default: nil
+        }
     }
 
     private func sectionOverline(_ text: String) -> some View {

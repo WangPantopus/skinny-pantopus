@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +69,7 @@ const val PLACE_DASHBOARD_HOME_ID_KEY = "homeId"
  * avatar + a verify-nudge banner + a "Locked until you verify" group.
  * Parity twin of iOS `PlaceDashboardView`.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("LongParameterList")
 fun PlaceDashboardScreen(
@@ -92,7 +95,17 @@ fun PlaceDashboardScreen(
     var showVerify by remember { mutableStateOf(false) }
     val verifyAddress = (state as? PlaceDashboardUiState.Loaded)?.intelligence?.place?.label.orEmpty()
 
-    Box(modifier = modifier.fillMaxSize().background(PantopusColors.appBg)) {
+    // Pull to refresh, like iOS's `.refreshable`. The spinner shows only for a pull, not the first load.
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(state) { if (state !is PlaceDashboardUiState.Loading) pulled = false }
+    PullToRefreshBox(
+        isRefreshing = pulled && state is PlaceDashboardUiState.Loading,
+        onRefresh = {
+            pulled = true
+            viewModel.refresh()
+        },
+        modifier = modifier.fillMaxSize().background(PantopusColors.appBg),
+    ) {
         when (val current = state) {
             PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton()
             is PlaceDashboardUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
@@ -120,6 +133,7 @@ fun PlaceDashboardScreen(
             address = verifyAddress,
             onStart = { method ->
                 showVerify = false
+                viewModel.reloadOnReturn()
                 onStartVerify(method, verifyAddress)
             },
             onDismiss = { showVerify = false },

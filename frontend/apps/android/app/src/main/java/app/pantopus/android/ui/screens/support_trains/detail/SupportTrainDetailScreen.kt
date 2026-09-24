@@ -172,7 +172,11 @@ fun SupportTrainDetailScreen(
     action.error?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.acknowledgeError() },
-            title = { Text("Something went wrong") },
+            title = {
+                Text(
+                    if (message == SupportTrainDetailViewModel.NO_OPEN_DATES_NOTICE) "No open dates" else "Something went wrong",
+                )
+            },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { viewModel.acknowledgeError() }) { Text("OK") }
@@ -186,13 +190,16 @@ private const val TOAST_MILLIS = 2_500L
 
 data class SupportTrainDetailActions(
     val onBack: () -> Unit = {},
-    val onOpenManage: () -> Unit = {},
+    /** Organizers only; null hides "Manage signups". */
+    val onOpenManage: (() -> Unit)? = null,
     val onShare: () -> Unit = {},
     val onSignUp: () -> Unit = {},
-    val onEditSlot: (SlotRowContent) -> Unit = {},
-    val onSendCard: () -> Unit = {},
-    val onJoinAsBackup: () -> Unit = {},
-    val onMessageHost: () -> Unit = {},
+    /** Null hides the controls: none of these has a backend route yet. */
+    val onEditSlot: ((SlotRowContent) -> Unit)? = null,
+    val onSendCard: (() -> Unit)? = null,
+    val onJoinAsBackup: (() -> Unit)? = null,
+    /** Opens a chat with the train's organizer. Null hides "Message the host". */
+    val onMessageHost: ((HostedByFooter) -> Unit)? = null,
 )
 
 /**
@@ -218,12 +225,17 @@ internal fun SupportTrainDetailContentLayout(
                 .background(PantopusColors.appBg)
                 .testTag("supportTrainDetail"),
     ) {
+        val loaded = (state as? SupportTrainDetailUiState.Loaded)?.content
+        // The organizer flag also comes from the loaded train, so hosts that
+        // can't know the viewer's role still show Manage.
+        val viewerIsOrganizer = isOrganizer || loaded?.viewerRole?.isOrganizer == true
+        val messageHost =
+            loaded?.let { content -> messageHostAction(content, actions.onMessageHost) }
         TopBar(
-            isOrganizer = isOrganizer,
             onBack = actions.onBack,
             onShare = actions.onShare,
-            onOpenManage = actions.onOpenManage,
-            onMessageHost = actions.onMessageHost,
+            onOpenManage = actions.onOpenManage?.takeIf { viewerIsOrganizer },
+            onMessageHost = messageHost,
         )
         when (state) {
             SupportTrainDetailUiState.Loading -> LoadingShell()
@@ -234,7 +246,7 @@ internal fun SupportTrainDetailContentLayout(
                     onEditSlot = actions.onEditSlot,
                     onSendCard = actions.onSendCard,
                     onJoinAsBackup = actions.onJoinAsBackup,
-                    onMessageHost = actions.onMessageHost,
+                    onMessageHost = messageHost,
                     isSubmitting = isSubmitting,
                     onReserveSlot = onReserveSlot,
                     onMarkDelivered = onMarkDelivered,
@@ -258,11 +270,10 @@ internal fun SupportTrainDetailContentLayout(
 
 @Composable
 private fun TopBar(
-    isOrganizer: Boolean,
     onBack: () -> Unit,
     onShare: () -> Unit,
-    onOpenManage: () -> Unit,
-    onMessageHost: () -> Unit,
+    onOpenManage: (() -> Unit)?,
+    onMessageHost: (() -> Unit)?,
 ) {
     Box(
         modifier =
@@ -293,11 +304,10 @@ private fun TopBar(
                 tag = "supportTrainDetailShareButton",
                 onClick = onShare,
             )
-            OverflowMenuButton(
-                isOrganizer = isOrganizer,
-                onOpenManage = onOpenManage,
-                onMessageHost = onMessageHost,
-            )
+            // Only live actions: the button hides when there is none.
+            (onOpenManage ?: onMessageHost)?.let { action ->
+                OverflowMenuButton(onAction = action)
+            }
         }
         Box(
             modifier =
@@ -348,23 +358,14 @@ private fun TopBarButton(
  * for accessibility tests.
  */
 @Composable
-private fun OverflowMenuButton(
-    isOrganizer: Boolean,
-    onOpenManage: () -> Unit,
-    onMessageHost: () -> Unit,
-) {
+private fun OverflowMenuButton(onAction: () -> Unit) {
     Box(
         modifier =
             Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .clickable {
-                    // Default action is `Message the host`; the
-                    // `Manage signups` action is surfaced by the
-                    // Hub-tab host as a separate route push for
-                    // organizers (see RootTabScreen.kt).
-                    if (isOrganizer) onOpenManage() else onMessageHost()
-                }
+                // Organizers: Manage signups. Everyone else: Message the host.
+                .clickable(onClick = onAction)
                 .testTag("supportTrainDetailMoreButton")
                 .semantics {
                     contentDescription = "More options"
@@ -387,10 +388,10 @@ private fun OverflowMenuButton(
 private fun LoadedBody(
     content: SupportTrainDetailContent,
     onSignUp: () -> Unit,
-    onEditSlot: (SlotRowContent) -> Unit,
-    onSendCard: () -> Unit,
-    onJoinAsBackup: () -> Unit,
-    onMessageHost: () -> Unit,
+    onEditSlot: ((SlotRowContent) -> Unit)?,
+    onSendCard: (() -> Unit)?,
+    onJoinAsBackup: (() -> Unit)?,
+    onMessageHost: (() -> Unit)?,
     isSubmitting: Boolean = false,
     onReserveSlot: (String?) -> Unit = {},
     onMarkDelivered: (String) -> Unit = {},
@@ -436,7 +437,7 @@ private fun LoadedBody(
                                     null
                                 },
                             onEdit =
-                                if (row.mine) {
+                                if (row.mine && onEditSlot != null) {
                                     { onEditSlot(row) }
                                 } else {
                                     null
@@ -464,12 +465,17 @@ private fun LoadedBody(
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
 
-        Dock(
-            dock = content.dock,
-            onSignUp = onSignUp,
-            onSendCard = onSendCard,
-            onJoinAsBackup = onJoinAsBackup,
-        )
+        // A fully covered train has no dock unless Send a card or Join as
+        // backup is wired (neither has a backend route yet).
+        val hasDock = content.dock !is SupportTrainDock.SendCardAndBackup || onSendCard != null || onJoinAsBackup != null
+        if (content.typeDates.slotsTotal > 0 && hasDock) {
+            Dock(
+                dock = content.dock,
+                onSignUp = onSignUp,
+                onSendCard = onSendCard ?: {},
+                onJoinAsBackup = onJoinAsBackup ?: {},
+            )
+        }
     }
 }
 
@@ -717,7 +723,7 @@ private fun CelebrationBannerView(content: CelebrationBanner) {
 @Composable
 private fun HostedByRow(
     content: HostedByFooter,
-    onMessageHost: () -> Unit,
+    onMessageHost: (() -> Unit)?,
 ) {
     val shape = RoundedCornerShape(Radii.md)
     Row(
@@ -728,7 +734,7 @@ private fun HostedByRow(
                 .clip(shape)
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorderSubtle, shape)
-                .clickable { onMessageHost() }
+                .clickable(enabled = onMessageHost != null) { onMessageHost?.invoke() }
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
                 .semantics {
                     role = Role.Button
@@ -773,12 +779,14 @@ private fun HostedByRow(
                 )
             }
         }
-        PantopusIconImage(
-            icon = PantopusIcon.MessageSquare,
-            contentDescription = null,
-            size = 14.dp,
-            tint = PantopusColors.appTextMuted,
-        )
+        if (onMessageHost != null) {
+            PantopusIconImage(
+                icon = PantopusIcon.MessageSquare,
+                contentDescription = null,
+                size = 14.dp,
+                tint = PantopusColors.appTextMuted,
+            )
+        }
     }
 }
 
@@ -1027,4 +1035,14 @@ private fun ErrorPreview() {
     SupportTrainDetailContentLayout(
         state = SupportTrainDetailUiState.Error("Network unavailable."),
     )
+}
+
+/** "Message the host": non-organizers only, and only when the train names its organizer. */
+private fun messageHostAction(
+    content: SupportTrainDetailContent,
+    onMessageHost: ((HostedByFooter) -> Unit)?,
+): (() -> Unit)? {
+    if (content.viewerRole.isOrganizer || onMessageHost == null) return null
+    if (content.hostedBy.organizerUserId.isNullOrEmpty()) return null
+    return { onMessageHost(content.hostedBy) }
 }

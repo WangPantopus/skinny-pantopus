@@ -60,12 +60,48 @@ export default function BookingDetailView({
   pillar,
   tz,
   ownerLabel,
+  onRespond,
+  savingResponse = false,
+  responseError,
 }: {
   detail: BookingDetail;
   pillar: Pillar;
   tz: string;
   ownerLabel: string;
+  onRespond?: (status: "going" | "maybe" | "declined") => void;
+  savingResponse?: boolean;
+  responseError?: string | null;
 }) {
+  if (detail.participant) {
+    const { booking, eventType, participant } = detail;
+    const labels = { going: "Going", maybe: "Maybe", declined: "Not going", pending: "Not answered" };
+    return (
+      <div className="space-y-3">
+        <div>
+          <h1 className="text-xl font-bold leading-tight text-app-text-strong">{eventType?.name || "Booking"}</h1>
+          <p className="mt-1 text-sm font-medium text-app-text-secondary">{formatRange(booking.start_at, booking.end_at, tz)}</p>
+        </div>
+        <SectionCard overline="Your participation" icon={UserRound} accentClass="text-app-text-muted">
+          <p className="font-semibold text-app-text">{participant.role === "assigned_host" ? "You're the assigned host" : "You're an attendee"}</p>
+          <p className="mt-2 text-sm text-app-text-secondary">Only your participation details are shown.</p>
+          {participant.is_required !== null && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-app-text">Your response: {labels[participant.rsvp_status ?? "pending"]}</p>
+              {(booking.status === "pending" || booking.status === "confirmed") && onRespond && (
+                <div className="flex flex-wrap gap-2">
+                  {(["going", "maybe", "declined"] as const).map((value) => (
+                    <button key={value} type="button" disabled={savingResponse} onClick={() => onRespond(value)} className="rounded-lg border border-app-border px-3 py-2 text-sm font-medium text-app-text hover:bg-app-hover disabled:opacity-50">{labels[value]}</button>
+                  ))}
+                </div>
+              )}
+              {savingResponse && <p role="status" className="text-sm text-app-text-secondary">Saving your response…</p>}
+              {responseError && <p role="alert" className="text-sm text-app-error">{responseError}</p>}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+    );
+  }
   const { booking, eventType } = detail;
   const tk = pillarTokens(pillar);
   const past = isPast(booking);
@@ -259,7 +295,7 @@ function formatAnswer(value: unknown): string {
 }
 
 function buildTimeline(
-  detail: BookingDetail,
+  detail: Exclude<BookingDetail, { participant: unknown }>,
   tz: string,
   past: boolean,
 ): TimelineStep[] {

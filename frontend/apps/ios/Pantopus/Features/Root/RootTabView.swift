@@ -102,6 +102,9 @@ public struct RootTabView: View {
     /// the Monthly Receipt card already expanded (RN parity —
     /// `/(tabs)/profile?tab=receipt`).
     @State private var expandMonthlyReceipt = false
+    /// A notification link to a screen inside the profile cover (persona
+    /// inboxes, "Your audience") opens the cover on that screen.
+    @State private var profileInitialRoute: YouRoute?
 
     public init() {}
 
@@ -141,8 +144,15 @@ public struct RootTabView: View {
         }
         .fullScreenCover(
             isPresented: $showProfile,
-            onDismiss: { expandMonthlyReceipt = false },
-            content: { YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt) { showProfile = false } }
+            onDismiss: {
+                expandMonthlyReceipt = false
+                profileInitialRoute = nil
+            },
+            content: {
+                YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt, initialRoute: profileInitialRoute) {
+                    showProfile = false
+                }
+            }
         )
         .fullScreenCover(item: $pendingInviteToken) { item in
             TokenAcceptView(
@@ -218,12 +228,21 @@ public struct RootTabView: View {
             expandMonthlyReceipt = true
             showProfile = true
             _ = router.consume()
+        case .creatorInbox:
+            openProfile(at: .creatorInbox)
+        case let .fanInbox(personaId):
+            openProfile(at: .fanInbox(personaId: personaId))
+        case .creatorAudienceMembers:
+            openProfile(at: .creatorAudienceMembers)
         case .conversation:
             // Chat lives in the Mail tab's Messages segment.
             MailTabStore.shared.pendingSegment = .messages
             model.selected = .mail
         case .home:
             model.selected = .place
+            _ = router.consume()
+        case .nearby:
+            model.selected = .nearby
             _ = router.consume()
         case .resetPassword, .verifyEmail, .unknown:
             _ = router.consume()
@@ -237,6 +256,13 @@ public struct RootTabView: View {
         case .monthlyReceipt, .resetPassword, .verifyEmail, .unknown: true
         default: false
         }
+    }
+
+    /// Persona screens live in the profile cover's own stack.
+    private func openProfile(at route: YouRoute) {
+        profileInitialRoute = route
+        showProfile = true
+        _ = router.consume()
     }
 
     private var tabBinding: Binding<RootTab> {

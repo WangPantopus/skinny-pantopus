@@ -65,8 +65,12 @@ sealed interface PulsePostDetailUiState {
 
     data class Loaded(val content: PulsePostDetailContent) : PulsePostDetailUiState
 
-    data class Error(val message: String) : PulsePostDetailUiState
+    /** [retryable] is false when the post is gone or hidden (Try again can't help). */
+    data class Error(val message: String, val retryable: Boolean = true) : PulsePostDetailUiState
 }
+
+/** The one success toast on this screen; every other toast reports a failure. */
+internal const val POST_REPORT_SUBMITTED_TOAST = "Report submitted"
 
 /** Loads + mutates a single Pulse post. */
 @HiltViewModel
@@ -327,7 +331,7 @@ class PulsePostDetailViewModel
         fun reportPost(reason: String) {
             viewModelScope.launch {
                 when (repo.report(postId, reason)) {
-                    is NetworkResult.Success -> _toastMessage.value = "Report submitted"
+                    is NetworkResult.Success -> _toastMessage.value = POST_REPORT_SUBMITTED_TOAST
                     is NetworkResult.Failure -> _toastMessage.value = "Couldn't submit the report"
                 }
             }
@@ -413,7 +417,11 @@ class PulsePostDetailViewModel
                     _state.value = PulsePostDetailUiState.Loaded(rebuildContent(result.data.post))
                 }
                 is NetworkResult.Failure -> {
-                    _state.value = PulsePostDetailUiState.Error(friendlyMessage(result.error))
+                    _state.value =
+                        PulsePostDetailUiState.Error(
+                            message = friendlyMessage(result.error),
+                            retryable = result.error != NetworkError.NotFound && result.error != NetworkError.Forbidden,
+                        )
                 }
             }
         }

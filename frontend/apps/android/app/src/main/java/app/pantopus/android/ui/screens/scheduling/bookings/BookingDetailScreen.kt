@@ -32,6 +32,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -88,6 +89,7 @@ fun BookingDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val approveDecline by viewModel.approveDecline.collectAsStateWithLifecycle()
+    val rsvp by viewModel.rsvp.collectAsStateWithLifecycle()
     val reschedule by rescheduleViewModel.state.collectAsStateWithLifecycle()
     val rescheduleCommitted by rescheduleViewModel.committed.collectAsStateWithLifecycle()
     val cancel by cancelViewModel.state.collectAsStateWithLifecycle()
@@ -114,6 +116,12 @@ fun BookingDetailScreen(
     }
 
     val data = (state as? BookingDetailUiState.Loaded)?.data
+    LaunchedEffect(data == null, data?.participant != null) {
+        if (data == null || data.participant != null) {
+            rescheduleViewModel.dismiss()
+            cancelViewModel.dismiss()
+        }
+    }
 
     Box(
         modifier =
@@ -175,10 +183,10 @@ fun BookingDetailScreen(
                             tint = PantopusColors.errorBg,
                             accent = PantopusColors.error,
                         )
-                    is BookingDetailUiState.Loaded -> DetailContent(s.data)
+                    is BookingDetailUiState.Loaded -> DetailContent(s.data, rsvp, viewModel::respond)
                 }
             }
-            if (data != null) {
+            if (data != null && data.participant == null) {
                 if (data.hasConflict) {
                     ConflictBanner()
                 }
@@ -322,7 +330,7 @@ private fun DetailTopBar(
         if (data != null) {
             SchedulingStatusPill(status = data.pillStatus)
         }
-        if (data != null && data.isActive) {
+        if (data != null && data.isActive && data.participant == null) {
             Box {
                 Box(
                     modifier =
@@ -402,7 +410,11 @@ private fun MenuItem(
 // ─── Content ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DetailContent(data: BookingDetailData) {
+private fun DetailContent(
+    data: BookingDetailData,
+    rsvp: BookingRsvpUiState,
+    onRespond: (String) -> Unit,
+) {
     Column(
         modifier =
             Modifier.fillMaxSize().verticalScroll(
@@ -410,19 +422,59 @@ private fun DetailContent(data: BookingDetailData) {
             ).padding(bottom = Spacing.s12),
     ) {
         Header(data)
-        StatusBanner(data)
-        RequesterCard(data)
-        data.location?.let { LocationCard(it, data.pillar.accent) }
-        if (data.assignedHostInitials != null) {
-            AssignedMemberCard(data)
-        }
-        if (data.intakeAnswers.isNotEmpty()) {
-            IntakeCard(data.intakeAnswers)
-        }
-        if (data.timeline.isNotEmpty()) {
-            TimelineCard(data.timeline, data.pillar.accent)
+        if (data.participant != null) {
+            ParticipantCard(data, rsvp, onRespond)
+        } else {
+            StatusBanner(data)
+            RequesterCard(data)
+            data.location?.let { LocationCard(it, data.pillar.accent) }
+            if (data.assignedHostInitials != null) {
+                AssignedMemberCard(data)
+            }
+            if (data.intakeAnswers.isNotEmpty()) {
+                IntakeCard(data.intakeAnswers)
+            }
+            if (data.timeline.isNotEmpty()) {
+                TimelineCard(data.timeline, data.pillar.accent)
+            }
         }
         Spacer(Modifier.height(Spacing.s4))
+    }
+}
+
+@Composable
+private fun ParticipantCard(
+    data: BookingDetailData,
+    rsvp: BookingRsvpUiState,
+    onRespond: (String) -> Unit,
+) {
+    val participant = data.participant ?: return
+    Column(Modifier.fillMaxWidth().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        Text(
+            if (participant.role == "assigned_host") "You're the assigned host" else "You're an attendee",
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        Text("Only your participation details are shown.", color = PantopusColors.appTextSecondary)
+        if (participant.isRequired != null) {
+            val response =
+                when (participant.rsvpStatus) {
+                    "going" -> "Going"
+                    "maybe" -> "Maybe"
+                    "declined" -> "Not going"
+                    else -> "Not answered"
+                }
+            Text("Your response: $response", color = PantopusColors.appText)
+            if (data.isActive) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    listOf("going" to "Going", "maybe" to "Maybe", "declined" to "Not going").forEach { (value, label) ->
+                        TextButton(onClick = { onRespond(value) }, enabled = !rsvp.busy) { Text(label) }
+                    }
+                }
+            }
+            if (rsvp.busy) Text("Saving your response…", color = PantopusColors.appTextSecondary)
+            rsvp.error?.let { Text(it, color = PantopusColors.error) }
+        }
     }
 }
 

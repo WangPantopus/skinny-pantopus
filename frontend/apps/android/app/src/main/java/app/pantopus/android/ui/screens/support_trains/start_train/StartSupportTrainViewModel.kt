@@ -50,6 +50,17 @@ class StartSupportTrainViewModel
         private val _isSearching = MutableStateFlow(false)
         val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+        /** The last recipient search failed (offline, server error). A failed
+         *  search found nobody, so the "no one by that name" branch stays hidden. */
+        private val _beneficiarySearchFailed = MutableStateFlow(false)
+        val beneficiarySearchFailed: StateFlow<Boolean> = _beneficiarySearchFailed.asStateFlow()
+
+        /** The recipient field is being edited. The no-match card replaces the
+         *  field, so it waits until editing ends instead of swallowing the rest
+         *  of a name mid-typing. */
+        private val _isEditingBeneficiaryQuery = MutableStateFlow(false)
+        val isEditingBeneficiaryQuery: StateFlow<Boolean> = _isEditingBeneficiaryQuery.asStateFlow()
+
         private val _isSubmitting = MutableStateFlow(false)
         val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
@@ -72,6 +83,7 @@ class StartSupportTrainViewModel
             if (current != null && value != displayName(current)) {
                 _selectedBeneficiary.value = null
             }
+            _beneficiarySearchFailed.value = false
             val trimmed = value.trim()
             searchJob?.cancel()
             if (trimmed.length < 2) {
@@ -79,28 +91,42 @@ class StartSupportTrainViewModel
                 _isSearching.value = false
                 return
             }
-            searchJob =
-                viewModelScope.launch {
-                    delay(250)
-                    searchBeneficiary(trimmed)
-                }
+            scheduleBeneficiarySearch(trimmed)
+        }
+
+        /** Re-runs the recipient search for the current text (the "Try again"
+         *  after a failed search). */
+        fun retryBeneficiarySearch() {
+            val trimmed = _form.value.beneficiaryQuery.trim()
+            if (trimmed.length < 2) return
+            _beneficiarySearchFailed.value = false
+            scheduleBeneficiarySearch(trimmed)
+        }
+
+        /** The recipient field gained or lost focus. */
+        fun setEditingBeneficiaryQuery(editing: Boolean) {
+            _isEditingBeneficiaryQuery.value = editing
         }
 
         fun selectBeneficiary(recipient: MailRecipientDto) {
             _selectedBeneficiary.value = recipient
             _form.value = _form.value.copy(beneficiaryQuery = displayName(recipient))
             _beneficiaryResults.value = emptyList()
+            _isEditingBeneficiaryQuery.value = false
         }
 
-        fun clearBeneficiary() {
-            _selectedBeneficiary.value = null
-        }
+        /** "Change" on the chosen recipient: start a fresh search. Keeping the
+         *  chosen name in the field with no results read as "no one by that
+         *  name" for a person who is on Pantopus. */
+        fun clearBeneficiary() = searchAgain()
 
         fun searchAgain() {
             searchJob?.cancel()
             _selectedBeneficiary.value = null
             _beneficiaryResults.value = emptyList()
             _isSearching.value = false
+            _beneficiarySearchFailed.value = false
+            _isEditingBeneficiaryQuery.value = false
             _form.value = _form.value.copy(beneficiaryQuery = "")
         }
 
@@ -196,12 +222,16 @@ class StartSupportTrainViewModel
             return hasBeneficiary
         }
 
+        /** The typed name matched no one: shown only after a search that
+         *  worked, and once the field is no longer being edited. */
         fun isInviteRecipientBranch(): Boolean {
             val current = _form.value
             return _selectedBeneficiary.value == null &&
                 current.beneficiaryQuery.trim().length >= 2 &&
                 _beneficiaryResults.value.isEmpty() &&
-                !_isSearching.value
+                !_isSearching.value &&
+                !_beneficiarySearchFailed.value &&
+                !_isEditingBeneficiaryQuery.value
         }
 
         fun canAdvanceFromWhatAndWhen(): Boolean {
@@ -209,22 +239,21 @@ class StartSupportTrainViewModel
             return current.endDateMillis >= current.startDateMillis && generatedSlots().isNotEmpty()
         }
 
-        /** Mutual connections shared with the selected verified neighbor —
-         *  drives the recipient card's micro-avatar strip. Stubbed from
-         *  sample data; a real implementation would fetch the mutuals when
-         *  a beneficiary is selected. */
-        fun recipientMutuals(): List<StartSupportTrainMutual> =
-            if (_selectedBeneficiary.value == null) emptyList() else StartSupportTrainSampleData.mutuals
+        /** Mutual connections shared with the selected recipient, for the
+         *  recipient card's micro-avatar strip. There is no mutuals lookup
+         *  yet, so none are shown (the sample names were shown for everyone). */
+        fun recipientMutuals(): List<StartSupportTrainMutual> = emptyList()
 
         /** The Frame-2 invite candidate when the typed name matched no
          *  verified neighbor. Contact handles are stubbed (real
          *  contact-picker is out of scope); only the typed name is live. */
         fun inviteCandidate(): StartSupportTrainInviteCandidate? {
             if (!isInviteRecipientBranch()) return null
+            // No contact handles: sample ones must never reach the live card.
             return StartSupportTrainInviteCandidate(
                 typedName = _form.value.beneficiaryQuery.trim(),
-                phone = StartSupportTrainSampleData.inviteCandidate.phone,
-                email = StartSupportTrainSampleData.inviteCandidate.email,
+                phone = "",
+                email = "",
             )
         }
 
@@ -315,7 +344,8 @@ class StartSupportTrainViewModel
         private fun primaryCtaLabelFor(step: StartSupportTrainStep): String =
             when (step) {
                 StartSupportTrainStep.WhoAndWhy ->
-                    if (isInviteRecipientBranch()) "Send invite & continue" else "Continue"
+                    // No invite is sent from the wizard, so the CTA doesn't promise one.
+                    "Continue"
                 StartSupportTrainStep.WhatAndWhen -> "Continue"
                 StartSupportTrainStep.ReviewAndLaunch -> "Launch train"
                 StartSupportTrainStep.Success -> "Open train"
@@ -359,12 +389,27 @@ class StartSupportTrainViewModel
 
         private fun displayName(recipient: MailRecipientDto?): String = recipient?.name ?: recipient?.username ?: ""
 
+        private fun scheduleBeneficiarySearch(query: String) {
+            searchJob?.cancel()
+            searchJob =
+                viewModelScope.launch {
+                    delay(250)
+                    searchBeneficiary(query)
+                }
+        }
+
         private suspend fun searchBeneficiary(query: String) {
             _isSearching.value = true
             try {
                 when (val result = mailCompose.recipients(query)) {
-                    is NetworkResult.Success -> _beneficiaryResults.value = result.data.recipients
-                    is NetworkResult.Failure -> _beneficiaryResults.value = emptyList()
+                    is NetworkResult.Success -> {
+                        _beneficiaryResults.value = result.data.recipients
+                        _beneficiarySearchFailed.value = false
+                    }
+                    is NetworkResult.Failure -> {
+                        _beneficiaryResults.value = emptyList()
+                        _beneficiarySearchFailed.value = true
+                    }
                 }
             } finally {
                 _isSearching.value = false

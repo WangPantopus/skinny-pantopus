@@ -79,6 +79,15 @@ data class BookingDetailResponse(
     val booking: BookingDto,
     val attendees: List<AttendeeDto> = emptyList(),
     val eventType: BookingEventTypeRef? = null,
+    val participant: BookingParticipantDto? = null,
+)
+
+/** Minimal signed-in participant capability; no owner or invitee details. */
+@JsonClass(generateAdapter = true)
+data class BookingParticipantDto(
+    val role: String,
+    @Json(name = "rsvp_status") val rsvpStatus: String? = null,
+    @Json(name = "is_required") val isRequired: Boolean? = null,
 )
 
 /** Lifecycle-action responses (`approve/decline/cancel/reschedule/no-show/reassign/propose`). */

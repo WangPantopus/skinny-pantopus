@@ -78,6 +78,7 @@ data class TypeDatesCardContent(
     val slotsTotal: Int,
     val contributors: List<ContributorBubble>,
     val extraCount: Int,
+    val status: String? = null,
 ) {
     val isFullyCovered: Boolean get() = slotsTotal > 0 && slotsFilled >= slotsTotal
 
@@ -158,6 +159,8 @@ data class HostedByFooter(
     val organizerInitials: String,
     val organizerDisplayName: String,
     val neighborHint: String?,
+    /** The primary organizer's account, for "Message the host". */
+    val organizerUserId: String? = null,
 )
 
 /**

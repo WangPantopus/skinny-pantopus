@@ -493,6 +493,9 @@ public struct HubTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
+    @State private var placeResolutionError: String?
+    @State private var isResolvingPlace = false
+    @State private var placeResolutionGeneration = 0
     /// P6.6 — share / mail system sheet driven by "Share listing",
     /// "Share train", and "Invite a business".
     @State private var systemSheet: SystemSheetRequest?
@@ -674,19 +677,7 @@ public struct HubTabRoot: View {
             // stays the stack root (reachable via back-swipe) and the
             // no-home fallback. Hub-mode only — the Mail tab's instance
             // roots at the mailbox and must not auto-land.
-            guard mode == .hub else { return }
-            guard path.isEmpty, router.pending == nil, PendingDeepLinkStore.peek() == nil,
-                  rootTabs.selected == owningTab, !didAutoLandPlace else { return }
-            if PlacePendingStore.bind(to: currentUserId) != nil {
-                didAutoLandPlace = true
-                path.append(.placeArrival)
-                return
-            }
-            let homeId = await Self.primaryHomeId()
-            // A link or a tab change can arrive during the network request.
-            guard path.isEmpty, router.pending == nil, rootTabs.selected == owningTab else { return }
-            didAutoLandPlace = true
-            if let homeId { path.append(.placeDashboard(homeId: homeId)) }
+            await resolvePlaceLanding()
         }
         .fullScreenCover(item: $modalRoute) { item in
             destination(for: item.route) { path.append($0) }
@@ -780,9 +771,22 @@ public struct HubTabRoot: View {
     private var stackRoot: some View {
         switch mode {
         case .hub:
-            hub
-                .navigationTitle("Hub")
-                .toolbar(.hidden, for: .navigationBar)
+            Group {
+                if !didAutoLandPlace, path.isEmpty, isResolvingPlace || placeResolutionError != nil {
+                    if let placeResolutionError {
+                        ErrorState(headline: "Couldn't load your place", message: placeResolutionError) {
+                            await resolvePlaceLanding()
+                        }
+                    } else {
+                        ScrollView { HubSkeleton() }
+                            .background(Theme.Color.appBg)
+                    }
+                } else {
+                    hub
+                }
+            }
+            .navigationTitle("Hub")
+            .toolbar(.hidden, for: .navigationBar)
         case .mailbox:
             // The Mail tab: same destination universe, mailbox at the root.
             makeMailboxRoot { path.append($0) }
@@ -1017,7 +1021,7 @@ public struct HubTabRoot: View {
                 pushPlace(homeId: homeId, slug: slug)
             } else {
                 Task {
-                    if let resolved = await Self.primaryHomeId() {
+                    if let resolved = try? await Self.primaryHomeId() {
                         pushPlace(homeId: resolved, slug: slug)
                     }
                 }
@@ -1118,7 +1122,8 @@ public struct HubTabRoot: View {
     static func ownsDeepLink(_ destination: DeepLinkRouter.Destination, tab: RootTab) -> Bool {
         switch destination {
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
-             .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
+             .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
+             .creatorInbox, .fanInbox, .creatorAudienceMembers, .nearby:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
@@ -1222,6 +1227,30 @@ public struct HubTabRoot: View {
                 online: false
             )
         }
+    }
+
+    /// A one-to-one chat with a support train's organizer.
+    /// Chat with a confirmed helper from Review signups.
+    static func chatDestination(toHelper reservation: SupportTrainReservationDTO) -> InboxConversationDestination {
+        let name = reservation.displayName
+        let initials = String(name.split(separator: " ").compactMap(\.first).prefix(2)).uppercased()
+        return InboxConversationDestination(
+            mode: .person(otherUserId: reservation.userId ?? reservation.helper?.id ?? ""),
+            displayName: name,
+            initials: initials,
+            identityKind: nil,
+            verified: false
+        )
+    }
+
+    static func chatRoute(toHost host: HostedByFooter) -> HubRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
     }
 
     /// Dispatch a discovery card tap to the matching detail route.
@@ -2514,7 +2543,7 @@ public struct HubTabRoot: View {
                 },
                 onShare: {
                     systemSheet = .share(
-                        items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                        items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                     )
                 },
                 onSignUp: {
@@ -2522,25 +2551,11 @@ public struct HubTabRoot: View {
                     // screen itself (`ReserveSlotSheet`), which posts
                     // `POST …/slots/:slotId/reserve`. Nothing to push.
                 },
-                onEditSlot: { _ in
-                    Task { @MainActor in
-                        push(.placeholder(label: "Edit your slot"))
-                    }
-                },
-                onSendCard: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Send a card"))
-                    }
-                },
-                onJoinAsBackup: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Join as backup"))
-                    }
-                },
-                onMessageHost: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Message host"))
-                    }
+                // Edit slot, Send a card and Join as backup have no backend
+                // route yet, so they aren't wired and the screen hides them
+                // (Leave / Mark delivered cover a helper's own slot).
+                onMessageHost: { host in
+                    Task { @MainActor in push(Self.chatRoute(toHost: host)) }
                 }
             )
         case let .reviewSignups(supportTrainId):
@@ -2549,7 +2564,7 @@ public struct HubTabRoot: View {
                     supportTrainId: supportTrainId,
                     onShareTrain: {
                         systemSheet = .share(
-                            items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                         )
                     },
                     onConfirm: { reservationId in
@@ -2566,8 +2581,8 @@ public struct HubTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in push(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in push(.chatConversation(Self.chatDestination(toHelper: reservation))) }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -2584,14 +2599,13 @@ public struct HubTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in if !path.isEmpty { path.removeLast() } } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
+                    )
                 }
             )
         case .discoverHub:
@@ -3249,10 +3263,46 @@ public struct HubTabRoot: View {
         }
     }
 
-    private static func primaryHomeId() async -> String? {
-        guard let response: MyHomesResponse = try? await APIClient.shared.request(
+    private var canResolvePlaceLanding: Bool {
+        mode == .hub && path.isEmpty && router.pending == nil && PendingDeepLinkStore.peek() == nil
+            && rootTabs.selected == owningTab && !didAutoLandPlace
+    }
+
+    private func resolvePlaceLanding() async {
+        guard canResolvePlaceLanding else { return }
+        placeResolutionGeneration += 1
+        let generation = placeResolutionGeneration
+        placeResolutionError = nil
+        isResolvingPlace = true
+        defer {
+            if generation == placeResolutionGeneration { isResolvingPlace = false }
+        }
+        if PlacePendingStore.bind(to: currentUserId) != nil {
+            didAutoLandPlace = true
+            path.append(.placeArrival)
+            return
+        }
+        do {
+            let homeId = try await Self.primaryHomeId()
+            // A tab change, link, or newer retry must win over this response.
+            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            didAutoLandPlace = true
+            if PlacePendingStore.bind(to: currentUserId) != nil {
+                path.append(.placeArrival)
+            } else if let homeId {
+                path.append(.placeDashboard(homeId: homeId))
+            }
+        } catch {
+            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            placeResolutionError = (error as? APIError)?.errorDescription
+                ?? "Check your connection and try again."
+        }
+    }
+
+    private static func primaryHomeId() async throws -> String? {
+        let response: MyHomesResponse = try await APIClient.shared.request(
             HomesEndpoints.myHomes()
-        ) else { return nil }
+        )
         return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
             ?? response.sharedHomes.first?.id
     }

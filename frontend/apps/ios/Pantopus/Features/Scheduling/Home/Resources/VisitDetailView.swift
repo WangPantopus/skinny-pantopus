@@ -169,27 +169,26 @@ struct VisitDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
     }
 
-    /// Header terminal chip (Completed) shown in the `done` state.
+    /// Neutral elapsed-time chip; it does not imply the visit took place.
     private func terminalChip(label: String, icon: PantopusIcon) -> some View {
         HStack(spacing: Spacing.s1) {
-            Icon(icon, size: 11, color: Theme.Color.success)
+            Icon(icon, size: 11, color: Theme.Color.appTextSecondary)
             Text(label)
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
+                .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .background(Theme.Color.successBg)
+        .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
     }
 
     // MARK: Status timeline
 
-    private static let statusSteps = ["Offered", "Reserved", "Confirmed", "Done"]
+    private static let statusSteps = ["Scheduled", "Past"]
 
-    /// 4-step Offered → Reserved → Confirmed → Done progress, mirroring the
-    /// design's `StatusTimeline`. `current` is the active step; earlier steps
-    /// render completed (check), later steps muted.
+    /// Existing scheduled visit and elapsed time, without inferring an offer,
+    /// reservation, attendance, or completion.
     private var statusTimeline: some View {
         let current = viewModel.statusStep
         return SectionCard {
@@ -243,7 +242,7 @@ struct VisitDetailView: View {
                 .foregroundStyle(active ? Theme.Color.homeDark : (done ? Theme.Color.appTextStrong : Theme.Color.appTextMuted))
                 .multilineTextAlignment(.center)
         }
-        .frame(width: 46)
+        .frame(minWidth: 46)
     }
 
     @ViewBuilder private var banner: some View {
@@ -332,14 +331,6 @@ struct VisitDetailView: View {
                     viewModel.bookAgain()
                 }
             }
-            // Design footer always carries a trailing `message-circle` text btn.
-            Button { viewModel.messageVisitor() } label: {
-                Icon(.messageCircle, size: 18, color: Theme.Color.appTextStrong)
-                    .frame(width: 46, height: 46)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Message")
-            .accessibilityIdentifier("scheduling.visitDetail.message")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s2)

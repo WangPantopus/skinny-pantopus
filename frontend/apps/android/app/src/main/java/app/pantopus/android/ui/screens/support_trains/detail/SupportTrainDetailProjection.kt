@@ -52,6 +52,7 @@ object SupportTrainDetailProjection {
                 slotsTotal = total,
                 contributors = contributors(organizers),
                 extraCount = maxOf(0, covered - minOf(organizers.size, 4)),
+                status = dto.status,
             )
         val isFull = typeDates.isFullyCovered
         val mineSlotIds = reservations.mapNotNull { it.slotId }.toSet()
@@ -66,13 +67,14 @@ object SupportTrainDetailProjection {
             typeDates = typeDates,
             calendarDays = calendar(slots, reservations),
             sections = sections(slots, reservations),
-            hostedBy = hostedBy(primaryName),
+            hostedBy = hostedBy(primaryName, organizers.firstOrNull()?.user?.id),
             dock = if (isFull) SupportTrainDock.SendCardAndBackup else SupportTrainDock.SignUp("Sign up for a slot"),
             celebrationBanner =
                 if (isFull) {
                     CelebrationBanner(
                         title = "Every slot is covered",
-                        body = "Every slot is spoken for. Sign up as backup in case someone can't make it.",
+                        // No backup sign-up exists yet (see the dock), so don't offer one.
+                        body = "Every slot is spoken for.",
                     )
                 } else {
                     null
@@ -151,9 +153,17 @@ object SupportTrainDetailProjection {
         )
     }
 
-    private fun hostedBy(primaryName: String?): HostedByFooter {
+    private fun hostedBy(
+        primaryName: String?,
+        primaryUserId: String?,
+    ): HostedByFooter {
         val name = primaryName ?: "Organizer"
-        return HostedByFooter(organizerInitials = initials(name), organizerDisplayName = name, neighborHint = null)
+        return HostedByFooter(
+            organizerInitials = initials(name),
+            organizerDisplayName = name,
+            neighborHint = null,
+            organizerUserId = primaryUserId,
+        )
     }
 
     private fun locationLabel(loc: SupportTrainCoarseLocationDto?): String {
@@ -215,7 +225,7 @@ object SupportTrainDetailProjection {
                     millis in mineDates -> SlotCalendarState.Mine
                     millis in coveredDates -> SlotCalendarState.Filled
                     millis in openDates -> SlotCalendarState.Open
-                    else -> SlotCalendarState.Past // no slot that future day — inert/muted tile
+                    else -> SlotCalendarState.Unscheduled // no slot that future day — inert/muted tile
                 }
             SlotCalendarDay(id = "day-$idx", date = date, dayNumber = cal.get(Calendar.DAY_OF_MONTH), state = state)
         }

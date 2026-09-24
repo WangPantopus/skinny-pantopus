@@ -68,7 +68,11 @@ fun TypeDatesCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Header(content)
-        ProgressBlock(content)
+        if (content.slotsTotal > 0) {
+            ProgressBlock(content)
+        } else {
+            Text("No slots scheduled yet.", color = PantopusColors.appTextSecondary, fontSize = 12.sp)
+        }
     }
 }
 
@@ -80,7 +84,7 @@ private fun Header(content: TypeDatesCardContent) {
     ) {
         IconTile(content.kind)
         HeaderText(content)
-        StatusPill(isFullyCovered = content.isFullyCovered)
+        StatusPill(content = content)
     }
 }
 
@@ -127,11 +131,28 @@ private fun RowScope.HeaderText(content: TypeDatesCardContent) {
 }
 
 @Composable
-private fun StatusPill(isFullyCovered: Boolean) {
+private fun StatusPill(content: TypeDatesCardContent) {
+    val isFullyCovered = content.isFullyCovered
+    val label =
+        when (content.status) {
+            "draft" -> "DRAFT"
+            "paused" -> "PAUSED"
+            "completed" -> "COMPLETED"
+            "archived" -> "ARCHIVED"
+            "published", "active", null ->
+                if (content.slotsTotal == 0) {
+                    "NO SLOTS"
+                } else if (isFullyCovered) {
+                    "COVERED"
+                } else {
+                    "OPEN"
+                }
+            else -> "UNAVAILABLE"
+        }
     val fg = if (isFullyCovered) PantopusColors.success else PantopusColors.primary700
     val bg = if (isFullyCovered) PantopusColors.successBg else PantopusColors.primary50
     Text(
-        text = if (isFullyCovered) "COVERED" else "OPEN",
+        text = label,
         color = fg,
         fontWeight = FontWeight.Bold,
         fontSize = 10.5.sp,

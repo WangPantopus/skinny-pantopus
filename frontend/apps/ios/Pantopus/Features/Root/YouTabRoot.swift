@@ -140,6 +140,10 @@ public enum YouRoute: Hashable {
     /// T6.3f / P14 — Home dashboard for a specific home, reached from
     /// the My homes row tap inside the You stack.
     case homeDashboard(homeId: String)
+    /// Property details from the Home dashboard's "Property details" row
+    /// (the Hub stack's `.propertyDetails`), and its correction form.
+    case propertyDetails(homeId: String)
+    case propertyCorrection(homeId: String)
     /// T3.2 — Identity Center. The "me.identityCenter" Personal section row pushes here.
     case identityCenter
     /// T3.3 — Audience profile. The "me.audience" Personal section row pushes here.
@@ -449,9 +453,13 @@ public struct YouTabRoot: View {
     private let expandMonthlyReceipt: Bool
     /// Closes the profile cover (RootTabView presents it full screen).
     private let onClose: (@MainActor () -> Void)?
+    /// Pushed once when a notification opens the cover on a screen inside it.
+    private let initialRoute: YouRoute?
+    @State private var didOpenInitialRoute = false
 
-    public init(expandMonthlyReceipt: Bool = false, onClose: (@MainActor () -> Void)? = nil) {
+    public init(expandMonthlyReceipt: Bool = false, initialRoute: YouRoute? = nil, onClose: (@MainActor () -> Void)? = nil) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
+        self.initialRoute = initialRoute
         self.onClose = onClose
     }
 
@@ -465,6 +473,11 @@ public struct YouTabRoot: View {
                 onClose: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
+            .task {
+                guard !didOpenInitialRoute, let initialRoute else { return }
+                didOpenInitialRoute = true
+                path.append(initialRoute)
+            }
             .navigationDestination(for: YouRoute.self) { route in
                 destination(for: route)
                     .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
@@ -620,7 +633,7 @@ public struct YouTabRoot: View {
              .businessOwner, .viewAs, .membershipDetail, .identityCenter,
              .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
              .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
-             .transferOwnership, .mailRoutingQueue, .mailDay:
+             .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -635,6 +648,17 @@ public struct YouTabRoot: View {
         default:
             false
         }
+    }
+
+    /// A one-to-one chat with a support train's organizer.
+    static func chatRoute(toHost host: HostedByFooter) -> YouRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
@@ -1630,10 +1654,11 @@ public struct YouTabRoot: View {
         case let .supportTrainDetail(supportTrainId):
             SupportTrainDetailView(
                 viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
-                // Keep the `onBack:` label: as a trailing closure it binds to
-                // the last closure (`onMessageHost`) and Back does nothing.
-                // swiftlint:disable:next trailing_closure
-                onBack: { Task { @MainActor in pop() } }
+                onBack: { Task { @MainActor in pop() } },
+                onOpenManage: { Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) } },
+                onMessageHost: { host in
+                    Task { @MainActor in path.append(Self.chatRoute(toHost: host)) }
+                }
             )
         case .searchSupportTrains:
             SupportTrainsSearchView(
@@ -1664,7 +1689,7 @@ public struct YouTabRoot: View {
                     supportTrainId: supportTrainId,
                     onShareTrain: {
                         systemSheet = .share(
-                            items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
                         )
                     },
                     onConfirm: { reservationId in
@@ -1682,8 +1707,10 @@ public struct YouTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in path.append(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in
+                            path.append(.chatConversation(HubTabRoot.chatDestination(toHelper: reservation)))
+                        }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -1700,14 +1727,13 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
+                    )
                 }
             )
         case .identityCenter:
@@ -1964,6 +1990,16 @@ public struct YouTabRoot: View {
                     if !path.isEmpty { path.removeLast() }
                 }
             )
+        case let .propertyDetails(homeId):
+            PropertyDetailsView(
+                homeId: homeId,
+                onBack: { Task { @MainActor in pop() } },
+                onRequestCorrection: {
+                    Task { @MainActor in path.append(.propertyCorrection(homeId: homeId)) }
+                }
+            )
+        case let .propertyCorrection(homeId):
+            PropertyCorrectionView(homeId: homeId) { pop() }
         case let .homePets(homeId):
             PetsListView(homeId: homeId)
         case let .homeCalendar(homeId):
@@ -2332,6 +2368,9 @@ public struct YouTabRoot: View {
                 },
                 onOpenMembers: { membersHomeId in
                     Task { @MainActor in path.append(.homeMembers(homeId: membersHomeId)) }
+                },
+                onOpenPropertyDetails: { detailsHomeId in
+                    Task { @MainActor in path.append(.propertyDetails(homeId: detailsHomeId)) }
                 },
                 onHireHelp: { _ in
                     // H1 — "Hire" on a seasonal-checklist item opens the

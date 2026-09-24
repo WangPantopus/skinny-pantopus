@@ -221,6 +221,7 @@ export default function GigsBrowsePage() {
   const [gigs, setGigs] = useState<GigListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [appendFailed, setAppendFailed] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -285,6 +286,7 @@ export default function GigsBrowsePage() {
     async (pageNum = 1, append = false) => {
       try {
         setFetchError(null);
+        setAppendFailed(false);
         const location =
           userLat != null && userLng != null
             ? { latitude: userLat, longitude: userLng, radiusMiles }
@@ -312,7 +314,9 @@ export default function GigsBrowsePage() {
         setPage(pageNum);
       } catch (err) {
         console.warn('Failed to fetch gigs:', err);
-        if (!append) setFetchError('Failed to load tasks. Please try again.');
+        // A failed page 1 replaces the list with the error; a failed "load more" keeps the list and shows the banner.
+        setFetchError(append ? "Couldn't load more tasks." : 'Failed to load tasks. Please try again.');
+        setAppendFailed(append);
       }
     },
     [filters, debouncedSearch, sortOption, userLat, userLng, radiusMiles]
@@ -731,7 +735,7 @@ export default function GigsBrowsePage() {
                       <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3">
                         <p className="text-sm text-red-700 dark:text-red-300">{fetchError}</p>
                         <button
-                          onClick={onRefresh}
+                          onClick={appendFailed ? onLoadMore : onRefresh}
                           className="ml-4 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900 transition"
                         >
                           Retry
@@ -763,7 +767,7 @@ export default function GigsBrowsePage() {
                           </div>
                         ))}
                       </div>
-                    ) : gigs.length === 0 ? (
+                    ) : gigs.length === 0 && !fetchError ? (
                       <div>
                         <EmptyState
                           icon={Search}
@@ -802,7 +806,7 @@ export default function GigsBrowsePage() {
                           </div>
                         )}
                       </div>
-                    ) : (
+                    ) : gigs.length > 0 ? (
                       <>
                         {/* Results count */}
                         <p className="text-xs text-app-text-muted mb-2">
@@ -838,7 +842,7 @@ export default function GigsBrowsePage() {
                           </div>
                         )}
                       </>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>

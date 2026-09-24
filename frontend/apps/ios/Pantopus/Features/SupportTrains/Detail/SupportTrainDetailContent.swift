@@ -122,6 +122,7 @@ public struct TypeDatesCardContent: Equatable, Sendable {
     /// "+N" disc. The view truncates / pads as needed.
     public let contributors: [ContributorBubble]
     public let extraCount: Int
+    public let status: String?
 
     public var isFullyCovered: Bool {
         slotsFilled >= slotsTotal && slotsTotal > 0
@@ -141,7 +142,8 @@ public struct TypeDatesCardContent: Equatable, Sendable {
         slotsFilled: Int,
         slotsTotal: Int,
         contributors: [ContributorBubble],
-        extraCount: Int
+        extraCount: Int,
+        status: String? = nil
     ) {
         self.kind = kind
         self.title = title
@@ -151,6 +153,7 @@ public struct TypeDatesCardContent: Equatable, Sendable {
         self.slotsTotal = slotsTotal
         self.contributors = contributors
         self.extraCount = extraCount
+        self.status = status
     }
 }
 
@@ -299,11 +302,20 @@ public struct HostedByFooter: Equatable, Sendable {
     public let organizerInitials: String
     public let organizerDisplayName: String
     public let neighborHint: String?
+    /// The primary organizer's account, for "Message the host". Nil when
+    /// the detail read carried no organizer.
+    public let organizerUserId: String?
 
-    public init(organizerInitials: String, organizerDisplayName: String, neighborHint: String?) {
+    public init(
+        organizerInitials: String,
+        organizerDisplayName: String,
+        neighborHint: String?,
+        organizerUserId: String? = nil
+    ) {
         self.organizerInitials = organizerInitials
         self.organizerDisplayName = organizerDisplayName
         self.neighborHint = neighborHint
+        self.organizerUserId = organizerUserId
     }
 }
 

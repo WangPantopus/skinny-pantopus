@@ -43,6 +43,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
@@ -239,6 +240,7 @@ import app.pantopus.android.ui.screens.hub.HubNavigationIntent
 import app.pantopus.android.ui.screens.hub.HubScreen
 import app.pantopus.android.ui.screens.hub.JumpBackItem
 import app.pantopus.android.ui.screens.hub.PillarTile
+import app.pantopus.android.ui.screens.hub.sections.HubSkeleton
 import app.pantopus.android.ui.screens.hub.today.TodayDetailScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityCenterScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityKind
@@ -2028,6 +2030,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.Nearby -> {
+                navController.navigateToRootTab(PantopusRoute.Nearby)
+                DeepLinkRouter.consume()
+            }
             DeepLinkRouter.Destination.Connections -> {
                 navController.navigate(ChildRoutes.CONNECTIONS)
                 DeepLinkRouter.consume()
@@ -2343,6 +2349,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.invoiceDetail(pending.invoiceId))
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.CreatorInbox -> {
+                navController.navigate(ChildRoutes.CREATOR_INBOX)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.FanInbox -> {
+                navController.navigate(ChildRoutes.fanInbox(pending.personaId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.CreatorAudienceMembers -> {
+                navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,
@@ -2419,7 +2437,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeDashboard(landing.homeId))
                         }
                     }
-                    if (placeLanding is HomeLanding.Review) {
+                    val landingError = placeLanding as? HomeLanding.Error
+                    if (placeLanding is HomeLanding.Loading) {
+                        HubSkeleton()
+                    } else if (landingError != null) {
+                        ErrorState(
+                            headline = "Couldn't load your place",
+                            message = landingError.message,
+                            onRetry = placeHostVm::resolve,
+                        )
+                    } else if (placeLanding is HomeLanding.Review) {
                         val arrival by placeHostVm.arrival.collectAsStateWithLifecycle()
                         app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen(
                             state = arrival,
@@ -5442,28 +5469,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 },
                                 onShare = {
                                     appContext.shareText(
-                                        "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                        "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                         "Share train",
                                     )
                                 },
-                                onSignUp = {
-                                    // Slot-claim sheet lands with the
-                                    // editor surface in a P3.7 follow-up — surface
-                                    // the affordance via a placeholder for now so
-                                    // the dock CTA remains testable.
-                                    navController.navigate(ChildRoutes.placeholder("Claim a slot"))
-                                },
-                                onEditSlot = {
-                                    navController.navigate(ChildRoutes.placeholder("Edit your slot"))
-                                },
-                                onSendCard = {
-                                    navController.navigate(ChildRoutes.placeholder("Send a card"))
-                                },
-                                onJoinAsBackup = {
-                                    navController.navigate(ChildRoutes.placeholder("Join as backup"))
-                                },
-                                onMessageHost = {
-                                    navController.navigate(ChildRoutes.placeholder("Message host"))
+                                // The screen opens its own reserve sheet; pushing a
+                                // placeholder here covered it (C-16).
+                                onSignUp = {},
+                                // Edit slot, Send a card and Join as backup have no
+                                // backend route yet, so they stay unwired and hidden.
+                                onMessageHost = { host ->
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationFromPicker(
+                                            userId = host.organizerUserId.orEmpty(),
+                                            displayName = host.organizerDisplayName,
+                                            initials = host.organizerInitials,
+                                            verified = false,
+                                            locality = null,
+                                        ),
+                                    )
                                 },
                             ),
                     )
@@ -5476,12 +5500,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                             },
                         ),
-                ) {
+                ) { entry ->
+                    val trainId = entry.arguments?.getString(ChildRoutes.REVIEW_SIGNUPS_ID_KEY).orEmpty()
                     ReviewSignupsScreen(
                         onBack = { navController.popBackStack() },
                         onShareTrain = {
                             appContext.shareText(
-                                "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                 "Share train",
                             )
                         },
@@ -5517,14 +5542,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics"))
-                        },
-                        onEditDates = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates"))
-                        },
-                        onInviteHelpers = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers"))
+                        // Invite shares the train, as the detail's Share does.
+                        // Analytics and Edit dates have no backend / native
+                        // editor yet, so they aren't wired and their rows are
+                        // hidden.
+                        onInviteHelpers = { trainId ->
+                            appContext.shareText(
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
+                                "Share train",
+                            )
                         },
                     )
                 }

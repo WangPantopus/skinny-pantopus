@@ -60,6 +60,9 @@ class SupportTrainDetailViewModel
     ) : ViewModel() {
         companion object {
             const val SUPPORT_TRAIN_ID_KEY = "supportTrainDetailId"
+
+            /** Shown when "Sign up for a slot" finds nothing open — a notice, not a failure. */
+            const val NO_OPEN_DATES_NOTICE = "There are no open dates left on this train."
         }
 
         private val trainId: String =
@@ -129,7 +132,7 @@ class SupportTrainDetailViewModel
         fun startReserve(slotId: String? = null) {
             val content = loadedContent
             if (content == null || content.reserveOptions.isEmpty()) {
-                _action.update { it.copy(error = "There are no open dates left on this train.") }
+                _action.update { it.copy(error = NO_OPEN_DATES_NOTICE) }
                 return
             }
             val resolved = content.reserveOptions.firstOrNull { it.id == slotId }?.id
