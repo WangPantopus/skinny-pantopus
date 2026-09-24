@@ -93,6 +93,7 @@ fun MeView(
                     }
                 PopulatedFrame(
                     active = active,
+                    showBusiness = s.showBusiness,
                     onSwitch = viewModel::selectIdentity,
                     onAction = onAction,
                     onSection = onSection,
@@ -147,6 +148,7 @@ internal fun PopulatedFrame(
     onAction: (MeActionTile) -> Unit,
     onSection: (MeSectionRow) -> Unit,
     onDestructive: () -> Unit,
+    showBusiness: Boolean = true,
     monthlyReceipt: MonthlyReceiptDto? = null,
     expandMonthlyReceipt: Boolean = false,
     inviteProgress: InviteProgressDto? = null,
@@ -159,7 +161,7 @@ internal fun PopulatedFrame(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
     ) {
-        MeHeader(content = active, onSwitch = onSwitch)
+        MeHeader(content = active, showBusiness = showBusiness, onSwitch = onSwitch)
         if (!active.isUnbound) {
             MeStatsRow(
                 stats = active.stats,
@@ -228,6 +230,7 @@ internal fun PopulatedFrame(
 @Composable
 private fun MeHeader(
     content: MeIdentityContent,
+    showBusiness: Boolean,
     onSwitch: (MeIdentity) -> Unit,
 ) {
     val brush =
@@ -245,7 +248,7 @@ private fun MeHeader(
     ) {
         IdentitySwitcherPillRow(
             options =
-                MeIdentity.entries.map { identity ->
+                MeIdentity.entries.filter { showBusiness || it != MeIdentity.Business }.map { identity ->
                     IdentityOption(
                         id = identity.key,
                         label = identity.label,

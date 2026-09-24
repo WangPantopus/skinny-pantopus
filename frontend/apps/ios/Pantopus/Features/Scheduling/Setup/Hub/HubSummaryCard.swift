@@ -24,6 +24,7 @@ struct HubSummaryCard: View {
     let onShare: () -> Void
     let onRetry: () -> Void
     let onInsights: () -> Void
+    var readOnly = false
 
     private var theme: SchedulingIdentityTheme {
         owner.theme
@@ -77,7 +78,9 @@ struct HubSummaryCard: View {
                 breakdown(byType).padding(.top, Spacing.s3)
             }
 
-            seeInsights.padding(.top, Spacing.s3)
+            if !readOnly {
+                seeInsights.padding(.top, Spacing.s3)
+            }
         }
     }
 
@@ -118,6 +121,7 @@ struct HubSummaryCard: View {
                     .tracking(-0.5)
                     .foregroundStyle(color)
                     .monospacedDigit()
+                    .fixedSize(horizontal: delta != nil, vertical: false)
             }
             Text(label)
                 .font(.system(size: 10.5, weight: .semibold))
@@ -188,21 +192,25 @@ struct HubSummaryCard: View {
                 .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("No bookings yet").font(.system(size: 15, weight: .bold)).tracking(-0.2).foregroundStyle(Theme.Color.appText)
-                    Text("Share your link to get your first one.").font(.system(size: 12.5)).foregroundStyle(Theme.Color.appTextSecondary)
+                    Text(readOnly ? "Upcoming bookings will show up here." : "Share your link to get your first one.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: Spacing.s0)
             }
             .padding(.top, 14)
-            SetupPrimaryCTA(
-                title: "Share booking link",
-                icon: .share,
-                iconTrailing: false,
-                owner: owner,
-                height: 44,
-                fontSize: 13.5,
-                action: onShare
-            )
-            .padding(.top, 14)
+            if !readOnly {
+                SetupPrimaryCTA(
+                    title: "Share booking link",
+                    icon: .share,
+                    iconTrailing: false,
+                    owner: owner,
+                    height: 44,
+                    fontSize: 13.5,
+                    action: onShare
+                )
+                .padding(.top, 14)
+            }
         }
     }
 

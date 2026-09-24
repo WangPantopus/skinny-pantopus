@@ -42,8 +42,8 @@ import app.pantopus.android.ui.theme.Spacing
 const val CANCEL_REFUND_SHEET_TAG = "cancelRefundSheet"
 
 /**
- * E5 Cancel & Refund sheet. Reason chips (free-text "Other") + a note + a
- * notify switch; when the booking is paid (and the paid flag is on) a refund
+ * E5 Cancel & Refund sheet. Reason chips (free-text "Other") + a note;
+ * when the booking is paid (and the paid flag is on) a refund
  * card explains the policy-driven refund the server issues. 409 `PAST_DEADLINE`
  * renders inline; `REFUND_FAILED` flips the CTA to "Retry refund".
  */
@@ -55,7 +55,6 @@ fun CancelRefundSheet(
     onSelectReason: (String) -> Unit,
     onSetOther: (String) -> Unit,
     onSetNote: (String) -> Unit,
-    onToggleNotify: () -> Unit,
     onSelectPreset: (RefundPreset) -> Unit,
     onToggleRestoreCredit: () -> Unit,
     onConfirm: () -> Unit,
@@ -89,7 +88,6 @@ fun CancelRefundSheet(
                     onSelectReason = onSelectReason,
                     onSetOther = onSetOther,
                     onSetNote = onSetNote,
-                    onToggleNotify = onToggleNotify,
                     onSelectPreset = onSelectPreset,
                     onToggleRestoreCredit = onToggleRestoreCredit,
                     onConfirm = onConfirm,
@@ -104,7 +102,6 @@ private fun CancelForm(
     onSelectReason: (String) -> Unit,
     onSetOther: (String) -> Unit,
     onSetNote: (String) -> Unit,
-    onToggleNotify: () -> Unit,
     onSelectPreset: (RefundPreset) -> Unit,
     onToggleRestoreCredit: () -> Unit,
     onConfirm: () -> Unit,
@@ -158,9 +155,6 @@ private fun CancelForm(
                 onToggle = onToggleRestoreCredit,
             )
         }
-
-        Spacer(Modifier.height(Spacing.s3))
-        NotifySwitch(notify = state.notify, onToggle = onToggleNotify, accent = state.pillar.accent)
 
         // Non-refund errors render inline at the foot of the form.
         if (!state.refundFailed) {
@@ -556,7 +550,7 @@ private fun cancelledOutcomeBody(state: CancelSheetUiState): String =
             "A refund was issued to the card. The invitee has been notified."
         state.showRefund ->
             "No refund was due per your cancellation policy. The invitee has been notified."
-        else -> "The invitee has been notified."
+        else -> "This booking is cancelled and is no longer active."
     }
 
 /** Body copy for the already-cancelled read-only frame (frame 8). Mirrors iOS. */
@@ -567,41 +561,6 @@ private fun alreadyCancelledBody(state: CancelSheetUiState): String =
             "This booking was cancelled. No refund was due per your cancellation policy."
         else -> "This booking was cancelled and is no longer active."
     }
-
-@Composable
-private fun NotifySwitch(
-    notify: Boolean,
-    onToggle: () -> Unit,
-    accent: Color,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                .clickable(onClick = onToggle)
-                .padding(Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        PantopusIconImage(
-            icon = PantopusIcon.Bell,
-            contentDescription = null,
-            size = 17.dp,
-            tint = PantopusColors.appTextSecondary,
-        )
-        Text(
-            text = "Notify invitee",
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appText,
-            modifier = Modifier.weight(1f),
-        )
-        ToggleTrack(on = notify, accent = accent)
-    }
-}
 
 @Composable
 private fun CancelInlineError(message: String) {

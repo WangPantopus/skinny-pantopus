@@ -89,8 +89,8 @@ struct EventTypeListView: View {
             "Delete event type?",
             isPresented: deletePresented,
             presenting: viewModel.deleteTarget
-        ) { _ in
-            Button("Delete", role: .destructive) { Task { await viewModel.confirmDelete() } }
+        ) { target in
+            Button("Delete", role: .destructive) { Task { await viewModel.confirmDelete(target: target) } }
             Button("Cancel", role: .cancel) { viewModel.deleteTarget = nil }
         } message: { eventType in
             Text("\u{201C}\(eventType.name)\u{201D} will be removed. This can't be undone.")

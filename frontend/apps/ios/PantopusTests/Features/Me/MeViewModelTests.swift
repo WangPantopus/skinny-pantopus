@@ -44,7 +44,7 @@ final class MeViewModelTests: XCTestCase {
         "accountType": "personal",
         "role": "member",
         "verified": true,
-        "residency": null,
+        "residency": { "verified": true },
         "avatar_url": null,
         "profile_picture_url": null,
         "profilePicture": null,
@@ -99,6 +99,7 @@ final class MeViewModelTests: XCTestCase {
     private func stubSuccessfulLoad(homesJSON: String = MeViewModelTests.homesJSON) {
         URLProtocolStub.stub(path: "/api/users/profile", response: .json(Self.profileJSON))
         URLProtocolStub.stub(path: "/api/homes/my-homes", response: .json(homesJSON))
+        URLProtocolStub.stub(path: "/api/businesses/my-businesses", response: .json("{\"businesses\": []}"))
         URLProtocolStub.stub(path: "/api/users/u1/stats", response: .json(Self.statsJSON))
     }
 
@@ -154,7 +155,7 @@ final class MeViewModelTests: XCTestCase {
         XCTAssertEqual(home.stats.map(\.id), ["bills", "tasks", "members"])
 
         XCTAssertEqual(business.identity, .business)
-        XCTAssertTrue(business.isUnbound, "business stays unbound until mobile business read APIs land")
+        XCTAssertTrue(business.isUnbound, "an account without businesses has no bound business content")
     }
 
     func testLoadProducesUnboundHomeWhenNoHomeClaimed() async {

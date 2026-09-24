@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
+import app.pantopus.android.ui.screens.scheduling.bookings_extra.ExtrasInlineError
 import app.pantopus.android.ui.screens.shared.identity.IdentityOption
 import app.pantopus.android.ui.screens.shared.identity.IdentitySwitcherPillRow
 import app.pantopus.android.ui.theme.PantopusColors
@@ -60,6 +61,7 @@ fun SchedulingHubScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val copied by viewModel.copied.collectAsStateWithLifecycle()
     val shareRequest by viewModel.shareRequest.collectAsStateWithLifecycle()
+    val hasBusiness by viewModel.hasBusiness.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -85,7 +87,12 @@ fun SchedulingHubScreen(
         }
     }
 
-    val canEdit = (state as? SchedulingHubUiState.Loaded)?.canEdit ?: true
+    val canEdit =
+        when (val current = state) {
+            is SchedulingHubUiState.Loaded -> current.canEdit
+            is SchedulingHubUiState.Empty -> current.canEdit
+            else -> false
+        }
     val showFooter = state is SchedulingHubUiState.Loaded && canEdit
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
@@ -94,7 +101,7 @@ fun SchedulingHubScreen(
                 canEdit = canEdit,
                 onSettings = { onNavigate(viewModel.settingsRoute()) },
             )
-            HubPillBand(pillar = pillar, onSelect = viewModel::selectPillar)
+            HubPillBand(pillar = pillar, showBusiness = hasBusiness, onSelect = viewModel::selectPillar)
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Column(
                     modifier =
@@ -108,9 +115,20 @@ fun SchedulingHubScreen(
                             Spacer(Modifier.height(Spacing.s4))
                             HubSkeleton()
                         }
-                        is SchedulingHubUiState.Error -> HubErrorState(message = s.message, onRetry = viewModel::load)
+                        is SchedulingHubUiState.Error ->
+                            HubErrorState(
+                                message = s.message,
+                                accessDenied = s.accessDenied,
+                                onRetry = viewModel::load,
+                            )
                         is SchedulingHubUiState.Empty -> {
-                            HubEmptyState(pillar = s.pillar, onSetUp = { onNavigate(viewModel.startSetupRoute()) })
+                            if (s.canEdit) {
+                                HubEmptyState(pillar = s.pillar, onSetUp = { onNavigate(viewModel.startSetupRoute()) })
+                            } else {
+                                ViewOnlyBanner()
+                                Spacer(Modifier.height(Spacing.s4))
+                                Text("No event types yet. Ask an owner to set up scheduling.", color = PantopusColors.appTextSecondary)
+                            }
                             Spacer(Modifier.height(Spacing.s8))
                         }
                         is SchedulingHubUiState.Loaded ->
@@ -132,6 +150,13 @@ fun SchedulingHubScreen(
                             )
                     }
                 }
+            }
+            (state as? SchedulingHubUiState.Loaded)?.pauseError?.let { message ->
+                ExtrasInlineError(
+                    message = message,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+                    centered = true,
+                )
             }
             if (showFooter) {
                 val loaded = state as SchedulingHubUiState.Loaded
@@ -187,7 +212,7 @@ private fun HubTopBar(
             ) {
                 PantopusIconImage(
                     icon = if (canEdit) PantopusIcon.MoreHorizontal else PantopusIcon.Info,
-                    contentDescription = if (canEdit) "Settings" else "View-only access",
+                    contentDescription = if (canEdit) "Settings" else "Scheduling access",
                     size = if (canEdit) 22.dp else 20.dp,
                     tint = PantopusColors.appText,
                 )
@@ -200,6 +225,7 @@ private fun HubTopBar(
 @Composable
 private fun HubPillBand(
     pillar: SchedulingPillar,
+    showBusiness: Boolean,
     onSelect: (SchedulingPillar) -> Unit,
 ) {
     Box(
@@ -211,12 +237,13 @@ private fun HubPillBand(
     ) {
         IdentitySwitcherPillRow(
             options =
-                listOf(
+                listOfNotNull(
                     IdentityOption("personal", "Personal", PantopusIcon.User, SchedulingPillar.Personal.accent),
                     IdentityOption("home", "Home", PantopusIcon.Home, SchedulingPillar.Home.accent),
                     // Hub identity pill uses the storefront glyph per scheduling-hub-frames.jsx
                     // (PILLAR.business.icon == 'store'); mirrors iOS SetupKit's hub-pill override.
-                    IdentityOption("business", "Business", PantopusIcon.Store, SchedulingPillar.Business.accent),
+                    // Only for a user who runs a business.
+                    IdentityOption("business", "Business", PantopusIcon.Store, SchedulingPillar.Business.accent).takeIf { showBusiness },
                 ),
             activeId =
                 when (pillar) {
@@ -267,6 +294,7 @@ private fun HubLoadedBody(
         onShare = onShare,
         onRetry = onRetrySummary,
         onInsights = onInsights,
+        readOnly = !state.canEdit,
     )
     if (state.isComposed) {
         Spacer(Modifier.height(Spacing.s3))
@@ -282,12 +310,13 @@ private fun HubLoadedBody(
         handle = state.handle,
         isPaused = state.isPaused,
         readOnly = !state.canEdit,
+        previewTimes = state.previewTimes,
         onCopy = onCopy,
         onShare = onShare,
     )
     Spacer(Modifier.height(Spacing.s3))
     when {
-        !state.canEdit -> HubReadOnlyStatus(pillar = state.pillar)
+        !state.canEdit -> HubReadOnlyStatus(pillar = state.pillar, isPaused = state.isPaused)
         state.isPaused -> HubPausedBanner(onResume = onResume)
         else -> HubPauseRow(pillar = state.pillar, isAccepting = true, onToggle = onToggle)
     }

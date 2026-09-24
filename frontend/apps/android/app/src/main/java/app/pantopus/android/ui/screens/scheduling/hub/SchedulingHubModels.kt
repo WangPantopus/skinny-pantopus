@@ -36,10 +36,14 @@ sealed interface SchedulingHubUiState {
         val manageRows: List<HubManageItem>,
         /** Initials of real roster members (home occupants / business team) for the composed note. */
         val memberInitials: List<String> = emptyList(),
+        /** The link preview's next open start times; empty = none open, null = unknown. */
+        val previewTimes: List<String>? = null,
+        val pauseError: String? = null,
     ) : SchedulingHubUiState
 
     data class Error(
         val message: String,
+        val accessDenied: Boolean = false,
     ) : SchedulingHubUiState
 }
 

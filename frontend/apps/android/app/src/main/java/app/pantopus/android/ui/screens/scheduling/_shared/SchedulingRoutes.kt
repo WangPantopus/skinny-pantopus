@@ -76,6 +76,13 @@ object SchedulingRoutes {
 
     // ── A1 Setup & hub ──────────────────────────────────────────────────────
     const val HUB = "scheduling/hub"
+    const val HUB_WITH_OWNER = "$HUB?$OWNER_ARGS"
+
+    fun hub(
+        ownerKind: String?,
+        ownerId: String?,
+    ) = HUB + ownerQuery(ownerKind, ownerId)
+
     const val SETUP_WIZARD = "scheduling/setup"
     const val SETTINGS = "scheduling/settings?$OWNER_ARGS"
 
