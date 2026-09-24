@@ -184,7 +184,8 @@ class SchedulingHubViewModel
         private suspend fun resolveFirstBusinessId(): String? =
             businesses.myBusinesses().dataOrNull()?.businesses?.firstOrNull()?.businessUserId?.takeIf { it.isNotBlank() }
 
-        @Suppress("LongMethod", "CyclomaticComplexMethod")
+        // Early exits keep failed reads and obsolete owners from falling through to an empty or stale hub.
+        @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
         private suspend fun fetch() {
             canEdit = false
             val fetchOwner = owner
@@ -387,7 +388,8 @@ class SchedulingHubViewModel
             pauseJob =
                 viewModelScope.launch {
                     val r = repo.updateBookingPage(requestOwner, UpdateBookingPageRequest(isPaused = paused))
-                    if (!isActive || ownerGeneration != requestGeneration || owner != requestOwner || _pillar.value != requestPillar) {
+                    if (!isActive) return@launch
+                    if (ownerGeneration != requestGeneration || owner != requestOwner || _pillar.value != requestPillar) {
                         return@launch
                     }
                     when (r) {
