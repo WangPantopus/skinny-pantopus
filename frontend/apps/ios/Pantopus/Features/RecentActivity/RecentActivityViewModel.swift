@@ -162,7 +162,7 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
     /// Map an activity item's `route` field to the typed destination
     /// case. Public so tests can pin the mapping without a VM.
     public static func destination(for item: HubResponse.HubActivityItem) -> RecentActivityDestination {
-        let path = item.route
+        let path = DeepLinkRouter.notificationPath(type: item.notificationType, link: item.route) ?? item.route
         if let id = idAfter(prefixCandidates: ["/gigs/", "/app/gigs/", "/gig/"], in: path) {
             return .gigDetail(id: id)
         }

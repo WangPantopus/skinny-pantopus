@@ -538,6 +538,7 @@ router.get('/', verifyToken, async (req, res) => {
           at: n.created_at,
           read: !!n.is_read,
           route,
+          notificationType: n.type || null,
         });
       }
 
