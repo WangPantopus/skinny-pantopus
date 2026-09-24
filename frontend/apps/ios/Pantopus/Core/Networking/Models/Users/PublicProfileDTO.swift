@@ -119,4 +119,12 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         }
         return "\(city), \(state)"
     }
+
+    /// Verified residency (`residency.verified`), the fact behind "Verified
+    /// neighbor". `verified` is the account flag, which sign-in sets.
+    public var hasVerifiedResidency: Bool {
+        guard case let .object(map) = residency ?? .null,
+              case let .bool(value) = map["verified"] ?? .null else { return false }
+        return value
+    }
 }

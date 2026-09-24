@@ -12,11 +12,11 @@ import org.junit.Test
  * A10.11 — Covers the Earn VM's seeded (preview/test) path: load selects
  * populated (active earner) vs. empty (new earner) from the seeded
  * fixture, plus the shape of the sample fixtures. The live fetch path is
- * covered by CI integration; here the repository is a relaxed mock the
+ * covered by CI integration; here the repositories are relaxed mocks the
  * seeded path never touches. Mirrors the iOS `EarnViewModelTests`.
  */
 class EarnViewModelTest {
-    private fun makeVm(): EarnViewModel = EarnViewModel(repository = mockk(relaxed = true))
+    private fun makeVm(): EarnViewModel = EarnViewModel(repository = mockk(relaxed = true), walletRepository = mockk(relaxed = true))
 
     @Test
     fun initial_state_is_loading() {

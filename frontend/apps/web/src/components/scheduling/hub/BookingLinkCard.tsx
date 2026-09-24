@@ -6,7 +6,8 @@
 
 import clsx from "clsx";
 import { Check, Copy, Link2, Pause } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { publicBooking } from "@pantopus/api";
 import { copyToClipboard, buildBookingPageUrl } from "@pantopus/utils";
 import type { BookingPage } from "@pantopus/types";
 import ShareLink from "@/components/scheduling/ShareLink";
@@ -22,6 +23,7 @@ interface BookingLinkCardProps {
   pillar: Pillar;
   name: string;
   role: string;
+  eventTypeSlug?: string;
   readOnly?: boolean;
   onTurnOn?: () => void;
   onRegenerate?: () => void;
@@ -32,11 +34,15 @@ function LivePreview({
   name,
   role,
   paused,
+  times,
+  loading,
 }: {
   pillar: Pillar;
   name: string;
   role: string;
   paused: boolean;
+  times: string[] | null;
+  loading: boolean;
 }) {
   const tk = pillarTokens(pillar);
   return (
@@ -68,7 +74,7 @@ function LivePreview({
             {role}
           </p>
           <div className="mt-2 flex gap-1">
-            {["9:00", "9:30", "10:00"].map((t) => (
+            {(times ?? []).map((t) => (
               <span
                 key={t}
                 className={clsx(
@@ -81,6 +87,11 @@ function LivePreview({
                 {t}
               </span>
             ))}
+            {!times?.length && (
+              <span className="text-[8px] text-app-text-secondary">
+                {loading ? "Loading open times…" : times === null ? "Preview unavailable" : "No open times yet"}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -139,6 +150,7 @@ export default function BookingLinkCard({
   pillar,
   name,
   role,
+  eventTypeSlug,
   readOnly,
   onTurnOn,
   onRegenerate,
@@ -146,6 +158,36 @@ export default function BookingLinkCard({
   const tk = pillarTokens(pillar);
   const url = buildBookingPageUrl(page.slug);
   const paused = page.is_paused || !page.is_live;
+  const previewKey = [page.slug, page.timezone, eventTypeSlug, paused].join("|");
+  const [preview, setPreview] = useState<{ key: string; times: string[] | null } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    if (!eventTypeSlug || paused) {
+      setPreview({ key: previewKey, times: [] });
+      return;
+    }
+    const now = new Date();
+    const tz = page.timezone || "UTC";
+    const range = {
+      from: now.toISOString().slice(0, 10),
+      to: new Date(now.getTime() + 14 * 86400000).toISOString().slice(0, 10),
+      tz,
+    };
+    void publicBooking.getPublicSlots(page.slug, eventTypeSlug, range)
+      .then(({ slots }) => {
+        const future = slots.map((slot) => new Date(slot.start))
+          .filter((date) => Number.isFinite(date.getTime()) && date > now)
+          .sort((a, b) => a.getTime() - b.getTime());
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+        const firstDay = future[0] && day.format(future[0]);
+        const clock = new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: "numeric", minute: "2-digit" });
+        const times = future.filter((date) => day.format(date) === firstDay).slice(0, 3).map((date) => clock.format(date));
+        if (current) setPreview({ key: previewKey, times });
+      })
+      .catch(() => { if (current) setPreview({ key: previewKey, times: null }); });
+    return () => { current = false; };
+  }, [eventTypeSlug, page.slug, page.timezone, paused, previewKey]);
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm">
@@ -159,7 +201,7 @@ export default function BookingLinkCard({
         </span>
       </div>
 
-      <LivePreview pillar={pillar} name={name} role={role} paused={paused} />
+      <LivePreview pillar={pillar} name={name} role={role} paused={paused} times={preview?.key === previewKey ? preview.times : null} loading={preview?.key !== previewKey} />
 
       <div className="mt-3">
         {readOnly ? (

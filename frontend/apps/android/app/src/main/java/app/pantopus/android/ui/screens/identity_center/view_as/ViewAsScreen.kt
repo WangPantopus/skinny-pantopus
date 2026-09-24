@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.LiveBadge
 import app.pantopus.android.ui.components.RedactionLevel
 import app.pantopus.android.ui.components.RedactionScrim
@@ -86,6 +87,7 @@ fun ViewAsScreen(
         onBack = onBack,
         onManagePrivacy = onManagePrivacy,
         onEdit = onEdit,
+        onRetry = viewModel::load,
     )
 }
 
@@ -97,6 +99,7 @@ fun ViewAsScreenContent(
     onBack: () -> Unit,
     onManagePrivacy: () -> Unit,
     onEdit: () -> Unit,
+    onRetry: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -113,6 +116,7 @@ fun ViewAsScreenContent(
         )
         when (state) {
             is ViewAsUiState.Loading -> ViewAsLoadingFrame()
+            is ViewAsUiState.Failed -> ErrorState(headline = "Couldn't load this preview", onRetry = onRetry)
             is ViewAsUiState.Loaded ->
                 Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     Column(

@@ -23,12 +23,15 @@ enum class EarnCategory {
 /**
  * Clearing status for an earnings row. [Paid] renders the green cleared
  * amount; [Pending] renders the amber "Pending" chip + amount and the
- * "clears …" sub-line.
+ * "clears …" sub-line; [Offer] renders a muted amount marked "Not cashable
+ * yet" — a mail-offer or ad payout, which nothing pays out.
  */
 sealed interface EarnStatus {
     data object Paid : EarnStatus
 
     data class Pending(val clearsLabel: String) : EarnStatus
+
+    data object Offer : EarnStatus
 }
 
 /** A single earnings row inside the Recent-earnings card. */
@@ -128,6 +131,12 @@ data class EarnContent(
     val thisWeekMeta: String,
     val pending: String,
     val pendingMeta: String,
+    /**
+     * Mail-offer and ad payouts, e.g. `"$10.00"`. They can't be cashed out, so
+     * they stay out of [available]; when set, the hero shows this one split
+     * cell in place of This week / Pending.
+     */
+    val offerEarnings: String? = null,
     // The weekly-goal target, linked payout method, auto-cash-out, and 1099
     // tax docs have no `/earnings/*` source (the last three are Stripe
     // Connect — Phase 3), so the live path leaves them null and the screen
@@ -138,7 +147,11 @@ data class EarnContent(
     val payoutMethod: EarnPayoutMethod? = null,
     val autoCashOut: EarnAutoCashOut? = null,
     val taxDocs: EarnTaxDocs? = null,
-)
+) {
+    /** True when there is wallet money to cash out; the Cash out bar shows only then. */
+    val hasCashableBalance: Boolean
+        get() = (available.toDoubleOrNull() ?: 0.0) > 0.0
+}
 
 /**
  * Four-state machine: loading / populated / empty / error. Matches iOS

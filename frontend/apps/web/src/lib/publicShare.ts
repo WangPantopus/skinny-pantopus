@@ -76,7 +76,8 @@ export const fetchPublicPost = cache(async (id: string): Promise<PublicFetchResu
 
 export const fetchPublicSupportTrain = cache(async (id: string): Promise<PublicFetchResult<any>> => {
   const result = await fetchPublicJson<any>(
-    `/api/activities/support-trains/${encodeURIComponent(id)}`
+    `/api/activities/support-trains/${encodeURIComponent(id)}`,
+    { noStore: true },
   );
   return { data: result.data ?? null, status: result.status };
 });
