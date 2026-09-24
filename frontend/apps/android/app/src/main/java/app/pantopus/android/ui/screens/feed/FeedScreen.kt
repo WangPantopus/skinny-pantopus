@@ -134,13 +134,13 @@ fun FeedScreen(
     var viewMode by remember { mutableStateOf(FeedViewMode.List) }
 
     LaunchedEffect(Unit) {
+        if (surface == FeedSurface.Pulse) {
+            contextBarViewModel.onChange = { viewModel.refresh() }
+            viewModel.onViewingAreaResolved = contextBarViewModel::applyCurrent
+        }
         viewModel.configureSurface(surface)
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenPulseFeedViewed(intent = activeIntent.key))
-        if (surface == FeedSurface.Pulse) {
-            contextBarViewModel.onChange = { viewModel.refresh() }
-            contextBarViewModel.load()
-        }
     }
 
     // Keep the suggestion ladder aligned with the server-side radius.
