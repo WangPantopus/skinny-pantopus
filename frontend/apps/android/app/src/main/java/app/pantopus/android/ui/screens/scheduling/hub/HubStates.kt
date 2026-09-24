@@ -177,6 +177,7 @@ internal fun HubEmptyState(
 @Composable
 internal fun HubErrorState(
     message: String,
+    accessDenied: Boolean = false,
     onRetry: () -> Unit,
 ) {
     Column(
@@ -190,7 +191,12 @@ internal fun HubErrorState(
             PantopusIconImage(icon = PantopusIcon.CloudOff, contentDescription = null, size = 28.dp, tint = PantopusColors.appTextSecondary)
         }
         Spacer(Modifier.height(Spacing.s4))
-        Text("Couldn't load scheduling", style = PantopusTextStyle.h3, color = PantopusColors.appText, textAlign = TextAlign.Center)
+        Text(
+            if (accessDenied) "Scheduling access needed" else "Couldn't load scheduling",
+            style = PantopusTextStyle.h3,
+            color = PantopusColors.appText,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(Spacing.s2))
         Text(message, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(Spacing.s4))

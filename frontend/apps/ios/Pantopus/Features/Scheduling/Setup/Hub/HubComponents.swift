@@ -72,6 +72,8 @@ struct HubLinkCard: View {
     let role: String
     var paused: Bool = false
     var readOnly: Bool = false
+    /// The next open start times for the preview; nil when unknown.
+    var previewTimes: [String]?
     let onCopy: () -> Void
     let onShare: () -> Void
 
@@ -82,7 +84,7 @@ struct HubLinkCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             header
-            HubLinkPreview(owner: owner, name: name, role: role, paused: paused)
+            HubLinkPreview(owner: owner, name: name, role: role, paused: paused, times: previewTimes)
                 .padding(.top, 10)
             handleRow.padding(.top, Spacing.s3)
             ghostButtons.padding(.top, 10)
@@ -164,6 +166,8 @@ private struct HubLinkPreview: View {
     let name: String
     let role: String
     let paused: Bool
+    /// Real next open times; `[]` shows "No open times yet", nil shows none.
+    let times: [String]?
 
     private var theme: SchedulingIdentityTheme {
         owner.theme
@@ -213,22 +217,31 @@ private struct HubLinkPreview: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(name).font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.Color.appText).lineLimit(1)
                 Text(role).font(.system(size: 8)).foregroundStyle(Theme.Color.appTextSecondary).lineLimit(1)
-                HStack(spacing: Spacing.s1) {
-                    ForEach(["9:00", "9:30", "10:00"], id: \.self) { t in
-                        Text(t)
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(paused ? Theme.Color.appTextMuted : theme.accent)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, Spacing.s1)
-                            .background(paused ? Theme.Color.appSurfaceSunken : theme.accentBg)
-                            .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous).stroke(
-                                paused ? Theme.Color.appBorder : Theme.Color.primary200,
-                                lineWidth: 1
-                            ))
+                if let times, !times.isEmpty {
+                    HStack(spacing: Spacing.s1) {
+                        ForEach(times, id: \.self) { t in
+                            Text(t)
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(paused ? Theme.Color.appTextMuted : theme.accent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, Spacing.s1)
+                                .background(paused ? Theme.Color.appSurfaceSunken : theme.accentBg)
+                                .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous).stroke(
+                                    paused ? Theme.Color.appBorder : Theme.Color.primary200,
+                                    lineWidth: 1
+                                ))
+                        }
                     }
+                    .padding(.top, 6)
+                } else if times != nil {
+                    Text("No open times yet")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .padding(.top, 6)
                 }
-                .padding(.top, 6)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.top, 14)
@@ -328,6 +341,7 @@ struct HubPausedBanner: View {
 /// Permission-gated read-only status row ("Managed by the home owner").
 struct HubReadOnlyStatus: View {
     let owner: SchedulingOwner
+    let isPaused: Bool
 
     private var theme: SchedulingIdentityTheme {
         owner.theme
@@ -337,7 +351,9 @@ struct HubReadOnlyStatus: View {
         HStack(spacing: Spacing.s3) {
             setupIconTile(.calendarCheck, bg: theme.accentBg, fg: theme.accent)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Accepting bookings").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.Color.appText)
+                Text(isPaused ? "Bookings are paused" : "Accepting bookings")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
                 Text("Managed by the home owner").font(.system(size: 11.5)).foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s2)

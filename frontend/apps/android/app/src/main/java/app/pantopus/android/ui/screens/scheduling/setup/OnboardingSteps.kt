@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.scheduling._shared.PantopusMiniToggle
@@ -45,23 +47,6 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-
-internal data class SeededPerson(val id: String, val name: String, val sub: String, val initials: String)
-
-private val HOME_MEMBERS =
-    listOf(
-        SeededPerson("you", "You", "Verified · household admin", "Y"),
-        SeededPerson("m2", "David K.", "Verified household member", "DK"),
-        SeededPerson("m3", "Lena K.", "Verified household member", "LK"),
-    )
-
-private val BUSINESS_TEAM =
-    listOf(
-        Triple(SeededPerson("owner", "You", "Owner", "Y"), "OWNER", true),
-        Triple(SeededPerson("t2", "Priya N.", "Stylist", "PN"), "STYLIST", false),
-        Triple(SeededPerson("t3", "Marcus L.", "Stylist", "ML"), "STYLIST", false),
-        Triple(SeededPerson("t4", "Dana W.", "Front desk", "DW"), "FRONT DESK", false),
-    )
 
 private data class ServiceChoice(val id: String, val icon: PantopusIcon, val label: String)
 
@@ -175,94 +160,155 @@ internal fun ComposedAvailabilityCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(icon = PantopusIcon.Globe, contentDescription = null, size = 14.dp, tint = pillar.accent)
+            // The device's zone, which finish-setup gives the booking page;
+            // members' own hours keep their own zones.
             Text(
-                "Everyone's set to $timezoneId",
+                "Times show in your time zone ($timezoneId)",
                 color = PantopusColors.appTextStrong,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.5.sp,
                 modifier = Modifier.weight(1f),
             )
-            Row(
-                modifier =
-                    Modifier.clip(
-                        RoundedCornerShape(Radii.pill),
-                    ).background(PantopusColors.successLight).padding(horizontal = 8.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 10.dp, tint = PantopusColors.success)
-                Text("CONFIRMED", color = PantopusColors.success, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-            }
         }
     }
 }
 
 @Composable
 internal fun OnboardingMemberList(
+    people: List<OnboardingPerson>,
+    peopleState: OnboardingPeopleState,
     selected: Set<String>,
     pillar: SchedulingPillar,
     onToggle: (String) -> Unit,
+    onRetry: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         SetupOverline("Household members")
         SeededListCard {
-            HOME_MEMBERS.forEachIndexed { index, person ->
-                SeededPersonRow(
-                    person = person,
-                    trailing = {
-                        // Design 32×18 mini toggle, not the Material 3 Switch
-                        // (onboarding-shell.jsx "iOS 32×18 toggles"; iOS SetupMiniToggle).
-                        PantopusMiniToggle(
-                            checked = person.id in selected,
-                            onCheckedChange = { onToggle(person.id) },
-                            accent = pillar.accent,
-                            modifier = Modifier.testTag("onboardingMember_${person.id}"),
+            when (peopleState) {
+                OnboardingPeopleState.Loading -> PeopleLoadingRow()
+                OnboardingPeopleState.Failed -> PeopleErrorRow("Couldn't load your household.", pillar, onRetry)
+                OnboardingPeopleState.Ready -> {
+                    if (people.isEmpty()) PeopleEmptyRow("Just you for now — invite household members any time.")
+                    people.forEachIndexed { index, person ->
+                        val on = person.id in selected
+                        SeededPersonRow(
+                            person = person,
+                            trailing = {
+                                // Design 32×18 mini toggle, not the Material 3 Switch
+                                // (onboarding-shell.jsx "iOS 32×18 toggles"; iOS SetupMiniToggle).
+                                PantopusMiniToggle(
+                                    checked = on,
+                                    onCheckedChange = { onToggle(person.id) },
+                                    accent = pillar.accent,
+                                    modifier = Modifier.testTag("onboardingMember_${person.id}"),
+                                )
+                            },
+                            divider = index < people.lastIndex,
+                            selectedMark = on,
                         )
-                    },
-                    divider = index < HOME_MEMBERS.lastIndex,
-                    verified = true,
-                )
+                    }
+                }
             }
-            InviteRow("Invite someone", "Add a family member by phone or email", pillar, "onboardingInviteMember")
         }
     }
 }
 
 @Composable
 internal fun OnboardingTeamList(
+    people: List<OnboardingPerson>,
+    peopleState: OnboardingPeopleState,
     seated: Set<String>,
     pillar: SchedulingPillar,
     onToggle: (String) -> Unit,
+    onRetry: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SetupOverline("Team seats")
             Spacer(Modifier.weight(1f))
-            Text("${seated.size} of 5 seats used", color = pillar.accent, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        }
-        SeededListCard {
-            BUSINESS_TEAM.forEachIndexed { index, (person, role, _) ->
-                val on = person.id in seated
-                SeededPersonRow(
-                    person = person,
-                    roleChip = role,
-                    rolePillar = pillar,
-                    statusSub = if (on) "Seated · bookable" else "Not seated",
-                    trailing = {
-                        // Design 32×18 mini toggle, not the Material 3 Switch
-                        // (onboarding-shell.jsx "iOS 32×18 toggles"; iOS SetupMiniToggle).
-                        PantopusMiniToggle(
-                            checked = on,
-                            onCheckedChange = { onToggle(person.id) },
-                            accent = pillar.accent,
-                            modifier = Modifier.testTag("onboardingSeat_${person.id}"),
-                        )
-                    },
-                    divider = index < BUSINESS_TEAM.lastIndex,
+            if (peopleState == OnboardingPeopleState.Ready && people.isNotEmpty()) {
+                // Seated of the real team, as on web — not a made-up plan size.
+                Text(
+                    "${people.count { it.id in seated }} of ${people.size} seats used",
+                    color = pillar.accent,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
                 )
             }
-            InviteRow("Invite teammate", "2 seats left on your plan", pillar, "onboardingInviteTeammate")
         }
+        SeededListCard {
+            when (peopleState) {
+                OnboardingPeopleState.Loading -> PeopleLoadingRow()
+                OnboardingPeopleState.Failed -> PeopleErrorRow("Couldn't load your team.", pillar, onRetry)
+                OnboardingPeopleState.Ready -> {
+                    if (people.isEmpty()) PeopleEmptyRow("Just you for now — invite teammates any time.")
+                    people.forEachIndexed { index, person ->
+                        val on = person.id in seated
+                        SeededPersonRow(
+                            person = person,
+                            roleChip = person.role.uppercase(),
+                            rolePillar = pillar,
+                            statusSub = if (on) "Seated · bookable" else "Not seated",
+                            trailing = {
+                                // Design 32×18 mini toggle, not the Material 3 Switch
+                                // (onboarding-shell.jsx "iOS 32×18 toggles"; iOS SetupMiniToggle).
+                                PantopusMiniToggle(
+                                    checked = on,
+                                    onCheckedChange = { onToggle(person.id) },
+                                    accent = pillar.accent,
+                                    modifier = Modifier.testTag("onboardingSeat_${person.id}"),
+                                )
+                            },
+                            divider = index < people.lastIndex,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeopleLoadingRow() {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s4).testTag("onboardingPeopleLoading"),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+    }
+}
+
+@Composable
+private fun PeopleEmptyRow(message: String) {
+    Text(
+        message,
+        color = PantopusColors.appTextSecondary,
+        fontSize = 13.sp,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(Spacing.s4).testTag("onboardingPeopleEmpty"),
+    )
+}
+
+@Composable
+private fun PeopleErrorRow(
+    message: String,
+    pillar: SchedulingPillar,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s4),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(message, color = PantopusColors.appTextSecondary, fontSize = 13.sp)
+        Text(
+            "Try again",
+            color = pillar.accent,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            modifier = Modifier.clickable(onClick = onRetry).testTag("onboardingPeopleRetry"),
+        )
     }
 }
 
@@ -280,13 +326,14 @@ private fun SeededListCard(content: @Composable () -> Unit) {
 
 @Composable
 private fun SeededPersonRow(
-    person: SeededPerson,
+    person: OnboardingPerson,
     trailing: @Composable () -> Unit,
     divider: Boolean,
     roleChip: String? = null,
     rolePillar: SchedulingPillar? = null,
     statusSub: String? = null,
-    verified: Boolean = false,
+    // A check on the avatar marks the person as selected, not verified.
+    selectedMark: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
@@ -304,7 +351,7 @@ private fun SeededPersonRow(
             ) {
                 Text(person.initials, color = avatarFg, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
-            if (verified) {
+            if (selectedMark) {
                 Box(
                     modifier =
                         Modifier
@@ -347,39 +394,12 @@ private fun SeededPersonRow(
                     }
                 }
             }
-            Text(statusSub ?: person.sub, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
+            Text(statusSub ?: person.role, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
         }
         trailing()
     }
     if (divider) {
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).padding(start = 13.dp).background(PantopusColors.appBorderSubtle))
-    }
-}
-
-@Composable
-private fun InviteRow(
-    title: String,
-    sub: String,
-    pillar: SchedulingPillar,
-    tag: String,
-) {
-    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = title) {}.padding(horizontal = 13.dp, vertical = 11.dp).testTag(tag),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(pillar.accentBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(icon = PantopusIcon.UserPlus, contentDescription = null, size = 17.dp, tint = pillar.accent)
-        }
-        Spacer(Modifier.width(Spacing.s3))
-        Column(Modifier.weight(1f)) {
-            Text(title, color = pillar.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(sub, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
-        }
-        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
 }
 

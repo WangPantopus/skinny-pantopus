@@ -7,8 +7,7 @@
 //  `GET /api/users/profile` + `GET /api/users/:id/stats`. The Home
 //  identity reads `GET /api/homes/my-homes` and uses the primary home
 //  (or surfaces an `isUnbound` empty state when no home exists). The
-//  Business identity ships an `isUnbound` empty state until business
-//  read APIs land in mobile.
+//  Business identity binds to the first managed business from My businesses.
 //
 
 import Foundation
@@ -24,6 +23,8 @@ public final class MeViewModel {
 
     /// Currently selected identity.
     public private(set) var activeIdentity: MeIdentity = .personal
+
+    public private(set) var showBusiness = false
 
     /// Transient toast surface.
     public var toastMessage: String?
@@ -62,9 +63,10 @@ public final class MeViewModel {
         monthlyReceipt.map(MonthlyReceiptCard.shareMessage)
     }
 
-    /// Share text for the invite CTA — RN `handleShareInvite`.
-    public var inviteShareMessage: String {
-        let code = inviteCode?.isEmpty == false ? (inviteCode ?? "INVITE") : "INVITE"
+    /// Share text for the invite CTA — RN `handleShareInvite`. Nil until a
+    /// real invite code has loaded: a made-up code would share a dead link.
+    public var inviteShareMessage: String? {
+        guard let code = inviteCode, !code.isEmpty else { return nil }
         return "Join me on Pantopus! Use my invite code to get started: "
             + "https://pantopus.com/join/\(code)"
     }
@@ -127,7 +129,12 @@ public final class MeViewModel {
             profileLocality: Self.localityString(profile.user),
             homesFailed: homes == nil
         )
-        let business = Self.buildBusiness(profile: profile.user)
+        let businesses: MyBusinessesResponse? = await optional {
+            try await self.api.request(BusinessesEndpoints.myBusinesses())
+        }
+        showBusiness = businesses == nil || !(businesses?.businesses.isEmpty ?? true)
+        if !showBusiness, activeIdentity == .business { activeIdentity = .personal }
+        let business = Self.buildBusiness(membership: businesses?.businesses.first, failed: businesses == nil)
         state = .loaded(personal: personal, home: home, business: business)
         await fetchInsights()
     }
@@ -222,7 +229,13 @@ private extension MeViewModel {
         let locality = localityString(profile)
         let tagline = (profile.tagline?.isEmpty == false ? profile.tagline : nil) ?? profile.bio
         let activityValue = "\(stats?.totalGigsCompleted ?? profile.gigsCompleted ?? 0)"
-        let trustValue = profile.verified ? "Verified" : "Pending"
+        let residencyVerified: Bool = if case let .object(values) = profile.residency ?? .null,
+                                         case let .bool(value) = values["verified"] ?? .null {
+            value
+        } else {
+            false
+        }
+        let trustValue = residencyVerified ? "Verified" : "Pending"
         let reputationValue = ratingString(stats?.averageRating ?? profile.averageRating ?? 0)
         return MeIdentityContent(
             identity: .personal,
@@ -231,7 +244,7 @@ private extension MeViewModel {
             handle: "@\(profile.username)",
             locality: locality,
             tagline: tagline,
-            verified: profile.verified,
+            verified: residencyVerified,
             stats: [
                 MeStat(id: "activity", value: activityValue, label: "Activity"),
                 MeStat(id: "trust", value: trustValue, label: "Trust"),
@@ -340,37 +353,33 @@ private extension MeViewModel {
         )
     }
 
-    private static func buildBusiness(profile: UserProfile) -> MeIdentityContent {
-        // Mobile doesn't ship business-read APIs yet; surface a polite
-        // empty state so the identity switcher remains a real button
-        // and the user understands the destination.
-        MeIdentityContent(
+    private static func buildBusiness(membership: BusinessMembership?, failed: Bool) -> MeIdentityContent {
+        let business = membership?.business
+        let name = business?.name?.isEmpty == false ? business?.name ?? "Your Businesses" : "Your Businesses"
+        let args = membership.map { ["businessId": $0.businessUserId] } ?? [:]
+        var rows = [MeSectionRow(id: "businesses", icon: .shoppingBag, label: "My businesses", routeKey: "me.businesses")]
+        if membership != nil {
+            rows.append(MeSectionRow(
+                id: "scheduling",
+                icon: .calendarClock,
+                label: "Scheduling",
+                routeKey: "me.business.scheduling",
+                routeArgs: args
+            ))
+        }
+        rows.append(MeSectionRow(id: "settings", icon: .menu, label: "Settings", routeKey: "me.settings"))
+        return MeIdentityContent(
             identity: .business,
-            displayName: "Your Businesses",
-            initials: "B",
-            handle: "Business pages",
-            locality: localityString(profile),
-            tagline: "Open My businesses to manage a business, create one, or claim a page that's already listed.",
+            displayName: name,
+            initials: initials(from: name),
+            handle: failed ? "Couldn't load your businesses" : (business?.username.map { "@\($0)" } ?? "Business pages"),
+            locality: [business?.city, business?.state].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "),
+            tagline: failed ? "Open My businesses to try again." : membership?.profile?.description,
             verified: false,
-            stats: [
-                MeStat(id: "orders", value: "—", label: "Orders"),
-                MeStat(id: "products", value: "—", label: "Products"),
-                MeStat(id: "rating", value: "—", label: "Rating")
-            ],
-            actionTiles: [
-                MeActionTile(id: "orders", icon: .file, label: "Orders", routeKey: "me.business.orders"),
-                MeActionTile(id: "products", icon: .shoppingBag, label: "Products", routeKey: "me.business.products"),
-                MeActionTile(id: "payouts", icon: .shield, label: "Payouts", routeKey: "me.business.payouts"),
-                MeActionTile(id: "team", icon: .userPlus, label: "Team", routeKey: "me.business.team"),
-                MeActionTile(id: "hours", icon: .info, label: "Hours", routeKey: "me.business.hours"),
-                MeActionTile(id: "promo", icon: .megaphone, label: "Promo", routeKey: "me.business.promo"),
-                MeActionTile(id: "scheduling", icon: .calendarClock, label: "Scheduling", routeKey: "me.business.scheduling")
-            ],
+            stats: [],
+            actionTiles: [],
             sections: withDebug([
-                MeSection(id: "business", header: "Business", rows: [
-                    MeSectionRow(id: "profile", icon: .edit2, label: "Edit business profile", routeKey: "me.business.editProfile"),
-                    MeSectionRow(id: "settings", icon: .menu, label: "Settings", routeKey: "me.settings")
-                ]),
+                MeSection(id: "business", header: "Business", rows: rows),
                 MeSection(id: "help_legal", header: "Help & Legal", rows: [
                     MeSectionRow(id: "help", icon: .helpCircle, label: "Help", routeKey: "me.help"),
                     MeSectionRow(id: "terms", icon: .file, label: "Terms", routeKey: "me.legal"),

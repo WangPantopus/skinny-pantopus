@@ -995,7 +995,8 @@ struct RowView: View {
                     chips: row.chips ?? [],
                     timeMeta: row.headerChips == nil ? row.timeMeta : nil,
                     metaTail: row.metaTail,
-                    splitWith: row.splitWith
+                    splitWith: row.splitWith,
+                    wraps: row.wrapChips
                 )
                 .padding(.top, Spacing.s1)
             }
@@ -1452,30 +1453,46 @@ private struct ChipRowView: View {
     /// otherwise sit. The two don't coexist on Bills rows in practice;
     /// when both are set, splitWith wins.
     let splitWith: SplitStackData?
+    var wraps = false
 
     var body: some View {
-        HStack(spacing: Spacing.s1) {
-            if let bidderStack, !bidderStack.bidders.isEmpty || bidderStack.overflow > 0 {
-                BidderStack(bidders: bidderStack.bidders, overflow: bidderStack.overflow)
-                    .padding(.trailing, 2)
+        if wraps {
+            FilterSheetFlowLayout(spacing: Spacing.s1) {
+                chipContent
+                trailingContent
             }
-            ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                ChipPill(chip: chip)
+        } else {
+            HStack(spacing: Spacing.s1) {
+                chipContent
+                Spacer(minLength: Spacing.s0)
+                trailingContent
             }
-            if let metaTail {
-                Text(metaTail)
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextMuted)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: Spacing.s0)
-            if let splitWith {
-                SplitStackTail(data: splitWith)
-            } else if let timeMeta {
-                Text(timeMeta)
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextMuted)
-            }
+        }
+    }
+
+    @ViewBuilder private var chipContent: some View {
+        if let bidderStack, !bidderStack.bidders.isEmpty || bidderStack.overflow > 0 {
+            BidderStack(bidders: bidderStack.bidders, overflow: bidderStack.overflow)
+                .padding(.trailing, 2)
+        }
+        ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
+            ChipPill(chip: chip)
+        }
+        if let metaTail {
+            Text(metaTail)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder private var trailingContent: some View {
+        if let splitWith {
+            SplitStackTail(data: splitWith)
+        } else if let timeMeta {
+            Text(timeMeta)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextMuted)
         }
     }
 }

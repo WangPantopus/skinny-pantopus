@@ -191,16 +191,6 @@ public struct MailTaskView: View {
     private func headerRow(_ task: MailTaskContent) -> some View {
         HStack(spacing: Spacing.s1 + 2) {
             HStack(spacing: Spacing.s1) {
-                Icon(.shieldCheck, size: 11, color: Theme.Color.success)
-                Text("Verified")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.Color.success)
-            }
-            .padding(.horizontal, Spacing.s2)
-            .padding(.vertical, 3)
-            .background(Theme.Color.successBg)
-            .clipShape(Capsule())
-            HStack(spacing: Spacing.s1) {
                 Circle().fill(Theme.Color.categoryTask).frame(width: 6, height: 6)
                 Text("Task")
                     .font(.system(size: 10, weight: .bold))

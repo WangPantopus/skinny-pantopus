@@ -15,6 +15,7 @@ const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin'
 jest.mock('../stripe/stripeService', () => ({
   createPaymentIntentForGig: jest.fn(),
   getPaymentIntentClientSecret: jest.fn(),
+  readListingCheckoutIntent: jest.fn(),
   getOrCreateCustomer: jest.fn(),
   createEphemeralKey: jest.fn(),
 }));
@@ -58,6 +59,10 @@ beforeEach(() => {
     payment: { id: 'pay-1', payment_status: 'authorize_pending' },
   });
   stripeService.getPaymentIntentClientSecret.mockResolvedValue('pi_existing_secret');
+  stripeService.readListingCheckoutIntent.mockResolvedValue({
+    status: 'requires_payment_method',
+    client_secret: 'pi_existing_secret',
+  });
   stripeService.getOrCreateCustomer.mockResolvedValue('cus_123');
   stripeService.createEphemeralKey.mockResolvedValue({ secret: 'ek_secret_123' });
 });
@@ -67,7 +72,8 @@ function seedAcceptedListingOffer(overrides = {}) {
     id: LISTING_ID,
     user_id: SELLER_ID,
     title: 'Patio chair',
-    status: 'reserved',
+    // An accepted offer holds its listing as pending_pickup (listing_status has no 'reserved').
+    status: 'pending_pickup',
     ...overrides.listing,
   }]);
   seedTable('ListingOffer', [{
@@ -197,6 +203,8 @@ describe('POST /api/payments/intent — PaymentSheet params', () => {
       payee_id: SELLER_ID,
       gig_id: null,
       amount_total: 7500,
+      currency: 'usd',
+      stripe_customer_id: 'cus_123',
       payment_status: 'authorize_pending',
       payment_type: 'gig_payment',
       stripe_payment_intent_id: 'pi_existing',
@@ -218,7 +226,10 @@ describe('POST /api/payments/intent — PaymentSheet params', () => {
       paymentId: 'pay-existing',
       reused: true,
     });
-    expect(stripeService.getPaymentIntentClientSecret).toHaveBeenCalledWith('pi_existing');
+    expect(stripeService.readListingCheckoutIntent).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'pay-existing',
+      stripe_payment_intent_id: 'pi_existing',
+    }));
     expect(stripeService.createPaymentIntentForGig).not.toHaveBeenCalled();
   });
 

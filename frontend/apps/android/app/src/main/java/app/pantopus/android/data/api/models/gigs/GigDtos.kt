@@ -28,6 +28,10 @@ data class GigCreator(
     @Json(name = "avatarUrl") val avatarUrl: String? = null,
     val verified: Boolean? = null,
     val badges: List<String>? = null,
+    // Bid rows (`GET /api/gigs/:gigId/bids`) add the bidder's track record.
+    @Json(name = "average_rating") val averageRating: Double? = null,
+    @Json(name = "review_count") val reviewCount: Int? = null,
+    @Json(name = "gigs_completed") val gigsCompleted: Int? = null,
 ) {
     fun resolvedDisplayName(): String =
         displayName?.takeIf { it.isNotEmpty() }

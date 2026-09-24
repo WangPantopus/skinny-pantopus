@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, Bookmark, Gift, Package, Laptop, BedDouble, Shirt, Leaf, Baby, Trophy, Hammer, Car, BookOpen, MapPin, Globe, ImageIcon } from 'lucide-react';
 import Image from 'next/image';
-import { CONDITION_LABELS, LAYER_COLORS, formatTimeAgo, formatDistance, formatExpiration } from './constants';
+import { CONDITION_LABELS, LAYER_COLORS, formatTimeAgo, formatDistance, formatExpiration, sellerIsVerifiedNeighbor } from './constants';
 import type { Listing } from '@pantopus/api';
 
 // ── Category icon map for no-image placeholder ──
@@ -230,7 +230,7 @@ export default React.memo(function ListingCard({ item, onSave, onClick }: Listin
                 {creatorDisplayName}
               </span>
             )}
-            {item.is_address_attached && (
+            {sellerIsVerifiedNeighbor(item.creator) && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-50 dark:bg-green-900/30 rounded-full">
                 <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" />
                 <span className="text-[10px] font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">Verified Neighbor</span>

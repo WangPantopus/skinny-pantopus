@@ -2,7 +2,11 @@
 
 package app.pantopus.android.ui.screens.scheduling.hub
 
+import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.businesses.BusinessTeamMembersResponse
+import app.pantopus.android.data.api.models.businesses.BusinessUserDto
+import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.OccupantDto
@@ -16,11 +20,11 @@ import app.pantopus.android.data.api.models.scheduling.GetAvailabilityResponse
 import app.pantopus.android.data.api.models.scheduling.GetBookingsResponse
 import app.pantopus.android.data.api.models.scheduling.GetConnectedCalendarsResponse
 import app.pantopus.android.data.api.models.scheduling.GetEventTypesResponse
-import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
@@ -29,11 +33,9 @@ import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -56,15 +58,23 @@ class SchedulingHubViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val repo: app.pantopus.android.data.scheduling.SchedulingRepository = mockk(relaxed = true)
     private val homes: HomesRepository = mockk()
+    private val homeAdmin: HomeAdminRepository = mockk()
     private val homeMembers: HomeMembersRepository = mockk()
     private val businessTeam: BusinessTeamRepository = mockk()
-    private val auth: AuthRepository = mockk()
+    private val businesses: BusinessesRepository = mockk()
     private val errors = SchedulingErrorDecoder(Moshi.Builder().build())
 
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
-        every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedIn(user()))
+        coEvery { homeAdmin.myAccess(any()) } returns
+            NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("calendar.view", "calendar.edit")))
+        coEvery { businesses.myBusinesses() } returns
+            NetworkResult.Success(
+                MyBusinessesResponse(
+                    listOf(BusinessMembership(id = "seat-1", businessUserId = "biz-1", business = BusinessUserDto(id = "biz-1"))),
+                ),
+            )
         coEvery {
             homes.myHomes()
         } returns NetworkResult.Success(MyHomesResponse(homes = listOf(home("00000000-0000-4000-8000-000000000007")), message = null))
@@ -74,8 +84,6 @@ class SchedulingHubViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
-
-    private fun user() = UserDto(id = "user-1", email = "a@b.com", displayName = "A", avatarUrl = null)
 
     private fun home(id: String) =
         MyHome(
@@ -101,7 +109,7 @@ class SchedulingHubViewModelTest {
         coEvery { repo.getConnectedCalendars() } returns NetworkResult.Success(GetConnectedCalendarsResponse())
     }
 
-    private fun newVm() = SchedulingHubViewModel(repo, homes, homeMembers, businessTeam, auth, errors)
+    private fun newVm() = SchedulingHubViewModel(repo, homes, homeMembers, businessTeam, businesses, errors, homeAdmin)
 
     private fun et(id: String) =
         EventTypeDto(id = id, name = "Intro call", slug = "intro", durations = listOf(30), defaultDuration = 30, locationMode = "video")
@@ -156,7 +164,7 @@ class SchedulingHubViewModelTest {
         }
 
     @Test
-    fun `selecting Business pillar resolves signed-in user id`() =
+    fun `selecting Business pillar resolves the first business the user runs`() =
         runTest(dispatcher) {
             stubFetch(listOf(et("e1")))
             val vm = newVm()
@@ -164,7 +172,7 @@ class SchedulingHubViewModelTest {
             advanceUntilIdle()
             vm.selectPillar(SchedulingPillar.Business)
             advanceUntilIdle()
-            coVerify { repo.getBookingPage(SchedulingOwner.Business("user-1")) }
+            coVerify { repo.getBookingPage(SchedulingOwner.Business("biz-1")) }
         }
 
     @Test
@@ -253,7 +261,7 @@ class SchedulingHubViewModelTest {
 
             vm.selectPillar(SchedulingPillar.Business)
             advanceUntilIdle()
-            assertEquals("scheduling/onboarding?flow=business&ownerKind=business&ownerId=user-1", vm.startSetupRoute())
+            assertEquals("scheduling/onboarding?flow=business&ownerKind=business&ownerId=biz-1", vm.startSetupRoute())
 
             vm.selectPillar(SchedulingPillar.Home)
             advanceUntilIdle()

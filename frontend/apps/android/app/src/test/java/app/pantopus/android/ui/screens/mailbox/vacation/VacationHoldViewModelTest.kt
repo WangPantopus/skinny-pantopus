@@ -61,12 +61,12 @@ class VacationHoldViewModelTest {
     }
 
     @Test
-    fun saveDisabledWhenAllScopesOff() {
+    fun savedDatesDoNotDependOnUnavailableScopes() {
         val vm = VacationHoldViewModel(VacationHoldSeed.Scheduling)
         vm.toggleScope(VacationHoldScope.Kind.Mail, isOn = false)
         vm.toggleScope(VacationHoldScope.Kind.Packages, isOn = false)
         vm.toggleScope(VacationHoldScope.Kind.MarketplacePickups, isOn = false)
-        assertFalse(vm.trailingActionEnabled)
+        assertTrue(vm.trailingActionEnabled)
     }
 
     @Test

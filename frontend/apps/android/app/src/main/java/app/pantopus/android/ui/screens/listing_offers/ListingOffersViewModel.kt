@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.models.transaction_reviews.CreateTransactionReviewBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.listing_offers.ListingOffersRepository
 import app.pantopus.android.data.listings.ListingsRepository
@@ -277,6 +278,9 @@ data class CounterSheetTarget(
 /** One-shot effects emitted by [ListingOffersViewModel]. */
 sealed interface ListingOffersEvent {
     data class PresentCheckout(val params: PaymentIntentSheetParamsDto) : ListingOffersEvent
+
+    /** A seller action the server refused, with its reason. */
+    data class ShowError(val message: String) : ListingOffersEvent
 }
 
 /**
@@ -379,6 +383,12 @@ class ListingOffersViewModel
                             actions =
                                 listOf(
                                     RowFooterAction(
+                                        title = "Decline",
+                                        icon = PantopusIcon.X,
+                                        variant = CompactButtonVariant.Ghost,
+                                        onClick = callbacks.onDecline,
+                                    ),
+                                    RowFooterAction(
                                         title = "Counter",
                                         icon = PantopusIcon.ArrowsRepeat,
                                         variant = CompactButtonVariant.Ghost,
@@ -396,17 +406,12 @@ class ListingOffersViewModel
                         RowFooter(
                             actions =
                                 listOf(
+                                    // No route withdraws only the counter: this declines the buyer's offer.
                                     RowFooterAction(
-                                        title = "Withdraw counter",
+                                        title = "Decline offer",
                                         icon = PantopusIcon.X,
                                         variant = CompactButtonVariant.Destructive,
                                         onClick = callbacks.onDecline,
-                                    ),
-                                    RowFooterAction(
-                                        title = "Send counter",
-                                        icon = PantopusIcon.ArrowsRepeat,
-                                        variant = CompactButtonVariant.Primary,
-                                        onClick = callbacks.onCounter,
                                     ),
                                 ),
                         )
@@ -415,10 +420,10 @@ class ListingOffersViewModel
                             actions =
                                 listOf(
                                     RowFooterAction(
-                                        title = "View transaction",
-                                        icon = PantopusIcon.FileText,
+                                        title = "Message buyer",
+                                        icon = PantopusIcon.MessageCircle,
                                         variant = CompactButtonVariant.Primary,
-                                        onClick = callbacks.onViewTransaction,
+                                        onClick = callbacks.onMessageBuyer,
                                     ),
                                 ),
                         )
@@ -427,10 +432,10 @@ class ListingOffersViewModel
                             actions =
                                 listOf(
                                     RowFooterAction(
-                                        title = "View transaction",
-                                        icon = PantopusIcon.FileText,
+                                        title = "Message buyer",
+                                        icon = PantopusIcon.MessageCircle,
                                         variant = CompactButtonVariant.Ghost,
-                                        onClick = callbacks.onViewTransaction,
+                                        onClick = callbacks.onMessageBuyer,
                                     ),
                                     RowFooterAction(
                                         title = "Leave a review",
@@ -530,6 +535,7 @@ class ListingOffersViewModel
                 return when (key) {
                     "active" -> ListingContextStatus("Active", PantopusIcon.Circle, StatusChipVariant.Success)
                     "reserved" -> ListingContextStatus("Reserved", PantopusIcon.Check, StatusChipVariant.Info)
+                    "pending_pickup" -> ListingContextStatus("Pickup pending", PantopusIcon.Clock, StatusChipVariant.Info)
                     "sold" -> ListingContextStatus("Sold", PantopusIcon.CheckCheck, StatusChipVariant.Success)
                     "expired" -> ListingContextStatus("Expired", PantopusIcon.Timer, StatusChipVariant.Neutral)
                     "draft" -> ListingContextStatus("Draft", PantopusIcon.Pencil, StatusChipVariant.Neutral)
@@ -632,6 +638,10 @@ class ListingOffersViewModel
         private val _counterTarget = MutableStateFlow<CounterSheetTarget?>(null)
         val counterTarget: StateFlow<CounterSheetTarget?> = _counterTarget.asStateFlow()
 
+        /** The offer awaiting the seller's "Decline" confirmation. */
+        private val _declineTarget = MutableStateFlow<ListingOfferDto?>(null)
+        val declineTarget: StateFlow<ListingOfferDto?> = _declineTarget.asStateFlow()
+
         // BLOCK 2D — transaction-review sheet on a completed offer.
         private val _leaveReviewTarget = MutableStateFlow<TransactionReviewSheetTarget?>(null)
         val leaveReviewTarget: StateFlow<TransactionReviewSheetTarget?> = _leaveReviewTarget.asStateFlow()
@@ -641,11 +651,12 @@ class ListingOffersViewModel
         private var loadedAtLeastOnce = false
         private var sort: ListingOffersSort = ListingOffersSort.HighestOffer
         private var pendingCheckoutOfferId: String? = null
+        private var pendingCheckoutUserId: String? = null
 
         private var nowProvider: () -> Instant = { Instant.now() }
         private var shareHandler: () -> Unit = {}
         private var openBuyerHandler: (ListingOfferUserDto) -> Unit = {}
-        private var openTransactionHandler: (ListingOfferDto) -> Unit = {}
+        private var messageBuyerHandler: (ListingOfferDto) -> Unit = {}
         private var editPriceHandler: () -> Unit = {}
 
         init {
@@ -661,13 +672,13 @@ class ListingOffersViewModel
         fun bindCallbacks(
             onShareListing: () -> Unit,
             onOpenBuyer: (ListingOfferUserDto) -> Unit,
-            onOpenTransaction: (ListingOfferDto) -> Unit,
+            onMessageBuyer: (ListingOfferDto) -> Unit,
             onEditPrice: () -> Unit = {},
             now: () -> Instant = { Instant.now() },
         ) {
             shareHandler = onShareListing
             openBuyerHandler = onOpenBuyer
-            openTransactionHandler = onOpenTransaction
+            messageBuyerHandler = onMessageBuyer
             editPriceHandler = onEditPrice
             nowProvider = now
             _topBarAction.value =
@@ -821,7 +832,7 @@ class ListingOffersViewModel
             val onAccept: () -> Unit = {},
             val onCounter: () -> Unit = {},
             val onDecline: () -> Unit = {},
-            val onViewTransaction: () -> Unit = {},
+            val onMessageBuyer: () -> Unit = {},
             val onLeaveReview: () -> Unit = {},
         )
 
@@ -830,8 +841,8 @@ class ListingOffersViewModel
                 onTap = { dto.buyer?.let(openBuyerHandler) },
                 onAccept = { acceptOffer(dto) },
                 onCounter = { requestCounter(dto) },
-                onDecline = { declineOffer(dto) },
-                onViewTransaction = { openTransactionHandler(dto) },
+                onDecline = { requestDecline(dto) },
+                onMessageBuyer = { messageBuyerHandler(dto) },
                 onLeaveReview = { requestLeaveReview(dto) },
             )
 
@@ -850,6 +861,7 @@ class ListingOffersViewModel
                     is NetworkResult.Failure -> {
                         offers = previous
                         applyState()
+                        _events.tryEmit(ListingOffersEvent.ShowError(result.error.displayMessage("Couldn't accept this offer.")))
                     }
                 }
             }
@@ -860,6 +872,7 @@ class ListingOffersViewModel
             fallback: ListingOfferDto,
         ) {
             if (!shouldCheckoutAcceptedOffer(offer, fallback)) return
+            val checkoutUserId = currentUserId()
             val result =
                 paymentsRepo.createPaymentIntent(
                     CreatePaymentIntentRequest(
@@ -871,6 +884,7 @@ class ListingOffersViewModel
             when (result) {
                 is NetworkResult.Success -> {
                     pendingCheckoutOfferId = offer.id
+                    pendingCheckoutUserId = checkoutUserId
                     _events.emit(ListingOffersEvent.PresentCheckout(result.data))
                 }
                 is NetworkResult.Failure -> Unit
@@ -880,7 +894,10 @@ class ListingOffersViewModel
         fun onCheckoutOutcome(outcome: CheckoutOutcome) {
             val offerId = pendingCheckoutOfferId ?: return
             pendingCheckoutOfferId = null
+            val viewerId = pendingCheckoutUserId
+            pendingCheckoutUserId = null
             if (outcome == CheckoutOutcome.Paid) {
+                if (viewerId != null) paymentsRepo.markListingConfirmationPending(viewerId, listingId, offerId)
                 refresh()
             } else {
                 offers.find { it.id == offerId }?.let { replaceOffer(it) }
@@ -896,6 +913,21 @@ class ListingOffersViewModel
             return buyerId == currentUserId()
         }
 
+        /** "Decline" asks first: a declined offer can't be reopened. */
+        fun requestDecline(dto: ListingOfferDto) {
+            _declineTarget.value = dto
+        }
+
+        fun cancelDecline() {
+            _declineTarget.value = null
+        }
+
+        fun confirmDecline() {
+            val target = _declineTarget.value ?: return
+            _declineTarget.value = null
+            declineOffer(target)
+        }
+
         fun declineOffer(dto: ListingOfferDto) {
             val previous = offers
             applyOptimisticStatus(dto.id, "declined")
@@ -905,6 +937,7 @@ class ListingOffersViewModel
                     is NetworkResult.Failure -> {
                         offers = previous
                         applyState()
+                        _events.tryEmit(ListingOffersEvent.ShowError(result.error.displayMessage("Couldn't decline this offer.")))
                     }
                 }
             }
@@ -1010,6 +1043,7 @@ class ListingOffersViewModel
                     is NetworkResult.Failure -> {
                         offers = previous
                         applyState()
+                        _events.tryEmit(ListingOffersEvent.ShowError(result.error.displayMessage("Couldn't send your counter.")))
                     }
                 }
             }

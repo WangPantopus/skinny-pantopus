@@ -160,6 +160,8 @@ export type ListingUserSummary = {
   profile_picture_url?: string;
   city?: string;
   state?: string;
+  /** Identity-serializer badges; `verified_resident` is the seller's real residency verification. */
+  badges?: string[] | null;
 };
 
 /** Listing detail as returned by GET /api/listings/:id */

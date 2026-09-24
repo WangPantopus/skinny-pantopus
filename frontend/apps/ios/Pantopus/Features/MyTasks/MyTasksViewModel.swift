@@ -884,7 +884,9 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     ) -> RowModel {
         let dto = projection.dto
         let category = OffersCategory.from(rawCategory: dto.category)
-        let budget = Self.formatBudget(price: dto.price, payType: dto.payType)
+        let budget = GigOffers.isOpen(payType: dto.payType, acceptedBy: dto.acceptedBy)
+            ? BudgetText(amount: GigOffers.label, sublabel: nil)
+            : Self.formatBudget(price: dto.price, payType: dto.payType)
         let title = dto.title.isEmpty ? "Untitled task" : dto.title
         let statusChip = RowChip(
             text: projection.status.label,

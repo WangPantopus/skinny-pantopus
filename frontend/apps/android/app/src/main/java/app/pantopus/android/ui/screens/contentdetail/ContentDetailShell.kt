@@ -88,6 +88,10 @@ fun ContentDetailShell(
     renderLocationMaps: Boolean = true,
     /** Optional trailing top-bar control (e.g. the gig save toggle, P1.C). */
     topBarAccessory: (@Composable () -> Unit)? = null,
+    /** Taps on the cover's glass chips (share, bookmark). Without it the chips are decorative. */
+    onGlassAction: ((PantopusIcon) -> Unit)? = null,
+    /** Glass chips drawn in their "on" state (a saved bookmark). */
+    activeGlassActions: Set<PantopusIcon> = emptySet(),
     scrollFooter: @Composable () -> Unit = {},
 ) {
     Box(
@@ -116,6 +120,8 @@ fun ContentDetailShell(
                     overflowItems = overflowItems,
                     renderLocationMaps = renderLocationMaps,
                     topBarAccessory = topBarAccessory,
+                    onGlassAction = onGlassAction,
+                    activeGlassActions = activeGlassActions,
                     scrollFooter = scrollFooter,
                 )
         }
@@ -207,6 +213,8 @@ private fun LoadedFrame(
     overflowItems: List<ContentDetailOverflowItem>,
     renderLocationMaps: Boolean,
     topBarAccessory: (@Composable () -> Unit)?,
+    onGlassAction: ((PantopusIcon) -> Unit)?,
+    activeGlassActions: Set<PantopusIcon>,
     scrollFooter: @Composable () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -265,6 +273,8 @@ private fun LoadedFrame(
                 overflowItems = overflowItems,
                 glassActions = content.cover.glassActions,
                 accessory = topBarAccessory,
+                onGlassAction = onGlassAction,
+                activeGlassActions = activeGlassActions,
             )
         }
         StickyDock(
@@ -285,6 +295,8 @@ private fun TopNav(
     overflowItems: List<ContentDetailOverflowItem> = emptyList(),
     glassActions: List<PantopusIcon> = emptyList(),
     accessory: (@Composable () -> Unit)? = null,
+    onGlassAction: ((PantopusIcon) -> Unit)? = null,
+    activeGlassActions: Set<PantopusIcon> = emptySet(),
 ) {
     Row(
         modifier =
@@ -321,20 +333,28 @@ private fun TopNav(
                 modifier = Modifier.testTag("contentDetailGlassActions"),
             ) {
                 glassActions.forEach { icon ->
+                    val active = icon in activeGlassActions
                     Box(
                         modifier =
                             Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.85f)),
+                                .background(Color.White.copy(alpha = 0.85f))
+                                .then(
+                                    if (onGlassAction != null) {
+                                        Modifier.clickable(role = Role.Button) { onGlassAction(icon) }
+                                    } else {
+                                        Modifier
+                                    },
+                                ).testTag("contentDetailGlassAction_${icon.name}"),
                         contentAlignment = Alignment.Center,
                     ) {
                         PantopusIconImage(
                             icon = icon,
-                            contentDescription = null,
+                            contentDescription = if (onGlassAction != null) glassActionLabel(icon, active) else null,
                             size = 18.dp,
                             strokeWidth = 2f,
-                            tint = PantopusColors.appText,
+                            tint = if (active) PantopusColors.primary600 else PantopusColors.appText,
                         )
                     }
                 }
@@ -347,6 +367,16 @@ private fun TopNav(
         }
     }
 }
+
+private fun glassActionLabel(
+    icon: PantopusIcon,
+    active: Boolean,
+): String =
+    when (icon) {
+        PantopusIcon.Share -> "Share"
+        PantopusIcon.Bookmark -> if (active) "Saved — tap to remove" else "Save"
+        else -> icon.name
+    }
 
 @Composable
 private fun OverflowMenu(
@@ -1541,9 +1571,11 @@ private fun BidRow(bid: ContentDetailBidRow) {
                 if (!largeText) BidRowTag(bid)
             }
             if (largeText) BidRowTag(bid)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
-                Text(text = bid.ratingLine, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+            bid.ratingLine?.let { line ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
+                    Text(text = line, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                }
             }
         }
         Text(

@@ -4,7 +4,7 @@
 //
 //  A10.11 — Earn dashboard. The earnings-IN sibling of the A10.10 Wallet:
 //  it reframes the same dark `BalanceHero` vocabulary around MAKING money
-//  — "Available to cash out" + this-week / pending split, a weekly-goal
+//  — "Available to cash out" (the wallet balance) + a split, a weekly-goal
 //  momentum ring, a `Ways to earn` launcher, the recent-earnings list,
 //  payout settings, and the tax-docs row, with a sticky Cash out CTA.
 //
@@ -92,7 +92,13 @@ public struct EarnView: View {
         case let .populated(earnContent):
             ZStack(alignment: .bottom) {
                 populatedScroll(earnContent)
-                bottomBar { CashOutCTA(amount: earnContent.available, onTap: onCashOut) }
+                // Cash out opens Payments, which withdraws the same wallet
+                // balance; with nothing to cash out, the next step is finding work.
+                if earnContent.hasCashableBalance {
+                    bottomBar { CashOutCTA(amount: earnContent.available, onTap: onCashOut) }
+                } else {
+                    bottomBar { BrowseCTA(onTap: onBrowseTasks) }
+                }
             }
         case let .empty(waysToEarn):
             ZStack(alignment: .bottom) {
@@ -122,7 +128,15 @@ public struct EarnView: View {
                     EarnWaysToEarnCard(items: content.waysToEarn, onSelect: dispatchWay)
                 }
                 section(overline: "Recent earnings", action: "See all", onAction: onSeeAllEarnings) {
-                    EarnEarningsList(items: content.earnings)
+                    if content.earnings.isEmpty {
+                        EarnLockedRow(
+                            title: "No mail offer earnings",
+                            subcopy: "Task earnings go to your wallet in Payments.",
+                            identifier: "earnEarningsLockedRow"
+                        )
+                    } else {
+                        EarnEarningsList(items: content.earnings)
+                    }
                 }
                 if let payoutMethod = content.payoutMethod, let autoCashOut = content.autoCashOut {
                     section(overline: "Payout settings") {
@@ -152,21 +166,31 @@ public struct EarnView: View {
             overline: "Available to cash out",
             amount: content.available,
             currencyCode: "USD",
-            split: [
-                .init(
-                    icon: .calendar,
-                    overline: "This week",
-                    value: content.thisWeek,
-                    note: content.thisWeekMeta
-                ),
-                .init(
-                    icon: .clock,
-                    overline: "Pending",
-                    value: content.pending,
-                    note: content.pendingMeta
-                )
-            ]
+            split: heroSplit(content)
         )
+    }
+
+    /// Mail-offer and ad payouts sit beside the wallet balance, never inside
+    /// it: nothing pays them out.
+    private func heroSplit(_ content: EarnContent) -> [BalanceHero.SplitCell] {
+        if let offers = content.offerEarnings {
+            return [.init(icon: .mailOpen, overline: "Mail offers", value: offers, note: "can't be cashed out yet")]
+        }
+        guard !content.thisWeek.isEmpty else { return [] }
+        return [
+            .init(
+                icon: .calendar,
+                overline: "This week",
+                value: content.thisWeek,
+                note: content.thisWeekMeta
+            ),
+            .init(
+                icon: .clock,
+                overline: "Pending",
+                value: content.pending,
+                note: content.pendingMeta
+            )
+        ]
     }
 
     // MARK: - Empty (new earner)
@@ -180,7 +204,7 @@ public struct EarnView: View {
                 section(overline: "Recent earnings") {
                     EarnLockedRow(
                         title: "No earnings yet",
-                        subcopy: "Your paid tasks land here — your first one unlocks cash out.",
+                        subcopy: "Task earnings go to your wallet in Payments.",
                         identifier: "earnEarningsLockedRow"
                     )
                 }
@@ -190,7 +214,7 @@ public struct EarnView: View {
                 section(overline: "Taxes") {
                     EarnLockedRow(
                         title: "Tax documents",
-                        subcopy: "Your 1099 and YTD totals appear after your first paid task.",
+                        subcopy: "Tax documents aren't available in the app yet.",
                         identifier: "earnTaxDocsLockedRow"
                     )
                 }
@@ -394,7 +418,7 @@ private struct BrowseCTA: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("earnBrowseTasksButton")
 
-            Text("Cash out unlocks after your first paid task.")
+            Text("Cash out task earnings from Payments.")
                 .font(.system(size: 10.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)

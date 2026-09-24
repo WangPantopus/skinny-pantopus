@@ -64,12 +64,12 @@ final class VacationHoldViewModelTests: XCTestCase {
         XCTAssertEqual(civic?.isOn, false)
     }
 
-    func test_saveDisabledWhenAllScopesOff() {
+    func test_savedDatesDoNotDependOnUnavailableScopes() {
         let vm = VacationHoldViewModel(seed: .scheduling)
         vm.toggleScope(.mail, isOn: false)
         vm.toggleScope(.packages, isOn: false)
         vm.toggleScope(.marketplacePickups, isOn: false)
-        XCTAssertFalse(vm.trailingActionEnabled, "All scopes off → form invalid → Save disabled")
+        XCTAssertTrue(vm.trailingActionEnabled, "Saving dates does not depend on unavailable handling controls")
     }
 
     // MARK: - Date span recompute

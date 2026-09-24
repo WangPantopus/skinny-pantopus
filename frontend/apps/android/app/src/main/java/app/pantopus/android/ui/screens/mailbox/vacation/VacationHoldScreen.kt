@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -48,6 +49,8 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.DateSpan
 import app.pantopus.android.ui.components.DateSpanTone
+import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.FutureDatePickerDialog
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HeldList
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HoldStatusHero
 import app.pantopus.android.ui.theme.PantopusColors
@@ -90,12 +93,18 @@ fun VacationHoldScreen(
 ) {
     val mode by viewModel.mode.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    val mutationInFlight by viewModel.mutationInFlight.collectAsStateWithLifecycle()
 
     /**
      * A14.8 — "End hold early" is destructive (the backend marks the hold
      * `cancelled` and clears `User.vacation_mode`), so it confirms first.
      */
     var showEndHoldConfirm by remember { mutableStateOf(false) }
+
+    /** The From / To row whose date picker is open. */
+    var pickingDate by remember { mutableStateOf<VacationDateField?>(null) }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -125,7 +134,11 @@ fun VacationHoldScreen(
                     .background(PantopusColors.appBg)
                     .testTag("vacationHold"),
         ) {
-            TopBar(viewModel = viewModel, mode = mode)
+            TopBar(
+                viewModel = viewModel,
+                mode = mode,
+                trailingEnabled = !isLoading && loadError == null && !mutationInFlight && viewModel.trailingActionEnabled,
+            )
             Column(
                 modifier =
                     Modifier
@@ -133,25 +146,54 @@ fun VacationHoldScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(bottom = Spacing.s6),
             ) {
-                when (val m = mode) {
-                    is VacationHoldMode.Scheduling -> SchedulingBody(viewModel = viewModel, draft = m.draft)
-                    is VacationHoldMode.Active ->
-                        ActiveBody(
-                            viewModel = viewModel,
-                            hold = m.hold,
-                            onEndHold = { showEndHoldConfirm = true },
-                        )
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (loadError != null) {
+                    ErrorState(
+                        headline = "Couldn't load travel dates",
+                        message = loadError.orEmpty(),
+                        onRetry = { viewModel.load() },
+                    )
+                } else {
+                    when (val m = mode) {
+                        is VacationHoldMode.Scheduling ->
+                            SchedulingBody(viewModel = viewModel, draft = m.draft, onPickDate = { pickingDate = it })
+                        is VacationHoldMode.Active ->
+                            ActiveBody(
+                                hold = m.hold,
+                                onEndHold = { showEndHoldConfirm = true },
+                            )
+                    }
                 }
             }
+        }
+
+        val picking = pickingDate
+        val scheduling = mode as? VacationHoldMode.Scheduling
+        if (picking != null && scheduling != null) {
+            val draft = scheduling.draft
+            val isFrom = picking == VacationDateField.From
+            FutureDatePickerDialog(
+                initial = if (isFrom) draft.fromDate else draft.toDate,
+                earliest = if (isFrom) null else draft.fromDate,
+                confirmLabel = "Done",
+                onSelect = { date ->
+                    if (isFrom) viewModel.setFromDate(date) else viewModel.setToDate(date)
+                    pickingDate = null
+                },
+                onDismiss = { pickingDate = null },
+            )
         }
 
         if (showEndHoldConfirm) {
             AlertDialog(
                 onDismissRequest = { showEndHoldConfirm = false },
-                title = { Text(text = "End your vacation hold?") },
+                title = { Text(text = "Cancel your travel dates?") },
                 text = {
                     Text(
-                        text = "Mail and packages resume delivery right away.",
+                        text = "This removes the saved date range. Contact carriers separately about any delivery arrangements.",
                         fontSize = 13.sp,
                         color = PantopusColors.appTextSecondary,
                     )
@@ -164,12 +206,12 @@ fun VacationHoldScreen(
                         },
                         modifier = Modifier.testTag("vacationHoldEndConfirm"),
                     ) {
-                        Text(text = "End hold", color = PantopusColors.error)
+                        Text(text = "Cancel dates", color = PantopusColors.error)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showEndHoldConfirm = false }) {
-                        Text(text = "Keep holding", color = PantopusColors.appTextSecondary)
+                        Text(text = "Keep dates", color = PantopusColors.appTextSecondary)
                     }
                 },
             )
@@ -204,13 +246,9 @@ fun VacationHoldScreen(
 private fun TopBar(
     viewModel: VacationHoldViewModel,
     mode: VacationHoldMode,
+    trailingEnabled: Boolean,
 ) {
     val trailingLabel = if (mode is VacationHoldMode.Active) "Edit" else "Save"
-    val trailingEnabled =
-        when (mode) {
-            is VacationHoldMode.Scheduling -> mode.draft.isValid
-            is VacationHoldMode.Active -> true
-        }
     val trailingColor: Color =
         when (mode) {
             is VacationHoldMode.Scheduling ->
@@ -286,27 +324,37 @@ private fun TopBar(
 
 // MARK: - Scheduling body
 
+/** The date row a picker is open for. */
+private enum class VacationDateField { From, To }
+
 @Composable
 private fun SchedulingBody(
     viewModel: VacationHoldViewModel,
     draft: VacationScheduleDraft,
+    onPickDate: (VacationDateField) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         VacationOverline("When")
         VacationCard {
             VacationDateRow(
                 label = "From",
-                sub = "9:00 AM pickup",
+                sub = "Departure date",
                 value = formatWeekdayShort(draft.fromDate),
-                onTap = { viewModel.tapFromDate() },
+                onTap = {
+                    viewModel.tapFromDate()
+                    onPickDate(VacationDateField.From)
+                },
                 tag = "vacationHoldFromDate",
             )
             VacationHairline()
             VacationDateRow(
                 label = "To",
-                sub = "Resume delivery",
+                sub = "Return date",
                 value = formatWeekdayShort(draft.toDate),
-                onTap = { viewModel.tapToDate() },
+                onTap = {
+                    viewModel.tapToDate()
+                    onPickDate(VacationDateField.To)
+                },
                 tag = "vacationHoldToDate",
             )
             VacationHairline()
@@ -325,72 +373,7 @@ private fun SchedulingBody(
             }
         }
 
-        VacationOverline("Hold during this period")
-        VacationCard {
-            draft.scopes.forEachIndexed { index, scope ->
-                VacationToggleRow(
-                    label = scope.label,
-                    sub = scope.sub,
-                    isOn = scope.isOn,
-                    isLocked = scope.isLocked,
-                    onChange = { newValue -> viewModel.toggleScope(scope.kind, newValue) },
-                    tag = "vacationHoldScope.${scope.id}",
-                )
-                if (index < draft.scopes.size - 1) {
-                    VacationHairline()
-                }
-            }
-        }
-        VacationCardHelper("Civic notices always get delivered — too important to hold.")
-
-        VacationOverline("Forwarding")
-        VacationCard {
-            VacationToggleRow(
-                label = "Forward urgent mail",
-                sub = "Else held until you return",
-                isOn = draft.forwardingEnabled,
-                isLocked = false,
-                onChange = { viewModel.toggleForwarding(it) },
-                tag = "vacationHoldForwardToggle",
-            )
-            if (draft.forwardingEnabled && draft.forwarding != null) {
-                VacationHairline()
-                VacationChevronIconRow(
-                    icon = PantopusIcon.MapPin,
-                    tint = PantopusColors.primary600,
-                    background = PantopusColors.primary50,
-                    title = draft.forwarding.title,
-                    sub = draft.forwarding.sub,
-                    onTap = { viewModel.tapForwarding() },
-                    tag = "vacationHoldForwardAddress",
-                )
-            }
-        }
-        VacationCardHelper("Urgent items (overnight, signature-required) re-route the same day.")
-
-        VacationOverline("Emergency contact")
-        VacationCard {
-            if (draft.emergency != null) {
-                VacationChevronAvatarRow(
-                    initials = draft.emergency.initials,
-                    title = "${draft.emergency.name} (${draft.emergency.relation.lowercase()})",
-                    sub = draft.emergency.phone,
-                    onTap = { viewModel.tapEmergency() },
-                    tag = "vacationHoldEmergencyContact",
-                )
-            } else {
-                VacationChevronIconRow(
-                    icon = PantopusIcon.UserPlus,
-                    tint = PantopusColors.primary600,
-                    background = PantopusColors.primary50,
-                    title = "Add an emergency contact",
-                    sub = "Optional — for delivery-driver issues",
-                    onTap = { viewModel.tapEmergency() },
-                    tag = "vacationHoldEmergencyContact",
-                )
-            }
-        }
-        VacationCardHelper("We'll call them if a delivery driver flags an issue at your door.")
+        VacationCardHelper("Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.")
 
         VacationMonoFooter(draft.footerBlurb)
     }
@@ -400,7 +383,6 @@ private fun SchedulingBody(
 
 @Composable
 private fun ActiveBody(
-    viewModel: VacationHoldViewModel,
     hold: VacationActiveHold,
     onEndHold: () -> Unit,
 ) {
@@ -414,54 +396,18 @@ private fun ActiveBody(
             HoldStatusHero(
                 daysLeft = hold.daysLeft,
                 untilLabel = hold.untilLabel,
-                stats = hold.stats,
+                stats = emptyList(),
+                statusLabel = hold.statusLabel,
+                daysLabel = "days until return",
             )
         }
 
-        VacationOverline("Currently held")
-        Column(modifier = Modifier.padding(horizontal = Spacing.s3)) {
-            HeldList(items = hold.heldItems)
-            Spacer(modifier = Modifier.height(Spacing.s2))
-            Text(
-                text = hold.resumeBlurb,
-                fontSize = 11.5.sp,
-                color = PantopusColors.appTextSecondary,
-                modifier = Modifier.padding(horizontal = Spacing.s1),
-            )
-        }
-
-        hold.forwarding?.let { forwarding ->
-            VacationOverline("Forwarding to")
-            VacationCard {
-                VacationChevronIconRow(
-                    icon = PantopusIcon.MapPin,
-                    tint = PantopusColors.primary600,
-                    background = PantopusColors.primary50,
-                    title = forwarding.title,
-                    sub = forwarding.sub,
-                    onTap = { viewModel.tapForwarding() },
-                    tag = "vacationHoldActiveForwarding",
-                )
-            }
-        }
-
-        hold.emergency?.let { emergency ->
-            VacationOverline("Emergency contact")
-            VacationCard {
-                VacationChevronAvatarRow(
-                    initials = emergency.initials,
-                    title = "${emergency.name} (${emergency.relation.lowercase()})",
-                    sub = emergency.phone,
-                    onTap = { viewModel.tapEmergency() },
-                    tag = "vacationHoldActiveEmergency",
-                )
-            }
-        }
+        VacationCardHelper(hold.resumeBlurb)
 
         VacationCard {
             VacationDestructiveRow(
-                label = "End hold early",
-                sub = "Mail resumes tomorrow morning",
+                label = "Cancel travel dates",
+                sub = "Remove this saved date range",
                 onTap = onEndHold,
                 tag = "vacationHoldEndEarly",
             )

@@ -73,6 +73,9 @@ fun MeView(
     val activeIdentity by viewModel.activeIdentity.collectAsStateWithLifecycle()
     val monthlyReceipt by viewModel.monthlyReceipt.collectAsStateWithLifecycle()
     val inviteProgress by viewModel.inviteProgress.collectAsStateWithLifecycle()
+    // The invite code loads after the progress card; collecting it recomposes
+    // the card so "Invite a neighbor" appears once a real code is in.
+    val inviteCode by viewModel.inviteCode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -90,6 +93,7 @@ fun MeView(
                     }
                 PopulatedFrame(
                     active = active,
+                    showBusiness = s.showBusiness,
                     onSwitch = viewModel::selectIdentity,
                     onAction = onAction,
                     onSection = onSection,
@@ -105,7 +109,10 @@ fun MeView(
                     onShareReceipt = {
                         viewModel.receiptShareMessage()?.let { shareText(context, it) }
                     },
-                    onShareInvite = { shareText(context, viewModel.inviteShareMessage()) },
+                    onShareInvite =
+                        inviteCode?.let { viewModel.inviteShareMessage() }?.let { message ->
+                            { shareText(context, message) }
+                        },
                 )
             }
         }
@@ -141,11 +148,12 @@ internal fun PopulatedFrame(
     onAction: (MeActionTile) -> Unit,
     onSection: (MeSectionRow) -> Unit,
     onDestructive: () -> Unit,
+    showBusiness: Boolean = true,
     monthlyReceipt: MonthlyReceiptDto? = null,
     expandMonthlyReceipt: Boolean = false,
     inviteProgress: InviteProgressDto? = null,
     onShareReceipt: () -> Unit = {},
-    onShareInvite: () -> Unit = {},
+    onShareInvite: (() -> Unit)? = {},
 ) {
     Column(
         modifier =
@@ -153,7 +161,7 @@ internal fun PopulatedFrame(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
     ) {
-        MeHeader(content = active, onSwitch = onSwitch)
+        MeHeader(content = active, showBusiness = showBusiness, onSwitch = onSwitch)
         if (!active.isUnbound) {
             MeStatsRow(
                 stats = active.stats,
@@ -222,6 +230,7 @@ internal fun PopulatedFrame(
 @Composable
 private fun MeHeader(
     content: MeIdentityContent,
+    showBusiness: Boolean,
     onSwitch: (MeIdentity) -> Unit,
 ) {
     val brush =
@@ -239,7 +248,7 @@ private fun MeHeader(
     ) {
         IdentitySwitcherPillRow(
             options =
-                MeIdentity.entries.map { identity ->
+                MeIdentity.entries.filter { showBusiness || it != MeIdentity.Business }.map { identity ->
                     IdentityOption(
                         id = identity.key,
                         label = identity.label,

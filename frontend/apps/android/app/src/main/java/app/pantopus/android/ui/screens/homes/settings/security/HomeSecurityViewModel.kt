@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomePrivacyDto
 import app.pantopus.android.data.api.models.homes.UpdateHomePrivacyRequest
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomePrivacyRepository
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
@@ -24,23 +25,20 @@ import javax.inject.Inject
 const val HOME_SECURITY_HOME_ID_KEY = "homeId"
 
 /**
- * P5.1 / A14.2 — Per-home Security toggles. Pure switchgear: 3
- * groups × 3 toggles = 9 toggles total. Helper-line copy under each
- * card mirrors the design's state-aware rule — calm default copy
- * when only the headline toggle is on, all-on consequence copy when
- * every toggle in the group is on, and an "off" warning when the
- * headline toggle is flipped off.
+ * P5.1 / A14.2 — Per-home Security. Nine toggles are stored per Home, but
+ * only address precision changes anything (the server drops the unit
+ * number from Place), so it is the only one offered, and its helper line
+ * says what it does. The other eight are read by nothing on the server or
+ * any client; they're hidden and their stored values are left as they are.
  *
  * P3F wiring: [load] reads the persisted toggle set from
  * `GET /api/homes/:id/privacy`; each flip optimistically updates and
  * PATCHes the single key, rolling back on failure. The [Variant.Balanced]
- * seed is the in-flight / offline baseline (and the test/preview seam via
- * [setVariant]).
+ * seed is available only through the explicit test/preview seam [setVariant].
  *
- * Two variant frames cover the design parity audit:
+ * Two seed frames (previews and tests):
  *   - [Variant.Balanced] 5 of 9 toggles on
- *   - [Variant.Strict]   all 9 on, helpers shift to consequence
- *                        language
+ *   - [Variant.Strict]   all 9 on
  */
 @HiltViewModel
 class HomeSecurityViewModel
@@ -58,26 +56,33 @@ class HomeSecurityViewModel
                 "HomeSecurityViewModel requires a '$HOME_SECURITY_HOME_ID_KEY' nav arg."
             }
 
-        val footerCaption: String = "$footerHomeName · Last audit 2h ago"
+        // No footer: it used to show a sample address ("14 Elm Park Lane") and a made-up "Last audit 2h ago" for
+        // every Home.
+        val footerCaption: String? = null
 
         private val _toggles: MutableMap<String, Boolean> = HomeSecurityToggles.seed(Variant.Balanced).toMutableMap()
         val toggles: Map<String, Boolean> get() = _toggles
+
+        private var saveError: String? = null
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
 
         fun load() {
-            // Render the seeded baseline immediately, then reconcile from
-            // the backend. A failed fetch keeps the baseline (settings
-            // tolerate offline) rather than erroring the whole screen.
-            _state.value = GroupedListUiState.Loaded(groups())
+            saveError = null
+            _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 when (val result = repository.getPrivacy(homeId)) {
                     is NetworkResult.Success -> {
                         applyServer(result.data.privacy)
                         _state.value = GroupedListUiState.Loaded(groups())
                     }
-                    is NetworkResult.Failure -> Unit
+                    is NetworkResult.Failure -> {
+                        _state.value =
+                            GroupedListUiState.Error(
+                                result.error.displayMessage("Couldn't load this home's privacy settings. Try again."),
+                            )
+                    }
                 }
             }
         }
@@ -93,8 +98,9 @@ class HomeSecurityViewModel
             rowId: String,
             isOn: Boolean,
         ) {
-            if (!_toggles.containsKey(rowId)) return
+            if (_state.value !is GroupedListUiState.Loaded || !_toggles.containsKey(rowId)) return
             val previous = _toggles[rowId] ?: return
+            saveError = null
             // Optimistic flip.
             _toggles[rowId] = isOn
             _state.value = GroupedListUiState.Loaded(groups())
@@ -103,6 +109,7 @@ class HomeSecurityViewModel
                 if (result is NetworkResult.Failure) {
                     // Roll back the single key.
                     _toggles[rowId] = previous
+                    saveError = "Your change wasn't saved. ${result.error.displayMessage("Please try again.")}"
                     _state.value = GroupedListUiState.Loaded(groups())
                 }
             }
@@ -137,69 +144,23 @@ class HomeSecurityViewModel
                 else -> UpdateHomePrivacyRequest()
             }
 
-        private val footerHomeName: String get() = "14 Elm Park Lane"
-
         // Group projection — mirror of iOS `HomeSecurityViewModel.groups()`.
 
-        private fun groups(): List<GroupedListGroup> =
-            listOf(
-                accessControlGroup(),
-                privacyGroup(),
-                documentsGroup(),
-            )
+        // Only the control something enforces is offered: address precision.
+        private fun groups(): List<GroupedListGroup> = listOf(accessControlGroup())
 
         private fun accessControlGroup(): GroupedListGroup =
             GroupedListGroup(
                 id = "accessControl",
                 overline = "Access control",
-                helper = HomeSecurityHelpers.forAccessControl(_toggles),
+                helper = saveError ?: HomeSecurityHelpers.forAccessControl(_toggles),
                 rows =
                     listOf(
-                        toggleRow(HomeSecurityToggles.GUEST_APPROVAL, "Guest approval", "Ask before letting in new passes"),
-                        toggleRow(
-                            HomeSecurityToggles.MEMBER_NAME_VISIBILITY,
-                            "Member name visibility",
-                            "Show only your home name to outsiders",
-                        ),
                         toggleRow(
                             HomeSecurityToggles.ADDRESS_PRECISION,
                             "Address precision",
                             "Street only · hide unit number",
                         ),
-                    ),
-            )
-
-        private fun privacyGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = "privacy",
-                overline = "Privacy",
-                helper = HomeSecurityHelpers.forPrivacy(_toggles),
-                rows =
-                    listOf(
-                        toggleRow(
-                            HomeSecurityToggles.ACTIVITY_VISIBILITY,
-                            "Activity visibility",
-                            "Show check-ins to verified neighbors",
-                        ),
-                        toggleRow(HomeSecurityToggles.MAP_OPT_OUT, "Map opt-out", "Hide from the neighborhood map"),
-                        toggleRow(
-                            HomeSecurityToggles.NOTIFICATION_PREVIEWS,
-                            "Notification previews",
-                            "Suppress preview text on the lock screen",
-                        ),
-                    ),
-            )
-
-        private fun documentsGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = "documents",
-                overline = "Documents",
-                helper = HomeSecurityHelpers.forDocuments(_toggles),
-                rows =
-                    listOf(
-                        toggleRow(HomeSecurityToggles.DOC_LOCK, "Doc lock", "Require unlock to view household docs"),
-                        toggleRow(HomeSecurityToggles.PHOTO_BLUR, "Photo blur", "Blur doc thumbnails until tapped"),
-                        toggleRow(HomeSecurityToggles.VAULT_AUTO_LOCK, "Vault auto-lock", "Lock the vault after 5 minutes idle"),
                     ),
             )
 
@@ -265,42 +226,10 @@ object HomeSecurityToggles {
  * holds.
  */
 object HomeSecurityHelpers {
-    fun forAccessControl(toggles: Map<String, Boolean>): String {
-        val approval = toggles[HomeSecurityToggles.GUEST_APPROVAL] ?: false
-        val allOn =
-            (toggles[HomeSecurityToggles.GUEST_APPROVAL] ?: false) &&
-                (toggles[HomeSecurityToggles.MEMBER_NAME_VISIBILITY] ?: false) &&
-                (toggles[HomeSecurityToggles.ADDRESS_PRECISION] ?: false)
-        return when {
-            allOn -> "All guest activity requires your explicit approval. Names and street precision are hidden from outsiders."
-            approval -> "Guest approval is on, so guests need an owner-tap to enter."
-            else -> "Guest approval is off — anyone with a code is in. Tighten this if you're away."
+    fun forAccessControl(toggles: Map<String, Boolean>): String =
+        if (toggles[HomeSecurityToggles.ADDRESS_PRECISION] == true) {
+            "Place shows this Home's street without the unit number."
+        } else {
+            "Place shows this Home's full street address, including the unit number."
         }
-    }
-
-    fun forPrivacy(toggles: Map<String, Boolean>): String {
-        val activity = toggles[HomeSecurityToggles.ACTIVITY_VISIBILITY] ?: false
-        val allOn =
-            (toggles[HomeSecurityToggles.ACTIVITY_VISIBILITY] ?: false) &&
-                (toggles[HomeSecurityToggles.MAP_OPT_OUT] ?: false) &&
-                (toggles[HomeSecurityToggles.NOTIFICATION_PREVIEWS] ?: false)
-        return when {
-            allOn -> "Hidden from the neighborhood map, previews suppressed. Outsiders only see your home name."
-            activity -> "Visible to verified neighbors only. Address used for deliveries."
-            else -> "Activity is hidden — even verified neighbors can't see your check-ins."
-        }
-    }
-
-    fun forDocuments(toggles: Map<String, Boolean>): String {
-        val lock = toggles[HomeSecurityToggles.DOC_LOCK] ?: false
-        val allOn =
-            (toggles[HomeSecurityToggles.DOC_LOCK] ?: false) &&
-                (toggles[HomeSecurityToggles.PHOTO_BLUR] ?: false) &&
-                (toggles[HomeSecurityToggles.VAULT_AUTO_LOCK] ?: false)
-        return when {
-            allOn -> "All docs require Face ID. Previews stay blurred everywhere, including notifications."
-            lock -> "Docs unlock with Face ID. Previews still appear in chat."
-            else -> "Docs open without unlock — anyone with your phone can read them."
-        }
-    }
 }

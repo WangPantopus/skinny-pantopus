@@ -325,7 +325,9 @@ async function resolveListingOfferCheckout({ payerId, listingId, offerId }) {
   if (listing.user_id !== offer.seller_id) {
     throw paymentRouteError(409, 'Offer seller does not match listing owner');
   }
-  if (!['active', 'reserved'].includes(listing.status)) {
+  // An accepted offer holds its listing as pending_pickup (the listing_status enum has no 'reserved'); listings
+  // accepted before that fix are still active.
+  if (!['active', 'pending_pickup'].includes(listing.status)) {
     throw paymentRouteError(409, 'Listing is not payable');
   }
 
@@ -416,7 +418,25 @@ async function resolveExistingCheckoutIntent({ payerId, checkout }) {
   }
 
   if (REUSABLE_CHECKOUT_PAYMENT_STATUSES.has(status) && payment.stripe_payment_intent_id) {
-    const clientSecret = await stripeService.getPaymentIntentClientSecret(payment.stripe_payment_intent_id);
+    let clientSecret;
+    if (checkout.listingId) {
+      let intent;
+      try {
+        intent = await stripeService.readListingCheckoutIntent(payment);
+      } catch (_error) {
+        throw paymentRouteError(503, 'Payment status is unavailable. Please check the status and try again.');
+      }
+      if (!['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(intent.status)) {
+        if (['requires_capture', 'processing', 'succeeded'].includes(intent.status)) {
+          throw paymentRouteError(409, 'Payment confirmation is pending. Please check the payment status.');
+        }
+        throw paymentRouteError(503, 'Payment status is unavailable. Please check the status and try again.');
+      }
+      clientSecret = intent.client_secret;
+      if (!clientSecret) throw paymentRouteError(503, 'Payment status is unavailable. Please check the status and try again.');
+    } else {
+      clientSecret = await stripeService.getPaymentIntentClientSecret(payment.stripe_payment_intent_id);
+    }
     return {
       reused: true,
       result: {

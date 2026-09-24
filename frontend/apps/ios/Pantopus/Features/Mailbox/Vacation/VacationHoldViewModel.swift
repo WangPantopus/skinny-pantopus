@@ -42,6 +42,8 @@ public final class VacationHoldViewModel {
     public private(set) var mutationInFlight: Bool = false
     /// Transient banner; the view clears it after display.
     public var toast: String?
+    public private(set) var isLoading = false
+    public private(set) var loadError: String?
 
     /// `nil` in the preview / test seam — that path flips `mode` locally.
     private let api: APIClient?
@@ -58,10 +60,7 @@ public final class VacationHoldViewModel {
     /// Wire row backing the active hold, so Edit can seed the composer
     /// from it rather than from a stale default.
     private var activeHoldDTO: VacationHoldDTO?
-    /// Id of the hold the composer is currently editing. The backend has
-    /// no update route (`/vacation/start` always inserts), so saving an
-    /// edit cancels this hold first — otherwise Save would leave two
-    /// overlapping holds on the same home.
+    /// The existing record to update atomically when saving an edit.
     private var editingHoldId: String?
 
     /// Production seam. `APIClient` is internal, so this initialiser is
@@ -75,6 +74,7 @@ public final class VacationHoldViewModel {
         onPickToDate: @escaping @MainActor () -> Void = {}
     ) {
         self.api = api
+        isLoading = true
         mode = .scheduling(VacationScheduleDraft.liveDefault())
         self.onBack = onBack
         self.onEditForwarding = onEditForwarding
@@ -110,17 +110,17 @@ public final class VacationHoldViewModel {
 
     // MARK: - Lifecycle
 
-    /// Fetch the current hold. An `active` hold renders the Active
-    /// variant; otherwise the scheduling composer. A14.8 has no dedicated
-    /// error frame, so a transport failure falls back to the composer
-    /// (with a toast) rather than blanking the screen — same as Android.
+    /// Load current or scheduled dates; a failed read blocks mutations until retry.
     public func load() async {
         guard let api else { return }
+        isLoading = true
+        loadError = nil
+        defer { isLoading = false }
         do {
             let response: VacationStatusResponse = try await api.request(
                 MailboxP3Endpoints.vacationStatus()
             )
-            if let active = response.active {
+            if let active = response.active ?? response.upcoming {
                 activeHoldId = active.id
                 activeHoldDTO = active
                 editingHoldId = nil
@@ -132,8 +132,7 @@ public final class VacationHoldViewModel {
                 mode = .scheduling(VacationScheduleDraft.liveDefault())
             }
         } catch {
-            mode = .scheduling(VacationScheduleDraft.liveDefault())
-            toast = (error as? APIError)?.errorDescription ?? "Couldn't load your hold."
+            loadError = (error as? APIError)?.errorDescription ?? "Couldn't load your travel dates."
         }
     }
 
@@ -156,7 +155,7 @@ public final class VacationHoldViewModel {
     /// mode always renders the Edit button enabled so the user can
     /// adjust the hold at any time.
     public var trailingActionEnabled: Bool {
-        guard !mutationInFlight else { return false }
+        guard !mutationInFlight, !isLoading, loadError == nil else { return false }
         switch mode {
         case let .scheduling(draft): return draft.isValid
         case .active: return true
@@ -179,6 +178,7 @@ public final class VacationHoldViewModel {
     }
 
     public func tapTrailingAction() async {
+        guard trailingActionEnabled else { return }
         guard api != nil else {
             // Preview / test seam — flip locally so QA + snapshots still
             // validate the "Save flips chrome" / "Edit returns to form"
@@ -279,37 +279,23 @@ public final class VacationHoldViewModel {
         mutationInFlight = true
         defer { mutationInFlight = false }
 
-        guard let homeId = await resolveHomeId() else {
-            toast = "Add a home before scheduling a hold."
-            return
+        let homeId: String?
+        if editingHoldId != nil {
+            homeId = activeHoldDTO?.homeId
+            if homeId == nil { toast = "Reload your travel dates before editing." }
+        } else {
+            homeId = await resolveHomeId()
         }
+        guard let homeId else { return }
 
-        // Editing an existing hold: there is no update route, so retire
-        // the old row first. Bail out if that fails rather than leaving
-        // two overlapping holds on the same home.
-        if let editingHoldId {
-            do {
-                let _: CancelVacationResponse = try await api.request(
-                    MailboxP3Endpoints.cancelVacation(holdId: editingHoldId)
-                )
-            } catch {
-                toast = (error as? APIError)?.errorDescription ?? "Couldn't update your hold."
-                return
-            }
-            self.editingHoldId = nil
-            activeHoldId = nil
-            activeHoldDTO = nil
-        }
-
-        // The composer collects scopes / forwarding, not the backend's
-        // hold / package enums — derive the closest action from forwarding.
         let request = StartVacationRequest(
             homeId: homeId,
             startDate: Self.isoDay(draft.fromDate),
             endDate: Self.isoDay(draft.toDate),
-            holdAction: draft.forwardingEnabled ? Self.forwardToHousehold : "hold_in_vault",
-            packageAction: "hold_at_carrier",
-            autoNeighborRequest: false
+            holdAction: activeHoldDTO?.holdAction ?? "hold_in_vault",
+            packageAction: activeHoldDTO?.packageAction ?? "hold_at_carrier",
+            autoNeighborRequest: activeHoldDTO?.autoNeighborRequest ?? false,
+            holdId: editingHoldId
         )
         do {
             let response: StartVacationResponse = try await api.request(
@@ -318,10 +304,16 @@ public final class VacationHoldViewModel {
             activeHoldId = response.hold.id
             activeHoldDTO = response.hold
             mode = .active(Self.activeHold(from: response.hold))
-            toast = "Hold scheduled"
+            editingHoldId = nil
+            toast = "Travel dates saved"
         } catch {
             // Keep the composer; the CTA can be retried.
-            toast = (error as? APIError)?.errorDescription ?? "Couldn't schedule your hold."
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't save your travel dates."
+            if let apiError = error as? APIError, case .clientError(status: 409, message: _) = apiError {
+                loadError = message
+            } else {
+                toast = message
+            }
         }
     }
 
@@ -337,7 +329,8 @@ public final class VacationHoldViewModel {
             activeHoldDTO = nil
             editingHoldId = nil
             mode = .scheduling(VacationScheduleDraft.liveDefault())
-            toast = "Hold ended"
+            toast = "Travel dates cancelled"
+            await load()
         } catch {
             // Keep the active hold visible.
             toast = (error as? APIError)?.errorDescription ?? "Couldn't end your hold."
@@ -351,8 +344,13 @@ public final class VacationHoldViewModel {
         guard let api else { return nil }
         do {
             let response: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
-            return response.sharedHomes.first?.id
+            guard let homeId = response.sharedHomes.first?.id else {
+                toast = "Add a home before saving travel dates."
+                return nil
+            }
+            return homeId
         } catch {
+            toast = (error as? APIError)?.errorDescription ?? "Couldn't load your home. Try saving again."
             return nil
         }
     }
@@ -391,34 +389,18 @@ public final class VacationHoldViewModel {
         let start = parseDay(hold.startDate)
         let daysLeft = end.map { max(0, Self.dayCount(from: today, to: $0)) } ?? 0
         let untilLabel = end.map(shortDayLabel(_:)) ?? (hold.endDate ?? "")
-        let heldCount = hold.itemsHeldCount ?? 0
-        let heldItems: [VacationHeldItem] = heldCount > 0
-            ? [
-                VacationHeldItem(
-                    icon: .mail,
-                    label: "Held items",
-                    sub: "Holding until you return",
-                    count: heldCount
-                )
-            ]
-            : []
-        let forwarding: VacationForwardingTarget? = hold.holdAction == forwardToHousehold
-            ? VacationForwardingTarget(
-                title: "Forwarding urgent mail",
-                sub: "To your household address"
-            )
-            : nil
+        let statusLabel = hold.status == "scheduled" ? "Scheduled" : (hold.status == "completed" ? "Completed" : "Current")
+        let fromLabel = start.map(shortDayLabel(_:)) ?? (hold.startDate ?? "")
         return VacationActiveHold(
             daysLeft: daysLeft,
             untilLabel: untilLabel,
-            resumeBlurb: untilLabel.isEmpty
-                ? "Everything held resumes delivery when your hold ends."
-                : "Everything held resumes delivery the morning of \(untilLabel).",
-            stats: [VacationHoldStat(id: "items", count: heldCount, label: "Items held")],
-            heldItems: heldItems,
-            forwarding: forwarding,
+            resumeBlurb: "Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.",
+            stats: [],
+            heldItems: [],
+            forwarding: nil,
             emergency: nil,
-            activeSinceLabel: start.map { "Active since \(shortDayLabel($0))" } ?? "Active"
+            activeSinceLabel: "\(fromLabel) – \(untilLabel) · Status changes at midnight UTC.",
+            statusLabel: statusLabel
         )
     }
 

@@ -406,8 +406,8 @@ final class EventTypeListViewModel: ListOfRowsDataSource {
         }
     }
 
-    func confirmDelete() async {
-        guard let target = deleteTarget else { return }
+    func confirmDelete(target: EventTypeDTO? = nil) async {
+        guard let target = target ?? deleteTarget else { return }
         deleteTarget = nil
         await mutate {
             try await self.client.send(SchedulingEndpoints.deleteEventType(owner: self.owner, id: target.id))

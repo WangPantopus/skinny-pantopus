@@ -123,6 +123,10 @@ class BusinessProfileViewModel
             _toastMessage.value = null
         }
 
+        fun showToast(message: String) {
+            _toastMessage.value = message
+        }
+
         fun setShowOverflow(show: Boolean) {
             _showOverflow.value = show
         }

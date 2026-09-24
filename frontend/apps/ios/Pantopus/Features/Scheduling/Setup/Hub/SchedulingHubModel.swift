@@ -131,8 +131,18 @@ final class SchedulingHubModel {
     private(set) var eventTypes: [EventTypeDTO] = []
     private(set) var availabilityRules: [AvailabilityRuleDTO] = []
     private(set) var connectedCalendars: [ConnectedCalendarDTO] = []
-    private(set) var canEdit = true
+    private(set) var canEdit = false
+    private var fetchGeneration = 0
+    private(set) var accessDenied = false
     private(set) var isPaused = false
+    private(set) var pauseError: String?
+    /// The first business the user can manage (`GET /api/businesses/my-businesses`,
+    /// the source web's hub uses). The Business pill shows only when there is one.
+    private(set) var businessOwnerId: String?
+    private(set) var hasBusiness: Bool
+    /// The link card's live preview: the next open start times of the first
+    /// active event type. `[]` when there are none; nil when unread.
+    private(set) var previewTimes: [String]?
 
     private let client = SchedulingClient.shared
     private let api = APIClient.shared
@@ -144,13 +154,24 @@ final class SchedulingHubModel {
     init(owner: SchedulingOwner, push: @escaping @MainActor (SchedulingRoute) -> Void) {
         self.owner = owner
         self.push = push
+        var isBusiness = false
+        if case .business = owner { isBusiness = true }
+        hasBusiness = isBusiness
+    }
+
+    /// The identity pills: Business only when the user runs a business.
+    var pillarChoices: [SchedulingPillarChoice] {
+        hasBusiness ? SchedulingPillarChoice.allCases : [.personal, .home]
     }
 
     // MARK: Lifecycle
 
     func load() async {
         phase = .loading
+        async let business = resolveFirstBusinessId()
         await fetch()
+        businessOwnerId = await business
+        if businessOwnerId != nil { hasBusiness = true }
     }
 
     func refresh() async {
@@ -158,77 +179,158 @@ final class SchedulingHubModel {
     }
 
     func selectPillar(_ choice: SchedulingPillarChoice) async {
-        guard !choice.matches(owner) else { return }
+        if choice.matches(owner) {
+            // Selecting the current owner cancels a different owner still resolving.
+            if phase == .loading { await fetch() }
+            return
+        }
+        fetchGeneration += 1
+        let generation = fetchGeneration
         phase = .loading
-        // Resolve the owner id BEFORE mutating `owner` — an unresolved id must
-        // never produce a malformed `/api/homes//scheduling` request, and the
-        // failure copy is pillar-specific (mirrors Android SchedulingHubViewModel).
+        previewTimes = nil
+        pauseError = nil
+        canEdit = false
+        let nextOwner: SchedulingOwner
         switch choice {
         case .personal:
-            owner = .personal
+            nextOwner = .personal
         case .home:
-            guard let homeId = await resolveFirstHomeId(), !homeId.isEmpty else {
+            let homeId = await resolveFirstHomeId()
+            guard generation == fetchGeneration else { return }
+            guard let homeId, !homeId.isEmpty else {
                 phase = .error("No household yet. Create one to share a family booking link.")
                 return
             }
-            owner = .home(homeId: homeId)
+            nextOwner = .home(homeId: homeId)
         case .business:
-            guard let userId = await resolveCurrentUserId(), !userId.isEmpty else {
+            let businessId: String? = if let businessOwnerId { businessOwnerId } else { await resolveFirstBusinessId() }
+            guard generation == fetchGeneration else { return }
+            guard let businessId, !businessId.isEmpty else {
                 phase = .error("Couldn't load your business scheduling.")
                 return
             }
-            owner = .business(id: userId)
+            businessOwnerId = businessId
+            nextOwner = .business(id: businessId)
         }
+        owner = nextOwner
         await fetch()
     }
 
     private func fetch() async {
-        // Re-arm edit affordances on every fetch — a 403 from one pillar must
-        // not latch view-only mode onto the others (mirrors Android's
-        // `canEdit = true` at the top of fetch).
-        canEdit = true
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        let fetchOwner = owner
+        pauseError = nil
+        phase = .loading
+        previewTimes = nil
+        canEdit = false
+        accessDenied = false
         let pageResult: BookingPageResponse
         do {
-            pageResult = try await client.request(SchedulingEndpoints.getBookingPage(owner: owner))
-        } catch let error as SchedulingError {
-            if case .forbidden = error { canEdit = false }
-            phase = .error(error.userMessage ?? "Couldn't load your scheduling hub.")
-            return
+            pageResult = try await client.request(SchedulingEndpoints.getBookingPage(owner: fetchOwner))
         } catch {
-            phase = .error("Couldn't load your scheduling hub.")
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
+            showPageError(error)
             return
         }
 
-        let isPersonal = owner.isPersonal
+        guard generation == fetchGeneration, owner == fetchOwner else { return }
+        if case let .home(homeId) = fetchOwner {
+            do {
+                let access: HomeAccessDTO = try await api.request(HomeAdminEndpoints.myAccess(homeId: homeId))
+                guard generation == fetchGeneration, owner == fetchOwner else { return }
+                canEdit = access.can("calendar.edit")
+            } catch {
+                guard generation == fetchGeneration, owner == fetchOwner else { return }
+                phase = .error("Couldn't check your Home scheduling access. Try again.")
+                return
+            }
+        } else if generation == fetchGeneration, owner == fetchOwner {
+            canEdit = true
+        }
 
-        async let typesR: EventTypesResponse? = try? api.request(SchedulingEndpoints.getEventTypes(owner: owner))
-        async let summaryR: HubSummary? = try? api.request(SchedulingEndpoints.getBookingsSummary(owner: owner))
-        async let upcomingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: owner, status: "upcoming"))
-        async let pendingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: owner, status: "pending"))
+        let isPersonal = fetchOwner.isPersonal
+
+        async let typesR: EventTypesResponse? = try? api.request(SchedulingEndpoints.getEventTypes(owner: fetchOwner))
+        async let summaryR: HubSummary? = try? api.request(SchedulingEndpoints.getBookingsSummary(owner: fetchOwner))
+        async let upcomingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: fetchOwner, status: "upcoming"))
+        async let pendingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: fetchOwner, status: "pending"))
         async let availR: AvailabilityResponse? = isPersonal ? (try? api.request(SchedulingEndpoints.getAvailability())) : nil
         async let calR: ConnectedCalendarsResponse? = isPersonal ? (try? api.request(SchedulingEndpoints.getConnectedCalendars())) : nil
-        async let namesR: [String: String] = resolveMemberNames()
+        async let namesR: [String: String] = resolveMemberNames(owner: fetchOwner)
 
+        let (typesResponse, summaryResponse, upcomingResponse, pendingResponse, availabilityResponse, calendarsResponse, names) =
+            await (typesR, summaryR, upcomingR, pendingR, availR, calR, namesR)
+        guard generation == fetchGeneration, owner == fetchOwner else { return }
         page = pageResult.page
         isPaused = pageResult.page.isPaused
-        let typesResponse = await typesR
         eventTypes = typesResponse?.eventTypes ?? []
-        let s = await summaryR
-        summary = s
-        summaryFailed = (s == nil)
-        upcoming = await (upcomingR)?.bookings ?? []
-        pending = await (pendingR)?.bookings ?? []
-        availabilityRules = await (availR)?.rules ?? []
-        connectedCalendars = await (calR)?.calendars ?? []
-        memberNames = await namesR
+        summary = summaryResponse
+        summaryFailed = (summaryResponse == nil)
+        upcoming = upcomingResponse?.bookings ?? []
+        pending = pendingResponse?.bookings ?? []
+        availabilityRules = availabilityResponse?.rules ?? []
+        connectedCalendars = calendarsResponse?.calendars ?? []
+        memberNames = names
 
         // A failed /event-types fetch is an error with retry — never the
         // first-run empty state. Enter .empty only on a successful zero-row
         // response (a 500/timeout must not render "set up your page").
         if typesResponse == nil {
             phase = .error("Couldn't load your scheduling hub.")
+        } else if upcomingResponse == nil || pendingResponse == nil {
+            phase = .error("Couldn't load your bookings. Try again.")
         } else {
             phase = eventTypes.isEmpty ? .empty : .loaded
+            if !eventTypes.isEmpty { await refreshPreviewTimes(owner: fetchOwner, generation: generation) }
+        }
+    }
+
+    private func showPageError(_ error: Error) {
+        if let schedulingError = error as? SchedulingError {
+            if case .forbidden = schedulingError {
+                accessDenied = true
+                canEdit = false
+                phase = .error("You don't have access to this scheduling hub. Ask an owner for access.")
+            } else {
+                phase = .error(schedulingError.userMessage ?? "Couldn't load your scheduling hub.")
+            }
+        } else {
+            phase = .error("Couldn't load your scheduling hub.")
+        }
+    }
+
+    /// The first day's next open start times (up to three) of the first active
+    /// event type, from the public slots read over the next 14 days, in the
+    /// page's time zone.
+    private func refreshPreviewTimes(owner fetchOwner: SchedulingOwner, generation: Int) async {
+        guard let slug = page?.slug, !slug.isEmpty,
+              let type = eventTypes.first(where: { $0.isActive != false }) else {
+            previewTimes = []
+            return
+        }
+        let tz = page?.timezone.flatMap { TimeZone(identifier: $0) != nil ? $0 : nil } ?? TimeZone.current.identifier
+        let now = Date()
+        do {
+            let response: PublicSlotsResponse = try await client.request(
+                SchedulingPublicEndpoints.slots(
+                    slug: slug,
+                    eventTypeSlug: type.slug,
+                    from: SchedulingTime.isoDay(now),
+                    to: SchedulingTime.isoDay(now.addingTimeInterval(14 * 86400)),
+                    tz: tz
+                )
+            )
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
+            let future = response.slots.filter { (SchedulingTime.parseUTC($0.start) ?? .distantPast) > now }
+            let firstDay = future.first.flatMap { SchedulingTime.parseUTC($0.start) }.map { SchedulingTime.isoDay($0, tz: tz) }
+            previewTimes = future
+                .filter { SchedulingTime.parseUTC($0.start).map { SchedulingTime.isoDay($0, tz: tz) } == firstDay }
+                .prefix(3)
+                .compactMap { SchedulingTime.localString(utcISO: $0.start, tz: tz, dateStyle: .none, timeStyle: .short) }
+        } catch {
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
+            previewTimes = nil
         }
     }
 
@@ -247,19 +349,31 @@ final class SchedulingHubModel {
 
     func setPaused(_ paused: Bool) async {
         guard canEdit else { return }
+        let requestOwner = owner
+        let generation = fetchGeneration
         let previous = isPaused
+        pauseError = nil
         isPaused = paused
         do {
             let result: BookingPageResponse = try await client.request(
-                SchedulingEndpoints.updateBookingPage(owner: owner, BookingPageUpdateRequest(isPaused: paused))
+                SchedulingEndpoints.updateBookingPage(owner: requestOwner, BookingPageUpdateRequest(isPaused: paused))
             )
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             page = result.page
             isPaused = result.page.isPaused
         } catch let error as SchedulingError {
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
-            if case .forbidden = error { canEdit = false }
+            if case .forbidden = error {
+                canEdit = false
+                pauseError = "Your access changed. Ask an owner to update bookings."
+            } else {
+                pauseError = paused ? "Couldn't pause bookings. Try again." : "Couldn't resume bookings. Try again."
+            }
         } catch {
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
+            pauseError = paused ? "Couldn't pause bookings. Try again." : "Couldn't resume bookings. Try again."
         }
     }
 
@@ -442,7 +556,7 @@ final class SchedulingHubModel {
     /// (home occupants / business team) into a user-id → name map so agenda
     /// rows can render the design's `user` glyph + host first name. Personal
     /// hubs skip the fetch; failures degrade to no attribution.
-    private func resolveMemberNames() async -> [String: String] {
+    private func resolveMemberNames(owner: SchedulingOwner) async -> [String: String] {
         switch owner {
         case .personal:
             return [:]
@@ -471,9 +585,9 @@ final class SchedulingHubModel {
         return r?.homes.first?.home.id
     }
 
-    private func resolveCurrentUserId() async -> String? {
-        let r: ProfileResponse? = try? await api.request(UsersEndpoints.profile())
-        return r?.user.id
+    private func resolveFirstBusinessId() async -> String? {
+        let r: MyBusinessesResponse? = try? await api.request(BusinessesEndpoints.myBusinesses())
+        return r?.businesses.first?.businessUserId
     }
 
     // MARK: Static helpers

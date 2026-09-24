@@ -374,9 +374,8 @@ private struct HostAvatar: View {
             .frame(width: 64, height: 64)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 3))
-
-            verifiedCheck
-                .offset(x: 2, y: 2)
+            // No verified check: the public page payload carries no host
+            // verification.
         }
     }
 
@@ -384,14 +383,6 @@ private struct HostAvatar: View {
         Text(initials)
             .font(.system(size: 23, weight: .bold))
             .foregroundStyle(Theme.Color.appTextInverse)
-    }
-
-    private var verifiedCheck: some View {
-        Icon(.check, size: 10, strokeWidth: 4, color: Theme.Color.appTextInverse)
-            .frame(width: 18, height: 18)
-            .background(Theme.Color.successSolid)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2.5))
     }
 }
 

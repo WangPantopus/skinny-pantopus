@@ -57,7 +57,7 @@ import app.pantopus.android.ui.theme.Spacing
  * Contact picker for the New Message flow (T6.6b P25). Modal-style
  * top bar (Cancel + title), sticky search bar (the primary
  * affordance), then stacked card-style sections — Connections,
- * Recent, All verified — each with avatar-first contact rows. Tap a
+ * Recent, People — each with avatar-first contact rows. Tap a
  * row → emit a [NewMessageDestination] via the VM; the host
  * (RootTabScreen) pops the picker and pushes the chat-conversation
  * route in `person(otherUserId)` mode.

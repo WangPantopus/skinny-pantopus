@@ -839,7 +839,8 @@ class MailDetailViewModel
             @JvmStatic
             fun project(detail: MailDetail): MailDetailContent {
                 val category = MailItemCategory.fromRaw(detail.mailType ?: detail.type)
-                val trust = MailTrust.fromRaw(null)
+                // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
+                val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName =
                     detail.sender?.name
                         ?: detail.senderBusinessName
@@ -851,6 +852,7 @@ class MailDetailViewModel
                         category = category,
                         sender = detail.sender,
                         businessName = detail.senderBusinessName,
+                        senderTrust = detail.senderTrust,
                     )
                 val carrierLine = "via ${carrierLabel(detail.`object`)}"
                 val referenceLabel = referenceLabel(detail.`object`, detail.id)
@@ -992,17 +994,12 @@ class MailDetailViewModel
                         } else {
                             null
                         },
-                    // Backend ingestion for personal invites is not yet
-                    // wired; fall back to the deterministic fixture so the
-                    // A17.9 variant lights up the moment a user opens a
-                    // party-categorised mail. Once the wire schema ships,
-                    // `PartyDetailDto.decodeFromObjectPayload(...)` returns
-                    // the real payload and this fallback becomes dead code.
+                    // No sample invite: a party letter without an invite
+                    // payload opens in the generic layout rather than showing
+                    // someone else's party.
                     party =
                         if (category == MailItemCategory.Party) {
                             PartyDetailDto.decodeFromObjectPayload(payload)
-                                ?: app.pantopus.android.ui.screens.mailbox.item_detail.MailItemSampleData
-                                    .partyInvite
                         } else {
                             null
                         },
@@ -1053,18 +1050,25 @@ class MailDetailViewModel
                     ?: "Pantopus Mail"
             }
 
+            /**
+             * "Verified sender" only when the letter's stored `sender_trust`
+             * says so; the category or a business name alone proves nothing.
+             */
             @JvmStatic
             fun senderTypeLabel(
                 category: MailItemCategory,
                 sender: MailDetail.Sender?,
                 businessName: String?,
+                senderTrust: String?,
             ): String =
                 when {
                     sender != null -> "Pantopus user"
-                    businessName != null && category.detailTrust == MailDetailTrust.Verified -> "Verified sender"
+                    businessName != null && senderTrust in VERIFIED_SENDER_TRUST -> "Verified sender"
                     businessName != null -> "Business"
                     category.detailTrust == MailDetailTrust.Warning -> "Action notice"
                     else -> "Mail sender"
                 }
+
+            private val VERIFIED_SENDER_TRUST = setOf("verified_gov", "verified_utility", "verified_business")
         }
     }

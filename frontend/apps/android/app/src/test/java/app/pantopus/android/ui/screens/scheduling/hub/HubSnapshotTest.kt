@@ -73,6 +73,8 @@ class HubSnapshotTest {
                         readOnly = false,
                         onCopy = {},
                         onShare = {},
+                        // Fixture open times; the hub reads real ones from the public slots API.
+                        previewTimes = listOf("9:00", "9:30", "10:00"),
                     )
                     HubPauseRow(SchedulingPillar.Personal, isAccepting = true) {}
                     HubManageGroup(

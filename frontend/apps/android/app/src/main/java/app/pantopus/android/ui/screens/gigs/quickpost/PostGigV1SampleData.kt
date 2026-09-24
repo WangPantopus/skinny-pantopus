@@ -61,7 +61,7 @@ object PostGigV1SampleData {
             ),
             PostGigV1ValidationError(
                 field = PostGigV1Field.Price,
-                message = "Enter a price, or pick Free.",
+                message = "Enter a price, or pick Open to offers.",
             ),
             PostGigV1ValidationError(
                 field = PostGigV1Field.DateTime,

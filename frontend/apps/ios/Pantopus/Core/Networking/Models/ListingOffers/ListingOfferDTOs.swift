@@ -49,6 +49,7 @@ public struct ListingOfferDTO: Decodable, Sendable, Hashable, Identifiable {
     public let updatedAt: String?
     public let buyer: ListingOfferUserDTO?
     public let seller: ListingOfferUserDTO?
+    public let checkout: ListingCheckoutSummary?
 
     public init(
         id: String,
@@ -67,7 +68,8 @@ public struct ListingOfferDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         buyer: ListingOfferUserDTO? = nil,
-        seller: ListingOfferUserDTO? = nil
+        seller: ListingOfferUserDTO? = nil,
+        checkout: ListingCheckoutSummary? = nil
     ) {
         self.id = id
         self.listingId = listingId
@@ -86,10 +88,11 @@ public struct ListingOfferDTO: Decodable, Sendable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.buyer = buyer
         self.seller = seller
+        self.checkout = checkout
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, amount, message, status, buyer, seller
+        case id, amount, message, status, buyer, seller, checkout
         case listingId = "listing_id"
         case buyerId = "buyer_id"
         case sellerId = "seller_id"
@@ -137,6 +140,17 @@ public struct ListingOfferUserDTO: Decodable, Sendable, Hashable, Identifiable {
 }
 
 /// Body for `POST /api/listings/:listingId/offers/:offerId/counter`.
+/// Body for `POST /api/listings/:listingId/offers` (`createOfferSchema`: amount ≥ 0 or null, message ≤ 500).
+public struct CreateListingOfferBody: Encodable, Sendable {
+    public let amount: Double?
+    public let message: String?
+
+    public init(amount: Double?, message: String?) {
+        self.amount = amount
+        self.message = message
+    }
+}
+
 public struct CounterListingOfferBody: Encodable, Sendable {
     public let counterAmount: Double
     public let counterMessage: String?
@@ -149,5 +163,18 @@ public struct CounterListingOfferBody: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case counterAmount
         case counterMessage
+    }
+}
+
+/// Buyer-only display state; the intent endpoint remains the payment authority.
+public struct ListingCheckoutSummary: Decodable, Sendable, Hashable {
+    public let state: String
+    public let canContinue: Bool
+    public let paymentStatus: String?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case canContinue = "can_continue"
+        case paymentStatus = "payment_status"
     }
 }

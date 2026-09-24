@@ -108,6 +108,7 @@ public struct MeView: View {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 MeHeader(
                     content: active,
+                    showBusiness: viewModel.showBusiness,
                     onClose: onClose
                 ) { viewModel.selectIdentity($0) }
                 if !active.isUnbound {
@@ -140,10 +141,13 @@ public struct MeView: View {
                     }
                     if let progress = viewModel.inviteProgress {
                         InviteProgressCard(
-                            progress: progress
-                        ) { systemSheet = .share(items: [viewModel.inviteShareMessage]) }
-                            .padding(.horizontal, Spacing.s4)
-                            .padding(.top, Spacing.s4)
+                            progress: progress,
+                            onShare: viewModel.inviteShareMessage.map { message in
+                                { @MainActor in systemSheet = .share(items: [message]) }
+                            }
+                        )
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s4)
                     }
                 }
                 ForEach(active.sections) { section in
@@ -206,6 +210,7 @@ public struct MeView: View {
 
 private struct MeHeader: View {
     let content: MeIdentityContent
+    let showBusiness: Bool
     let onClose: (@MainActor () -> Void)?
     let onSwitch: @MainActor (MeIdentity) -> Void
 
@@ -307,7 +312,7 @@ private struct MeHeader: View {
 
     private var identityPillRow: some View {
         IdentitySwitcherPillRow(
-            options: MeIdentity.allCases.map { identity in
+            options: MeIdentity.allCases.filter { showBusiness || $0 != .business }.map { identity in
                 IdentityOption(
                     id: identity.rawValue,
                     label: identity.label,

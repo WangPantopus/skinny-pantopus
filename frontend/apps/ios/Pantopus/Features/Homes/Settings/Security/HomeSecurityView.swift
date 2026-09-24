@@ -28,9 +28,9 @@ public struct HomeSecurityView: View {
 }
 
 #Preview("Balanced") {
-    HomeSecurityView(viewModel: HomeSecurityViewModel(homeId: "home-1", variant: .balanced)) {}
+    HomeSecurityView(viewModel: HomeSecurityViewModel.preview(variant: .balanced)) {}
 }
 
 #Preview("Strict") {
-    HomeSecurityView(viewModel: HomeSecurityViewModel(homeId: "home-1", variant: .strict)) {}
+    HomeSecurityView(viewModel: HomeSecurityViewModel.preview(variant: .strict)) {}
 }

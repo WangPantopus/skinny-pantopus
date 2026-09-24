@@ -283,7 +283,7 @@ public struct TasksTabRoot: View {
                         displayName: profile.displayName,
                         initials: Self.initials(from: profile.displayName),
                         identityKind: nil,
-                        verified: profile.verified ?? false
+                        verified: profile.hasVerifiedResidency
                     )))
                 }
             },
@@ -332,14 +332,16 @@ public struct TasksTabRoot: View {
             onMessage: { listing in
                 Task { @MainActor in
                     guard let sellerId = listing.userId else { return }
-                    let name = listing.title ?? "Seller"
+                    // The chat is with the seller; the listing is its topic.
+                    let title = listing.title ?? "Listing"
+                    let name = listing.creator?.resolvedDisplayName ?? title
                     path.append(.chatConversation(InboxConversationDestination(
                         mode: .person(otherUserId: sellerId),
                         displayName: name,
                         initials: Self.initials(from: name),
                         identityKind: nil,
-                        verified: false,
-                        initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: name)
+                        verified: listing.creator?.resolvedVerified ?? false,
+                        initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: title)
                     )))
                 }
             },
@@ -352,6 +354,10 @@ public struct TasksTabRoot: View {
                 Task { @MainActor in
                     path.append(.editListing(listingId: dto.id, jumpToStep: nil))
                 }
+            },
+            onFindSimilar: {
+                // Tasks is a Nearby surface: switch it to the marketplace.
+                NeighborhoodDoorStore.shared.pendingSurface = .marketplace
             }
         )
     }
@@ -387,8 +393,11 @@ public struct TasksTabRoot: View {
                 onOpenBuyer: { buyer in
                     Task { @MainActor in path.append(.publicProfile(userId: buyer.id)) }
                 },
-                onOpenTransaction: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Transaction detail")) }
+                onMessageBuyer: { offer in
+                    guard let chat = ListingOffersViewModel.buyerChat(
+                        for: offer, listingId: listingId, listingTitle: titleHint
+                    ) else { return }
+                    Task { @MainActor in path.append(.chatConversation(chat)) }
                 },
                 onEditPrice: {
                     Task { @MainActor in

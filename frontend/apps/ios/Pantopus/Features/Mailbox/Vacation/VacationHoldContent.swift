@@ -129,6 +129,7 @@ public struct VacationActiveHold: Sendable, Hashable {
     public let forwarding: VacationForwardingTarget?
     public let emergency: VacationEmergencyContact?
     public let activeSinceLabel: String
+    public let statusLabel: String
 
     public init(
         daysLeft: Int,
@@ -138,7 +139,8 @@ public struct VacationActiveHold: Sendable, Hashable {
         heldItems: [VacationHeldItem],
         forwarding: VacationForwardingTarget?,
         emergency: VacationEmergencyContact?,
-        activeSinceLabel: String
+        activeSinceLabel: String,
+        statusLabel: String = "Current"
     ) {
         self.daysLeft = daysLeft
         self.untilLabel = untilLabel
@@ -148,6 +150,7 @@ public struct VacationActiveHold: Sendable, Hashable {
         self.forwarding = forwarding
         self.emergency = emergency
         self.activeSinceLabel = activeSinceLabel
+        self.statusLabel = statusLabel
     }
 }
 
@@ -196,11 +199,9 @@ public struct VacationScheduleDraft: Sendable, Hashable {
         return max(0, (components.day ?? 0) + 1)
     }
 
-    /// The form is valid when there is at least 1 day of hold and at
-    /// least one scope toggled on (locked civic notices don't count —
-    /// they're delivery, not hold).
+    /// Only the saved date range is editable; handling controls are unavailable.
     public var isValid: Bool {
-        spanDays >= 1 && scopes.contains { $0.isOn && !$0.isLocked }
+        spanDays >= 1
     }
 
     /// Blank composer the live screen opens with when
@@ -210,46 +211,49 @@ public struct VacationScheduleDraft: Sendable, Hashable {
     /// forwarding address / emergency contact stay empty rather than
     /// showing a fixture as if it were the user's own. Mirrors Android
     /// `VacationScheduleDraft.liveDefault`.
+    ///
+    /// "Today" is the user's own calendar day. Draft days are that day's
+    /// UTC midnight (see `VacationDay`), so the day shown, the day counted
+    /// and the day sent never drift across time zones.
     public static func liveDefault(today: Date = Date()) -> VacationScheduleDraft {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-        let from = calendar.startOfDay(for: today)
-        let to = calendar.date(byAdding: .day, value: 7, to: from) ?? from
+        let from = VacationDay.day(fromLocal: today)
+        let to = VacationDay.calendar.date(byAdding: .day, value: 7, to: from) ?? from
         return VacationScheduleDraft(
             fromDate: from,
             toDate: to,
-            scopes: [
-                VacationHoldScope(
-                    kind: .mail,
-                    label: "Mail & flyers",
-                    sub: "Postal hold via USPS API",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .packages,
-                    label: "Packages",
-                    sub: "Carriers hold at neighborhood hub",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .marketplacePickups,
-                    label: "Marketplace pickups",
-                    sub: "Buyers see away status",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .civic,
-                    label: "Civic notices",
-                    sub: "Permits, voting, service alerts",
-                    isOn: false,
-                    isLocked: true
-                )
-            ],
+            scopes: [],
             forwardingEnabled: false,
             forwarding: nil,
             emergency: nil,
-            footerBlurb: "Applies to your primary home address."
+            footerBlurb: "Dates are saved to your home. Status changes at midnight UTC."
         )
+    }
+}
+
+// MARK: - Calendar days
+
+/// A vacation date is a calendar day. The draft stores it as that day's
+/// UTC midnight (the wire's `yyyy-MM-dd` day); the date picker works in the
+/// user's own time zone. These convert between the two without moving the day.
+public enum VacationDay {
+    /// UTC gregorian calendar — the draft's and the wire's day arithmetic.
+    public static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar
+    }
+
+    /// The draft day (UTC midnight) for the calendar day `date` falls on in
+    /// the user's time zone.
+    public static func day(fromLocal date: Date, localCalendar: Calendar = .current) -> Date {
+        let comps = localCalendar.dateComponents([.year, .month, .day], from: date)
+        return calendar.date(from: comps) ?? calendar.startOfDay(for: date)
+    }
+
+    /// The local midnight of a draft day, for a date picker in the user's time zone.
+    public static func localDate(fromDay day: Date, localCalendar: Calendar = .current) -> Date {
+        let comps = calendar.dateComponents([.year, .month, .day], from: day)
+        return localCalendar.date(from: comps) ?? day
     }
 }
 

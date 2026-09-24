@@ -258,23 +258,14 @@ struct ComposedAvailabilityNote: View {
             }
             HStack(spacing: Spacing.s2) {
                 Icon(.globe, size: 14, color: identity.accent)
-                Text("Everyone's set to \(timezone)")
+                // The device's zone, which finish-setup gives the booking page;
+                // members' own hours keep their own zones.
+                Text("Times show in your time zone (\(timezone))")
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: Spacing.s2)
-                HStack(spacing: Spacing.s1) {
-                    Icon(.check, size: 10, strokeWidth: 3, color: Theme.Color.appTextInverse)
-                    Text("CONFIRMED")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.4)
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .padding(.horizontal, Spacing.s2)
-                .padding(.vertical, 3)
-                .background(Theme.Color.successSolid)
-                .clipShape(Capsule())
             }
             .padding(.horizontal, 10)
             .padding(.vertical, Spacing.s2)
@@ -295,33 +286,31 @@ struct ComposedAvailabilityNote: View {
 private struct OnboardingMemberList: View {
     @Bindable var model: SchedulingOnboardingModel
 
-    private struct Member: Identifiable { let id: String
-        let name: String
-        let rel: String
-    }
-
-    private let members: [Member] = [
-        Member(id: "you", name: "You", rel: "Verified · household admin"),
-        Member(id: "m2", name: "David K.", rel: "Verified household member"),
-        Member(id: "m3", name: "Lena K.", rel: "Verified household member")
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             WizardOverline(text: "Household members")
             VStack(spacing: Spacing.s0) {
-                ForEach(Array(members.enumerated()), id: \.element.id) { idx, m in
-                    memberRow(m)
-                    if idx < members.count { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
+                switch model.peopleState {
+                case .loading:
+                    OnboardingPeopleLoading()
+                case .failed:
+                    OnboardingPeopleError(model: model, message: "Couldn't load your household.")
+                case .ready where model.people.isEmpty:
+                    OnboardingPeopleEmpty(message: "Just you for now — invite household members any time.")
+                case .ready:
+                    ForEach(Array(model.people.enumerated()), id: \.element.id) { idx, m in
+                        memberRow(m)
+                        if idx < model.people.count - 1 { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
+                    }
                 }
-                inviteRow
             }
             .setupCard(radius: Radii.lg, shadow: .sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task { if model.peopleState != .ready { await model.loadPeople() } }
     }
 
-    private func memberRow(_ m: Member) -> some View {
+    private func memberRow(_ m: SchedulingOnboardingModel.Person) -> some View {
         let on = model.selectedMembers.contains(m.id)
         let tone = SchedulingHubModel.avatarTone(for: m.name)
         return HStack(spacing: Spacing.s3) {
@@ -332,13 +321,13 @@ private struct OnboardingMemberList: View {
                 .background(tone.bg)
                 .clipShape(Circle())
                 .overlay(alignment: .bottomTrailing) {
-                    if on { memberVerifiedBadge.offset(x: 2, y: 2) }
+                    if on { memberSelectedBadge.offset(x: 2, y: 2) }
                 }
             VStack(alignment: .leading, spacing: 1) {
                 Text(m.name)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text(m.rel)
+                Text(m.role)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
@@ -352,8 +341,8 @@ private struct OnboardingMemberList: View {
         .padding(.vertical, 11)
     }
 
-    /// Green verified/selected check badge on a selected member's avatar.
-    private var memberVerifiedBadge: some View {
+    /// Green check on a selected member's avatar (selection, not verification).
+    private var memberSelectedBadge: some View {
         ZStack {
             Circle().fill(Theme.Color.successSolid)
             Icon(.check, size: 9, strokeWidth: 3.5, color: Theme.Color.appTextInverse)
@@ -361,34 +350,56 @@ private struct OnboardingMemberList: View {
         .frame(width: 16, height: 16)
         .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
     }
+}
 
-    private var inviteRow: some View {
-        Button {} label: {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    Circle().fill(model.accentBg)
-                    Icon(.userPlus, size: 17, color: model.accent)
-                }
-                .frame(width: 40, height: 40)
-                .overlay(Circle().stroke(style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])).foregroundStyle(model.accentBg))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Invite someone")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(model.accent)
-                    Text("Add a family member by phone or email")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: Spacing.s2)
-                Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
+/// Loading row inside a people card.
+private struct OnboardingPeopleLoading: View {
+    var body: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.s4)
+            .accessibilityIdentifier("onboardingPeopleLoading")
+    }
+}
+
+/// Empty row inside a people card (web's OnboardingWizard copy).
+private struct OnboardingPeopleEmpty: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s4)
+            .accessibilityIdentifier("onboardingPeopleEmpty")
+    }
+}
+
+/// Failure row inside a people card, with Try again.
+private struct OnboardingPeopleError: View {
+    @Bindable var model: SchedulingOnboardingModel
+    let message: String
+
+    var body: some View {
+        VStack(spacing: Spacing.s2) {
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            Button {
+                Task { await model.loadPeople() }
+            } label: {
+                Text("Try again")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(model.accent)
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("onboardingPeopleRetry")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("onboardingInviteMember")
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.s4)
     }
 }
 
@@ -626,46 +637,41 @@ private struct OnboardingServicePicker: View {
 private struct OnboardingTeamList: View {
     @Bindable var model: SchedulingOnboardingModel
 
-    private struct Teammate: Identifiable { let id: String
-        let name: String
-        let role: String
-    }
-
-    /// Design TeamList (onboarding-business-frames.jsx) seats 4 teammates — the
-    /// 4th, Dana W. (Front desk · not seated), demonstrates the front-desk role
-    /// the step subcopy references.
-    private let team: [Teammate] = [
-        Teammate(id: "owner", name: "You", role: "Owner"),
-        Teammate(id: "t2", name: "Priya N.", role: "Stylist"),
-        Teammate(id: "t3", name: "Marcus L.", role: "Stylist"),
-        Teammate(id: "t4", name: "Dana W.", role: "Front desk")
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(alignment: .firstTextBaseline) {
                 WizardOverline(text: "Team seats")
                 Spacer()
-                // Design counter reads "3 of 5 seats used" — surface the plan
-                // capacity, not just the live seated count.
-                Text("\(model.seatedTeam.count) of 5 seats used")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(model.accent)
-                    .monospacedDigit()
+                if model.peopleState == .ready, !model.people.isEmpty {
+                    // Seated of the real team, as on web — not a made-up plan size.
+                    Text("\(model.people.filter { model.seatedTeam.contains($0.id) }.count) of \(model.people.count) seats used")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(model.accent)
+                        .monospacedDigit()
+                }
             }
             VStack(spacing: Spacing.s0) {
-                ForEach(Array(team.enumerated()), id: \.element.id) { idx, m in
-                    row(m)
-                    if idx < team.count { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
+                switch model.peopleState {
+                case .loading:
+                    OnboardingPeopleLoading()
+                case .failed:
+                    OnboardingPeopleError(model: model, message: "Couldn't load your team.")
+                case .ready where model.people.isEmpty:
+                    OnboardingPeopleEmpty(message: "Just you for now — invite teammates any time.")
+                case .ready:
+                    ForEach(Array(model.people.enumerated()), id: \.element.id) { idx, m in
+                        row(m)
+                        if idx < model.people.count - 1 { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
+                    }
                 }
-                inviteRow
             }
             .setupCard(radius: Radii.lg, shadow: .sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task { if model.peopleState != .ready { await model.loadPeople() } }
     }
 
-    private func row(_ m: Teammate) -> some View {
+    private func row(_ m: SchedulingOnboardingModel.Person) -> some View {
         let on = model.seatedTeam.contains(m.id)
         let tone = SchedulingHubModel.avatarTone(for: m.name)
         let owner = m.role == "Owner"
@@ -701,34 +707,6 @@ private struct OnboardingTeamList: View {
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 11)
-    }
-
-    private var inviteRow: some View {
-        Button {} label: {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    Circle().fill(model.accentBg)
-                    Icon(.userPlus, size: 17, color: model.accent)
-                }
-                .frame(width: 40, height: 40)
-                .overlay(Circle().stroke(style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])).foregroundStyle(model.accentBg))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Invite teammate")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(model.accent)
-                    Text("2 seats left on your plan")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: Spacing.s2)
-                Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
-            }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("onboardingInviteTeammate")
     }
 }
 

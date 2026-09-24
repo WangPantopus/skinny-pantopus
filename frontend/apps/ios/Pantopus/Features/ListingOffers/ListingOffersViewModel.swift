@@ -27,10 +27,9 @@
 //        chips    : status chip + optional counter pill
 //        metaTail : "N days old · 1 of M offers"
 //        footer   :
-//          pending   → [Counter (ghost), Accept (primary)]
-//          countered → [Withdraw counter (destructive ghost),
-//                       Send counter (primary)]
-//          accepted  → [View transaction (primary)] — single button
+//          pending   → [Decline (ghost), Counter (ghost), Accept (primary)]
+//          countered → [Decline offer (destructive ghost)]
+//          accepted  → [Message buyer (primary)] — single button
 //          declined  → no footer
 //    - Top offer (highest amount among pending) gets the `LEADING`
 //      highlight (amber border + badge), per the design.
@@ -118,20 +117,20 @@ public enum ListingOfferStatus: Sendable, Hashable {
 /// The shell renders each variant as 1–2 `CompactButton.footer` (34pt)
 /// entries above the divider.
 public enum ListingOfferFooter: Sendable, Hashable {
-    /// Pending offer — Counter (ghost) + Accept (primary).
+    /// Pending offer — Decline (ghost) + Counter (ghost) + Accept (primary).
     case respondPending
-    /// Countered offer — Withdraw counter (destructive ghost) +
+    /// Countered offer — Decline offer (destructive ghost) +
     /// Send counter (primary).
     ///
     /// The backend only allows countering `pending` offers, so
     /// "Send counter" on a countered offer will surface a 409 error
-    /// (handled by the optimistic-rollback path). "Withdraw counter"
-    /// maps to the decline endpoint — the closest semantic equivalent
-    /// the backend exposes today.
+    /// (handled by the optimistic-rollback path). No route withdraws only
+    /// the counter, so the destructive action says what it does: it
+    /// declines the buyer's offer.
     case undoCounter
-    /// Accepted offer — single full-width "View transaction" button.
+    /// Accepted offer — single full-width "Message buyer" button.
     case viewTransaction
-    /// Completed offer — "View transaction" + "Leave a review" (BLOCK 2D).
+    /// Completed offer — "Message buyer" + "Leave a review" (BLOCK 2D).
     /// The review POSTs to `/api/transaction-reviews`; the backend only
     /// accepts reviews on `completed` transactions.
     case reviewTransaction
@@ -335,6 +334,13 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
     /// flow on a completed offer (BLOCK 2D).
     public var leaveReviewTarget: TransactionReviewSheetTarget?
 
+    /// The offer awaiting the seller's "Decline" confirmation (a declined
+    /// offer can't be reopened).
+    public var declineTarget: ListingOfferDTO?
+
+    /// Why the server refused the seller's last action, for the view's toast.
+    public var actionError: String?
+
     // MARK: - Dependencies
 
     private let listingId: String
@@ -342,7 +348,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
     private let api: APIClient
     private let onShareListing: @MainActor () -> Void
     private let onOpenBuyer: @MainActor (ListingOfferUserDTO) -> Void
-    private let onOpenTransaction: @MainActor (ListingOfferDTO) -> Void
+    private let onMessageBuyer: @MainActor (ListingOfferDTO) -> Void
     private let onEditPrice: @MainActor () -> Void
     private let currentUserId: @MainActor () -> String?
     private let checkout: CheckoutCoordinator
@@ -380,7 +386,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         api: APIClient = .shared,
         onShareListing: @escaping @MainActor () -> Void = {},
         onOpenBuyer: @escaping @MainActor (ListingOfferUserDTO) -> Void = { _ in },
-        onOpenTransaction: @escaping @MainActor (ListingOfferDTO) -> Void = { _ in },
+        onMessageBuyer: @escaping @MainActor (ListingOfferDTO) -> Void = { _ in },
         onEditPrice: @escaping @MainActor () -> Void = {},
         currentUserId: @escaping @MainActor () -> String? = ListingOffersViewModel.currentSignedInUserId,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
@@ -391,7 +397,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         self.api = api
         self.onShareListing = onShareListing
         self.onOpenBuyer = onOpenBuyer
-        self.onOpenTransaction = onOpenTransaction
+        self.onMessageBuyer = onMessageBuyer
         self.onEditPrice = onEditPrice
         self.currentUserId = currentUserId
         self.checkout = checkout
@@ -504,7 +510,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         public let onAccept: @Sendable () -> Void
         public let onCounter: @Sendable () -> Void
         public let onDecline: @Sendable () -> Void
-        public let onViewTransaction: @Sendable () -> Void
+        public let onMessageBuyer: @Sendable () -> Void
         public let onLeaveReview: @Sendable () -> Void
 
         public init(
@@ -512,14 +518,14 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             onAccept: @escaping @Sendable () -> Void = {},
             onCounter: @escaping @Sendable () -> Void = {},
             onDecline: @escaping @Sendable () -> Void = {},
-            onViewTransaction: @escaping @Sendable () -> Void = {},
+            onMessageBuyer: @escaping @Sendable () -> Void = {},
             onLeaveReview: @escaping @Sendable () -> Void = {}
         ) {
             self.onTap = onTap
             self.onAccept = onAccept
             self.onCounter = onCounter
             self.onDecline = onDecline
-            self.onViewTransaction = onViewTransaction
+            self.onMessageBuyer = onMessageBuyer
             self.onLeaveReview = onLeaveReview
         }
     }
@@ -565,11 +571,11 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             },
             onDecline: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in await self.declineOffer(dto) }
+                Task { @MainActor in self.requestDecline(dto) }
             },
-            onViewTransaction: { [weak self] in
+            onMessageBuyer: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onOpenTransaction(dto) }
+                Task { @MainActor in self.onMessageBuyer(dto) }
             },
             onLeaveReview: { [weak self] in
                 guard let self else { return }
@@ -598,18 +604,24 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             let accepted = response.offer
             replace(offer: accepted)
             if shouldCheckoutAcceptedOffer(accepted, fallback: dto) {
+                let checkoutUserId = currentUserId()
+                let checkoutListingId = accepted.listingId ?? dto.listingId ?? listingId
                 let outcome = await checkout.pay(CheckoutRequest(
-                    listingId: accepted.listingId ?? dto.listingId ?? listingId,
+                    listingId: checkoutListingId,
                     offerId: accepted.id,
                     description: listing?.title ?? listingTitleHint
                 ))
                 if outcome == .paid {
+                    if let checkoutUserId {
+                        checkout.markListingConfirmationPending(userId: checkoutUserId, listingId: checkoutListingId, offerId: accepted.id)
+                    }
                     await refresh()
                 }
             }
         } catch {
             offers = previous
             rebuild()
+            actionError = Self.message(for: error, fallback: "Couldn't accept this offer.")
         }
     }
 
@@ -618,6 +630,20 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
               let me = currentUserId(),
               !me.isEmpty else { return false }
         return me == (offer.buyerId ?? offer.buyer?.id ?? fallback?.buyerId ?? fallback?.buyer?.id)
+    }
+
+    /// "Decline" asks first: a declined offer can't be reopened.
+    public func requestDecline(_ dto: ListingOfferDTO) {
+        declineTarget = dto
+    }
+
+    public func cancelDecline() {
+        declineTarget = nil
+    }
+
+    public func confirmDecline(_ target: ListingOfferDTO) async {
+        declineTarget = nil
+        await declineOffer(target)
     }
 
     public func declineOffer(_ dto: ListingOfferDTO) async {
@@ -631,7 +657,14 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         } catch {
             offers = previous
             rebuild()
+            actionError = Self.message(for: error, fallback: "Couldn't decline this offer.")
         }
+    }
+
+    /// The server's reason when it has one (a 4xx), else `fallback`.
+    private static func message(for error: Error, fallback: String) -> String {
+        guard case let APIError.clientError(_, message) = error, let message, !message.isEmpty else { return fallback }
+        return message
     }
 
     /// Open the counter sheet for the offer. The actual POST runs from
@@ -727,8 +760,14 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
     /// Send the counter offer. Reverts the optimistic update on failure
     /// (the backend may 409 on "only pending offers can be countered" if
     /// the row was already accepted/declined by another session).
-    public func confirmCounter(amount: Double, message: String? = nil) async {
-        guard let target = counterTarget else { return }
+    public func confirmCounter(
+        amount: Double,
+        message: String? = nil,
+        target sheetTarget: CounterSheetTarget? = nil
+    ) async {
+        // The sheet passes its own target: dismissing it clears `counterTarget`
+        // before this task runs, which used to drop the counter unsent.
+        guard let target = sheetTarget ?? counterTarget else { return }
         counterTarget = nil
         let previous = offers
         applyOptimisticStatus(for: target.id, status: "countered", counterAmount: amount)
@@ -744,6 +783,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         } catch {
             offers = previous
             rebuild()
+            actionError = Self.message(for: error, fallback: "Couldn't send your counter.")
         }
     }
 
@@ -853,6 +893,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             trailing: .priceStack(amount: amount, sublabel: asking),
             onTap: context.callbacks.onTap,
             chips: chips,
+            wrapChips: true,
             metaTail: metaTail(for: offer, index: context.index, total: context.total, now: context.now),
             note: offer.message?.isEmpty == false ? offer.message : nil,
             highlight: context.isLeading ? .leading : nil,
@@ -897,6 +938,25 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         }
         if parts.isEmpty { return nil }
         return parts.joined(separator: " · ")
+    }
+
+    /// "Message buyer": the chat with the offer's buyer, the listing as its
+    /// topic. `nil` when the offer carries no buyer.
+    public static func buyerChat(
+        for offer: ListingOfferDTO,
+        listingId: String,
+        listingTitle: String?
+    ) -> InboxConversationDestination? {
+        guard let buyerId = offer.buyer?.id ?? offer.buyerId else { return nil }
+        let name = displayName(for: offer.buyer)
+        return InboxConversationDestination(
+            mode: .person(otherUserId: buyerId),
+            displayName: name,
+            initials: GigDetailViewModel.initialsFromName(name),
+            identityKind: nil,
+            verified: false,
+            initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listingId, title: listingTitle ?? "Listing")
+        )
     }
 
     public static func displayName(for user: ListingOfferUserDTO?) -> String {
@@ -1054,6 +1114,12 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         case .respondPending:
             RowFooter(actions: [
                 RowFooterAction(
+                    title: "Decline",
+                    icon: .x,
+                    variant: .ghost,
+                    handler: callbacks.onDecline
+                ),
+                RowFooterAction(
                     title: "Counter",
                     icon: .arrowsRepeat,
                     variant: .ghost,
@@ -1068,35 +1134,30 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             ])
         case .undoCounter:
             RowFooter(actions: [
+                // No route withdraws only the counter: this declines the buyer's offer.
                 RowFooterAction(
-                    title: "Withdraw counter",
+                    title: "Decline offer",
                     icon: .x,
                     variant: .destructive,
                     handler: callbacks.onDecline
-                ),
-                RowFooterAction(
-                    title: "Send counter",
-                    icon: .arrowsRepeat,
-                    variant: .primary,
-                    handler: callbacks.onCounter
                 )
             ])
         case .viewTransaction:
             RowFooter(actions: [
                 RowFooterAction(
-                    title: "View transaction",
-                    icon: .fileText,
+                    title: "Message buyer",
+                    icon: .messageCircle,
                     variant: .primary,
-                    handler: callbacks.onViewTransaction
+                    handler: callbacks.onMessageBuyer
                 )
             ])
         case .reviewTransaction:
             RowFooter(actions: [
                 RowFooterAction(
-                    title: "View transaction",
-                    icon: .fileText,
+                    title: "Message buyer",
+                    icon: .messageCircle,
                     variant: .ghost,
-                    handler: callbacks.onViewTransaction
+                    handler: callbacks.onMessageBuyer
                 ),
                 RowFooterAction(
                     title: "Leave a review",

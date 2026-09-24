@@ -76,6 +76,21 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
     }
   }, [existingOffer, listing.id, onOfferSent, onClose]);
 
+  const handleWithdrawOffer = useCallback(async () => {
+    if (!existingOffer) return;
+    setCounterActing(true);
+    try {
+      const { offer } = await api.listings.withdrawOffer(listing.id, existingOffer.id);
+      onOfferSent(offer);
+      onClose();
+      toast.success(isFree ? 'Interest withdrawn.' : 'Offer withdrawn.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not withdraw your offer.');
+    } finally {
+      setCounterActing(false);
+    }
+  }, [existingOffer, listing.id, isFree, onOfferSent, onClose]);
+
   const handleDeclineCounter = useCallback(async () => {
     if (!existingOffer) return;
     setCounterActing(true);
@@ -91,6 +106,11 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
   }, [existingOffer, listing.id, onClose]);
 
   const isCountered = existingOffer?.status === 'countered';
+  // "View Offer": the viewer's own offer that's still open (pending) or accepted is shown, not a new-offer form.
+  const ownOffer = existingOffer && (existingOffer.status === 'pending' || existingOffer.status === 'accepted')
+    ? existingOffer
+    : null;
+  const showForm = !isCountered && !ownOffer;
   const canSubmit = isFree || (amount && parseFloat(amount) > 0);
   const thumbnailUri = listing.media_urls?.[0];
 
@@ -100,7 +120,7 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-app-border">
           <h3 className="text-lg font-semibold text-app-text">
-            {isFree ? "I'm Interested" : 'Make an Offer'}
+            {ownOffer ? (isFree ? 'Your Interest' : 'Your Offer') : isFree ? "I'm Interested" : 'Make an Offer'}
           </h3>
           <button onClick={onClose} className="text-app-text-muted hover:text-app-text-secondary">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,8 +173,36 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
           </div>
         )}
 
+        {/* The viewer's own pending or accepted offer */}
+        {ownOffer && (
+          <div className="mx-6 my-4 p-4 rounded-xl bg-app-surface-sunken border border-app-border">
+            <p className="text-sm text-app-text-secondary">
+              {ownOffer.status === 'accepted' ? 'The seller accepted your offer' : 'Waiting for the seller'}
+            </p>
+            {!isFree && ownOffer.amount != null && (
+              <p className="text-2xl font-bold text-app-text mt-1">${ownOffer.amount}</p>
+            )}
+            {ownOffer.message && (
+              <p className="text-sm text-app-text-secondary italic mt-2">&ldquo;{ownOffer.message}&rdquo;</p>
+            )}
+            {ownOffer.status === 'accepted' ? (
+              <p className="text-sm text-app-text-secondary mt-3">
+                The item is held for you. Arrange the pickup with the seller in Messages.
+              </p>
+            ) : (
+              <button
+                onClick={handleWithdrawOffer}
+                disabled={counterActing}
+                className="w-full mt-4 px-4 py-2.5 bg-app-surface border border-app-border text-app-text-strong rounded-lg font-semibold text-sm hover:bg-app-hover disabled:opacity-50"
+              >
+                {counterActing ? 'Withdrawing...' : isFree ? 'Withdraw interest' : 'Withdraw offer'}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Amount input (non-free, non-countered) */}
-        {!isFree && !isCountered && (
+        {!isFree && showForm && (
           <div className="px-6 pt-5">
             <div className="flex items-center gap-1">
               <span className="text-2xl font-bold text-app-text">$</span>
@@ -183,14 +231,14 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
         )}
 
         {/* Free items label */}
-        {isFree && !isCountered && (
+        {isFree && showForm && (
           <div className="px-6 pt-5">
             <p className="text-sm text-app-text-secondary">Express your interest in this item</p>
           </div>
         )}
 
         {/* Message input */}
-        {!isCountered && (
+        {showForm && (
           <div className="px-6 pt-4">
             <textarea
               value={message}
@@ -204,7 +252,7 @@ export default function OfferModal({ listing, existingOffer, onOfferSent, onClos
         )}
 
         {/* Submit button */}
-        {!isCountered && (
+        {showForm && (
           <div className="px-6 py-5">
             <button
               onClick={handleSubmit}

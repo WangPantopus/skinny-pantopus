@@ -1,5 +1,6 @@
 package app.pantopus.android.data.payments
 
+import app.pantopus.android.data.api.models.listing_offers.ListingOfferDto
 import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
 import app.pantopus.android.data.api.models.payments.AddCardSheetRequest
 import app.pantopus.android.data.api.models.payments.ConfirmAddCardRequest
@@ -27,6 +28,38 @@ class PaymentsRepository
     constructor(
         private val api: PaymentsApi,
     ) {
+        // Submitted sheet IDs survive screen re-entry, without inferring paid state
+        // or retaining provider credentials. Only an authoritative read clears them.
+        private data class ListingConfirmation(val userId: String, val listingId: String, val offerId: String)
+
+        private val pendingListingConfirmations = mutableSetOf<ListingConfirmation>()
+
+        fun markListingConfirmationPending(
+            userId: String,
+            listingId: String,
+            offerId: String,
+        ) {
+            pendingListingConfirmations.add(ListingConfirmation(userId, listingId, offerId))
+        }
+
+        fun isListingConfirmationPending(
+            userId: String?,
+            listingId: String,
+        ): Boolean = pendingListingConfirmations.any { it.userId == userId && it.listingId == listingId }
+
+        fun reconcileListingConfirmation(
+            userId: String,
+            listingId: String,
+            offer: ListingOfferDto,
+        ) {
+            val summary = offer.checkout ?: return
+            val resolved = setOf("authorized", "processing", "paid", "refund_pending", "partially_refunded", "refunded", "disputed")
+            val retry = summary.state == "retry" && summary.canContinue && summary.paymentStatus == "authorization_failed"
+            if (summary.state in resolved || retry) {
+                pendingListingConfirmations.remove(ListingConfirmation(userId, listingId, offer.id))
+            }
+        }
+
         suspend fun refunds(paymentId: String): NetworkResult<app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto> =
             safeApiCall { api.refunds(paymentId) }
 

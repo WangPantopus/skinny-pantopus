@@ -40,6 +40,10 @@ public final class ExploreMapViewModel {
 
     /// Last user coordinate — drives the "you are here" disc.
     public private(set) var userCoordinate: UserCoordinate?
+    /// Query/camera area; a saved or explicit area never impersonates device location.
+    public private(set) var viewingCenter: UserCoordinate?
+    private var explicitCenter: UserCoordinate?
+    private var fetchGeneration = 0
 
     /// Applied filter criteria. Surfaced so the view can seed the filter
     /// sheet + render the active-count badge.
@@ -83,6 +87,7 @@ public final class ExploreMapViewModel {
         allEntities = ExploreMapSampleData.entities(for: scenario)
         filters = ExploreMapSampleData.filters(for: scenario)
         userCoordinate = ExploreMapSampleData.center
+        viewingCenter = ExploreMapSampleData.center
     }
 
     // MARK: - Lifecycle
@@ -106,9 +111,25 @@ public final class ExploreMapViewModel {
         await load()
     }
 
-    /// Re-resolve GPS and re-fetch the viewport around the updated anchor.
+    public func configureFocus(_ focus: ExploreMapFocus?) {
+        fetchGeneration += 1
+        fetchTask?.cancel()
+        explicitCenter = focus.map { UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 0) }
+    }
+
+    /// A locate action explicitly requests the actual device area.
     public func locate() async {
-        userCoordinate = await location.requestCurrent(timeoutSeconds: 4)
+        fetchTask?.cancel()
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        let coordinate = await location.requestCurrent(timeoutSeconds: 4)
+        guard generation == fetchGeneration else { return }
+        guard let coordinate else {
+            state = .error(message: "Turn on location to find your current area.")
+            return
+        }
+        userCoordinate = coordinate
+        explicitCenter = coordinate
         await fetchAroundUser()
     }
 
@@ -183,16 +204,26 @@ public final class ExploreMapViewModel {
 
     // MARK: - Live fetch
 
-    /// Build a ~1.3 km square viewport around the user (or a fallback
-    /// downtown anchor) and hit both in-bounds endpoints. A total failure
-    /// surfaces as `.error`; a partial failure renders what loaded.
+    /// Resolve the requested area before fetching the existing discovery routes.
+    /// A total failure surfaces as `.error`; a partial failure renders what loaded.
     private func fetchAroundUser() async {
         fetchTask?.cancel()
-        if userCoordinate == nil {
-            userCoordinate = await location.requestCurrent(timeoutSeconds: 4)
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        let center: UserCoordinate
+        do {
+            guard let resolved = try await resolveCenter() else {
+                guard generation == fetchGeneration else { return }
+                state = .error(message: "Choose an area or turn on location to explore nearby.")
+                return
+            }
+            center = resolved
+        } catch {
+            guard generation == fetchGeneration else { return }
+            state = .error(message: "Couldn't load your selected area. Please try again.")
+            return
         }
-        let center = userCoordinate
-            ?? UserCoordinate(latitude: 40.7484, longitude: -73.9857, accuracyMeters: 100)
+        guard generation == fetchGeneration else { return }
         let halfDegLat = 0.012
         let halfDegLon = 0.016
         let minLat = center.latitude - halfDegLat
@@ -222,10 +253,12 @@ public final class ExploreMapViewModel {
             let gigs = await gigsResult
             let listings = await listingsResult
             let markers = await markersResult
+            guard generation == self.fetchGeneration, !Task.isCancelled else { return }
             if gigs == nil, listings == nil, markers == nil {
                 state = .error(message: "Couldn't load the map.")
                 return
             }
+            viewingCenter = center
             allEntities = Self.project(
                 gigs: gigs?.gigs ?? [],
                 listings: listings?.listings ?? [],
@@ -236,6 +269,17 @@ public final class ExploreMapViewModel {
         }
         fetchTask = task
         _ = await task.value
+    }
+
+    private func resolveCenter() async throws -> UserCoordinate? {
+        userCoordinate = location.cachedCoordinate()
+        if let explicitCenter { return explicitCenter }
+        let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
+        if let selected = payload.viewingLocation {
+            return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
+        }
+        if userCoordinate == nil { userCoordinate = await location.requestCurrent(timeoutSeconds: 4) }
+        return userCoordinate
     }
 
     // MARK: - Projection
