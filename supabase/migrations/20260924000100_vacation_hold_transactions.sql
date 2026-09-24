@@ -1,3 +1,5 @@
+-- Backwards compatible: yes. Adds a service-only function; existing tables,
+-- columns and endpoint response shapes remain supported. Old app callers work.
 -- Deploy before the backend. No tables or existing rows change at deployment.
 -- Separate PostgREST writes acknowledged failed User updates/cancellations and
 -- overwrote another surviving hold's summary. One per-user transaction owns
