@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T00:54:27Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T01:02:09Z (active Codex coordinator)
 
-Masterb8815ad5095c0e848d1f3f45f36f1195aacdc8e3; batch5 PR398 exact23bd9a530 awaits targeted retry of one unchanged iPhone16Pro injected-request timeout, other applicable checks passed. PR399 vacation transaction repair accepted after real API/SQL/web failure, concurrency and cleanup evidence; CI OK green, held for next batch. Native vacation edit/afters remain open. Stream1 TEST authorization verified without capture; delayed-confirmation and native area-race repairs await afters. Stream3 actual iOS owner/preview/pause races reproduced, minimal fixes prepared. Support397 held for train-specific link and Tasks organizer Manage afters. All three streams active, Shared worker currently Home. Original155 remains64/29/62; broad80 remains13closed/67partial. [Live coordination block](workstreams/README.md) carries exact evidence, limitations, monitor and runtime reservations. Fresh full-app sweep still ahead; founder§7/A17 and every hard limit remain unchanged.
+Batch5 PR398/395/396 merged after unchanged-head targeted iOS rerun passed; Git mastereba2ff56209e6e6b87248c7c33bcfe436f37fbf7. Original155 now66fixed/merged,27inflight,62notstarted (89unfinished); broad80 remains13closed/67partial. Vacation399 accepted/green, next batch awaits narrow atomic-edit follow-up justified by real Android cancel-first data loss; native afters remain. Stream1 real TEST authorization accepted without capture, checkout/map guards await native afters; Stream3 frozen native scheduling repair builds and additional owner/error races remain under actual verification. Support397 held. [Live coordination block](workstreams/README.md) records evidence, approval boundaries and runtime reservations. All three core streams active, Shared worker currently Home; fresh full-app sweep ahead. Founder§7/A17 and hard limits unchanged.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 

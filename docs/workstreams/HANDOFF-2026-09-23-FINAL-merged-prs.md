@@ -1,8 +1,8 @@
 # Appendix: every PR merged on 2026-09-23 (generated from GitHub)
 
-## Live additions — checked 2026-09-23T23:50:35Z
+## Live additions — checked 2026-09-24T01:02:09Z
 
-The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `b8815ad5095c0e848d1f3f45f36f1195aacdc8e3`. Event times are GitHub-reported; merge SHAs are verified in Git.
+The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `eba2ff56209e6e6b87248c7c33bcfe436f37fbf7`. Event times are GitHub-reported; merge SHAs are verified in Git.
 
 | PR | Merged (UTC) | Merge commit | Branch | Title |
 |---|---|---|---|---|
@@ -14,6 +14,10 @@ The187-row table below is the original handoff snapshot on master1a15514cc. Thes
 | [#388](https://github.com/WangPantopus/skinny-pantopus/pull/388) | 23:42:25 | `0d2e9848f3c0212d8da1d4a2c371df3758f22a54` | via batch4 #394 | Native mail trust chips |
 | [#325](https://github.com/WangPantopus/skinny-pantopus/pull/325) | 23:42:25 | `cc3d41f5b14f4ca2cb6cbe56db263462246409a9` | via batch4 #394 | Native mail-task conflict handling and vacation dates |
 | [#392](https://github.com/WangPantopus/skinny-pantopus/pull/392) | 23:42:25 | `68b31f2e984f16d456fa5f444fdda666618c946e` | via batch4 #394 | Native business-profile location decode |
+
+| [#398](https://github.com/WangPantopus/skinny-pantopus/pull/398) | Sep24 00:58:36 | `eba2ff56209e6e6b87248c7c33bcfe436f37fbf7` | `claude/coord-merge-batch-5` | Combined reviewed batch: #395, #396 |
+| [#395](https://github.com/WangPantopus/skinny-pantopus/pull/395) | Sep24 00:58:37 | `a7339266d07c4b88624b1bb61fb69b119b061a18` | via batch5 #398 | Real native invite code and Stripe status (C-21/C-37) |
+| [#396](https://github.com/WangPantopus/skinny-pantopus/pull/396) | Sep24 00:58:38 | `23bd9a53093d6246b7973274d860d157ed3bd2e5` | via batch5 #398 | Web scheduling owner/access/live preview and read failures |
 
 ## Preserved original snapshot
 
