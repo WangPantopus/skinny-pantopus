@@ -588,6 +588,11 @@ object DeepLinkRouter {
                     else -> Destination.SupportTrain(id)
                 }
             }
+            // Stored Support Train notices used the API-style activities prefix.
+            "activities" ->
+                segments.getOrNull(2)
+                    ?.takeIf { segments.size == 3 && segments[1] == "support-trains" && MAIL_UUID.matches(it) }
+                    ?.let { Destination.SupportTrain(it) } ?: Destination.Unknown(raw)
             // `/broadcast/:id` aliases Pulse/persona post detail (RN parity).
             "post", "posts", "broadcast", "broadcasts" -> {
                 val id = segments.getOrNull(1)

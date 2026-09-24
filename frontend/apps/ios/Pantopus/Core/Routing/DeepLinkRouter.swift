@@ -475,6 +475,11 @@ final class DeepLinkRouter {
                 return .supportTrainManage(id: id)
             }
             return .supportTrain(id: id)
+        case "activities":
+            // Stored Support Train notices used the API-style activities prefix.
+            guard segments.count == 3, segments[1] == "support-trains",
+                  UUID(uuidString: segments[2]) != nil else { return .unknown(url) }
+            return .supportTrain(id: segments[2])
         case "post", "posts", "broadcast", "broadcasts":
             // `/broadcast/:id` aliases Pulse/persona post detail (RN parity).
             if let id = segments.dropFirst().first { return .post(id: id) }
