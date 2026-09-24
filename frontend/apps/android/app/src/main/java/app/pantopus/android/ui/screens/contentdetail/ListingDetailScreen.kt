@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -63,15 +64,19 @@ fun ListingDetailScreen(
     var offerSending by remember { mutableStateOf(false) }
     var offerError by remember { mutableStateOf<String?>(null) }
     var toastText by remember { mutableStateOf<String?>(null) }
-    var toastIsError by remember { mutableStateOf(false) }
+    var toastKind by remember { mutableStateOf(ToastKind.Success) }
 
     val showCheckoutError: (String) -> Unit = { message ->
-        toastIsError = true
+        toastKind = ToastKind.Error
         toastText = message
+    }
+    val showCheckoutPending: () -> Unit = {
+        toastKind = ToastKind.Info
+        toastText = "Payment submitted. Confirmation is still pending. Check status again."
     }
     val paymentSheet =
         rememberPaymentSheet { result ->
-            viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result), showCheckoutError)
+            viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result), showCheckoutError, showCheckoutPending)
         }
     val continueCheckout = {
         viewModel.continueCheckout(
@@ -88,6 +93,7 @@ fun ListingDetailScreen(
                 )
             },
             onError = showCheckoutError,
+            onPending = showCheckoutPending,
         )
     }
 
@@ -146,7 +152,7 @@ fun ListingDetailScreen(
         overflowItems = overflowItems,
         onGlassAction = { icon ->
             onListingGlassAction(icon, context, viewModel) { message ->
-                toastIsError = true
+                toastKind = ToastKind.Error
                 toastText = message
             }
         },
@@ -172,7 +178,7 @@ fun ListingDetailScreen(
                             offerSending = false
                             if (ok) {
                                 sheetVisible = false
-                                toastIsError = false
+                                toastKind = ToastKind.Success
                                 toastText = if (isFree) "Interest sent" else "Offer sent"
                             }
                         }
@@ -192,7 +198,13 @@ fun ListingDetailScreen(
                     Modifier
                         .padding(Spacing.s4)
                         .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (toastIsError) PantopusColors.error else PantopusColors.success)
+                        .background(
+                            when (toastKind) {
+                                ToastKind.Error -> PantopusColors.error
+                                ToastKind.Info -> PantopusColors.info
+                                else -> PantopusColors.success
+                            },
+                        )
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("listing-detail-toast"),
             ) {
