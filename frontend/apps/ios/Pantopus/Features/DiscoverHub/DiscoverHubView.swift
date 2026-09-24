@@ -33,7 +33,7 @@ public struct DiscoverHubView: View {
             onSeeAllMarketplace: { viewModel.seeAllMarketplace() },
             onSeeAllPosts: { viewModel.seeAllPosts() },
             onRetry: { Task { await viewModel.refreshMagazine() } },
-            onNotify: { viewModel.notifyWhenActive() }
+            onNotify: { viewModel.seeAllPosts() }
         )
         .task { await viewModel.loadMagazine() }
         .accessibilityIdentifier("discoverHub")
@@ -113,16 +113,7 @@ struct DiscoverHubMagazineContentView: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: Spacing.s2)
 
-            Button(
-                action: {},
-                label: {
-                    Icon(.search, size: 16, strokeWidth: 2.2, color: Theme.Color.appText)
-                        .frame(width: 44, height: 44)
-                }
-            )
-            .buttonStyle(.plain)
-            .accessibilityLabel("Search discovery")
-            .accessibilityIdentifier("discoverHubSearch")
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, Spacing.s1)
         .frame(height: 52)
@@ -187,6 +178,7 @@ struct DiscoverHubMagazineContentView: View {
         case let .populated(content):
             DiscoverHubRailsBody(
                 content: content,
+                selectedFilter: selectedFilter,
                 onSelectTask: onSelectTask,
                 onSelectMarketplace: onSelectMarketplace,
                 onSelectPost: onSelectPost,
@@ -220,17 +212,15 @@ private struct DiscoverCompactMapPreview: View {
                     DiscoverMiniPin(pin: pin)
                         .position(x: geo.size.width * pin.x, y: geo.size.height * pin.y)
                 }
-                if let cluster {
+                if let cluster, cluster.count >= 1 {
                     DiscoverMapClusterView(cluster: cluster)
                         .position(x: geo.size.width * cluster.x, y: geo.size.height * cluster.y)
                 }
-                DiscoverYouAreHereDot()
-                    .position(x: geo.size.width * 0.46, y: geo.size.height * 0.79)
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpenMap)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Compact discover map. Opens Explore Map.")
+            .accessibilityLabel("Open Explore Map")
             .accessibilityAddTraits(.isButton)
         }
         .clipped()
@@ -364,21 +354,6 @@ private struct DiscoverMapClusterView: View {
     }
 }
 
-private struct DiscoverYouAreHereDot: View {
-    var body: some View {
-        Circle()
-            .fill(Theme.Color.primary600)
-            .frame(width: 13, height: 13)
-            .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 3))
-            .background(
-                Circle()
-                    .fill(Theme.Color.primary600.opacity(0.20))
-                    .frame(width: 28, height: 28)
-            )
-            .accessibilityLabel("You are here")
-    }
-}
-
 // MARK: - Chips
 
 private struct DiscoverEntityChipRow: View {
@@ -387,7 +362,7 @@ private struct DiscoverEntityChipRow: View {
 
     private var chips: [DiscoverEntityChip] {
         [DiscoverEntityChip(id: "all", label: "All", kind: nil)] +
-            DiscoverHubMapKind.allCases.map {
+            [DiscoverHubMapKind.task, .item, .post].map {
                 DiscoverEntityChip(id: $0.rawValue, label: $0.pluralLabel, kind: $0)
             }
     }
@@ -448,6 +423,7 @@ private struct DiscoverEntityChip: Identifiable {
 
 private struct DiscoverHubRailsBody: View {
     let content: DiscoverHubMagazineContent
+    let selectedFilter: DiscoverHubMapKind?
     let onSelectTask: (String) -> Void
     let onSelectMarketplace: (String) -> Void
     let onSelectPost: (String) -> Void
@@ -458,69 +434,99 @@ private struct DiscoverHubRailsBody: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: Spacing.s0) {
-                DiscoverRailSectionHeader(
-                    icon: .hammer,
-                    color: DiscoverHubMapKind.task.color,
-                    title: "Tasks near you",
-                    subcopy: "Closest first - 0.5 mi radius",
-                    onSeeAll: onSeeAllTasks,
-                    identifier: "discoverHubTasksSeeAll"
-                )
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.s3) {
-                        ForEach(content.tasks) { item in
-                            DiscoverTaskRailCard(item: item) {
-                                onSelectTask(item.id)
+                if selectedFilter == nil || selectedFilter == .task {
+                    DiscoverRailSectionHeader(
+                        icon: .hammer,
+                        color: DiscoverHubMapKind.task.color,
+                        title: "Latest tasks",
+                        subcopy: "Open tasks",
+                        onSeeAll: onSeeAllTasks,
+                        identifier: "discoverHubTasksSeeAll"
+                    )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.s3) {
+                            ForEach(content.tasks) { item in
+                                DiscoverTaskRailCard(item: item) {
+                                    onSelectTask(item.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.vertical, Spacing.s1)
                     }
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.vertical, Spacing.s1)
-                }
-                .accessibilityIdentifier("discoverHubTasksRail")
+                    .accessibilityIdentifier("discoverHubTasksRail")
 
-                DiscoverRailSectionHeader(
-                    icon: .tag,
-                    color: DiscoverHubMapKind.item.color,
-                    title: "Marketplace picks",
-                    subcopy: "Fresh listings - 4 new today",
-                    onSeeAll: onSeeAllMarketplace,
-                    identifier: "discoverHubMarketplaceSeeAll"
-                )
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.s3) {
-                        ForEach(content.marketplace) { item in
-                            DiscoverMarketplaceRailCard(item: item) {
-                                onSelectMarketplace(item.id)
+                    if content.tasks.isEmpty {
+                        Text("No tasks to show yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.vertical, Spacing.s3)
+                    }
+                }
+                if selectedFilter == nil || selectedFilter == .item {
+                    DiscoverRailSectionHeader(
+                        icon: .tag,
+                        color: DiscoverHubMapKind.item.color,
+                        title: "Marketplace picks",
+                        subcopy: "Recent listings",
+                        onSeeAll: onSeeAllMarketplace,
+                        identifier: "discoverHubMarketplaceSeeAll"
+                    )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.s3) {
+                            ForEach(content.marketplace) { item in
+                                DiscoverMarketplaceRailCard(item: item) {
+                                    onSelectMarketplace(item.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.vertical, Spacing.s1)
                     }
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.vertical, Spacing.s1)
-                }
-                .accessibilityIdentifier("discoverHubMarketplaceRail")
+                    .accessibilityIdentifier("discoverHubMarketplaceRail")
 
-                DiscoverRailSectionHeader(
-                    icon: .messageCircle,
-                    color: DiscoverHubMapKind.post.color,
-                    title: "From your block",
-                    subcopy: "Pulse posts - last 24h",
-                    onSeeAll: onSeeAllPosts,
-                    identifier: "discoverHubPostsSeeAll"
-                )
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.s3) {
-                        ForEach(content.posts) { item in
-                            DiscoverPostRailCard(item: item) {
-                                onSelectPost(item.id)
+                    if content.marketplace.isEmpty {
+                        Text("No listings to show yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.vertical, Spacing.s3)
+                    }
+                }
+                if selectedFilter == nil || selectedFilter == .post {
+                    DiscoverRailSectionHeader(
+                        icon: .messageCircle,
+                        color: DiscoverHubMapKind.post.color,
+                        title: "Pulse",
+                        subcopy: "Browse local posts",
+                        onSeeAll: onSeeAllPosts,
+                        identifier: "discoverHubPostsSeeAll"
+                    )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.s3) {
+                            ForEach(content.posts) { item in
+                                DiscoverPostRailCard(item: item) {
+                                    onSelectPost(item.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.vertical, Spacing.s1)
+                        .padding(.bottom, Spacing.s4)
                     }
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.vertical, Spacing.s1)
-                    .padding(.bottom, Spacing.s4)
+                    .accessibilityIdentifier("discoverHubPostsRail")
+                    if content.posts.isEmpty {
+                        Text("Choose an area in Pulse to browse local posts.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.vertical, Spacing.s3)
+                    }
                 }
-                .accessibilityIdentifier("discoverHubPostsRail")
             }
         }
         .accessibilityIdentifier("discoverHubRails")
@@ -795,7 +801,7 @@ private struct DiscoverHubEmptyBody: View {
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.bottom, Spacing.s1)
-                Text("Check back soon - as verified neighbors near you post, things will surface here grouped by category.")
+                Text("No tasks or listings to show yet. You can still browse local posts in Pulse.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
@@ -820,8 +826,8 @@ private struct DiscoverHubEmptyBody: View {
 
                 Button(action: onNotify) {
                     HStack(spacing: Spacing.s2) {
-                        Icon(.bell, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
-                        Text("Notify me when active")
+                        Icon(.messageCircle, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
+                        Text("Browse Pulse")
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
                             .foregroundStyle(Theme.Color.appTextStrong)
@@ -833,7 +839,7 @@ private struct DiscoverHubEmptyBody: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("discoverHubNotify")
+                .accessibilityIdentifier("discoverHubBrowsePulse")
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, Spacing.s6)
@@ -961,7 +967,7 @@ private struct DiscoverDiagonalSkeleton: View {
 }
 
 #Preview("Populated") {
-    DiscoverHubView(viewModel: DiscoverHubViewModel())
+    DiscoverHubView(viewModel: DiscoverHubViewModel(magazineScenario: .populated))
 }
 
 #Preview("Empty") {
