@@ -121,10 +121,6 @@ public struct BookingParticipantDTO: Decodable, Sendable, Hashable {
     }
 }
 
-public struct BookingRsvpResponse: Decodable, Sendable {
-    public let attendee: BookingAttendeeDTO
-}
-
 /// Envelope for the single-booking mutations (approve / decline / cancel /
 /// reschedule / reassign / no-show / propose-reschedule / create) → `{ booking }`.
 public struct BookingResponse: Decodable, Sendable, Hashable {
