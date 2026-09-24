@@ -367,16 +367,21 @@ extension ListingDetailViewModel {
         state = .loaded(Self.project(listing, viewerUserId: currentUserId(), checkoutButton: checkoutButton))
     }
 
-    public func continueCheckout() async -> String? {
+    public enum CheckoutFeedback {
+        case awaitingConfirmation
+        case error(String)
+    }
+
+    public func continueCheckout() async -> CheckoutFeedback? {
         guard !isCheckingOut else { return nil }
         guard let offer = acceptedOffer, let summary = offer.checkout,
               summary.canContinue, ["ready", "retry", "pending"].contains(summary.state), !checkoutReadFailed,
               !isAwaitingConfirmation else {
             await load()
             if checkoutReadFailed || acceptedOffer?.checkout == nil || acceptedOffer?.checkout?.state == "unavailable" {
-                return "Payment status is unavailable. Please try again."
+                return .error("Payment status is unavailable. Please try again.")
             }
-            return isAwaitingConfirmation ? "Payment submitted. Confirmation is still pending. Check status again." : nil
+            return isAwaitingConfirmation ? .awaitingConfirmation : nil
         }
         let checkoutUserId = currentUserId()
         isCheckingOut = true
@@ -394,9 +399,9 @@ extension ListingDetailViewModel {
                 checkout.markListingConfirmationPending(userId: checkoutUserId, listingId: listingId, offerId: offer.id)
             }
             await load()
-            return isAwaitingConfirmation ? "Payment submitted. Confirmation is still pending. Check status again." : nil
+            return isAwaitingConfirmation ? .awaitingConfirmation : nil
         case .canceled: return nil
-        case let .declined(message), let .failed(message): return message
+        case let .declined(message), let .failed(message): return .error(message)
         }
     }
 }

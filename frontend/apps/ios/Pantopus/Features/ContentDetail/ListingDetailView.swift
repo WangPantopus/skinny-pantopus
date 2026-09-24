@@ -106,8 +106,12 @@ public struct ListingDetailView: View {
     private func handlePrimaryAction() {
         if viewModel.hasCheckoutAction {
             Task {
-                if let message = await viewModel.continueCheckout() {
+                switch await viewModel.continueCheckout() {
+                case .awaitingConfirmation:
+                    toast = ToastMessage(text: "Payment submitted. Confirmation is still pending. Check status again.", kind: .info)
+                case let .error(message):
                     toast = ToastMessage(text: message, kind: .error)
+                case nil: break
                 }
             }
             return

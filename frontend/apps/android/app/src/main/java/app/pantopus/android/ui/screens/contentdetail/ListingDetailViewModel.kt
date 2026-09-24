@@ -193,6 +193,7 @@ class ListingDetailViewModel
         fun continueCheckout(
             onReady: (PaymentIntentSheetParamsDto) -> Unit,
             onError: (String) -> Unit,
+            onPending: () -> Unit = {},
         ) {
             if (isCheckingOut || readInFlight) return
             val offer = acceptedOffer
@@ -202,7 +203,7 @@ class ListingDetailViewModel
                     if (checkoutReadFailed || acceptedOffer?.checkout == null || acceptedOffer?.checkout?.state == "unavailable") {
                         onError("Payment status is unavailable. Please try again.")
                     } else if (isAwaitingConfirmation()) {
-                        onError("Payment submitted. Confirmation is still pending. Check status again.")
+                        onPending()
                     }
                 }
                 return
@@ -239,6 +240,7 @@ class ListingDetailViewModel
         fun onCheckoutOutcome(
             outcome: CheckoutOutcome,
             onError: (String) -> Unit,
+            onPending: () -> Unit = {},
         ) {
             viewModelScope.launch {
                 if (outcome == CheckoutOutcome.Paid) {
@@ -249,7 +251,7 @@ class ListingDetailViewModel
                         paymentsRepo.markListingConfirmationPending(viewerId, listingId, offerId)
                     }
                     refreshContent()
-                    if (isAwaitingConfirmation()) onError("Payment submitted. Confirmation is still pending. Check status again.")
+                    if (isAwaitingConfirmation()) onPending()
                 }
                 checkoutUserId = null
                 checkoutOfferId = null
