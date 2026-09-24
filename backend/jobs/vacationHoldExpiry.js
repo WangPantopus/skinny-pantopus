@@ -18,12 +18,19 @@ async function vacationHoldExpiry() {
         if ((data || []).length < 500) break;
       }
     }
+    let failedUsers = 0;
     for (const userId of [...userIds].sort()) {
-      const { error } = await supabaseAdmin.rpc('vacation_hold_transition', {
-        p_user_id: userId, p_action: 'status',
-      });
-      if (error) throw error;
+      try {
+        const { error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+          p_user_id: userId, p_action: 'status',
+        });
+        if (error) throw error;
+      } catch (error) {
+        failedUsers += 1;
+        logger.error('[VacationHold] User reconciliation failed', { userId, error: error.message });
+      }
     }
+    if (failedUsers > 0) throw new Error(`Vacation reconciliation failed for ${failedUsers} user(s)`);
     logger.info('[VacationHold] Complete', { users: userIds.size });
   } catch (error) {
     logger.error('[VacationHold] Reconciliation failed', { error: error.message });
