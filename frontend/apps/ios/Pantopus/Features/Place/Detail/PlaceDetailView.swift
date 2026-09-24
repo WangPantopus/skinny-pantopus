@@ -65,7 +65,8 @@ struct PlaceDetailView: View {
     @ViewBuilder
     private func groupContent(_ intel: PlaceIntelligence) -> some View {
         switch viewModel.group {
-        case .today: PlaceTodayDetailContent(intel: intel, vm: viewModel)
+        // This page opens over the Place dashboard, where the ballot card is.
+        case .today: PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onBack)
         case .yourHome: PlaceHomeDetailContent(intel: intel, vm: viewModel)
         case .risk: PlaceRiskDetailContent(intel: intel, vm: viewModel)
         case .block: PlaceBlockDetailContent(intel: intel, vm: viewModel)

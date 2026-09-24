@@ -255,7 +255,6 @@ struct PlaceDashboardView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .kerning(0.88)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-                .padding(.horizontal, 2)
                 .accessibilityAddTraits(.isHeader)
             BallotCardView(
                 card: card,

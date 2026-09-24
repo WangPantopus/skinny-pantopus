@@ -128,6 +128,38 @@ final class BallotP0Tests: XCTestCase {
         XCTAssertEqual(PlaceDashboardView.groups(plain).flatMap(\.sections).map(\.id), [.civicDistricts, .civicElection])
     }
 
+    func testStackDrawsOneLayerPerGovernment() {
+        XCTAssertEqual(BallotStackGeometry.layers(for: 0), 1)
+        XCTAssertEqual(BallotStackGeometry.layers(for: 5), 5)
+        XCTAssertEqual(BallotStackGeometry.layers(for: 14), 9)
+        // The peel board's home line starts 10 above the top layer: 212 for five.
+        XCTAssertEqual(BallotStackGeometry.lineTop(layers: 5), 212)
+    }
+
+    func testStoryKeepsTheBoardsTiming() {
+        let story = BallotStory(steps: 5)
+        XCTAssertEqual(story.duration, 7.2, accuracy: 0.0001)
+        // Government 1: hidden at 0, in by 0.18 s, held to 1.02 s, gone by 1.2 s.
+        XCTAssertEqual(story.presence(0, at: 0), 0)
+        XCTAssertEqual(story.presence(0, at: 0.18), 1)
+        XCTAssertEqual(story.presence(0, at: 0.6), 1)
+        XCTAssertEqual(story.lift(0, at: 0.6), -8)
+        XCTAssertLessThan(story.presence(0, at: 1.1), 1)
+        XCTAssertEqual(story.presence(0, at: 1.2), 0)
+        // Government 2 takes its turn 1.2 s later.
+        XCTAssertEqual(story.presence(1, at: 1.0), 0)
+        XCTAssertEqual(story.presence(1, at: 1.8), 1)
+        // The finished frame arrives after the last government and holds.
+        XCTAssertEqual(story.presence(5, at: 6.0), 0)
+        XCTAssertEqual(story.presence(5, at: 6.5), 1)
+        XCTAssertEqual(story.presence(5, at: .infinity), 1)
+        XCTAssertEqual(story.presence(4, at: .infinity), 0)
+        XCTAssertEqual(story.bar(at: 3.6), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(story.bar(at: .infinity), 1)
+        XCTAssertEqual(BallotGovernmentsView.overline(2, of: 5, minimum: true), "Government 2 of at least 5")
+        XCTAssertEqual(BallotGovernmentsView.overline(2, of: 5, minimum: false), "Government 2 of 5")
+    }
+
     func testFormatting() {
         XCTAssertEqual(BallotFormat.daysLeft(32), "32 days left.")
         XCTAssertEqual(BallotFormat.daysLeft(1), "1 day left.")

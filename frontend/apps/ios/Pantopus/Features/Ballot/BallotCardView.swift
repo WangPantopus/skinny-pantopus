@@ -15,11 +15,13 @@
 
 import SwiftUI
 
-/// The card frame the Ballot cards share (the Place card surface, radius 20).
+/// The card frame the Ballot cards share (the Place card surface, radius
+/// 20), as the canvas's CSS box: the 1pt border sits inside the outer edge
+/// and the 16 padding inside it, so rows are 324 wide on a 390 screen.
 struct BallotCardFrame: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(Spacing.s4)
+            .padding(Spacing.s4 + 1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous))
@@ -57,7 +59,10 @@ struct BallotCardView: View {
                     .foregroundStyle(Theme.Color.appText)
             }
             if card.phase == .inSeason, card.coverage == .supported, let today = card.today, !card.deadlines.isEmpty {
+                // The canvas draws a 326-wide chart in the 324 content box
+                // and lets it overflow by 2 on the trailing side.
                 BallotTimelineView(deadlines: card.deadlines, today: today)
+                    .padding(.trailing, -2)
             }
             if let notice = card.electionDayNotice {
                 BallotNoticeWell(lead: notice.lead, detail: notice.detail)

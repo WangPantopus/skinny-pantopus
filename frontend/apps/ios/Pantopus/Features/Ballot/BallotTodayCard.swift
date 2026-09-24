@@ -4,14 +4,15 @@
 //
 //  Today — the "Ballot week" card and the "Moved this year?" well (Board:
 //  Today in ballot week, as corrected on the proposed P0 board: no Mail
-//  Day line, no personal delivery date, no plan line before P2).
+//  Day line, no personal delivery date, no plan line before P2). The
+//  button shows only when the caller can open the ballot card.
 //
 
 import SwiftUI
 
 struct BallotTodayCard: View {
     let card: BallotSummary
-    let onOpenBallot: () -> Void
+    var onOpenBallot: (() -> Void)?
     @Environment(\.openURL) private var openURL
 
     static func applies(_ card: BallotSummary?) -> Bool {
@@ -65,8 +66,10 @@ struct BallotTodayCard: View {
             if let text = week.body {
                 BallotBodyText(text: text)
             }
-            BallotPrimaryButton(label: "Open your ballot", height: 44, fontSize: 14.5, action: onOpenBallot)
-                .accessibilityIdentifier("today.ballot.open")
+            if let onOpenBallot {
+                BallotPrimaryButton(label: "Open your ballot", height: 44, fontSize: 14.5, action: onOpenBallot)
+                    .accessibilityIdentifier("today.ballot.open")
+            }
         }
         .ballotCardFrame()
         .accessibilityIdentifier("today.ballot.week")

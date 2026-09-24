@@ -56,7 +56,8 @@ struct AddressTodayTabView: View {
         if !resolved {
             PlaceDetailSkeleton()
         } else if let detail {
-            AddressTodayLoaded(viewModel: detail)
+            // The Ballot P0 card's "Open your ballot" lands on the Place tab.
+            AddressTodayLoaded(viewModel: detail) { rootTabs.selected = .place }
         } else if loadFailed {
             couldNotLoad
         } else {
@@ -144,6 +145,7 @@ struct AddressTodayTabView: View {
 /// detail page so the calendar's pickup-day picker keeps working.
 private struct AddressTodayLoaded: View {
     @State var viewModel: PlaceDetailViewModel
+    let onOpenPlace: () -> Void
 
     var body: some View {
         Group {
@@ -153,7 +155,7 @@ private struct AddressTodayLoaded: View {
             case let .loaded(intel):
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        PlaceTodayDetailContent(intel: intel, vm: viewModel)
+                        PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onOpenPlace)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, Spacing.s10)
