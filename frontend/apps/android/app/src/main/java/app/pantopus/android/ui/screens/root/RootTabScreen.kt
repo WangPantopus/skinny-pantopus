@@ -5417,7 +5417,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 },
                                 onShare = {
                                     appContext.shareText(
-                                        "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                        "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                         "Share train",
                                     )
                                 },
@@ -5448,12 +5448,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                             },
                         ),
-                ) {
+                ) { entry ->
+                    val trainId = entry.arguments?.getString(ChildRoutes.REVIEW_SIGNUPS_ID_KEY).orEmpty()
                     ReviewSignupsScreen(
                         onBack = { navController.popBackStack() },
                         onShareTrain = {
                             appContext.shareText(
-                                "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                 "Share train",
                             )
                         },
@@ -5493,9 +5494,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // Analytics and Edit dates have no backend / native
                         // editor yet, so they aren't wired and their rows are
                         // hidden.
-                        onInviteHelpers = {
+                        onInviteHelpers = { trainId ->
                             appContext.shareText(
-                                "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Join my support train on Pantopus — ${InviteLinks.supportTrainUrl(trainId)}",
                                 "Share train",
                             )
                         },

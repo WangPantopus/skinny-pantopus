@@ -28,6 +28,18 @@ public enum InviteLinks {
         URL(string: downloadURLString)
     }
 
+    /// Use the existing public train page, with this build's web origin.
+    public static func supportTrainURLString(trainId: String) -> String {
+        let configured = Bundle.main.object(forInfoDictionaryKey: "PantopusPublicWebURL") as? String
+        let origin = configured.flatMap { URL(string: $0) }
+        let base = origin.flatMap { url in
+            ["https", "http"].contains(url.scheme ?? "") && url.host != nil ? url.absoluteString : nil
+        } ?? "https://pantopus.com"
+        let pathCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let encodedId = trainId.addingPercentEncoding(withAllowedCharacters: pathCharacters) ?? trainId
+        return base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/support-trains/" + encodedId
+    }
+
     public static let inviteMessage =
         "Join me on Pantopus — your neighborhood for trusted home help, " +
         "local gigs, and your whole household in one place. \(downloadURLString)"
