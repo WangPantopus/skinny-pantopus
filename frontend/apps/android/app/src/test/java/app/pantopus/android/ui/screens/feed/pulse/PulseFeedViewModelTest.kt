@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.feed.FeedPagination
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedPostCreator
 import app.pantopus.android.data.api.models.feed.FeedResponse
+import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventsResponse
 import app.pantopus.android.data.api.net.NetworkError
@@ -59,7 +60,7 @@ class PulseFeedViewModelTest {
 
     // No area chosen: the feed falls back to the device location (none here).
     private val viewingLocation: ViewingLocationRepository =
-        mockk { coEvery { current() } returns NetworkResult.Failure(NetworkError.NotFound) }
+        mockk { coEvery { current() } returns NetworkResult.Success(ViewingLocationPayload()) }
 
     // Sports lane — only queried once the Sports topic is selected.
     private val sportsRepo: SportsRepository =
