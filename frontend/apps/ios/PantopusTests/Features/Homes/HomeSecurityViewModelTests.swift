@@ -9,10 +9,8 @@
 //  `HomeSecurityHelpers` object so that iOS+Android parity holds.
 //
 //  P3F: the view-model now reads `GET /api/homes/:id/privacy` and PATCHes
-//  each flip. The projection tests drive a stubbed `APIClient` whose GET
-//  fails so the view-model falls back to its `variant` seed (the offline
-//  baseline), keeping the projection assertions data-source-agnostic. The
-//  networked happy-path + rollback are covered separately.
+//  each flip. Projection tests use the explicit preview factory; networking
+//  fixtures provide a successful required read before testing mutations.
 //
 
 import XCTest
@@ -33,11 +31,14 @@ final class HomeSecurityViewModelTests: XCTestCase {
         )
     }
 
-    /// VM whose `load()` GET fails (no stubbed response), so it falls back
-    /// to the `variant` seed.
+    private let balancedResponse = """
+    {"privacy":{"home_id":"home-1","guest_approval":true,"member_name_visibility":true,
+    "address_precision":false,"activity_visibility":true,"map_opt_out":false,
+    "notification_previews":true,"doc_lock":true,"photo_blur":false,"vault_auto_lock":false}}
+    """
+
     private func makeSeededVM(variant: HomeSecurityViewModel.Variant) -> HomeSecurityViewModel {
-        SequencedURLProtocol.sequence = [.status(500, body: "{}")]
-        return HomeSecurityViewModel(homeId: "home-1", api: makeAPI(), variant: variant)
+        HomeSecurityViewModel.preview(variant: variant)
     }
 
     func testBalancedVariantHasFiveTogglesOn() async {
@@ -98,7 +99,7 @@ final class HomeSecurityViewModelTests: XCTestCase {
     }
 
     func testToggleFlipUpdatesState() async {
-        SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(200, body: "{}")]
+        SequencedURLProtocol.sequence = [.status(200, body: balancedResponse), .status(200, body: "{}")]
         let vm = HomeSecurityViewModel(homeId: "home-1", api: makeAPI(), variant: .balanced)
         await vm.load()
         await vm.toggleRow(HomeSecurityViewModel.Toggles.addressPrecision, isOn: true)
@@ -131,8 +132,8 @@ final class HomeSecurityViewModelTests: XCTestCase {
     }
 
     func testToggleRollsBackOnPatchFailure() async {
-        // GET fails → balanced seed (addressPrecision off); PATCH fails → revert.
-        SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(500, body: "{}")]
+        // GET succeeds with addressPrecision off; PATCH fails → revert.
+        SequencedURLProtocol.sequence = [.status(200, body: balancedResponse), .status(500, body: "{}")]
         let vm = HomeSecurityViewModel(homeId: "home-1", api: makeAPI(), variant: .balanced)
         await vm.load()
         await vm.toggleRow(HomeSecurityViewModel.Toggles.addressPrecision, isOn: true)

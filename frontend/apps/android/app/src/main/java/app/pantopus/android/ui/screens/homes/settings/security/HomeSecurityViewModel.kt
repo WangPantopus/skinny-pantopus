@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomePrivacyDto
 import app.pantopus.android.data.api.models.homes.UpdateHomePrivacyRequest
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomePrivacyRepository
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
@@ -33,10 +34,9 @@ const val HOME_SECURITY_HOME_ID_KEY = "homeId"
  * P3F wiring: [load] reads the persisted toggle set from
  * `GET /api/homes/:id/privacy`; each flip optimistically updates and
  * PATCHes the single key, rolling back on failure. The [Variant.Balanced]
- * seed is the in-flight / offline baseline (and the test/preview seam via
- * [setVariant]).
+ * seed is available only through the explicit test/preview seam [setVariant].
  *
- * Two seed frames (previews, tests and the offline baseline):
+ * Two seed frames (previews and tests):
  *   - [Variant.Balanced] 5 of 9 toggles on
  *   - [Variant.Strict]   all 9 on
  */
@@ -67,17 +67,19 @@ class HomeSecurityViewModel
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
 
         fun load() {
-            // Render the seeded baseline immediately, then reconcile from
-            // the backend. A failed fetch keeps the baseline (settings
-            // tolerate offline) rather than erroring the whole screen.
-            _state.value = GroupedListUiState.Loaded(groups())
+            _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 when (val result = repository.getPrivacy(homeId)) {
                     is NetworkResult.Success -> {
                         applyServer(result.data.privacy)
                         _state.value = GroupedListUiState.Loaded(groups())
                     }
-                    is NetworkResult.Failure -> Unit
+                    is NetworkResult.Failure -> {
+                        _state.value =
+                            GroupedListUiState.Error(
+                                result.error.displayMessage("Couldn't load this home's privacy settings. Try again."),
+                            )
+                    }
                 }
             }
         }
@@ -93,7 +95,7 @@ class HomeSecurityViewModel
             rowId: String,
             isOn: Boolean,
         ) {
-            if (!_toggles.containsKey(rowId)) return
+            if (_state.value !is GroupedListUiState.Loaded || !_toggles.containsKey(rowId)) return
             val previous = _toggles[rowId] ?: return
             // Optimistic flip.
             _toggles[rowId] = isOn

@@ -8,14 +8,14 @@
 //  says what it does. The other eight are read by nothing on the server or
 //  any client; they're hidden and their stored values are left as they are.
 //
-//  Two seed frames (previews, tests and the offline baseline):
+//  Two seed frames (previews and tests):
 //    `.balanced`  — 5 of 9 toggles on
 //    `.strict`    — all 9 on
 //
 //  P3F wiring: `load()` reads the persisted toggle set from
 //  `GET /api/homes/:id/privacy`; each flip optimistically updates and
 //  PATCHes the single key, rolling back on failure. The `variant` seed is
-//  kept as the in-flight/offline baseline (and for previews/tests).
+//  available only through the explicit preview factory.
 //
 
 import Foundation
@@ -42,10 +42,9 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     public private(set) var toggles: [String: Bool]
 
     private let api: APIClient
+    private var isPreview = false
 
-    /// Source variant when the view-model boots. Seeds the in-flight /
-    /// offline baseline; the live toggle set replaces it once `load()`
-    /// returns from the backend.
+    /// Source variant for explicit previews and projection fixtures.
     public enum Variant: Sendable, Hashable { case balanced, strict }
 
     public convenience init(
@@ -69,22 +68,31 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
         toggles = Self.seedToggles(for: variant)
     }
 
+    /// Explicit preview seam; live callers always require a successful read.
+    static func preview(variant: Variant) -> HomeSecurityViewModel {
+        let model = HomeSecurityViewModel(homeId: "preview-home", variant: variant)
+        model.isPreview = true
+        model.state = .loaded(model.groups())
+        return model
+    }
+
     // MARK: - GroupedListDataSource
 
     public func load() async {
-        // Render the seeded baseline immediately so the grouped list shows
-        // while the fetch is in flight.
-        state = .loaded(groups())
+        guard !isPreview else { return }
+        state = .loading
         do {
             let response: HomePrivacyResponse = try await api.request(
                 HomePrivacyEndpoints.get(homeId: homeId)
             )
             toggles = response.privacy.toggles
+            state = .loaded(groups())
         } catch {
-            // Settings tolerate offline: keep the seeded baseline rather
-            // than blanking the whole screen with an error.
+            state = .error(
+                message: (error as? APIError)?.errorDescription
+                    ?? "We couldn't load this home's privacy settings. Check your connection and try again."
+            )
         }
-        state = .loaded(groups())
     }
 
     public func tapRow(_: String) async {}
@@ -92,10 +100,11 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     public func setSlider(_: String, index _: Int) async {}
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
-        guard let previous = toggles[rowId] else { return }
+        guard case .loaded = state, let previous = toggles[rowId] else { return }
         // Optimistic flip.
         toggles[rowId] = isOn
         state = .loaded(groups())
+        guard !isPreview else { return }
         do {
             _ = try await api.request(
                 HomePrivacyEndpoints.update(

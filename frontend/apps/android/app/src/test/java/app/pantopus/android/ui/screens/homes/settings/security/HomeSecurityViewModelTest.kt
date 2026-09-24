@@ -33,7 +33,7 @@ import org.junit.Test
  *
  * P3F: the view-model now reads `GET /api/homes/:id/privacy` and PATCHes
  * each flip. The projection/helper tests drive the seed (via [setVariant]
- * or a failing GET), keeping them data-source-agnostic; the networked
+ * or a successful GET fixture), keeping them data-source-agnostic; the networked
  * happy-path + rollback are covered separately.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -43,8 +43,8 @@ class HomeSecurityViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        // Default: GET fails so `load()` keeps the seed; PATCH succeeds.
-        coEvery { repository.getPrivacy(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
+        // Default: GET returns the balanced fixture; PATCH succeeds.
+        coEvery { repository.getPrivacy(any()) } returns NetworkResult.Success(privacyResponse())
         coEvery { repository.updatePrivacy(any(), any()) } returns NetworkResult.Success(privacyResponse())
     }
 
@@ -94,7 +94,7 @@ class HomeSecurityViewModelTest {
     fun group_shape_matches_audit() =
         runTest {
             val vm = makeVm()
-            vm.load() // GET fails → keeps Balanced seed
+            vm.load() // GET returns the Balanced fixture
             val groups = (vm.state.value as GroupedListUiState.Loaded).groups
             assertEquals(listOf("accessControl"), groups.map { it.id })
             assertEquals(listOf(HomeSecurityToggles.ADDRESS_PRECISION), groups.first().rows.map { it.id })
