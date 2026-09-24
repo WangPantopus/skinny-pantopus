@@ -105,8 +105,9 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
 
   // Select a suggestion
   const handleSelectSuggestion = async (suggestion: Record<string, any>) => {
-    const center = suggestion?.center as { lat: number; lng: number } | undefined;
-    if (!center) return;
+    // /api/geo/autocomplete returns center as GeoJSON [lng, lat].
+    const [lng, lat] = Array.isArray(suggestion?.center) ? (suggestion.center as [number, number]) : [NaN, NaN];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
     const suggestionId = suggestion.suggestion_id as string;
 
@@ -116,8 +117,8 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
       const shortLabel = n.city || n.address?.split(',')[0] || (suggestion.primary_text as string) || 'Selected location';
 
       onChange({
-        latitude: n.latitude ?? center.lat,
-        longitude: n.longitude ?? center.lng,
+        latitude: n.latitude ?? lat,
+        longitude: n.longitude ?? lng,
         locationName: shortLabel,
         locationAddress: n.address || (suggestion.label as string) || shortLabel,
         source: 'search',
@@ -125,8 +126,8 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
     } catch {
       // Fall back to suggestion fields
       onChange({
-        latitude: center.lat,
-        longitude: center.lng,
+        latitude: lat,
+        longitude: lng,
         locationName: (suggestion.primary_text as string) || 'Selected location',
         locationAddress: (suggestion.label as string) || 'Selected location',
         source: 'search',
