@@ -127,6 +127,7 @@ const vacationDay = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom((value, h
     ? helpers.error('date.base') : value;
 });
 const startVacationSchema = Joi.object({
+  holdId: Joi.string().uuid().optional(),
   homeId: Joi.string().uuid().required(),
   startDate: vacationDay.required(),
   endDate: vacationDay.required(),
@@ -1601,7 +1602,7 @@ router.get('/vacation/status', verifyToken, async (req, res) => {
 router.post('/vacation/start', verifyToken, validate(startVacationSchema), async (req, res) => {
   try {
     const userId = req.user.id;
-    const { homeId, startDate, endDate, holdAction, packageAction, autoNeighborRequest } = req.body;
+    const { holdId, homeId, startDate, endDate, holdAction, packageAction, autoNeighborRequest } = req.body;
     if (endDate < startDate) {
       return res.status(400).json({ error: 'Return date must be on or after departure.' });
     }
@@ -1610,11 +1611,17 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
       return res.status(403).json({ error: 'Not a member of this home' });
     }
     const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
-      p_user_id: userId, p_action: 'start', p_home_id: homeId,
+      p_user_id: userId, p_action: 'start', p_hold_id: holdId || null, p_home_id: homeId,
       p_start_date: startDate, p_end_date: endDate,
       p_hold_action: holdAction, p_package_action: packageAction,
       p_auto_neighbor_request: autoNeighborRequest || false,
     });
+    if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
+      return res.status(403).json({ error: 'Not your vacation hold' });
+    }
+    if (error?.message === 'VACATION_HOLD_NOT_EDITABLE') {
+      return res.status(409).json({ error: 'These travel dates are no longer editable. Reload to see your current dates.' });
+    }
     if (error) throw error;
     if (!data.reused) {
       logMailEvent(userId, 'vacation_started', null, {
