@@ -20,24 +20,33 @@ final class BookingDetailViewModel {
     let bookingId: String
     private let push: @MainActor (SchedulingRoute) -> Void
     private let actions: BookingActions
+    private let actor: @MainActor () -> String?
 
     private(set) var phase: Phase = .loading
     private(set) var detail: BookingDetailResponse?
     var activeSheet: BookingActionSheet?
     var actionError: String?
+    private(set) var savingRsvp = false
+    private var generation = 0
 
     private var didLoad = false
+    private var loadedActor: String?
 
     init(
         owner: SchedulingOwner,
         bookingId: String,
         push: @escaping @MainActor (SchedulingRoute) -> Void,
-        actions: BookingActions
+        actions: BookingActions,
+        actor: @escaping @MainActor () -> String? = {
+            if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+            return nil
+        }
     ) {
         self.owner = owner
         self.bookingId = bookingId
         self.push = push
         self.actions = actions
+        self.actor = actor
     }
 
     // MARK: - Derived
@@ -48,6 +57,14 @@ final class BookingDetailViewModel {
 
     var booking: BookingDTO? {
         detail?.booking
+    }
+
+    var actorId: String? {
+        actor()
+    }
+
+    var participant: BookingParticipantDTO? {
+        detail?.participant
     }
 
     var attendees: [BookingAttendeeDTO] {
@@ -142,7 +159,7 @@ final class BookingDetailViewModel {
 
     /// Overflow-menu actions, contextual to status.
     var overflowActions: [BookingRowAction] {
-        guard let booking else { return [] }
+        guard participant == nil, let booking else { return [] }
         var items: [BookingRowAction] = []
         switch SchedulingPillStatus(backend: booking.status) {
         case .confirmed, .active:
@@ -170,8 +187,9 @@ final class BookingDetailViewModel {
     // MARK: - Loading
 
     func load() async {
-        guard !didLoad else { return }
+        guard !didLoad || loadedActor != actorId else { return }
         didLoad = true
+        loadedActor = actorId
         await fetch()
     }
 
@@ -180,36 +198,82 @@ final class BookingDetailViewModel {
     }
 
     private func fetch() async {
+        generation += 1
+        let requestGeneration = generation
+        let requestActor = actorId
         phase = .loading
+        detail = nil
+        activeSheet = nil
+        actionError = nil
+        savingRsvp = false
+        guard requestActor != nil else {
+            phase = .error(message: "Sign in to view this booking.")
+            return
+        }
         do {
-            detail = try await actions.detail(id: bookingId)
+            let response = try await actions.detail(id: bookingId)
+            guard generation == requestGeneration, actorId == requestActor, !Task.isCancelled else { return }
+            detail = response
             phase = .ready
         } catch let error as SchedulingError {
-            phase = .error(message: error.userMessage ?? "Couldn't load this booking.")
+            guard generation == requestGeneration, actorId == requestActor, !Task.isCancelled else { return }
+            if case .forbidden = error {
+                phase = .error(message: "You don't have access to this booking.")
+            } else {
+                phase = .error(message: error.userMessage ?? "Couldn't load this booking.")
+            }
         } catch {
+            guard generation == requestGeneration, actorId == requestActor, !Task.isCancelled else { return }
             phase = .error(message: "Couldn't load this booking.")
+        }
+    }
+
+    func respond(_ status: String) async {
+        guard participant?.isRequired != nil, !savingRsvp,
+              booking?.status == "pending" || booking?.status == "confirmed",
+              let requestActor = actorId else { return }
+        let requestGeneration = generation
+        savingRsvp = true
+        actionError = nil
+        do {
+            try await actions.rsvp(id: bookingId, status: status)
+            guard generation == requestGeneration, actorId == requestActor, !Task.isCancelled else { return }
+            await refresh()
+        } catch {
+            guard generation == requestGeneration, actorId == requestActor, !Task.isCancelled else { return }
+            if case SchedulingError.forbidden = error {
+                await refresh()
+                return
+            }
+            savingRsvp = false
+            actionError = "Couldn't save your response. Try again."
         }
     }
 
     // MARK: - Actions
 
     func presentReview() {
+        guard participant == nil else { return }
         if let booking { activeSheet = .review(booking) }
     }
 
     func presentDecline() {
+        guard participant == nil else { return }
         if let booking { activeSheet = .decline(booking) }
     }
 
     func presentReschedule() {
+        guard participant == nil else { return }
         if let booking { activeSheet = .reschedule(booking) }
     }
 
     func presentCancel() {
+        guard participant == nil else { return }
         if let booking { activeSheet = .cancel(booking) }
     }
 
     func switchToReschedule(_ booking: BookingDTO) {
+        guard participant == nil else { return }
         activeSheet = .reschedule(booking)
     }
 
@@ -239,6 +303,7 @@ final class BookingDetailViewModel {
     func viewConflict() { /* deferredBackend: conflict target id */ }
 
     func markNoShow() async {
+        guard participant == nil else { return }
         actionError = nil
         do {
             _ = try await actions.markNoShow(id: bookingId)

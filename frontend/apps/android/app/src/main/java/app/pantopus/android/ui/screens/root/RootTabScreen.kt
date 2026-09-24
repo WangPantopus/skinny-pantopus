@@ -2028,6 +2028,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.Nearby -> {
+                navController.navigateToRootTab(PantopusRoute.Nearby)
+                DeepLinkRouter.consume()
+            }
             DeepLinkRouter.Destination.Connections -> {
                 navController.navigate(ChildRoutes.CONNECTIONS)
                 DeepLinkRouter.consume()
@@ -2341,6 +2345,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.InvoiceDetail -> {
                 navController.navigate(ChildRoutes.invoiceDetail(pending.invoiceId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.CreatorInbox -> {
+                navController.navigate(ChildRoutes.CREATOR_INBOX)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.FanInbox -> {
+                navController.navigate(ChildRoutes.fanInbox(pending.personaId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.CreatorAudienceMembers -> {
+                navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.ResetPassword,
