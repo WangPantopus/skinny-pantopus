@@ -97,7 +97,9 @@ fun VisitSetupScreen(
 
     LaunchedEffect(Unit) { viewModel.start() }
 
-    val canSave = loadState is VisitSetupLoadState.Ready && viewModel.isValid
+    val canSave =
+        loadState is VisitSetupLoadState.Ready &&
+            form.title.isNotBlank() && form.whoIsHome.isNotEmpty() && form.durationHours > 0
 
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag(VISIT_SETUP_TAG),
