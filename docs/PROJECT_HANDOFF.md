@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T01:26:57Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T01:35:45Z (active Codex coordinator)
 
-Batch6 PR401/399/400 merged with all applicable CI/fresh-schema replay; Git masterbaf6588b7b52a58de2b404e4cbf64b3e12012305. Vacation lifecycle/atomic-edit API+DB acceptance is merged; native Home afters pending. Root verified Support public web cache/error recovery in actual IAB; two-file PR4021b74e1e9 pendingCI, native397 still held. S3 R3 iOS building, S1 corrected Android and Home Android follow. Original155 remains66fixed/merged,27inflight,62notstarted; broad80 remains13closed/67partial, fresh full-app sweep unstarted. [Live hub](workstreams/README.md) has exact evidence, limits and runtime state. Founder§7/A17/hard limits unchanged.
+Git master2768759bd845a8582583688eb53671a65ba3c45d includes batch6 vacation399/400 and real-web-verified Support402. NativeHome/Support397 still pending; S3 actual iOS owner/error/viewer afters advancing, S1 Android afters running. Root prepared missing Tasks Manage route with lint only; next Shared rotation must verify it on app. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 stays13closed/67partial; fresh full-app sweep unstarted. [Live hub](workstreams/README.md) records exact evidence and gates. Founder§7/A17/hard limits unchanged.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
