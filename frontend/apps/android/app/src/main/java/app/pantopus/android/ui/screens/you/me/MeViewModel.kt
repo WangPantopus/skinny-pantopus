@@ -18,6 +18,7 @@ import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +74,8 @@ class MeViewModel
         val inviteCode: StateFlow<String?> = _inviteCode.asStateFlow()
 
         private var clock: () -> LocalDate = { LocalDate.now() }
+        private var loadJob: Job? = null
+        private var businessReadFailed = false
 
         /** Share text for the receipt card — RN `handleShareReceipt`. */
         fun receiptShareMessage(): String? = _monthlyReceipt.value?.let(MonthlyReceiptFormat::shareMessage)
@@ -85,7 +88,7 @@ class MeViewModel
         }
 
         fun load() {
-            if (_state.value is MeUiState.Loaded) return
+            if (_state.value is MeUiState.Loaded && !businessReadFailed) return
             fetch()
         }
 
@@ -97,44 +100,47 @@ class MeViewModel
         }
 
         private fun fetch() {
-            viewModelScope.launch {
-                val profileDeferred = async { profileRepo.ownProfile() }
-                val homesDeferred = async { homesRepo.myHomes() }
-                val businessesDeferred = async { businessesRepo.myBusinesses() }
-                val profileResult = profileDeferred.await()
-                val homesResult = homesDeferred.await()
-                val businessesResult = businessesDeferred.await()
-                val businesses = (businessesResult as? NetworkResult.Success)?.data?.businesses
-                val showBusiness = businesses == null || businesses.isNotEmpty()
-                if (!showBusiness && _activeIdentity.value == MeIdentity.Business) _activeIdentity.value = MeIdentity.Personal
+            if (loadJob?.isActive == true) return
+            loadJob =
+                viewModelScope.launch {
+                    val profileDeferred = async { profileRepo.ownProfile() }
+                    val homesDeferred = async { homesRepo.myHomes() }
+                    val businessesDeferred = async { businessesRepo.myBusinesses() }
+                    val profileResult = profileDeferred.await()
+                    val homesResult = homesDeferred.await()
+                    val businessesResult = businessesDeferred.await()
+                    businessReadFailed = businessesResult is NetworkResult.Failure
+                    val businesses = (businessesResult as? NetworkResult.Success)?.data?.businesses
+                    val showBusiness = businesses == null || businesses.isNotEmpty()
+                    if (!showBusiness && _activeIdentity.value == MeIdentity.Business) _activeIdentity.value = MeIdentity.Personal
 
-                val profile =
-                    (profileResult as? NetworkResult.Success)?.data?.user
-                        ?: run {
-                            val message =
-                                (profileResult as? NetworkResult.Failure)
-                                    ?.error?.message
-                                    ?: "Couldn't load your profile."
-                            _state.value = MeUiState.Error(message)
-                            return@launch
-                        }
-                val homes: List<MyHome> =
-                    (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
-                // A failed homes read must not read as "No shared Home".
-                val homesFailed = homesResult is NetworkResult.Failure
+                    val profile =
+                        (profileResult as? NetworkResult.Success)?.data?.user
+                            ?: run {
+                                val message =
+                                    (profileResult as? NetworkResult.Failure)
+                                        ?.error?.message
+                                        ?: "Couldn't load your profile."
+                                _state.value = MeUiState.Error(message)
+                                return@launch
+                            }
+                    val homes: List<MyHome> =
+                        (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
+                    // A failed homes read must not read as "No shared Home".
+                    val homesFailed = homesResult is NetworkResult.Failure
 
-                val stats =
-                    (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
+                    val stats =
+                        (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
 
-                _state.value =
-                    MeUiState.Loaded(
-                        personal = buildPersonal(profile, stats),
-                        home = buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed),
-                        business = buildBusiness(businesses?.firstOrNull(), businesses == null),
-                        showBusiness = showBusiness,
-                    )
-                fetchInsights()
-            }
+                    _state.value =
+                        MeUiState.Loaded(
+                            personal = buildPersonal(profile, stats),
+                            home = buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed),
+                            business = buildBusiness(businesses?.firstOrNull(), businesses == null),
+                            showBusiness = showBusiness,
+                        )
+                    fetchInsights()
+                }
         }
 
         /**
