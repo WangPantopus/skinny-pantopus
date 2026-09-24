@@ -19,7 +19,10 @@ final class MarketplaceViewModelTests: XCTestCase {
     }
 
     private func makeAPI() -> APIClient {
-        APIClient(
+        SequencedURLProtocol.routeResponses["/api/location"] = Array(repeating: .status(200, body: """
+        {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
+        """), count: 2)
+        return APIClient(
             environment: .current,
             session: SequencedURLProtocol.makeSession(),
             retryPolicy: .none
