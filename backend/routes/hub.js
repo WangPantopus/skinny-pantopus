@@ -314,7 +314,8 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('is_active', true)
       ).catch(() => ({ count: 0 }));
 
-      // Neighbor density: count verified users within ~1 mile via PostGIS
+      // Neighbor density: people with an active occupancy within ~1 mile via PostGIS (count_neighbors_within counts
+      // every active occupancy, verified or not, including the viewer's own).
       const homeLat = primaryHome.latitude;
       const homeLng = primaryHome.longitude;
       if (homeLat && homeLng) {

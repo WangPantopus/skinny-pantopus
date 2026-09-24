@@ -166,12 +166,12 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => router.push('/app/mailbox/travel')}
               className="flex items-center gap-2 w-full text-left"
-              aria-label="Travel Mode active. Click to manage."
+              aria-label={`Travel dates ${vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'}. Click to manage.`}
             >
               <span className="text-sm flex-shrink-0">✈️</span>
               <span className="text-xs font-medium text-amber-700 dark:text-amber-300 truncate hidden lg:inline">
-                Travel Mode active · Returns{' '}
-                {new Date(vacationHold!.end_date).toLocaleDateString(undefined, {
+                Travel dates {vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'} · Returns{' '}
+                {new Date(`${vacationHold!.end_date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
                 })}

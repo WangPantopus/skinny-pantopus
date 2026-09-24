@@ -70,7 +70,7 @@ public enum VacationHoldSampleData {
         VacationActiveHold(
             daysLeft: 5,
             untilLabel: "Jun 9",
-            resumeBlurb: "Everything held resumes delivery the morning of Jun 9.",
+            resumeBlurb: "Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.",
             stats: [
                 VacationHoldStat(id: "packages", count: 4, label: "Packages"),
                 VacationHoldStat(id: "mailItems", count: 12, label: "Mail items"),
@@ -112,7 +112,7 @@ public enum VacationHoldSampleData {
                 relation: "Spouse",
                 phone: "(•••) 555-0247"
             ),
-            activeSinceLabel: "14 Elm Park Lane · Active since May 28"
+            activeSinceLabel: "May 28 – Jun 9 · Status changes at midnight UTC."
         )
     }
 

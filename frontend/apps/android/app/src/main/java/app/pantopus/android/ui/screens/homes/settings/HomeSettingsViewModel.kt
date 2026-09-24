@@ -381,12 +381,6 @@ class HomeSettingsViewModel
                 rows =
                     listOf(
                         GroupedListRow("accessCodes", "Access codes", subtext = subtexts.accessCodes, control = RowControl.Chevron),
-                        GroupedListRow(
-                            "trustedNeighbors",
-                            "Trusted neighbors",
-                            subtext = subtexts.trustedNeighbors,
-                            control = RowControl.Chevron,
-                        ),
                         GroupedListRow("privacy", "Privacy", subtext = subtexts.privacy, control = RowControl.Chevron),
                         GroupedListRow(
                             "ownershipSecurity",

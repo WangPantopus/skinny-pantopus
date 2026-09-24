@@ -54,6 +54,7 @@ data class StartVacationRequest(
     val holdAction: String,
     val packageAction: String,
     val autoNeighborRequest: Boolean = false,
+    val holdId: String? = null,
 )
 
 /** Envelope for `POST /api/mailbox/v2/p3/vacation/start` — `{ hold }`. */

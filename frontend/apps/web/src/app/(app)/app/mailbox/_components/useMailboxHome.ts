@@ -17,7 +17,7 @@ const FALLBACK_CENTER = { lat: 45.5945, lng: -122.4065 };
  * has no stored coordinates, and these pages need the Home id regardless.
  */
 export default function useMailboxHome() {
-  const { data } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.placePrimaryHome(),
     queryFn: async () => api.homes.getPrimaryHome(),
     staleTime: 60_000,
@@ -26,6 +26,9 @@ export default function useMailboxHome() {
   const coordinates = home?.location?.coordinates; // PostGIS order: [lng, lat]
   const place = [home?.city, home?.state].filter(Boolean).join(', ');
   return {
+    isLoading,
+    isError,
+    refetch,
     homeId: home?.id ?? '',
     lat: Array.isArray(coordinates) ? coordinates[1] : FALLBACK_CENTER.lat,
     lng: Array.isArray(coordinates) ? coordinates[0] : FALLBACK_CENTER.lng,

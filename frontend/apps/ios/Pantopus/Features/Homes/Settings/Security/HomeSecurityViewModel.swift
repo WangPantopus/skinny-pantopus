@@ -2,22 +2,20 @@
 //  HomeSecurityViewModel.swift
 //  Pantopus
 //
-//  P5.1 / A14.2 — Per-home Security toggles. Pure switchgear: 3
-//  groups × 3 toggles = 9 toggles total. The helper line under each
-//  card mirrors the design's "shifts based on current state" rule —
-//  default mixed-state copy when at least the headline toggle of the
-//  group is on, all-on consequence copy when every toggle in the
-//  group is on, and an "off" warning when the headline toggle is
-//  flipped off.
+//  P5.1 / A14.2 — Per-home Security. Nine toggles are stored per Home, but
+//  only address precision changes anything (the server drops the unit
+//  number from Place), so it is the only one offered, and its helper line
+//  says what it does. The other eight are read by nothing on the server or
+//  any client; they're hidden and their stored values are left as they are.
 //
-//  Two variant frames cover the design parity audit:
-//    `.balanced`  — 5 of 9 toggles on, helpers read calm
-//    `.strict`    — all 9 on, helpers shift to consequence language
+//  Two seed frames (previews and tests):
+//    `.balanced`  — 5 of 9 toggles on
+//    `.strict`    — all 9 on
 //
 //  P3F wiring: `load()` reads the persisted toggle set from
 //  `GET /api/homes/:id/privacy`; each flip optimistically updates and
 //  PATCHes the single key, rolling back on failure. The `variant` seed is
-//  kept as the in-flight/offline baseline (and for previews/tests).
+//  available only through the explicit preview factory.
 //
 
 import Foundation
@@ -30,8 +28,10 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
         "Security"
     }
 
+    /// No footer: it used to show a sample address ("14 Elm Park Lane") and a
+    /// made-up "Last audit 2h ago" for every Home.
     public var footerCaption: String? {
-        "\(footerHomeName) · Last audit 2h ago"
+        nil
     }
 
     public private(set) var state: GroupedListState = .loading
@@ -41,55 +41,60 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     /// so the projection + helper logic stay in lockstep.
     public private(set) var toggles: [String: Bool]
 
-    private let footerHomeName: String
     private let api: APIClient
+    private var isPreview = false
+    private var saveError: String?
 
-    /// Source variant when the view-model boots. Seeds the in-flight /
-    /// offline baseline; the live toggle set replaces it once `load()`
-    /// returns from the backend.
+    /// Source variant for explicit previews and projection fixtures.
     public enum Variant: Sendable, Hashable { case balanced, strict }
 
     public convenience init(
         homeId: String,
-        variant: Variant = .balanced,
-        homeName: String = "14 Elm Park Lane"
+        variant: Variant = .balanced
     ) {
         self.init(
             homeId: homeId,
             api: .shared,
-            variant: variant,
-            homeName: homeName
+            variant: variant
         )
     }
 
     init(
         homeId: String,
         api: APIClient,
-        variant: Variant = .balanced,
-        homeName: String = "14 Elm Park Lane"
+        variant: Variant = .balanced
     ) {
         self.homeId = homeId
         self.api = api
-        footerHomeName = homeName
         toggles = Self.seedToggles(for: variant)
+    }
+
+    /// Explicit preview seam; live callers always require a successful read.
+    static func preview(variant: Variant) -> HomeSecurityViewModel {
+        let model = HomeSecurityViewModel(homeId: "preview-home", variant: variant)
+        model.isPreview = true
+        model.state = .loaded(model.groups())
+        return model
     }
 
     // MARK: - GroupedListDataSource
 
     public func load() async {
-        // Render the seeded baseline immediately so the grouped list shows
-        // while the fetch is in flight.
-        state = .loaded(groups())
+        guard !isPreview else { return }
+        saveError = nil
+        state = .loading
         do {
             let response: HomePrivacyResponse = try await api.request(
                 HomePrivacyEndpoints.get(homeId: homeId)
             )
             toggles = response.privacy.toggles
+            state = .loaded(groups())
         } catch {
-            // Settings tolerate offline: keep the seeded baseline rather
-            // than blanking the whole screen with an error.
+            state = .error(
+                message: (error as? APIError)?.errorDescription
+                    ?? "We couldn't load this home's privacy settings. Check your connection and try again."
+            )
         }
-        state = .loaded(groups())
     }
 
     public func tapRow(_: String) async {}
@@ -97,10 +102,12 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     public func setSlider(_: String, index _: Int) async {}
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
-        guard let previous = toggles[rowId] else { return }
+        guard case .loaded = state, let previous = toggles[rowId] else { return }
+        saveError = nil
         // Optimistic flip.
         toggles[rowId] = isOn
         state = .loaded(groups())
+        guard !isPreview else { return }
         do {
             _ = try await api.request(
                 HomePrivacyEndpoints.update(
@@ -111,55 +118,26 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
         } catch {
             // Roll back the single key on failure.
             toggles[rowId] = previous
+            let reason = (error as? APIError)?.errorDescription ?? "Please try again."
+            saveError = "Your change wasn't saved. \(reason)"
             state = .loaded(groups())
         }
     }
 
     // MARK: - Group projection
 
+    /// Only the control something enforces is offered: address precision.
     private func groups() -> [GroupedListGroup] {
-        [
-            accessControlGroup(),
-            privacyGroup(),
-            documentsGroup()
-        ]
+        [accessControlGroup()]
     }
 
     private func accessControlGroup() -> GroupedListGroup {
         GroupedListGroup(
             id: "accessControl",
             overline: "Access control",
-            helper: Self.helperForAccessControl(toggles: toggles),
+            helper: saveError ?? Self.helperForAccessControl(toggles: toggles),
             rows: [
-                toggleRow(id: Toggles.guestApproval, label: "Guest approval", sub: "Ask before letting in new passes"),
-                toggleRow(id: Toggles.memberNameVisibility, label: "Member name visibility", sub: "Show only your home name to outsiders"),
                 toggleRow(id: Toggles.addressPrecision, label: "Address precision", sub: "Street only · hide unit number")
-            ]
-        )
-    }
-
-    private func privacyGroup() -> GroupedListGroup {
-        GroupedListGroup(
-            id: "privacy",
-            overline: "Privacy",
-            helper: Self.helperForPrivacy(toggles: toggles),
-            rows: [
-                toggleRow(id: Toggles.activityVisibility, label: "Activity visibility", sub: "Show check-ins to verified neighbors"),
-                toggleRow(id: Toggles.mapOptOut, label: "Map opt-out", sub: "Hide from the neighborhood map"),
-                toggleRow(id: Toggles.notificationPreviews, label: "Notification previews", sub: "Suppress preview text on the lock screen")
-            ]
-        )
-    }
-
-    private func documentsGroup() -> GroupedListGroup {
-        GroupedListGroup(
-            id: "documents",
-            overline: "Documents",
-            helper: Self.helperForDocuments(toggles: toggles),
-            rows: [
-                toggleRow(id: Toggles.docLock, label: "Doc lock", sub: "Require unlock to view household docs"),
-                toggleRow(id: Toggles.photoBlur, label: "Photo blur", sub: "Blur doc thumbnails until tapped"),
-                toggleRow(id: Toggles.vaultAutoLock, label: "Vault auto-lock", sub: "Lock the vault after 5 minutes idle")
             ]
         )
     }
@@ -176,45 +154,9 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     // MARK: - Helper-line copy (parity contract — mirrored in Android)
 
     static func helperForAccessControl(toggles: [String: Bool]) -> String {
-        let approval = toggles[Toggles.guestApproval] ?? false
-        let allOn = (toggles[Toggles.guestApproval] ?? false)
-            && (toggles[Toggles.memberNameVisibility] ?? false)
-            && (toggles[Toggles.addressPrecision] ?? false)
-        if allOn {
-            return "All guest activity requires your explicit approval. Names and street precision are hidden from outsiders."
-        } else if approval {
-            return "Guest approval is on, so guests need an owner-tap to enter."
-        } else {
-            return "Guest approval is off — anyone with a code is in. Tighten this if you're away."
-        }
-    }
-
-    static func helperForPrivacy(toggles: [String: Bool]) -> String {
-        let activity = toggles[Toggles.activityVisibility] ?? false
-        let allOn = (toggles[Toggles.activityVisibility] ?? false)
-            && (toggles[Toggles.mapOptOut] ?? false)
-            && (toggles[Toggles.notificationPreviews] ?? false)
-        if allOn {
-            return "Hidden from the neighborhood map, previews suppressed. Outsiders only see your home name."
-        } else if activity {
-            return "Visible to verified neighbors only. Address used for deliveries."
-        } else {
-            return "Activity is hidden — even verified neighbors can't see your check-ins."
-        }
-    }
-
-    static func helperForDocuments(toggles: [String: Bool]) -> String {
-        let lock = toggles[Toggles.docLock] ?? false
-        let allOn = (toggles[Toggles.docLock] ?? false)
-            && (toggles[Toggles.photoBlur] ?? false)
-            && (toggles[Toggles.vaultAutoLock] ?? false)
-        if allOn {
-            return "All docs require Face ID. Previews stay blurred everywhere, including notifications."
-        } else if lock {
-            return "Docs unlock with Face ID. Previews still appear in chat."
-        } else {
-            return "Docs open without unlock — anyone with your phone can read them."
-        }
+        (toggles[Toggles.addressPrecision] ?? false)
+            ? "Place shows this Home's street without the unit number."
+            : "Place shows this Home's full street address, including the unit number."
     }
 
     // MARK: - Seed data

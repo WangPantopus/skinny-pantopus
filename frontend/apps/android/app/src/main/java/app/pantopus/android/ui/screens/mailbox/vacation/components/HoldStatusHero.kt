@@ -58,6 +58,8 @@ fun HoldStatusHero(
     stats: List<VacationHoldStat>,
     modifier: Modifier = Modifier,
     reduceMotionOverride: Boolean? = null,
+    statusLabel: String = "Hold active",
+    daysLabel: String = "days left",
 ) {
     val reduceMotion = reduceMotionOverride ?: false
     val gradient =
@@ -82,22 +84,24 @@ fun HoldStatusHero(
                 .testTag("vacationHoldStatusHero")
                 .semantics {
                     contentDescription =
-                        "Vacation hold active, $daysLeft days left until $untilLabel"
+                        "$statusLabel, $daysLeft $daysLabel, return $untilLabel"
                 },
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
-        HeaderRow(untilLabel = untilLabel, reduceMotion = reduceMotion)
-        DaysRow(daysLeft = daysLeft)
-        Spacer(modifier = Modifier.height(10.dp))
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(Color.White.copy(alpha = 0.18f)),
-        )
-        Spacer(modifier = Modifier.height(Spacing.s3))
-        StatsGrid(stats = stats)
+        HeaderRow(untilLabel = untilLabel, reduceMotion = reduceMotion, statusLabel = statusLabel)
+        DaysRow(daysLeft = daysLeft, daysLabel = daysLabel)
+        if (stats.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.18f)),
+            )
+            Spacer(modifier = Modifier.height(Spacing.s3))
+            StatsGrid(stats = stats)
+        }
     }
 }
 
@@ -105,13 +109,14 @@ fun HoldStatusHero(
 private fun HeaderRow(
     untilLabel: String,
     reduceMotion: Boolean,
+    statusLabel: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        ActivePill(reduceMotion = reduceMotion)
+        ActivePill(reduceMotion = reduceMotion, statusLabel = statusLabel)
         Text(
             text = "until $untilLabel",
             color = Color.White.copy(alpha = 0.7f),
@@ -122,7 +127,10 @@ private fun HeaderRow(
 }
 
 @Composable
-private fun ActivePill(reduceMotion: Boolean) {
+private fun ActivePill(
+    reduceMotion: Boolean,
+    statusLabel: String,
+) {
     Row(
         modifier =
             Modifier
@@ -134,7 +142,7 @@ private fun ActivePill(reduceMotion: Boolean) {
     ) {
         PulsingDot(reduceMotion = reduceMotion)
         Text(
-            text = "HOLD ACTIVE",
+            text = statusLabel.uppercase(),
             color = Color.White,
             fontSize = 10.5.sp,
             fontWeight = FontWeight.Bold,
@@ -192,7 +200,10 @@ private fun PulsingDot(reduceMotion: Boolean) {
 }
 
 @Composable
-private fun DaysRow(daysLeft: Int) {
+private fun DaysRow(
+    daysLeft: Int,
+    daysLabel: String,
+) {
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -206,7 +217,7 @@ private fun DaysRow(daysLeft: Int) {
         )
         Text(
             modifier = Modifier.padding(bottom = 4.dp),
-            text = "days left",
+            text = daysLabel,
             color = Color.White.copy(alpha = 0.75f),
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
