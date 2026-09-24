@@ -265,6 +265,7 @@ export default function BookingsSearchPage() {
                 onFollowUp={() =>
                   setFollowUp({
                     id: b.id,
+                    eventTypeId: b.event_type_id,
                     title: eventTypeName(b.event_type_id),
                     subtitle: `${b.invitee_name ?? "Invitee"} · ${fmtDateTime(b.start_at, b.invitee_timezone)}`,
                     inviteeName: b.invitee_name,

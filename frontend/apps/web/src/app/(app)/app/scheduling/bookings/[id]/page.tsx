@@ -9,7 +9,7 @@
 // sheets/handlers.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Bell,
@@ -43,18 +43,21 @@ import BookingDetailView from "@/components/scheduling/bookings/BookingDetailVie
 import ApproveDeclineSheet from "@/components/scheduling/bookings/ApproveDeclineSheet";
 import RescheduleReassignSheet from "@/components/scheduling/bookings/RescheduleReassignSheet";
 import CancelRefundSheet from "@/components/scheduling/bookings/CancelRefundSheet";
+import FollowUpSheet from "@/components/scheduling/bookings-extras/FollowUpSheet";
 import {
   canReassign,
   ownerFromQuery,
+  ownerQueryString,
   PILLAR_LABEL,
   pillarOfOwner,
 } from "@/components/scheduling/bookings/owners";
 import { isPast } from "@/components/scheduling/bookings/bookingActions";
 import { viewerTz } from "@/components/scheduling/bookings/format";
 
-type Sheet = null | "approve" | "reschedule" | "cancel";
+type Sheet = null | "approve" | "reschedule" | "cancel" | "followUp";
 
 export default function BookingDetailPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = String(params?.id ?? "");
   const sp = useSearchParams();
@@ -372,11 +375,11 @@ export default function BookingDetailPage() {
             {/* Frame 3: completed → Rebook (ghost) + Follow up (primary) */}
             {booking.status === "completed" && (
               <>
-                <DockButton tone="ghost" onClick={() => {}}>
+                <DockButton tone="ghost" onClick={() => router.push(`/app/scheduling/bookings/manual${ownerQueryString(owner)}`)}>
                   <RotateCcw className="h-4 w-4" aria-hidden />
                   Rebook
                 </DockButton>
-                <DockButton tone="primary" pillar={pillar} onClick={() => {}}>
+                <DockButton tone="primary" pillar={pillar} onClick={() => setSheet("followUp")}>
                   <Send className="h-4 w-4" aria-hidden />
                   Follow up
                 </DockButton>
@@ -392,12 +395,12 @@ export default function BookingDetailPage() {
                     Message
                   </DockLink>
                 ) : (
-                  <DockButton tone="ghost" onClick={() => {}}>
+                  <DockButton tone="ghost" onClick={() => setSheet("followUp")}>
                     <MessageCircle className="h-4 w-4" aria-hidden />
                     Message
                   </DockButton>
                 )}
-                <DockButton tone="primary" pillar={pillar} onClick={() => {}}>
+                <DockButton tone="primary" pillar={pillar} onClick={() => setSheet("followUp")}>
                   <Link2 className="h-4 w-4" aria-hidden />
                   Send rebook link
                 </DockButton>
@@ -406,12 +409,26 @@ export default function BookingDetailPage() {
 
             {/* Frame 4: cancelled → Rebook this time (primary) */}
             {booking.status === "cancelled" && (
-              <DockButton tone="primary" pillar={pillar} onClick={() => {}}>
+              <DockButton tone="primary" pillar={pillar} onClick={() => router.push(`/app/scheduling/bookings/manual${ownerQueryString(owner)}`)}>
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 Rebook this time
               </DockButton>
             )}
           </Dock>
+
+          <FollowUpSheet
+            open={sheet === "followUp"}
+            onClose={() => setSheet(null)}
+            booking={{
+              id: booking.id,
+              eventTypeId: booking.event_type_id,
+              title: eventName,
+              subtitle: booking.invitee_name ?? "Invitee",
+              inviteeName: booking.invitee_name,
+            }}
+            owner={owner}
+            pillar={pillar}
+          />
 
           {/* Local sheets (E3 / E4 / E5) */}
           <ApproveDeclineSheet
