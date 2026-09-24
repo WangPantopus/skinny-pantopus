@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T03:29:17Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T03:48:38Z (active Codex coordinator)
 
-Master remains2768759bd845a8582583688eb53671a65ba3c45d. Reviewed package393 and Shells403 are combined in queued batch7 PR404/0d2e2c82a, waiting native CI. Home Android privacy/member/offline gates passed; final iOS app build is ready but real iOS checks still wait for S1. Stream1 maps passed bounded iOS afters; checkout/Decline remain. Stream3 functional Android afters passed; summary fit and cleanup remain. Root Shared Android997eddfa5d2c3d04641195b54ef2df3a528b1aa4 is building after two narrow lint corrections; new native recovery/share afters have not run. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 stays13closed/67partial. No fresh full-app sweep. Exact evidence/queues/limits: [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
+Master2768759bd845a8582583688eb53671a65ba3c45d; reviewed batch7 PR404 remains queued pending native CI. Root Android997ed actual pagination Retry, Hub delayed-response ordering, and copied Support link→Chrome/restricted403/outage Retry/native return passed. Area retry exposed stale header/radius; repaird8aa5cb8c457b3004c784be80cf2b077f27fadf8 is prepared, unbuilt. Stream1 exact TEST authorizations were canceled after accepted no-capture/restart checks; final iOS Decline/wrap now underway. Home real iOS checks wait for S1 UI; S3 summary-only Android build owns heavy. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial. Fresh full-app sweep remains ahead. Exact receipts/queues/limits in [live hub](workstreams/README.md); founder§7/A17 reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
