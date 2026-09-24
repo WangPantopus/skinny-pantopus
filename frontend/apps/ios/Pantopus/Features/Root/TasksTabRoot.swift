@@ -29,6 +29,7 @@ public enum TasksRoute: Hashable {
     case myTasks
     case supportTrains
     case supportTrainDetail(supportTrainId: String)
+    case manageTrain(trainId: String)
     case placeholder(label: String)
 }
 
@@ -163,6 +164,8 @@ public struct TasksTabRoot: View {
             supportTrainsDestination()
         case let .supportTrainDetail(supportTrainId):
             supportTrainDetailDestination(supportTrainId: supportTrainId)
+        case let .manageTrain(trainId):
+            manageTrainDestination(trainId: trainId)
         }
     }
 
@@ -209,6 +212,9 @@ public struct TasksTabRoot: View {
         SupportTrainDetailView(
             viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
             onBack: pop,
+            onOpenManage: {
+                Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) }
+            },
             onShare: {
                 systemSheet = .share(
                     items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: supportTrainId))"]
@@ -222,6 +228,18 @@ public struct TasksTabRoot: View {
                     identityKind: nil,
                     verified: false
                 )))
+            }
+        )
+    }
+
+    private func manageTrainDestination(trainId: String) -> some View {
+        ManageTrainView(
+            viewModel: ManageTrainViewModel(trainId: trainId),
+            onClose: { Task { @MainActor in pop() } },
+            onInviteHelpers: { _ in
+                systemSheet = .share(
+                    items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]
+                )
             }
         )
     }
