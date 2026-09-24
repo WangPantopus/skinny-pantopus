@@ -1,0 +1,35 @@
+{
+ "id": "f1-today-air-band",
+ "name": "Air quality band (and the alert landing)",
+ "feature": "F1 / F4",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Today's air section on all three platforms; also the landing for AQI \u2265 101 and NOAA alert pushes, which F4 widens to saved-place users.",
+ "purpose": "Make the one genuinely canonical scale in the product legible, and make an alert push land on a screen that shows the crossing that caused it.",
+ "contents": "The reading, the band name, the dominant pollutant, the health message, the observation time, and on the alert variant the address label with its 'Saved place \u00b7 Only you' chip so the notification and the screen agree about which address this is about. Rendered ALWAYS, not only when is_noteworthy \u2014 today a healthy day and a failed fetch look identical (nothing).",
+ "states": [
+  "reading present",
+  "no reading ('No reading for this address right now' \u2014 visibly different from Good)",
+  "alert: moderate",
+  "alert: critical",
+  "saved place (chip) vs claimed home",
+  "stale observation (time stated)",
+  "OS permission denied \u2014 in-app only",
+  "location source none (never alert)",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Today (always visible)",
+  "AQI / NOAA alert push",
+  "Compare scale strip 'Air today' row"
+ ],
+ "visualization": "A six-band horizontal scale bar in the EPA colours users already know, with a marker at the index and the band name printed beside it; on the alert variant the 101 threshold is marked on the same bar so the push's cause is visible in one glance. The bar is what makes 'Good' informative \u2014 the number alone says nothing about where 42 sits or how far 101 is.",
+ "uxNote": "For most T1 users the air alert is the first push Pantopus ever sends, about an address they only bookmarked \u2014 so the landing must name the saved place and say 'Only you', or it reads as surveillance. Keep the audiences separate: widening alert geohashes to SavedPlace must not widen pickup pushes, which F4 explicitly forbids for a saved place with no user-set day.",
+ "effortDays": 1
+}

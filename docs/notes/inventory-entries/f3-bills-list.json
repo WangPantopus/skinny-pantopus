@@ -1,0 +1,34 @@
+{
+ "id": "f3-bills-list",
+ "name": "Bills list (member read-only + payer attribution)",
+ "feature": "F3",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web bills page + BillsBudgetCard; iOS BillsListViewModel; Android bills list.",
+ "purpose": "Let a co-resident see the household's bills and see who paid what, so two people do not pay the same bill.",
+ "contents": "finance.view read-only list (no Mark paid), payer attribution on the row, highlight-from-notification support (already present on web via highlightBillId), and rows that open the bill detail rather than writing from the list.",
+ "states": [
+  "loading",
+  "Upcoming / Paid / All",
+  "member read-only",
+  "manage",
+  "highlighted from a notification",
+  "permission-denied",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Home dashboard Bills card",
+  "Place file Money section",
+  "bill_paid notification"
+ ],
+ "visualization": "Row grammar: provider, amount, due date, status chip, and 'Paid by Sam \u00b7 Sep 15' as the secondary line \u2014 the attribution is what gives the push an in-app twin.",
+ "uxNote": "Keep mark-paid semantics identical everywhere it exists, or remove the write from glanceable surfaces entirely: a mis-tap on a card the user was skimming should not mark a household bill paid and notify everyone.",
+ "effortDays": 0.75
+}

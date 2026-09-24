@@ -1,0 +1,34 @@
+{
+ "id": "f3-household-notifications",
+ "name": "Household activity notifications (rows, channel, routing)",
+ "feature": "F3 / F5 / F10",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web /app/notifications + notificationRoutes.ts; iOS notification centre + DeepLinkRouter; Android NotificationDispatcher.channelFor + DeepLinkRouter.",
+ "purpose": "Make 'Sam marked the water bill paid' arrive, read clearly, and land on the thing it describes \u2014 and do the same for date and bill reminders.",
+ "contents": "Types: bill_paid \u2192 the bill; task_completed \u2192 the task; home_event_created \u2192 the calendar; calendar_date reminder \u2192 Today with the rule highlighted; bill reminder \u2192 the bill. An in-app row always exists even with push off. New router branches on Android for /bills, /calendar and /place/today?rule=; a household push channel so muting co-resident chatter does not mute security alerts.",
+ "states": [
+  "unread / read",
+  "push disabled at OS level (in-app twin present)",
+  "same-day grouping when several bills are paid at once",
+  "landing target resolves",
+  "landing target gone (graceful fallback to the list, never a blank screen)",
+  "T1 vs T3 routing (rule links must branch on scope, not assume a home id)",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Push tray",
+  "In-app notifications list",
+  "Notification settings ('what you'll get')"
+ ],
+ "visualization": "Two-line rows with an actor avatar and a home label when the user belongs to more than one home: 'Sam marked the Clark PUD bill paid' / '$84 \u00b7 due Sep 20 \u00b7 Maple St'. Reminder rows carry the same provenance mark as the calendar row they came from, so an unconfirmed deadline is unconfirmed in the tray too.",
+ "uxNote": "Two of the three new links mis-land on Android on day one without the router branches, and channelFor's prefix mapping drops all of them into SYSTEM. Fix both with the feature, not after.",
+ "effortDays": 1
+}

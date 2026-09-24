@@ -1,0 +1,34 @@
+{
+ "id": "f7-today-widget",
+ "name": "Today at your address (home-screen widget, three sizes)",
+ "feature": "F7",
+ "disposition": "NEW_WIDGET",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "iOS: new PantopusWidgets/TodayWidget.swift + a third bundle entry + TodayWidgetSnapshot shared into the extension via project.yml. Android: TodayWidgetProvider cloned from TasksNearMeWidgetProvider + layout + info xml + manifest receiver. Snapshot only \u2014 the extension can never call the API.",
+ "purpose": "Give the address a reason to be on the home screen: what's due, what the air is, what's next \u2014 with no push and no permission.",
+ "contents": "Snapshot contract {generatedAt, placeLabel, nextPickup{kind,date,unverified}?, aqi{index,label}?, nextDate{kind,title,date}?, year?}. Relative day words computed at render from the stored ISO date, never a stored days_until. Urgency promotion ladder shared by both platforms: pickup within 1 day > AQI \u2265 101 > nearest date > any pickup > any AQI.",
+ "states": [
+  "fresh",
+  "partial (any one or two facts nil \u2014 distinct layouts, not blanks)",
+  "pickup not set (a demoted line, never the hero \u2014 a chore does not belong in a surface people added to feel informed)",
+  "unverified pickup (hollow mark)",
+  "stale >6h (marks greyed, geometry kept, 'Open to refresh')",
+  "no snapshot ever written",
+  "no place ('Save an address to see today here' \u2014 only where the add-a-place sheet exists)",
+  "dark mode",
+  "iOS tinted/accented rendering (marks must survive desaturation)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "OS widget gallery",
+  "Place file 'Put today on your home screen' row",
+  "How-to sheet"
+ ],
+ "visualization": "Each size earns its area with a different FORM, not more strings. SMALL: one promoted fact chosen by the urgency ladder, with its glyph and provenance mark. MEDIUM: the promoted fact as a hero line, then the 14-day dot strip (about 120pt at 6pt cells \u2014 the same instrument as Today), then AQI as a micro band-bar with a marker instead of the string 'AQI 42 Good'. LARGE: the 12-month year strip above today's three lines \u2014 the only place the annual promise is visible without opening the app. Stale greys the marks but keeps the strip geometry, so 'nothing due' (drawn cells, no dots) and 'stale' (greyed dots) are different pictures.",
+ "uxNote": "Three equal text lines gives a lease notice twelve days out the same weight as tomorrow's recycling, and nothing earns a second size. One snapshot key + StaticConfiguration is acceptable for a one-address-per-mover pilot, but placeLabel is then the only tell of which address this is \u2014 so it must never be the line that truncates.",
+ "effortDays": 3
+}

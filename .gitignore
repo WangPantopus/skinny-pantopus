@@ -65,3 +65,16 @@ __pycache__/
 # Playwright / tooling output
 test-results/
 playwright-report/
+
+# Design pipeline: derived artefacts, regenerable from the HTML exports
+# docs/design/send-kit      -> tools/export-render/make_attachments.py
+# docs/design/exports/*/png -> tools/export-render/render.mjs, render-frames.mjs
+# docs/design/exports/*/pages -> tools/export-render/verify_export.py
+# docs/design/exports/attach-> tools/export-render/package.py
+docs/design/send-kit/
+docs/design/exports/*/png/
+docs/design/exports/*/pages/
+docs/design/exports/attach/
+docs/design/existing-screens/
+# Local browser automation state
+docs/design/exports/.chrome-profile/

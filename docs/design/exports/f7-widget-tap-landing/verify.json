@@ -1,0 +1,15 @@
+{
+ "id": "f7-widget-tap-landing",
+ "export": "docs/design/exports/f7-widget-tap-landing/f7-widget-tap-landing.html",
+ "manifest": 20,
+ "mode": "bundle",
+ "pages": 20,
+ "exact": 20,
+ "labelled": 20,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f7-widget-tap-landing/pages",
+ "placeholders": []
+}

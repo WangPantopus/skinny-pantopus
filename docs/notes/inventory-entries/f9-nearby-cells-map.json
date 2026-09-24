@@ -1,0 +1,33 @@
+{
+ "id": "f9-nearby-cells-map",
+ "name": "Cells map detail (3-referral unlock, de-curated counts)",
+ "feature": "F9",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Nearby: web NearbyCellsMap; iOS NearbyCellsMapCard; Android NearbyScreen.",
+ "purpose": "Make the 3-referral tier a real destination with an honest locked state, and stop curator rows counting as organic activity.",
+ "contents": "Cell grid with a per-cell detail panel. Locked: the map stays visible, per-cell detail carries 'Unlock with 3 neighbors who join' plus a 1/3 progress row and a share control. Unlocked: verified-home count, founding slots open, activity \u2014 with origin='curator' excluded from organic counts.",
+ "states": [
+  "locked (0-2)",
+  "progress 1/3, 2/3",
+  "unlocked",
+  "cell has no data",
+  "loading",
+  "error",
+  "offline"
+ ],
+ "phase": "pilot",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Nearby tab",
+  "Invite rewards card tier 2 ('Unlocked \u2014 see the map')",
+  "Block Founders panel"
+ ],
+ "visualization": "The free layer legitimately shows the grid and the shape of activity; only the per-cell NUMBERS gate. Count 'verified homes' (real, small) and 'posts' separately rather than one blended figure that silently shrinks the day curator rows stop counting.",
+ "uxNote": "Gating content in a product with almost no users makes an empty map feel withheld rather than sparse \u2014 so never blur-paywall the map itself. This is also where the 3-referral tier finally has a destination; today every unlocked tier is a dead promise on all three platforms.",
+ "effortDays": 1
+}

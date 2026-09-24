@@ -1,0 +1,27 @@
+{
+ "id": "f9-verification-promise-copy",
+ "name": "Verification promise lists (one name, no withdrawn fee promise)",
+ "feature": "F9",
+ "disposition": "COPY_ONLY",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "VerifyPromptSheet, VerifiedSuccess, the mover rows' payoff line on web; PlaceVerifyFlow and JustMovedCard on iOS; JustMovedCard on Android.",
+ "purpose": "Every surface that sells verification uses one name and none carries the withdrawn 'permanent 0% marketplace fee' promise.",
+ "contents": "Unlock-list rows and the post-verify success list, re-labelled: 'Block Founder' is the permanent rank, 'Founding Neighbor' is the scarce first-5 tier, and the two are never used as synonyms.",
+ "states": [
+  "default"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Verify sheet",
+  "Post-verify success",
+  "Place file Proof row"
+ ],
+ "visualization": "No new layout, but labels shorten \u2014 re-check the unlock list's row rhythm at two lines per row rather than three.",
+ "uxNote": "The doc's only test is a copy grep in publicPlace.test.js, which covers none of the six client files \u2014 the native mirrors will silently keep the old names. Run the grep over frontend/apps/{web,ios,android} or the platforms diverge on day one.",
+ "effortDays": 0.25
+}

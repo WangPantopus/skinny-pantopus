@@ -1,0 +1,23 @@
+# Last review findings for f7-widget-gallery (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) 'All three provenance shapes appear' is not backed by the listed sample. The small and medium show only hollow and tick marks (the voter date is a bar). The only filled mark would be the county markers in the large year band, and the prompt never says those are filled. The Notes item says the voter row is 'drawn filled', but in the sample it is a bar with no mark; it is filled only in Jordan's own-data hero.
+  - evidence: Prompt: 'the 14-day strip with 6 items: Tue 20 hollow, Fri 23 tick, Mon 26 Washington bar, Tue 27 hollow, Wed 28 tick, Sun 1 Nov tick' and 'All three provenance shapes appear, so the honesty encoding is visible before install.'
+  - fix: Say where the filled mark appears in the sample (for example 'property tax markers in the Clark County lane are filled'), and point the VoteWA note at Jordan's hero.
+- [minor] (substance) The baked sample shows 'Larkspur Loop · Your household' with no sample caption. An Android user below version 15 who has their own snapshot sees a stranger's address labelled 'Your household'. The how-to sheet treats this as something to prevent.
+  - evidence: f7-widget-howto-sheet prompt: 'a stranger's household must not read as hers'. Gallery prompt: 'A snapshot exists on Android below version 15: the baked sample' and Notes: 'the OS picker has no caption slot, so the sample is shown there without a "Sample" label'.
+  - fix: Add this risk to Notes, and consider dropping the scope words from the sample label or using a neutral label.
+- [minor] (substance) Jordan's own-data frame gives no snapshot date, and 'in 7 days' only holds on Mon 19 Oct. The Android 15 generated-preview rate limit from the research is also missing.
+  - evidence: Prompt: 'Artboard 04: Jordan Lee (PLACE B) on his iPhone, after one Today load.' research per-surface: 'Android 15 generated previews (setWidgetPreview, about 2 calls/hour)'.
+  - fix: State 'snapshot Mon 19 Oct, 7:50 AM', and add the roughly 2-per-hour update limit to Notes.
+- [major] (ux) Jordan's own-data medium preview asks for a hero that wraps to 3 lines, which cannot fit the iOS medium's 126pt content height alongside the label, caption, strip and air row. The f7-today-widget prompt also defines no medium date-hero layout.
+  - evidence: "Hero: 'Online or mail voter registration must arrive by Mon 26 Oct' · 'in 7 days', wrapping to 3 lines"; EDGE CASES "Jordan's voter hero is the longest hero and wraps to 3 lines without truncating."; iOS medium is 338x158 with 16pt margins.
+  - fix: Change it to: 'Hero in body semibold, 2 lines; "in 7 days", a filled ProvenanceMark XS and "Official" continue on line 2 in caption; the air row drops (the stated drop order) so the strip keeps its full height.' In EDGE CASES, write 'wraps to 2 lines on iOS medium (3 on Android 4x2) without truncating'.
+- [minor] (ux) The prompt says all three provenance shapes appear in the sample, but the medium's 14-day window holds only hollow marks, ticks and a statewide bar. The only filled mark (property tax Mon 2 Nov) is in the large's year band.
+  - evidence: "All three provenance shapes appear, so the honesty encoding is visible before install."; the medium strip is "Tue 20 hollow, Fri 23 tick, Mon 26 Washington bar, Tue 27 hollow, Wed 28 tick, Sun 1 Nov tick".
+  - fix: Change it to 'All three provenance shapes appear on the large sample (filled: the property tax on Mon 2 Nov); the medium shows hollow and tick.'
+- [minor] (ux) Artboard 05 needs the existing Android 'Tasks near me' tile, but ATTACH has only the f7-today-widget artboards.
+  - evidence: ATTACH "the f7-today-widget artboards 01 (the iOS set) and 14 (the Android set)"; artboard 05 "with the existing 'Tasks near me' tile beside it".
+  - fix: Add to ATTACH: 'the existing Pantopus "Tasks near me" widget on Android, for its picker tile.'
+- [minor] (ux) The baked sample shows 'Your household' to someone who has no household, and the OS picker has no caption slot to say it is a sample.
+  - evidence: "label 'Larkspur Loop · Your household'" in the baked sample; Notes "the OS picker has no caption slot, so the sample is shown there without a 'Sample' label".
+  - fix: Add to Notes: 'Sample scope words shown to people with no place are a known trade-off: realistic data (HIG) against invariant 2. Revisit if pilot users read it as theirs.'

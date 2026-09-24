@@ -1,0 +1,29 @@
+{
+ "id": "f8-compare-arrival-header",
+ "name": "Compare arrival header on /start",
+ "feature": "F8",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "StartFunnel HeroStep at /start?vs=<token>; nearest precedent is the existing 'from the card in your mailbox' pill.",
+ "purpose": "Show a stranger what their friend's place reads, and put their own address field in the still-empty second column so the only obvious next move is to type.",
+ "contents": "Left: the sender's card decoded from the token \u2014 optional first name + city, the four scale strips, the aha headline. Right: 'Your place', empty, holding the address field and 'See your place', with the privacy proof line. The from-card pill and the compare header never both render; precedence is defined.",
+ "states": [
+  "verifying token (sender skeleton)",
+  "valid, sender named",
+  "valid, anonymous ('A place in Camas, WA')",
+  "expired or tampered \u2192 quiet banner 'That comparison link has expired. Type an address to see your own place.' and the ordinary hero",
+  "token verify offline \u2192 render decodable chips or the expired banner",
+  "signed-in viewer \u2192 header swaps 'Sign in' for 'Save this address'",
+  "<640px \u2192 sender column collapses"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "A friend's /start?vs= link (SMS, chat, email unfurl)"
+ ],
+ "visualization": "Above 640px, two columns. Below it \u2014 which is where nearly every compare link is opened \u2014 the sender collapses to a ONE-LINE strip (name \u00b7 city \u00b7 four tiny markers, tap to expand) sitting directly above a still-autofocused address field. The doc's 'compare header above the hero' pushes the field below the fold on a phone, which is the exact opposite of the spread goal.",
+ "uxNote": "A signed-in pilot user opening a friend's link is the most likely recipient in a 30-mover pilot, and today PlaceHeader tells them to sign in to an account they are already in. Fixing that is one state, not a screen.",
+ "effortDays": 1
+}

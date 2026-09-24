@@ -1,0 +1,15 @@
+{
+ "id": "f3-invite-composer",
+ "export": "docs/design/exports/f3-invite-composer/f3-invite-composer.html",
+ "manifest": 22,
+ "mode": "bundle",
+ "pages": 22,
+ "exact": 22,
+ "labelled": 22,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3-invite-composer/pages",
+ "placeholders": []
+}

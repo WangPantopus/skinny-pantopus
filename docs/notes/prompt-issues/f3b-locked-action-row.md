@@ -1,0 +1,26 @@
+# Last review findings for f3b-locked-action-row (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The inventory's release-coupling note is missing from the Notes.
+  - evidence: inventory uxNote: "Ship it in the same release as the migration, or household members get a mystery week."
+  - fix: Add this release note to the frame 19 Notes.
+- [minor] (substance) Three reason strings were reworded from v1 (residency letter, Block Founder, Real Rent), but Notes list only 'the seven new host reason strings' as invented.
+  - evidence: v1: "Address verification needed to request a residency letter", "...to claim Block Founder rank", "...to set Real Rent". The new prompt has "to get a residency letter", "to earn a Block Founder rank", "to share what you pay in rent".
+  - fix: List all ten non-doc reason strings as invented or changed, noting that they follow the GrantLimitList verbs.
+- [minor] (substance) The 'Mail: letters to neighbors' host narrows the design doc's mail compose gate without saying so.
+  - evidence: Design doc: "mail compose also filter on `verification_status='verified'` (`mailCompose.js:78`)". Prompt: "Mail letters: \"Address verification needed to send a letter to neighbors\"".
+  - fix: In Notes, add the assumption that mailCompose's gated action is sending letters to neighbors, and confirm the scope.
+- [major] (ux) The pending row has no link, which creates a dead end and contradicts the verify sheet. When Sam's postcard arrives, the row where he met the lock gives him no way to the code field. The verify sheet also keeps Document and Ask available while a postcard is pending, so 'the server would refuse a second start' is not true for this person.
+  - evidence: LAYOUT: "The pending state drops the link, because the server would refuse a second start." CONTENT: "Pending (Sam, postcard path), no link". f3b-verify-address-sheet LAYOUT: "While a postcard is pending, the pending block replaces the Postcard row, and Document and Ask stay available under the heading 'Or verify another way'." research-findings.md: "Disabled controls must never be communication dead ends".
+  - fix: Give the pending row the link "Enter code", which opens the verify sheet in its postcard-pending state (not a second start). Change CONTENT to: "Pending: 'Your postcard is on its way — expected by Sat 24 Oct' · 'Enter code'". In LAYOUT, replace the degradation sentence with "The pending state's link reads 'Enter code' and opens the pending sheet." On Notes, record the contract change to LockedActionRow's pending variant (string and link). Update frame 5 to "Sam's pending row with Enter code".
+- [minor] (ux) The light-mode colour is left as a choice ('text.strong on sunken, or text.secondary on base or raised'), so the three host shapes may be drawn with different fills. Dark mode is specified with raw hex, which the house rule forbids.
+  - evidence: LAYOUT: "Light mode: text.strong on surface.sunken (9.37:1), or text.secondary on base or raised". "Dark mode: the reason in dark text secondary #94A3B8 ... the link in #38BDF8."
+  - fix: Choose one: "The row sits on the host's surface (base, or raised in card headers) with the reason in text.secondary and no fill. Under a button and in a list it is on base; in a card header it is on raised." For dark mode, name tokens only: "dark text secondary on dark base (dark raised in card headers), dark border hairline, dark focus/link colour for the link."
+- [minor] (ux) The flow asks for the row 'in place of the control', but the prompt draws a dimmed control with the row beneath it. Notes records the deviation only against the inventory, not against flows-spec.
+  - evidence: flows-spec.md flow-04 step 12: "sees 'Address verification needed to send neighbor messages · Verify address' in place of the control"; failure branch: "The row must replace the control". Frame 19 Notes: "replaces the inventory's 'in place of the control' wording".
+  - fix: Extend the Notes item: "...replaces the inventory's and flows-spec flow-04 step 12's 'in place of the control' wording. The Android silent no-op is prevented because the dimmed control stays tappable and brings the reason into focus."
+- [minor] (ux) COPY does not list every user-facing string, as the v2 structure requires. Most strings are only in CONTENT. The pending date also lacks the relative count, and 'Mon 19 Oct' is today.
+  - evidence: COPY lists only "Offline caption", "Legacy member" and "My Homes caption". CONTENT: "expected Mon 19 Oct to Sat 24 Oct".
+  - fix: Move the reason strings, the variants and the result line into COPY, or add "All strings in CONTENT are final copy" to COPY. Write the pending date as "expected by Sat 24 Oct (in 5 days)".
+- [minor] (ux) Some reason strings keep jargon a newcomer won't understand.
+  - evidence: CONTENT: "Address verification needed to make a residency claim" · "Address verification needed to watch this home's records".
+  - fix: Use "Address verification needed to claim residency for a program" and "Address verification needed to get alerts when this home's public records change", and list both on Notes.

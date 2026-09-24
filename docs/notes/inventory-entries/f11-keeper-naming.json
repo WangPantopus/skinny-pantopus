@@ -1,0 +1,34 @@
+{
+ "id": "f11-keeper-naming",
+ "name": "Give your place a keeper (naming)",
+ "feature": "F11",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Expands from an inline invitation on the keeper strip. Writes one place-scoped preference slot keyed by (scope_type, scope_key), not two.",
+ "purpose": "A one-time, low-stakes act of naming that converts a data screen into something the person owns \u2014 and that is genuinely skippable and reversible.",
+ "contents": "Six species tiles, a 24-character name field with a live counter and a suggested default, primary 'Name the keeper' and an equal-weight 'Skip'. One scope line: 'Only you see this.' (T1) vs 'Everyone in this household sees this.' (T3). Overflow on the strip afterwards: Rename, Change species, Remove.",
+ "states": [
+  "default (primary disabled until a species is picked)",
+  "name validation error",
+  "saving",
+  "save error",
+  "skipped (persisted; never auto-presents again, still reachable)",
+  "permission-denied (member sees 'Sam named this place's keeper Ollie', read-only)",
+  "T1 vs T3 copy",
+  "offline (save disabled)"
+ ],
+ "phase": "phase2",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Keeper strip inline invitation",
+  "Keeper strip overflow (rename / change species)",
+  "Place file 'Proof'/'Place' section row"
+ ],
+ "visualization": "Six species tiles in a two-row grid with the name field beneath \u2014 one screen, no wizard step. Skip is a real button of equal weight, not a grey afterthought.",
+ "uxNote": "An auto-presented modal on the second open interrupts someone who opened the app to learn whether recycling is tomorrow \u2014 the worst possible moment to ask for a pet name. Make the auto-present an inline invitation that expands on tap, fire the sheet at most once ever, and make rename/remove exist: the doc gives naming exactly once with no rename path, so a typo or a kid's joke name is permanent.",
+ "effortDays": 1
+}

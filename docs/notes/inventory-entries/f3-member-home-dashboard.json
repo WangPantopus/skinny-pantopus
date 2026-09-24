@@ -1,0 +1,33 @@
+{
+ "id": "f3-member-home-dashboard",
+ "name": "Home dashboard, member read-only view",
+ "feature": "F3",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web dashboard per-card gates + useHomePermissions; iOS HomeDashboardProjection; Android HomeDashboardScreen + HomeDashboardAccess.",
+ "purpose": "Give an invited co-resident a dashboard that is useful and readable without manage permissions \u2014 which the permissions migration creates on day one.",
+ "contents": "After the migration a member gets members.view, calendar.view, calendar.edit and finance.view, so Members, Calendar and Bills cards appear for the first time. Each needs a designed read-only variant defined ONCE \u2014 same layout, action row replaced by a single 'View'. TodayCard's memberCount becomes non-null for members (today it is forced null unless members.view).",
+ "states": [
+  "loading",
+  "member view (read-only cards, no manage FAB)",
+  "owner/admin view",
+  "access revoked mid-session",
+  "verification-required CTA row",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Place file \u2192 this home",
+  "My Homes",
+  "Household notification deep links"
+ ],
+ "visualization": "One read-only card variant applied across all six cards rather than per-card improvisation: identical header and body, action row replaced by a single quiet 'View' affordance. Every manage control a member can see is either absent or disabled-with-reason \u2014 never present-and-inert.",
+ "uxNote": "Android's silent early-return on canPerform is the specific failure: a member taps a visible control and nothing happens at all, which reads as a broken app rather than a permission.",
+ "effortDays": 1
+}

@@ -1,0 +1,51 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pantopus</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--app-bg); color: var(--app-text); font-family: var(--font-sans); overflow: hidden; }
+  .cover { position: relative; height: 288px; overflow: hidden; }
+  .art { position: absolute; top: 0; left: 480px; width: 480px; height: 288px; overflow: hidden; }
+  .art svg { display: block; width: 480px; height: 288px; }
+  .brand { fill: var(--color-primary-600); }
+  .ink { fill: var(--app-text); }
+  .home { fill: var(--color-identity-home-solid); }
+  .sky { fill: var(--color-primary-300); }
+  .card { rx: var(--radius-2xl); }
+  .hole { fill: var(--app-bg); }
+  .words { position: absolute; left: var(--spacing-6); bottom: var(--spacing-6); max-width: 440px; }
+  .name { margin: 0; font-size: 88px; line-height: 0.92; font-weight: 700; letter-spacing: -0.02em; color: var(--app-text); }
+  .tag { margin: var(--spacing-2) 0 0 2px; font-size: 14px; line-height: 20px; color: var(--app-text-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      color-primary-600 176×252 slab bled off the top (the brand, largest) · app-text 280×112 bled off the right (deep ink) · color-identity-home-solid 128×96 (the Place accent) · color-primary-300 136×96 bled right (relief tint, visible in every theme) ≈ 34% of 960×288
+  arrangement the Place dashboard grid: one tall card beside a wide card over two paired cards, bottoms spacing-6 above the edge, spacing-4 gutters
+  pattern     stamp perforations, from the perforation mark (“mail, what is shown, and proof”): spacing-3 notches of app-bg punched along card edges at a spacing-6 pitch, 31 in all
+  scales      sides in spacing-4 multiples; gutters spacing-4; pitch spacing-6; notch diameter spacing-3; corners radius-2xl (the card radius)
+-->
+<rect class="brand card" x="24" y="-20" width="176" height="252" rx="20"/>
+<rect class="ink card" x="216" y="40" width="280" height="112" rx="20"/>
+<rect class="home card" x="216" y="168" width="128" height="96" rx="20"/>
+<rect class="sky card" x="360" y="168" width="136" height="96" rx="20"/>
+<circle class="hole" cx="52" cy="232" r="6"/><circle class="hole" cx="76" cy="232" r="6"/><circle class="hole" cx="100" cy="232" r="6"/><circle class="hole" cx="124" cy="232" r="6"/><circle class="hole" cx="148" cy="232" r="6"/><circle class="hole" cx="172" cy="232" r="6"/>
+<circle class="hole" cx="200" cy="36" r="6"/><circle class="hole" cx="200" cy="60" r="6"/><circle class="hole" cx="200" cy="84" r="6"/><circle class="hole" cx="200" cy="108" r="6"/><circle class="hole" cx="200" cy="132" r="6"/><circle class="hole" cx="200" cy="156" r="6"/><circle class="hole" cx="200" cy="180" r="6"/><circle class="hole" cx="200" cy="204" r="6"/>
+<circle class="hole" cx="244" cy="152" r="6"/><circle class="hole" cx="268" cy="152" r="6"/><circle class="hole" cx="292" cy="152" r="6"/><circle class="hole" cx="316" cy="152" r="6"/><circle class="hole" cx="340" cy="152" r="6"/><circle class="hole" cx="364" cy="152" r="6"/><circle class="hole" cx="388" cy="152" r="6"/><circle class="hole" cx="412" cy="152" r="6"/><circle class="hole" cx="436" cy="152" r="6"/><circle class="hole" cx="460" cy="152" r="6"/>
+<circle class="hole" cx="216" cy="196" r="6"/><circle class="hole" cx="216" cy="220" r="6"/><circle class="hole" cx="216" cy="244" r="6"/>
+<circle class="hole" cx="388" cy="264" r="6"/><circle class="hole" cx="412" cy="264" r="6"/><circle class="hole" cx="436" cy="264" r="6"/><circle class="hole" cx="460" cy="264" r="6"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">Pantopus</h1>
+<p class="tag">See what’s true about your address.</p>
+</div>
+</div>
+</body>
+</html>

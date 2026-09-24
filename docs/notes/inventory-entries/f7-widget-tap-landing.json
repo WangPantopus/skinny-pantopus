@@ -1,0 +1,29 @@
+{
+ "id": "f7-widget-tap-landing",
+ "name": "Widget tap landing (attribution + forced refresh)",
+ "feature": "F7",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "iOS DeepLinkRouter (which today reads only deliveryId/kind and discards every other query param) + TodayTabRoot; Android DeepLinkRouter + RootTabScreen + TodayTabViewModel.",
+ "purpose": "Make the tap honest: open the exact surface the widget summarises, refresh it so the snapshot is rewritten, and record that this open came from the widget.",
+ "contents": "Parse ?src=widget; force refresh() (not the idempotent load()); write the snapshot on success; post session_open {trigger:'widget'} \u2014 which requires the first funnel-event client either native app has ever had. Adds an 'Updated just now' / 'Updated Nm ago' line to the Today header so a user who tapped 'Open to refresh' can see it happened.",
+ "states": [
+  "loaded",
+  "refreshing in place (content stays; never the skeleton)",
+  "refresh failed (last content + inline 'Couldn't refresh')",
+  "cold start (full skeleton is acceptable \u2014 no prior content)",
+  "no place \u2192 the add-a-place sheet",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Any tap on either widget size"
+ ],
+ "visualization": "Refresh-in-place: a thin progress line under the header, content untouched. Blanking a screen someone tapped a widget to reach is the one thing this landing must never do.",
+ "uxNote": "Two confirmed bugs, not risks. (1) Android maps 'today' to the hub BRIEFING screen, so a widget tap lands on a different payload than the widget showed \u2014 and for a T1 user that screen has no empty state and hard-errors. (2) Both Today view models are idempotent once loaded, so 'Open to refresh' can open a warm app, write no snapshot, and leave the widget grey permanently. Fix both here or F7 is a decoration.",
+ "effortDays": 1
+}

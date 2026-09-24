@@ -1,0 +1,36 @@
+{
+ "id": "f3-bill-detail-web",
+ "name": "Bill detail (new web route)",
+ "feature": "F3 / F5 / F10",
+ "disposition": "NEW_SCREEN",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "New route /app/homes/[id]/bills/[billId] \u2014 today the bills directory contains only page.tsx, so web has no bill-shaped destination at all.",
+ "purpose": "Give every bill push, notification and calendar row an exact surface to land on, as design rule 4 requires.",
+ "contents": "Provider, amount, due date, status, payer attribution ('Paid by Sam \u00b7 Tue'), Mark paid / Already paid gated on finance.manage, Edit, Remove \u2014 and in phase 2 the photo provenance block and the 12-month trend. Fixes the confirmed bug on the way in: the list writes status 'cancelled' while the Upcoming filter excludes only 'canceled', so a deleted bill stays listed.",
+ "states": [
+  "loading",
+  "unpaid",
+  "due today",
+  "overdue",
+  "paid (landing after a reminder reads as reassurance, not an error)",
+  "member read-only (Mark paid absent with reason)",
+  "deleted since the push ('This bill was removed')",
+  "permission-denied",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "bill_paid notification",
+  "Bill reminder push",
+  "Bills list row",
+  "Today 14-day strip money row (phase 2)",
+  "Mail piece 'Added to bills' (phase 2)"
+ ],
+ "visualization": "Amount and due date as the headline, status as a single chip, everything else subordinate. Provenance and trend sit beneath as evidence, never as a banner above the number the user came to see.",
+ "uxNote": "A few hours of work that unblocks four other surfaces. Without it, every money push on web lands on a list and the monthly-return step of the loop breaks quietly. Ship the matching Android router branches for /bills and /calendar in the same PR \u2014 DeepLinkRouter enumerates eight /homes/:id children and sends everything else to the dashboard.",
+ "effortDays": 0.5
+}

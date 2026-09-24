@@ -1,0 +1,30 @@
+{
+ "id": "f8-compare-reveal",
+ "name": "Compare reveal (a third funnel step)",
+ "feature": "F8",
+ "disposition": "NEW_SCREEN",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "An explicit third state of the StartFunnel state machine (hero | compare-reveal | preview) at /start?vs=<token> after submit.",
+ "purpose": "The payoff moment \u2014 their place next to the sender's, layer by layer \u2014 before dropping them into their own full preview.",
+ "contents": "The comparison block, then the recipient's own aha, money lead, Band-A groups, locked Band-B and the WallBar unchanged. Ends with a quiet divider so the compare block and the recipient's aha are not two competing headlines.",
+ "states": [
+  "loading (a two-column skeleton that does not exist today)",
+  "both revealed",
+  "both marks in the same band (merged mark + 'Both minimal' \u2014 the most common outcome and the one the doc omits)",
+  "recipient geocode failure \u2014 KEEPS the sender's marks and retries inline (today CouldNotPlace resets the funnel and destroys the sender column)",
+  "unsupported region \u2014 same rule",
+  "a layer missing for the recipient ('Not on record here')",
+  "legacy free-tiles fallback when sections is empty",
+  "offline after reveal"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Submitting an address from the compare arrival header"
+ ],
+ "visualization": "ONE comparison table: four rows, one per layer, each row a SINGLE track carrying BOTH marks \u2014 sender filled, 'You' ringed \u2014 with the layer name above and the two plain-language values beneath left and right. Rows ordered by distance between the marks, descending, so the one real difference is row one \u2014 never a fixed order and never 'worse first'. True two-column cards only above 768px, as a presentation of the same rows.",
+ "uxNote": "Two literal facing cards at 375px is eight markers and eight captions, and two scorecards invite a winner \u2014 the neighbour-judgment failure. A shared track reads as two readings on one instrument, works identically at 375 and 1200px, and solves the OG card with the same component. It is a screen, not a card: it has its own skeleton, its own error rules and its own place in the funnel state machine.",
+ "effortDays": 1.5
+}

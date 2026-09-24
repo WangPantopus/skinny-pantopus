@@ -1,0 +1,15 @@
+{
+ "id": "x-place-file",
+ "export": "docs/design/exports/x-place-file/x-place-file.html",
+ "manifest": 22,
+ "mode": "bundle",
+ "pages": 22,
+ "exact": 22,
+ "labelled": 22,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/x-place-file/pages",
+ "placeholders": []
+}

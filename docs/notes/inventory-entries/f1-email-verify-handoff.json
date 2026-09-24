@@ -1,0 +1,30 @@
+{
+ "id": "f1-email-verify-handoff",
+ "name": "Email verification handoff carrying the held address",
+ "feature": "F1",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "frontend/apps/web/src/app/(auth)/register \u2192 /verify-email-sent interstitial and the verification landing route.",
+ "purpose": "Keep the previewed address alive across the register \u2192 verify-email \u2192 return gap, which is where the bridge currently breaks for cross-device users.",
+ "contents": "The interstitial names the held address (label only, never coordinates): 'We're holding 1402 NE 3rd Ave for you. Verify your email to save it.' The verification landing completes the save from a SERVER-side pending place attached to the unverified account, then routes to the save confirmation. The localStorage draft becomes an optimization, not the load-bearing path.",
+ "states": [
+  "sent (address named)",
+  "verified on the same device",
+  "verified on a different device (server draft completes the save)",
+  "no held address (plain verification copy)",
+  "draft expired",
+  "verification link expired",
+  "error"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Register submit from /start with a preview",
+  "Email verification link"
+ ],
+ "visualization": "Interstitial: the held address rendered as a small pinned address chip under the headline, so the user sees the thing being held rather than reading about it. Nothing else changes.",
+ "uxNote": "Adversarial flow 1 blocker. Requires one backend change (persist the pending place server-side at register time). Without it, F1's entire bridge is device-local and fails silently for anyone who opens the verification mail on their phone.",
+ "effortDays": 1
+}

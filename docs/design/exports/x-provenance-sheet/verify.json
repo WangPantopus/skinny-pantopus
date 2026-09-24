@@ -1,0 +1,15 @@
+{
+ "id": "x-provenance-sheet",
+ "export": "docs/design/exports/x-provenance-sheet/x-provenance-sheet.html",
+ "manifest": 37,
+ "mode": "bundle",
+ "pages": 37,
+ "exact": 37,
+ "labelled": 37,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/x-provenance-sheet/pages",
+ "placeholders": []
+}

@@ -1,0 +1,7 @@
+# Research-backed changes for f9-verification-promise-copy
+
+- Every verification mention states method and date ('Address confirmed by postcard · Sep 8, 2026'), never a bare 'Verified' or a check badge [trust]
+- Remove 'permanent' from 'Block Founder #3 — your permanent rank' unless the data model keeps the rank through staleness and move-out. Otherwise say 'your rank on this block' plus the real condition [trust]
+- List what verification does not do alongside what it does [trust]
+- Consider a name for the Founding tier that is clearly different from 'Block Founder' (for example 'First 5 on this block') and test it for confusion [trust]
+- (research contradiction, topic trust-provenance-privacy: where facts co) v1: 'Block Founder #3 — your permanent rank on this block'. 'You are Block Founder #3. That rank is permanent.' 'Verify and you're Block Founder #3 here — permanently.' | research: The design doc says isVerifiedResident checks both verification status and staleness, so verification can lapse. Airbnb warns that verified status can be lost when information changes. The product's own fail-closed rule (f9-founding-meter-preview) is to never promise what the system can't honour. Mathur et al. document how inflated promises erode trust. | do: Before shipping the copy, confirm in the data model that the rank survives staleness, move-out and re-verification. If it doesn't, say 'your rank on this block' plus a precise condition (e.g. 'kept even if you move') only if that condition is actually true.

@@ -1,0 +1,19 @@
+{
+ "id": "f3-bill-detail-web",
+ "export": "docs/design/exports/f3-bill-detail-web/f3-bill-detail-web.html",
+ "manifest": 27,
+ "mode": "bundle",
+ "pages": 27,
+ "exact": 26,
+ "labelled": 27,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f3-bill-detail-web \u00b7 Notes"
+ ],
+ "extra": [
+  null
+ ],
+ "pagesDir": "docs/design/exports/f3-bill-detail-web/pages",
+ "placeholders": []
+}

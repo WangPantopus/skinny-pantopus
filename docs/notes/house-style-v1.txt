@@ -1,0 +1,35 @@
+PANTOPUS HOUSE STYLE — paste this once at the top of your Claude Design session, then send any screen prompt below.
+
+DESIGN SYSTEM. Before designing, open these two projects and use them as the source of truth for every token, component and layout convention:
+  https://claude.ai/design/p/019e16cb-d2a9-77b0-b9e0-370dbe3856ba?via=share
+  https://claude.ai/design/p/c65a37ac-191a-4cdc-9f30-602926979fd6?via=share
+All existing Pantopus screens are already designed there. Match them. Do not invent a new visual language, card style, type scale or icon set.
+
+DESIGN DIRECTION: clean, trustworthy, warm.
+
+TOKENS (shared source of truth, mirrored on iOS and Android — use these names, never raw hex):
+  Primary sky-blue ramp 50-900 · primary.DEFAULT #0284c7 · primary.500 #0ea5e9 · primary.700 #0369a1
+  Surfaces: base #FFFFFF · raised #F9FAFB · sunken #F3F4F6 · app #F6F7F9 · muted #F8FAFC
+  Text: primary #111827 · strong #374151 · secondary #6B7280 · muted #9CA3AF · inverse #FFFFFF
+  Borders: default #E5E7EB · strong #D1D5DB · focus #0284c7 · subtle #F3F4F6
+  Semantic: success #059669 / bg #F0FDF4 · warning #D97706 / bg #FFFBEB · error #DC2626 / bg #FEF2F2 · info #0284c7 / bg #F0F9FF
+  Identity pillars: personal #0284C7 · home #16A34A · business #7C3AED · professional #D97706
+  Dark mode: surface base #0F172A · raised #1E293B · app #020617 · text primary #E5E7EB · secondary #94A3B8 · border default #1F2937 · focus #38BDF8
+  Type scale: h1 30/36/700 · h2 24/32/600 · h3 20/28/600 · body 16/24/400 · bodySmall 14/20/400 · label 13/18 · caption 12/16/400 · overline 11/16/600 uppercase +0.5 tracking
+
+HOUSE RULE: every colour is a semantic token. The codebase forbids a hex literal anywhere in Features/**. If a colour you want is not in the list above, you are designing something the system cannot express — pick the nearest token instead.
+
+DRAW BOTH LIGHT AND DARK.
+
+HONESTY RULES (product rules, not style preferences — they must be visible in the pixels):
+  1. Unverified data must look unverified. Anything from a city default rather than confirmed by the household carries a visible "unconfirmed" treatment, consistently, on every surface it appears on — calendar row, push, widget, share card. Design that treatment once and reuse it.
+  2. "Only you" vs "your household." A saved place is private; a claimed home is shared with co-residents. Every surface showing address data says which it is.
+  3. Never imply a claim about a neighbour's home. Comparison surfaces are about places and sources, never "your neighbour's house."
+  4. Silence is a designed state. "Nothing needs your attention today" is a state, not an error or an empty shell — and it shows only when every check actually succeeded.
+  5. Sources are shown, not hidden. Where a fact comes from a public dataset, the source is on the surface: "FEMA flood zone", "AirNow, today", "County radon zone (EPA)".
+
+PLATFORMS AND VIEWPORTS:
+  Web: 1440x900 desktop and 390x844 mobile web. Four-tab bottom bar on mobile, left sidebar on desktop.
+  iOS: 393x852 (iPhone 15/16 Pro). Native nav patterns, sheets with detents.
+  Android: 412x915. Material 3 patterns, bottom sheets.
+  NAVIGATION IS FIXED AT FOUR TABS: Place - Today - Nearby - Mail. Do not add a tab, rename one, or propose a fifth. Every screen must be reachable from those four plus deep links.

@@ -1,0 +1,32 @@
+{
+ "id": "f9-earn-removal",
+ "name": "Earn entries removed + a calm landing for old links",
+ "feature": "F9",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Hub status strip inbox_offers item; mailbox nav Earn section; the native onOpenEarn routes and the /earn wallet route.",
+ "purpose": "Take the cash-Earn promise off every surface for users who never earned, without hiding money from users who have.",
+ "contents": "Nav and status-strip entries gated on 'has an EarnTransaction', defaulting hidden while eligibility is unknown. Old links redirect silently to the mailbox root with one neutral line; the wallet stays reachable for anyone with a balance.",
+ "states": [
+  "no EarnTransaction \u2192 hidden",
+  "has one \u2192 shown",
+  "eligibility loading \u2192 hidden (never flash then remove)",
+  "ineligible arrival \u2192 redirect + one line",
+  "eligible with history \u2192 wallet read-only",
+  "offline with a cached payload still carrying inbox_offers (gate on the flag, not the cache)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Mailbox drawer",
+  "Hub status strip",
+  "Old bookmarks and old pushes"
+ ],
+ "visualization": "The drawer simply has one fewer row \u2014 no gap, no stale badge, no orphaned section header. Draw both variants side by side; the eligible variant is now the exception.",
+ "uxNote": "The doc specifies 404s. A 404 on a route the app itself linked last week reads as a broken product, not a policy \u2014 and locking someone out of their own pending payout to tidy the IA would be the worst outcome in F9. Gate client and server both, or native flashes the row before the payload arrives.",
+ "effortDays": 0.5
+}

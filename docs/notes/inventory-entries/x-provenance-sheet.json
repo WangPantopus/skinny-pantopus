@@ -1,0 +1,36 @@
+{
+ "id": "x-provenance-sheet",
+ "name": "Where this comes from (provenance + \"this isn't right\")",
+ "feature": "Cross-cutting (F4, F5, F6, F8, F9, F10, F12)",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Opened from any data mark in the product: a 14-day strip dot, a calendar row, an air-quality marker, a compare scale strip, a bill provenance block, a seeded civic/tax row.",
+ "purpose": "One sheet that answers 'where did this fact come from, how sure are we, and how do I tell you it's wrong' \u2014 so provenance is a mark everywhere and prose in exactly one place.",
+ "contents": "Takes a common payload {value, bands, authority, as_of, confidence, source_url, rule_id}. Renders: the value in plain language; the authority ('FEMA flood zone', 'AirNow, today', 'Clark County Assessor', 'You', 'We read this from your photo'); observed/updated time; the confidence line ('On record, not yet confirmed'); a source link that opens in a new tab / SFSafariViewController / Custom Tab; and the report control 'This isn't right' with a two-option reason picker (wrong date / not my schedule) and the confirmation 'Thanks \u2014 we'll check it.' Needs a backend report endpoint that does not exist today.",
+ "states": [
+  "official/confirmed",
+  "on record, unconfirmed",
+  "you entered it",
+  "no source_url (label, no dead tap target)",
+  "report submitted",
+  "report failed",
+  "offline (read-only from cache, report disabled)"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Any hollow or filled mark on the Today 14-day strip",
+  "Calendar row tap",
+  "AQI band marker tap",
+  "Compare scale-strip row tap",
+  "Bill provenance block (phase 2)",
+  "Pickup card 'Not my schedule'"
+ ],
+ "visualization": "A half-sheet whose top is the mark itself, rendered large, in the same three shapes used everywhere else: FILLED = official/confirmed, HOLLOW = on record but unconfirmed, FILLED-WITH-TICK = you entered it. Under it, a one-line legend, the authority as a caption, and the source link as a row with an external-link glyph. The report control is a quiet text button, not a destructive red.",
+ "uxNote": "This resolves the single worst inconsistency across the three critiques: UNVERIFIED is currently specified four ways (a row-suffix string, a push parenthetical, a widget glyph, and nothing at all on the share card). Words repeated per row become boilerplate exactly where the pilot's zero-target honesty metric is scored; a shape repeated per mark does not. Push copy is the only exception \u2014 a mark cannot travel in a notification tray, so the caveat rides the title, never the body tail where truncation eats it. Build this FIRST: every other entry renders its marks.",
+ "effortDays": 1.5
+}

@@ -1,0 +1,37 @@
+{
+ "id": "f3-members-roster",
+ "name": "Members roster (one surface, honest invite, no fake guest form)",
+ "feature": "F3 / F3b",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web: collapse /app/homes/[id]/members into a thin wrapper over the dashboard Members & Security tab (or delete the tab in favour of the route) \u2014 today they are two unlinked 537-line surfaces. iOS MembersListViewModel; Android MembersListScreen.",
+ "purpose": "Let every member see who lives here, show honestly how each person was verified, and make the Invite button actually invite.",
+ "contents": "Roster grouped by role; per-row verification-source note; pending invites (managers only) including the 'Needs reissue' row with one-tap reissue after the permissions migration; the FIX \u2014 both web Invite buttons currently route to /members/add-guest, whose handleSubmit makes no API call and toasts success unconditionally. That page is DELETED and 'Add guest' points at the working Share Center.",
+ "states": [
+  "loading",
+  "member view (no FAB, no role editing, no pending section)",
+  "owner/admin view",
+  "empty",
+  "permission-denied",
+  "pending invite",
+  "needs reissue",
+  "sending / reissuing",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Home dashboard Members tab",
+  "Place file 'People' rows",
+  "Household block 'Who lives here'",
+  "Invite banner 'You have 2 invitations'"
+ ],
+ "visualization": "Role groups with one row per person. The verification note is NOT a status chip on the name \u2014 it appears only where something is locked, as a quiet capability caption, because badging your housemates as 'Address-verified' vs 'Household member' reads as a social ranking of the people you live with rather than a note about what they can do.",
+ "uxNote": "Resolves the two critiques' disagreement in favour of the first-time reader: the IA lens wanted per-row source chips removed, the F3b analysis wanted the distinction visible. Answer \u2014 put the explanation on the ACTION (the locked-action row), never on the person. Also note the roster is where a lying screen currently sits one tap from the flow F3 is fixing; deleting add-guest is not optional cleanup.",
+ "effortDays": 1.5
+}

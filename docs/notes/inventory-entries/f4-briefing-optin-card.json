@@ -1,0 +1,34 @@
+{
+ "id": "f4-briefing-optin-card",
+ "name": "Briefing opt-in (morning + night-before, one card)",
+ "feature": "F1 / F4",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Today, below the day's content. Replaces the home-gated BriefingOptIn currently buried in web's TodayDetail; net-new on both natives, where no briefing control exists outside Settings.",
+ "purpose": "Let a saved-place user switch on the return trigger without owning or verifying a home \u2014 and expose the evening briefing that F4's whole feature and \u00a75's activation metric depend on.",
+ "contents": "Two asks in one card: 'A morning heads-up?' and 'The night before pickup?', each Yes / Not now, each expanding in place into a time-chip row (evening default 6pm). The silence contract stated once: 'Only when something needs you. No news means nothing's up.' Declining writes prompted_at so it never asks twice. Once on, collapses to a '6:00pm \u00b7 Change' row. Reads OS notification authorization before it claims anything.",
+ "states": [
+  "never asked",
+  "asked and declined (hidden)",
+  "one on / one off",
+  "both on (collapsed rows)",
+  "OS notifications denied \u2014 'Notifications are off for Pantopus' + Open settings, and the widget row is promoted above this card",
+  "saving",
+  "save error",
+  "no location (hidden)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Today",
+  "Notification settings (the durable twin)",
+  "After a first pickup confirmation"
+ ],
+ "visualization": "One card, two switch rows, each expanding in place into a chip row \u2014 never two competing cards and never a modal. The permission warning, when present, sits above both rows as a single amber line, so a switch can never read 'on' while the OS is denying delivery.",
+ "uxNote": "The proposal specified two separate opt-in cards for the same screen and then wrote a risk on each saying 'show only one at a time' \u2014 merging is the obvious answer and it removes the ranking problem entirely. Shipping morning-only would leave \u00a75's activation bar unreachable for a purely navigational reason: evening_briefing_enabled is three taps deep in Settings on every platform today.",
+ "effortDays": 1
+}

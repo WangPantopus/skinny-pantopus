@@ -1,0 +1,9 @@
+# Research-backed changes for f8-compare-sheet
+
+- Mint on open (and debounced on name toggle); spinner on the URL row. Share is enabled only once the link exists, so navigator.share is called synchronously [share]
+- AbortError returns to ready with 'Copy link' visible; it is never an error [share]
+- Privacy line: 'This card shows readings and your city, never your address. Anyone with the link can see it until Sat 19 Dec' [share]
+- The preview renders exactly the token contents; nothing else is re-identifiable [share]
+- Update the civic headline to the per-method string; the air row is dated [share]
+- 'Link copied' is role=status; tertiary actions have 44pt/48dp targets 8dp apart; decline copy is neutral [a11y, companion]
+- (research contradiction, topic share-compare-civic: shareable cards, th) v1: The Share/Copy tap triggers minting (state 3: button disabled with spinner), then the OS share sheet opens. 'Share cancelled' returns to idle. The privacy line says only "This card shows readings and your city, never your address." | research: MDN: navigator.share must be triggered from a UI event (transient activation), so an awaited network mint before share risks NotAllowedError. AbortError is returned both for user cancel and when no targets are available. A stateless signed token exposes nothing until someone shares it, and it cannot be revoked afterward. Strava shows privacy controls do not follow shared content. | do: Mint when the sheet opens and again (debounced) when the name toggle changes. Show the minting spinner on the URL row, and enable Share only when the link exists, so the tap calls share synchronously. In the cancelled/AbortError state, keep a visible 'Copy link' fallback. Extend the privacy line: "Anyone with the link can see this card until {exp date}."
