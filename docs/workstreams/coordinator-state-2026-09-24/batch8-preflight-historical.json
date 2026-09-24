@@ -1,0 +1,29 @@
+{
+  "at": "2026-09-24T05:29:48Z",
+  "base": "5cf4a26c35f79e04503a2e734ef6a1582e90af24",
+  "tip": "90584c7188b4174b10929a2fce9786641dd3dbe6",
+  "tree": "d8e213dfea1ac80fcb6216e8eda1b38b6b9168d0",
+  "heads": {
+    "405": "a31cea46eb2b0ad8ac55c7c8738817e8199921ef",
+    "406": "5682c03bc725bebc515cd984ad3b1d108872ae07",
+    "407": "fdb64a95b9c618b07e24aa5d5dc48f63f90db977",
+    "408": "28ed4e2fb9676c76cb010d50365e8fd1d9662785"
+  },
+  "mergeConflicts": false,
+  "sharedDiffReview": "Read all 774 lines across 7 shared files; existing callbacks and checkout/owner routes coexist",
+  "newMergeDuplicateFunctions": [],
+  "sharedSwiftLint": {
+    "swiftlint": "0.63.3",
+    "swiftformat": "0.61.1",
+    "files": 5,
+    "passed": true
+  },
+  "published": true,
+  "gate": "All4sourceCIgreen; batch410 exacthead reviewed; combined CI required before merge",
+  "deltaFromPreviousPreflight": "Four reviewed existing VacationHold test assertions only; no application/shared file delta. Prior774-line source review and five pinned Swift-file results reused.",
+  "allSourceExactHeadCIGreen": true,
+  "readyAt": "2026-09-24T05:53:07Z",
+  "branch": "codex/integration-batch8-20260924",
+  "url": "https://github.com/WangPantopus/skinny-pantopus/pull/410",
+  "queueRegisteredAt": "2026-09-24T05:54:20Z"
+}

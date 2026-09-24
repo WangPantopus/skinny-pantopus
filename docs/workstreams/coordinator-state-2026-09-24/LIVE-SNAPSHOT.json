@@ -1,0 +1,766 @@
+{
+  "at": "2026-09-24T07:03:20Z",
+  "master": "fd48ccfd2a4da525c82175cf479889bc785f9fe3",
+  "openPRs": [
+    {
+      "baseRefName": "master",
+      "headRefName": "codex/stream3-web-notification-participants",
+      "headRefOid": "62d543f75f9c5ec8e245711486a9a511f1b6154a",
+      "number": 417,
+      "title": "Route web notifications to safe participant booking details",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/417",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521631130"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521631482"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521665813"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521666176"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521664617"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521664653"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521666087"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521666067"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521665715"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107521759967"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965037434/job/107522803179"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/stream1-web-listing-detail",
+      "headRefOid": "828119e579251bf8b51186aa7c370ac964c3cfd2",
+      "number": 416,
+      "title": "Repair listing read errors, saves and owner confirmations",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/416",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516430043"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516430271"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516454186"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516454665"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516453120"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516453119"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516454040"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516454648"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516453856"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107516558318"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963341698/job/107517655790"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/stream1-web-gigs-v2-chat",
+      "headRefOid": "040131672a5f9b3bc5e8c5a3fba81b687af01966",
+      "number": 415,
+      "title": "Repair gig chat navigation and decline feedback",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/415",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516414674"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516414885"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516444859"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516445150"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516443912"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516443988"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516445610"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516445306"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516445569"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107516529320"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963336669/job/107517560906"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/stream1-web-gig-detail",
+      "headRefOid": "c259c120557285ef2ee514eeb9899290e37251d7",
+      "number": 414,
+      "title": "Distinguish unavailable gig reads and remove invented membership year",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/414",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523954291"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523954069"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523990553"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523991570"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523990134"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523989864"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523991533"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523991304"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107523991386"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107524097476"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35965792387/job/107524919553"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/stream1-web-tasks-browse",
+      "headRefOid": "34f8dbad8ff33d2b272723ba0e409cbe1e388482",
+      "number": 413,
+      "title": "Make task categories and failed-page retries match results",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/413",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516390516"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516390466"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516411967"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516412158"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516411093"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516411064"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516412378"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516412486"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516411899"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107516599726"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963328371/job/107517332002"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/stream1-web-map-new-listing",
+      "headRefOid": "6ae580356b2526e255d252744ffc4bd0b6945d1d",
+      "number": 412,
+      "title": "Repair Marketplace creation access and read retries",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/412",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516303886"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516303723"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516460822"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516460755"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516459442"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516459477"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516461073"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516460594"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516460899"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107516449584"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963300451/job/107517639104"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "codex/stream3-booking-participant-read",
+      "headRefOid": "670ba0366ff5e10fa1505ca679e462724b34da93",
+      "number": 411,
+      "title": "Allow minimal booking detail reads for current participants",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/411",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515555889"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515555662"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515577132"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515577144"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515578730"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515578742"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515578783"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515578206"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515578574"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107515692955"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35963053900/job/107516172657"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "codex/stream1-listing-reveal-address",
+      "headRefOid": "e426c59986074bf71a9f5aff5850ad011de269ea",
+      "number": 409,
+      "title": "fix(marketplace): restore owner-granted listing address responses",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/409",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507597114"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507596997"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507617104"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507616971"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507618188"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507618500"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507618478"
+        },
+        {
+          "name": "ios",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507618484"
+        },
+        {
+          "name": "android",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507618514"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107507711937"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35960422784/job/107508169873"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "claude/shared-ux-support-train-host-actions",
+      "headRefOid": "544d1db26ac21d145d67f683234107e7505e90b0",
+      "number": 397,
+      "title": "fix(native): restore support-train actions and share destinations",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/397",
+      "checks": [
+        {
+          "name": "Detect changes",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519062096"
+        },
+        {
+          "name": "Deployment and migration safeguards",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519061905"
+        },
+        {
+          "name": "Backend (privacy gates + Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088967"
+        },
+        {
+          "name": "Backend Docker image",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519089553"
+        },
+        {
+          "name": "Web (lint, typecheck gate, Jest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088930"
+        },
+        {
+          "name": "Web E2E (Identity Firewall)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519089044"
+        },
+        {
+          "name": "Seeder (pytest)",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088759"
+        },
+        {
+          "name": "ios / Lint (SwiftLint + SwiftFormat)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088331"
+        },
+        {
+          "name": "ios / Build iOS test bundles",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088333"
+        },
+        {
+          "name": "ios / Tests on iPhone 16",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107523456409"
+        },
+        {
+          "name": "ios / Tests on iPhone 16 Pro",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107523456349"
+        },
+        {
+          "name": "ios / Tests on iPhone SE (3rd generation)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107523456408"
+        },
+        {
+          "name": "android / Lint, test, assemble",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088293"
+        },
+        {
+          "name": "android / Instrumented tests (emulator)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519088297"
+        },
+        {
+          "name": "database / Replay and lint the complete schema",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107519197408"
+        },
+        {
+          "name": "CI OK",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/WangPantopus/skinny-pantopus/actions/runs/35964197841/job/107528718383"
+        }
+      ],
+      "ciOK": "SUCCESS",
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "place-design",
+      "headRefOid": "2fd455116c6083fb818427252a28fbfd67f1b5cc",
+      "number": 46,
+      "title": "add design",
+      "url": "https://github.com/WangPantopus/skinny-pantopus/pull/46",
+      "scope": "Founder only: untouched"
+    }
+  ],
+  "counts": {
+    "originalInventory": 155,
+    "fixedAndMerged": 73,
+    "inFlight": 20,
+    "notStarted": 62,
+    "remaining": 82,
+    "wholeAppCoveragePercent": null
+  },
+  "pause": {
+    "allFourOwnedIOSDevices": "Shutdown",
+    "adbOwnedDevices": [],
+    "heavyLease": "free",
+    "deviceSlots": "all free after exact root slot2 release",
+    "monitor": "stopped",
+    "mergeQueue": "empty",
+    "ownedAppRuntimes": "stopped",
+    "databases": "retained",
+    "newWorkStartedDuringPause": false
+  }
+}
