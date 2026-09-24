@@ -384,6 +384,13 @@ class GigDetailViewModel
         /** Raw bids for the owner panel (owner-only endpoint; empty otherwise). */
         private val _bids = MutableStateFlow<List<GigBidDto>>(emptyList())
         val bids: StateFlow<List<GigBidDto>> = _bids.asStateFlow()
+        private val _bidsReadError = MutableStateFlow<String?>(null)
+        val bidsReadError: StateFlow<String?> = _bidsReadError.asStateFlow()
+        private val _bidsRefreshing = MutableStateFlow(false)
+        val bidsRefreshing: StateFlow<Boolean> = _bidsRefreshing.asStateFlow()
+
+        /** Retry this view model's fixed gig scope without discarding its loaded rows. */
+        fun retryOwnerBids() = silentRefetch()
 
         /**
          * Ranking metadata keyed by bid id, populated only when the owner's
@@ -825,16 +832,19 @@ class GigDetailViewModel
             if (!showLoading && refetchInFlight) return
             if (showLoading) _state.value = ContentDetailUiState.Loading
             refetchInFlight = true
+            _bidsRefreshing.value = true
             viewModelScope.launch {
                 if (!bidCheckout.isCurrentReadScope()) {
                     _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
                     refetchInFlight = false
+                    _bidsRefreshing.value = false
                     return@launch
                 }
                 val result = repo.detail(gigId)
                 if (!bidCheckout.isCurrentReadScope()) {
                     _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
                     refetchInFlight = false
+                    _bidsRefreshing.value = false
                     return@launch
                 }
                 when (result) {
@@ -847,6 +857,7 @@ class GigDetailViewModel
                         if (!bidCheckout.isCurrentReadScope()) {
                             _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
                             refetchInFlight = false
+                            _bidsRefreshing.value = false
                             return@launch
                         }
                         applyLoaded(result.data.gig, bids, historicalTip)
@@ -855,10 +866,13 @@ class GigDetailViewModel
                     is NetworkResult.Failure -> {
                         if (showLoading) {
                             _state.value = ContentDetailUiState.Error(result.error.displayMessage("Couldn't load detail."))
+                        } else if (viewerIsOwner) {
+                            _bidsReadError.value = result.error.displayMessage("Couldn't refresh bids.")
                         }
                     }
                 }
                 refetchInFlight = false
+                _bidsRefreshing.value = false
             }
         }
 
@@ -886,13 +900,20 @@ class GigDetailViewModel
                                     gigsCompleted = offer.trustCapsule?.gigsCompleted,
                                 )
                         }
+                    _bidsReadError.value = null
                     return scored.data.offers.map { it.asBid() }
                 }
             }
-            _offerRankings.value = emptyMap()
             return when (val bidsResult = repo.bids(gigId)) {
-                is NetworkResult.Success -> bidsResult.data.bids
-                is NetworkResult.Failure -> emptyList()
+                is NetworkResult.Success -> {
+                    _offerRankings.value = emptyMap()
+                    _bidsReadError.value = null
+                    bidsResult.data.bids
+                }
+                is NetworkResult.Failure -> {
+                    _bidsReadError.value = bidsResult.error.displayMessage("Couldn't load bids.")
+                    _bids.value
+                }
             }
         }
 
@@ -971,6 +992,7 @@ class GigDetailViewModel
                         canInstantAccept,
                         Projection.ownerPanelHandlesBids(gig, viewerIsOwner),
                         viewerCanEditBid(),
+                        ownerBidsUnavailable = viewerIsOwner && _bidsReadError.value != null && bids.isEmpty(),
                     ),
                 )
         }
@@ -2336,6 +2358,7 @@ class GigDetailViewModel
                 canInstantAccept: Boolean = false,
                 suppressBidsModule: Boolean = false,
                 viewerCanUpdateBid: Boolean = false,
+                ownerBidsUnavailable: Boolean = false,
             ): ContentDetailContent {
                 val content =
                     if (shouldProjectTaskV2(gig)) {
@@ -2352,7 +2375,12 @@ class GigDetailViewModel
                     } else {
                         projectGigV1(gig, bids, canTip, viewerUserId, suppressBidsModule, viewerCanUpdateBid)
                     }
-                return currentGigDetail(content, gig, viewerUserId, canMarkDelivered, canTip)
+                val current = currentGigDetail(content, gig, viewerUserId, canMarkDelivered, canTip)
+                return if (ownerBidsUnavailable && gig.status?.lowercase() == "open") {
+                    current.copy(statusPill = current.statusPill?.copy(label = "Open · Bids unavailable"))
+                } else {
+                    current
+                }
             }
 
             /**
