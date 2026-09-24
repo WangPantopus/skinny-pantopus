@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { formatPrice } from '@pantopus/ui-utils';
+import { BID_STATUS_STYLES, formatPrice, statusLabel } from '@pantopus/ui-utils';
 import TrustCapsule from './TrustCapsule';
 
 interface OfferCardV2Props {
@@ -11,9 +11,11 @@ interface OfferCardV2Props {
   gig?: any;
 }
 
-export default function OfferCardV2({ offer, onAccept, onDecline }: OfferCardV2Props) {
+export default function OfferCardV2({ offer, onAccept, onDecline, gig }: OfferCardV2Props) {
   const user = offer.user || offer.bidder || {};
   const trust = offer.trust_capsule || {};
+  const canAccept = gig?.status === 'open' && offer.status === 'pending';
+  const canDecline = gig?.status === 'open' && ['pending', 'countered'].includes(offer.status);
   const isRecommended = offer.is_recommended || offer.match_rank === 1;
   const displayName = user.first_name
     ? `${user.first_name} ${user.last_name || ''}`.trim()
@@ -70,21 +72,27 @@ export default function OfferCardV2({ offer, onAccept, onDecline }: OfferCardV2P
         <p className="text-sm text-app-text-secondary line-clamp-2">{offer.message}</p>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => onAccept(offer.id)}
-          className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
-        >
-          Accept
-        </button>
-        <button
-          onClick={() => onDecline(offer.id)}
-          className="text-sm text-app-text-secondary hover:text-app-text"
-        >
-          Decline
-        </button>
-      </div>
+      <p className="text-sm text-app-text-secondary">Status: {statusLabel(BID_STATUS_STYLES, offer.status)}</p>
+      {(canAccept || canDecline) && (
+        <div className="flex items-center gap-4">
+          {canAccept && (
+            <button
+              onClick={() => onAccept(offer.id)}
+              className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
+            >
+              Accept
+            </button>
+          )}
+          {canDecline && (
+            <button
+              onClick={() => onDecline(offer.id)}
+              className="text-sm text-app-text-secondary hover:text-app-text"
+            >
+              Decline
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
