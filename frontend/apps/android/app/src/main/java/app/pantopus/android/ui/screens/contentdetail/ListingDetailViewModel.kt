@@ -126,9 +126,11 @@ class ListingDetailViewModel
             val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return
             if (isOwnedByMe() || isSold()) return
             when (val offers = offersRepo.listOffers(listingId)) {
-                is NetworkResult.Success -> acceptedOffer = offers.data.offers.firstOrNull {
-                    it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
-                }
+                is NetworkResult.Success ->
+                    acceptedOffer =
+                        offers.data.offers.firstOrNull {
+                            it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                        }
                 is NetworkResult.Failure -> checkoutReadFailed = true
             }
         }
@@ -149,17 +151,18 @@ class ListingDetailViewModel
         }
 
         private fun checkoutStatusButton(state: String): ContentDetailDockButton {
-            val label = when (state) {
-                "authorized" -> "Payment authorized"
-                "processing" -> "Payment processing"
-                "paid" -> "Payment received"
-                "refund_pending" -> "Refund processing"
-                "partially_refunded" -> "Partially refunded"
-                "refunded" -> "Payment refunded"
-                "disputed" -> "Payment disputed"
-                "not_payable" -> "Pickup pending"
-                else -> null
-            }
+            val label =
+                when (state) {
+                    "authorized" -> "Payment authorized"
+                    "processing" -> "Payment processing"
+                    "paid" -> "Payment received"
+                    "refund_pending" -> "Refund processing"
+                    "partially_refunded" -> "Partially refunded"
+                    "refunded" -> "Payment refunded"
+                    "disputed" -> "Payment disputed"
+                    "not_payable" -> "Pickup pending"
+                    else -> null
+                }
             return if (label == null) {
                 ContentDetailDockButton("Check payment", PantopusIcon.Clock)
             } else {
@@ -342,27 +345,27 @@ class ListingDetailViewModel
                 checkoutButton: ContentDetailDockButton?,
             ): ContentDetailDock =
                 if (sold) {
-                        ContentDetailDock(
-                            secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
-                            primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
-                        )
-                    } else if (!isViewerOwner && checkoutButton != null) {
-                        ContentDetailDock(
-                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
-                            primary = checkoutButton,
-                        )
-                    } else if (onHold && !isViewerOwner) {
-                        // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
-                        ContentDetailDock(
-                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
-                            primary = ContentDetailDockButton(label = "Pickup pending", icon = PantopusIcon.Clock, enabled = false),
-                        )
-                    } else {
-                        ContentDetailDock(
-                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
-                            primary = ContentDetailDockButton(label = if (isViewerOwner) "View offers" else "Make offer"),
-                        )
-                    }
+                    ContentDetailDock(
+                        secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
+                        primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
+                    )
+                } else if (!isViewerOwner && checkoutButton != null) {
+                    ContentDetailDock(
+                        secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                        primary = checkoutButton,
+                    )
+                } else if (onHold && !isViewerOwner) {
+                    // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
+                    ContentDetailDock(
+                        secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                        primary = ContentDetailDockButton(label = "Pickup pending", icon = PantopusIcon.Clock, enabled = false),
+                    )
+                } else {
+                    ContentDetailDock(
+                        secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                        primary = ContentDetailDockButton(label = if (isViewerOwner) "View offers" else "Make offer"),
+                    )
+                }
 
             fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
 
