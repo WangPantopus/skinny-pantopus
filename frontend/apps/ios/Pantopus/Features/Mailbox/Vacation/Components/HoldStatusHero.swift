@@ -20,6 +20,8 @@ struct HoldStatusHero: View {
     let daysLeft: Int
     let untilLabel: String
     let stats: [VacationHoldStat]
+    let statusLabel: String
+    let daysLabel: String
 
     /// Reduce-motion override hook for tests / previews. Defaults to
     /// reading the accessibility trait at render time.
@@ -29,12 +31,16 @@ struct HoldStatusHero: View {
         daysLeft: Int,
         untilLabel: String,
         stats: [VacationHoldStat],
-        reduceMotionOverride: Bool? = nil
+        reduceMotionOverride: Bool? = nil,
+        statusLabel: String = "Hold active",
+        daysLabel: String = "days left"
     ) {
         self.daysLeft = daysLeft
         self.untilLabel = untilLabel
         self.stats = stats
         self.reduceMotionOverride = reduceMotionOverride
+        self.statusLabel = statusLabel
+        self.daysLabel = daysLabel
     }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -43,8 +49,10 @@ struct HoldStatusHero: View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             headerRow
             daysRow
-            divider
-            statsGrid
+            if !stats.isEmpty {
+                divider
+                statsGrid
+            }
         }
         .padding(.horizontal, 18)
         .padding(.top, Spacing.s4)
@@ -62,7 +70,7 @@ struct HoldStatusHero: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Vacation hold active, \(daysLeft) days left until \(untilLabel)")
+        .accessibilityLabel("\(statusLabel), \(daysLeft) \(daysLabel), return \(untilLabel)")
         .accessibilityIdentifier("vacationHoldStatusHero")
     }
 
@@ -85,7 +93,7 @@ struct HoldStatusHero: View {
     private var activePill: some View {
         HStack(spacing: Spacing.s1 + 2) {
             PulsingDot(reduceMotion: reduceMotion)
-            Text("Hold active")
+            Text(statusLabel)
                 .font(.system(size: 10.5, weight: .bold))
                 .tracking(0.6)
                 .textCase(.uppercase)
@@ -105,7 +113,7 @@ struct HoldStatusHero: View {
                 .tracking(-0.5)
                 .foregroundStyle(.white)
                 .monospacedDigit()
-            Text("days left")
+            Text(daysLabel)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.75))
         }

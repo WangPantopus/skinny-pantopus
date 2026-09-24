@@ -38,30 +38,39 @@ public struct VacationHoldView: View {
             topBar
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s0) {
-                    switch viewModel.mode {
-                    case let .scheduling(draft):
-                        VacationSchedulingBody(
-                            draft: draft,
-                            onPickFromDate: {
-                                viewModel.tapFromDate()
-                                pickingDate = .from
-                            },
-                            onPickToDate: {
-                                viewModel.tapToDate()
-                                pickingDate = .to
-                            },
-                            onToggleScope: { kind, isOn in viewModel.toggleScope(kind, isOn: isOn) },
-                            onToggleForwarding: { viewModel.toggleForwarding($0) },
-                            onTapForwarding: { viewModel.tapForwarding() },
-                            onTapEmergency: { viewModel.tapEmergency() }
-                        )
-                    case let .active(hold):
-                        VacationActiveBody(
-                            hold: hold,
-                            onTapForwarding: { viewModel.tapForwarding() },
-                            onTapEmergency: { viewModel.tapEmergency() },
-                            onEndHold: { showsEndHoldConfirm = true }
-                        )
+                    if viewModel.isLoading {
+                        ProgressView("Loading travel dates…")
+                            .frame(maxWidth: .infinity, minHeight: 160)
+                    } else if let message = viewModel.loadError {
+                        ErrorState(headline: "Couldn't load travel dates", message: message) {
+                            await viewModel.refresh()
+                        }
+                    } else {
+                        switch viewModel.mode {
+                        case let .scheduling(draft):
+                            VacationSchedulingBody(
+                                draft: draft,
+                                onPickFromDate: {
+                                    viewModel.tapFromDate()
+                                    pickingDate = .from
+                                },
+                                onPickToDate: {
+                                    viewModel.tapToDate()
+                                    pickingDate = .to
+                                },
+                                onToggleScope: { kind, isOn in viewModel.toggleScope(kind, isOn: isOn) },
+                                onToggleForwarding: { viewModel.toggleForwarding($0) },
+                                onTapForwarding: { viewModel.tapForwarding() },
+                                onTapEmergency: { viewModel.tapEmergency() }
+                            )
+                        case let .active(hold):
+                            VacationActiveBody(
+                                hold: hold,
+                                onTapForwarding: { viewModel.tapForwarding() },
+                                onTapEmergency: { viewModel.tapEmergency() },
+                                onEndHold: { showsEndHoldConfirm = true }
+                            )
+                        }
                     }
                 }
                 .padding(.bottom, Spacing.s6)
@@ -90,17 +99,17 @@ public struct VacationHoldView: View {
             }
         }
         .confirmationDialog(
-            "End your vacation hold?",
+            "Cancel your travel dates?",
             isPresented: $showsEndHoldConfirm,
             titleVisibility: .visible
         ) {
-            Button("End hold", role: .destructive) {
+            Button("Cancel dates", role: .destructive) {
                 Task { await viewModel.endHoldEarly() }
             }
             .accessibilityIdentifier("vacationHoldEndConfirm")
-            Button("Keep holding", role: .cancel) {}
+            Button("Keep dates", role: .cancel) {}
         } message: {
-            Text("Mail and packages resume delivery right away.")
+            Text("This removes the saved date range. Contact carriers separately about any delivery arrangements.")
         }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -179,17 +188,7 @@ private struct VacationSchedulingBody: View {
             VacationOverline("When")
             whenCard
 
-            VacationOverline("Hold during this period")
-            scopesCard
-            VacationCardHelper("Civic notices always get delivered — too important to hold.")
-
-            VacationOverline("Forwarding")
-            forwardingCard
-            VacationCardHelper("Urgent items (overnight, signature-required) re-route the same day.")
-
-            VacationOverline("Emergency contact")
-            emergencyCard
-            VacationCardHelper("We'll call them if a delivery driver flags an issue at your door.")
+            VacationCardHelper("Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.")
 
             VacationMonoFooter(draft.footerBlurb)
         }
@@ -199,7 +198,7 @@ private struct VacationSchedulingBody: View {
         VacationCard {
             VacationDateRow(
                 label: "From",
-                sub: "9:00 AM pickup",
+                sub: "Departure date",
                 value: VacationHoldFormatter.weekdayShort(draft.fromDate),
                 onTap: onPickFromDate,
                 identifier: "vacationHoldFromDate"
@@ -207,7 +206,7 @@ private struct VacationSchedulingBody: View {
             VacationHairline()
             VacationDateRow(
                 label: "To",
-                sub: "Resume delivery",
+                sub: "Return date",
                 value: VacationHoldFormatter.weekdayShort(draft.toDate),
                 onTap: onPickToDate,
                 identifier: "vacationHoldToDate"
@@ -307,53 +306,19 @@ private struct VacationActiveBody: View {
             HoldStatusHero(
                 daysLeft: hold.daysLeft,
                 untilLabel: hold.untilLabel,
-                stats: hold.stats
+                stats: [],
+                statusLabel: hold.statusLabel,
+                daysLabel: "days until return"
             )
             .padding(.horizontal, Spacing.s3)
             .padding(.top, 14)
 
-            VacationOverline("Currently held")
-            VStack(alignment: .leading, spacing: Spacing.s2) {
-                HeldList(items: hold.heldItems)
-                Text(hold.resumeBlurb)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.horizontal, Spacing.s1)
-            }
-            .padding(.horizontal, Spacing.s3)
-
-            if let forwarding = hold.forwarding {
-                VacationOverline("Forwarding to")
-                VacationCard {
-                    VacationChevronRow(
-                        leadingIcon: .mapPin,
-                        leadingTint: Theme.Color.primary600,
-                        leadingBackground: Theme.Color.primary50,
-                        title: forwarding.title,
-                        sub: forwarding.sub,
-                        onTap: onTapForwarding,
-                        identifier: "vacationHoldActiveForwarding"
-                    )
-                }
-            }
-
-            if let emergency = hold.emergency {
-                VacationOverline("Emergency contact")
-                VacationCard {
-                    VacationChevronRow(
-                        leading: AnyView(VacationAvatar(initials: emergency.initials)),
-                        title: "\(emergency.name) (\(emergency.relation.lowercased()))",
-                        sub: emergency.phone,
-                        onTap: onTapEmergency,
-                        identifier: "vacationHoldActiveEmergency"
-                    )
-                }
-            }
+            VacationCardHelper(hold.resumeBlurb)
 
             VacationCard {
                 VacationDestructiveRow(
-                    label: "End hold early",
-                    sub: "Mail resumes tomorrow morning",
+                    label: "Cancel travel dates",
+                    sub: "Remove this saved date range",
                     onTap: onEndHold,
                     identifier: "vacationHoldEndEarly"
                 )

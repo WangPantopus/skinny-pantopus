@@ -114,6 +114,7 @@ public struct VacationStatusResponse: Decodable, Sendable, Hashable {
 /// Body for `POST /api/mailbox/v2/p3/vacation/start` — route
 /// `backend/routes/mailboxV2Phase3.js:1546` (`startVacationSchema`).
 public struct StartVacationRequest: Encodable, Sendable, Hashable {
+    public let holdId: String?
     public let homeId: String
     public let startDate: String
     public let endDate: String
@@ -127,8 +128,10 @@ public struct StartVacationRequest: Encodable, Sendable, Hashable {
         endDate: String,
         holdAction: String,
         packageAction: String,
-        autoNeighborRequest: Bool = false
+        autoNeighborRequest: Bool = false,
+        holdId: String? = nil
     ) {
+        self.holdId = holdId
         self.homeId = homeId
         self.startDate = startDate
         self.endDate = endDate
