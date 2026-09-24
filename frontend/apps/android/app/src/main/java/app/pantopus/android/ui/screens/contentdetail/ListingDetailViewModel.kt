@@ -138,20 +138,21 @@ class ListingDetailViewModel
             }
         }
 
-        private fun isAwaitingConfirmation(): Boolean =
-            paymentsRepo.isListingConfirmationPending(
-                (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id,
-                listingId,
-            )
+        private val isAwaitingConfirmation: Boolean
+            get() =
+                paymentsRepo.isListingConfirmationPending(
+                    (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id,
+                    listingId,
+                )
 
         fun hasCheckoutAction(): Boolean =
-            !isSold() && !isOwnedByMe() && (acceptedOffer != null || checkoutReadFailed || isAwaitingConfirmation())
+            !isSold() && !isOwnedByMe() && (acceptedOffer != null || checkoutReadFailed || isAwaitingConfirmation)
 
         private fun checkoutButton(): ContentDetailDockButton? {
             val summary = acceptedOffer?.checkout
             return when {
                 isCheckingOut -> ContentDetailDockButton("Checking payment…", PantopusIcon.Clock, enabled = false)
-                isAwaitingConfirmation() -> ContentDetailDockButton("Check payment status", PantopusIcon.Clock)
+                isAwaitingConfirmation -> ContentDetailDockButton("Check payment status", PantopusIcon.Clock)
                 checkoutReadFailed -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
                 acceptedOffer == null -> null
                 summary == null -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
@@ -183,7 +184,7 @@ class ListingDetailViewModel
 
         private fun canContinueCheckout(): Boolean {
             val summary = acceptedOffer?.checkout ?: return false
-            return !checkoutReadFailed && !isAwaitingConfirmation() && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
+            return !checkoutReadFailed && !isAwaitingConfirmation && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
         }
 
         private fun rebuild() {
@@ -203,7 +204,7 @@ class ListingDetailViewModel
                     refreshContent()
                     if (checkoutReadFailed || acceptedOffer?.checkout == null || acceptedOffer?.checkout?.state == "unavailable") {
                         onError("Payment status is unavailable. Please try again.")
-                    } else if (isAwaitingConfirmation()) {
+                    } else if (isAwaitingConfirmation) {
                         onPending()
                     }
                 }
@@ -252,7 +253,7 @@ class ListingDetailViewModel
                         paymentsRepo.markListingConfirmationPending(viewerId, listingId, offerId)
                     }
                     refreshContent()
-                    if (isAwaitingConfirmation()) onPending()
+                    if (isAwaitingConfirmation) onPending()
                 }
                 checkoutUserId = null
                 checkoutOfferId = null
