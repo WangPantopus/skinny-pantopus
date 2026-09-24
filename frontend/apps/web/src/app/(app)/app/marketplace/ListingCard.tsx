@@ -45,9 +45,10 @@ interface ListingCardProps {
   item: Listing;
   onSave: () => void;
   onClick: () => void;
+  saveDisabled?: boolean;
 }
 
-export default React.memo(function ListingCard({ item, onSave, onClick }: ListingCardProps) {
+export default React.memo(function ListingCard({ item, onSave, onClick, saveDisabled = false }: ListingCardProps) {
   const coverUrl = item.media_urls?.[0];
   const layerColor = LAYER_COLORS[item.layer] || LAYER_COLORS.goods;
   const expLabel = formatExpiration(item.expires_at);
@@ -78,6 +79,7 @@ export default React.memo(function ListingCard({ item, onSave, onClick }: Listin
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (saveDisabled) return;
     setSaveAnimating(true);
     setTimeout(() => setSaveAnimating(false), 300);
     onSave();
@@ -135,7 +137,9 @@ export default React.memo(function ListingCard({ item, onSave, onClick }: Listin
           onClick={handleSave}
           aria-label={item.userHasSaved ? `Unsave ${item.title}` : `Save ${item.title}`}
           aria-pressed={!!item.userHasSaved}
-          className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-app-surface/90 hover:bg-app-surface flex items-center justify-center shadow-sm transition-transform duration-200 ${
+          disabled={saveDisabled}
+          aria-busy={saveDisabled}
+          className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-app-surface/90 hover:bg-app-surface flex items-center justify-center shadow-sm transition-transform duration-200 disabled:opacity-60 disabled:cursor-wait ${
             saveAnimating ? 'scale-125' : 'scale-100'
           }`}
         >
