@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T03:48:38Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T04:03:21Z (active Codex coordinator)
 
-Master2768759bd845a8582583688eb53671a65ba3c45d; reviewed batch7 PR404 remains queued pending native CI. Root Android997ed actual pagination Retry, Hub delayed-response ordering, and copied Support link→Chrome/restricted403/outage Retry/native return passed. Area retry exposed stale header/radius; repaird8aa5cb8c457b3004c784be80cf2b077f27fadf8 is prepared, unbuilt. Stream1 exact TEST authorizations were canceled after accepted no-capture/restart checks; final iOS Decline/wrap now underway. Home real iOS checks wait for S1 UI; S3 summary-only Android build owns heavy. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial. Fresh full-app sweep remains ahead. Exact receipts/queues/limits in [live hub](workstreams/README.md); founder§7/A17 reserved.
+Batch7 PR404/393/403 merged after reviewed evidence and green CI; fetched master5cf4a26c35f79e04503a2e734ef6a1582e90af24. Original155 now68fixed/merged,25inflight,62notstarted (87unfinished≈56%, not app coverage); broad80 remains13closed/67partial. Root Android326b follow-up build active, earlier pagination/race/Support copied-link actuals passed. Home actual iOS checks underway; S3 summary fit passed but new Business return recovery repair awaits build/afters. S1 checkout405 and offers406 published;405 backend CI failure under investigation,406 full review pending. Fresh full-app sweep remains ahead. Exact receipts/queues/limits in [live hub](workstreams/README.md); founder§7/A17 reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 

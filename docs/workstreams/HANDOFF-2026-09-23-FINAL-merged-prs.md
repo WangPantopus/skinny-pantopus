@@ -1,8 +1,8 @@
 # Appendix: every PR merged on 2026-09-23 (generated from GitHub)
 
-## Live additions — checked 2026-09-24T01:35:45Z
+## Live additions — checked 2026-09-24T04:03:21Z
 
-The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `2768759bd845a8582583688eb53671a65ba3c45d`. Event times are GitHub-reported; merge SHAs are verified in Git.
+The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `5cf4a26c35f79e04503a2e734ef6a1582e90af24`. Event times are GitHub-reported; merge SHAs are verified in Git.
 
 | PR | Merged (UTC) | Merge commit | Branch | Title |
 |---|---|---|---|---|
@@ -24,6 +24,10 @@ The187-row table below is the original handoff snapshot on master1a15514cc. Thes
 | [#400](https://github.com/WangPantopus/skinny-pantopus/pull/400) | Sep24 01:20:59 | `bb92bc8577a6fe229ae3801d6074f8f22685bfa4` | via batch6 #401 | Preserve vacation record when editing dates |
 
 | [#402](https://github.com/WangPantopus/skinny-pantopus/pull/402) | Sep24 01:33:59 | `2768759bd845a8582583688eb53671a65ba3c45d` | `codex/support-train-public-access` | Current Support Train sharing access and honest outage/retry |
+
+| [#404](https://github.com/WangPantopus/skinny-pantopus/pull/404) | Sep24 03:58:47 | `5cf4a26c35f79e04503a2e734ef6a1582e90af24` | `codex/coord-merge-batch-7` | Reviewed package detail and native Mail/Blocked users: #393/#403 |
+| [#393](https://github.com/WangPantopus/skinny-pantopus/pull/393) | via batch7 | `be684d219e22cf9702dd6215f5f9943582676526` | via batch7 #404 | Bounded native package detail; founder A17 excluded |
+| [#403](https://github.com/WangPantopus/skinny-pantopus/pull/403) | via batch7 | `0d2e2c82ab86d51ae5e31d14428c19d0f56a6032` | via batch7 #404 | Mail compose and Blocked users refresh (C29/C33) |
 
 ## Preserved original snapshot
 
