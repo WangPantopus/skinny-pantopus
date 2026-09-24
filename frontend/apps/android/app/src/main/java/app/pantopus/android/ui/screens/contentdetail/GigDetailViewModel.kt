@@ -1797,6 +1797,7 @@ class GigDetailViewModel
             viewModelScope.launch {
                 when (val result = repo.counterBid(gigId, bidId, amount, message)) {
                     is NetworkResult.Success -> {
+                        applyOwnerBidReceipt(result.data.bid)
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Counter-offer sent"))
                         _bidActionInFlight.value = null
                         silentRefetch()
@@ -1819,6 +1820,8 @@ class GigDetailViewModel
             viewModelScope.launch {
                 when (val result = repo.rejectBid(gigId, bidId)) {
                     is NetworkResult.Success -> {
+                        // This endpoint confirms the rejection with a message, not a bid payload.
+                        _bids.value = _bids.value.map { if (it.id == bidId) it.copy(status = "rejected") else it }
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Bid rejected"))
                         _bidActionInFlight.value = null
                         silentRefetch()
@@ -1844,6 +1847,7 @@ class GigDetailViewModel
             viewModelScope.launch {
                 when (val result = ownerActionsRepo.withdrawCounterOffer(gigId, bidId)) {
                     is NetworkResult.Success -> {
+                        applyOwnerBidReceipt(result.data.bid)
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Counter-offer withdrawn."))
                         _bidActionInFlight.value = null
                         silentRefetch()
@@ -1857,6 +1861,18 @@ class GigDetailViewModel
                             ),
                         )
                     }
+                }
+            }
+        }
+
+        /** Keep confirmed server terms visible when the following list read is unavailable. */
+        private fun applyOwnerBidReceipt(receipt: GigBidDto?) {
+            if (receipt == null) return
+            _bids.value = _bids.value.map { bid ->
+                if (bid.id == receipt.id) {
+                    receipt.copy(bidder = receipt.bidder ?: bid.bidder, legacyBidder = receipt.legacyBidder ?: bid.legacyBidder)
+                } else {
+                    bid
                 }
             }
         }
