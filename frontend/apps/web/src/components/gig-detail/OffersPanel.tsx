@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { toast } from '@/components/ui/toast-store';
 
 type AnyObj = Record<string, any>;
 
@@ -50,8 +51,16 @@ function ScopedOffersPanel({
     return () => { mounted.current = false; };
   }, []);
   const [offers, setOffers] = useState<AnyObj[]>([]);
-  const [loadingOffers, setLoadingOffers] = useState(false);
+  const [loadingOffers, setLoadingOffers] = useState(true);
+  const [offersLoaded, setOffersLoaded] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
   const [offersError, setOffersError] = useState<string | null>(null);
+  const [counterOffer, setCounterOffer] = useState<AnyObj | null>(null);
+  const [counterAmount, setCounterAmount] = useState('');
+  const [counterMessage, setCounterMessage] = useState('');
+  const [counterError, setCounterError] = useState<string | null>(null);
+  const [sendingCounter, setSendingCounter] = useState(false);
+  const counterPending = useRef(false);
 
   useEffect(() => {
     if (!isOwner) return;
@@ -62,7 +71,7 @@ function ScopedOffersPanel({
   const loadOffers = async () => {
     if (!mounted.current) return;
     setLoadingOffers(true);
-    setOffersError(null);
+    setReadError(null);
 
     try {
       const gigsExt = api.gigs as unknown as GigsOffersApiExt;
@@ -70,12 +79,12 @@ function ScopedOffersPanel({
       if (!mounted.current) return;
       const bids = ((list as Record<string, any>)?.bids ?? list ?? []) as AnyObj[];
       setOffers(bids);
+      setOffersLoaded(true);
     } catch (e: unknown) {
       console.error('Failed to load offers:', e);
-      setOffers([]);
-      setOffersError(e instanceof Error ? e.message : 'Failed to load offers');
+      if (mounted.current) setReadError(e instanceof Error ? e.message : 'Failed to load offers');
     } finally {
-      setLoadingOffers(false);
+      if (mounted.current) setLoadingOffers(false);
     }
   };
 
@@ -107,16 +116,29 @@ function ScopedOffersPanel({
     }
   };
 
-  const handleCounterBid = async (offer: AnyObj) => {
-    const amt = prompt(`Counter-offer amount (original: $${offer.bid_amount ?? offer.amount}):`);
-    if (!amt || isNaN(Number(amt)) || Number(amt) <= 0) return;
-    const msg = prompt('Optional message:') || '';
+  const handleCounterBid = async () => {
+    if (!counterOffer || counterPending.current) return;
+    const amount = Number(counterAmount);
+    if (!counterAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      setCounterError('Enter a counter amount greater than $0.');
+      return;
+    }
+    counterPending.current = true;
+    setSendingCounter(true);
+    setCounterError(null);
     try {
-      await (api.gigs as unknown as GigsOffersApiExt).counterBid?.(gigId, String(offer.id), { amount: Number(amt), message: msg });
+      const data = await api.gigs.counterBid(gigId, String(counterOffer.id), { amount, message: counterMessage });
+      if (!mounted.current) return;
+      setOffers((current) => current.map((offer) => offer.id === counterOffer.id
+        ? { ...offer, ...data.bid } : offer));
+      setCounterOffer(null);
+      toast.success('Counter-offer sent');
       await loadOffers();
     } catch (e: unknown) {
-      const eData = e && typeof e === 'object' ? (e as Record<string, any>) : null;
-      setOffersError(e instanceof Error ? e.message : 'Failed to counter');
+      if (mounted.current) setCounterError(e instanceof Error ? e.message : 'Failed to send counter-offer');
+    } finally {
+      counterPending.current = false;
+      if (mounted.current) setSendingCounter(false);
     }
   };
 
@@ -152,18 +174,26 @@ function ScopedOffersPanel({
             className="text-sm text-app-text-secondary hover:text-app-text"
             disabled={loadingOffers}
           >
-            Refresh
+            {loadingOffers && offersLoaded ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
 
         {offersError && (
-          <p className="text-sm text-red-600 mb-2">{offersError}</p>
+          <p role="alert" className="text-sm text-red-600 mb-2">{offersError}</p>
         )}
 
-        {loadingOffers ? (
+        {readError && (
+          <div role="alert" className="text-sm text-red-600 mb-2">
+            <p>{readError}</p>
+            {offersLoaded && <p className="text-app-text-secondary">Showing the last loaded offers.</p>}
+            <button onClick={loadOffers} disabled={loadingOffers} className="mt-1 underline font-medium">Retry</button>
+          </div>
+        )}
+
+        {loadingOffers && !offersLoaded ? (
           <p className="text-sm text-app-text-secondary">Loading offers...</p>
         ) : offers.length === 0 ? (
-          <p className="text-sm text-app-text-secondary">No offers yet.</p>
+          offersLoaded && !readError && <p className="text-sm text-app-text-secondary">No offers yet.</p>
         ) : (
           <div className="space-y-3">
             {offers.map((o) => {
@@ -272,23 +302,50 @@ function ScopedOffersPanel({
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleRejectBid(o.id)}
+                        disabled={sendingCounter}
                         className="flex-1 bg-app-surface border border-app-border text-app-text py-2 rounded-lg hover:bg-app-hover font-medium text-sm"
                       >
                         Reject
                       </button>
                       <button
-                        onClick={() => handleCounterBid(o)}
+                        onClick={() => {
+                          setCounterOffer(o);
+                          setCounterAmount(String(o.bid_amount ?? o.amount ?? ''));
+                          setCounterMessage('');
+                          setCounterError(null);
+                        }}
+                        disabled={sendingCounter}
                         className="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 font-medium text-sm"
                       >
                         Counter
                       </button>
                       <button
                         onClick={() => handleAcceptBid(o.id)}
+                        disabled={sendingCounter}
                         className="flex-1 bg-gray-900 text-white py-2 rounded-lg hover:bg-black font-semibold text-sm"
                       >
                         Accept
                       </button>
                     </div>
+                  )}
+
+                  {counterOffer?.id === o.id && (
+                    <form onSubmit={(event) => { event.preventDefault(); void handleCounterBid(); }} className="mt-3 border border-app-border rounded-lg p-3 space-y-3">
+                      <p className="text-sm font-medium text-app-text">Counter-offer</p>
+                      <label className="block text-sm text-app-text-secondary">
+                        Amount ($)
+                        <input type="number" step="any" value={counterAmount} onChange={(event) => setCounterAmount(event.target.value)} disabled={sendingCounter} className="mt-1 w-full border border-app-border rounded-lg px-3 py-2 text-sm" />
+                      </label>
+                      <label className="block text-sm text-app-text-secondary">
+                        Message (optional)
+                        <textarea value={counterMessage} onChange={(event) => setCounterMessage(event.target.value)} disabled={sendingCounter} rows={2} className="mt-1 w-full border border-app-border rounded-lg px-3 py-2 text-sm" />
+                      </label>
+                      {counterError && <p role="alert" className="text-sm text-red-600">{counterError}</p>}
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setCounterOffer(null)} disabled={sendingCounter} className="px-3 py-2 text-sm text-app-text-secondary disabled:opacity-50">Cancel</button>
+                        <button type="submit" disabled={sendingCounter} className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium disabled:opacity-50">{sendingCounter ? 'Sending…' : 'Send counter-offer'}</button>
+                      </div>
+                    </form>
                   )}
 
                   {/* Counter accepted — prompt owner to accept or reject the bid */}
