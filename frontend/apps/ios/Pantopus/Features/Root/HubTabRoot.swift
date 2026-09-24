@@ -327,6 +327,10 @@ public enum HubRoute: Hashable {
     /// preview's "Manage privacy" link when it lands in the Hub stack
     /// (via the `pantopus://identity/preview` deep link).
     case privacySettings
+    /// Privacy → "Download your data": the existing Data export screen.
+    case dataExport
+    /// Privacy → "What we collect": a Legal document (the privacy policy).
+    case legalContent(LegalDocument)
     /// Edit profile form — pushed by Settings → "Edit profile". P1.4.
     case editProfile
     /// Mailbox search target (P4.2). Client-side filter over the user's
@@ -1072,6 +1076,21 @@ public struct HubTabRoot: View {
             path.append(.homeDashboard(homeId: homeId))
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
+        case .mailbox:
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab's
+            // own root.
+            path.removeAll { _ in true }
+            _ = router.consume()
+        case let .mailItem(mailId):
+            // A mail notification's letter, in the item detail the mailbox
+            // list opens; pushed through the mailbox root like the other
+            // mailbox links so Back returns to the mailbox.
+            path.append(.mailboxRoot)
+            path.append(.mailItemDetail(mailId: mailId))
+            _ = router.consume()
+        case let .neighborMessage(messageId):
+            path.append(.neighborMessage(messageId: messageId))
+            _ = router.consume()
         case let .bookingDetail(bookingId, owner):
             path.append(.scheduling(.bookingDetail(owner: owner, bookingId: bookingId)))
             _ = router.consume()
@@ -1095,7 +1114,7 @@ public struct HubTabRoot: View {
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
-             .mailTranslation, .unboxing, .packageGig, .earn:
+             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
             tab == .mail
         default:
             tab == .place
@@ -1944,9 +1963,6 @@ public struct HubTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in push(.publicProfile(userId: userId)) }
                 },
-                onTranslate: {
-                    Task { @MainActor in push(.mailTranslation(mailId: mailId)) }
-                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.
@@ -1988,7 +2004,7 @@ public struct HubTabRoot: View {
                             displayName: profile.displayName,
                             initials: Self.initials(from: profile.displayName),
                             identityKind: nil,
-                            verified: profile.verified ?? false
+                            verified: profile.hasVerifiedResidency
                         )))
                     }
                 },
@@ -2012,7 +2028,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessProfilePage(businessId, pageSlug):
@@ -2028,7 +2043,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessPages(businessId):
@@ -3078,7 +3092,16 @@ public struct HubTabRoot: View {
                 onEdit: { Task { @MainActor in push(.editProfile) } }
             )
         case .privacySettings:
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { Task { @MainActor in pop() } }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: push(.dataExport)
+                case .privacyPolicy: push(.legalContent(.privacy))
+                }
+            }) { Task { @MainActor in pop() } }
+        case .dataExport:
+            DataExportView { Task { @MainActor in pop() } }
+        case let .legalContent(doc):
+            LegalContentView(document: doc) { Task { @MainActor in pop() } }
         case let .waitingRoom(homeId):
             WaitingRoomView(
                 viewModel: WaitingRoomViewModel(homeId: homeId, state: .active),
@@ -3296,7 +3319,6 @@ private struct BusinessProfileDestination: View {
     let onBack: @MainActor () -> Void
     let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
     let onShare: @MainActor () -> Void
-    let onOpenReport: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -3308,7 +3330,6 @@ private struct BusinessProfileDestination: View {
             onBack: onBack,
             onOpenMessages: onOpenMessages,
             onShare: onShare,
-            onOpenReport: onOpenReport,
             onOpenWebsite: { url in openURL(url) },
             onEdit: onEdit
         )

@@ -48,6 +48,8 @@ export interface ListingCreator {
   last_name?: string;
   /** Legacy, may still be populated on some surfaces; prefer `avatarUrl`. */
   profile_picture_url?: string;
+  /** Identity-serializer badges; `verified_resident` is the seller's real residency verification. */
+  badges?: string[] | null;
 }
 
 export interface Listing {

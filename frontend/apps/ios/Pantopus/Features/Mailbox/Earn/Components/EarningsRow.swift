@@ -5,7 +5,8 @@
 //  A10.11 — the Recent-earnings card. Grouped-by-day rows, each a
 //  category-tinted tile + description (+ amber "Pending" chip) + the
 //  counterparty / time line + a trailing tabular-nums "+$amount" (green
-//  cleared, amber on-hold). Also hosts `EarnLockedRow` — the gated
+//  cleared, amber on-hold, muted "Not cashable yet" for a mail-offer or ad
+//  payout). Also hosts `EarnLockedRow` — the gated
 //  placeholder the empty new-earner frame shows in place of real
 //  earnings (and reused by the gated Taxes row).
 //
@@ -80,8 +81,8 @@ private struct EarnEarningRow: View {
                     .font(.system(size: 13.5, weight: .bold))
                     .tracking(-0.2)
                     .monospacedDigit()
-                    .foregroundStyle(isPending ? WalletPalette.amberDeep : Theme.Color.success)
-                Text(isPending ? "On hold" : "Paid")
+                    .foregroundStyle(amountColor)
+                Text(statusLabel)
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
@@ -104,6 +105,22 @@ private struct EarnEarningRow: View {
     private var isPending: Bool {
         if case .pending = item.status { return true }
         return false
+    }
+
+    private var amountColor: Color {
+        switch item.status {
+        case .paid: Theme.Color.success
+        case .pending: WalletPalette.amberDeep
+        case .offer: Theme.Color.appTextSecondary
+        }
+    }
+
+    private var statusLabel: String {
+        switch item.status {
+        case .paid: "Paid"
+        case .pending: "On hold"
+        case .offer: "Not cashable yet"
+        }
     }
 
     private var categoryTile: some View {
@@ -141,7 +158,7 @@ private struct EarnEarningRow: View {
     }
 
     private var accessibilityText: String {
-        "\(item.description). \(subtext). plus $\(item.amount). \(isPending ? "On hold" : "Paid")."
+        "\(item.description). \(subtext). plus $\(item.amount). \(statusLabel)."
     }
 }
 
@@ -229,7 +246,7 @@ enum EarnCategoryPalette {
         EarnEarningsList(items: EarnSampleData.populated.earnings)
         EarnLockedRow(
             title: "No earnings yet",
-            subcopy: "Your paid tasks land here — your first one unlocks cash out."
+            subcopy: "Task earnings go to your wallet in Payments."
         )
     }
     .padding(Spacing.s4)

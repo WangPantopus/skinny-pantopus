@@ -177,7 +177,8 @@ final class PublicProfileViewModelTests: XCTestCase {
         XCTAssertEqual(content.header.displayName, "Alex Rivera")
         XCTAssertEqual(content.header.handle, "alex")
         XCTAssertEqual(content.header.locality, "Cambridge, MA")
-        XCTAssertTrue(content.header.isVerified)
+        // The account email flag no longer draws a verified check.
+        XCTAssertFalse(content.header.isVerified)
         XCTAssertEqual(content.stats.stats.map(\.label), ["Reviews", "Rating", "Gigs"])
         XCTAssertEqual(content.stats.reviews.count, 1)
         XCTAssertEqual(content.stats.skills, ["Carpentry", "Spanish"])
@@ -289,7 +290,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.kind, .persona)
-        XCTAssertEqual(content.header.tierLabel, "Persona · Verified")
+        XCTAssertEqual(content.header.tierLabel, "Persona")
         XCTAssertFalse(content.header.isVerifiedNeighbor)
     }
 

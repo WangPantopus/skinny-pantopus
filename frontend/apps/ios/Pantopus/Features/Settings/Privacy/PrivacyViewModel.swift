@@ -95,16 +95,29 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
 
     public enum Variant: Sendable, Hashable { case populated, stealth }
 
+    /// Screens the "Your data" rows open; the host pushes them.
+    public enum Link: Sendable, Hashable {
+        /// "Download your data" → the existing Data export screen.
+        case dataExport
+        /// "What we collect" → Legal › Privacy policy.
+        case privacyPolicy
+    }
+
+    @ObservationIgnored
+    private let onOpen: @MainActor (Link) -> Void
+
     init(
         variant: Variant = .populated,
         appLock: AppLockManager = .shared,
         auth: AuthManager = .shared,
-        api: APIClient = .shared
+        api: APIClient = .shared,
+        onOpen: @escaping @MainActor (Link) -> Void = { _ in }
     ) {
         isStealth = (variant == .stealth)
         self.appLock = appLock
         self.auth = auth
         self.api = api
+        self.onOpen = onOpen
         sensitiveActionGate = { reason in
             await appLock.verifySensitiveAction(reason: reason)
         }
@@ -155,9 +168,13 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         case "deleteAccount":
             deleteAccountError = nil
             isDeleteSheetPresented = true
+        case "downloadData":
+            onOpen(.dataExport)
+        case "whatWeCollect":
+            onOpen(.privacyPolicy)
+        case Row.searchPrivacyRetry:
+            await load()
         default:
-            // Download your data / What we collect open dedicated GDPR
-            // flows tracked outside this package.
             break
         }
     }
@@ -420,6 +437,18 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                 accessibilityIdentifier: "search-visibility-\(option.key)"
             )
         }
+        if searchPrivacyLoadFailed {
+            // The card has no pull-to-refresh; this row is the way back.
+            rows.insert(
+                GroupedListRow(
+                    id: Row.searchPrivacyRetry,
+                    label: "Try again",
+                    control: .chevron,
+                    accessibilityIdentifier: "search-privacy-retry"
+                ),
+                at: 0
+            )
+        }
         rows.append(
             GroupedListRow(
                 id: Row.findableByName,
@@ -434,7 +463,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             id: Group.searchPrivacy,
             overline: "Find me in search",
             helper: searchPrivacyLoadFailed
-                ? "Search privacy could not load. Pull to refresh before changing this setting."
+                ? "Search privacy could not load. Try again before changing this setting."
                 : Self.searchVisibilityHelp[searchVisibility],
             rows: rows
         )
@@ -448,7 +477,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                 GroupedListRow(
                     id: "downloadData",
                     label: "Download your data",
-                    subtext: "ZIP of profile, tasks, messages — emailed to you",
+                    // Export is by request (the Data export screen emails
+                    // the privacy team); there is no automated ZIP yet.
+                    subtext: "Request a copy by email",
                     control: .chevron,
                     leadingIcon: .download
                 ),
@@ -496,6 +527,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         /// `searchVisibility.<everyone|mutuals|nobody>`.
         public static let searchVisibilityPrefix = "searchVisibility"
         public static let findableByName = "findableByName"
+        public static let searchPrivacyRetry = "searchPrivacyRetry"
         public static let deleteAccount = "deleteAccount"
     }
 

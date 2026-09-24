@@ -789,9 +789,12 @@ public final class PublicProfileViewModel {
             handle: profile.username.isEmpty ? nil : profile.username,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identityBadges: buildBadges(profile),
-            tierLabel: kind == .persona ? "Persona · Verified" : nil,
+            // No server field verifies a persona, so the chip names the kind only.
+            tierLabel: kind == .persona ? "Persona" : nil,
             isVerifiedNeighbor: kind == .local
         )
 
@@ -888,9 +891,10 @@ public final class PublicProfileViewModel {
         let stats = [
             ratingStat,
             NeighborStat(id: "jobs", value: "\(jobs)", label: "Jobs done"),
+            // No response-time data exists yet; "—" until it does.
             NeighborStat(
                 id: "response",
-                value: isNew ? "New" : "~45m",
+                value: isNew ? "New" : "—",
                 label: "Response",
                 valueColor: isNew ? Theme.Color.primary600 : Theme.Color.appText
             )
@@ -900,7 +904,9 @@ public final class PublicProfileViewModel {
             name: profile.displayName,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identity: isNew ? .fresh : .personal,
             kicker: neighborSince(profile.createdAt, isNew: isNew)
         )
@@ -908,8 +914,7 @@ public final class PublicProfileViewModel {
         let welcome = isNew
             ? NeighborWelcome(
                 title: "Be the welcome wagon",
-                body: "\(firstName(profile.displayName)) just moved in. A quick hello goes a long way — "
-                    + "and first messages from verified neighbors travel fast."
+                body: "\(firstName(profile.displayName)) just moved in. A quick hello goes a long way."
             )
             : nil
 
@@ -921,7 +926,8 @@ public final class PublicProfileViewModel {
             verifications: neighborVerifications(profile, isNew: isNew),
             reviews: reviews,
             reviewCount: reviewCount,
-            mutuals: isNew ? neighborMutuals(for: profile) : nil,
+            // No mutual-neighbor data comes from the server, so no strip.
+            mutuals: nil,
             welcome: welcome,
             posts: posts,
             isNewNeighbor: isNew,
@@ -933,38 +939,21 @@ public final class PublicProfileViewModel {
         let tile: NeighborVerification.Tile = isNew ? .success : .primary
         let trailing: NeighborVerification.Trailing = isNew ? .status("Recent") : .check
         var items: [NeighborVerification] = []
+        // Only what the payload shows: verified residency (method unknown) and
+        // the account's confirmed email. No server field records an ID check.
         if hasHomeResidency(profile) {
             items.append(NeighborVerification(
                 id: "address", icon: .home, label: "Address",
-                meta: "Verified · postcard", tile: tile, trailing: trailing
+                meta: "Verified", tile: tile, trailing: trailing
             ))
         }
         if profile.verified ?? false {
             items.append(NeighborVerification(
-                id: "identity", icon: .badgeCheck, label: "Identity",
-                meta: "Government ID", tile: tile, trailing: trailing
+                id: "email", icon: .mail, label: "Email",
+                meta: "Confirmed", tile: tile, trailing: trailing
             ))
         }
-        items.append(NeighborVerification(
-            id: "email", icon: .mail, label: "Email",
-            meta: profile.username.isEmpty ? "Confirmed" : "\(profile.username)@…",
-            tile: tile, trailing: trailing
-        ))
         return items
-    }
-
-    private func neighborMutuals(for profile: PublicProfile) -> NeighborMutuals {
-        let seed = profile.id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        let names = [
-            ["Jamal", "Ravi", "Lena", "Amina"],
-            ["Maya", "Chen", "Priya", "Owen"],
-            ["Noah", "Iris", "Sam", "Leah"]
-        ][seed % 3]
-        return NeighborMutuals(
-            count: names.count,
-            names: names.joined(separator: ", "),
-            initials: names.map { String($0.prefix(1)) }
-        )
     }
 
     private func neighborSince(_ iso: String?, isNew: Bool) -> String? {

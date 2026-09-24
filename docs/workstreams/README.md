@@ -1,6 +1,1106 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 23:10 UTC
+> **▶ START HERE (handoff, Sep 23 20:50 UTC):** [`HANDOFF-2026-09-23-FINAL.md`](HANDOFF-2026-09-23-FINAL.md) — complete handoff of coordinator session `92cc4526`: what was done (187 PRs merged today; don't redo), exact paused state, prioritized remaining work, founder queue, runbooks. Paused-state detail: [`coordinator-state-2026-09-23/COORDINATOR-RESUME.md`](coordinator-state-2026-09-23/COORDINATOR-RESUME.md).
+
+> **▶ START HERE:** [`HANDOFF-2026-09-23.md`](HANDOFF-2026-09-23.md) — full end-of-session handoff (all three
+> streams, the pushed-but-no-PR P04/P05 fee work, the queue, and the search-filter security area the next agent
+> must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
+> records what the next coordinator session (`92cc4526`) did with the handoff.
+
+## CURRENT RESUME POINT — 2026-09-23T21:39:56Z (isolated runtime recovery)
+
+- **Verified recovery boundary:** both local Docker contexts resolve to the same empty engine; old stream ports had no listeners. The coordinator approved fresh canonical replay and synthetic fixtures only, on the existing stream ports. No database archive restore, founder data repair, existing ledger rewrite or application schema change is authorized.
+- **Stream 3:** fresh owned API64531/SQL64532 replay succeeded, 89 canonical migrations through `20260923000300`, source `cef95ab67864ccca3ca243cc0d936a87d342cc8f`. Geo Android build and fresh fixture setup continue. Retain the accepted iOS evidence.
+- **Stream 2:** fresh `pantopus-stream2-native-resume-r2` on API64553/SQL64554 replay succeeded with the same canonical 89-entry schema. #325 checkout is pinned at `7034669ae72fdd19acfa5ad738d700625bb4bd1c`; simulator build and fresh auth/fixture recovery continue. The prior API health was 503; a listener alone is not acceptance.
+- **Stream 1:** released to replay its prepared synthetic `pantopus-stream1-resume-20260923` on API64561/SQL64562; Shares this with Shared UX later. Stream1 fixtures use `f9230b01`, Shared UX must use its distinct prefix. No data is recovered merely by recreating a schema.
+- **Batch preflight:** #356/#388 merge cleanly together at unchanged heads; no files overlap between them. Coordinator read current diffs and verified all 37/34 evidence-manifest files respectively. Current-head CI still running; #325 iOS and geo Android remain real-app gates. No batch PR published yet.
+- **Tool adaptations:** merge runner now uses the coordination checkout instead of the forbidden founder checkout. Batch-builder new commits no longer falsely attribute Codex-generated merge messages to Claude. Durable scripts updated here; prior authorship/history retained.
+- **Limits/next:** no fresh real-app pass yet. Complete pending journeys and green exact-head batch4 before progressing through unpublished groups. Founder queue unchanged. Agent identities, three coordinator decisions and hard limits are in the preceding takeover block. Keep evidence store/worktree intact.
+
+## Resume point history — 2026-09-23T21:36:01Z (Codex coordinator takeover)
+
+The founder resumed the paused effort. Read the final handoff below for preserved evidence and remaining scope; this block corrects its Git/runtime snapshot. Acceptance remains **13 closed / 67 partial**. No fresh app journey is claimed yet.
+
+- **Live Git:** master `cef95ab67864ccca3ca243cc0d936a87d342cc8f`; #389 was already merged at the GitHub-reported `2026-09-23T21:09:55Z`, so it is excluded from batch 4. Open application PRs are #325 (`7034669ae72fdd19acfa5ad738d700625bb4bd1c`), #356 (`f9ebef95f842d30bcc09861e01ee253a3c5ae1ba`), #388 (`f98c86e2cc546e7e23bc9be7e05c526f16bcb043`). Their stable repair patch IDs match their handoff-reviewed versions exactly; only master merges changed their heads. Current-head CI is pending. Docs #391 and founder #46 are also open; #46 remains untouched.
+- **Recovery:** every §5.2 stream/WIP branch exists on origin. The hub fast-forwarded to its existing remote history. Most application worktrees have been removed since the pause; helpers and evidence remain. The coordinator worktree's intentional `.claude/launch.json` edit is preserved. No founder checkout mutation.
+- **Machine:** uptime 2 days 23:45, load 4.20/5.14/10.32, kernel pressure 1, free space 150 GiB at the `date -u` preflight. Auto-maintenance stays paused; no gc/maintenance/repack authorized.
+- **Watcher:** existing `coord-watch2.sh` started as a supervised, 30-minute process (Codex exec session 98353; watcher PID 85063), because this environment has no Claude Monitor tool. REST-only; re-arm on expiry. Merge runner stays off until a reviewed batch exists.
+- **Agent order:** prior Claude agent IDs are not callable in this Codex team. Replacement Stream 3 (`/root/stream3`) started first: geo Android completion then scheduling/You. Stream 2 (`/root/stream2`) next: #325 exact-current-head iOS re-check, then Home/Place. Stream 1 (`/root/stream1`) follows: native afters then one web session. Shared UX is next when a background slot is available (three worker slots plus coordinator here). Only one heavy build; at most one device per stream. No standalone unit-test campaign or new tests.
+- **Runtime discrepancy under investigation:** Stream 3 sees no containers/volumes in the current desktop-linux Docker context, despite surviving helper files and Stream 2 listeners. Check all relevant local contexts read-only before rebuilding or declaring retained data absent. Never change the founder runtime or migrate an existing stream ledger.
+- **Coordinator decisions:** (1) hide unboxing and ceremonial-letter Share alongside the other dead controls; (2) landlord tenant-request notifications open the authorized Home using its existing route; (3) do not apply `wip/stream3/accounts-social-publicshare-nostore`: its `publicShare.ts` is already byte-identical to master (Git blob `9c0603ed2ed4a387bc41dad7aea31f8865d478a6`, history `cf34d604d8` / `f941c3bb40`), and its remaining tsconfig change is a local build artifact. Preserve the backup ref.
+- **Next:** complete the two real-app gates, recheck CI, build batch 4 from #356/#388/#325 and geo when ready, review each new PR and merge only a green exact head. Then unpublished groups, remaining existing inventory and a fresh full-app iOS/Android/web pass. No whole-app cleanliness claim.
+- **Standing limits:** founder environment and main checkout untouched; search-filter audit closed; Stripe TEST only; secrets stay private; no bare stash; all §7 founder decisions/data repairs/marketing remain with the founder. Keep the coordinator worktree; copy its audit store to the founder audit location before any future removal, per the explicit handoff requirement.
+
+## Resume point history — September 23, 2026, 19:30 UTC (coordinator session `92cc4526`)
+
+This updates the 17:00 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merges
+- **Batch 2 (#374) merged at 19:22 UTC** as `9779bf9d3`. All 35 PRs are marked merged: the 34 listed, plus #385, the CI registry fallback.
+- **Batch 2 needed two coordinator fix-ups:**
+  - `aa1297ffd` splits `HubViewModel` helpers into `HubViewModel+Formatting.swift`, because #304 and #333 together broke SwiftLint `file_length`;
+  - #385: the database replay falls back to the public ECR mirror when ghcr.io refuses the Supabase image.
+- **Batch 3 = #387**, with 20 PRs, in CI:
+  257 339 346 349 350 365 371 372 373 375 376 377 378 379 380 381 382 383 384 386.
+- **Left out of batch 3:** #325 and #356 conflict with master after batch 2. Their owners are merging master in.
+
+### Operations
+- **CI outage.** A GitHub incident is ongoing since 10:11 UTC. ghcr.io has refused the Supabase Postgres image since about 17:54 UTC, and every database replay failed. #385 fixes it for new runs. PRs that failed only that job are treated as batch-ready, because batch CI re-checks them.
+- **Memory thrash at about 18:35 UTC.** Load reached about 430 with swap full.
+  - `heavy-slot.sh` and `device-slot.sh` now gate on the kernel memory-pressure level plus load.
+  - Agents stopped idle Next servers, emulators and Gradle daemons.
+  - macOS ControlCenter is using about 11 GB, likely a system leak. Restarting it is the founder's call.
+- **Merge runner.** It now keeps a PR queued on a failed CI OK instead of dropping it.
+
+### Notes since the last block
+- Stream 2 Home trust claims: the Members verified badge is accurate (the occupants read returns only active, verified occupancies), so it stays. The Hub pill becomes "N neighbors within 1 mi": count_neighbors_within counts all active occupancies, including the viewer.
+- DECISION: 8 of 9 Home Security toggles (activity_visibility, map_opt_out, guest_approval, member_name_visibility, notification_previews, doc_lock, photo_blur, vault_auto_lock) are stored by homePrivacy.js but read by nothing on the backend; only address_precision is enforced. Hide every toggle no client or server enforces, keep the rest with helpers that say exactly what they do, and keep address_precision. Stored values are untouched.
+- DECISION: remove the web Travel Mode note "Only verified household members and trusted neighbors will handle your mail". Hide the native Trusted neighbors entry (a static screen with no backend). Web Community page neighborCount={47} is sample data: use a real count, or drop the number.
+- FOUNDER QUESTIONS: which Home privacy controls to build for real; a trusted-neighbors feature.
+- Stream 1 #375 (native: Android tolerant items decode; "Open to offers" plus the quick-post rename; bid-row and Tasks-map trust claims), #376 (web offers label without "$1"), #377 (price-rule clients, the client half of #366), #378 (package-gig routes /p2/package/:mailId/gig, /gig-accepted and /package/:mailId/neighbor-gig → 501, no writes; web "Verified Neighbor" follows the seller's verified_resident badge, not is_address_attached). All reviewed.
+- DECISION: the web marketplace "Verified" filter pill (trust_only → listings RPC filters is_address_attached = true) is removed. FOUNDER QUESTION: a real "Verified sellers" filter (RPC change)?
+- Stream 2 also hides the web vacation/travel "Ask a Verified Neighbor" auto-gig (the same package-gig placeholder).
+- Stream 2 #257 rebased by merging master f02dd4bd1 (head fab5fa4fd): kept #257's .mailbox/.mailItem/.neighborMessage plus #292 owner-aware .bookingDetail and #279 .invoiceDetail; iOS routing suites 126/0, Android DeepLinkRouterTest 108/0; simulator re-check of mail notice → letter, summary → Mail root, neighbor → message. Findings routed into the mail-detail PR: the iOS detail hero pill always 'Unverified' (MailTrust.fromRaw(nil)) while the list says Verified → use the stored sender_trust; the sender card is hidden under the Actions dock on short letters → bottom inset. The community publish 'reach' (min(all active occupancies platform-wide, 50) → neighbors_received) is a made-up number → stop displaying it (the backend value stays as noted cleanup).
+- MARKETPLACE BUG (Stream 1): accepting a listing offer (listingOfferService.acceptOffer, tradeService) set Listing.status='reserved', but listing_status is {draft, active, pending_pickup, sold, archived}. The update failed unchecked (invalid enum), so the listing stayed 'active' and kept taking offers after the seller had accepted one. DECISION (a): use pending_pickup with checked writes and reverse transitions (cancel → active, complete → sold); refuse new offers while pending_pickup; clients treat pending_pickup as reserved. No migration. FOUNDER DATA ACTION pending: count of listings still 'active' with an accepted offer or trade.
+- Stream 2 #380 (web Home dead ends, reviewed): S2-01 remove 'Invite your landlord' (route 404s, no invite route); S2-20 remove the Issue/Bill/Package file pickers (files were silently dropped; no backend media route, no native picker) — the honest D02 constraint; S2-23 waiting-room 'Request help' opens the same mailto as the Verification Center; S2-24 'Property insights coming soon' → the native 'No estimate available' copy.
+- Stream 2 #381 (web, reviewed): S2-05 dead 'Link an access code' row in Schedule a visit removed (no handler; visitSchema has no access-code field). Native rows to follow in a native group.
+- CI flake (about 17:53 UTC): ghcr.io rate-limited the Supabase Postgres image pull ('toomanyrequests') in 'database / Replay and lint the complete schema' across PRs (#379, #380, batch #374). Not code. Re-runs are scheduled after a pause. The merge runner now keeps a PR queued on a failed CI OK (logs it once) instead of dropping it.
+- DECISION: the support-train wizard's 'no match' branch showed 'No verified neighbor by that name' ('we searched verified addresses near yours') plus sample contacts (+1 (415) 555-0142, d.chen@example.com) and 'Send invite & continue', but the search is a plain name search over all users and nothing is sent. Option (a): honest copy ('No one on Pantopus by that name'), sample contact rows hidden, CTA 'Continue'. FOUNDER QUESTION: real phone/email invites via the existing POST /api/support-trains/:id/invites (needs contact entry + consent).
+- Stream 1 pending_pickup (backend verified at API level, harness 24–25): accept holds the listing (conditional active→pending_pickup; a failed hold fails the accept; a failed offer write reverts); completion → sold; trades hold both and complete → sold (trade completion also wrote 'traded', not in the enum, and failed silently); pays.js offer checkout accepts ['active','pending_pickup'] (was 'reserved'). Coordinator checked: the gate is only in resolveListingOfferCheckout (payer must be the accepted buyer; no buy-now path). Web already shows PENDING PICKUP and hides Make Offer. Native pill + disabled dock ship with the backend in one new PR (#365 unchanged). Finding: web 'View Offer' opens the Make-an-Offer form for pending/accepted offers (next web item). FOUNDER QUESTION: no route cancels an ACCEPTED offer or trade (only the seller's status control), so how do people back out after acceptance, including refunds? FOUNDER DATA ACTION: .pantopus-recovery/audits/20260923-stream1-listing-pending-pickup-r1/evidence/founder-count-query.sql (active listings with an accepted offer or trade; completed-trade listings not sold; open offers on promised listings).
+- Stream 1 #382 (web, reviewed): 'View Offer' shows the buyer's own pending/accepted offer (Withdraw for pending; 'held for you, arrange pickup in Messages' for accepted) instead of a new-offer form.
+- CI: GitHub has an unresolved 'Incident across several services' (since 10:11 UTC); ghcr.io intermittently rate-limits the Supabase Postgres image in the database replay job. A coordinator loop (scratchpad auto-rerun-db.sh) re-runs failures where the database job is the only failed job, every 10 min, for batch #374 and #379–#382.
+- INCIDENT (18:35 UTC): memory thrash (load about 430, swap full, pressure level 2). Biggest footprints: macOS ControlCenter 11 GB (system leak; restarting it is the founder's call), Docker VM 8.2 GB, Stream 2 Next server 7.2 GB, Stream 1 emulator 4.6 GB, Gradle daemons. heavy-slot and device-slot now gate on the kernel pressure level plus load. Agents told to stop idle servers, emulators and daemons.
+- CI FALLBACK #385 (coordinator): the DB workflow retries 'supabase db start' from public.ecr.aws when ghcr.io refuses the Supabase image (GitHub incident; every DB replay failed from 17:54 UTC). actionlint v1.7.12 passes. Merged into batch 2 (#374, new head 07ee7539f, full CI rerun). PRs whose only failed job is the DB replay (#379–#382) are treated as batch-ready; batch CI re-checks them.
+- Stream 2 finding: getHomeResidents (mailboxV2.js:49) embeds User from HomeOccupancy without naming the FK (two FKs: user_id, added_by_user_id), so PostgREST returns PGRST201, the error is ignored and residents = [] everywhere. Consequences: share-eta never notified anyone (notified 0); compose home-context shows 0 household members (native ceremonial compose 'Destination' card); recipients 'household members first' empty. DECISION (B): qualify the embed for share-eta + compose reads (relabel share-eta as the sharing member, pantopus_user). routeMail's resident step (same helper) stays dormant. FOUNDER QUESTION + PRIVACY FINDING: routeMail sets drawer/privacy but never recipient_user_id, so a letter matched to another resident (alias matches already, resident matches once enabled) becomes private_to_person in the ROUTER's own drawer and the intended resident never sees it; what should routing do?
+- Stream 1 S1-05 (sold listing dead controls, both apps): Find similar → marketplace; Share → canonical link; Bookmark → POST /api/listings/:id/save with error toast; the 'Alert me when similar appears · Set' callout removed. FOUNDER QUESTION: marketplace saved-search alerts (the existing route alerts on every new listing in a category anywhere; native can't list or delete saved searches). Ships stacked on #365 together with pending_pickup (PR targets master).
+- Stream 3 #383 (scheduling group: real household/team in onboarding become assignees (Home link from 0 assignees/0 slots to 2/49); no host check on the booking landing; no avatar check on public profiles; real hub initials instead of sample "JD"/"AV"), #384 (Help "Who can see my address?" matches what the apps show; Creator inbox "Only members on a tier with messaging can message you." = openThread rule), #371 (master merged at 4a7b03672, with #306 covering the owner chip and "N businesses"). All accepted for batch 3.
+- DECISIONS (Stream 3 findings):
+  - Native Business scheduling sends the signed-in user's own id as the business (creates business-<userId> BookingPages): fix it to use a managed business, and hide Business when the user has none. Founder data count of existing bogus pages is pending.
+  - "Everyone's set to <device tz> ✓ CONFIRMED" is reworded, and the chip dropped.
+  - The hub LIVE PREVIEW's fixed 9:00/9:30/10:00 becomes real next times or "No open times yet".
+  - The personal You header "Verified" stat and avatar check (email flag) are removed.
+  - The Help email-verification claim is checked against server enforcement.
+  - Carried-over items: owner can't report their own business; Identity Center / "No verified businesses nearby" / AI prompt / endorse 403 / "verified recently" copy.
+- FOUNDER NOTE: the native booking landing (C5) is unreachable (no entry, no /book/<slug> deep link): add the deep link, or retire the screen.
+- FOUNDER DATA ACTION (bogus business scheduling rows from the native Business pill using the personal user id), read-only: select count(*) as bogus_business_pages, count(*) filter (where bp.is_live) as live_pages, (select count(*) from "EventType" et join "User" u2 on u2.id=et.owner_id where et.owner_type='business' and coalesce(u2.account_type,'')<>'business') as bogus_event_types, (select count(*) from "Booking" b join "User" u3 on u3.id=b.owner_id where b.owner_type='business' and coalesce(u3.account_type,'')<>'business') as bogus_bookings from "BookingPage" bp left join "User" u on u.id=bp.owner_id where bp.owner_type='business' and coalesce(u.account_type,'')<>'business';
+- Stream 2 #386 (backend, reviewed): the share-eta notice goes out as the sharing member (pantopus_user) and notifies the other residents (notified 0→3); the FK-qualified User embed fixes share-eta plus the compose home-context (memberCount 0→4) and recipients household-first; getHomeResidents/routeMail untouched. Finding routed to Stream 3: the Home scheduling hub fails with 'Couldn't load scheduling' for a plain member because the manage-only booking-page GET returns 403.
+
+## Resume point history — September 23, 2026, 17:00 UTC (coordinator session `92cc4526`)
+
+This updates the 15:00 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merges
+- **Batch 1 (#353) merged at 16:51 UTC** as `f02dd4bd1`, and all 36 included PRs are marked merged.
+- **Batch 2 = #374**: 34 reviewed PRs, each passing CI OK at its head, now in CI.
+- **Next batch candidates** (reviewed, waiting on CI): #325, #339, #346, #349, #350, #356, #365, #371–#373.
+- **#257** is being rebased by Stream 2.
+
+### Headline findings this block
+- **Trust claims.** A coordinator sweep found about 55 unbacked verification claims. The plan and owners are in `/private/tmp/pantopus-tools/trust-claims-2026-09-23.md`. PRs #365, #367, #368, #370, #371, #372 and #373 fix most of the person, business and chat claims. The remaining native groups are in progress.
+- **Security.** Mail "Verified business" could be spoofed with a typed name. It's fixed in #368, with the "Send as" picker in #370.
+- **Fake features switched off honestly** (501, no writes, entry points hidden):
+  - mail translation (#369);
+  - package-pickup tasks (Stream 1, in progress);
+  - the coupon order route (earlier).
+- **Broken features fixed:**
+  - household letters never reached members' native drawers (#363);
+  - organic business matching never ran (#362);
+  - task item lists were stored as JSON strings (#359);
+  - web waitlist join (#364);
+  - Make offer on native (#365).
+- **Disk incident at 16:50 UTC.** Git auto-maintenance was looping on the shared object store. It's paused on the main repo (`maintenance.auto=false`, `gc.auto=0`); revert it later with one controlled gc. Details are in the notes below.
+
+### Notes since the last block
+- Stream 1 #359 (backend, reviewed): Gig.items writers (create, PATCH edit, magic-post) now store jsonb arrays instead of JSON strings; normalizeGigItems serves an array on read in redactGigTracking (list/detail/my-tasks) and browse; remaining select('*') readers covered by the Android tolerant decode (next native PR). No data migration: old string rows are served as arrays. MANIFEST d1e311ae….
+- DECISION (coordinator): native quick-post "Free" has always posted pay_type 'offers' + price 0 (backend has only fixed/hourly/offers), so helpers could make priced offers on a task the poster thought was free. Rename the native quick-post option to "Open to offers" ("Helpers suggest a price"), keep the wire mapping; offers tasks read "Open to offers" on all clients. FOUNDER QUESTION: do you want true no-pay favours as a task type (new pay type + payment/bid rules)?
+- Stream 1 S1-01 (Make offer on native marketplace): iOS after verified — $40 offer POST 201; second offer 409 "You already have an active offer on this listing" shown in the sheet.
+- TRUST CLAIMS (found by shared-UX on iOS, traced by coordinator): chat header subtitle reads "Verified neighbor" for anyone not online (iOS ChatConversationView.swift:1658, Android ChatConversationScreen.kt:1477); empty-chat intro says "You're both verified neighbors" + "Private between verified neighbors" pill regardless of status; chat list "Only verified neighbors can DM you" (policy to confirm vs backend); Android bid rows ratingLine = "verified neighbor" for every bidder (GigDetailViewModel.kt:2732). Routed: chat -> Stream 3 (high priority, one native PR + web if any); bid rows -> Stream 1. Coordinator launched a read-only sweep for other ungated verification/trust claims on all three clients.
+- Shared UX PRs: #351 (C-19), #357 (web Discover: People tab removed per decision (a) + C-12 web), #360 (C-14 Action queue), #361 (C-31 part: comment delete confirm, no Ctrl+Enter double post, like failure message). iOS integration verified: Discover without People; C-07 Manage signups + Message the host; Settings sign-out confirm. Support-train group (C-07/C-16/C-08/C-09) held to ship as one native PR.
+- Stream 3 #358 (S3-20): hide the dead booking-page "Get notified" button; follow-up assigned: wire it to the existing waitlist join (email), host Waitlist page + promote notify already exist.
+- Stacked PRs retargeted to master so batches mark them merged: #309 (was on #308's branch; contains #308 head), #356 (was on #286's branch; contains #286 head, which is in batch 1).
+- Stream 2 #325 regrouped (head b6fa1e448, MANIFEST 4d65c205…): (1) task-from-mail 409 reason (iOS now verified too); (2) owner replay: backend returns replayed:true, apps say "This mail already has a task · You already made “<title>” …" + Open task (before: duplicate listed on Android); (3) vacation hold dates: rows open the date pickers (From ≥ today, To ≥ From), iOS "From = yesterday" fixed (UTC-midnight days shown in local time), web Travel Mode uses the local day, and an iOS trailing-closure mis-binding fixed (To tap popped the screen, Back did nothing).
+- NEW BUG (Stream 2, high): a household notice sent from compose is stored in drawer "personal" with no recipient user, so Home members never see it. Assigned: reproduce via real compose, fix the writer to Home mail per homeMailAccess (M01), verify members see it on all clients; report any data repair need (no data migration without approval).
+- Stream 2 #363 (backend only, reviewed; MANIFEST c0c56127…): POST /api/mailbox/send never set Mail.drawer, so household letters from all three compose flows defaulted to 'personal' with no personal recipient; native drawer reads (GET /api/mailbox/v2/drawer/home|personal) listed them for nobody (web's undrawered list showed them). Fix: drawer = 'home' when delivery_target_type = 'home'. Sender/read rules unchanged; verified matrix (all-members, attn_only, person letter, non-member 403) on web, iOS, Android.
+- FOUNDER ACTION: existing misfiled household letters stay invisible on native until repaired. Count first on hosted data: SELECT count(*) FROM "Mail" WHERE drawer='personal' AND recipient_user_id IS NULL AND recipient_home_id IS NOT NULL AND delivery_target_type='home'; if nonzero, approve the one-time UPDATE ... SET drawer='home' (same WHERE), run manually or as a reviewed forward data migration.
+- Shared UX #362 (backend job, reviewed): organic business matching called find_businesses_nearby with parameter names the SQL function doesn't have (PGRST202 on every post), so matched_business_ids was never set and the Matched Businesses / Nearby Providers card never showed. Now uses the real signature, nearest-first top 5, distance from distance_meters, is_new_business via isNewBusiness; no paid/founding/verification boost in ranking. Founder question stands: should neighborhood posts show matched businesses, and only public posts?
+- Stream 3 #364 (web, reviewed; stacked on #358): the booking page's "Get notified when times open" joins the existing waitlist (email required, prefilled for signed-in visitors; name optional); honest copy ("we'll email you / notify you in Pantopus if <host> opens a spot"), "No open times" instead of "Fully booked", Leave waitlist → Done (no leave endpoint), plain 400/404/429 errors. Host Waitlist + Promote already existed.
+- DECISION (coordinator): mail translation is a mock on every client (POST /p3/translate writes a fake cached translation into the Mail row on every letter open, answers from_language 'auto' -> "Detected: auto [Translate]" banner; Translate shows "[Translated to en] <subject>" + key_facts JSON). Switch it off like the coupon route (#328): route returns 501 "Translation isn't available yet." and writes nothing; web stops calling it on open and drops the banner/translated view; native hides ⋯ > Translate in the next Mail native group (retires S2-04's placeholder). Fake cached rows left inert (possible later cleanup). FOUNDER QUESTION: real mail translation (provider + cost, L01 bundle)?
+- #346 CI FAILED (Android Paparazzi: EarnSnapshotTest.earn_empty, MailboxRootSnapshotTest.earn_incoming_empty) because the honest empty-state copy changed those screens; Stream 2 re-recording goldens (PR body claimed unchanged).
+- Stream 2 web Mailbox defects reproduced (one web PR coming): S2-12 failed load reads "Mailbox is empty" / failed All switch shows Personal under "Unified Mailbox"; S2-13 failed star stays starred, failed archive/delete silent; S2-18 opening a letter posts action 'open' (400 twice) so unread counts stay stale; S2-19 failed File to Vault silent, folders load failure reads "No vault folders yet"; S2-08 web header ⋮ inert.
+- Stream 1 #366 (backend, reviewed): every non-zero price change order is refused at create and approve with 409 PAID_PRICE_CHANGE_UNAVAILABLE ("option 1 extended to all tasks"); reason distinguishes a live hold vs. any other task ("Price changes aren't available for this task. It keeps its agreed price."). Repro: free task +$5 approved -> Gig.price 0 -> 5 with no payment -> owner confirm 409 forever. Client side stacked on #287 (publish after #353). Founder items unchanged: how price changes settle; operator path for tasks already above $0 with no payment.
+- Stream 1 #365 (native, reviewed): S1-01 native "Make offer" posted an inquiry, not an offer -> now POST /api/listings/:id/offers like web (one request at a time, server reason in the sheet, "Offer sent"; free listing sends interest); S1-07 seller card was "Seller" + unearned verified check -> real creator identity, badge only when verified, chat headed with the seller's name.
+- TRUST-CLAIMS SWEEP (coordinator, read-only, origin/master 1c987dcc5): ~55 unbacked verification claims (iOS 28, Android 27, web 3 new; 11 policy claims checked: 8 unenforced, 3 partial). Plan + assignments: /private/tmp/pantopus-tools/trust-claims-2026-09-23.md. SECURITY: POST /api/mailbox/send marks mail verified_business from a client-typed senderBusinessName (any user can show "Verified business" under any name) -> Stream 2 backend fix first. SAMPLE-LIVE fabricated data in live paths: fake mutual-neighbor names on profiles, default "Rating 4.9 / Customers 1,000+" saved into new business page blocks and shown publicly, View-as sample fallback, party-mail fixture host, support-train sample mutuals/address, scheduling seeded household member.
+- FOUNDER DECISION: landing/auth/invite copy promises "…no anonymous tier." and "Every helper is identity-verified and reviewed" (PillarsSection.tsx:9, HeroSection.tsx:102, join/[code]/page.tsx:108, LoginView.swift:585, LoginScreen.kt:783) but sign-up, visitor posts, DMs and bids need no verified address or ID. Before public launch: enforce the gates or change the copy (coordinator recommends changing the copy until the gates exist). FOUNDER DATA ACTION (pending count from Stream 2): mail rows marked verified_business from a typed name.
+- DECISION (coordinator): package gigs are a placeholder end to end. POST /api/mailbox/v2/p2/package/:mailId/gig (mailboxV2Phase2.js:1313, "Placeholder: in production this creates an actual Gig record") stores a random UUID and logs an event but creates no Gig, while both apps show "Task Posted! … Verified Neighbors nearby will be notified" / "Visibility: Verified Neighbors within 0.5 mi"; /gig-accepted stores a client-sent neighbor. Stopgap (Stream 1): both routes return 501 and write nothing; hide "Post Task Request" natively (and web's package-gig modal if it uses the same route). FOUNDER QUESTION: package pickups as real tasks (address privacy, pay, who may see/accept)?
+- Stream 2 #346 re-recorded the two Android Paparazzi frames CI failed (new copy); earlier "unchanged" claim came from an alpha-only image comparison; PR body + bundle corrected (MANIFEST 1f192067…).
+- Stream 1 trust claims: #365 covers the listing seller badge (seller?.resolvedVerified); Tasks map empty copy -> "Be the first to post one — people nearby will see it." (nearby needs no login, 5 km default); web Verified Neighbor / "Sent to verified neighbors first" in one web PR.
+- SECURITY FIX Stream 2 #368 (backend, reviewed; MANIFEST fbba05e7…): the client's senderBusinessName now only selects among businesses the sender may send mail for (getBusinessIdsWithPermissions(sender, ['mail.send']); owners always), and the letter carries that business's stored name; verified_business only when BusinessProfile.verification_status is document_verified or government_verified; otherwise pantopus_user under the sender's own name; typed name not stored (row or envelope). Also removed the v2 reader fallback (mailboxV2.js resolveSenderTrust) that badged any row with a business name. Web compose's free-text "Sender business name" (only client that sends it) -> follow-up picker.
+- FOUNDER DATA ACTION (#368): pre-deploy rows claiming verified_business were never checked. Count: SELECT count(*) FROM "Mail" WHERE sender_trust='verified_business' AND sender_business_name IS NOT NULL AND sender_user_id IS NOT NULL AND created_at < '<#368 deploy time>'; the typed name also sits in sender_business_name, sender_display and the stored mail object's envelope.senderBusinessName. Refined counts in the #368 bundle receipts/t38-existing-rows.txt.
+- Stream 3 #367 (web trust claims, reviewed): new page-builder Stats blocks no longer pre-filled with fabricated "1,000+ Customers · 5+ Years · 4.9 Rating" (they were published as the business's own); "Verified host" check removed from booking pages; "Verified requester" fallback removed; endorsements copy "from households on Pantopus". FOUNDER DATA ACTION pending: business pages already published with the default stats (count query from Stream 3).
+- FOUNDER DATA ACTION (#367 follow-up, read-only counts): pages still publishing the old page-builder default stats. Blocks (any revision): select count(*) from "BusinessPageBlock" where block_type='stats' and data->'stats' = '[{"label":"Customers","value":"1,000+"},{"label":"Years","value":"5+"},{"label":"Rating","value":"4.9"}]'::jsonb; Published pages: select count(distinct p.id) from "BusinessPage" p join "BusinessPageRevision" r on r.page_id=p.id and r.revision=p.published_revision cross join lateral jsonb_array_elements(r.blocks_snapshot) b(block) where b.block->>'block_type'='stats' and b.block->'data'->'stats' = <same jsonb>; exact match only (owner-edited blocks don't count).
+- Stream 2 #369 (web + backend, reviewed; MANIFEST 05b142a0…): translate route -> 501, writes/reads nothing (cached Mail.translation_text/lang/cached_at left inert); web Mailbox: failed loads show ErrorState + Try Again (no stale previous-scope list), failed star/archive/delete toast the reason and keep saved state, letter open relies on the item GET (which marks opened) instead of the 400ing 'open' action so unread counts update, File to Vault failures and folder-load errors explained, dead ⋮ and booklet Share removed, translation UI removed. Follow-up noted: web package unboxing 'save to vault' sends an attachment id as the mail id.
+- Stream 2 #370 (web+backend, reviewed; contains #368; MANIFEST 956d3e2c…): GET /api/mailbox/sender-businesses (auth, private no-store, before /:id) lists businesses the caller may send mail as (mail.send, owners always) with verified flag; /send resolves through the same list; web compose free-text sender name -> "Send as" select (hidden when none); a business that couldn't be used now says so instead of "Mail sent successfully". DECISION: share-eta household notice (sender 'Pantopus' + verified_business while sender_user_id is the member; sender_trust CHECK allows only verified_gov/utility/business, pantopus_user, unknown) -> relabel as pantopus_user under the member's name (no schema change).
+- INCIDENT (about 16:50 UTC): the disk fell to about 2.3 GiB free and git and tool writes failed (ENOSPC). Cause: `git maintenance run --auto` repacking the shared 20 GiB object store, twice at once, each attempt leaving about 1 GiB tmp packs. Coordinator paused auto maintenance on the main repo (maintenance.auto=false, gc.auto=0), stopped the repacks, and deleted the unheld tmp packs (4.9 GiB). Agents deleted their own derived data, builds, APKs and stale worktrees. Free space is back above 30 GiB. REVERT LATER: one controlled `git maintenance run --task=gc` with at least 40 GiB free and agents idle, then unset both settings. No founder data touched.
+- Batch 1 #353 MERGED 16:51 (f02dd4bd1), 36 PRs marked merged. Batch 2 = #374 (34 PRs: 304 308 309 312 315 316 320 321 329 330 331 332 333 334 338 342 348 351 352 354 355 357 358 359 360 361 362 363 364 366 367 368 369 370), in CI.
+- DECISIONS: (1) chat LocalProfile identity lookup (routes/chats.js LOCAL_PROFILE_IDENTITY_SELECT selects nonexistent LocalProfile.verified_resident, so it fails on every call and chat never shows LocalProfile name/locality) is left failing closed. FOUNDER QUESTION: should chat show LocalProfile name and locality, and which verification source should it use (PRV-05)? (2) The profile avatar check that means only "email confirmed" is dropped on both apps (it reads as identity verification). (3) Mail detail: the A17 variant layouts (party, certified, community, coupon, legal, tax, records, memory, gig, booklet) can't render in production: the Mail type/mail_type CHECK constraints and absent variant payloads rule them out. FOUNDER NOTE: wire the variants, or remove the layouts.
+- Stream 3 #371 (business trust claims + S3-07 report sheet), #372 (chat trust claims, neutral empty DM, honest policy copy, AI copy softened), #373 (profile: no "Persona · Verified", invented verification methods or fake mutual names; View-as error state instead of the sample) are open.
+
+## Resume point history — September 23, 2026, 15:00 UTC (coordinator session `92cc4526`)
+
+This updates the 14:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #310, #317, #318.
+
+### Merge process change: combined batches
+- **Why.** About 30 reviewed native PRs were waiting. A native CI run takes about 35 minutes, and runners were saturated (3 running, 11 queued, some waiting since 13:29). Serial exact-head merges would have taken most of a day, and agents open PRs faster than that.
+- **How it works.**
+  - The coordinator builds one branch, `claude/coord-merge-batch-N`, from master, with `git merge-tree` in the object store (no checkout).
+  - Each reviewed PR's head commit merges unchanged, in queue order. A PR that conflicts is left out.
+  - CI runs once on the combination, and the serial queue merges the batch PR with `--match-head-commit`.
+  - GitHub then marks each included PR as merged.
+  - If an agent pushes after a batch is built, that PR stays open with only its new commits and merges later.
+- **Batch 1 = #353.** It includes 36 PRs: 319 343 345 344 347 292 337 340 341 314 221 236 219 214 215 224 199 208 251 252 279 262 264 287 266 285 286 301 303 305 306 302 313 307 335 336.
+- **Left out: #257.** It conflicts with #292 and #279 in `HubTabRoot.swift`; all three change notification routing. Stream 2 rebases it after #353 merges.
+- **Batch 2 candidates (reviewed):** #351 (web post detail errors, C-19) and #352 (web links that 404, S3-19/21/27).
+- **Queue tooling.** The serial queue order before batching is saved in `/private/tmp/pantopus-tools/merge-queue/queue.before-batch1.txt`. The builder script is in the coordinator scratchpad; it prints `OK <pr> <head> <chain commit>` per PR.
+
+### GitHub API rate limit
+- **What happened.** At about 14:55 UTC, GitHub's GraphQL budget (5,000 points an hour, shared by the coordinator and all agents) ran out.
+- **Cause.** The coordinator's CI watcher polled about 85 PRs every minute, merged ones included, with two GraphQL calls each.
+- **Fix.** It is replaced by `/private/tmp/pantopus-tools/ci-watch2.sh`, run by `coord-watch2.sh`. The new watcher is REST-only: one open-PR list per 90-second loop, and each PR head is checked only until it reports. Agents were asked not to use `gh pr checks --watch`.
+
+### Stream 2 PRs since the last block
+- **#346 (native Earn honest).** The hero now reads "Available to cash out" from `GET /api/wallet`, the same source as Payments.
+  - Cash out shows only above $0.
+  - Ad and mail-offer payouts sit in their own cell: "Mail offers $X · can't be cashed out yet".
+  - Refer is hidden.
+  - The empty states, including the Mail > Earn drawer, are honest.
+  - Before, both platforms showed "Cash out $10.00" from an unfunded ad letter.
+  - MANIFEST `4e3f529b…` (corrected from `1a940c85…`).
+- **#347 (S2-02 part B, security-sensitive; reviewed, in batch 1).** Record photos move to private storage.
+  - Route: `POST /api/mailbox/v2/p3/records/asset/:id/photos`, into the private `HOME_DOCUMENTS_BUCKET`.
+  - The bucket is refused if it is public. The server generates each key: `asset-photos/<home>/<asset>/<photo>/<sha256>`.
+  - Upload needs `assets.manage` (403). A non-member or unknown record gets 404.
+  - Permissions are checked before any bytes are parsed. Photos must be JPEG, PNG, WebP or HEIC, magic-checked, 25 MB or less.
+  - Reads get a 300-second signed URL, and only viewers with `assets.view` see photos.
+  - Web "Add photo" is back, for `assets.manage` only. No schema change. MANIFEST `71230a41…`.
+  - **Deploy note:** hosted environments need `HOME_DOCUMENTS_BUCKET` set.
+
+## Resume point history — September 23, 2026, 14:34 UTC (coordinator session `92cc4526`)
+
+This updates the 13:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #289: approve route price write.
+- #311: web ApiRequestError. Real reasons are shown, and 4xx responses are not retried.
+- #322: web offline banner.
+- #323: Records photo button hidden.
+- #324: record "Post Gig" uses the real form.
+- #326: honest coupon page.
+- #327: mailbox Tasks "Post as Gig" uses the real flow.
+
+### Queue
+310 317 318 319 343 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 301 303 305 306 302 313 
+
+### Notes since the last block
+- Stream 1: magic compose E2E PASSES on Android + iOS ('Mow my lawn this weekend' low-confidence draft -> 201, in_person, task opens). Shared WizardShell fix verified on 7 Android wizards (magic, listing, CreateBusiness, AddBill, ClaimOwnership, InviteTeammate, FirstRun; X on dirty form now asks). NEW BUG: Gig.items written double-encoded (JSON.stringify into jsonb) by magic-post AND classic create/update (gigs.js:1144, :3907) -> Android can't open those tasks ('Expected BEGIN_ARRAY but was STRING at $.gig.items' -> 'Couldn't load detail'); decision: fix writers + normalize items on read in gig serializers (repairs existing rows without a data migration) + tolerant Android decode. UX: offers-priced tasks show '$1 budget' -> show 'Open to offers'. 6 PRs coming (shared chrome, decode, category mapping, post category, gigs/new, magic-post items).
+- Stream 1 published: #337 shared WizardShell chrome, #339 magic-draft decode (iOS+Android), #340 Android category mapping, #341 Android post category, #342 gigs/new link (iOS+Android). Items double-encode backend PR in progress (writers + normalize on read + tolerant Android decode), then 'Open to offers' label, then S1-01/S1-07/price rule.
+- Shared-UX: #338 Settings asks before signing out (C-27); #343 Hub Discover Businesses rail fixed (hub.js selected BusinessProfile.category, table has categories -> 42703 swallowed -> Businesses rail empty on every client) + Discover links. PRIVACY decision: Discover 'People' rail has always been empty (filter account_type='personal' vs CHECK individual/business/curator); correcting it would list every member (name, city, rating) to everyone, ignoring visibility and distance -> coordinator: (a) hide the People tab on all clients; FOUNDER: if wanted, which visibility setting + proximity rule governs people discovery. Other findings: posts.js matched-businesses hydrate selects nonexistent BusinessProfile columns (500 when cache empty); web Hub 'Jump back in' renders icon keys as text; support-train empty-dates dialog 'Something went wrong'; Vacation hold date rows inert + 'From' defaults to a past date (Stream 2).
+
+## Resume point history — September 23, 2026, 13:34 UTC (coordinator session `92cc4526`)
+
+This updates the 12:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #280 (fan-out failures, migration `000300`) and #283 (no-show reasons).
+- #291: My Home coordinates.
+- #290: Change Orders banner.
+- #328: the coupon-order route is disabled.
+
+### Queue
+289 311 322 323 324 326 327 310 317 318 319 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 301 303 
+
+### Open PRs not yet queued
+- **Stream 1:** #302, #312.
+- **Stream 3:** #304–#309, #330–#332.
+- **Shared-UX:** #313–#316, #329, #333, #334.
+- **Stream 2:** #320, #321, #325.
+
+Each gets queued as its CI OK turns green.
+
+### Notes since the last block
+- Stream 2 #323 (S2-02 part A): web record page hides 'Add photo' (POST …/photos never existed; home-interior photos must stay private — part B = private-bucket write + signed URLs, approved); Link Mail Item drawer shows its error. FAKE SUCCESS found: record page 'Post Gig' uses a stub createGig and shows 'Task Posted!' without creating anything -> route to the real classic composer with prefill (approved).
+- Shared-UX #311 queued (web ApiRequestError: server reasons shown, machine codes/5xx internals -> plain copy per status, 4xx not retried, Today error state). #322 web offline status bar (C-25). C-26 (keep content on failed refresh) coded for iOS Hub/Pulse/Messages/Mailbox/Place.
+- Stream 2 #324 (stacked on #323): record 'Post Gig' -> real /app/gigs/new prefill (was a stub 'Task Posted!' with no request). #325: task-from-mail 409 shows the server reason and switches to the mail-task list (Android verified). Stub search: /app/mailbox/coupon CouponPipeline fakes an order + payout (order_<ts>, receipt_<ts>, earnPayoutReleased:true) -> coordinator decision: hide entry points + honest unavailable state unless a real route exists; web mailbox Tasks 'Post as gig' fake 'Task Posted!' -> same fix as #324.
+- CORE (Stream 1): Android magic composer can't post — (1) WizardShell reads chrome only at first composition (Kotlin 2.0.21 strong skipping) -> footer/step readout/dirty flag frozen; latent in ~12 Android wizards (CreateBusiness, InviteTeammate, CeremonialMail, PrivacyHandshake, AddBill, ClaimOwnership, AddPet, FirstRun, OnboardingHomeBusiness, StartSupportTrain, listing composer) -> shared WizardShell fix approved (Stream 1), verification matrix across wizards; (2) magic-draft decode: clarifyingQuestion arrives as an object but iOS+Android models declare String -> every low-confidence draft silently loses title/description (iOS affected too) -> tolerant decode; (3) Android category mapping; gigs/new deep link opens detail 'new' -> composer.
+- Stream 2 #326: /app/mailbox/coupon crashed on load on master (offerId passed where an offer object is expected); now honest EmptyState 'Coupon orders aren't available yet'; mock order/payout can't render. MONEY RISK found: POST /api/mailbox/v2/p2/coupon/order records a redemption with no payment/merchant step, flips the user's EarnTransaction to 'available' (payout release) and creates a receipt — no UI calls it; coordinator asked Stream 2 to verify whether a normal user can mint withdrawable earnings through it and, if so, disable it pending a real design. #327: mailbox Tasks 'Post as Gig instead' -> real composer (was fake 'Task Posted!'); existing-task path escalates twice + hangs on failure -> fix.
+- Coupon order route verified (Stream 2, MANIFEST ad259c13…): does NOT release real money today (no withdrawal/payout/wallet reads EarnTransaction; /api/wallet unchanged) but it flips pending AND flagged/under_review/rejected EarnTransactions to 'available' (overrides risk holds), no ownership/engagement/active checks, no idempotency, receipt insert always fails Mail_type_check; no UI caller. Coordinator decision: disable (410) in a small safety PR; check Earn 'Available' UI honesty. FOUNDER: Earn payouts are not wired to any cash-out path.
+- Stream 2 #328: POST /api/mailbox/v2/p2/coupon/order disabled (410 'Coupon orders aren't available yet.'), writes nothing; comment lists ownership/status/idempotency/price/receipt requirements. MANIFEST bf103042…. Flaky: postVisibilityContract 5 s timeout under load (passes alone).
+- Stream 3 round: #271 acceptance on iOS+Android (409 shown, user stays signed in, DB unchanged; clean delete 200); iOS post-delete login shows a 'Welcome back' card for the deleted account -> #236 (queued) fixes. New PRs: #304 bell = unread, #305 'N businesses', #306 real verification chip, #307 iOS pinned header, #308 native 403 server reason, #309 refused chat send (no Retry), #310 create-full business_type validation, #317 web business type select, #318 web chat room access state, #319 web chat send failures + Retry, #330 email fallback + support@pantopus.com, #331 iOS Messages list live (S3-30), #332 password screen shows own email (was 'maria@pantopus.app · Last changed 84 days ago' for everyone). S3-29 decision: hide the four fake native privacy cards (no backend) + invented 'Last updated' footer; FOUNDER: wire real fields later if wanted. Shared-UX new: #329 iOS single back, #333 keep content on refresh failure, #334 Nearby sheets Back.
+- Earn honesty (Stream 2, MANIFEST b0ca818f…): web honest; NATIVE Earnings tab showed 'Available to cash out $X' + 'Cash out $X' from unfunded mail-offer/ad payouts never credited to the wallet (/api/wallet = 0) — reproduced: any ordinary account can attach an unfunded payout ≤ $10 to an Ad letter and the recipient's app then shows 'Cash out $10.00'; 'Ways to earn' shows sample data ('28 near you · up to $140 today') and a referral reward that doesn't exist. Coordinator decision: cash-out hero reads the real wallet (/api/wallet) + honest separate label for offer/ad earnings + honest copy; hide referral. FOUNDER: unfunded ad payouts by any account; offer payouts never clear; ad payouts never credited.
+
+## Resume point history — September 23, 2026, 12:34 UTC (coordinator session `92cc4526`)
+
+This updates the 11:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #296: web task edit sees the cookie viewer.
+- #297: posting from a Home requires `home.view`.
+- #298: task lists use `optionalAuth` and filter blocked users in both directions.
+- #293: relationships conceal blocks.
+- #295: neutral reply copy.
+- #299: a failed load on web Settings or Privacy no longer leads to a public-overwriting Save.
+- #300: web business creation works.
+- **#255: search terms escaped.** This is the defensive edit from HANDOFF §0, and it is now on master.
+- #278: HomeAsset categories (migration `000200`).
+
+### Queue
+280 283 291 290 289 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 
+
+### Coordinator decisions
+- **Price changes are unavailable on every task.**
+  - A free task with an approved price increase can never be confirmed, and a paid task's hold gets bricked.
+  - Scope and time changes stay.
+  - **Founder:** the real design, either settling the difference at completion or re-authorizing, plus an operator path for stuck tasks.
+- **Support email.** Native used `support@pantopus.app`, which has no MX records and so bounces. Every client now uses `support@pantopus.com`.
+
+### Notes since the last block
+- 11:39 #297 merged (-> 9deb8e3ae); 11:43 #298 merged (-> b8788b85e); 11:48 #293 merged (-> 44b0a5483). #295/#299/#300 queued. Native support email support@pantopus.app is DEAD (pantopus.app has no MX; pantopus.com has Google MX) -> Stream 3 switching to support@pantopus.com.
+- MONEY DESIGN (coordinator decision): approved price change on a FREE task -> owner confirm 409 'The agreed payment must be verified before confirmation' forever (confirmCompletionHelper refuses price>0 without payment_id). With #269 (paid tasks bricked), price change orders break in every case -> price changes unavailable on EVERY task (extend #269 guard + #287 hide rule to all tasks); scope/time changes stay. FOUNDER: real price-change design (settle delta at completion or re-authorize) + operator path for tasks stuck with price>0 and no payment. Bundle 20260923-stream1-free-task-price-change-r1 MANIFEST 39fbae1d….
+- Stream 1 native batch verified on iOS: S1-06 bid errors show the payout-onboarding reason + Go to Wallet; S1-19 confirm step ('Release $30.00 to <worker>?') + Stripe TEST capture; iOS gig link over an open gig opens the linked gig. Android checks next.
+- 11:52 #295, 11:58 #299, 12:04 #300 merged. #292 (S3-02 regression) verified on both platforms, queued after the fast group.
+- Stream 3 native batch verified on Android (bell dot = unread, 'N businesses', real verification chip, 'No email app found' alert, refused send to a blocker: master showed 'Failed to send · Retry' and swallowed the 403 -> now 'Unable to message this user' + 'Not sent', no Retry). Native business creation OK (create-full maps business_type per category). Latent: create-full validates business_type with .valid(...Object.keys(Set)) = accepts any string -> tiny PR approved. Web 'Business Type' free-text requiring exact keys -> select with human labels approved. Native entity-type editor: recorded parity gap.
+- iOS double back buttons (~70 Hub/You routes) handed to the shared-UX agent with Stream 3's inventory (/private/tmp/pantopus-tools/ios-double-back-inventory.md). Disk recovered to 24 GiB; shared-UX may create its own AVD (one device at a time).
+- Shared-UX PRs: #313 iOS profile cover Close (C-01); #314 Hub pills -> Notifications/Wallet + iOS My Listings (C-02/C-20); #315 You Home/Business rows -> My homes/My businesses (C-04/C-05/C-11); #316 honest placeholders with Go back, no raw ids (C-22); #311 web client rejects with Error so real reasons show (C-23) + retry guard reads statusCode (C-24) + Today error state (C-13). Android checks pending (own AVD Pantopus_Shared_UX). C-36 not a defect. Web /app/chat/<room not in> 403 renders 'No messages yet. Say hello!' + composer -> Stream 3.
+- Stream 1 PRs: #301 bid refusal reason + Go to Wallet (S1-06); #302 confirm step before releasing payment (S1-19); #303 Android notification gig Back -> Notifications + iOS gig link over an open gig; #312 iOS tip dock parity + '3-tip limit' copy (iOS/Android). All-task price rule: backend branch 4ea5098d6 (409 on any non-zero amount_change; free vs held messages) + clients branch 11d7ff8f6 (price types never offered; pending price order shows the reason instead of Approve) — publishing after device checks.
+- Stream 2 #320 (S2-07): native mail action tiles stop claiming fake success (Pay/Sign/Remind/Forward/Dispute/Share/Acknowledge removed; master Forward even moved bills out of Incoming); Create Task opens the real task-from-mail flow. #321 (S2-09): native Home dashboard tabs open their screens (Android Tasks/Packages/Members/Bills/Ownership; iOS Tasks). #288 native: iOS magic post verified (201, in_person); ANDROID magic composer 'Review & post' stays disabled after description + Flexible + address -> Stream 1 top priority. Findings: Android task-from-mail shows 'Could not create task' on 409 'already has a linked task' (Stream 2); pantopus://gigs/new opens task detail 'new' (Stream 1).
+
+## Resume point history — September 23, 2026, 11:34 UTC (coordinator session `92cc4526`)
+
+This updates the 11:01 block below; read both.
+
+### Count: **13 closed / 67 partial**
+P04 and P05 closed at 11:2x UTC, after the fee merged:
+- #253 → `1d791906c`;
+- #254 → `63953ccd8`;
+- bundle r2, MANIFEST `57092fbf…`.
+
+### Merged since the last block
+- #254 (fee line on the clients).
+- **#288:** magic post works again. `task_format` defaults to `in_person`, and the web composer shows a failure instead of swallowing it.
+- **#294:** the classic web post form accepts empty optional fields.
+
+### Queue
+296 297 255 278 280 283 291 290 289 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286.
+Core-flow and security fixes go first.
+
+### New PRs
+- **#296 (Stream 2):** `GET /api/gigs/:id` resolves the viewer through `optionalAuth`.
+  - Before: web cookie sessions were anonymous there, so the owner's edit form lost the exact address and Save failed with "Please choose an exact address".
+- **#297 (Stream 2, security):** posting from a Home requires `home.view`.
+  - Before: strangers and moved-out members could tag any Home, and the task appeared on that household's list.
+- **#298 (Stream 2, privacy):** `GET /api/gigs`, `/in-bounds` and `/browse` use `optionalAuth` and now **filter blocked users' tasks in both directions**, matching on `user_id` or `created_by`.
+  - Before: blocked users' tasks were listed on every transport.
+  - A failed block read now returns 503 rather than an unfiltered list.
+  - **Recorded follow-up:** a block rule for direct-link task detail needs a participant exception (owner, assigned worker, existing bidder).
+- **#291 (Stream 2):** web "My Home" reads the Home list's coordinates. Before, every post ran a geocode and a Home PATCH.
+- **#289 (Stream 1):** the approve route claims only a still-pending order, checks the price write, and returns 409 on a repeat.
+- **#290 (Stream 1):** the web Change Orders banner is worded from the viewer's side, and one click sends one approve.
+- **#292 (Stream 3):** the native routers accept `?ot=&oid=` host booking links. This fixes the #245 regression; the device checks are pending.
+- **#286:** native 5xx copy. It was re-greened after a one-line update to a test expectation.
+
+### Agents
+- **Five running:** Streams 1, 2 and 3; the fee agent is done; the new shared-UX agent (C-items).
+- **Shared-UX progress:** it reproduced C-01, C-02, C-04, C-11 and C-22 on iOS master. Its fix branches are written, and the iOS integration build is waiting for the heavy slot.
+
+### Disk
+- Disk reached 98%, about 11 GiB free.
+- **The coordinator** deleted its own 8 GB of derived data. **Streams 2 and 3** pruned about 11 GB of their own regenerable outputs.
+- **Time Machine local snapshots** still hold the deleted blocks, and the OS purges them under pressure. Nobody touches them; the founder can thin them.
+- **Shared-UX agent:** it gets its own AVD only at 20 GiB or more free.
+
+## Resume point history — September 23, 2026, 11:01 UTC (coordinator session `92cc4526`)
+
+This updates the 10:33 block below; read both. The count is **11 closed / 69 partial**.
+
+### Merged
+- #282 (business-account notifications go to owners/admins).
+- **#253, the P04/P05 poster-fault fee backend,** merged 10:38 → `1d791906c`.
+
+### Queue
+254 (clients) 288 (magic post) 255 278 280 283 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285.
+- The coordinator merged master into #255 (import conflict with #253) and ran the full backend suite: 341 suites pass.
+- #280 and #283 were rebased, and #257 was rebased and now runs before #279.
+
+### UX inventory (U05/U03), done
+- **File:** `/private/tmp/pantopus-tools/ux-inventory-2026-09-23.md`. A code read on `4f2983c5d`.
+- **Totals:** 155 items: 48 dead ends, 60 misleading, 37 weak, 10 cosmetic.
+- **By stream:** Stream 1: 25, Stream 2: 24, Stream 3: 69, shared: 37.
+- **Top items:**
+  - iOS profile cover with no way back (C-01);
+  - native bid errors hide "set up payouts first" (S1-06);
+  - native "Make offer" creates an inquiry the seller never sees (S1-01);
+  - web business creation always fails (S3-01);
+  - native mail buttons claim "Payment started" when nothing happened (S2-07);
+  - native privacy controls don't save (S3-29);
+  - web Settings: a failed load, then Save, can make a private profile public (S3-28);
+  - **a #245 regression:** Home- and Business-owned booking notifications open nothing on native (S3-02, being fixed first);
+  - every native listing shows a verified "Seller" (S1-07);
+  - Hub pills and You → Home rows open placeholders (C-02, C-04);
+  - native Home dashboard tabs never show content (S2-09);
+  - iOS Messages stops updating (S3-30);
+  - one-tap payment release with no confirm (S1-19).
+- **Dispatch:** each stream got its section in impact order.
+- **New shared-UX agent** for the 37 shared items: navigation shells, Hub/You/Settings, shared error components, feed, support trains. It uses API 18138 / Next 18139 and its own fixtures on 64561/64562.
+- **Device slots raised to 4.** The memory gate stays at 20% free.
+
+### Privacy fixes approved (Stream 3)
+- The relationships list omits blocked rows the caller didn't create, and unblock returns a uniform 404 to anyone but the blocker.
+- The neighbor reply copy stays true for the blocker and is neutral for the blocked party.
+
+## Resume point history — September 23, 2026, 10:33 UTC (coordinator session `92cc4526`)
+
+This updates the 08:34 block below; read both. The count is **11 closed / 69 partial**.
+
+### Usage-limit pause
+- All four agents stopped at about 09:35 UTC on the account's session limit: Streams 1, 2 and 3, and the UX inventory agent.
+- The merge queue kept running.
+- The agents were resumed at 10:33 UTC with their context intact.
+
+### Merged by the queue (09:17–10:30)
+#274, #276, #256, #260, #263, #265, #275, #267, #268, #270, #272, #284, #277, #245, #281. Master is `4f2983c5d`.
+
+### Queue
+282 253 254 255 278 280 221 236 219 214 215 224 199 208 251 252 279 257 262 264 287 266 285.
+
+### Conflict plan
+- **#255 (search escaping):** it collides with #253 in the gigs.js import lines. The coordinator merges master into #255 right after #253 lands.
+- **#283 (no-show reasons):** it collides with #253's eligibility rule. Stream 1 rebases it after #253 and aligns the copy with the new scheduled-start rule.
+- **#257 and #280:** both now conflict with master. Stream 2 is rebasing them first.
+- **#279:** queued ahead of #257, which absorbs #279 in its rebase.
+- **#286:** red CI. An existing Android test asserts the old 5xx copy; Stream 1 is updating that expectation.
+
+### Findings since the last block
+- **Magic post (core flow):** `POST /api/gigs/magic-post` returns 500 for every in-person task on all clients.
+  - Cause: `magicTask.js` inserts `task_format: null` into a NOT NULL column.
+  - Web `MagicTaskComposerV2` swallows the error.
+  - Stream 2 is fixing it as the top priority.
+- **Security, decided:** posting a task with another household's `location.homeId` (the `origin_home_id` field) was accepted from a non-member. Setting it now requires `home.view` on that Home. Stream 2 is implementing this.
+- **Web Change Orders banner** shows the owner "The worker has requested changes" when the pending orders are the owner's own. Fix approved (Stream 1).
+- **iOS gig deep link** doesn't navigate while another gig detail is open. Fix approved (Stream 1).
+- **Fee follow-ups:**
+  - payer history labels a fee "Captured hold" → "No-show fee" / "Cancellation fee" (Stream 1, after #253/#254);
+  - iOS `pantopus://settings/payments` shows two back buttons (Stream 3).
+- **Founder: draftBusinessReminder email.** Its email path calls a `sendTransactionalEmail` that doesn't exist, so the reminder email has never been sent. It is left off, because enabling it would start emailing business contacts.
+
+## Resume point history — September 23, 2026, 08:34 UTC (coordinator session `92cc4526`)
+
+This updates the 08:19 block below; read both. The count is **11 closed / 69 partial**.
+
+### Merged
+- #259 → `780f2d4fd`: a repeated change order returns the existing order.
+
+### Queue
+231 271 269 273 274 255 256 260 263 265 267 268 270 272 253 221 236 219 214 215 224 199 208 251 252 257 262 264 266.
+- Fast backend/web PRs run ahead of native ones.
+- Safety and privacy fixes are first: #271, #269, #273, #274.
+- #254 joins right after #253 when its native CI is green.
+
+### Fee (#253 ready; #254 pending native CI)
+- **Re-review items fixed in `a1e3b111e`.** The DB was rebuilt from the amended migration before re-verifying with real Stripe TEST:
+  - payer spending and "paid" now use the captured fee: 313, and 213 after a 100 refund;
+  - the single-payment read carries `gig_fee`;
+  - the replay captures only while `capture_pending`;
+  - guard reasons are specific (`STOP_ACTIVE` / `NO_SHOW_REPORT_ACTIVE`), with no stray incident;
+  - the dispute branch rethrows, so redelivery records the fee;
+  - replays park after 3 definitive failures (`REPLAY_EXHAUSTED`, one alert).
+- **Follow-up in #253's Limits:** the support "release" action.
+- **Bundle r2:** 492 files, MANIFEST `8210feb6c0ad73a3662adf078205761a87984f5fff63ef39c71a46bac20a8758`.
+- #253 CI OK; marked ready and queued.
+
+### New safety and privacy PRs
+- **#269:** interim guard. A price change on a task with a live payment hold returns 409 `PAID_PRICE_CHANGE_UNAVAILABLE`.
+  - Android: the error shows as a toast and inline in the sheet.
+  - iOS: inline, in red.
+  - The paid task still starts, completes and captures.
+  - Bundle `…-paid-price-change-guard-r1`, MANIFEST `83ad5959…`.
+- **#271:** the account-delete guard returns 409 `PAYMENT_HISTORY_RETAINED` before any destructive step.
+  - Records are byte-identical before and after, and a user with no payment records still deletes.
+  - MANIFEST `a09a5474…`.
+  - The native UI check needs a step-up, so it runs in Stream 3's setup after merge.
+- **#273 (privacy):** business_team mail keeps its attention person. The Business list uses the Home mail rule, where it used to return other members' attn_only letters with `select *`.
+- **#274:** an attn_only bill letter no longer creates a household HomeBill.
+  - **Decision:** attn_only letters skip ALL household fan-outs (the HomeDocument visible to members, HomePackage, HomeTask). This is a follow-up PR.
+- **#272:** the web Owners and Emergency pages show a load failure with Retry, not a false empty list.
+  - The same flaw on the unreachable docs/maintenance/share/access/settings pages is recorded.
+- **#264 (Stream 1):** Android sheet errors inline. **#266 (Stream 3):** iOS menu bottom inset.
+
+### Cross-cutting
+- A read-only UX inventory agent is compiling `/private/tmp/pantopus-tools/ux-inventory-2026-09-23.md`. It covers placeholder/dead-end actions and weak states on all three clients, routed by stream (backlog rows U05/U03).
+- **Watch script:** `/private/tmp/pantopus-tools/coord-watch.sh` combines merge-queue events with CI OK results for the PRs in `ci-watch.txt`.
+
+## Resume point history — September 23, 2026, 08:19 UTC (coordinator session `92cc4526`)
+
+This updates the 07:52 block below; read both. The count is **11 closed / 69 partial**; P08 closed at 07:5x.
+
+### FOUNDER DIRECTION (08:15 UTC, in chat)
+*"keep working on all 3 workstreams until all features, functions, workflows within the app are verified, tested with
+all cases … errors are handled properly, with great best user experience … think carefully whether the user
+experience is good enough or not. if not, fulfill it. We do not care about unit test … launch the apps in iOS,
+Android, simulator and emulator, web app, test everything end to end, and fix anything you find … merge whenever you
+think they are ready."*
+
+- **UX improvements are authorized**, within the existing design system, with before/after on the real app.
+- **No new unit tests.** CI must stay green.
+- **Rules:** `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md` (UPDATE 08:20).
+- **Consequence:** the coordinator decided the items that had been waiting on the founder, as listed next. Each
+  decision is recorded here so the founder can override it.
+
+### Coordinator decisions (formerly founder questions)
+- **Stream 1:**
+  - Error toasts go red and are drawn above sheets.
+  - Copy: "Server error N…" → "Something went wrong on our side. Please try again." on native; the 409 no-show copy
+    gets a specific reason.
+  - **Paid price changes:** option 1. The interim server guard in #269 stays, and the UI stops offering price types on
+    paid tasks.
+  - iOS tip dock parity and tip-limit copy.
+  - Back from a notification-opened gig returns to the list.
+  - P06 native dispute presentation.
+  - P07 copy. The P07 recovery job is escalated first, because it moves money.
+  - **Account delete:** an interim 409 before any destructive step. **Retention/anonymise stays a founder/legal
+    question**, and production accounts may already have lost Refund/Wallet/Payout rows this way.
+- **Stream 2:**
+  - **v1 sender gate:** the Home mail rule.
+  - **Route item 6 (package unboxing on web):** built by reusing the native two-step upload.
+  - **Route item 8:** a read-only `GET /api/homes/:id/gigs` (`origin_home_id`, `home.view`).
+  - **Route item 9 (landlord Notices/Settings):** an honest "not available yet" state.
+  - **`business_team` drawer:** honours attention.
+  - **v1 bill send:** no fan-out for attn_only letters.
+  - **HomeAsset CHECK:** extended by a forward migration.
+  - **Landlord dispute route:** left as recorded.
+- **Stream 3:**
+  - "N businesses", dropping "verified".
+  - The "Business · Verified" chip shows the real status.
+  - Email support with no mail app shows an alert and a Copy action.
+  - Sending to a blocker shows the server copy, with no Retry on 403.
+  - The hub bell dot means unread notifications.
+  - The iOS "EARLIER" header overlap is fixed.
+  - A blocked business can't invoice the person who blocked it.
+  - Business-scheduled notifications go to owners/admins.
+  - One-on-one business host notifications go to the owner or the assignee.
+- **Fee (FYI):** fees under $0.50 are waived.
+
+### Fee PRs (#253/#254)
+- **Second review:** "safe to merge on money safety"; F1–F4 and F7/F8 are closed.
+- **Before merge:**
+  - payer spending totals (Medium);
+  - replay capture only on `capture_pending`;
+  - poster guard reasons and incident ordering;
+  - dispute-branch rethrow;
+  - replay parking.
+- **Bundle r2:** 364 files, MANIFEST `5abf2216…`. #253 CI OK.
+- Both PRs stay in draft until those items are done.
+
+### Merged since the last block
+- #213 → `348ccb638`
+- #261 → `327364fa1` (privacy)
+- #258 → `27d45c027`
+
+### Queue
+259 231 221 236 219 214 215 224 199 208 251 252 255 256 260 257 263 265 267 268 262 270 264.
+- #269 goes right after #259 once its iOS check lands.
+- #264 is new: Android sheet errors are inline, with an in-flight guard; idle states are pixel-identical. Bundle
+  `…-sheet-error-feedback-r1`, MANIFEST `60cc03f4…`.
+
+## Resume point history — September 23, 2026, 07:52 UTC (coordinator session `92cc4526`)
+
+This updates the 07:24 block below; read both. The count is **10 closed / 70 partial**.
+
+### Merged
+- #218 → `4f41c4217` at 07:28 UTC.
+
+### Queue
+213 261 258 259 231 221 236 219 214 215 224 199 208 251 252 255 256 260 257 263.
+- #261 (a privacy fix) goes right after #213.
+- #260, #257 and #263 were added as their CI went green.
+
+### New PRs
+- **#260 (Stream 2): web route-drift cleanups.**
+  - Item 5: the Mail Day banner stays dismissed for the rest of the day in this browser.
+  - Item 7: the dead hub-context calls are removed.
+  - Item 8: the error copy now says "home help" instead of the internal key.
+  - Bundle `…-web-route-drift-cleanups-r1`, MANIFEST `71e127e7…`.
+- **#261 (Stream 2, PRIVACY): the `mail_extracted` compatibility retry is narrowed.**
+  - Before: the retry fired on any error that named a new column. An attn_only Home letter whose attention user had
+    been deleted hit `Mail_attn_user_id_fk` (23503). The retry dropped the attention and visibility fields, the send
+    returned 201, and every household member was notified and could open the letter.
+  - Now: the retry fires only on PGRST204 or 42703.
+  - Bundle `…-mail-compat-retry-narrow-r1`, MANIFEST `23d0f339…`.
+- **#263 (Stream 2):** a malformed Home id now gets 400, not 500, on the intelligence and systems routes. MANIFEST
+  `e245c1a7…`.
+
+### Fee repair: every review finding reproduced on #253's head with real Stripe TEST (harness 18136)
+- **F1a:** the poster's worker-no-show report arrives during the worker's fee capture. The fee is captured and the
+  payment stays stuck in `capture_pending`.
+- **F1b:** a Start Work in the same window produces `in_progress` with 25% captured.
+- **F3:** a report 3 h before the scheduled start charged 313.
+- **F4:** a lost capture followed by hold expiry leaves the gig `assigned` forever.
+- **F2:**
+  - the admin refund returns 409;
+  - a dashboard refund makes the webhook fail with 500 forever;
+  - the worker is still credited 266.
+- **F6:** Stripe TEST refuses `amount_to_capture` below 50¢ (`amount_too_small`).
+- **F5:** history shows the full 1250/1063 amounts.
+- **F8a:** a fee the webhook records sends no notice to the poster.
+
+The repairs are in progress. **FYI for the founder (coordinator-approved, revisitable):** fees under Stripe's $0.50
+minimum are waived. The owner's late cancel becomes a fee-free release; a worker no-show report cancels and releases
+the hold.
+
+### Coordinator-approved functional repairs (Stream 2)
+- **Defect A:** v1 "Person @ Home" failed for every non-owner resident. `isUserLinkedToHome` needs `finance.view`,
+  which only owners have, so the user saw the false "That person doesn't live at the selected home address".
+  - Fix: the Home mail rule, in the same PR as the attention-user validation (a clear 400).
+- **Defect B:** web compose errors render behind the modal overlay, so they are invisible. The error moves inside the
+  modal with the existing banner styling, and the modal is pixel-identical when there is no error.
+
+### Founder decisions added (not implemented)
+- **v1 mail sender gate:** `hasHomeAccess` needs `finance.view`, so a verified lease resident gets 403 sending a
+  household letter to their own Home. Options: owner-only (today), `mailbox.view`, or the Home mail rule.
+- **"N verified businesses" banner:** it counts pending and unverified businesses by design (the A08 mockup and the
+  tests), so an unverified owner sees "1 verified business". Options:
+  - (a) count only verified businesses;
+  - (b) drop the word "verified".
+- **Recommended:** the owner dashboard chip "Business · Verified" is hard-coded on iOS (`OwnerHeader.swift:258`) and
+  Android (`OwnerHeader.kt:253`) and shows for unverified businesses. Hide it unless the business is verified; no new
+  copy.
+
+## Resume point history — September 23, 2026, 07:24 UTC (coordinator session `92cc4526`)
+
+This updates the 07:21 block below; read both. The count is **10 closed / 70 partial**.
+
+### New agent PRs (each queued only after CI OK)
+- **#257 (Stream 2): native mail/mailbox/neighbor notification links.**
+  - Android re-verified on a dex-checked APK against 18142: the mail notice opens the letter, the summary notice opens
+    the Mail tab, the neighbor notice opens the message, and a deleted target shows a clear not-found.
+  - The master baseline drops the mail and summary taps, and the neighbor tap shows "Server error 500".
+  - Bundle `20260923-stream2-native-notification-links-r1`, MANIFEST `4f7ae017…`.
+- **#258 (Stream 3): invoice_received notification.**
+  - The route now uses `createNotification`, so the payload goes to `metadata` and badge/socket/push fire.
+  - It skips the notification when blocked, and fails closed.
+  - The link is `/app/invoice/:id`.
+  - Verified through the real iOS create-invoice caller. Bundle `…-invoice-received-notification-r1`, MANIFEST
+    `ddae007a…`.
+- **#259 (Stream 1): repeated change orders.**
+  - On master, a double tap made two "+$10" orders, and approving both took the price from 0 to 10 to 20.
+  - The route now returns the existing pending order: `already_requested`, a derived id and the primary key close the
+    race.
+  - Bundle `…-change-order-repeat-r1`, MANIFEST `2f8f87d3…`.
+
+### Decisions made by the coordinator (functional; no visual change at rest)
+- **Stream 1:**
+  - Android lifecycle sheets get an inline error, reusing EditBidSheet's treatment, plus an in-flight guard. Idle
+    states must stay pixel-identical.
+- **Stream 2:**
+  - Android bottom bar: highlight the tab on child screens, and make a tap on Place work. This starts after
+    #251/#252/#257.
+  - `/api/homes/:id/intelligence` returns 400 instead of 500 for a malformed id.
+  - Route item 5: Mail Day dismiss is kept client-side as "dismissed today", and the dead POST is dropped.
+  - Route item 7: the dead hub-context calls are removed.
+  - Route item 8: the section error copy must not expose internal keys like "homeGigs".
+- **Stream 3:**
+  - The iOS half of decision 5 (chat link → person thread) gets its own PR.
+  - Hub side menu: "Help & Support" sits under the tab bar; the fix is bottom padding only.
+  - The "1 verified business" count is fixed if its logic is wrong; if only the wording is wrong, it goes to the
+    founder.
+
+### Founder decisions added (not implemented)
+- **Route item 6:** the web package unboxing panel has never rendered.
+  - (A) Map the package fields and reuse the native two-step upload. The panel would appear.
+  - (B) Leave it hidden.
+- **Route item 8:** Home dashboard gigs.
+  - (A) A small read-only `GET /api/homes/:id/gigs` from `Gig.origin_home_id`, gated on `home.view`.
+  - (B) Stop requesting it.
+- **Route item 9:** landlord Notices/Settings.
+  - (A) Hide the tabs. (B) Show an honest "not available yet". (C) Build 3 tables and routes.
+  - The agent recommends A or B.
+- **Paid gigs:** an approved price change on a PAID gig never changes the hold. Stream 1 is documenting what each
+  party sees.
+- **Presentation (from Stream 1):** red error toasts drawn above sheets, and copy for "Server error 503…" and
+  "No grounds for no-show report".
+
+### Queue (08:00 ETA for #213)
+- Order: 218 213 231 221 236 219 214 215 224 199 208 251 252 255 256.
+- #213 was moved up because Stream 3's #245 native tap check needs it.
+- Each native PR takes about 35 minutes of Android CI after its update.
+
+### Process notes
+- **iOS sign-in:** Stream 3 now signs in through a local DEBUG launch-env build, then installs the master build over
+  it. No credential is typed. The simulator pasteboard mirrors the Mac clipboard, so `simctl pbcopy` is unsafe for
+  secrets.
+- **CI watcher:** `/private/tmp/pantopus-tools/ci-watch.sh` watches the PR numbers listed in `ci-watch.txt`.
+
+## Resume point history — September 23, 2026, 07:21 UTC (coordinator session `92cc4526`)
+
+This updates the 06:52 block below; read both. The count is **10 closed / 70 partial**.
+
+### Fee PRs #253/#254 are back in DRAFT; they are not safe to merge
+A read-only coordinator review of #253 found must-fix defects. The full list is in
+`/private/tmp/pantopus-tools/fee-review-253-2026-09-23.md`.
+1. A worker-no-show report or Start Work that runs during the fee capture leaves a captured fee unrecorded, with the
+   payment stuck in `capture_pending`.
+2. Fee refunds can't be reconciled, and the worker share still settles after a refund.
+3. A worker could charge the no-show fee before the scheduled start, although the existing UI copy says "only after
+   the agreed start time".
+4. A stalled reservation has no recovery path.
+5. History and pending earnings show the full task amount.
+6. Sub-50¢ partial captures are unverified.
+7. Settlement routes on the mere presence of `metadata.gig_fee`.
+8. Several low items.
+
+Both PRs were taken off the queue and marked draft. A dedicated fee-repair agent owns them now: disposable project
+64571/64572, ports 18134/18135, iOS sim C2BCF36A. It reproduces each finding, repairs it, re-verifies with Stripe
+TEST, and writes bundle `…-poster-fault-fee-r2`.
+
+### Other changes since 06:52
+- **#256 (new): web transport errors show plain copy.**
+  - Reproduced on `/login`: "Request failed with status code 500" when the API was down, and "Network error: cannot
+    reach API at /api/users/login" when offline.
+  - Both now show the app's existing plain copy.
+  - Bundle `20260923-coord-web-transport-error-copy-r1`, MANIFEST `d16e9c0f…`.
+  - CI OK. Queued before the fee PRs were pulled.
+- **Queue:** 218 231 221 236 219 213 214 215 224 199 208 251 252 255 256. #218's Android CI is running.
+- **Stream 1: Android gig-detail sheet failures are invisible.** The toast is drawn under the sheet's scrim, in the
+  success colour, for 2.5 s. Seven lifecycle sheets are affected; confirmed on emulator-5558 in bundle
+  `20260923-stream1-sheet-error-feedback-r1`.
+  - **Approved functional repair:** an inline error that reuses EditBidSheet's treatment, plus an in-flight guard. The
+    idle state must stay pixel-identical.
+  - **New defect:** a double tap on "Send request" created two identical pending change orders. It is being
+    reproduced end to end (approve both, check the price delta); a server guard comes first.
+- **Founder question (presentation):**
+  - Colour `isError` toasts red and draw them above sheets (iOS and web already do both).
+  - Copy: "Server error 503. Please try again." → "Something went wrong on our side. Please try again."
+  - Copy: "No grounds for no-show report" → "The worker has already started, so this can't be reported as a no-show."
+
+## Resume point history — September 23, 2026, 06:52 UTC (coordinator session `92cc4526`)
+
+The count is now **10 closed / 70 partial**: P03 closed, because #241 (its last recorded iOS observation) merged after
+its installed-simulator verification. The row text in `REMAINING_WORK_2026-09-11.md` carries the evidence.
+
+### Merged since the handoff (serial queue, exact-head CI)
+- #241 → `fa647f69a`
+- #248 → `c6f7db9c0`
+- #247 → `019fb0b03`
+- #249 → `c4a538e2a`
+- #250 → `35391f59e`
+
+The runner (pid 6029) is alive. #251 and #252 were appended at 06:35 UTC. Queue at 06:52: 218 231 221 236 219 213
+214 215 224 199 208 251 252.
+
+### New PRs (not queued until CI OK)
+- **#253 — P04/P05 fee, backend and migration** (`claude/stream1-poster-fault-fee` @ `be92a0f71`).
+- **#254 — fee line on web, iOS and Android** (`…-clients` @ `b0a5f9e70`), stacked on #253. Merge #253 first.
+- **Fee bundle.** The coordinator sealed it from the fee agent's evidence:
+  - 160 files, MANIFEST `18db9ac4ba6a71ff7fe95be3fce323bfffa2a4f12882f5dc8df01fca9113d024`;
+  - journeys J1–J8 plus settlement, on real Stripe TEST.
+- **Android pixel identity is complete.** The tall captures of the card and the stop sheet differ only in the
+  status-bar clock (re-compared at 06:38 UTC). The handoff's "Android pair in progress" item is closed.
+- **Migration policy re-checked.** `20260923000100` sorts after master's newest `20260922023100`, and no queued PR
+  adds a migration.
+- **#255 — search terms escaped before ILIKE filters** (`claude/search-terms-escape-ilike` @ `45f114cdf`).
+  - This is the plain defensive edit from HANDOFF §0: `escapeIlike()` is lifted to `backend/utils/escapeIlike.js`
+    and applied at the eight listed call sites.
+  - Backend Jest: 341 suites pass. Privacy gates pass.
+  - **No probing and no write-up.** The search-filter audit stays closed.
+
+### Evidence location changed (this session only)
+- This coordinator runs in an isolated worktree. A hook blocks writes into the founder's main checkout, and the
+  legacy store `skinny-pantopus/.pantopus-recovery/audits/` lives there.
+- **New and resealed bundles go in the worktree store** (gitignored by its own `.gitignore`):
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`.
+- **Copy them into the legacy store before this worktree is removed.** The legacy store stays read-only for this
+  session's agents.
+
+### Stream agents respawned (06:50 UTC)
+- Stream 1 (gigs & payments), Stream 2 (Home) and Stream 3 (accounts & social) are running as background agents
+  of session `92cc4526`. Their shared rules are in `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md`.
+- **New shared limiter:** `/private/tmp/pantopus-tools/device-slot.sh`.
+  - At most 3 booted test devices at a time. The founder's simulator EB5AD759 is excluded and never touched.
+  - No slot is handed out below 20% free memory.
+  - This sits alongside the existing heavy build slot.
+- **Stream 2 incident (05:57–05:59 UTC, previous session).**
+  - What happened: an Android APK built without `PANTOPUS_API_BASE_URL`/`PANTOPUS_SOCKET_URL` fell back to
+    `http://10.0.2.2:8000`. It sent two requests to the founder's `:8000` backend: a refresh (401 TOKEN_REUSE) and a
+    login for a synthetic account (401).
+  - Likely effect: log lines and limiter counts only. The founder's stack was not queried.
+  - The rules now require explicit URLs and a dex check (the APK must contain its own port and no `:8000`) before
+    any install.
+- **Load shed.** The coordinator shut down its idle simulators (F4DBD47E, C2BCF36A and Stream 3's 0AE16FA0; the
+  apps stay installed) and `docker stop`ped the finished fee project `pantopus-stream1-fee-r1` (volumes kept).
+
+### New Stream 1 observation (being verified by the Stream 1 agent)
+- **Where:** Android gig detail draws its lifecycle toast in the screen content, under any open `ModalBottomSheet`.
+- **Colour:** always `success`, even for `isError` toasts.
+- **Evidence:** in the fee J3 run, "Report no-show" returned 503, the sheet stayed open, and no message was visible.
+- **Next:** device check first. Any colour change is presentation and goes to the founder.
+
+## Resume point history — September 23, 2026, 05:07 UTC
+
+This updates the 04:40 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Merged since 04:40 UTC
+- #226, #227: Stream 2 web error reasons.
+- #242: v1 send keeps attention and visibility fields.
+- #240: business Contact works again (block/curator gates added first).
+- #209: D07 role change independent of expiry.
+
+### Stream 1 (coordinator)
+- **#244, money safety, queued.** A Stripe webhook whose Payment write failed was still acknowledged with 200 and marked processed, and redelivery was skipped as a duplicate. Reproduced with a **real TEST dispute** and an injected write failure on master: the Payment stayed `captured_hold` with no `dispute_id` while both parties were told of a dispute. Settlement gates on the database's `dispute_id`, so it would still credit the worker.
+  - Fix: 18 money-state writes now use the file's existing `assertSupabaseOk`. The event returns 500 and Stripe redelivers it. Verified: 500, event unprocessed, no notifications; then the healthy redelivery records `disputed` + `dispute_id`.
+  - Bundle `20260923-stream1-webhook-write-failures-r1`, MANIFEST `f64e89c13eb0f4ae22a7873b4835075ca492b14149be014c60aff613c51abf49`.
+  - Found by the new unchecked-write scan (`/private/tmp/pantopus-coord-schema/unchecked-writes.cjs`). The 17 non-webhook hits and the StripeAccount writes are recorded.
+- **#241 (iOS tip refresh):** built in its own derived data. The simulator run is deferred until swap recovers.
+- **Parity check:** Android refetches after 16 gig actions. iOS refreshes or updates in place for all of them except tips, which #241 fixes. Web `/confirm-completion` and native `/cancel` share the same services as `/complete` and the stop flow.
+- **Fee agent:** web and iOS pixel identity done (fee line, card and stop sheet identical apart from the clock and blur); Android pair in progress. Migration pre-read by the coordinator: the 24h worker-reports-poster rule matches the route.
+
+### Notification-return audit (coordinator)
+- **Web:** gig links are fine (middleware `/gigs/:id` → `/app/gigs/:id`). Broken: booking host lifecycle `/app/profile/schedule/bookings/:id` (404); `invoice_sent` → the recipient page `/app/invoice/:id` (Stream 3 corrected the coordinator's target); four `/homes/…` subpaths (Stream 2).
+- **Native:** mail item and `mail_summary` links are discarded; neighbor-message opens Place with homeId "neighbor-message"; landlord, `connection_accepted`, `marketplace` and audience links are discarded.
+- Dispatched: Stream 2 (mail, Place, landlord, homes); Stream 3 (booking host link + invoice PR in progress, connection/marketplace/persona).
+
+### Stream 2
+- **#243 queued:** the web Counter uses the existing `drawer/*?tab=counter`.
+- **Six web mailbox pages ran on a hard-coded stub Home `home_1`** (Camas, WA coordinates). Records create and list crash, Tasks falsely empty, Travel 400. One PR is in progress, reusing an existing Home source with an unmask check.
+- Recorded:
+  - records category options vs the HomeAsset CHECK (a visible change; founder);
+  - the p3 records reader field mapping (a small follow-up PR);
+  - the `mail_extracted` compatibility retry, to be limited later;
+  - the v1 residency test uses `finance.view`, pending a comparison with v2.
+
+### Stream 3
+- Deletion 409 is correct on both native apps (M18).
+- Android You → Help/Legal/Privacy opened "isn't here yet" placeholders although the screens exist; a wiring fix is approved.
+- Booking-link + invoice PR in progress.
+- Invoice notifications failed silently (a `data` column); fix approved with a block gate.
+- Combined per-platform verification builds are approved (exact heads recorded per bundle).
+
+### Host overload incident (~05:00 UTC)
+- Load reached about 660 and swap about 23.5 of 24.6 GB. Emulator input stalled.
+- Each stream shed only its own load:
+  - the coordinator's schema DB and simulator;
+  - Stream 3's emulator-5554, sim 0AE16FA0 and mail-r3 stack;
+  - Stream 2's emulator-5556, sim 6F914A30 and Next.
+- **The founder's live environment was identified and left alone:** Docker stack `pantopus-home-gig-replay` (64521/64522), backend :8000 and simulator iPhone 17 `EB5AD759`. Never stop these.
+- Native work is serial until swap recovers. At 05:07 load was about 240 and swap had 2 GB free.
+
+### Founder questions added (not implemented)
+- **Business drawer:** should a `business_team` letter keep honouring attn and recipient? Today a member who files an attn_only letter into Business exposes it to the household.
+- **Records:** extend the HomeAsset CHECK, or align the categories?
+- **Blocks and invoices:** may a blocked business still create or list invoices to the blocker?
+- **Business-scheduled notifications:** notifications to business User rows (draftBusinessReminder, expirePopupBusinesses) are unreadable. Reroute them to owners?
+- **iOS tip dock:** label parity ("Check tip status") and tip-limit copy (UX proposals).
+
+### Queue
+243 211 244 210 218 231 221 236 219 213 214 215 224 199 208.
+
+## Resume point history — September 23, 2026, 04:40 UTC
+
+This updates the 04:17 block below; read both. The count is still **9 closed / 71 partial**. P03 closure is proposed once #241 is verified on a simulator (below).
+
+### Timestamp correction (coordinator)
+- Four earlier block labels were ahead of their actual commit times. They are now labelled with the real UTC commit time, and each keeps its first label.
+- Three Stream 1 bundle headers stated windows later than their runs. They are corrected from the harness request logs and resealed, with a `## Correction` note in each RESULT.md:
+  - `retire-gig-status-route-r1`: 04:15–04:17, MANIFEST `bbabd6aabf152dd5229c59794a5ccfc0d8cf21e1b9834a43f48b903829e548b4`;
+  - `schema-drift-reads-r1`: 04:09–04:13, MANIFEST `63d582a83e83a78db95fda2f4a74c285829eac3559820c73dfa4fa2d4809849f`;
+  - `account-delete-money-guard-r1`: 03:58–04:02, MANIFEST `6e12133bcbcec40f21641c03eadf66caccdc6caf58bf5c9efd55e243cf386ac6`.
+- Eight other Stream 1 manifests had `updatedAt` rounded 2–11 minutes past their real seal. Each is set to its actual write time with a `corrections` entry; file hashes are unchanged. The hub citations now carry the new MANIFEST hashes.
+- Commit times and harness request logs are authoritative.
+
+### Merged since 04:17 UTC
+- #230: Hub mail counts (Stream 2).
+- #237 (Stream 1): schema-drift reads.
+- #238 (Stream 1): retires `PATCH /api/gigs/:id/status`.
+- #216: booking invitee notification link (Stream 3).
+- **#239: M01 privacy fix, merged `7855e7c7d`.**
+  - Members see only the Home letters the Home rule allows. The rule is one definition in `utils/homeMailAccess`, shared by the v1/v2 lists, the per-item gate, drawers, pending, Mail Day and the badge.
+  - The v1 delivery notice now reaches only members who may open the letter.
+  - Bundle `20260923-stream2-m01-home-mail-visibility-r1`: 57 files, MANIFEST `739617a1e8752fd3ecf07c6db86a40994f28c97d23533eec0141257cccf46e61`, verified by the coordinator.
+
+### Client-route drift scan (coordinator, new tool)
+`/private/tmp/pantopus-coord-schema/routes-scan.cjs` builds Express 5's route table in registration order. It covers `app.js` mounts, routers, nested and helper-registered routes, and loop-generated paths: 1,229 routes. It matches all 2,734 client calls against it (web 1,060, iOS 794, Android 880).
+- **Result:** 2,696 calls resolve. Triage is in `/private/tmp/pantopus-coord-schema/route-findings-2026-09-23.md`.
+- **Stream 2, dispatched:** nine live **web** screens call backend routes that never existed; `git log -S` finds none ever. Each item is reproduce-first; repairs go through an existing route where the semantics match, otherwise a build-vs-hide proposal for the founder:
+  - Mailbox Counter page and nav badge;
+  - Records create asset and add photo;
+  - map pin "add to calendar";
+  - Mail Day summary dismiss;
+  - package condition photo;
+  - Hub context sync;
+  - Home dashboard gigs;
+  - landlord property **Notices** and **Settings** tabs (no tables exist).
+- **Recorded, no UI caller:**
+  - web chat room leave/search/mute/pin/archive;
+  - files metadata, get and portfolio reorder;
+  - `PUT /users/location`;
+  - native listing `DELETE …/save` (the backend POST toggles);
+  - web ad-campaign functions (`GET /api/mailbox/campaigns` is also shadowed by `/:id`);
+  - `updateMagicSettings` sends PUT where the backend has PATCH.
+- **Informational:** 147 calls reach only routes behind `IDENTITY_FIREWALL_ENABLED`, `PERSONA_ENABLED` or `PERSONA_BROADCAST_ENABLED`, which is deployment configuration.
+- **Stripped-body scan** (`body-scan.cjs`): `validate()` uses `stripUnknown`. Across 274 validated routes, 175 read the body, and only one reads an undeclared field: listing `source_type`/`source_id`, which no client sends. Of the web literal bodies, 79 were checked against their Joi schemas: no enum mismatch, and 4 stripped keys that no handler needs. No repair.
+
+### Stream 1
+- **#241, awaiting simulator verification:**
+  - Fix: iOS gig detail refetches after a terminal tip. The P03 iOS bundle recorded a stale payment card until reopen; Android refetches on its receipt.
+  - Verification plan: its own simulator, derived data and port 18152, on the heavy slot after the fee agent's iOS pair and Stream 3's chat-link builds.
+  - With it, every item in P03's recorded "Remaining" list is covered:
+    - iOS create/cancel/3DS: `20260923-stream1-p03-ios-tip-r1`;
+    - storage loss on both platforms: `20260923-stream1-p03-storage-loss-r1`.
+- **Fee agent (P04/P05):**
+  - Backend and all three clients are implemented locally.
+  - Checks pass:
+    - CI schema replay reproduced with CLI 2.116.0 (2.98.2 segfaults on unchanged contracts);
+    - 67/67 pgTAP;
+    - migration `20260923000100_gig_fee_capture.sql` sorts after master's newest;
+    - backend Jest 238 suites.
+  - The Stripe TEST hold-unavailable no-show converges.
+  - Native pixel-identity pairs and the payer journeys are next. It holds C2BCF36A, `/private/tmp/pantopus-stream1-ios-dd`, port 18132 and emulator-5558.
+
+### Disk
+The data volume hit ENOSPC twice around 04:25 UTC. Each stream deleted only its own regenerable build output:
+- Stream 1: the 3DS-run derived data and packages, plus an old worktree's Android build;
+- Stream 2: about 19 GiB of stale iOS derived data;
+- Stream 3: about 3 GiB.
+
+About 32 GiB was free afterwards. Shared caches (`~/Library/Developer/Xcode/DerivedData`) were not touched.
+
+### Founder questions added (not implemented)
+- **Mailbox:**
+  - who sees `business_team` mail;
+  - whether admins see `attn_plus_admins` letters;
+  - whether a v1 bill send on an `attn_only` letter should still fan out a HomeBill (provider and amount) to finance viewers.
+- **Route drift:** build-vs-hide decisions for the Stream 2 items without a backend, once Stream 2 posts its proposals. The landlord Notices/Settings tabs have no tables at all.
+
+### Queue
+226 227 209 211 210 218 231 221 236 219 213 214 215 224 199 208. #240 (Stream 3 business inbox) is queued after review of its bundle, and #241 after simulator verification.
+
+## Resume point history — September 23, 2026, 04:17 UTC (first labelled 05:00)
+
+This updates the 03:45 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Whole-backend schema-drift scan (coordinator, new tool)
+
+`/private/tmp/pantopus-coord-schema/scan.cjs` parses every supabase-js chain in `backend/`: 478 files, 3,129 chains
+and 135 RPC calls. It checks them against a DB-only replay of master's 86 migrations (`supabase db start`, project
+`pantopus-coord-schema`, SQL 64592; maps in `columns.json` / `fks.json` / `functions.json`). It found 148 candidates:
+queries naming tables, columns or RPCs that don't exist, which usually fail silently as false-empties or failing
+writes.
+- **Per-stream lists:** `findings-stream{1,2,3}.md` in the same folder. Streams 2 and 3 are working theirs by user
+  impact.
+- **Rule for every repair:** check whether the fix unmasks data (the #212 → #217 lesson), and gate first if it
+  does. Rerun the scan after merges to see what remains.
+
+Stream 1 results:
+- **#235: money-safety repair, merged `02bdef415`.** Account deletion's escrow guard filtered a nonexistent
+  `Payment.status`, so deleting an account erased in-flight payments for both parties: held escrow, live holds,
+  owed partial-refund earnings and payouts in transit. Bundle `20260923-stream1-account-delete-money-guard-r1`.
+- **#237:** gig-search title suggestions and the AI assistant's activity counts were always empty. Verified in the
+  web UI.
+- **#238:** retires `PATCH /api/gigs/:id/status`, a dormant bypass that let owners write completed/in_progress
+  without Start Work, capture or settlement. It was blocked only by the drift 404.
+- **Recorded, no change:**
+  - the dead public previews `/api/public/gigs|listings|posts` (if revived they must honour visibility);
+  - urgent-task neighbor fan-out, which never worked (missing `find_homes_nearby`; enabling it is a founder
+    decision);
+  - the legacy `/api/offers`;
+  - the unused geo helpers;
+  - the anomaly-job fallback.
+
+### Merged since 03:45 UTC
+- #222 / #223 / #225 / #228: mailbox Home scope, readers, settings and Hub Today calendar.
+- #232: blocked viewers can't open the blocker's profile.
+- **#233: critical v2 mailbox IDOR; outsiders could read, mark opened and take any letter.**
+- #234: party join Home gate.
+- #235: account-deletion money guard.
+- #229: bids refused across personal blocks.
+
+### Founder questions added (not implemented)
+- **Account deletion:** retain terminal payment history and the wallet ledger? Require withdrawing a positive
+  wallet balance first?
+- **Urgent-task fan-out:** build `find_homes_nearby` and start neighbor pushes?
+- **Mailbox:** should admins see `attn_plus_admins` letters? `/party/assign` assignee membership.
+
+## Resume point history — September 23, 2026, 03:34 UTC (first labelled 03:45)
+
+This updates the 01:55 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Operating model
+- The coordinator session reviews, merges and edits this hub.
+- Four Claude agents, one PR per reproduced defect, each with an evidence bundle:
+  - Stream 2 (Home);
+  - Stream 3 (accounts/social);
+  - Stream 1 fee agent: P04/P05 poster-fault fee execution, working in its own worktree `/private/tmp/pantopus-stream1-fee` and a private disposable full-schema DB. It uses Stream 1's port 18132, emulator-5558 and simulator C2BCF36A; the coordinator no longer uses them.
+- **Merge queue:** `/private/tmp/pantopus-tools/merge-queue/run.sh` runs detached.
+  - It reads `queue.txt` in order, updates each branch, waits for "CI OK" on that exact head, then merges with `--match-head-commit`.
+  - It logs to `log.txt`. Append a PR number to `queue.txt` to add it.
+  - It stops a PR on a conflict, CI failure or 90 min timeout.
+  - Only coordinator-reviewed PRs go in.
+
+### Founder decisions (2026-09-23, second round)
+- **P04 worker share: 85% of the fee**, the normal split (`floor(fee*amount_to_payee/amount_total)`).
+- **Late-cancel scope: before work starts only.** After-start stays `STARTED_POLICY_REVIEW`.
+- **Fee display: a minimal fee line is approved** on web, iOS and Android. Every other state stays pixel-identical.
+- **D07 "Set expiry": hide the control.** Stream 2 is implementing it.
+
+### Merged since 01:55 UTC
+- #206 (`7e728e081`)
+- #212 (`d3bbfee06`, hub Home columns)
+- #207 (`f0cbe9971`)
+- #217 (`c0dee7a08`): the hub household gate. It closes a privacy leak that #212 had unmasked: applicants and members without `finance.view` saw household bills.
+
+### Queue (in merge order at 03:45)
+- 220 / 222: phase-3 mailbox Home-scope privacy fixes. The outsider read and write leak is **live in production**.
+- 223 / 225: Mail Day readers and settings.
+- 228: Hub Today calendar.
+- 229: **bids refused across a personal block** (Stream 1). Verified on Android.
+- 216: invitee booking link.
+- 226 / 227 / 209: web error surfacing and role payload.
+- 211 / 210: Stream 1 no-show release and Android a11y.
+- 218: Android verify banner.
+- 221: **iOS decodes null names**; every new iOS email signup could not open You.
+- 219: iOS verify banner.
+- 213 / 214 / 215 / 224 / 199 / 208: native routing, cold-start, blocked count, Face ID sequencing, block state and letter errors.
+
+### New privacy findings in progress (coordinator-approved)
+- **v2 mailbox per-item IDOR (Stream 2, live):** `GET /api/mailbox/v2/item/:id` and five other v2 handlers read or change any mail by id. The item read also marks it opened for the real recipient. The fix reuses v1 `canAccessMail`, with 404 denials.
+- **M01 (a) (Stream 2):** members could read other members' `private_to_person` / `attn_only` home mail. The fix applies the dashboard's existing visibility predicates. v1 no-recipient letters are treated as household mail.
+- **Blocked viewer can open or search the blocker's personal profile (Stream 3):** directional refusal on `GET /api/users/id/:id` and people search. Persona surfaces stay a founder call.
+- **Android DM block/report failures show nothing (Stream 3):** existing AlertDialogs with the iOS copy.
+
+### Open questions for the founder (not implemented)
+1. **M01 (b):** require `mailbox.view` for home mail. This is the DB policy, and it would remove lease residents' home mail.
+2. **Mailbox records:**
+   - Unlink scope: any member of the asset's Home (current #222), or only the member who linked it?
+   - Pin `visible_to` is not enforced among members.
+   - Canonical Mail Day defaults.
+3. **D10 household delete:**
+   - Should members be notified or given a consent window?
+   - A deletion receipt outside the cascade.
+   - Revoke letters/passes with a reason instead of deleting them.
+   - Retention of household mail and bills.
+4. **iOS:**
+   - The "You" cover has no close control.
+   - Dynamic Type adoption: 4,746 fixed-size fonts, so AX5 is ignored.
+   - The dark-mode BEST MATCH pill is about 2.9:1.
+5. Carried over: persona surfaces vs personal UserBlock; R06 native Identity entry, letter PDF, guest copy and manager role; tips on disputed tasks; the viewer bid count during payment; duplicate PostReport rows; the booking host lifecycle link is a 404 on web.
+
+### Stream 1 evidence since 01:55 (cleanup verified in each)
+- `20260923-stream1-p08-ios-account-r1`: iOS checkout lifetime.
+- `20260923-stream1-u02-ios-a11y-r1`: iOS dark mode is fine; Dynamic Type proposal.
+- `20260923-stream1-p03-storage-loss-r1`: native tip recovery after local-storage loss. Android pays and iOS cancels, both on the same intent.
+- `20260923-stream1-bid-block-gate-r1`: PR229.
+
+## Resume point history — September 23, 2026, 01:44 UTC (first labelled 01:55)
+
+The operating model from 23:50 UTC (below) still holds:
+- Claude coordinator session: Stream 1 developer and coordinator.
+- Claude background agents run Streams 2 and 3.
+- Agents open one PR per reproduced defect and never merge or edit this hub.
+- The coordinator reviews every PR and merges serially at fresh exact-head CI. Branch protection is strict, so every merge sends the other PRs behind; run `gh pr update-branch`, then wait for CI again.
+
+The count is still **9 closed / 71 partial**. No merged PR closes a whole row.
+
+### Merged since 23:50 UTC (master `8d3ab8810`)
+
+| PR | Stream / row | Merge commit | Evidence (private bundle, MANIFEST sha256) |
+|---|---|---|---|
+| 200 letter verification requires current residency | 2 / R06 | `d718cc4e9` | `20260923-stream2-r06-residency-letters-r1`, `50d34d0c1318…` |
+| 201 public page shows revoked/expired letters as such | 2 / R06 | `7321e7a54` | same bundle |
+| 202 personal block refuses connection requests | 3 / N03–N04 | `896e15ba5` | `20260923-stream3-connection-request-block-gate-r1`, `3d6bf7393553…` |
+| 203 web hides Follow after a personal block | 3 / N03–N04 | `2ac88e90b` | `20260923-stream3-web-profile-block-follow-r1`, `a52fac3a451f…` |
+| 204 **P06 record + freeze** (founder decision) | 1 / P06 | `dd59f811b` | `20260923-stream1-p06-disputed-capture-freeze-r1`, `e83baeae267b…` |
+| 205 only resident roles issue letters/passes | 2 / R06 | `8d3ab8810` | `20260923-stream2-r06-native-letters-passes-r1`, `abc109142f59…` |
+
+P06 detail:
+- A charge already disputed at capture is now recorded, confirmed and frozen as `disputed`, whether the capture or the dispute webhook comes first.
+- Verified on installed apps with real Stripe TEST events:
+  - Android won: settlement credited the worker 1063.
+  - iOS lost: `refunded_full` 750 with no credit.
+
+### Open queue (merge in this order)
+
+1. **206** web letter/pass errors (Stream 2)
+2. **212** `/api/hub` read nonexistent `Home.latitude/longitude`; every resident's hub showed "no homes" (2, D09/H08; evidence `20260923-stream2-hub-home-columns-r1`, MANIFEST `7e5620a41ad4…`). Highest impact.
+3. **207** Android letter errors (2)
+4. **210** Android large text + dark sheets (Stream 1, U02, founder-approved)
+5. **211** worker no-show releases the poster's hold (1, P04)
+6. **209** web role change without access dates (2, D07)
+7. **199** iOS Local profile block state (3)
+8. **208** iOS letter errors (2)
+
+Hold the next hub docs PR until this queue is empty.
+
+### Founder decisions (2026-09-23) and implementation state
+
+- **P04/P05 "poster-fault pays worker":**
+  - Worker no-show → poster refunded in full, worker not charged. **PR211** releases the hold; verified on installed Android.
+  - Poster no-show or late cancel → the worker gets the recorded % from the held funds and the rest is released. **Not built yet.**
+  - Stripe TEST probe: a partial capture (`amount_to_capture`) leaves the remainder released with `amount_refunded` 0 and no refund object. The existing settlement also requires a completed and confirmed gig.
+  - Fee execution therefore needs a forward migration: a fee-capture record plus a cancelled-gig settlement path. Late cancel also needs the stop command and all three clients (their stop-receipt fences accept only `released`/`refunded`/`none`).
+- **P06 record + freeze:** done (PR204).
+- **Large text / dark mode:** approved when default light mode stays pixel-identical. Android gig detail is done in PR210 (proof in the bundle). iOS and web are not audited yet.
+
+### Decisions still needed from the founder
+
+1. **P04 fee share.** Does the worker get the whole fee, or the fee after the normal 15% platform share (what the existing refund-proportional settlement would pay)?
+2. **D07 "Set expiry".**
+   - No endpoint can change member access dates.
+   - Options: (a) remove or disable the control (a design change), or (b) add a shorten-only access-window operation (product/security decision plus a migration).
+   - Related: lease residents are badged "MEMBER", and Change Role has no "Lease resident".
+3. **R06.**
+   - Native Identity entry: a native dashboard link to letters and passes.
+   - Native letter PDF: view or download on native.
+   - Guest copy: a verified guest still reads "Verified resident".
+   - Manager role: it may still issue letters and passes.
+4. Tips can still be sent on a task whose payment is disputed (tips are separate payments).
+5. From earlier: non-owner viewers see "No bids yet" while a bid is mid-payment.
+
+### New evidence (all cleanup verified: owned SQL rows 0, TEST objects refunded/canceled/deleted, ledgers unchanged)
+
+- Stream 1:
+  - `20260923-stream1-p03-ios-tip-r1` (MANIFEST `df1187bf0648…`): P03 **iOS** native tips.
+    - Covered: new card; dismiss → Cancel tip; 3DS success; 3DS failure → same-intent recovery; three-tip limit; reload total $30.
+    - iOS adds the Tip line only after a reload (Android updates it in place).
+  - `20260923-stream1-p06-disputed-capture-freeze-r1` (PR204).
+  - `20260923-stream1-u02-android-sheets-a11y-r1` (MANIFEST `b6c055ad4483…`, PR210).
+  - `20260923-stream1-p04-no-show-release-r1` (MANIFEST `a4182bfcacaa…`, PR211).
+- Stream 2: `20260923-stream2-d07-member-expiry-r1` (MANIFEST `aa8764195…`, PR209). Its R06 bundles are in the table above.
+- Stream 3: the bundles in the table above.
+
+### Next actions
+
+- **Stream 1:**
+  1. Poster-fault fee capture: no-show 25% first, then the stop-command late cancel.
+  2. iOS equivalents of the P08/P09 Android journeys.
+  3. U02 audits on iOS and web.
+- **Stream 2:** D09 malformed-success readers → D02 unknown-save → D10 household delete cleanup.
+- **Stream 3:** iOS Settings "Blocked users" count (PR pending) → booking notification routing (iOS/Android) → cold-start link binding.
+
+## Resume point history — September 22, 2026, 23:44 UTC (first labelled 23:50; superseded by the block above)
+
+### Operating model from 23:50 UTC — founder direction: "resume all work, all 3 streams"
+
+The founder asked this Claude coordinator session to run **all three streams** and finish every locally actionable criterion with real simulator/emulator verification.
+- **Streams 2 and 3** are now run by Claude background agents, not the idle Codex tasks `01a0c0d4…`/`01a0a824…`. **Do not resume those Codex tasks on these worktrees** unless the founder reassigns them.
+- Each agent writes only its own new work checkout, runtime, devices and evidence bundles. The agents do **not** edit or commit this hub. The coordinator integrates status here, reviews every PR and merges serially after exact-head CI.
+- **One heavy native build at a time across all streams:** `/private/tmp/pantopus-tools/heavy-slot.sh acquire "<stream>: <purpose>"`, then `release` right after the build and install.
+- Shared Android UI helper: `ANDROID_SERIAL=<own emulator> /private/tmp/pantopus-tools/aui.py dump|tap|has|shot`.
+- Device/port ownership is unchanged:
+  - Stream 1: `emulator-5558`, `C2BCF36A…`, ports 18132/18133, SQL 64562.
+  - Stream 2: `emulator-5556`, `6F914A30…`, ports 18143/18142 (+18144–18149 for new runs), SQL 64554.
+  - Stream 3: `emulator-5554`, `0AE16FA0…`, ports 18130/18131 (+18134–18139), SQL 64532, Mailpit 64535/36.
+  - `iPhone 17 EB5AD759` and `:8000` stay the founder device session; do not touch them.
+
 
 The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
 

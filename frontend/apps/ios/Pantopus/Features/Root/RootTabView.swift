@@ -187,7 +187,8 @@ public struct RootTabView: View {
         // Mailbox-cluster destinations resolve in the Mail tab's stack
         // (a mailbox-rooted HubTabRoot sharing the same destinations).
         case .vacationHold, .mailDay,
-             .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn:
+             .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
+             .mailbox, .mailItem:
             model.selected = .mail
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
@@ -197,7 +198,7 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings,
-             .businessOwner, .viewAs, .waitingRoom,
+             .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
             model.selected = .place

@@ -276,23 +276,6 @@ private fun HeaderRow(content: MailTaskContent) {
             modifier =
                 Modifier
                     .clip(CircleShape)
-                    .background(PantopusColors.successBg)
-                    .padding(horizontal = Spacing.s2, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.ShieldCheck,
-                contentDescription = null,
-                size = 11.dp,
-                tint = PantopusColors.success,
-            )
-            Text(text = "Verified", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PantopusColors.success)
-        }
-        Row(
-            modifier =
-                Modifier
-                    .clip(CircleShape)
                     .background(PantopusColors.appSurfaceSunken)
                     .padding(horizontal = Spacing.s2, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,

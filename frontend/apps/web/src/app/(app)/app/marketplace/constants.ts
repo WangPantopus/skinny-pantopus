@@ -61,3 +61,11 @@ export const MARKETPLACE_TABS = SHARED_MARKETPLACE_TABS;
 
 // Helpers — re-exported from shared package
 export { formatTimeAgo, formatDistance, formatExpiration } from '@pantopus/ui-utils';
+
+/**
+ * "Verified Neighbor" follows the seller's real residency verification (the identity serializer's
+ * `verified_resident` badge). Attaching a listing to an address verifies nothing, so it doesn't count.
+ */
+export function sellerIsVerifiedNeighbor(creator?: { badges?: string[] | null } | null): boolean {
+  return Boolean(creator?.badges?.includes('verified_resident'));
+}

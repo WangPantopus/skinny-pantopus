@@ -13,7 +13,8 @@ extension MailDetailViewModel {
     ) -> MailDetailContent {
         let item = detail.item
         let category = MailItemCategory.fromRaw(item.mailType ?? item.type)
-        let trust = MailTrust.fromRaw(nil)
+        // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
+        let trust = MailTrust.fromRaw(item.senderTrust)
         let senderDisplayName = detail.sender?.name
             ?? item.senderBusinessName
             ?? item.senderAddress
@@ -22,7 +23,8 @@ extension MailDetailViewModel {
         let senderTypeLabel = senderTypeLabel(
             category: category,
             sender: detail.sender,
-            businessName: item.senderBusinessName
+            businessName: item.senderBusinessName,
+            senderTrust: item.senderTrust
         )
         let carrierLine = "via \(carrierLabel(from: detail.object))"
         let referenceLabel = referenceLabel(from: detail.object, itemId: item.id)
@@ -145,13 +147,19 @@ extension MailDetailViewModel {
         return "Pantopus Mail"
     }
 
+    /// "Verified sender" only when the letter's stored `sender_trust` says so;
+    /// the category or a business name alone proves nothing.
     static func senderTypeLabel(
         category: MailItemCategory,
         sender: MailDetailResponse.MailDetail.Sender?,
-        businessName: String?
+        businessName: String?,
+        senderTrust: String?
     ) -> String {
         if sender != nil { return "Pantopus user" }
-        if businessName != nil { return category.detailTrust == .verified ? "Verified sender" : "Business" }
+        if businessName != nil {
+            let verified = ["verified_gov", "verified_utility", "verified_business"].contains(senderTrust ?? "")
+            return verified ? "Verified sender" : "Business"
+        }
         return category.detailTrust == .warning ? "Action notice" : "Mail sender"
     }
 }
@@ -188,14 +196,9 @@ private func decodeVariantDetails(
         gig: category == .gig ? GigDetailDTO.decode(from: object) : nil,
         memory: category == .memory ? MemoryDetailDTO.decode(from: object) : nil,
         package: category == .package ? PackageBodyContent.decode(from: object) : nil,
-        // Backend ingestion for personal invites is not yet wired; fall back
-        // to the deterministic fixture so the A17.9 variant lights up the
-        // moment a user opens a party-categorised mail. Once the wire schema
-        // ships, `PartyDetailDTO.decode(from:)` returns the real payload and
-        // this fallback becomes dead code we can drop.
-        party: category == .party
-            ? (PartyDetailDTO.decode(from: object) ?? MailItemSampleData.partyInvite)
-            : nil,
+        // No sample invite: a party letter without an invite payload opens in
+        // the generic layout rather than showing someone else's party.
+        party: category == .party ? PartyDetailDTO.decode(from: object) : nil,
         records: category == .records ? RecordsDetailDTO.decode(from: object) : nil
     )
 }
