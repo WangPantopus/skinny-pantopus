@@ -110,13 +110,11 @@ struct SchedulingHubScreen: View {
                     statusRow
                     agenda
                     manageSection
-                    Color.clear.frame(height: model.canEdit ? 96 : Spacing.s6)
+                    Color.clear.frame(height: (model.canEdit ? 96 : Spacing.s6) + (model.pauseError == nil ? 0 : 60))
                 }
             }
             .background(Theme.Color.appBg)
-            if model.canEdit {
-                HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
-            }
+            statusFooter
         }
     }
 
@@ -432,4 +430,20 @@ private struct HubShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_: UIActivityViewController, context _: Context) {}
+}
+
+private extension SchedulingHubScreen {
+    var statusFooter: some View {
+    VStack(spacing: Spacing.s0) {
+        if let message = model.pauseError {
+            ExtrasInlineError(message: message)
+                .padding(.horizontal, Spacing.s4)
+                .padding(.bottom, Spacing.s2)
+                .accessibilityIdentifier("schedulingPauseError")
+        }
+        if model.canEdit {
+            HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
+        }
+    }
+    }
 }

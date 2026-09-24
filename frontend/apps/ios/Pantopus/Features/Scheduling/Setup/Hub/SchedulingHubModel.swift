@@ -135,6 +135,7 @@ final class SchedulingHubModel {
     private var fetchGeneration = 0
     private(set) var accessDenied = false
     private(set) var isPaused = false
+    private(set) var pauseError: String?
     /// The first business the user can manage (`GET /api/businesses/my-businesses`,
     /// the source web's hub uses). The Business pill shows only when there is one.
     private(set) var businessOwnerId: String?
@@ -178,29 +179,40 @@ final class SchedulingHubModel {
     }
 
     func selectPillar(_ choice: SchedulingPillarChoice) async {
-        guard !choice.matches(owner) else { return }
+        if choice.matches(owner) {
+            // Selecting the current owner cancels a different owner still resolving.
+            if phase == .loading { await fetch() }
+            return
+        }
+        fetchGeneration += 1
+        let generation = fetchGeneration
         phase = .loading
-        // Resolve the owner id BEFORE mutating `owner` — an unresolved id must
-        // never produce a malformed `/api/homes//scheduling` request, and the
-        // failure copy is pillar-specific (mirrors Android SchedulingHubViewModel).
+        previewTimes = nil
+        pauseError = nil
+        canEdit = false
+        let nextOwner: SchedulingOwner
         switch choice {
         case .personal:
-            owner = .personal
+            nextOwner = .personal
         case .home:
-            guard let homeId = await resolveFirstHomeId(), !homeId.isEmpty else {
+            let homeId = await resolveFirstHomeId()
+            guard generation == fetchGeneration else { return }
+            guard let homeId, !homeId.isEmpty else {
                 phase = .error("No household yet. Create one to share a family booking link.")
                 return
             }
-            owner = .home(homeId: homeId)
+            nextOwner = .home(homeId: homeId)
         case .business:
-            // A business the user can manage, never the signed-in user's own id.
-            if businessOwnerId == nil { businessOwnerId = await resolveFirstBusinessId() }
-            guard let businessId = businessOwnerId, !businessId.isEmpty else {
+            let businessId: String? = if let businessOwnerId { businessOwnerId } else { await resolveFirstBusinessId() }
+            guard generation == fetchGeneration else { return }
+            guard let businessId, !businessId.isEmpty else {
                 phase = .error("Couldn't load your business scheduling.")
                 return
             }
-            owner = .business(id: businessId)
+            businessOwnerId = businessId
+            nextOwner = .business(id: businessId)
         }
+        owner = nextOwner
         await fetch()
     }
 
@@ -208,6 +220,7 @@ final class SchedulingHubModel {
         fetchGeneration += 1
         let generation = fetchGeneration
         let fetchOwner = owner
+        pauseError = nil
         phase = .loading
         previewTimes = nil
         canEdit = false
@@ -339,6 +352,7 @@ final class SchedulingHubModel {
         let requestOwner = owner
         let generation = fetchGeneration
         let previous = isPaused
+        pauseError = nil
         isPaused = paused
         do {
             let result: BookingPageResponse = try await client.request(
@@ -350,10 +364,16 @@ final class SchedulingHubModel {
         } catch let error as SchedulingError {
             guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
-            if case .forbidden = error { canEdit = false }
+            if case .forbidden = error {
+                canEdit = false
+                pauseError = "Your access changed. Ask an owner to update bookings."
+            } else {
+                pauseError = paused ? "Couldn't pause bookings. Try again." : "Couldn't resume bookings. Try again."
+            }
         } catch {
             guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
+            pauseError = paused ? "Couldn't pause bookings. Try again." : "Couldn't resume bookings. Try again."
         }
     }
 
