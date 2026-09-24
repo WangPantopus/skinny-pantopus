@@ -50,18 +50,19 @@ class HomeTabHostViewModel
                 return
             }
             _landing.value = HomeLanding.Loading
-            resolveJob = viewModelScope.launch {
-                _landing.value =
-                    when (val result = homesRepository.myHomes()) {
-                        is NetworkResult.Success -> {
-                            val homes = result.data.sharedHomes
-                            val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
-                            if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
+            resolveJob =
+                viewModelScope.launch {
+                    _landing.value =
+                        when (val result = homesRepository.myHomes()) {
+                            is NetworkResult.Success -> {
+                                val homes = result.data.sharedHomes
+                                val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+                                if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
+                            }
+                            is NetworkResult.Failure ->
+                                HomeLanding.Error(result.error.displayMessage("Couldn't load your place. Please try again."))
                         }
-                        is NetworkResult.Failure ->
-                            HomeLanding.Error(result.error.displayMessage("Couldn't load your place. Please try again."))
-                    }
-            }
+                }
         }
 
         fun loadPreview() {
