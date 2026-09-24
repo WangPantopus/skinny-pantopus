@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.AssessmentStance
+import app.pantopus.android.data.api.models.place.BallotPhase
 import app.pantopus.android.data.api.models.place.BenchmarkComparison
 import app.pantopus.android.data.api.models.place.CivicLevel
 import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
@@ -584,7 +585,9 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
     }
     intel.section(PlaceSectionId.CIVIC_ELECTION)?.let { env ->
         PlaceDetailSectionLabel("Election")
-        val data = env.civicElection
+        // With Ballot on, the section keeps a past election for the week
+        // after it (for the Place card's results link); it is not upcoming.
+        val data = env.civicElection?.takeIf { it.ballotCard?.phase != BallotPhase.AFTER }
         if (data != null && env.isLive()) {
             ElectionCard(data)
             PlaceSourceNote("Official county elections")

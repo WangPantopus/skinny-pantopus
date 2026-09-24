@@ -308,7 +308,11 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
   const reps = districtsData?.representatives ?? [];
 
   const electionReady = electionEnv && (electionEnv.status === 'ready' || electionEnv.status === 'stale' || electionEnv.status === 'partial') && electionEnv.data;
-  const electionData = electionReady ? (electionEnv!.data as PlaceCivicElectionData) : null;
+  // With Ballot on, the section keeps a past election for the week after it
+  // (phase 'after', for the Place card's results link); it is not upcoming.
+  const electionData = electionReady && (electionEnv!.data as PlaceCivicElectionData).phase !== 'after'
+    ? (electionEnv!.data as PlaceCivicElectionData)
+    : null;
 
   if (ballotOpen && electionData) {
     return <BallotLeaf data={electionData} address={address} onBack={() => setBallotOpen(false)} />;

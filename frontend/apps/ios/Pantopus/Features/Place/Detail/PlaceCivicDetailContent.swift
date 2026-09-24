@@ -36,7 +36,11 @@ struct PlaceCivicDetailContent: View {
 
             if let election = vm.section(.civicElection, in: intel) {
                 PlaceDetailSectionLabel(text: "Election")
-                if let data = election.civicElection, election.status == .ready || election.status == .stale {
+                // With Ballot on, the section keeps a past election for the
+                // week after it (for the Place card's results link); it is
+                // not an upcoming one.
+                if let data = election.civicElection, data.ballotCard?.phase != .after,
+                   election.status == .ready || election.status == .stale {
                     ElectionCard(data: data)
                     PlaceSourceNote(name: "Official county elections", asOf: nil)
                 } else {
