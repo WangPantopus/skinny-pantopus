@@ -44,10 +44,10 @@ The founder's rule: every screen follows the canvas exactly. The guide's rule: t
 
 | Phase | Ships | Gate to start | Gate to release |
 |---|---|---|---|
-| **P0 (now)** | Place "Your ballot" card; the still governments view; the /start teaser; Today ballot card and deadline line; "Moved this year?" line | This plan | Founder approves the section 11 items; release checks in section 10 pass; `ballot_p0` enabled for internal users, then the pilot |
+| **P0 (now)** | Place "Your ballot" card; the governments view with the peel story; the /start teaser; Today ballot card and deadline line; "Moved this year?" line | This plan | Founder approves the section 11 items; release checks in section 10 pass; `ballot_p0` enabled for internal users, then the pilot |
 | **P0.5 (October)** | Election reminders: one opt-in, off by default, at most three per user per election, quiet hours, cancellation when a date changes. The share card (count and city only) through the existing OG route | P0 live internally; push copy approved | Delivery verified on devices; disable path verified |
 | **F1 bridge (loop)** | Saving a place sets location for Today and the briefing | Already in NEXT_STEPS section 2 | Its own acceptance (loop design F1) |
-| **P1** | The ballot packet; strip and map; public contest pages; the animated peel; the glyph; Nearby looking | Real voterInfo coverage checked for Washington addresses against official sample ballots | Order, labels and empty states reviewed; boundary vintages verified |
+| **P1** | The ballot packet; strip and map; public contest pages; the peel's "what it decides" captions and dashed empty layers; the glyph; Nearby looking | Real voterInfo coverage checked for Washington addresses against official sample ballots | Order, labels and empty states reviewed; boundary vintages verified |
 | **P2** | Reading room for the Washington and Oregon pamphlets; place charts; levy (rate only until validated); device-only plan; clerk for retrieval, plus pre-published plain-language documents | P0/P1 retained-use evidence (section 9) | Neutrality review, correction workflow, source rights cleared |
 | **P3** | Federal record and money, more states, a data partner for deadlines, translations | P2 evidence plus a partnership decision | Per-source methodology documented |
 
@@ -128,13 +128,15 @@ It uses coordinates only. The geocoder call is live and writes no cache row. The
 | `#e5e7eb` border | `border-app-border` | `appBorder` | `appBorder` |
 | `#9a4a08` on `#fffbeb` needs action | `text-app-warning` / `bg-app-warning-bg` | `warning` / `warningBg` | `warning` / `warningBg` |
 | `#f3f4f6` sunken well | `bg-app-surface-sunken` | `appSurfaceSunken` | `appSurfaceSunken` |
+| `#eef1f5` stack base (illustration) | `fill-[#eef1f5]` | `ballotStackBase` (new) | `ballotStackBase` (new) |
+| `#9ca3af` "waiting for ballots" segment (illustration) | `stroke-[#9ca3af]` | `ballotWait` (new) | `ballotWait` (new) |
 
 The builder confirms each name against the token files before use: `globals.css`, `Colors.swift` together with `ColorTokenTests.swift`, and `Color.kt`. Android CI rejects hex literals under `ui/screens`. iOS `verify-tokens.sh` rejects hex literals and on-scale spacing and radius literals.
 
 ### 6.2 Place: "Your ballot" card ([Board: Place: Your ballot card])
 
-- **Placement.** A "This season" overline (11/16, 600, 0.08em tracking, uppercase, secondary) above the card. It sits before the first group, after the hero card. The existing screen keeps its order otherwise. The civic group then skips `civic_election`, so the election does not appear twice.
-- **Frame.** White surface, 1px border, radius 20, padding 16, shadow `0 1px 3px rgba(0,0,0,0.04)`, 14 between rows. This is the existing section-card frame on web. iOS and Android place cards use radius 16 today, and this card uses the canvas's 20.
+- **Placement.** A "This season" overline (11/16, 600, 0.08em tracking, uppercase, secondary) 16 above the card, level with its left edge. It sits before the first group, after the hero card. The existing screen keeps its order otherwise. The civic group then skips `civic_election`, so the election does not appear twice.
+- **Frame.** White surface, 1px border, radius 20, padding 16, shadow `0 1px 3px rgba(0,0,0,0.04)`, 14 between rows. This is the existing section-card frame on web. iOS and Android place cards use radius 16 today, and this card uses the canvas's 20. Native insets content by 17 (the border plus the padding, as the CSS box does), so rows are 324 wide on a 390 screen; the 326-wide timeline overflows by 2 on the trailing side, as on the board.
 - **Header.**
   - A 34 icon tile, radius 9, home-green. It holds the canvas's ballot-box glyph: three strokes, width 2, round caps, drawn at 19.
   - Title "Your ballot" 15/600. Subtitle "November 3 general election" 12.5, secondary.
@@ -142,7 +144,7 @@ The builder confirms each name against the token files before use: `globals.css`
 - **Line** (15/21, 500). The canvas reads "13 decisions from 6 of your 9 governments". In P0 there are no decisions, so the line reads "This address sits inside at least N governments." (proposed, section 11).
 - **Timeline** (section 6.5), full width, 74 tall.
 - **How it works** (13.5/19, `#374151`).
-- **Primary button.** Height 44, radius 12, `#0369a1`, 15/600 white. The canvas label is "Open your ballot", which opens the ballot (P1). In P0 it reads "See your governments" and opens the still governments view (section 6.4).
+- **Primary button.** Height 44, radius 12, `#0369a1`, 15/600 white. The canvas label is "Open your ballot", which opens the ballot (P1). In P0 it reads "See your governments" and opens the governments view (section 6.4).
 - **Official links well.** `#f3f4f6`, radius 14. Each row has padding 12, a 1px `#e5e7eb` divider, title 14/500, owner 12 secondary, and a 16 external-link icon. The canvas's "Make a voting plan" row is P2.
 - **Source line** (12/16 muted): "<source> · as of <time>".
 - **Compact states** (`far`, `links_only`, `election_day`, `after`) are drawn on the proposal board before they are built.
@@ -162,10 +164,10 @@ In P0:
 - **H1.** "Your address sits inside at least N governments."
 - **Legend.** Lists the governments by name, with each row using the line sample, then "This address" with its dot. The "decide something" and "nothing until" lines are left out (rule 3).
 - **Decisions line.** Left out.
-- **Primary action.** "See your governments" opens the still view. "Compare with a friend" waits for P0.5.
+- **Primary action.** "See your governments" opens the governments view. "Compare with a friend" waits for P0.5.
 - **Other states.** The links-only teaser is proposed on the canvas.
 
-### 6.4 The stack and the still governments view ([Boards: Overview, The peel, Web lookup])
+### 6.4 The stack and the governments view ([Boards: Overview, The peel, Web lookup])
 
 The stack uses the canvas's nine decorative polygons exactly, taken from the Main board's `points`. Each layer is drawn as `translate(cx, baseY − i·gap) scale(S) scale(1, 0.5) rotate(45)`. Sizes:
 
@@ -183,16 +185,14 @@ Fills and marks:
 
 The P0 stroke is solid ink for every layer. The drawing makes no claim about who decides what, because no legend text says it does. The dashed style waits for a verified-empty status.
 
-The still governments view is the Peel board's finished frame, which is also what reduced motion shows:
+The governments view is the Peel board, story included ([Board: The peel]; proposed boards "P0: the peel, told" and "P0: governments view, finished frame"):
 
-- A progress bar filled to 100%.
-- The address line, with "Close" in place of "Skip".
-- The stack.
-- The overline "Your address" (green), then a serif 30/34 title "You are standing in at least N governments."
-- The governments listed by name at 15/22.
-- The source line "Boundaries: Census Bureau · Special districts are not counted yet".
+- A progress bar that fills across the whole story, and the address line with "Skip". "Skip" jumps to the finished frame, where it reads "Close".
+- The stack. Each government in turn lifts 8 and takes the green highlight (`#dcfce7` fill, `#15803d` 3-wide stroke) for 1.2 s: in by 0.18 s with ease-out, held to 1.02 s, out by 1.2 s. These are the board's own timings (1.5%, 8.5% and 10% of its 12 s cycle).
+- Its caption rises 8 into place and leaves 4 upward: the overline "Government k of at least N" (green, 11/600, 0.07em) and the name (24/30 bold). The board's third line says what each government decides this year. That needs contest data, so it waits for P1, and "at least" keeps the count honest.
+- The finished frame: the overline "Your address" (green), then a serif 30/34 title "You are standing in at least N governments.", the governments listed by name at 15/22, and "Done" over the source line "Boundaries: Census Bureau · Special districts are not counted yet".
 
-The story animation (1.2 s per step, 180 ms captions, "Skip") ships in P1, once each government has a true caption.
+The board loops only because it is a prototype. The app plays the story once and holds the finished frame. Reduced motion starts on the finished frame.
 
 ### 6.5 Deadline timeline ([Chart catalog: Deadlines for the home address])
 
@@ -216,7 +216,7 @@ The canvas's own numbers confirm the scale: September 23 → November 3 is 41 da
 
 ### 6.6 Today ([Board: Today in ballot week])
 
-The ballot card is inserted first in the existing Today content:
+The ballot card follows the weather block in the existing Today content, as the board puts the conditions first:
 
 | Platform | Where it goes | Data |
 |---|---|---|
@@ -238,20 +238,24 @@ The ballot card is inserted first in the existing Today content:
 
 The canvas title "Your ballot should arrive today" claims a delivery date Pantopus cannot know. The Mail Day line and the plan line are left out. The button "Open your ballot" is full width.
 
-**The warning well:** "Moved this year? Update your registration online by Oct 26. N days left." It uses `#fffbeb` / `#9a4a08`, radius 16, padding 12×14, and an 18 calendar icon. It shows when `Home.move_in_date` falls in the last 365 days and `register_online_mail` is still ahead. It can be dismissed on the device.
+**"Open your ballot":** from the Today tab it switches to the Place tab; from the Place Today page it goes back to the dashboard it opened from. A surface that cannot reach the card leaves the button out.
+
+**The warning well:** "Moved this year? Update your registration online by Oct 26. N days left." It uses `#fffbeb` / `#9a4a08`, radius 16, padding 12×14, and an 18 calendar icon. It shows when `Home.move_in_date` falls in the last 365 days and `register_online_mail` is still ahead. Tapping it opens the state's registration page. P0 has no per-device dismissal; the line ends when the deadline passes or the move is a year old.
 
 ### 6.7 Files
 
 | Surface | Web | iOS | Android |
 |---|---|---|---|
-| Types / DTOs | `P/types/src/placeIntelligence.ts`, `P/api/src/endpoints/place.ts` | `PlaceIntelligenceDTOs.swift` | `PlaceIntelligenceDtos.kt`, `PlaceJsonAdapters.kt` |
+| Types / DTOs | `P/types/src/placeIntelligence.ts`, `P/api/src/endpoints/place.ts` | `PlaceIntelligenceDTOs.swift`, `BallotDTOs.swift` (new) | `PlaceIntelligenceDtos.kt`, `PlaceJsonAdapters.kt`, `BallotDtos.kt` (new) |
 | Ballot card, timeline, stack, glyph | `W/components/ballot/*` (new) | `Features/Ballot/*` (new) | `ui/screens/ballot/*` (new) |
 | Place placement | `W/components/place/PlaceDashboardView.tsx` | `Features/Place/PlaceDashboardView.swift` | `ui/screens/place/PlaceDashboardScreen.kt` |
-| Today | `W/app/(app)/app/hub/today/page.tsx` | `Features/Place/Detail/PlaceTodayDetailContent.swift` | `ui/screens/place/detail/PlaceTodayDetailContent.kt` |
+| Today | `W/app/(app)/app/hub/today/page.tsx` | `Features/Place/Detail/PlaceTodayDetailContent.swift`; "Open your ballot" wired in `AddressTodayTabView.swift` and `PlaceDetailView.swift` | `ui/screens/place/detail/PlaceTodayDetailContent.kt`; wired in `TodayTabScreen.kt`, `PlaceDetailScreen.kt` and `RootTabScreen.kt` |
 | /start teaser | `W/components/place/StartFunnel.tsx` (`PreviewBody`) | not in P0 (web only) | not in P0 (web only) |
 | Dev preview | `W/app/dev/ballot/page.tsx` (404 in production) | n/a | n/a |
 
 Why the new component folders are needed: no existing card has a date timeline, a stacked-polygon drawing or a link well. The card frame and the icon tile are reused.
+
+The card fields decode tolerantly on every client. A malformed ballot field drops only that field, and the election section keeps rendering: iOS decodes the card field by field, and Android reads it in `PlaceJsonAdapters` after the section's own adapter has succeeded.
 
 ## 7. Backend layout (P0)
 
@@ -286,8 +290,8 @@ These use the existing funnel, with no political data: useful visits (official l
 | Check | Where | Status in this session |
 |---|---|---|
 | Reference data validation, date math, phases, governments parsing, composer on/off, teaser | Backend Jest | Run here |
-| Card, timeline, stack, teaser, Today rendering and states | Web Jest + `/dev/ballot` Playwright screenshots beside the rendered canvas boards | Run here |
-| iOS and Android card and Today | Written to the existing patterns | **Not compiled here.** No Xcode or Android SDK in this container. Needs CI (a PR runs `ios-ci` / `android-ci`) and a device pass |
+| Card, timeline, stack, teaser, Today rendering and states | Web Jest + `/dev/ballot` Playwright screenshots beside the rendered canvas boards | Run here. Cards differ from their boards on 0.00–0.01% of pixels; the governments finished frame on 0.09%. Story frames were checked against the Peel board at 0.6 s and 1.8 s |
+| iOS and Android card, governments view and Today | Written to the existing patterns, with unit tests for decoding, timeline geometry, placement and story timing | **Not compiled here.** iOS passed swiftformat, strict SwiftLint, and the icon, overline and token checks. Android passed the hex, token-literal and line-length checks. No Xcode or Android SDK in this container: a PR runs `ios-ci` / `android-ci`, then a device pass |
 | Real addresses, real links | Release check 1: a person opens every source and link; release check 2: three Clark County addresses and one address outside Washington through the real API | **Not done.** Egress is blocked here |
 | End-to-end on simulator, emulator and web | Existing acceptance catalog | **Not done** |
 
@@ -301,5 +305,6 @@ These use the existing funnel, with no political data: useful visits (official l
    - The Today titles.
    - The removal of the Mail Day line.
 3. **The P0 stack drawing.** Every layer is solid until verified-empty data exists.
-4. **Reminders.** None in P0. P0.5 adds one opt-in, off by default, at most three per election, with the copy on the proposed Pushes board.
-5. **Enabling.** `ballot_p0` goes to internal users first, then globally for the pilot.
+4. **The P0 peel.** It keeps the board's motion, and each caption carries only "Government k of at least N" and the name. It plays once, holds the finished frame, and starts there under reduced motion.
+5. **Reminders.** None in P0. P0.5 adds one opt-in, off by default, at most three per election, with the copy on the proposed Pushes board.
+6. **Enabling.** `ballot_p0` goes to internal users first, then globally for the pilot.
