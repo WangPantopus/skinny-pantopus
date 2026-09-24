@@ -2282,7 +2282,7 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
     // Verify listing exists and requester is the author
     const { data: listing, error: listingErr } = await supabaseAdmin
       .from('Listing')
-      .select('id, user_id, title, location_address, exact_address')
+      .select('id, user_id, title, location_address')
       .eq('id', listingId)
       .single();
 
@@ -2337,7 +2337,7 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
     if (grantCreated) {
       // Send system message in the listing-topic chat thread (or first shared room as fallback)
       try {
-        const address = listing.location_address || listing.exact_address || 'the exact address';
+        const address = listing.location_address || 'the exact address';
         const u1 = authorId < granteeUserId ? authorId : granteeUserId;
         const u2 = authorId < granteeUserId ? granteeUserId : authorId;
 
