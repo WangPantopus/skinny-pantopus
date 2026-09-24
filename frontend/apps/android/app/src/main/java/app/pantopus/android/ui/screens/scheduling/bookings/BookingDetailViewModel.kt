@@ -13,13 +13,13 @@ import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -124,29 +124,30 @@ class BookingDetailViewModel
                 _state.value = BookingDetailUiState.Error("Sign in to view this booking.")
                 return
             }
-            readJob = viewModelScope.launch {
-                val result = repo.getBooking(owner, bookingId)
-                if (generation != requestGeneration || actorId() != actor) return@launch
-                when (result) {
-                    is NetworkResult.Success ->
-                        _state.value =
-                            BookingDetailUiState.Loaded(
-                                result.data.toDetailData(owner),
-                            )
-                    is NetworkResult.Failure ->
-                        _state.value =
-                            when (errors.decode(result.error)) {
-                                is SchedulingError.Secret ->
-                                    BookingDetailUiState.Error(
-                                        "You don't have access to this booking.",
-                                    )
-                                else ->
-                                    BookingDetailUiState.Error(
-                                        "We couldn't load this booking. Check your connection and try again.",
-                                    )
-                            }
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getBooking(owner, bookingId)
+                    if (generation != requestGeneration || actorId() != actor) return@launch
+                    when (result) {
+                        is NetworkResult.Success ->
+                            _state.value =
+                                BookingDetailUiState.Loaded(
+                                    result.data.toDetailData(owner),
+                                )
+                        is NetworkResult.Failure ->
+                            _state.value =
+                                when (errors.decode(result.error)) {
+                                    is SchedulingError.Secret ->
+                                        BookingDetailUiState.Error(
+                                            "You don't have access to this booking.",
+                                        )
+                                    else ->
+                                        BookingDetailUiState.Error(
+                                            "We couldn't load this booking. Check your connection and try again.",
+                                        )
+                                }
+                    }
                 }
-            }
         }
 
         fun respond(status: String) {
@@ -155,20 +156,21 @@ class BookingDetailViewModel
             val actor = actorId() ?: return
             val requestGeneration = generation
             _rsvp.value = BookingRsvpUiState(busy = true)
-            rsvpJob = viewModelScope.launch {
-                val result = repo.rsvpBooking(owner, bookingId, status)
-                if (generation != requestGeneration || actorId() != actor) return@launch
-                when (result) {
-                    is NetworkResult.Success -> fetch()
-                    is NetworkResult.Failure -> {
-                        if (errors.decode(result.error) is SchedulingError.Secret) {
-                            fetch()
-                        } else {
-                            _rsvp.value = BookingRsvpUiState(error = "Couldn't save your response. Try again.")
+            rsvpJob =
+                viewModelScope.launch {
+                    val result = repo.rsvpBooking(owner, bookingId, status)
+                    if (generation != requestGeneration || actorId() != actor) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> fetch()
+                        is NetworkResult.Failure -> {
+                            if (errors.decode(result.error) is SchedulingError.Secret) {
+                                fetch()
+                            } else {
+                                _rsvp.value = BookingRsvpUiState(error = "Couldn't save your response. Try again.")
+                            }
                         }
                     }
                 }
-            }
         }
 
         fun toastConsumed() {

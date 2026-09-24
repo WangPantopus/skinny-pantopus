@@ -444,7 +444,11 @@ private fun DetailContent(
 }
 
 @Composable
-private fun ParticipantCard(data: BookingDetailData, rsvp: BookingRsvpUiState, onRespond: (String) -> Unit) {
+private fun ParticipantCard(
+    data: BookingDetailData,
+    rsvp: BookingRsvpUiState,
+    onRespond: (String) -> Unit,
+) {
     val participant = data.participant ?: return
     Column(Modifier.fillMaxWidth().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Text(
@@ -454,12 +458,13 @@ private fun ParticipantCard(data: BookingDetailData, rsvp: BookingRsvpUiState, o
         )
         Text("Only your participation details are shown.", color = PantopusColors.appTextSecondary)
         if (participant.isRequired != null) {
-            val response = when (participant.rsvpStatus) {
-                "going" -> "Going"
-                "maybe" -> "Maybe"
-                "declined" -> "Not going"
-                else -> "Not answered"
-            }
+            val response =
+                when (participant.rsvpStatus) {
+                    "going" -> "Going"
+                    "maybe" -> "Maybe"
+                    "declined" -> "Not going"
+                    else -> "Not answered"
+                }
             Text("Your response: $response", color = PantopusColors.appText)
             if (data.isActive) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
