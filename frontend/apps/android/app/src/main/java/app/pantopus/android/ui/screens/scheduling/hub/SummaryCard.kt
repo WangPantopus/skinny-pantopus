@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -153,7 +154,7 @@ private fun SummaryData(
                 value = formatDelta(summary.deltaPct),
                 label = "vs last month",
                 delta = summary.deltaPct,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(IntrinsicSize.Min),
             )
             StatDivider()
         }
@@ -222,7 +223,7 @@ private fun StatCell(
                     tint = color,
                 )
             }
-            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 22.sp, softWrap = delta == null)
         }
         Text(label, color = PantopusColors.appTextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp)
     }
