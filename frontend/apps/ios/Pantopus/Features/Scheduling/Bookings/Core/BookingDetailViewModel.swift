@@ -30,6 +30,7 @@ final class BookingDetailViewModel {
     private var generation = 0
 
     private var didLoad = false
+    private var loadedActor: String?
 
     init(
         owner: SchedulingOwner,
@@ -186,8 +187,9 @@ final class BookingDetailViewModel {
     // MARK: - Loading
 
     func load() async {
-        guard !didLoad else { return }
+        guard !didLoad || loadedActor != actorId else { return }
         didLoad = true
+        loadedActor = actorId
         await fetch()
     }
 

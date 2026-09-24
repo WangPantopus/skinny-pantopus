@@ -29,7 +29,7 @@ struct BookingDetailView: View {
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .task(id: viewModel.actorId) { await viewModel.refresh() }
+        .task(id: viewModel.actorId) { await viewModel.load() }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .sheet(item: $viewModel.activeSheet) { sheet in
             BookingActionSheetView(
