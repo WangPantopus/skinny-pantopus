@@ -25,6 +25,7 @@ export default function ListingDetailPage() {
     user,
     loading,
     loadError,
+    viewerError,
     retryLoad,
     listingId,
     isOwner,
@@ -80,6 +81,10 @@ export default function ListingDetailPage() {
         </div>
       </div>
     );
+  }
+
+  if (viewerError) {
+    return <ErrorState message={viewerError} onRetry={() => void retryLoad()} />;
   }
 
   if (!listing && loadError) {

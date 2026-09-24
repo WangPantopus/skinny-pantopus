@@ -21,6 +21,7 @@ export function useListingDetail() {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewerError, setViewerError] = useState<string | null>(null);
   // A listing load that failed for any reason but "not found": the page can't say the listing is gone.
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -60,6 +61,20 @@ export function useListingDetail() {
   const isOwner = !!(user?.id && listing?.user_id && String(user.id) === String(listing.user_id));
 
   // ── Fetch data ─────────────────────────────────────────────
+  const fetchUser = useCallback(async () => {
+    try {
+      const currentUser = await api.users.getMyProfile();
+      if (!currentUser?.id) throw new Error("Account unavailable");
+      setUser(currentUser);
+      setViewerError(null);
+      return currentUser;
+    } catch {
+      setUser(null);
+      setViewerError("Couldn't load your account. Try again to see the right listing actions.");
+      return null;
+    }
+  }, []);
+
   const fetchListing = useCallback(async () => {
     if (!listingId) return;
     try {
@@ -75,12 +90,6 @@ export function useListingDetail() {
       );
     }
   }, [listingId]);
-
-  const retryLoad = useCallback(async () => {
-    setLoading(true);
-    await fetchListing();
-    setLoading(false);
-  }, [fetchListing]);
 
   const fetchQuestions = useCallback(async () => {
     if (!listingId) return;
@@ -120,6 +129,13 @@ export function useListingDetail() {
     }
   }, [listingId]);
 
+  const retryLoad = useCallback(async () => {
+    setLoading(true);
+    const [currentUser] = await Promise.all([fetchUser(), fetchListing()]);
+    if (currentUser?.id) await fetchExistingOffer(currentUser.id);
+    setLoading(false);
+  }, [fetchUser, fetchListing, fetchExistingOffer]);
+
   const handleOfferSent = useCallback(async () => {
     setShowOfferModal(false);
     await fetchListing();
@@ -130,19 +146,11 @@ export function useListingDetail() {
     const token = getAuthToken();
     if (!token) { router.push('/login'); return; }
 
-    const fetchUser = async () => {
-      try {
-        const u = await api.users.getMyProfile();
-        setUser(u);
-        return u;
-      } catch { return null; }
-    };
-
     setLoading(true);
     Promise.all([fetchUser(), fetchListing(), fetchQuestions()]).then(([u]) => {
       if (u?.id) fetchExistingOffer(u.id);
     }).finally(() => setLoading(false));
-  }, [fetchListing, fetchQuestions, fetchExistingOffer, router]);
+  }, [fetchUser, fetchListing, fetchQuestions, fetchExistingOffer, router]);
 
   // ── Actions ────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -329,6 +337,7 @@ export function useListingDetail() {
     user,
     loading,
     loadError,
+    viewerError,
     retryLoad,
     listingId,
     isOwner,
