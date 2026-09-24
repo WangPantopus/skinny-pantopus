@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T02:38:01Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T02:51:41Z (active Codex coordinator)
 
-Master stays `2768759bd845a8582583688eb53671a65ba3c45d`. Bounded Shells C29/C33 is pre-reviewed PR403 atc63123f08; required native CI pending, no merge/count closure. S1 final iOS actuals are running, S3 final Android build is retrying a narrow Detekt correction, and Home privacy repair awaits final build/afters. Root reproduced and prepared Android Pulse pagination retry and Hub late-response repairs; new Discover sample-content defect remains open. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial, not full-app coverage. Full-app sweep remains ahead. Exact evidence, leases and limits are in the [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
+Master remains `2768759bd845a8582583688eb53671a65ba3c45d`. Package PR393/8e7f273df and Shells PR403/c63123f08 are reviewed within their recorded real-app boundaries; required CI is pending, no new merge. Root reproduced Android Pulse area-read failure issuing an unscoped feed beneath a selected-area label; existing-file repair da8cc8e64 awaits build and real afters, alongside pagination/Hub ordering repairs. S3 Android action checks continue; S1 iOS Decline no-request defect is being repaired; Home is verifying privacy write failures before its final build. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial, not full-app coverage. Full-app sweep remains ahead. Exact evidence/leases/limits: [live hub](workstreams/README.md). Founder§7/A17 remain reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
