@@ -132,7 +132,7 @@ final class SchedulingHubModel {
     private(set) var availabilityRules: [AvailabilityRuleDTO] = []
     private(set) var connectedCalendars: [ConnectedCalendarDTO] = []
     private(set) var canEdit = false
-    private var accessGeneration = 0
+    private var fetchGeneration = 0
     private(set) var accessDenied = false
     private(set) var isPaused = false
     /// The first business the user can manage (`GET /api/businesses/my-businesses`,
@@ -205,80 +205,92 @@ final class SchedulingHubModel {
     }
 
     private func fetch() async {
-        accessGeneration += 1
-        let generation = accessGeneration
+        fetchGeneration += 1
+        let generation = fetchGeneration
         let fetchOwner = owner
+        phase = .loading
+        previewTimes = nil
         canEdit = false
         accessDenied = false
         let pageResult: BookingPageResponse
         do {
-            pageResult = try await client.request(SchedulingEndpoints.getBookingPage(owner: owner))
-        } catch let error as SchedulingError {
-            if case .forbidden = error {
-                accessDenied = true
-                canEdit = false
-                phase = .error("You don't have access to this scheduling hub. Ask an owner for access.")
-            } else {
-                phase = .error(error.userMessage ?? "Couldn't load your scheduling hub.")
-            }
-            return
+            pageResult = try await client.request(SchedulingEndpoints.getBookingPage(owner: fetchOwner))
         } catch {
-            phase = .error("Couldn't load your scheduling hub.")
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
+            showPageError(error)
             return
         }
 
+        guard generation == fetchGeneration, owner == fetchOwner else { return }
         if case let .home(homeId) = fetchOwner {
             do {
                 let access: HomeAccessDTO = try await api.request(HomeAdminEndpoints.myAccess(homeId: homeId))
-                guard generation == accessGeneration, owner == fetchOwner else { return }
+                guard generation == fetchGeneration, owner == fetchOwner else { return }
                 canEdit = access.can("calendar.edit")
             } catch {
-                guard generation == accessGeneration, owner == fetchOwner else { return }
+                guard generation == fetchGeneration, owner == fetchOwner else { return }
                 phase = .error("Couldn't check your Home scheduling access. Try again.")
                 return
             }
-        } else if generation == accessGeneration, owner == fetchOwner {
+        } else if generation == fetchGeneration, owner == fetchOwner {
             canEdit = true
         }
 
-        let isPersonal = owner.isPersonal
+        let isPersonal = fetchOwner.isPersonal
 
-        async let typesR: EventTypesResponse? = try? api.request(SchedulingEndpoints.getEventTypes(owner: owner))
-        async let summaryR: HubSummary? = try? api.request(SchedulingEndpoints.getBookingsSummary(owner: owner))
-        async let upcomingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: owner, status: "upcoming"))
-        async let pendingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: owner, status: "pending"))
+        async let typesR: EventTypesResponse? = try? api.request(SchedulingEndpoints.getEventTypes(owner: fetchOwner))
+        async let summaryR: HubSummary? = try? api.request(SchedulingEndpoints.getBookingsSummary(owner: fetchOwner))
+        async let upcomingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: fetchOwner, status: "upcoming"))
+        async let pendingR: BookingsResponse? = try? api.request(SchedulingEndpoints.getBookings(owner: fetchOwner, status: "pending"))
         async let availR: AvailabilityResponse? = isPersonal ? (try? api.request(SchedulingEndpoints.getAvailability())) : nil
         async let calR: ConnectedCalendarsResponse? = isPersonal ? (try? api.request(SchedulingEndpoints.getConnectedCalendars())) : nil
-        async let namesR: [String: String] = resolveMemberNames()
+        async let namesR: [String: String] = resolveMemberNames(owner: fetchOwner)
 
+        let (typesResponse, summaryResponse, upcomingResponse, pendingResponse, availabilityResponse, calendarsResponse, names) =
+            await (typesR, summaryR, upcomingR, pendingR, availR, calR, namesR)
+        guard generation == fetchGeneration, owner == fetchOwner else { return }
         page = pageResult.page
         isPaused = pageResult.page.isPaused
-        let typesResponse = await typesR
         eventTypes = typesResponse?.eventTypes ?? []
-        let s = await summaryR
-        summary = s
-        summaryFailed = (s == nil)
-        upcoming = await (upcomingR)?.bookings ?? []
-        pending = await (pendingR)?.bookings ?? []
-        availabilityRules = await (availR)?.rules ?? []
-        connectedCalendars = await (calR)?.calendars ?? []
-        memberNames = await namesR
+        summary = summaryResponse
+        summaryFailed = (summaryResponse == nil)
+        upcoming = upcomingResponse?.bookings ?? []
+        pending = pendingResponse?.bookings ?? []
+        availabilityRules = availabilityResponse?.rules ?? []
+        connectedCalendars = calendarsResponse?.calendars ?? []
+        memberNames = names
 
         // A failed /event-types fetch is an error with retry — never the
         // first-run empty state. Enter .empty only on a successful zero-row
         // response (a 500/timeout must not render "set up your page").
         if typesResponse == nil {
             phase = .error("Couldn't load your scheduling hub.")
+        } else if upcomingResponse == nil || pendingResponse == nil {
+            phase = .error("Couldn't load your bookings. Try again.")
         } else {
             phase = eventTypes.isEmpty ? .empty : .loaded
-            if !eventTypes.isEmpty { await refreshPreviewTimes() }
+            if !eventTypes.isEmpty { await refreshPreviewTimes(owner: fetchOwner, generation: generation) }
+        }
+    }
+
+    private func showPageError(_ error: Error) {
+        if let schedulingError = error as? SchedulingError {
+            if case .forbidden = schedulingError {
+                accessDenied = true
+                canEdit = false
+                phase = .error("You don't have access to this scheduling hub. Ask an owner for access.")
+            } else {
+                phase = .error(schedulingError.userMessage ?? "Couldn't load your scheduling hub.")
+            }
+        } else {
+            phase = .error("Couldn't load your scheduling hub.")
         }
     }
 
     /// The first day's next open start times (up to three) of the first active
     /// event type, from the public slots read over the next 14 days, in the
     /// page's time zone.
-    private func refreshPreviewTimes() async {
+    private func refreshPreviewTimes(owner fetchOwner: SchedulingOwner, generation: Int) async {
         guard let slug = page?.slug, !slug.isEmpty,
               let type = eventTypes.first(where: { $0.isActive != false }) else {
             previewTimes = []
@@ -296,6 +308,7 @@ final class SchedulingHubModel {
                     tz: tz
                 )
             )
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
             let future = response.slots.filter { (SchedulingTime.parseUTC($0.start) ?? .distantPast) > now }
             let firstDay = future.first.flatMap { SchedulingTime.parseUTC($0.start) }.map { SchedulingTime.isoDay($0, tz: tz) }
             previewTimes = future
@@ -303,6 +316,7 @@ final class SchedulingHubModel {
                 .prefix(3)
                 .compactMap { SchedulingTime.localString(utcISO: $0.start, tz: tz, dateStyle: .none, timeStyle: .short) }
         } catch {
+            guard generation == fetchGeneration, owner == fetchOwner else { return }
             previewTimes = nil
         }
     }
@@ -322,18 +336,23 @@ final class SchedulingHubModel {
 
     func setPaused(_ paused: Bool) async {
         guard canEdit else { return }
+        let requestOwner = owner
+        let generation = fetchGeneration
         let previous = isPaused
         isPaused = paused
         do {
             let result: BookingPageResponse = try await client.request(
-                SchedulingEndpoints.updateBookingPage(owner: owner, BookingPageUpdateRequest(isPaused: paused))
+                SchedulingEndpoints.updateBookingPage(owner: requestOwner, BookingPageUpdateRequest(isPaused: paused))
             )
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             page = result.page
             isPaused = result.page.isPaused
         } catch let error as SchedulingError {
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
             if case .forbidden = error { canEdit = false }
         } catch {
+            guard generation == fetchGeneration, owner == requestOwner else { return }
             isPaused = previous
         }
     }
@@ -517,7 +536,7 @@ final class SchedulingHubModel {
     /// (home occupants / business team) into a user-id → name map so agenda
     /// rows can render the design's `user` glyph + host first name. Personal
     /// hubs skip the fetch; failures degrade to no attribution.
-    private func resolveMemberNames() async -> [String: String] {
+    private func resolveMemberNames(owner: SchedulingOwner) async -> [String: String] {
         switch owner {
         case .personal:
             return [:]

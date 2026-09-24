@@ -308,7 +308,7 @@ private fun HubLoadedBody(
     )
     Spacer(Modifier.height(Spacing.s3))
     when {
-        !state.canEdit -> HubReadOnlyStatus(pillar = state.pillar)
+        !state.canEdit -> HubReadOnlyStatus(pillar = state.pillar, isPaused = state.isPaused)
         state.isPaused -> HubPausedBanner(onResume = onResume)
         else -> HubPauseRow(pillar = state.pillar, isAccepting = true, onToggle = onToggle)
     }

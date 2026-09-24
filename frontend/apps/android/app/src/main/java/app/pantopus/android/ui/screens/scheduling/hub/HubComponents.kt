@@ -424,12 +424,17 @@ internal fun HubPausedBanner(onResume: () -> Unit) {
 }
 
 @Composable
-internal fun HubReadOnlyStatus(pillar: SchedulingPillar) {
+internal fun HubReadOnlyStatus(pillar: SchedulingPillar, isPaused: Boolean) {
     StatusCard {
         IconTile(icon = PantopusIcon.CalendarCheck, bg = pillar.accentBg, fg = pillar.accent)
         Spacer(Modifier.width(Spacing.s3))
         Column(Modifier.weight(1f)) {
-            Text("Accepting bookings", color = PantopusColors.appText, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+            Text(
+                if (isPaused) "Bookings are paused" else "Accepting bookings",
+                color = PantopusColors.appText,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.5.sp,
+            )
             Text("Managed by the home owner", color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
         }
         PantopusIconImage(icon = PantopusIcon.Lock, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)

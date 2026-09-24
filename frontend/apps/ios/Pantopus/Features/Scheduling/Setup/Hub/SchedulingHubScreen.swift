@@ -146,7 +146,7 @@ struct SchedulingHubScreen: View {
     @ViewBuilder
     private var statusRow: some View {
         if !model.canEdit {
-            HubReadOnlyStatus(owner: model.owner)
+            HubReadOnlyStatus(owner: model.owner, isPaused: model.isPaused)
         } else if model.isPaused {
             HubPausedBanner { Task { await model.setPaused(false) } }
         } else {

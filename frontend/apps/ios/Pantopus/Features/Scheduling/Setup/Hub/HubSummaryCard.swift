@@ -121,6 +121,7 @@ struct HubSummaryCard: View {
                     .tracking(-0.5)
                     .foregroundStyle(color)
                     .monospacedDigit()
+                    .fixedSize(horizontal: delta != nil, vertical: false)
             }
             Text(label)
                 .font(.system(size: 10.5, weight: .semibold))

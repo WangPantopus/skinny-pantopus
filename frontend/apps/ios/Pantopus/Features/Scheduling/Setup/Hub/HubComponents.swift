@@ -341,6 +341,7 @@ struct HubPausedBanner: View {
 /// Permission-gated read-only status row ("Managed by the home owner").
 struct HubReadOnlyStatus: View {
     let owner: SchedulingOwner
+    let isPaused: Bool
 
     private var theme: SchedulingIdentityTheme {
         owner.theme
@@ -350,7 +351,9 @@ struct HubReadOnlyStatus: View {
         HStack(spacing: Spacing.s3) {
             setupIconTile(.calendarCheck, bg: theme.accentBg, fg: theme.accent)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Accepting bookings").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.Color.appText)
+                Text(isPaused ? "Bookings are paused" : "Accepting bookings")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
                 Text("Managed by the home owner").font(.system(size: 11.5)).foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s2)

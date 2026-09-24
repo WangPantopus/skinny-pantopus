@@ -216,10 +216,10 @@ class SchedulingHubViewModel
             // pillar switch / refresh that cancels fetchJob cancels them too.
             val data =
                 coroutineScope {
-                    val eventTypesDef = async { repo.getEventTypes(owner).dataOrNull()?.eventTypes.orEmpty() }
+                    val eventTypesDef = async { repo.getEventTypes(owner).dataOrNull()?.eventTypes }
                     val summaryDef = async { repo.getBookingsSummary(owner) }
-                    val upcomingDef = async { repo.getBookings(owner, status = "upcoming").dataOrNull()?.bookings.orEmpty() }
-                    val pendingDef = async { repo.getBookings(owner, status = "pending").dataOrNull()?.bookings.orEmpty() }
+                    val upcomingDef = async { repo.getBookings(owner, status = "upcoming").dataOrNull()?.bookings }
+                    val pendingDef = async { repo.getBookings(owner, status = "pending").dataOrNull()?.bookings }
                     val availabilityDef = async { if (isPersonal) repo.getAvailability().dataOrNull()?.rules.orEmpty() else emptyList() }
                     val calendarsDef =
                         async { if (isPersonal) repo.getConnectedCalendars().dataOrNull()?.calendars.orEmpty() else emptyList() }
@@ -235,10 +235,18 @@ class SchedulingHubViewModel
                     )
                 }
             val eventTypes = data.eventTypes
-            this.eventTypes = eventTypes
-            val summaryResult = data.summaryResult
+            if (eventTypes == null) {
+                _state.value = SchedulingHubUiState.Error("Couldn't load event types. Try again.")
+                return
+            }
             val upcoming = data.upcoming
             val pending = data.pending
+            if (upcoming == null || pending == null) {
+                _state.value = SchedulingHubUiState.Error("Couldn't load your bookings. Try again.")
+                return
+            }
+            this.eventTypes = eventTypes
+            val summaryResult = data.summaryResult
             val availability = data.availability
             val calendars = data.calendars
 
@@ -357,11 +365,15 @@ class SchedulingHubViewModel
         fun setPaused(paused: Boolean) {
             if (!canEdit) return
             val current = _state.value as? SchedulingHubUiState.Loaded ?: return
+            val requestOwner = owner
+            val requestPillar = _pillar.value
             _state.value = current.copy(isPaused = paused)
             pauseJob?.cancel()
             pauseJob =
                 viewModelScope.launch {
-                    when (val r = repo.updateBookingPage(owner, UpdateBookingPageRequest(isPaused = paused))) {
+                    val r = repo.updateBookingPage(requestOwner, UpdateBookingPageRequest(isPaused = paused))
+                    if (owner != requestOwner || _pillar.value != requestPillar) return@launch
+                    when (r) {
                         is NetworkResult.Success -> {
                             page = r.data.page
                             val live = _state.value as? SchedulingHubUiState.Loaded ?: return@launch
@@ -747,10 +759,10 @@ private fun toneFor(seed: String): HubAvatarTone {
 
 /** Bundle of the hub's parallel reads, awaited together inside a [coroutineScope]. */
 private data class HubFetchData(
-    val eventTypes: List<EventTypeDto>,
+    val eventTypes: List<EventTypeDto>?,
     val summaryResult: NetworkResult<BookingSummaryResponse>,
-    val upcoming: List<BookingDto>,
-    val pending: List<BookingDto>,
+    val upcoming: List<BookingDto>?,
+    val pending: List<BookingDto>?,
     val availability: List<AvailabilityRuleDto>,
     val calendars: List<ConnectedCalendarDto>,
     /** Member user-id → display name for cross-owner host attribution (empty on personal hubs). */
