@@ -2027,6 +2027,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.Nearby -> {
+                navController.navigateToRootTab(PantopusRoute.Nearby)
+                DeepLinkRouter.consume()
+            }
             DeepLinkRouter.Destination.Connections -> {
                 navController.navigate(ChildRoutes.CONNECTIONS)
                 DeepLinkRouter.consume()

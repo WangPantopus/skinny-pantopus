@@ -60,6 +60,8 @@ object DeepLinkRouter {
 
         data object Home : Destination
 
+        data object Nearby : Destination
+
         data object Notifications : Destination
 
         data object Connections : Destination
@@ -555,6 +557,7 @@ object DeepLinkRouter {
                 }
             }
             "home" -> Destination.Home
+            "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "hub-today", "hub_today", "today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.

@@ -26,6 +26,7 @@ final class DeepLinkRouter {
     enum Destination: Equatable {
         case feed
         case home
+        case nearby
         case notifications
         case supportTrain(id: String)
         /// `pantopus://support-trains/:id/manage` — A13.13 organizer
@@ -476,6 +477,8 @@ final class DeepLinkRouter {
             return queryValue("surface", in: comps) == "personas" ? .beacons : .feed
         case "home":
             return .home
+        case "nearby":
+            return segments.count == 1 ? .nearby : .unknown(url)
         case "notifications":
             return .notifications
         case "support-trains", "support_train":

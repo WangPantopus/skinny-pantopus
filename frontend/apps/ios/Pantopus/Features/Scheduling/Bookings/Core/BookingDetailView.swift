@@ -29,7 +29,7 @@ struct BookingDetailView: View {
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await viewModel.load() }
+        .task(id: viewModel.actorId) { await viewModel.refresh() }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .sheet(item: $viewModel.activeSheet) { sheet in
             BookingActionSheetView(
@@ -103,12 +103,16 @@ struct BookingDetailView: View {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     header(booking)
                     if let actionError = viewModel.actionError { banner(actionError, tone: .error) }
-                    statusBanner(booking)
-                    requesterCard(booking)
-                    locationCard
-                    assignedMemberCard(booking)
-                    intakeCard(booking)
-                    timelineCard
+                    if let participant = viewModel.participant {
+                        participantCard(participant, booking: booking)
+                    } else {
+                        statusBanner(booking)
+                        requesterCard(booking)
+                        locationCard
+                        assignedMemberCard(booking)
+                        intakeCard(booking)
+                        timelineCard
+                    }
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s4)
@@ -155,7 +159,8 @@ struct BookingDetailView: View {
     }
 
     private var hasDock: Bool {
-        switch viewModel.status {
+        guard viewModel.participant == nil else { return false }
+        return switch viewModel.status {
         case .pending, .confirmed, .active,
              .completed, .past, .noShow,
              .cancelled, .declined:
@@ -176,10 +181,39 @@ struct BookingDetailView: View {
             Text(viewModel.headerTime)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            ownerPill(booking.ownerType)
+            if viewModel.participant == nil { ownerPill(booking.ownerType) }
         }
         .opacity(dimmed ? 0.7 : 1)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func participantCard(_ participant: BookingParticipantDTO, booking: BookingDTO) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text(participant.role == "assigned_host" ? "You're the assigned host" : "You're an attendee")
+                .font(.headline)
+            Text("Only your participation details are shown.")
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if participant.isRequired != nil {
+                let labels = ["going": "Going", "maybe": "Maybe", "declined": "Not going"]
+                Text("Your response: \(labels[participant.rsvpStatus ?? ""] ?? "Not answered")")
+                if booking.status == "pending" || booking.status == "confirmed" {
+                    HStack(spacing: Spacing.s3) {
+                        ForEach(["going", "maybe", "declined"], id: \.self) { value in
+                            Button(labels[value] ?? value) {
+                                Task { await viewModel.respond(value) }
+                            }
+                            .disabled(viewModel.savingRsvp)
+                        }
+                    }
+                    .tint(viewModel.accent)
+                }
+                if viewModel.savingRsvp { Text("Saving your response…").foregroundStyle(Theme.Color.appTextSecondary) }
+            }
+        }
+        .foregroundStyle(Theme.Color.appText)
+        .padding(Spacing.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.lg))
     }
 
     private func ownerPill(_ ownerType: String?) -> some View {

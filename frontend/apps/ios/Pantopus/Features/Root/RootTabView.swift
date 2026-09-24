@@ -237,6 +237,9 @@ public struct RootTabView: View {
         case .home:
             model.selected = .place
             _ = router.consume()
+        case .nearby:
+            model.selected = .nearby
+            _ = router.consume()
         case .resetPassword, .verifyEmail, .unknown:
             _ = router.consume()
         }

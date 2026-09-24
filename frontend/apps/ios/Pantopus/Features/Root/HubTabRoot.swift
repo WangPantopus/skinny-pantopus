@@ -1119,7 +1119,7 @@ public struct HubTabRoot: View {
         switch destination {
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
-             .creatorInbox, .fanInbox, .creatorAudienceMembers:
+             .creatorInbox, .fanInbox, .creatorAudienceMembers, .nearby:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
