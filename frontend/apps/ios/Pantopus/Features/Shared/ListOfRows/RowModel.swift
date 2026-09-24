@@ -581,6 +581,9 @@ public struct RowModel: Identifiable, Sendable {
     /// counter pill). Renders left-to-right.
     public let chips: [RowChip]?
 
+    /// Keep complete pills together when a caller has several status facts.
+    public let wrapChips: Bool
+
     /// Chip row rendered as a header **above** the title/body, in the same
     /// row as the kebab (when present). Used by My posts — `[intent chip]
     /// [time meta]  …  [kebab]`. Mutually compatible with `chips`: when
@@ -655,6 +658,7 @@ public struct RowModel: Identifiable, Sendable {
         bodyEmphasis: RowBodyEmphasis = .secondary,
         inlineChip: RowChip? = nil,
         chips: [RowChip]? = nil,
+        wrapChips: Bool = false,
         headerChips: [RowChip]? = nil,
         timeMeta: String? = nil,
         metaTail: String? = nil,
@@ -683,6 +687,7 @@ public struct RowModel: Identifiable, Sendable {
         self.bodyEmphasis = bodyEmphasis
         self.inlineChip = inlineChip
         self.chips = chips
+        self.wrapChips = wrapChips
         self.headerChips = headerChips
         self.timeMeta = timeMeta
         self.metaTail = metaTail

@@ -893,6 +893,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             trailing: .priceStack(amount: amount, sublabel: asking),
             onTap: context.callbacks.onTap,
             chips: chips,
+            wrapChips: true,
             metaTail: metaTail(for: offer, index: context.index, total: context.total, now: context.now),
             note: offer.message?.isEmpty == false ? offer.message : nil,
             highlight: context.isLeading ? .leading : nil,
