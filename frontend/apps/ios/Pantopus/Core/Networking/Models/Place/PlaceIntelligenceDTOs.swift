@@ -1037,11 +1037,23 @@ public struct PlaceCivicElectionData: Decodable, Sendable, Hashable {
     public let pollingPlace: PlacePollingPlace?
     /// Ballot races; may be empty (summary only) on the dashboard.
     public let ballot: [PlaceBallotRace]
+    /// Ballot P0 card fields (`ballot_p0` flag); nil when not sent.
+    public let ballotCard: BallotSummary?
 
     private enum CodingKeys: String, CodingKey {
         case name, date, ballot
         case daysUntil = "days_until"
         case pollingPlace = "polling_place"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        date = try c.decode(String.self, forKey: .date)
+        daysUntil = try c.decode(Int.self, forKey: .daysUntil)
+        pollingPlace = try c.decodeIfPresent(PlacePollingPlace.self, forKey: .pollingPlace)
+        ballot = try c.decode([PlaceBallotRace].self, forKey: .ballot)
+        ballotCard = BallotSummary.decodeIfPresent(from: decoder, fallbackTitle: "Your ballot")
     }
 }
 

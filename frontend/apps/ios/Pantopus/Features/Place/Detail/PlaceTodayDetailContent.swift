@@ -34,6 +34,18 @@ struct PlaceTodayDetailContent: View {
                 }
             }
 
+            // Ballot P0 (ballot_p0): ballot week and "Moved this year?",
+            // only when the server says either applies.
+            if let election = vm.section(.civicElection, in: intel),
+               election.status == .ready,
+               let card = election.civicElection?.ballotCard,
+               BallotTodayCard.applies(card) {
+                BallotTodayCard(card: card) {
+                    DeepLinkRouter.shared.handle(path: "/place/\(vm.homeId)")
+                }
+                .padding(.top, Spacing.s4)
+            }
+
             // Verdicts, not readings. Silent when there is nothing to
             // answer — an empty verdict row is worse than no row.
             if let goodDay = vm.section(.goodDayTo, in: intel),

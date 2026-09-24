@@ -78,6 +78,11 @@ final class ColorTokenTests: XCTestCase {
         assertColor(Theme.Color.appHover, hex: "#f3f4f6")
     }
 
+    func testBallotIllustration() {
+        assertColor(Theme.Color.ballotStackBase, hex: "#eef1f5")
+        assertColor(Theme.Color.ballotWait, hex: "#9ca3af")
+    }
+
     func testCategories() {
         assertColor(Theme.Color.handyman, hex: "#f97316")
         assertColor(Theme.Color.cleaning, hex: "#27ae60")

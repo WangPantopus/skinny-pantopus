@@ -256,6 +256,14 @@ public extension Theme.Color {
     /// hero, archival document previews).
     static let paperCream = SwiftUI.Color("Neutral/PaperCream", bundle: Theme.bundle)
 
+    // MARK: - Ballot illustration
+
+    /// Base layer of the Ballot government stack — `#eef1f5`. An
+    /// illustration grey from the Pantopus Ballot canvas, not a UI surface.
+    static let ballotStackBase = SwiftUI.Color("Ballot/StackBase", bundle: Theme.bundle)
+    /// The Ballot timeline's "waiting for ballots" segment — `#9ca3af`.
+    static let ballotWait = SwiftUI.Color("Ballot/Wait", bundle: Theme.bundle)
+
     // MARK: - Category accents
 
     /// Category: handyman — `#f97316`.
