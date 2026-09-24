@@ -121,35 +121,7 @@ struct PackageDetailLayout: View {
     }
 
     private func makeAIElf() -> AIElfStripContent? {
-        let bullets: [AIElfBullet]
-        let headline: String
-        let summary: String
-        switch package.status {
-        case .delivered:
-            headline = "Delivered to your porch"
-            summary = "Pantopus matched the carrier's proof photo to your verified address."
-            bullets = [
-                AIElfBullet(icon: .camera, label: "Proof photo verified", text: package.deliveryPhoto?.location),
-                AIElfBullet(icon: .mapPin, label: "GPS match", text: package.deliveryPhoto?.verificationLabel ?? "verified"),
-                AIElfBullet(icon: .shieldCheck, label: "No signature required", text: nil)
-            ]
-        case .outForDelivery:
-            headline = "Out for delivery today"
-            summary = package.statusDetail
-            bullets = [
-                AIElfBullet(icon: .package, label: "Carrier is moving", text: "we'll ping when scanned"),
-                AIElfBullet(icon: .clock, label: package.etaLine ?? "ETA pending", text: nil),
-                AIElfBullet(icon: .shieldCheck, label: "Delivery photo expected", text: nil)
-            ]
-        case .inTransit, .shipped:
-            headline = "Pantopus is watching this delivery"
-            summary = "We'll surface scans and the ETA window as soon as the carrier hands off."
-            bullets = [
-                AIElfBullet(icon: .arrowRight, label: "In transit", text: package.statusDetail),
-                AIElfBullet(icon: .clock, label: package.etaLine ?? "ETA pending", text: nil)
-            ]
-        }
-        return AIElfStripContent(headline: headline, summary: summary, bullets: bullets)
+        AIElfStripContent(headline: package.statusTitle, summary: package.statusDetail, bullets: [])
     }
 
     private func makeAttachments() -> AttachmentsRowContent? {
