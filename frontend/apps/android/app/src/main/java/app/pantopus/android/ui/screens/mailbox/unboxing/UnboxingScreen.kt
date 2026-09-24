@@ -49,6 +49,7 @@ import app.pantopus.android.ui.components.OcrFactsList
 import app.pantopus.android.ui.components.OcrFactsStatus
 import app.pantopus.android.ui.components.OcrFactsTone
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.screens.mailbox.unboxing.components.CaptureFilmstrip
 import app.pantopus.android.ui.screens.mailbox.unboxing.components.DrawerSuggestionCard
 import app.pantopus.android.ui.screens.mailbox.unboxing.components.FiledSummary
@@ -287,7 +288,7 @@ private fun CaptureBody(
         onChooseAnother = {},
     )
     if (content.facts.isNotEmpty()) FactsList(facts = content.facts, locked = false)
-    AssemblyGigCard(isBusy = isBusy, onPost = onPostAssemblyGig)
+    if (PACKAGE_GIG_AVAILABLE) AssemblyGigCard(isBusy = isBusy, onPost = onPostAssemblyGig)
 }
 
 @Composable
@@ -309,7 +310,7 @@ private fun FiledBody(
     )
     Box(modifier = Modifier.testTag("unboxing_elf")) { AIElfStripView(content = content.filedElf) }
     if (content.facts.isNotEmpty()) FactsList(facts = content.facts, locked = true)
-    AssemblyGigCard(isBusy = isBusy, onPost = onPostAssemblyGig)
+    if (PACKAGE_GIG_AVAILABLE) AssemblyGigCard(isBusy = isBusy, onPost = onPostAssemblyGig)
     ScanNextCard(accent = accent, accentDark = accentDark, accentBg = accentBg, onTap = onScanNext)
 }
 

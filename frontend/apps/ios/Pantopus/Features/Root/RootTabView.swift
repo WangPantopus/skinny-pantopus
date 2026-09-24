@@ -72,6 +72,9 @@ public enum MailSegment: String, CaseIterable, Hashable {
 public final class MailTabStore {
     public static let shared = MailTabStore()
     public var pendingSegment: MailSegment?
+    /// Segment roots showing; the switch hides below a root (switching would discard it).
+    public var mailboxAtRoot = true
+    public var messagesAtRoot = true
     public init() {}
 }
 
@@ -326,18 +329,20 @@ public struct MailTabRoot: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Mail", selection: $segment) {
-                ForEach(MailSegment.allCases, id: \.self) { seg in
-                    Text(seg.label)
-                        .tag(seg)
-                        .accessibilityIdentifier("mailSegment.\(seg.rawValue)")
+            if segment == .mailbox ? store.mailboxAtRoot : store.messagesAtRoot {
+                Picker("Mail", selection: $segment) {
+                    ForEach(MailSegment.allCases, id: \.self) { seg in
+                        Text(seg.label)
+                            .tag(seg)
+                            .accessibilityIdentifier("mailSegment.\(seg.rawValue)")
+                    }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s2)
+                .padding(.bottom, Spacing.s2)
+                .accessibilityIdentifier("mailSegments")
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Spacing.s4)
-            .padding(.top, Spacing.s2)
-            .padding(.bottom, Spacing.s2)
-            .accessibilityIdentifier("mailSegments")
 
             switch segment {
             case .mailbox:

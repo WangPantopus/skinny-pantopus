@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.UnboxingPackageDto
 import app.pantopus.android.ui.components.OcrFact
 import app.pantopus.android.ui.components.OcrFactTag
 import app.pantopus.android.ui.components.OcrFactsTone
+import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfStripContent
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -139,7 +140,7 @@ object UnboxingProjection {
                             "folder and marks this unboxing complete. Condition photos you take here attach " +
                             "to the package record.",
                     bullets =
-                        listOf(
+                        listOfNotNull(
                             AIElfBullet(
                                 id = "ub-elf-c1",
                                 icon = PantopusIcon.FolderLock,
@@ -152,12 +153,13 @@ object UnboxingProjection {
                                 label = "Condition photos",
                                 text = photosLabel(shots.size),
                             ),
+                            // Offered only while posting a package task is available.
                             AIElfBullet(
                                 id = "ub-elf-c3",
                                 icon = PantopusIcon.UsersRound,
                                 label = "Need a hand?",
                                 text = "post an assembly task",
-                            ),
+                            ).takeIf { PACKAGE_GIG_AVAILABLE },
                         ),
                 ),
             filedElf =

@@ -22,6 +22,12 @@
 import Foundation
 import Observation
 
+/// Posting a task for a package isn't available yet: the package task routes answer 501 until package
+/// tasks are designed. While this is false, no screen offers the package-task flow.
+public enum PackageGigAvailability {
+    public static let isAvailable = false
+}
+
 /// Blocking alert (mirrors RN's `Alert.alert` failure paths).
 public struct PackageGigAlert: Sendable, Hashable, Identifiable {
     public let title: String
