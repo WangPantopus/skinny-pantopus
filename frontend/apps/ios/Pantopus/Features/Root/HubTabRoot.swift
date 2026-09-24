@@ -1991,9 +1991,6 @@ public struct HubTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in push(.publicProfile(userId: userId)) }
                 },
-                onTranslate: {
-                    Task { @MainActor in push(.mailTranslation(mailId: mailId)) }
-                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.

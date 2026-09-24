@@ -121,10 +121,16 @@ const dismissMemorySchema = Joi.object({
 });
 
 // ── Vacation ──
+const vacationDay = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom((value, helpers) => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return value.startsWith('0000-') || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
+    ? helpers.error('date.base') : value;
+});
 const startVacationSchema = Joi.object({
+  holdId: Joi.string().uuid().optional(),
   homeId: Joi.string().uuid().required(),
-  startDate: Joi.string().isoDate().required(),
-  endDate: Joi.string().isoDate().required(),
+  startDate: vacationDay.required(),
+  endDate: vacationDay.required(),
   holdAction: Joi.string().valid('hold_in_vault', 'forward_to_household', 'notify_urgent_only').required(),
   packageAction: Joi.string().valid('hold_at_carrier', 'ask_neighbor', 'locker').required(),
   autoNeighborRequest: Joi.boolean().default(false),
@@ -1042,7 +1048,9 @@ router.post('/tasks/from-mail', verifyToken, validate(createTaskSchema), async (
     const result = await homeRecordService.mutate({ homeId, actorId: req.user.id, kind: 'task', action: 'create',
       sourceMailId: mailId, payload: { task_type: 'reminder', title, description: description ?? null,
         due_at: dueAt ?? null, priority, status: 'open' } });
-    res.json({ task: mailTaskDto(result.record) });
+    // A creator re-submitting a mail that already has their task gets that task back; say so, so apps don't
+    // announce a new one.
+    res.json({ task: mailTaskDto(result.record), ...(result.replayed === true ? { replayed: true } : {}) });
   } catch (error) { homeRecordService.sendError(res, error); }
 });
 router.patch('/tasks/:id', verifyToken, validate(updateTaskSchema), async (req, res) => {
@@ -1576,116 +1584,68 @@ router.post('/memory/year/:year/share', verifyToken, async (req, res) => {
 //                     VACATION ENDPOINTS
 // ====================================================================
 
-// GET /vacation/status — current vacation hold status
+// GET /vacation/status — reconcile only this user's normal date lifecycle.
 router.get('/vacation/status', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const now = new Date().toISOString();
-
-    const { data: holds } = await supabaseAdmin
-      .from('VacationHold')
-      .select('*')
-      .eq('user_id', userId)
-      .in('status', ['scheduled', 'active'])
-      .order('start_date');
-
-    const active = (holds || []).find(h => h.status === 'active') || null;
-    const upcoming = (holds || []).find(h => h.status === 'scheduled') || null;
-
-    res.json({ active, upcoming });
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+      p_user_id: req.user.id, p_action: 'status',
+    });
+    if (error) throw error;
+    res.json({ active: data.active, upcoming: data.upcoming });
   } catch (err) {
     logger.error('[P3] GET /vacation/status failed', { error: err.message });
     res.status(500).json({ error: 'Failed to get vacation status' });
   }
 });
 
-// POST /vacation/start — create vacation hold
+// POST /vacation/start — save dates and their summary in one transaction.
 router.post('/vacation/start', verifyToken, validate(startVacationSchema), async (req, res) => {
   try {
     const userId = req.user.id;
-    const { homeId, startDate, endDate, holdAction, packageAction, autoNeighborRequest } = req.body;
-
-    // Verify home access
+    const { holdId, homeId, startDate, endDate, holdAction, packageAction, autoNeighborRequest } = req.body;
+    if (endDate < startDate) {
+      return res.status(400).json({ error: 'Return date must be on or after departure.' });
+    }
     const homeIds = await getAccessibleHomeIds(userId);
     if (!homeIds.includes(homeId)) {
       return res.status(403).json({ error: 'Not a member of this home' });
     }
-
-    // Determine status
-    const now = new Date();
-    const start = new Date(startDate);
-    const status = start <= now ? 'active' : 'scheduled';
-
-    const { data: hold, error } = await supabaseAdmin
-      .from('VacationHold')
-      .insert({
-        user_id: userId,
-        home_id: homeId,
-        start_date: startDate,
-        end_date: endDate,
-        hold_action: holdAction,
-        package_action: packageAction,
-        auto_neighbor_request: autoNeighborRequest || false,
-        status,
-        items_held_count: 0,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Update user vacation mode
-    await supabaseAdmin
-      .from('User')
-      .update({
-        vacation_mode: true,
-        vacation_start: startDate,
-        vacation_end: endDate,
-      })
-      .eq('id', userId);
-
-    logMailEvent(userId, 'vacation_started', null, {
-      holdId: hold.id, startDate, endDate, holdAction, packageAction,
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+      p_user_id: userId, p_action: 'start', p_hold_id: holdId || null, p_home_id: homeId,
+      p_start_date: startDate, p_end_date: endDate,
+      p_hold_action: holdAction, p_package_action: packageAction,
+      p_auto_neighbor_request: autoNeighborRequest || false,
     });
-    res.json({ hold });
+    if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
+      return res.status(403).json({ error: 'Not your vacation hold' });
+    }
+    if (error?.message === 'VACATION_HOLD_NOT_EDITABLE') {
+      return res.status(409).json({ error: 'These travel dates are no longer editable. Reload to see your current dates.' });
+    }
+    if (error) throw error;
+    if (!data.reused) {
+      logMailEvent(userId, 'vacation_started', null, {
+        holdId: data.hold.id, startDate, endDate, holdAction, packageAction,
+      });
+    }
+    res.json({ hold: data.hold });
   } catch (err) {
     logger.error('[P3] POST /vacation/start failed', { error: err.message });
     res.status(500).json({ error: 'Failed to start vacation' });
   }
 });
 
-// POST /vacation/cancel — cancel vacation hold
+// POST /vacation/cancel — leave any other surviving hold's summary intact.
 router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { holdId } = req.body;
-
-    const { data: hold } = await supabaseAdmin
-      .from('VacationHold')
-      .select('user_id')
-      .eq('id', holdId)
-      .single();
-
-    if (!hold || hold.user_id !== userId) {
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+      p_user_id: req.user.id, p_action: 'cancel', p_hold_id: req.body.holdId,
+    });
+    if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
       return res.status(403).json({ error: 'Not your vacation hold' });
     }
-
-    await supabaseAdmin
-      .from('VacationHold')
-      .update({ status: 'cancelled' })
-      .eq('id', holdId);
-
-    // Clear user vacation mode
-    await supabaseAdmin
-      .from('User')
-      .update({
-        vacation_mode: false,
-        vacation_start: null,
-        vacation_end: null,
-      })
-      .eq('id', userId);
-
-    logMailEvent(userId, 'vacation_cancelled', null, { holdId });
+    if (error) throw error;
+    if (!data.reused) logMailEvent(req.user.id, 'vacation_cancelled', null, { holdId: req.body.holdId });
     res.json({ message: 'Vacation hold cancelled' });
   } catch (err) {
     logger.error('[P3] POST /vacation/cancel failed', { error: err.message });

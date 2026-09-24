@@ -48,8 +48,8 @@ public struct MailTaskListView: View {
                 set: { if !$0 { viewModel.alert = nil } }
             ),
             presenting: viewModel.alert
-        ) { _ in
-            Button("OK", role: .cancel) { viewModel.alert = nil }
+        ) { shown in
+            Button(shown.openTaskId == nil ? "OK" : "Open task", role: .cancel) { viewModel.confirmAlert(shown) }
         } message: { alert in
             Text(alert.message)
         }

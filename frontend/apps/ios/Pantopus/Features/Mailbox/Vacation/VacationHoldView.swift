@@ -26,6 +26,8 @@ public struct VacationHoldView: View {
     /// A14.8 — "End hold early" is destructive (the backend marks the
     /// hold `cancelled` and clears `User.vacation_mode`), so it confirms.
     @State private var showsEndHoldConfirm = false
+    /// The From / To row whose date picker sheet is open.
+    @State private var pickingDate: VacationDateField?
 
     public init(viewModel: VacationHoldViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -40,8 +42,14 @@ public struct VacationHoldView: View {
                     case let .scheduling(draft):
                         VacationSchedulingBody(
                             draft: draft,
-                            onPickFromDate: { viewModel.tapFromDate() },
-                            onPickToDate: { viewModel.tapToDate() },
+                            onPickFromDate: {
+                                viewModel.tapFromDate()
+                                pickingDate = .from
+                            },
+                            onPickToDate: {
+                                viewModel.tapToDate()
+                                pickingDate = .to
+                            },
                             onToggleScope: { kind, isOn in viewModel.toggleScope(kind, isOn: isOn) },
                             onToggleForwarding: { viewModel.toggleForwarding($0) },
                             onTapForwarding: { viewModel.tapForwarding() },
@@ -65,6 +73,22 @@ public struct VacationHoldView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         .onAppear { Analytics.track(.screenVacationHoldViewed(mode: modeAnalyticsTag)) }
+        .sheet(item: $pickingDate) { field in
+            if case let .scheduling(draft) = viewModel.mode {
+                VacationDatePickerSheet(
+                    title: field == .from ? "From" : "To",
+                    day: field == .from ? draft.fromDate : draft.toDate,
+                    earliestDay: field == .from ? VacationDay.day(fromLocal: Date()) : draft.fromDate
+                ) { day in
+                    if field == .from {
+                        viewModel.setFromDate(day)
+                    } else {
+                        viewModel.setToDate(day)
+                    }
+                    pickingDate = nil
+                }
+            }
+        }
         .confirmationDialog(
             "End your vacation hold?",
             isPresented: $showsEndHoldConfirm,
@@ -638,11 +662,14 @@ private struct VacationAvatar: View {
 
 // MARK: - Formatting helpers
 
+/// Draft days are UTC midnights (`VacationDay`), so they format in UTC:
+/// in the user's own zone a UTC midnight can read as the day before.
 enum VacationHoldFormatter {
     /// "Tue, May 28" — date-row value.
     static func weekdayShort(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC") ?? .current
         formatter.dateFormat = "EEE, MMM d"
         return formatter.string(from: date)
     }
@@ -651,11 +678,69 @@ enum VacationHoldFormatter {
     static func weekdayLabel(_ date: Date) -> String {
         let weekday = DateFormatter()
         weekday.locale = Locale(identifier: "en_US_POSIX")
+        weekday.timeZone = TimeZone(identifier: "UTC") ?? .current
         weekday.dateFormat = "EEE"
         let day = DateFormatter()
         day.locale = Locale(identifier: "en_US_POSIX")
+        day.timeZone = TimeZone(identifier: "UTC") ?? .current
         day.dateFormat = "MMM d"
         return "\(weekday.string(from: date)) · \(day.string(from: date))"
+    }
+}
+
+// MARK: - Date picker
+
+enum VacationDateField: String, Identifiable {
+    case from, to
+
+    var id: String {
+        rawValue
+    }
+}
+
+/// Graphical date picker sheet for the From / To rows (the same sheet
+/// pattern as the block-off-time date field). Works in the user's time zone
+/// and hands back a `VacationDay` day.
+private struct VacationDatePickerSheet: View {
+    let title: String
+    let earliestDay: Date
+    let onDone: (Date) -> Void
+    @State private var selection: Date
+
+    init(title: String, day: Date, earliestDay: Date, onDone: @escaping (Date) -> Void) {
+        self.title = title
+        self.earliestDay = earliestDay
+        self.onDone = onDone
+        _selection = State(initialValue: VacationDay.localDate(fromDay: max(day, earliestDay)))
+    }
+
+    var body: some View {
+        VStack(spacing: Spacing.s4) {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+                .padding(.top, Spacing.s4)
+            DatePicker(
+                title,
+                selection: $selection,
+                in: VacationDay.localDate(fromDay: earliestDay)...,
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .tint(Theme.Color.primary600)
+            .labelsHidden()
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityIdentifier("vacationHoldDatePicker")
+            PrimaryButton(title: "Done") {
+                await MainActor.run { onDone(VacationDay.day(fromLocal: selection)) }
+            }
+            .padding(.horizontal, Spacing.s4)
+            Spacer(minLength: 0)
+        }
+        .background(Theme.Color.appBg)
+        // The graphical calendar, title and Done don't fit the medium detent.
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 

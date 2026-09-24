@@ -158,7 +158,9 @@ fun MailTaskListScreen(
             title = { Text(pending.title) },
             text = { Text(pending.message) },
             confirmButton = {
-                TextButton(onClick = viewModel::dismissAlert) { Text("OK") }
+                TextButton(onClick = viewModel::confirmAlert) {
+                    Text(if (pending.openTaskId != null) "Open task" else "OK")
+                }
             },
         )
     }
