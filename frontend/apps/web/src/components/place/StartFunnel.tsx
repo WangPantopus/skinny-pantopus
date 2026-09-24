@@ -57,6 +57,7 @@ import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
+import BallotTeaser from '@/components/ballot/BallotTeaser';
 
 
 // ── Brand lockup + static region pill ───────────────────────
@@ -417,6 +418,16 @@ export function PreviewBody({ preview, onWall }: { preview: PlacePreview; onWall
           onFollowUp={onWall}
           icon={aha.section_id ? AHA_ICON[aha.section_id] : undefined}
           source={ahaSection?.source ?? null}
+          className="mb-6"
+        />
+      ) : null}
+
+      {/* Ballot P0 (ballot_p0): the election card under the aha, per the
+          guide §5.8 — the aha ranking itself is unchanged. */}
+      {preview.ballot_teaser ? (
+        <BallotTeaser
+          teaser={preview.ballot_teaser}
+          address={preview.place?.address || 'This address'}
           className="mb-6"
         />
       ) : null}

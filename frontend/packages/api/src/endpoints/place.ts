@@ -14,6 +14,7 @@
 
 import { get, put } from '../client';
 import type {
+  BallotTeaser,
   PlaceIntelligence,
   PlaceDensityBucket,
   PlaceGroup,
@@ -142,6 +143,11 @@ export interface PlacePreview {
   sections?: PlaceSection[];
   locked?: PlacePreviewLockedSection[];
   disclaimer?: string;
+  /**
+   * Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
+   * Absent while the `ballot_p0` flag is off; null when it timed out.
+   */
+  ballot_teaser?: BallotTeaser | null;
 }
 
 /**
