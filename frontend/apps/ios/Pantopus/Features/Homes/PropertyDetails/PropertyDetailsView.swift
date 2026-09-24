@@ -137,7 +137,7 @@ private struct PropertyHero: View {
                     .padding(.top, Spacing.s1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            PropertyMap(latitude: address.latitude, longitude: address.longitude)
+            mapPreview
                 .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(
@@ -156,7 +156,25 @@ private struct PropertyHero: View {
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(address.line1), \(address.line2). Household")
+        .accessibilityLabel(
+            "\(address.line1), \(address.line2). Household" + (address.hasMapLocation ? "" : ". Map unavailable")
+        )
+    }
+
+    @ViewBuilder private var mapPreview: some View {
+        if address.hasMapLocation, let latitude = address.latitude, let longitude = address.longitude {
+            PropertyMap(latitude: latitude, longitude: longitude)
+        } else {
+            VStack(spacing: Spacing.s1) {
+                Icon(.mapPin, size: 18, color: Theme.Color.appTextMuted)
+                Text("Map unavailable")
+                    .font(.system(size: 10, weight: .medium))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.Color.appSurfaceSunken)
+        }
     }
 }
 

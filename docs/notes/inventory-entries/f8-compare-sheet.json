@@ -1,0 +1,33 @@
+{
+ "id": "f8-compare-sheet",
+ "name": "Compare with a friend (mint + consent)",
+ "feature": "F8",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "Opened from a secondary button under the aha card in the preview step and from the reveal ('Send yours back').",
+ "purpose": "Mint and send a compare link in one tap, showing \u2014 before the link exists \u2014 exactly what the card will and will not reveal.",
+ "contents": "A live preview of the card at share-card proportions; the privacy line 'This card shows readings and your city, never your address.'; an off-by-default 'Show my first name on the card' toggle + field; 'Copy link' on desktop / 'Share' on mobile. Fires t0_share_clicked with method 'compare'.",
+ "states": [
+  "idle",
+  "name field shown",
+  "minting",
+  "mint error",
+  "rate limited (distinct copy, not a generic error)",
+  "copied (18s confirmation)",
+  "share sheet opened",
+  "share cancelled (must not read as failure)",
+  "reciprocal variant from the reveal"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Under the aha card in the T0 preview",
+  "Compare reveal 'Send yours back'",
+  "WallBar footer (demoted)"
+ ],
+ "visualization": "The card preview is the top of the sheet, at the proportions it will unfurl in a messenger, with the privacy sentence directly beneath it and the button last \u2014 so consent precedes the link rather than following it.",
+ "uxNote": "The doc puts the privacy sentence in its own \u00a7Privacy section; if it lands after the link is made, the consent is retroactive. Also keep 'Compare with a friend' out of the WallBar footer, which already carries share + app-download \u2014 a third link there becomes a 3-up row on a phone.",
+ "effortDays": 1
+}

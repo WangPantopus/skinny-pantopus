@@ -1,0 +1,6 @@
+# Research-backed changes for f3b-locked-action-row
+
+- Reason text in text.strong on sunken (9.37:1) or text.secondary on base; lock glyph at least 3:1; link in primary.700. Only the disabled control itself may fall below 4.5:1 [a11y, trust]
+- The row names who can act: 'Maya can add bills here' / 'Verify address'. Tapping the dimmed control opens the same reason [household, trust]
+- T1 users never see attested controls; show 'Claim this address' instead. If no path exists, drop the link [trust]
+- (research contradiction, topic trust-provenance-privacy: where facts co) v1: 'Colour: muted text on the sunken surface with a border-subtle hairline.' | research: WCAG 1.4.3 exempts only text inside an inactive component. This row is live explanatory text with a working link, so it needs 4.5:1. House tokens give text.muted on sunken 2.31:1 and text.secondary on sunken 4.39:1, both failing. The 'Verify address' link in primary.DEFAULT on white is 4.10:1, also failing at 13–14px. | do: Keep the calm, non-error tone, but specify text.strong on sunken (9.37:1) or text.secondary on base/raised (4.83 / 4.63:1), a lock glyph of at least 3:1, and the link in primary.700. Only the disabled control above the row may drop below 4.5:1.

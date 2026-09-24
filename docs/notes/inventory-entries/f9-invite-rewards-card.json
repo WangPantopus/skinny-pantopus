@@ -1,0 +1,32 @@
+{
+ "id": "f9-invite-rewards-card",
+ "name": "Invite rewards (what a referral actually pays)",
+ "feature": "F9",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Nearby, above the cells map. Net-new on web (the getInviteProgress client has zero callers and web renders no referral UI at all); an extend of ProfileInsightCards on iOS and Android, moved off the profile.",
+ "purpose": "State honestly what a referral pays \u2014 1 \u2192 an extra postcard invite this week, 3 \u2192 cells-map detail, 10 \u2192 Founding Neighbor badge \u2014 and put it where the link is actually shared.",
+ "contents": "Converted vs invited counts; the copyable referral link at the top; the live reward the user can feel today ('4 postcard invites this week \u2014 3 base + 1 earned'); tier rows with real payouts, each tappable to its destination; priority_matching dropped (gig matching does not exist); tier 4 renamed Block Builder. The tier table is served in the payload, not mirrored a fourth time in client code.",
+ "states": [
+  "zero referrals (the realistic pilot state \u2014 link still copyable)",
+  "partial progress",
+  "all unlocked",
+  "loading",
+  "error",
+  "5-minute cache serving stale counts right after a conversion"
+ ],
+ "phase": "pilot",
+ "origin": "merged",
+ "entryPoints": [
+  "Nearby tab",
+  "Post-share confirmation",
+  "Block Founders allowance line ('where did this come from?')"
+ ],
+ "visualization": "Link and payoff in one frame: link row on top, the live earned reward as the hero line, locked tiers demoted to a quiet secondary list with real tap targets. Locked vs unlocked differs by more than opacity \u2014 a locked row shows its requirement, not a dimmed promise.",
+ "uxNote": "With near-zero other users, a 0/1/0/0 list is demoralising, so lead with the one thing the user can feel today. Four tier tables already disagree (types package, iOS, Android, backend) \u2014 serve it, do not mirror it.",
+ "effortDays": 1
+}

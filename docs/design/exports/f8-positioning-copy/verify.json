@@ -1,0 +1,15 @@
+{
+ "id": "f8-positioning-copy",
+ "export": "docs/design/exports/f8-positioning-copy/f8-positioning-copy.html",
+ "manifest": 19,
+ "mode": "bundle",
+ "pages": 19,
+ "exact": 19,
+ "labelled": 19,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-positioning-copy/pages",
+ "placeholders": []
+}

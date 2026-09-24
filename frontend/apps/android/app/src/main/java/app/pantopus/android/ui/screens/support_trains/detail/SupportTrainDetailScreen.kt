@@ -467,7 +467,8 @@ private fun LoadedBody(
 
         // A fully covered train has no dock unless Send a card or Join as
         // backup is wired (neither has a backend route yet).
-        if (content.dock !is SupportTrainDock.SendCardAndBackup || onSendCard != null || onJoinAsBackup != null) {
+        val hasDock = content.dock !is SupportTrainDock.SendCardAndBackup || onSendCard != null || onJoinAsBackup != null
+        if (content.typeDates.slotsTotal > 0 && hasDock) {
             Dock(
                 dock = content.dock,
                 onSignUp = onSignUp,

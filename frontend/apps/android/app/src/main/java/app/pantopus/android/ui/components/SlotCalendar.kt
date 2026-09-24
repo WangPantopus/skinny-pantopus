@@ -52,6 +52,7 @@ import java.util.Date
  */
 enum class SlotCalendarState {
     Past,
+    Unscheduled,
     Today,
     Filled,
     Open,
@@ -182,7 +183,8 @@ private fun Cell(
     box =
         box
             .semantics {
-                contentDescription = "${day.dayNumber}, ${day.state.name.lowercase()}"
+                val label = if (day.state == SlotCalendarState.Unscheduled) "no slot scheduled" else day.state.name.lowercase()
+                contentDescription = "${day.dayNumber}, $label"
                 if (tappable) role = Role.Button
             }.let { m -> if (tappable) m.clickable { onSelectDate(day.date) } else m }
 
@@ -209,7 +211,7 @@ private data class CellStyle(
 
 private fun cellStyleOf(state: SlotCalendarState): CellStyle =
     when (state) {
-        SlotCalendarState.Past ->
+        SlotCalendarState.Past, SlotCalendarState.Unscheduled ->
             CellStyle(
                 background = PantopusColors.appSurface,
                 foreground = PantopusColors.appTextMuted,
@@ -264,7 +266,7 @@ private fun Legend() {
         modifier = Modifier.padding(top = Spacing.s1),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        for (state in SlotCalendarState.values()) {
+        for (state in SlotCalendarState.entries.filter { it != SlotCalendarState.Unscheduled }) {
             LegendChip(state = state)
         }
     }
@@ -322,6 +324,7 @@ private fun LegendChip(state: SlotCalendarState) {
 private fun legendLabel(state: SlotCalendarState): String =
     when (state) {
         SlotCalendarState.Past -> "Past"
+        SlotCalendarState.Unscheduled -> "No slot"
         SlotCalendarState.Today -> "Today"
         SlotCalendarState.Filled -> "Covered"
         SlotCalendarState.Open -> "Open"

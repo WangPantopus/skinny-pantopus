@@ -1,0 +1,32 @@
+# Last review findings for f10-mail-snap-privacy (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The V2 confirm and done lines promise only that the bills stay, but 8 of the 15 pieces have no bill: filed, not classified or not confirmed. The sibling prompt fixes exactly this problem for one photo ("a promise about a bill that does not exist is untrue"), and this prompt does not flag it.
+  - evidence: Prompt: body "The bills and their amounts stay; only the photos are removed." Its list includes "Chase statement · Filed, no bill", "Riverview Bank statement · Filed, no bill", "Larkspur Loop HOA · Not confirmed yet". f10-mail-piece-photo INSTEAD OF: "a promise about a bill that does not exist is untrue".
+  - fix: Add a Notes flag proposing the V2 body "Your bills, their amounts and your mail records stay; only the photos are removed." Also note that a piece not confirmed yet loses its photo pane in Confirm what we read.
+- [minor] (substance) The generic who-row uses "Members" in user copy, which the glossary forbids as a synonym for the household. It is also shown in a household where nobody lacks bill access, so it describes people who do not exist.
+  - evidence: component-contract.md glossary: "Your household … Not: family, members (in user copy)". Prompt frame 13: "a household with no one lacking bill access … 'You and Sam. Members without bill access see that a piece arrived…'"
+  - fix: For frame 13, use "You and Sam. People nearby: None." and move the generic line to Notes as a template, or reword it to "People in your household without bill access see…".
+- [minor] (substance) The reading-off notice says "right now", which suggests a temporary outage. The source state is a deployment without extraction.
+  - evidence: inventory states: "AI unavailable"; derive f10-8: "an honest notice when extraction is unavailable on this deployment"; design doc: "With no OPENAI_API_KEY, the item still saves and the client asks for due date and amount by hand." Prompt: "We can't read photos right now."
+  - fix: Use "Reading photos is off for now. You can still photograph a piece of mail and type the payee, amount and due date yourself." Or flag the wording on Notes.
+- [minor] (substance) The guest LockedActionRow says Sam can change the Mail Day setting, but no source says a member can change home settings.
+  - evidence: Prompt: LockedActionRow "Maya or Sam can change this setting or delete these photos." Design doc F3 member permissions: "members.view, calendar.view, calendar.edit, finance.view".
+  - fix: Flag on Notes as an assumption, or use "Maya or Sam can delete these photos. Maya can change this setting."
+- [major] (ux) The zero state says nothing is kept, but the payees, amounts, due dates and last 4 account digits of confirmed bills remain on file. That is a false statement on the surface built for trust.
+  - evidence: COPY: "Zero: ... grid: "What we keep: None right now""; EDGE CASES: "The grid's first row reads "What we keep: None right now"." The same card says: "The payee, amount, due date and last 4 account digits stay."
+  - fix: Replace it with: "What we keep": "Photos: None right now. The payee, amount, due date and last 4 account digits of bills you confirmed stay with those bills." Use the same value in frame 08 (after delete all) and frame 09.
+- [major] (ux) The delete-all confirm promises that "the bills and their amounts stay", yet some photos belong to pieces that were never added to bills (Larkspur Loop HOA is not confirmed yet; in frame 05 both pieces are waiting to be read). Deleting those photos removes the only source for their read. The body does not name that loss, and in the default-off option there are no bills at all.
+  - evidence: List: "Larkspur Loop HOA · Mon 19 Oct · 1.9 MB · Not confirmed yet"; frame 05: "2 pieces waiting to be read"; confirm body "The bills and their amounts stay; only the photos are removed." Brief P19: "Destructive confirms name what survives."
+  - fix: Add a DestructiveConfirm V2 sub-variant, used when any listed piece is not confirmed or not read yet. Body: "The bills and their amounts stay; only the photos are removed. 1 piece isn't in bills yet, so you'll type its amount and due date yourself." In frame 05: "The 2 pieces waiting to be read won't be read; their mail records stay." Draw it as artboard "f10-mail-snap-privacy · ios · 06b-delete-all-unconfirmed · light", rebalance the batch plan, and list it on Notes.
+- [minor] (ux) The default-off option (frame 05) keeps the "What we keep" value written for photos that are kept, so the grid contradicts the toggle.
+  - evidence: Grid value: "The photo, plus the payee, amount, due date and last 4 account digits we read from it." Frame 05: "toggle off from the start ... deleted after we read them".
+  - fix: Add for frame 05: "What we keep": "The payee, amount, due date and last 4 account digits we read. The photo is deleted once we've read it. Full account numbers saved as text: None."
+- [minor] (ux) The generic who-row uses "Members", which the glossary forbids in user copy, and "Members without bill access" excludes Guests, who are the actual case.
+  - evidence: "You and Sam. Members without bill access see that a piece arrived..."; glossary: "Your household — ... Not: ... members (in user copy)"; "Member / Guest / Admin / Owner — household roles".
+  - fix: Use "You and Sam. Anyone else in your household without bill access sees that a piece arrived, not the photo or the amount. People nearby: None."
+- [minor] (ux) The prompt restates the destructive button anatomy with label weight 600, which conflicts with the Foundations board (500).
+  - evidence: "label in text.primary at weight 600" vs 00d-04: "Both labels are bodyMedium 16/24/500 text.primary."
+  - fix: Replace with "'Delete all mail snaps' uses the DestructiveConfirm destructive-button style exactly as on the Foundations board, and is never above the list."
+- [minor] (ux) The guest view repeats the explainer "You confirm before anything is saved", which is untrue for Alex, who cannot confirm.
+  - evidence: Guest view: "The explainer." Explainer: "We read the photo to suggest a payee, amount and due date. You confirm before anything is saved."
+  - fix: Give the guest its own explainer: "We read the photo to suggest a payee, amount and due date. Maya or Sam confirms before anything is saved."

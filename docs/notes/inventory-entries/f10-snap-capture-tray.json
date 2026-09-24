@@ -1,0 +1,34 @@
+{
+ "id": "f10-snap-capture-tray",
+ "name": "Snap capture tray (batch session)",
+ "feature": "F10",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Over Mail Day triage. iOS reuses SystemCameraPicker; Android reuses CameraX; web is a modal with file input + capture=environment + drag-drop, mirroring the shipped SnapSellListingModal pattern.",
+ "purpose": "Turn a physical stack into a batch of uploads in one session without leaving the screen between pieces.",
+ "contents": "Viewfinder or file target, a thumbnail strip of this session's shots with per-shot delete and retake, a live counter, 'Add another' as the default and 'Done (3)' as the commit, per-file progress, and one privacy line ('Photos are stored privately to your home and never shown to neighbors').",
+ "states": [
+  "camera permission denied \u2192 explain + Open Settings + photo-library fallback",
+  "no camera (web desktop) \u2192 file picker only",
+  "capturing",
+  "uploading",
+  "upload failed (per-item retry, batch preserved)",
+  "rejected file with a specific reason",
+  "offline (held locally, 'Will upload when you're back online')",
+  "no claimed home (checked BEFORE the viewfinder opens)"
+ ],
+ "phase": "phase2",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Mail Day capture affordance",
+  "Mail Day empty hero CTA",
+  "Hub 'Scan mail' action chip (currently inactive and routing to the mailbox root)"
+ ],
+ "visualization": "Batch-first: the thumbnail strip is the persistent element and 'Add another' is the default action, so 'shoot the whole stack now, confirm later' is the path of least resistance. One-handed reach for the counter and Done.",
+ "uxNote": "The doc says only 'wire the existing CTAs to the camera', which invites a one-shot picker \u2014 shoot, sheet, back to an empty screen, shoot again. Wrong shape for a stack of mail on a Tuesday evening. Run the tier and finance-permission checks before the viewfinder, or a user photographs a bill and is then told they cannot save it.",
+ "effortDays": 1.5
+}

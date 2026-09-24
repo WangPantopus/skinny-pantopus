@@ -1,0 +1,38 @@
+{
+ "id": "f3b-invitation-decision",
+ "name": "Invitation decision (what you get now vs what needs verification)",
+ "feature": "F3b",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web AuthenticatedInvitationPage / PublicInvitationPage at /invite/[token]; iOS HomeInvitationDecisionView; Android HomeInvitationDecisionScreen.",
+ "purpose": "Let someone accept household access understanding exactly what it does and does not give them \u2014 and land them somewhere useful.",
+ "contents": "Home, city, inviter, offered role, access window, expiry, Accept / Decline. Replaces the ownership sentence with a two-column scannable list: 'What you get now' (calendar, bills, tasks, members, the household's pickup day) vs 'What needs address verification' (residency letter, Residency Pass, neighbor messages, Real Rent, Block Founder rank). Accepted state gains primary 'Verify this address' and secondary 'Open Home'. The signed-out path preserves the token through register and returns here.",
+ "states": [
+  "loading",
+  "offer",
+  "accepting",
+  "accepted (verify next step)",
+  "declined",
+  "expired",
+  "revoked",
+  "already a member",
+  "INVITE_POLICY_CHANGED \u2014 blocked with the reason",
+  "signed-out variant",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Invite link / token deep link",
+  "Invite banner Review",
+  "Manual invite-code entry"
+ ],
+ "visualization": "Two short columns of ticked and locked rows instead of another paragraph \u2014 the paragraph is exactly why the current line reads as legalese. Lead with the grant; the limits are a scannable list, not a warning.",
+ "uxNote": "Do NOT auto-present the verify sheet on accept \u2014 that turns a welcome into a nag. Make it the success screen's primary CTA with a 'later' that costs nothing. Blocking dependency: see the owner-attestation entry; if no verification method accepts a non-owner occupant on an already-claimed home, this CTA leads to an uncompletable sheet.",
+ "effortDays": 1
+}

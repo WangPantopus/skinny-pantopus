@@ -1,0 +1,212 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-16T23:57:00Z"
+  },
+  "title": "Pantopus",
+  "namespace": "Pantopus",
+  "libraries": [
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "global": "React",
+      "file": "components/lib/react.production.min.js"
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "global": "ReactDOM",
+      "file": "components/lib/react-dom.production.min.js"
+    }
+  ],
+  "sections": {},
+  "groups": [
+    "Logos",
+    "Icons"
+  ],
+  "assetGroups": {
+    "Logos": {
+      "name": "Logos",
+      "tile": "l",
+      "order": [
+        "pantopus-mark.svg",
+        "pantopus-mark-dark.svg",
+        "pantopus-lockup.svg",
+        "pantopus-app-icon.svg",
+        "pantopus-icon-512.png",
+        "pantopus-favicon.svg"
+      ],
+      "files": {
+        "pantopus-mark.svg": {
+          "name": "pantopus-mark.svg",
+          "blob": "8c918320b50019bdabe824c0619ba6a7",
+          "size": 1044,
+          "type": "image/svg+xml"
+        },
+        "pantopus-mark-dark.svg": {
+          "name": "pantopus-mark-dark.svg",
+          "blob": "04e51c2f2e83b6e00844930cac478cbe",
+          "size": 1054,
+          "type": "image/svg+xml"
+        },
+        "pantopus-lockup.svg": {
+          "name": "pantopus-lockup.svg",
+          "blob": "505b4e043b06426c9acc0f55d6695ef5",
+          "size": 1266,
+          "type": "image/svg+xml"
+        },
+        "pantopus-app-icon.svg": {
+          "name": "pantopus-app-icon.svg",
+          "blob": "b389425c5317829c73845906d4622c5d",
+          "size": 1161,
+          "type": "image/svg+xml"
+        },
+        "pantopus-icon-512.png": {
+          "name": "pantopus-icon-512.png",
+          "blob": "76d3e323508492a30ec07ff09d6423fd",
+          "size": 10007,
+          "type": "image/png"
+        },
+        "pantopus-favicon.svg": {
+          "name": "pantopus-favicon.svg",
+          "blob": "7d583fc6ee1393d49877264ace0bb376",
+          "size": 1032,
+          "type": "image/svg+xml"
+        }
+      }
+    },
+    "Icons": {
+      "name": "Icons",
+      "tile": "s",
+      "order": [
+        "place-house.svg",
+        "today-sun.svg",
+        "nearby-compass.svg",
+        "mail.svg",
+        "hub-layout-dashboard.svg",
+        "messages-message-circle.svg",
+        "notifications-bell.svg",
+        "search.svg",
+        "map.svg",
+        "identity-shield-check.svg",
+        "profile-user.svg",
+        "scheduling-calendar-clock.svg",
+        "audience-radio.svg",
+        "marketplace-shopping-bag.svg",
+        "tasks-briefcase.svg",
+        "settings.svg"
+      ],
+      "files": {
+        "place-house.svg": {
+          "name": "place-house.svg",
+          "blob": "bb852a93c45f601b063d2f7f3d61a06e",
+          "size": 361,
+          "type": "image/svg+xml"
+        },
+        "today-sun.svg": {
+          "name": "today-sun.svg",
+          "blob": "76865e8911d30a1dc3de0eae34c9ef1a",
+          "size": 479,
+          "type": "image/svg+xml"
+        },
+        "nearby-compass.svg": {
+          "name": "nearby-compass.svg",
+          "blob": "bc1706adcfa0143e6e3f9691a56c5022",
+          "size": 331,
+          "type": "image/svg+xml"
+        },
+        "mail.svg": {
+          "name": "mail.svg",
+          "blob": "90bdf4453163fee837c9c2a61ff46dac",
+          "size": 294,
+          "type": "image/svg+xml"
+        },
+        "hub-layout-dashboard.svg": {
+          "name": "hub-layout-dashboard.svg",
+          "blob": "d482970e0a425f4522c1fd4fe0d3c13a",
+          "size": 398,
+          "type": "image/svg+xml"
+        },
+        "messages-message-circle.svg": {
+          "name": "messages-message-circle.svg",
+          "blob": "9b28bc7d6e519bfb773071b043b61f2f",
+          "size": 323,
+          "type": "image/svg+xml"
+        },
+        "notifications-bell.svg": {
+          "name": "notifications-bell.svg",
+          "blob": "f4a6006a994df446e47694f51fabc070",
+          "size": 371,
+          "type": "image/svg+xml"
+        },
+        "search.svg": {
+          "name": "search.svg",
+          "blob": "0d8792ce85d87a574c509c8ec0c9dee6",
+          "size": 255,
+          "type": "image/svg+xml"
+        },
+        "map.svg": {
+          "name": "map.svg",
+          "blob": "839207a5000ddcb5b2ac1cdcc3304bf8",
+          "size": 496,
+          "type": "image/svg+xml"
+        },
+        "identity-shield-check.svg": {
+          "name": "identity-shield-check.svg",
+          "blob": "02d6e947c97d0eab57d62d8aa58e4d9f",
+          "size": 393,
+          "type": "image/svg+xml"
+        },
+        "profile-user.svg": {
+          "name": "profile-user.svg",
+          "blob": "64b0b7af14380f01ed7c214e7af2c3e2",
+          "size": 279,
+          "type": "image/svg+xml"
+        },
+        "scheduling-calendar-clock.svg": {
+          "name": "scheduling-calendar-clock.svg",
+          "blob": "d788c1d72b13ee274e08fb50e929adbf",
+          "size": 407,
+          "type": "image/svg+xml"
+        },
+        "audience-radio.svg": {
+          "name": "audience-radio.svg",
+          "blob": "a1d20d24e7adb14cf18d04bff2dccb16",
+          "size": 423,
+          "type": "image/svg+xml"
+        },
+        "marketplace-shopping-bag.svg": {
+          "name": "marketplace-shopping-bag.svg",
+          "blob": "7a3512d4e4dc274a0abf506f83ab1d14",
+          "size": 402,
+          "type": "image/svg+xml"
+        },
+        "tasks-briefcase.svg": {
+          "name": "tasks-briefcase.svg",
+          "blob": "868c2cec09377b515e4a7782b341d29b",
+          "size": 297,
+          "type": "image/svg+xml"
+        },
+        "settings.svg": {
+          "name": "settings.svg",
+          "blob": "b4b1dd5b89abfc7c8600faecf1471ef7",
+          "size": 566,
+          "type": "image/svg+xml"
+        }
+      }
+    }
+  },
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Yingpeng Wang",
+    "at": "2026-09-22T17:59:28Z",
+    "via": "Cowork · Pantopus Foundations 00b · Data instruments",
+    "note": "Added the seven data instruments (ScaleStrip, AqiBand, FourteenDayStrip, YearBand, SlotMeter, PublicPointMap, FactCount) as components with previews, plus the Data instruments section. Drawn on the 00b specimen board in Cowork; no code source yet, so tools/design-system will not regenerate them."
+  }
+}

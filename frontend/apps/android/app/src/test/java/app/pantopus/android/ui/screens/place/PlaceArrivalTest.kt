@@ -170,7 +170,7 @@ class PlaceArrivalTest {
             vm.finish()
             advanceUntilIdle()
             assertNull(PlacePendingStore.read())
-            assertEquals(HomeLanding.Hub, vm.landing.value)
+            assertTrue(vm.landing.value is HomeLanding.Error)
             coVerify(exactly = 0) { saves.save(any()) }
             coVerify(exactly = 0) { homes.create(any()) }
         }

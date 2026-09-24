@@ -1,0 +1,29 @@
+# Last review findings for f7-widget-tap-landing (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The header gives the claimed HOME A a ScopeChip 'Your household', while the canonical Today inventory says claimed homes show no chip. The prompt also says to keep the attached screenshot exactly, so the two instructions may conflict.
+  - evidence: FINAL-screen-inventory f1-today-tab states: 'saved place (chip), claimed home (no chip)'. Prompt: 'Header: "2418 NE Larkspur Loop" · ScopeChip "Your household"'. component-contract ScopeChip: 'It appears on every surface that shows address data.'
+  - fix: State which source wins (the contract: show the chip on claimed homes too) and record it on Notes as a change to the host screen.
+- [minor] (substance) The no-place landing assumes the signed-in Add a place sheet exists on Android. The critique rated that missing destination a blocker, and the widget prompt handles it conditionally, but this prompt does not.
+  - evidence: critique-findings: 'A signed-in Android user with no place ... tap the widget's 'Save an address to see today here', and reach nothing.' Prompt: 'With no place, the Add a place sheet opens.'
+  - fix: Add an edge case: 'where the signed-in Add a place sheet does not exist yet, land on Today's "Today starts with a place" empty state with no sheet', and note it on Notes.
+- [minor] (substance) The highlight has no timer, while the contract DateRow and the house style say the highlight decays or fades. The prompt only half-flags this deviation on Notes ('the highlight lifetime').
+  - evidence: component-contract DateRow: 'highlighted (infoBg wash + outline, decays; focus moves)'. house-style: 'Deep-link landings scroll once and fade a highlight.' Prompt: 'It has no timer.'
+  - fix: On Notes, say explicitly that this replaces the contract's decaying highlight with 'until first interaction', and give the reason.
+- [minor] (substance) The COPY list leaves out the EPA health statements and the 'Updated just now' header address string that the frames print.
+  - evidence: Prompt CONTENT: '"Air quality is satisfactory, and air pollution poses little or no risk."' and '"Members of sensitive groups may experience health effects. The general public is less likely to be affected."' are absent from COPY.
+  - fix: Add both EPA statements verbatim to COPY.
+- [minor] (ux) Artboard 08 draws the Add a place sheet over Today's empty state, but neither screen is in ATTACH, so Claude Design will invent them.
+  - evidence: ARTBOARDS "8. ... 08-no-place · light — the Add a place sheet over empty Today."; EDGE CASES "Today's 'Today starts with a place', with the Add a place sheet over it." ATTACH lists neither.
+  - fix: Add to ATTACH: 'Today's empty state ("Today starts with a place") and the Add a place sheet, on iOS and Android.'
+- [minor] (ux) A section=air arrival with no active crossing scrolls to the sixth section, which changes the layout, but it has no artboard and is not listed as omitted. The widget's small air hero (the ladder's last rung) and the air line on the large both produce this arrival.
+  - evidence: EDGE CASES "section=air arrives with no active crossing: land at the air band, scrolling once, and highlight it."
+  - fix: Add artboard '10. f7-widget-tap-landing · ios · 10-arrived-air-no-crossing · light — AQI 42 day: scrolled once to the air band, highlighted and focused', renumber the rest, and update BATCH PLAN; or name it under 'omitted states' on Notes.
+- [minor] (ux) WHERE IT LIVES contains internal link and event names that Claude Design cannot draw.
+  - evidence: "Push arrivals use their own link, pantopus://hub-today?deliveryId=…, and the two links must not collide."; "one session_open event with trigger widget".
+  - fix: Move both sentences to the Notes list only, and in WHERE keep only 'push arrivals use a different link (see Notes)'.
+- [minor] (ux) DONE WHEN says the widget always clears 'Open to refresh' after a landing, but the offline and failed-refresh landings write no new snapshot.
+  - evidence: "The widget stops showing 'Open to refresh' after the landing." vs artboards 05 (refresh failed) and 07 (offline).
+  - fix: Change it to 'After a successful refresh, the widget stops showing "Open to refresh"; after a failed or offline landing it keeps it.'
+- [minor] (ux) COPY omits strings that appear in the frames.
+  - evidence: COPY lacks "Today starts with a place", "Air quality is satisfactory, and air pollution poses little or no risk.", "Members of sensitive groups may experience health effects. The general public is less likely to be affected." and "AirNow · nearest monitors · observed 4:00 PM".
+  - fix: Append these four strings to COPY.

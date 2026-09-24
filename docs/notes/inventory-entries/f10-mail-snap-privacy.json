@@ -1,0 +1,32 @@
+{
+ "id": "f10-mail-snap-privacy",
+ "name": "Mail snaps: privacy and storage",
+ "feature": "F10",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The Mail Day settings column on web; the Mail Day setup/settings stack on the natives (NOT settings/notifications, which is briefing-only).",
+ "purpose": "One place to understand where photographs of your mail live, and to delete all of them.",
+ "contents": "A plain-language explainer ('We read the photo to suggest a payee, amount and due date. You confirm before anything is saved. Photos stay private to this home.'); a 'Keep the photo after we read it' toggle (off = extract then discard); a count and size line that LISTS the snaps with payee and date; a destructive 'Delete all mail snaps' whose confirm states that bills and amounts survive; and an honest notice when extraction is unavailable on this deployment.",
+ "states": [
+  "photos kept (default)",
+  "photos off",
+  "deleting (progress, then confirmation)",
+  "zero snaps (no scary destructive button)",
+  "AI unavailable",
+  "error"
+ ],
+ "phase": "phase2",
+ "origin": "merged",
+ "entryPoints": [
+  "Mail Day settings",
+  "Photo viewer 'Manage mail snaps'",
+  "Privacy mirror 'What we store'"
+ ],
+ "visualization": "A trust surface, not a preferences grid: one paragraph of plain language, one toggle with its consequence line, then the list of what exists, then the destructive action. Listing what will be deleted is both the finder and the honest precondition for deleting it.",
+ "uxNote": "Without this, removing a photograph of an account number means finding each bill and deleting it one at a time \u2014 a poor answer to 'I photographed my bank statement by mistake.' Do not bolt reminder preferences onto this card while the per-home toggles still persist nothing.",
+ "effortDays": 1
+}

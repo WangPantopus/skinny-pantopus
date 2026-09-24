@@ -1,0 +1,15 @@
+{
+ "id": "f3-members-roster",
+ "export": "docs/design/exports/f3-members-roster/f3-members-roster.html",
+ "manifest": 24,
+ "mode": "bundle",
+ "pages": 24,
+ "exact": 24,
+ "labelled": 1,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3-members-roster/pages",
+ "placeholders": []
+}

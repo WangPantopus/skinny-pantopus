@@ -1,0 +1,36 @@
+{
+ "id": "f11-keeper-strip",
+ "name": "Keeper strip on Today",
+ "feature": "F11",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The unified Today tab on each platform \u2014 NOT the doc's named targets (HubTodayCard is mounted only at /app/hub, which is not a tab, and the native kicker belongs to the push-only briefing screen).",
+ "purpose": "Give the return surface a face: who is looking after this address, what is due, and how much the place file knows.",
+ "contents": "Species avatar (6 species x 4 moods), name, mood word, the mood line verbatim ('Nothing due this week.' / 'Recycling tomorrow.' / 'A bill is overdue.'), and the fact count as a tap target into the place file. Requires a nullable keeper block on the Today payload, since mood is computed in GET /api/hub \u2014 a third payload neither Today fetches.",
+ "states": [
+  "loading (reserved space, no pop-in after the weather renders)",
+  "unnamed (generic silhouette + 'Give your place a keeper')",
+  "relaxed / quiet day",
+  "attentive / fidgeting / worried",
+  "MOOD UNAVAILABLE \u2014 'Couldn't check what's due', visually distinct from relaxed",
+  "offline (last-known mood, greyed, 'as of')",
+  "T1 saved place (calendar-only mood; copy says 'this place', never 'household')",
+  "no place (keeper absent)",
+  "alert on screen (avatar and mood suppressed; the alert owns the screen)",
+  "permission-denied (member can see, cannot rename)"
+ ],
+ "phase": "phase2",
+ "origin": "merged",
+ "entryPoints": [
+  "Today (always, once named)",
+  "Naming sheet",
+  "Place file fact ring"
+ ],
+ "visualization": "Avatar + name + mood line as one strip above the weather. The fact count renders as a five-segment ring of CATEGORIES (place, dates, money, people, proof) filled where anything is known, integer inside \u2014 deliberately not a progress bar or percentage, so nothing reads as '60% complete' and a saved place reads as a smaller instrument rather than a failing one.",
+ "uxNote": "Two changes to the doc. (1) Ship it on the Today each platform actually shows, or almost nobody sees it. (2) Mood must be nullable end to end: the inputs come from hub.js:221-260, whose Mail and bill counts are wrapped in .catch(() => 0) over column names that can fail, so a broken query renders as a cheerful 'relaxed' on the day a bill is overdue \u2014 a lie on the one metric the pilot scores at zero. Drop the 'knows N things' mechanic as a growth game; the place file already shows the facts.",
+ "effortDays": 2.5
+}

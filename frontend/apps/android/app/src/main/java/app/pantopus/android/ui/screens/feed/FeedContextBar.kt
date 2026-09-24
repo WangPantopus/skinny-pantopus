@@ -229,7 +229,8 @@ class FeedContextBarViewModel
             }
         }
 
-        private fun applyCurrent(dto: ViewingLocationDto?) {
+        /** Apply a successfully resolved area, including the feed's own retry result. */
+        fun applyCurrent(dto: ViewingLocationDto?) {
             if (dto == null) return
             _locationLabel.value = dto.label
             dto.radiusMiles?.let { _radiusMiles.value = it }

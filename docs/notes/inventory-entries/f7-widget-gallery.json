@@ -1,0 +1,26 @@
+{
+ "id": "f7-widget-gallery",
+ "name": "Widget gallery entry (name, description, preview)",
+ "feature": "F7",
+ "disposition": "NEW_WIDGET",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "iOS configurationDisplayName/description + a POPULATED placeholder(in:); Android receiver label + description + a dedicated static previewLayout and new strings.",
+ "purpose": "The only place a person browsing their phone's widget gallery learns this exists \u2014 the whole top of the widget funnel.",
+ "contents": "Name 'Today at your address'; description promising a fact, not a feature ('Pickup, air and your next date \u2014 no notification needed.'); preview artwork with plausible sample content at each size.",
+ "states": [
+  "sample preview (each size)",
+  "iOS redacted placeholder",
+  "dark mode"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "OS widget gallery browse"
+ ],
+ "visualization": "A dedicated preview composition with sample data \u2014 'Recycling + garbage Tue', the 14-day strip half-populated, 'AQI 42' mid-band \u2014 never the live layout.",
+ "uxNote": "The existing Android widget sets previewLayout to the LIVE layout, so cloning that pattern would sell the widget to a brand-new user with the words 'Save an address to see today here'. Same trap on iOS if placeholder(in:) returns nil.",
+ "effortDays": 0.5
+}

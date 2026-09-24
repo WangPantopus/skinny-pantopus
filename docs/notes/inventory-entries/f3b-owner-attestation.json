@@ -1,0 +1,35 @@
+{
+ "id": "f3b-owner-attestation",
+ "name": "Confirm this person lives here (owner attestation)",
+ "feature": "F3b",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Opened from the members roster (owner/admin) and from a notification triggered when a household member starts verification on an already-claimed home.",
+ "purpose": "Give a co-resident a completable path to address verification on a home someone else has already claimed.",
+ "contents": "The person, when they joined, what confirming grants them (neighbor messages, residency letter, Block Founder rank), the owner's attestation checkbox with its plain consequence line, Confirm / Decline. Writes verification_source='address'.",
+ "states": [
+  "request pending",
+  "confirming",
+  "confirmed",
+  "declined",
+  "owner has revoked the member's access",
+  "already address-verified",
+  "permission-denied (only owner/admin)",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Members roster row overflow",
+  "Notification 'Sam is verifying this address'",
+  "Verify sheet's 'Ask {owner} to confirm you live here' path"
+ ],
+ "visualization": "A short attestation sheet: one person, one statement, one checkbox, two buttons. It reads as a vouching act, not a permissions grid.",
+ "uxNote": "Adversarial blocker. F3b's whole 'never hide, always explain, always offer the path' promise collapses if postcard, document and landlord flows all require the owner \u2014 every locked control would lead to a sheet nobody can complete, which is worse than hiding the control. Confirm which methods accept a non-owner occupant before the migration; if none do, this sheet is a hard prerequisite for F3b.",
+ "effortDays": 1
+}

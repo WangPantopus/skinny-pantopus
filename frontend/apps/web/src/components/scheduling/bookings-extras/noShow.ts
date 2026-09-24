@@ -34,5 +34,5 @@ export function noShowBlockedReason(
 
 /** A 1:1 booking has a single invitee; group events expose multiple attendees. */
 export function isGroupBooking(detail: BookingDetail): boolean {
-  return (detail.attendees?.length ?? 0) > 1;
+  return !detail.participant && (detail.attendees?.length ?? 0) > 1;
 }

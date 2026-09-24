@@ -1,0 +1,30 @@
+{
+ "id": "f3b-locked-action-row",
+ "name": "Address verification needed (the locked-action treatment)",
+ "feature": "F3b",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Every surface gated by isVerifiedResident: residency letters, Residency Pass, residency claims, fridge cards, Real Rent, Block Founder rank and postcard invites, neighbor-message compose, mail compose, the verified badge, the Founding tier CTA.",
+ "purpose": "Tell a household-verified member why an attested action is unavailable instead of hiding it or 403-ing after the tap.",
+ "contents": "One reusable row: lock glyph + one-line reason ('Address verification needed to send neighbor messages') + 'Verify address' link into the sheet. Also re-labels the iOS My Homes green 'Household access' chip, which currently claims verified status and contradicts F3b outright.",
+ "states": [
+  "address-verified (unchanged)",
+  "household-verified \u2014 locked with reason",
+  "legacy \u2014 treated as address so nobody loses an unlock",
+  "verification pending \u2014 'We're checking your postcard code' instead of a verify CTA",
+  "server disagrees with the client gate \u2014 honest error, never a silent no-op",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Every attested control (the row replaces the control in place)"
+ ],
+ "visualization": "One lock row that fits under a primary CTA, inside a list row and inside a card header without a bespoke variant per screen \u2014 lock, reason, link, one line at 320dp. Never hide, always explain, always offer the path.",
+ "uxNote": "Highest-risk part of F3b: flipping isVerifiedResident to false makes controls vanish or 403 with no explanation, and an invited co-resident reads that as the app being broken or the owner blocking them. Ship it in the same release as the migration, or household members get a mystery week. Android is a specific hazard \u2014 handleFab and handleQuickAction early-return silently when canPerform is false, so a visible control does literally nothing.",
+ "effortDays": 1.5
+}

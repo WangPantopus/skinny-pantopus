@@ -1,0 +1,34 @@
+{
+ "id": "f9-curator-chip",
+ "name": "Pantopus curator chip + 'Why am I seeing this?'",
+ "feature": "F9",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Feed post card and detail on all three platforms, plus the Pulse and map card variants that share the data but not the component.",
+ "purpose": "Let a reader tell at a glance that a post came from Pantopus rather than a neighbor, and understand what they are muting.",
+ "contents": "A 'Pantopus curator' chip replacing the neighbor identity affordance, a 'Source: {publisher}' line under the body, Report and Mute unchanged in the overflow, and a 'Why am I seeing this?' overflow item that expands IN PLACE with four short lines (what a curator post is, where it came from, that no neighbor wrote it, that it does not count as neighborhood activity) plus the mute toggle writing to the feed preferences that already exist.",
+ "states": [
+  "origin curator",
+  "origin system",
+  "origin user (unchanged)",
+  "origin missing on cached rows \u2192 NO chip, and never a human-looking byline",
+  "muted (feed re-filters behind the confirmation)",
+  "mute write failure",
+  "reported",
+  "media loading / failed"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Feed card author row",
+  "Pulse card",
+  "Post detail overflow"
+ ],
+ "visualization": "The curator row does not present an avatar-plus-name shape at all \u2014 the chip replaces the identity block, so it cannot be misread as a person. The explainer expands inline under the chip rather than opening a sheet, because four lines do not deserve a modal.",
+ "uxNote": "'Curator' is internal vocabulary, so the doc's own requirement ('keep report/mute available') assumes a reader who knows what they are muting. Decode safety matters more than the chip: adding origin to three client types means cached posts arrive without it, so the default must be no chip.",
+ "effortDays": 1
+}

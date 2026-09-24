@@ -1,0 +1,36 @@
+{
+ "id": "f3-invite-composer",
+ "name": "Invite a co-resident (email, username, link, QR)",
+ "feature": "F3",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web SenderInvitationManager (already has all three channels); iOS InviteMemberWizardView (email only, hard-rejects anything else); Android HomeInvitationSenderContent (email + username, no QR).",
+ "purpose": "Send one household invitation by whichever channel you actually have for that person.",
+ "contents": "Channel chips (Email / Username / Share instead), one recipient field that swaps with the channel, role chips Member/Guest, optional note, review, confirm, then the post-send recovery panel with the link and QR. iOS gains username and link; Android gains QR. The link-exposure warning renders at the moment Link is chosen, not after sending.",
+ "states": [
+  "form",
+  "per-channel validation error",
+  "review / confirm",
+  "sending",
+  "sent + recovery panel",
+  "needs reissue (INVITE_POLICY_CHANGED)",
+  "permission-denied",
+  "error",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Members roster Invite",
+  "Household block 'Invite by email' / 'Share a link'",
+  "Home dashboard FAB",
+  "Place file 'People' missing row"
+ ],
+ "visualization": "The channel picker swaps exactly one field and never reflows the form; Email stays the default path and Link/QR sit behind a 'Share instead' secondary that asks for no recipient. The review step is a plain manifest \u2014 home, offered role, access window, expiry.",
+ "uxNote": "iOS is the real work here; web is a no-op and Android is a QR affordance. Keeping Email primary matters because Link is the channel that widens exposure, and the warning has to arrive at the point of choosing rather than in a post-send panel.",
+ "effortDays": 1.5
+}

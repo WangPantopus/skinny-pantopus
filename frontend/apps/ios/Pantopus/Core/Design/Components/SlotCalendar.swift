@@ -17,6 +17,8 @@ public enum SlotCalendarState: String, Sendable, Hashable, CaseIterable {
     /// Day is in the past. Date number renders in `appTextMuted`, no
     /// border / fill — the cell is inert and not tappable.
     case past
+    /// A future date with no scheduled slot; inert with the same muted styling.
+    case unscheduled = "no slot scheduled"
     /// "Right now" cell. `primary600` fill + white text + a soft halo
     /// shadow so the day reads as the calendar's anchor.
     case today
@@ -174,7 +176,7 @@ public struct SlotCalendar: View {
 
     private var legend: some View {
         HStack(spacing: Spacing.s2) {
-            ForEach(SlotCalendarState.allCases, id: \.self) { state in
+            ForEach(SlotCalendarState.allCases.filter { $0 != .unscheduled }, id: \.self) { state in
                 LegendChip(state: state)
             }
         }
@@ -196,7 +198,7 @@ private struct CellStyle {
 
     static func of(_ state: SlotCalendarState) -> CellStyle {
         switch state {
-        case .past:
+        case .past, .unscheduled:
             CellStyle(
                 background: Theme.Color.appSurface,
                 foreground: Theme.Color.appTextMuted,
@@ -298,6 +300,7 @@ private struct LegendChip: View {
     private var label: String {
         switch state {
         case .past: "Past"
+        case .unscheduled: "No slot"
         case .today: "Today"
         case .filled: "Covered"
         case .open: "Open"

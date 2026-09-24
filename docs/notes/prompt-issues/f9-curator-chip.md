@@ -1,0 +1,38 @@
+# Last review findings for f9-curator-chip (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The frame count in the header does not match the manifest: the header says 18 frames, but the manifest lists 19 artboards plus Notes (20).
+  - evidence: Prompt header: "frames: 18"; ARTBOARDS 1–19 plus "20. f9-curator-chip · Notes"; BATCH PLAN "Turn 4: artboards 19-20".
+  - fix: Change the header to "frames: 19" (plus Notes).
+- [minor] (substance) The main frames draw explainer line 4, 'doesn't count as neighborhood activity'. The per-surface change says to leave it out until de-curation ships. The prompt justifies this with the F9 release, which the design doc's Seeder row supports, but it states the release as fact, not as a condition.
+  - evidence: per-surface-changes: "Leave out 'doesn't count as neighborhood activity' until de-curation ships". Design doc F9 Seeder prompt: "Exclude origin='curator' rows from the taper RPC and from every 'organic' count." Prompt: "That change ships in the same F9 release, so draw the four-line version in the main frames."
+  - fix: Keep the approach, but add to Notes: "Line 4 ships only once the Seeder prompt exclusion (taper RPC and organic counts) is live; otherwise ship the three-line inset." This is already partly there. Say explicitly that it is gated on that code.
+- [minor] (substance) The reported state commits to a review date with no relative count. It also doesn't flag whether a solo founder can meet a 7-day window.
+  - evidence: Prompt: "You reported this post. We'll review it by Mon 26 Oct." House style MICROCOPY: "beyond tomorrow, add the relative count: 'in 7 days · Mon 26 Oct'". research-findings: "A solo founder should commit only to a window they can actually meet."
+  - fix: Use "We'll review it by Mon 26 Oct (in 7 days)." or a similar relative form. Add an open question to Notes: "Is a 7-day review window achievable?"
+- [minor] (substance) The SourceCaption is described without the leading ProvenanceMark that the contract's anatomy includes, and with a 'Source:' prefix that isn't in the contract pattern. This is a quiet change to the component's anatomy.
+  - evidence: component-contract SourceCaption anatomy: "Pattern: [ProvenanceMark S] Authority · scope word · as-of". Prompt: "SourceCaption: 'Source: Clark Public Utilities · outage map · as of 4:05 PM ↗'" and "in text.secondary with its external-link glyph".
+  - fix: State which ProvenanceMark (if any) the caption carries on a Pantopus post. Record the 'Source:' prefix, which comes from the design doc's F9 row, as a documented variant on Notes.
+- [minor] (substance) The inventory's 'origin system' state is left undecided. The system card keeps its existing treatment, and whether it should also get an identity treatment is only flagged.
+  - evidence: Inventory states: "origin curator, origin system, origin user (unchanged)". Prompt: "System card ... Keep its existing treatment." and Notes "Whether the existing system card shows a human-looking byline (flag it; do not redesign it)."
+  - fix: Acceptable as is. Consider adding "origin system" to the Notes list of omitted states.
+- [minor] (ux) The dark-mode chip fill disappears. The design system does have a dark sunken token, but it equals dark base (#0F172A), so the pill has no visible edge on a base card. The prompt's fallback only applies when no sunken token exists.
+  - evidence: design-tokens.md dark: "sunken: '#0F172A'" (same as dark base); prompt: "dark mode: the dark sunken surface token (if the system has none, the dark raised surface...)"
+  - fix: Replace it with: "dark mode: dark raised fill with a 1px outline in dark text.secondary (3:1 or better against the card), label in dark text primary."
+- [minor] (ux) SourceCaption uses a variant name the contract doesn't define and leaves out the contract's ProvenanceMark and scope word. 'outage map' names a dataset, not a coverage area, which weakens the prompt's own DONE WHEN check for 'authority, scope and as-of time'.
+  - evidence: Prompt: "SourceCaption (URL variant)"; "Source: Clark Public Utilities · outage map · as of 4:05 PM ↗". Contract SourceCaption anatomy: "[ProvenanceMark S] Authority · scope word · as-of"; the variants list has no 'URL variant'.
+  - fix: Write "SourceCaption (dated static, with the external-link glyph because a URL exists)" and the string "Source: Clark Public Utilities · NE 164th Ave area · as of 4:05 PM ↗". Either add the filled ProvenanceMark S with its legend word ('Official') once on the card, or state 'no mark on post captions' and record that on Notes.
+- [minor] (ux) The prompt doesn't say whether the mute also hides Pantopus posts on the Pulse card (Today) and the map callout. The One Job is to 'understand exactly what muting hides'.
+  - evidence: COPY: "Posts from Pantopus are hidden in Nearby · Undo"; the variants include "Pulse card on the Today tab", but no muted Pulse state is described.
+  - fix: State the rule, for example: "Muting hides Pantopus posts in the Nearby feed, the Nearby map and the Pulse card." Match the toggle label and caption to it. Add a Notes open question if the Feed preference doesn't reach Pulse.
+- [minor] (ux) The 'Turn them back on in Feed preferences.' line has no position, and the prompt doesn't say where a failed mute appears when it started from the feed card, which has already collapsed to InlineUndo.
+  - evidence: COPY: "\"Turn them back on in Feed preferences.\"" with no placement; INTERACTION describes an optimistic collapse, while frame 9 shows only the explainer failure.
+  - fix: Add: "Under InlineUndo, caption 'Turn them back on in Feed preferences.' with 'Feed preferences' as a link. If the write fails after a feed-card mute, the card and the other Pantopus cards return, and InlineErrorRow (save failed) sits in the card's slot."
+- [minor] (ux) The iOS overflow is called a 'context menu', which is the long-press pattern. The prompt also says no action depends on long-press.
+  - evidence: PLATFORMS: "iOS 393x852 (native list; the overflow is a context menu)"; INTERACTION: "nothing depends on swipe, long-press or hover."
+  - fix: Write "the overflow is a pull-down menu from the ••• button" in PLATFORMS and in frame 6.
+- [minor] (ux) Offline handling misses the overflow's mute item. One INSTEAD OF line gives no reason.
+  - evidence: EDGE CASES: "Offline: the toggle and Report are disabled"; INSTEAD OF: "Instead of a mute that only closes the menu, save it to Feed preferences and show InlineUndo."
+  - fix: Add "and the overflow's 'Mute posts from Pantopus', each with 'Changing this needs a connection.'" Append "— because a mute that doesn't persist reappears on the next load and reads as broken."
+- [minor] (ux) The review-date promise has no known backend support.
+  - evidence: COPY: "You reported this post. We'll review it by Mon 26 Oct."
+  - fix: Add a Notes open question: "Is there a post-report review queue with a turnaround? If not, use 'You reported this post. We'll look at it.'"

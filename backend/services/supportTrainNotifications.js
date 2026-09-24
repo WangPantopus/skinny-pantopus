@@ -15,7 +15,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const { createNotification, createBulkNotifications } = require('./notificationService');
 const logger = require('../utils/logger');
 
-const DEEP_LINK_PREFIX = 'pantopus://activities/support-trains';
+const DEEP_LINK_PREFIX = '/app/support-trains';
 
 function supportTrainReference(trainTitle) {
   const safeTrainTitle = typeof trainTitle === 'string' ? trainTitle.trim() : '';

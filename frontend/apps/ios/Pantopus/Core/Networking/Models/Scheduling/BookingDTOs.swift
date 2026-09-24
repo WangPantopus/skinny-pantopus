@@ -105,6 +105,20 @@ public struct BookingDetailResponse: Decodable, Sendable, Hashable {
     public let booking: BookingDTO
     public let attendees: [BookingAttendeeDTO]?
     public let eventType: BookingEventTypeMetaDTO?
+    public var participant: BookingParticipantDTO?
+}
+
+/// A signed-in participant's own capability, separate from the full owner response.
+public struct BookingParticipantDTO: Decodable, Sendable, Hashable {
+    public let role: String
+    public let rsvpStatus: String?
+    public let isRequired: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case rsvpStatus = "rsvp_status"
+        case isRequired = "is_required"
+    }
 }
 
 /// Envelope for the single-booking mutations (approve / decline / cancel /

@@ -1,0 +1,15 @@
+{
+ "id": "f8-compare-arrival-header",
+ "export": "docs/design/exports/f8-compare-arrival-header/f8-compare-arrival-header.html",
+ "manifest": 19,
+ "mode": "bundle",
+ "pages": 19,
+ "exact": 19,
+ "labelled": 19,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-compare-arrival-header/pages",
+ "placeholders": []
+}

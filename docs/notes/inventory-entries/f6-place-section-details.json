@@ -1,0 +1,36 @@
+{
+ "id": "f6-place-section-details",
+ "name": "Place section details: risk instrument, free radon kits, registration deadline",
+ "feature": "F6 / F8 / F12",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Place > Risk & readiness (presentation.tsx lead_radon + flood/wildfire entries, /app/place/risk) and Place > Civic (CivicDetail / PlaceCivicDetailContent / PlaceMoneyCivicDetailContent).",
+ "purpose": "Make the in-app risk page the same instrument the share card uses, give the radon card its one genuinely free action, and give voter registration a durable home after the mover rows expire.",
+ "contents": "RISK: the four-layer scale strips (flood, wildfire, air today, radon) replacing independent inline chip rows, plus a free-kit action line under the existing screening disclaimer ('Free test kits \u00b7 Washington Dept of Health' from program_url, or 'Radon program \u00b7 {State} DOH', or nothing at all where no program exists). CIVIC: a 'Your registration' block above the existing election banner \u2014 state, deadline, days remaining, per-method dates, the provenance mark, source link, and 'Check or update' opening the Date sheet in seeded mode.",
+ "states": [
+  "ready",
+  "partial coverage",
+  "no program for this state (line absent, never a generic EPA fallback)",
+  "no seeded rule for this state (block absent, not an empty shell)",
+  "deadline passed (collapses to the existing 'No upcoming election')",
+  "unverified confidence (hollow mark + source)",
+  "section unavailable / error",
+  "home-gated (these details resolve the primary home only \u2014 show the address in the block header for multi-home users)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place > Risk & readiness",
+  "Place > Civic",
+  "Place file 'Voter registration' row",
+  "Compare scale strip tap (the in-app twin of the share card)",
+  "T0 preview radon aha follow-up"
+ ],
+ "visualization": "Risk: four stacked scale strips, each drawn on its OWN authority's named bands (FEMA zones; USFS 1-5; EPA's six AQI bands; radon zones 3-2-1) with a marker in the band and the band's plain name beside it \u2014 never a shared letter scale, never a radar. The free kit renders as an action pill with an arrow, visually separated from the grey disclaimer, because stacking a second grey under an existing grey buries the only free thing on the card. Civic: the registration block outranks the election banner, because a dated action beats an informational fact.",
+ "uxNote": "Merging the radon kit and the registration block into one entry keeps 'seeded facts get a source and an action' as a single pattern applied to two section cards. Making the risk detail use the compare card's strips means the most-shared artifact in the product is visibly a preview of the app rather than a separate marketing object \u2014 and it gives the compare chips a tap destination, which they otherwise lack.",
+ "effortDays": 1.5
+}

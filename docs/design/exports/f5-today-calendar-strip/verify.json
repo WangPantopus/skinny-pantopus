@@ -1,0 +1,15 @@
+{
+ "id": "f5-today-calendar-strip",
+ "export": "docs/design/exports/f5-today-calendar-strip/f5-today-calendar-strip.html",
+ "manifest": 23,
+ "mode": "bundle",
+ "pages": 23,
+ "exact": 23,
+ "labelled": 23,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f5-today-calendar-strip/pages",
+ "placeholders": []
+}

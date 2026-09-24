@@ -1,0 +1,15 @@
+{
+ "id": "f3-invite-banner",
+ "export": "docs/design/exports/f3-invite-banner/f3-invite-banner.html",
+ "manifest": 28,
+ "mode": "bundle",
+ "pages": 28,
+ "exact": 28,
+ "labelled": 28,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3-invite-banner/pages",
+ "placeholders": []
+}

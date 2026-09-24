@@ -1,0 +1,19 @@
+{
+ "id": "f7-widget-gallery",
+ "export": "docs/design/exports/f7-widget-gallery/f7-widget-gallery.html",
+ "manifest": 14,
+ "mode": "bundle",
+ "pages": 14,
+ "exact": 13,
+ "labelled": 14,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f7-widget-gallery \u00b7 ios \u00b7 12-gallery-medium \u00b7 dark"
+ ],
+ "extra": [
+  "f7-widget-gallery \u00b7 ios \u00b7 12-dark-medium \u00b7 dark"
+ ],
+ "pagesDir": "docs/design/exports/f7-widget-gallery/pages",
+ "placeholders": []
+}

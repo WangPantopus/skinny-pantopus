@@ -372,6 +372,7 @@ private fun LoadedBody(
                 title = content.title,
                 dateRangeLabel = content.dateRangeLabel,
                 isActive = content.isActive,
+                statusLabel = content.status.ifBlank { "Unavailable" },
             )
             StatCellRow(
                 cells =

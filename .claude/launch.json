@@ -4,8 +4,20 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:web"],
+      "runtimeArgs": [
+        "dev:web"
+      ],
       "port": 3000
+    },
+    {
+      "name": "coord-web-18151",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/pantopus-stream1-master/frontend/apps/web && NEXT_PUBLIC_API_URL=http://127.0.0.1:18150 NEXT_PUBLIC_APP_URL=http://127.0.0.1:18151 NEXT_DIST_DIR=.next-coord NEXT_TELEMETRY_DISABLED=1 exec ./node_modules/.bin/next dev -p 18151 -H 127.0.0.1"
+      ],
+      "port": 18151,
+      "url": "http://127.0.0.1:18151"
     }
   ]
 }

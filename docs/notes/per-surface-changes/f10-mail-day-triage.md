@@ -1,0 +1,11 @@
+# Research-backed changes for f10-mail-day-triage
+
+- 'Scan today's stack' launches the system scanner; the tray opens over Mail Day [capture]
+- Rows stay in 'Needs a call' until decided. A photographed piece's decision pairs the paper and the photo outcome ('Recycled · keep photo' / 'Recycled · delete photo') [capture]
+- Remove the 'Undo (4s)' countdown. Each reviewed row keeps its Undo until 'Finish day' [capture, a11y]
+- The sticky 'Finish day' footer reserves scroll padding [a11y]
+- Copy says 'the mail you've added today', never 'all caught up' [capture]
+- No streak shown anywhere [companion]
+- Text on warningBg is text.primary; no swipe-only triage; failed reads show blanks, not $0.00 [a11y, capture]
+- (research contradiction, topic capture-and-extraction: photographing pa) v1: The newest reviewed row reads 'Comcast · Recycled · Undo (4s)' with a live countdown. | research: WCAG 2.2 SC 2.2.1: a time limit set by content must be possible to turn off, adjust to at least 10x, or extend with at least 20 seconds' warning, unless it exceeds 20 hours. A visible 4-second countdown on the recovery path pressures people and fails screen-reader and motor-impaired users. v1 also lists per-item Undo and 'Undo all 6', so the countdown is unnecessary. | do: Remove the countdown. Every reviewed row keeps its Undo until 'Finish day' (which also meets the over-20-hours exception). A transient snackbar may echo the action but is not the only path back.
+- (research contradiction, topic accessibility-inclusive: WCAG 2.2 AA (in) v1: Reviewed rows show 'Comcast · Recycled · Undo (4s)' with a live countdown. A sticky footer 'Finish day · 9 left' overlaps the last rows. Unconfirmed rows use an amber (warningBg) state. | research: A 4-second undo is a short time limit (WCAG 2.2.1), and a ticking countdown is auto-updating content (2.2.2). Sticky footers covering focused rows are the named failure in 2.4.11. Warning-hue text on warningBg is 3.07:1. | do: Keep per-item Undo in the collapsed 'Reviewed today' rows until the day is finished, with no seconds label (a static 'Undo' is enough). Add scroll padding equal to the footer height. Use text.primary for any words on warningBg, and leave amber and the hollow mark to the glyph and border.

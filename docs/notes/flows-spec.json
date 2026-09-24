@@ -1,0 +1,1462 @@
+{
+ "flows": [
+  {
+   "id": "flow-01",
+   "name": "Stranger to activated: /start fact \u2192 save \u2192 account \u2192 verify on another device \u2192 Today \u2192 primer \u2192 first pickup night",
+   "persona": "Maya Chen, 34. She moved into a rental at 1402 NE 3rd Ave, Camas, 5 days ago. She looks the address up on her work laptop at lunch and reads personal email on her iPhone at home.",
+   "goal": "See one true fact about the new address, keep it without retyping anything, and have Pantopus tell her the night before her first bin day. That meets the \u00a75 activation definition (saved + briefing or widget + one household fact) within 7 days.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f8-positioning-copy",
+     "state": "default (hero, contrast line under the lede)",
+     "userSeesOrDoes": "She lands on /start from a search result, reads 'See what's true about your address.' and types 1402 NE 3rd Ave into the field above the fold.",
+     "momentOfTruth": "Nothing before the preview asks for an account, location permission or notification permission. The field is the first interactive element."
+    },
+    {
+     "surfaceId": "f8-seasonal-aha",
+     "n": 2,
+     "state": "seasonal deadline (Oct 8), per-method copy",
+     "userSeesOrDoes": "The headline card shows 'Online or mail voter registration for Nov 3 must arrive by Oct 26 in Washington.', the in-person line, the source 'Washington Secretary of State' and a date chip. She notices the source.",
+     "momentOfTruth": "The fact is specific to this month and this state, shows its source, and is fully readable signed out."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f8-scale-strips",
+     "state": "all four present, risk-detail size inside the preview's Band-A",
+     "userSeesOrDoes": "She scrolls through Flood, Wildfire, Air today and Radon. Each is on its own authority's scale with a word, a number and a caption in the form 'authority \u00b7 scope \u00b7 as-of'.",
+     "momentOfTruth": "No grade or verdict appears. Radon reads 'county-wide estimate', so it is not a claim about her apartment."
+    },
+    {
+     "n": 4,
+     "surfaceId": "ext:start-wallbar",
+     "state": "sticky wall, T0",
+     "userSeesOrDoes": "She taps 'Keep this address handy', and the wall explains: 'Today and a night-before pickup reminder run on it.'",
+     "momentOfTruth": "The account ask arrives only at the moment she wants to keep something, and it names the benefit in one line."
+    },
+    {
+     "n": 5,
+     "surfaceId": "ext:register",
+     "state": "register form carrying the preview",
+     "userSeesOrDoes": "She creates an account with her email on the laptop and submits.",
+     "momentOfTruth": "The server stores 1402 NE 3rd Ave against the unverified account at register time. The address does not depend on the laptop's localStorage."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f1-email-verify-handoff",
+     "state": "1 \u00b7 sent, address named (with the proposed code field and hold length)",
+     "userSeesOrDoes": "She sees the 'Check your email' page with the pinned chip '1402 NE 3rd Ave, Camas, WA 98607' and 'Only you will see this.'. Below it are a paste-enabled 6-digit code field, 'Resend the link' with a spam-folder hint, and a line stating how long the address is held.",
+     "momentOfTruth": "She can finish on the laptop by pasting the code. The copy says the place is already held, so she doesn't read the next step as a wall she must clear before anything is saved."
+    },
+    {
+     "n": 7,
+     "surfaceId": "ext:email-client",
+     "state": "verification email opened on iPhone Mail that evening",
+     "userSeesOrDoes": "She ignores the code and taps the link on her phone.",
+     "momentOfTruth": "The link works on any device and does not send her to a login screen first."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f1-email-verify-handoff",
+     "state": "3 \u00b7 verified on a different device",
+     "userSeesOrDoes": "She reads 'Saved 1402 NE 3rd Ave to your account.' with the same chip, then moves straight on.",
+     "momentOfTruth": "The phone frame is pixel-identical to the same-device frame. Nothing about it looks like recovery."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f1-save-confirmation",
+     "state": "3 \u00b7 saved",
+     "userSeesOrDoes": "She sees 'Saved privately', a tick, and one line saying Today now runs on this address. The primary action is 'See Today'. She taps it.",
+     "momentOfTruth": "The single sentence names what changed. The privacy caption says 'Only you'. There is no celebration."
+    },
+    {
+     "n": 10,
+     "surfaceId": "f1-today-tab",
+     "state": "3 \u00b7 warming \u2192 4 \u00b7 saved place with chip",
+     "userSeesOrDoes": "Content-shaped skeletons fill in their final slots as weather, air, alerts and the calendar land. The location row reads '1402 NE 3rd Ave \u00b7 Saved place \u00b7 Only you'.",
+     "momentOfTruth": "'Nothing needs your attention today' never appears before every provider has returned. There is no welcome carousel, no coach marks and no permission prompt at first launch."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f4-today-pickup-card",
+     "state": "unverified city rule",
+     "userSeesOrDoes": "She reads 'Recycling and garbage tomorrow', the hollow mark and 'City schedule, not yet confirmed'. It matches the bins she saw on the curb, so she taps 'That's my day'.",
+     "momentOfTruth": "The confirmation holds at T1: the source row flips to 'You \u00b7 Tuesday' and the caveat disappears. This depends on the SCOPE_RANK saved_place fix. A toast that fades while the city caveat keeps showing would count as a failure here."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f4-notification-primer",
+     "state": "default, entered from first 'That's my day' (native only)",
+     "userSeesOrDoes": "On the iOS app (installed from the wall, see flow-14) she sees the real night-before notification drawn as an in-app illustration: 'Unconfirmed: pickup tomorrow' before she confirms, 'Recycling + garbage tomorrow' after. Under it: 'Continue' and 'Your phone will ask next.'",
+     "momentOfTruth": "The purpose is concrete because she just confirmed a day. The primer does not imitate the system alert, and the button does not say 'Yes' or 'Allow'."
+    },
+    {
+     "n": 13,
+     "surfaceId": "ext:os-permission-dialog",
+     "state": "iOS one-time notification prompt",
+     "userSeesOrDoes": "She taps Allow.",
+     "momentOfTruth": "The one-shot grant is spent here, in context, and not at cold launch."
+    },
+    {
+     "n": 14,
+     "surfaceId": "f4-briefing-optin-card",
+     "state": "one on / one off",
+     "userSeesOrDoes": "Back on Today, the night-before row reads '6:00pm \u00b7 Change'. The morning row still asks.",
+     "momentOfTruth": "The on state matches what the OS actually allows. The time she never chose is shown so she can change it."
+    },
+    {
+     "n": 15,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "ready, T1",
+     "userSeesOrDoes": "She taps the '+ Add a date' row at the foot of the strip.",
+     "momentOfTruth": "The ask sits inside the section it fills. The first-week summary row names this as the next step and shows no fraction."
+    },
+    {
+     "n": 16,
+     "surfaceId": "x-date-sheet",
+     "state": "create \u2192 saved (lease ends, scope saved_place)",
+     "userSeesOrDoes": "She picks Lease ends, types the date, sets the notice rule, and sees 'Only you will see this.' The save confirmation is announced as a status message.",
+     "momentOfTruth": "She is now activated: saved + briefing + one date. The activation query and the Today first-week row agree on this."
+    },
+    {
+     "n": 17,
+     "surfaceId": "ext:os-push-tray",
+     "state": "Monday 6:00 PM evening briefing, confirmed rule",
+     "userSeesOrDoes": "She receives 'Recycling + garbage tomorrow' with the body 'Bins out tonight \u00b7 3rd Ave' (street label only).",
+     "momentOfTruth": "The push fires on her confirmed day, and only once. No house number appears on the lock screen."
+    },
+    {
+     "n": 18,
+     "surfaceId": "f1-today-tab",
+     "state": "11 \u00b7 arrived from a push, briefing pinned",
+     "userSeesOrDoes": "She taps the push and the pickup card is pinned at the top. session_open{trigger:push,kind:pickup} is recorded.",
+     "momentOfTruth": "The push lands on the exact card. With Today already open at 6 PM, the card is highlighted and no banner appears."
+    }
+   ],
+   "failureBranches": [
+    "Verification link opened on a device with no session and the server holds no draft (hold expired). f1-save-confirmation should show a selectable row '1402 NE 3rd Ave, Camas \u2014 Save it' when the server still has the address. The blank 'Street address' field is only for 'nothing was ever held'.",
+    "Verification link expired. f1-email-verify-handoff frame 6 still shows the chip with 'We're still holding 1402 NE 3rd Ave' and 'Send a new link'.",
+    "Mail app opens the link in an in-app browser with no cookies. It must land on the saved state, not on /login.",
+    "expectedUserId mismatch (a different account is signed in on the phone). f1-save-confirmation frame 6 refuses to save and offers 'Preview it on this account'.",
+    "A cold geohash returns partial results. The f1-today-tab partial frame names the provider that failed, offers Retry, and makes no all-clear claim.",
+    "No city pickup rule exists for the address. f4-today-pickup-card shows the demoted 'Set your pickup day' line, which opens x-date-sheet. Pickup is never pushed without a day she set herself.",
+    "Maya never installs a native app. Web has no primer: the night-before row on f4-briefing-optin-card asks for browser permission directly, or she relies on Today and email. The flow must still reach activation through the widget-less path (briefing on web or an email trigger).",
+    "iOS OS prompt denied. The card falls back to one neutral line plus a single widget offer (flow-07). No amber nag appears on Today.",
+    "Android declined once. The primer shows 'Continue' again, which re-fires the system dialog. Declined twice means blocked: only 'Open Settings' is offered. 'Not now' on Android never fires the system dialog.",
+    "'That's my day' save error. The card keeps the hollow mark and shows an inline retry. The primer must not open for a confirmation that failed.",
+    "Address outside Clark County. The preview works nationwide, so the save must succeed with a line naming which layers exist there. f1-add-place-sheet currently refuses the address instead."
+   ],
+   "successMetric": "Activation (saved + briefing or widget + one household fact within 7 days); secondarily Week-four return attributed to trigger=push.",
+   "whyItNeedsAStoryboard": "This flow crosses eight surfaces owned by four features (F8, F1, F4, F5), and it breaks in the gaps between them. Examples: an address held on the server but described as device-local, a primer that asks again after a Yes, and a confirmation dropped at T1. No single prompt covers register \u2192 verify on another device \u2192 Today \u2192 permission. The critique rated this path a blocker."
+  },
+  {
+   "id": "flow-02",
+   "name": "Weekly pickup loop: push or no push, confirm, correct with 'Not my schedule', holiday move",
+   "persona": "Luis Ortega, 41. He lives at 6519 NE 51st St, unincorporated Vancouver (Clark County), where recycling is every other week on his garbage day. He tapped 'Not now' on the first notification ask and opens the app on Sunday evenings out of habit.",
+   "goal": "Know every week, with or without notifications, whether it is a garbage-only or a garbage-plus-recycling night. Fix a wrong city guess once so it stays fixed.",
+   "platforms": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f1-today-tab",
+     "state": "4 \u00b7 saved place, organic open (notifications off)",
+     "userSeesOrDoes": "He opens Today on Monday evening with no push. The pickup card sits directly under the location row.",
+     "momentOfTruth": "The in-app card exists without a push. This is design rule 4, and it needs the single Today composition on both native apps."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f4-today-pickup-card",
+     "state": "unverified city rule",
+     "userSeesOrDoes": "He reads 'Recycling and garbage tomorrow', the hollow mark and 'Clark County solid-waste service map \u00b7 not yet confirmed'. He knows recycling is next week, not tomorrow, so he taps 'Not my schedule'.",
+     "momentOfTruth": "Both actions carry equal weight. The source is named, and it is the county map, not the City of Camas."
+    },
+    {
+     "n": 3,
+     "surfaceId": "x-provenance-sheet",
+     "state": "2 \u00b7 on record, unconfirmed \u2192 reason picker (schedule-type reasons)",
+     "userSeesOrDoes": "He sees the hollow mark drawn large, 'Clark County solid-waste service map \u00b7 Read 12 Aug 2026', and reasons tailored to a schedule. The lead action is 'Set my pickup day'. Under it is an optional checkbox: 'Also tell us the county map looks wrong'.",
+     "momentOfTruth": "Fixing it himself is the first path. The report does not end the flow."
+    },
+    {
+     "n": 4,
+     "surfaceId": "x-date-sheet",
+     "state": "create with pickup day, recurrence branch open",
+     "userSeesOrDoes": "He picks garbage on Tuesday, weekly. For recycling he picks every other week and enters 'Next recycling \u2014 Tue 27 Oct'. A read-only preview shows 'Tue 27 Oct \u00b7 Tue 10 Nov \u00b7 Tue 24 Nov', with the Thanksgiving-week move applied if the calendar is published.",
+     "momentOfTruth": "The date anchor is explicit and he can check it. Recycling is never inferred from the garbage day."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f4-today-pickup-card",
+     "state": "confirmed just now",
+     "userSeesOrDoes": "The card now reads 'Garbage only tomorrow' with the source row 'You \u00b7 Tuesday'. The caveat is gone.",
+     "momentOfTruth": "His correction shows in the pixels immediately and survives a reload. If the county rule still renders, that is the SCOPE_RANK blocker."
+    },
+    {
+     "n": 6,
+     "surfaceId": "x-provenance-sheet",
+     "state": "6 \u00b7 report submitted",
+     "userSeesOrDoes": "If he ticked the checkbox, he sees 'Reported Oct 19. We'll check it against Clark County Public Works by Oct 26 and tell you here.'",
+     "momentOfTruth": "The receipt says when and where the outcome will appear. \u00a75's honesty counter reads this report."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "ready, user-entered rule",
+     "userSeesOrDoes": "Tuesdays now carry a garbage glyph with a tick. Alternate Tuesdays add the recycling glyph.",
+     "momentOfTruth": "Combined days look different from garbage-only days. Strip cells are not tap targets; list rows are."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f7-today-widget",
+     "state": "fresh (if placed)",
+     "userSeesOrDoes": "The widget hero changes from a hollow mark to a tick on the next snapshot write.",
+     "momentOfTruth": "The confirm action rewrites the snapshot at once, so the widget never keeps showing the hollow guess."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f4-briefing-optin-card",
+     "state": "never asked \u2192 Yes on night-before row",
+     "userSeesOrDoes": "Now that the schedule is right, he taps Yes on 'The night before pickup?'.",
+     "momentOfTruth": "The card's Yes goes straight to the OS dialog. He does not get a second primer asking Yes again."
+    },
+    {
+     "n": 10,
+     "surfaceId": "ext:os-push-tray",
+     "state": "following Monday 6:00 PM, confirmed garbage+recycling night",
+     "userSeesOrDoes": "He receives 'Recycling + garbage tomorrow' with the body 'Bins out tonight \u00b7 curbside by 6:30 AM'.",
+     "momentOfTruth": "One push a night, with bins named, set-out time taken from the source, and no house number."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f4-today-pickup-card",
+     "state": "moved for a holiday (proposed state)",
+     "userSeesOrDoes": "In Thanksgiving week the card reads 'Garbage moves to Friday this week', shows a struck-through Thursday ghost, and cites 'Waste Connections 2026 holiday schedule'. The push fires Thursday evening, not Wednesday.",
+     "momentOfTruth": "The push follows the moved day. Sending 'bins out tonight' on the usual evening would be a lie, whatever mark it carries."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f1-today-tab",
+     "state": "6 \u00b7 quiet day with receipt line",
+     "userSeesOrDoes": "On a night with no pickup, Today reads 'Nothing needs your attention today' with four ticked checks, and no push arrives.",
+     "momentOfTruth": "The receipt shows only when every check succeeded, so the silence reads as finished work, not a broken app."
+    }
+   ],
+   "failureBranches": [
+    "The saved_place rule is dropped by applyPrecedence. The card keeps showing the county day after he confirms. This is a hard blocker: do not push unverified pickups to T1 until it is fixed.",
+    "Push arrives while Today is open. There is no banner; the pickup card is highlighted instead.",
+    "iOS Scheduled Summary holds the push. f4-notification-settings shows 'Pickup reminders may arrive with your summary', and the card on Today stays the guarantee.",
+    "OS notifications denied later. f4-notification-settings shows the denied banner and 'Open Settings', which opens the Pantopus notification page, not the app's root settings. Today shows no amber line unless an in-app switch is on while the OS blocks it.",
+    "Android 'Not now' on the primer must not spend a system-dialog denial.",
+    "He taps 'That's My Day' as a notification action from the tray. The rule is confirmed in the background and the widget snapshot is rewritten without opening the app.",
+    "Report failed. x-provenance-sheet frame 7 keeps the chosen reason and offers retry. The self-fix still applies.",
+    "Holiday data for 2027 is not yet published. Marks after the last published calendar are drawn as projected, never as confirmed.",
+    "He confirms a day, then a household member (T3) confirms a different day. The household rule wins and the row shows who set it.",
+    "Offline. The card's actions are disabled with a reason, and the last content stays with 'Updated 2h ago'."
+   ],
+   "successMetric": "Honesty (zero pushes on a guessed schedule without the caveat; 'not my schedule' reports resolved) and Week-four return by trigger (push vs organic).",
+   "whyItNeedsAStoryboard": "The loop runs across Today, the pickup card, the provenance sheet, the Date sheet, the strip, the widget and the push tray, and the prompts disagree on where 'Not my schedule' leads. The notifications-off path and the holiday move exist in no prompt at all. This is the only weekly return trigger the pilot has."
+  },
+  {
+   "id": "flow-03",
+   "name": "Lease date from entry to the 60-day reminder to done",
+   "persona": "Priya Raman, 29. She rents at The Blairmont, Vancouver, and her lease ends Wed 31 Mar 2027. It requires 30 days' written notice. She has a saved place only (T1) and her lease PDF open in another tab.",
+   "goal": "Type the lease end once, be told early enough to act, and mark it handled so the reminders stop.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "x-place-file",
+     "state": "3 \u00b7 T1 saved place, Dates category with a missing row",
+     "userSeesOrDoes": "She opens the Place tab and sees the year band with empty 'You' lanes and a missing row, 'When does your lease end?', with an 'Add date' button.",
+     "momentOfTruth": "The missing fact reads as an invitation, not a failure. The count has no denominator."
+    },
+    {
+     "n": 2,
+     "surfaceId": "x-date-sheet",
+     "state": "create, Lease ends tile",
+     "userSeesOrDoes": "She taps the Lease ends tile and types 03/31/2027 into a typeable field. Android opens in keyboard input mode; iOS uses the compact picker with a month/year jump. The field shows 'Wed 31 Mar 2027'.",
+     "momentOfTruth": "A date 18 months away takes two or three taps, not paging through a calendar."
+    },
+    {
+     "n": 3,
+     "surfaceId": "x-date-sheet",
+     "state": "create, lease notice question (proposed)",
+     "userSeesOrDoes": "She answers 'How much notice does your lease require?' with 30 days (options: 20 WA minimum / 30 / 60 / other, plus 'check your lease'). The sheet creates a linked row, 'Notice deadline \u00b7 Mon 1 Mar 2027'.",
+     "momentOfTruth": "The deadline she has to act on becomes its own row, with its weekday shown."
+    },
+    {
+     "n": 4,
+     "surfaceId": "x-date-sheet",
+     "state": "create, Remind me",
+     "userSeesOrDoes": "She picks 60 days before the lease end. The leader line shows the whole series with real dates: Sat 30 Jan 2027 (60 days), Sun 28 Feb (day before the notice deadline) and Mon 1 Mar (notice day). The reminder copy names the action.",
+     "momentOfTruth": "The control shows every reminder that will fire, and the 60-day reminder lands 30 days before the notice deadline, so it is still actionable."
+    },
+    {
+     "n": 5,
+     "surfaceId": "x-date-sheet",
+     "state": "saved",
+     "userSeesOrDoes": "She reads 'Saved to your calendar. Only you.' as a status message. The footer says 'Only you will see this.'",
+     "momentOfTruth": "The scope is stated at the moment of input."
+    },
+    {
+     "n": 6,
+     "surfaceId": "x-place-file",
+     "state": "T1, dates known",
+     "userSeesOrDoes": "The year band 'You' lane gains two tick markers (Mar and Mar 1, grouped by month on a phone), and the Dates rows show both dates.",
+     "momentOfTruth": "A date months beyond the 14-day window is visible and editable. Today it is otherwise invisible until 14 days out."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f1-today-tab",
+     "state": "4 \u00b7 saved place",
+     "userSeesOrDoes": "Today's first-week row moves to its next ask, or disappears if all steps are done.",
+     "momentOfTruth": "The Today row and the place file agree on what counts as done."
+    },
+    {
+     "n": 8,
+     "surfaceId": "ext:os-push-tray",
+     "state": "Sat 30 Jan 2027 7:00 AM (morning briefing slot), date reminder",
+     "userSeesOrDoes": "She receives 'Lease notice due Mon 1 Mar' with the body 'Tell your landlord in writing \u00b7 Blairmont' and a 'Done' action.",
+     "momentOfTruth": "The copy names the action and the deadline. The push is Active/DEFAULT urgency and shows no house number."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "reminder deep link (rule highlighted) \u2014 or x-place-file Dates row when the date is outside the 14-day window",
+     "userSeesOrDoes": "She taps the push. The app opens on the notice-deadline row with focus moved to it, then opens x-date-sheet in view-mine mode.",
+     "momentOfTruth": "The landing shows the exact rule even though it is 30 days out, beyond the strip. The 14-day strip cannot host it."
+    },
+    {
+     "n": 10,
+     "surfaceId": "x-date-sheet",
+     "state": "view-mine (edit / remind / delete) + proposed 'Mark done'",
+     "userSeesOrDoes": "She emails her landlord, then taps 'I gave notice' (mark done).",
+     "momentOfTruth": "Marking done cancels the Feb 28 and Mar 1 reminders and says so: 'We won't remind you again about this.'"
+    },
+    {
+     "n": 11,
+     "surfaceId": "x-place-file",
+     "state": "T1, row done",
+     "userSeesOrDoes": "The Notice deadline row goes quiet with a tick. Lease ends stays as a fact.",
+     "momentOfTruth": "Done rows recede; nothing is celebrated."
+    }
+   ],
+   "failureBranches": [
+    "The lead is longer than the time left (for example, a 60-day lead on a date 15 days away). The sheet suggests the nearest possible lead, e.g. 'That's already passed \u2014 remind 7 days before (Thu 24 Sep)?', instead of blocking.",
+    "Collision. A lease end is already set. The warning shows the existing row's title and date. At T3 the options are Replace, Add as a separate calendar event, or Cancel; at T1 the limit is stated before she types.",
+    "The notice deadline falls on a weekend. The sheet suggests acting on the Friday before.",
+    "She doesn't know the exact day. 'Not sure of the day' saves month and year with an 'about' treatment, and the reminder fires at the start of the month.",
+    "Notifications off. The 60-day reminder has no in-app twin until the date enters the 14-day strip, so the place file year band and a Today 'coming up' row must carry it.",
+    "The lead_days CHECK is still 0\u201330 on the backend. A 60-day choice fails to save; the error must keep her input.",
+    "She claims the address before January (flow-06). The rule moves to home scope, and her 'Only you' choice must hold unless she shares it.",
+    "She taps the reminder after deleting the rule. The landing falls back with 'That date was removed' and never shows a blank screen.",
+    "Household member without calendar.edit (T3). Fields are visible but disabled, with the reason stated.",
+    "Offline. Save is disabled with 'You're offline'."
+   ],
+   "successMetric": "Activation (one important date) and Week-four/annual return with trigger=push, kind=date.",
+   "whyItNeedsAStoryboard": "This is the loop's annual-return promise, and it spans months and four surfaces: the Date sheet, the place file, the tray and the landing. The v1 fixtures put the reminder on or after the notice deadline. No prompt draws the reminder push, its landing for a date outside the strip, or what 'done' looks like."
+  },
+  {
+   "id": "flow-04",
+   "name": "Inviting a co-resident through acceptance, first open, the locked action, and owner attestation",
+   "persona": "Dana Whitfield, 38, claimed and postcard-verified 1428 NE Maple St, Camas (owner). Sam Okafor, 32, her housemate, has no Pantopus account and reads email on a Pixel. Sam moved in Sep 3.",
+   "goal": "Dana adds Sam in two taps. Sam joins knowing what access he gets, lands somewhere useful, and has a way to complete verification when he tries to message a neighbor.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f3-household-block",
+     "state": "2 \u00b7 visible (place file People section)",
+     "userSeesOrDoes": "Dana sees 'Who lives here with you?' and the privacy sentence, and taps 'Invite by email'.",
+     "momentOfTruth": "The ask is on the Place tab where she actually lands. 'Just me' is a real button of equal weight."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f3-invite-composer",
+     "state": "form (Email, default)",
+     "userSeesOrDoes": "She types sam.okafor@example.com and picks Member. Under it she reads the caption 'Sees and edits the calendar, sees bills and who paid, sees who lives here'.",
+     "momentOfTruth": "The role explains itself where she chooses it."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f3-invite-composer",
+     "state": "review / confirm",
+     "userSeesOrDoes": "The manifest lists Home, Role offered (with the same grant list Sam will see), Access and 'Expires Sep 30, 2026'. She sends.",
+     "momentOfTruth": "The sender approves exactly what the invitee will read, built from one shared string."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f3-invite-composer",
+     "state": "sent + recovery panel",
+     "userSeesOrDoes": "She reads 'Invitation sent to sam.okafor@example.com' with a link and a QR code as a fallback.",
+     "momentOfTruth": "'Sent' is announced as a status. The roster shows a pending row with 'Expires Sep 30 \u00b7 Resend'."
+    },
+    {
+     "n": 5,
+     "surfaceId": "ext:email-client",
+     "state": "invitation email on Android",
+     "userSeesOrDoes": "Sam reads 'Dana Whitfield invited you to Maple St on Pantopus' and taps Review.",
+     "momentOfTruth": "The email names the inviter and the home and says what joining gives."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f3b-invitation-decision",
+     "state": "signed-out variant \u2192 offer",
+     "userSeesOrDoes": "On mobile web Sam sees the manifest, 'Dana Whitfield and 1 other live here' (a count, no names), the column 'What you get now' and the column 'What needs address verification' written as verbs ('Message your neighbors' \u2026).",
+     "momentOfTruth": "The grant comes first, and the limits read as a list. A forwarded link does not expose the household's names."
+    },
+    {
+     "n": 7,
+     "surfaceId": "ext:register",
+     "state": "register with invite token preserved",
+     "userSeesOrDoes": "Sam creates an account without installing the app.",
+     "momentOfTruth": "The token survives registration and brings him back to the decision screen, not to an empty Place tab."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f3b-invitation-decision",
+     "state": "accepted",
+     "userSeesOrDoes": "He taps Accept and reads 'You're in.' The primary button is 'Open Home'; the secondary is 'Start address verification \u2014 postcards take about a week'.",
+     "momentOfTruth": "Verification is offered, not pushed. The verify sheet does not open automatically."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f1-today-tab",
+     "state": "5 \u00b7 claimed home (first open after accept) + one-time notice (proposed)",
+     "userSeesOrDoes": "Today reads 'Today now uses Maple St \u00b7 because you joined this household' with a link to Your places. The pickup card shows 'Dana \u00b7 Wednesday, confirmed'.",
+     "momentOfTruth": "The switch in Today's address is explained, not silent. He sees the household's confirmed day straight away."
+    },
+    {
+     "n": 10,
+     "surfaceId": "f3-member-home-dashboard",
+     "state": "2 \u00b7 member view",
+     "userSeesOrDoes": "He opens the home and sees Members '3 people live here', the Calendar card and the Bills card '6 upcoming', each with a quiet 'View'.",
+     "momentOfTruth": "The dashboard is useful read-only. No control is visible but inert."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f3-household-calendar",
+     "state": "member with calendar.edit",
+     "userSeesOrDoes": "He adds 'Chimney sweep \u00b7 Sat Nov 14'.",
+     "momentOfTruth": "The T3 toast 'Saved to your household calendar' is true. Dana later receives one quiet home_event_created row."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f3b-locked-action-row",
+     "state": "household-verified, locked with reason (Nearby neighbor-message compose)",
+     "userSeesOrDoes": "In Nearby he taps Message a neighbor and sees 'Address verification needed to send neighbor messages \u00b7 Verify address' in place of the control.",
+     "momentOfTruth": "He gets an explanation, not a 403 or a dead tap. The text meets contrast (not text.muted on sunken)."
+    },
+    {
+     "n": 13,
+     "surfaceId": "f3b-verify-address-sheet",
+     "state": "method unavailable to a non-owner occupant, owner-attestation offered",
+     "userSeesOrDoes": "The header reads 'To send neighbor messages, we need to confirm you live here.' Postcard and document show their requirements; landlord is greyed with a reason. 'Ask Dana Whitfield to confirm \u00b7 Usually same day' is offered. He taps it.",
+     "momentOfTruth": "At least one method he can finish is shown, with an honest estimated time."
+    },
+    {
+     "n": 14,
+     "surfaceId": "f3b-verify-address-sheet",
+     "state": "request sent / attestation pending (proposed)",
+     "userSeesOrDoes": "He reads 'We asked Dana. You'll hear here when she answers.'",
+     "momentOfTruth": "The request is a visible state, so he doesn't tap again or give up."
+    },
+    {
+     "n": 15,
+     "surfaceId": "ext:os-push-tray",
+     "state": "Dana's phone, household update",
+     "userSeesOrDoes": "Dana receives 'Sam is verifying Maple St' and taps it.",
+     "momentOfTruth": "The push lands on the attestation sheet, not on the dashboard."
+    },
+    {
+     "n": 16,
+     "surfaceId": "f3b-owner-attestation",
+     "state": "request pending \u2192 confirming \u2192 confirmed",
+     "userSeesOrDoes": "Dana reads 'Does Sam live here?', the grant rows, and the consequence line 'does not give Sam ownership'. She ticks the box and confirms.",
+     "momentOfTruth": "She approves the same unlock list Sam was shown."
+    },
+    {
+     "n": 17,
+     "surfaceId": "f3b-locked-action-row",
+     "state": "address-verified (control live)",
+     "userSeesOrDoes": "Sam gets an in-app row, 'Dana confirmed you live at Maple St', and the compose control is live.",
+     "momentOfTruth": "The result reaches the requester, and the unlock is immediate."
+    },
+    {
+     "n": 18,
+     "surfaceId": "f3-members-roster",
+     "state": "owner/admin view",
+     "userSeesOrDoes": "Dana sees Sam under Members with a quiet caption. There is no status chip on the person. The pending row is gone.",
+     "momentOfTruth": "The roster does not rank housemates by how they were verified."
+    }
+   ],
+   "failureBranches": [
+    "The invitation expired. f3b-invitation-decision shows 'This invitation expired Sep 30. Ask Dana Whitfield to send a new one.', and the roster offers a one-tap Resend.",
+    "INVITE_POLICY_CHANGED after the permissions migration. See flow-12.",
+    "Sam declines. The decision frame says 'Dana will see that this invitation was declined'. The roster row reads 'Declined \u00b7 Sep 16' with Remove only.",
+    "Sam is signed in with a different email than the invite. The page states the mismatch and offers to accept anyway or switch accounts.",
+    "Dana chose 'Share a link'. The exposure warning appears when she picks it. A person who joins by link waits in 'Waiting for Dana's OK' and sees no household data until approved.",
+    "Dana declines the attestation or taps 'Not now'. Sam's sheet must show 'Dana didn't confirm' with the postcard path, not an endless pending state.",
+    "Dana has revoked Sam's access since the request. The attestation shows that state, and Sam's dashboard shows 'Your access to Maple St ended.'",
+    "Postcard pending. The locked row reads 'We're checking your postcard code \u2014 expected by \u2026' with no CTA. A late-arrival path is enabled only after the expected window.",
+    "Android canPerform early return. A visible control does nothing. The row must replace the control; a silent no-op is a failure.",
+    "Sam already has a saved place and Today silently switches to Maple St. The one-time notice (step 9) is required.",
+    "The household block keeps showing for Sam because of the 'within 7 days of occupancy start' trigger. It must show the read-only 'You and 2 others live here'.",
+    "Offline at accept. Accept is disabled with a reason, and the token is kept."
+   ],
+   "successMetric": "Activation (one household fact: a second active occupant) and Honesty (no attested action implied for household-verified members).",
+   "whyItNeedsAStoryboard": "It runs across two people, two devices, email, registration and nine surfaces. The completable path depends on a push to the other person and a result coming back, and no single prompt shows that round trip. The critique rated the non-owner verification dead end a blocker."
+  },
+  {
+   "id": "flow-05",
+   "name": "Compare card: sender mints \u2192 friend opens on a phone \u2192 reveal \u2192 friend sends their own",
+   "persona": "Maya Chen, 34 (sender, from flow-01), on mobile web. Jordan Lee, 36, is her friend. He just moved to 6207 NE 42nd Ave, Vancouver, and opens the link in iMessage on an iPhone during his commute.",
+   "goal": "Maya shares the readings, not her address. Jordan sees hers, types his own address, sees both on one instrument, and sends his back.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f8-seasonal-aha",
+     "state": "seasonal deadline (T0 preview)",
+     "userSeesOrDoes": "Maya reads her preview and taps the tertiary 'Compare with a friend' under the aha card.",
+     "momentOfTruth": "The spread action is there but does not outrank the save CTA."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f8-compare-sheet",
+     "state": "1 \u00b7 idle (link pre-minted on open)",
+     "userSeesOrDoes": "She sees the card preview at 1.91:1 with the city and the four strips, then 'This card shows readings and your city, never your address. Anyone with the link can see this card until {exp}.'",
+     "momentOfTruth": "She reads the consent before any link exists or is sent."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f8-compare-sheet",
+     "state": "2 \u00b7 name field shown",
+     "userSeesOrDoes": "She turns on 'Show my first name', types Maya, and the preview updates to 'Maya \u00b7 Camas, WA'. The link is re-minted in the background.",
+     "momentOfTruth": "The preview shows exactly what the token will contain and nothing more."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f8-compare-sheet",
+     "state": "7 \u00b7 share sheet opened",
+     "userSeesOrDoes": "She taps Share. navigator.share is called synchronously and she picks Jordan in Messages.",
+     "momentOfTruth": "No network wait sits between the tap and the share, so transient activation holds."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f8-og-compare-card",
+     "state": "1 \u00b7 vs valid, first name shown (in an iMessage bubble)",
+     "userSeesOrDoes": "Jordan sees the unfurl: the image, and under it the title 'What's on record at Maya's place. Yours?'",
+     "momentOfTruth": "The title line, not text inside the image, carries the question. The image is readable at bubble size and never renders as a broken image."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f8-compare-arrival-header",
+     "state": "7 \u00b7 below 640px, collapsed sender strip",
+     "userSeesOrDoes": "He sees a one-line text strip, 'Maya \u00b7 Camas, WA \u00b7 Flood X \u00b7 Wildfire Moderate \u00b7 Air on Sep 12 \u00b7 42 \u00b7 Radon Zone 1 \u203a', above an address field that already has focus.",
+     "momentOfTruth": "The field is in the first viewport, and nothing blocks typing while the token verifies."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f8-compare-arrival-header",
+     "state": "2 \u00b7 valid, sender named \u2192 typing",
+     "userSeesOrDoes": "He types 6207 NE 42nd Ave and taps 'See your place'.",
+     "momentOfTruth": "The contrast line sits below the field, and the privacy proof line is visible."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f8-compare-reveal",
+     "state": "1 \u00b7 loading \u2192 2 \u00b7 both revealed",
+     "userSeesOrDoes": "He sees one table in fixed order (Flood \u00b7 Wildfire \u00b7 Air \u00b7 Radon). Each row has one track with Maya's filled mark and his ringed 'You' mark. The Flood and Wildfire rows are tagged 'Different band'.",
+     "momentOfTruth": "Nothing ranks one home against the other: no arrows, no winner, no re-sorting. Air shows both dates."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f8-compare-reveal",
+     "state": "2 \u00b7 both revealed, recipient aha below the divider",
+     "userSeesOrDoes": "Below a quiet divider he reads his own aha, 'Zone AE \u2014 1% chance of flooding each year (about 1 in 4 over 30 years) \u00b7 FEMA', followed by a neutral next step, 'What Zone AE means \u00b7 FEMA'.",
+     "momentOfTruth": "The more serious reading comes with an authority's action, not with alarm."
+    },
+    {
+     "n": 10,
+     "surfaceId": "x-provenance-sheet",
+     "state": "1 \u00b7 official (flood payload, 'Covers: area zone')",
+     "userSeesOrDoes": "He taps the Flood row and reads the method, the effective date, and 'Only FEMA can change this' with a LOMA link.",
+     "momentOfTruth": "The whole row is the tap target, and disputes go to the authority."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f8-compare-sheet",
+     "state": "9 \u00b7 reciprocal variant",
+     "userSeesOrDoes": "He taps 'Send yours back', leaves the name toggle off, and taps 'Send my card'. The card is minted from the address he just typed.",
+     "momentOfTruth": "It is clear which address's readings the new card carries, and his address still never appears."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f8-og-compare-card",
+     "state": "2 \u00b7 vs valid, no first name",
+     "userSeesOrDoes": "Maya receives 'A place in Vancouver, WA \u00b7 Yours?' in the same thread.",
+     "momentOfTruth": "The loop closes. t0_compare_viewed and t0_aha_viewed share one anon_id."
+    },
+    {
+     "n": 13,
+     "surfaceId": "ext:start-wallbar",
+     "state": "sticky wall after reveal",
+     "userSeesOrDoes": "Jordan taps 'Keep this address handy' and continues into flow-01 from step 5.",
+     "momentOfTruth": "The wall offers saving, and makes no claim or Founding promise unless founding_open is true."
+    }
+   ],
+   "failureBranches": [
+    "Expired or tampered token. f8-compare-arrival-header frame 4 shows a quiet banner and the ordinary hero, and the OG card falls back to the generic card, never an error image in the chat.",
+    "Jordan's address fails to geocode. f8-compare-reveal frame 4 keeps Maya's marks and retries inline; the funnel does not reset.",
+    "Unsupported region. Maya's column stays and one line explains the gap.",
+    "Both marks fall in the same band on every row, the most common case. The marks merge and read 'Same band'.",
+    "Jordan already has an account (signed-in viewer). The header swaps Sign in for Save this address. Where that button goes (the add-place sheet or the save confirmation) is currently undefined.",
+    "The sender used native. The card is anonymous and the caption says so. Native sends are not counted in spread until the native funnel emitter exists.",
+    "Share cancelled or no targets (AbortError). The sheet returns to ready with 'Copy link' visible, not an error.",
+    "Rate limited. The sheet shows distinct copy with a time estimate.",
+    "Token verification offline. Decodable chips render, or the expired banner; a spinner never hangs.",
+    "Same geohash-6. The Founding same-block line describes the block's slots and never says 'you two are on the same block'.",
+    "Jordan has the iOS app installed. The link opens web /start (no universal link defined), so the native funnel is bypassed."
+   ],
+   "successMetric": "Spread (k = compare rate \u00d7 hop \u00d7 reveal \u2265 0.3) and Honesty (zero cards read as a claim about a neighbour's home).",
+   "whyItNeedsAStoryboard": "The flow passes from the sender's sheet to a third-party messenger unfurl, a stranger's phone, and back again, and each surface was prompted with a different sender, different strings and different freshness labels. The spread metric is measured across exactly these hand-offs."
+  },
+  {
+   "id": "flow-06",
+   "name": "Saved place \u2192 claim \u2192 claim receipt with what carried over",
+   "persona": "Maya Chen, 34 (flows 01 and 09). Three weeks after saving 1402 NE 3rd Ave, she decides to claim it: she wants to add her roommate and use Mail Day. She has a confirmed pickup day, two dates and (phase 2) a keeper named Ollie.",
+   "goal": "Upgrade the bookmark to a home without losing anything she typed, and decide for herself whether her dates become visible to the household.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f1-your-places",
+     "state": "3 \u00b7 single place, overflow open",
+     "userSeesOrDoes": "She opens Your places and taps 'Claim this address' on the row marked 'Used for Today'.",
+     "momentOfTruth": "Claiming is a deliberate, separate action, never the default path of a CTA labelled 'Preview' or 'Save'."
+    },
+    {
+     "n": 2,
+     "surfaceId": "ext:claim-verify-flow",
+     "state": "existing claim flow, postcard method chosen",
+     "userSeesOrDoes": "She requests a postcard.",
+     "momentOfTruth": "The flow says what happens to her saved-place data. The pending state is visible on the place file Proof row."
+    },
+    {
+     "n": 3,
+     "surfaceId": "x-place-file",
+     "state": "3 \u00b7 T1 with Proof row pending (proposed)",
+     "userSeesOrDoes": "The Proof row reads 'Postcard mailed Sep 20 \u00b7 expected Sep 25\u2013Oct 1 \u00b7 code expires Oct 20'.",
+     "momentOfTruth": "The time range has a real upper bound, and 'send a new code' stays disabled until that window has passed."
+    },
+    {
+     "n": 4,
+     "surfaceId": "ext:claim-verify-flow",
+     "state": "code entry \u2192 success",
+     "userSeesOrDoes": "She enters the code from the postcard.",
+     "momentOfTruth": "The server copies saved_place rules and preferences to home scope in the same transaction."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f1-claim-receipt",
+     "state": "all four carried (dense)",
+     "userSeesOrDoes": "Under the existing success headline she reads 'Your pickup day, 2 dates and Ollie came with you.' and a manifest row for each item with its value. Each date row shows 'Only you \u2192 Household (pending)'.",
+     "momentOfTruth": "The counts in the sentence match the rows, and nothing is shared yet."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f1-claim-receipt",
+     "state": "consent block (conditional copy)",
+     "userSeesOrDoes": "She reads 'Share the 2 dates you entered with the people who live here?' with two peer buttons. She taps 'Keep them private to me'.",
+     "momentOfTruth": "Leaving the screen without choosing keeps the dates private. The choice can be undone later."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f1-claim-receipt",
+     "state": "household-visibility consent declined",
+     "userSeesOrDoes": "The date rows show the private glyph on both sides of the arrow. The closing line reads 'Today now uses this home.'",
+     "momentOfTruth": "The receipt states the result of her choice as a fact."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f1-today-tab",
+     "state": "5 \u00b7 claimed home, no chip",
+     "userSeesOrDoes": "Today shows the same sections in the same order. The 'Saved place \u00b7 Only you' chip is gone, and the pickup card now reads 'You \u00b7 Tuesday' at home scope.",
+     "momentOfTruth": "The change reads as 'more sections appeared', with no re-layout and nothing lost."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f1-your-places",
+     "state": "6 \u00b7 row already claimed",
+     "userSeesOrDoes": "She sees one row for 1402 NE 3rd Ave, now with the home glyph and 'Today always uses your home'. There is no duplicate saved row.",
+     "momentOfTruth": "The retired SavedPlace row does not show up as a second copy of the same address."
+    },
+    {
+     "n": 10,
+     "surfaceId": "x-place-file",
+     "state": "2 \u00b7 T3 claimed home + one-time receipt banner + persistent 'What moved when you claimed' row (proposed)",
+     "userSeesOrDoes": "She sees the banner once, and later finds the same manifest under Place \u2192 'What moved when you claimed'.",
+     "momentOfTruth": "The receipt can be found again. Money, People and Proof now show real asks."
+    },
+    {
+     "n": 11,
+     "surfaceId": "x-date-sheet",
+     "state": "view-mine at home scope with per-date visibility control (proposed)",
+     "userSeesOrDoes": "She opens Renters insurance and sees 'Visible to: Only you \u00b7 Household'. She switches it to Household.",
+     "momentOfTruth": "The decline from step 6 can be reversed one date at a time, as easily as she gave it."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f7-today-widget",
+     "state": "fresh",
+     "userSeesOrDoes": "The widget label stays '3rd Ave \u00b7 Camas' and the marks update on the next snapshot.",
+     "momentOfTruth": "The claim rewrites the widget snapshot, so no stale scope lingers."
+    },
+    {
+     "n": 13,
+     "surfaceId": "f11-keeper-strip",
+     "state": "attentive (T3)",
+     "userSeesOrDoes": "Ollie is still Ollie. The naming scope line now reads 'Everyone in this household sees this.'",
+     "momentOfTruth": "The keeper survives the claim, and the change in who can see it is stated."
+    }
+   ],
+   "failureBranches": [
+    "A carry fails. The receipt names the failed row with Retry and never shows a quiet success with a row missing.",
+    "Nothing to carry. The plain success screen shows no empty list.",
+    "She claims a different address than the saved one. Today switches, and a one-time notice reads 'Today now uses {home}. {saved} is still saved.'",
+    "The address is already claimed by someone else. The flow becomes a household request or invitation path, not a duplicate home.",
+    "The home already has a keeper (the claim merges into an existing household). The receipt must say which keeper is kept.",
+    "The claim receipt is dismissed without a choice. Dates stay 'Only you'. Past-tense copy saying they are 'now visible' must not appear.",
+    "The postcard does not arrive. After the stated window a late path appears, with a warning that the old code will stop working.",
+    "Mover rows are keyed on Home.move_in_date, which does not exist at T1. At claim, move-in must be asked for or carried, or the 60-day mover rows never appear (f6-home-basics-rows).",
+    "Offline at receipt. Consent buttons are disabled with a reason, and the default stays private."
+   ],
+   "successMetric": "Week-four return (retention of invested facts) and Honesty (no silent scope change).",
+   "whyItNeedsAStoryboard": "The critique found that no feature owns this promotion. Data keyed to the saved place, the Today chip, the saved-places row, the widget label, the keeper and a privacy change all shift at once across seven surfaces. It is the most likely path for a mover and the moment of maximum investment."
+  },
+  {
+   "id": "flow-07",
+   "name": "Widget discovery \u2192 add \u2192 glance \u2192 tap",
+   "persona": "Hannah Ruiz, 52, a nurse on night shifts who moved to 1420 NE Garfield St, Camas. She has a Pixel 8 on Android 15, declined notifications (they wake her), and checks her home screen many times a day.",
+   "goal": "Get pickup day, air and her next date on the home screen with no notifications. Tapping it opens the exact thing shown.",
+   "platforms": [
+    "android",
+    "ios"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f4-briefing-optin-card",
+     "state": "OS notifications denied (neutral line + one-time widget offer)",
+     "userSeesOrDoes": "After declining, Today shows one neutral line: 'Pickup still shows here on Today \u00b7 Or put it on your home screen'.",
+     "momentOfTruth": "The widget is offered once, at a teachable moment, never as a blocking modal and never more than once in 24 hours."
+    },
+    {
+     "n": 2,
+     "surfaceId": "x-place-file",
+     "state": "widget row present",
+     "userSeesOrDoes": "Later she taps 'Put today on your home screen' on the place file.",
+     "momentOfTruth": "The durable entry point exists after the one-time hint has gone."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f7-widget-howto-sheet",
+     "state": "2 \u00b7 Android default with pin action (proposed)",
+     "userSeesOrDoes": "She sees her own medium widget labelled 'Your widget' (Tuesday recycling, AQI band), and a primary 'Add to home screen' button because requestPinAppWidget is supported.",
+     "momentOfTruth": "She sees the reward before any instructions. The preview is clearly an illustration."
+    },
+    {
+     "n": 4,
+     "surfaceId": "ext:os-pin-dialog",
+     "state": "Android system pin dialog with preview",
+     "userSeesOrDoes": "She taps Add.",
+     "momentOfTruth": "The system places the widget; no gestures are needed."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f7-today-widget",
+     "state": "fresh, Android 4\u00d72 (dynamic colour)",
+     "userSeesOrDoes": "The widget shows the hero 'Recycling + garbage tomorrow' with a tick, a 14-day strip across the full width, and 'AQI 42 \u00b7 Good' on the band.",
+     "momentOfTruth": "The text is 11pt or larger, and meaning survives dynamic colour and greyscale."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f7-today-widget",
+     "state": "fresh, next day after midnight entry",
+     "userSeesOrDoes": "She glances after her shift and 'Tomorrow' has become 'Tonight', without her opening the app.",
+     "momentOfTruth": "Relative words are computed at render time from ISO dates, using timeline entries at day boundaries."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f7-widget-tap-landing",
+     "state": "1 \u00b7 loaded from widget, section=pickup",
+     "userSeesOrDoes": "She taps the hero. Today opens scrolled to the pickup card, highlights it once, and shows 'Updated just now'.",
+     "momentOfTruth": "The tap opens the exact fact. Content never blanks; a hairline shows only if the refresh takes more than 1 second."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f7-widget-tap-landing",
+     "state": "2 \u00b7 refreshing in place \u2192 snapshot rewritten",
+     "userSeesOrDoes": "The refresh finishes and session_open{trigger:widget} is posted.",
+     "momentOfTruth": "A forced refresh writes the snapshot, so 'Open to refresh' can never leave the widget grey."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f7-today-widget",
+     "state": "AQI-hero day (AQI \u2265 101)",
+     "userSeesOrDoes": "On a smoke day the hero is 'Unhealthy for sensitive groups \u00b7 118'. She taps it.",
+     "momentOfTruth": "The urgency ladder chooses the hero, and the widget and Today agree about it."
+    },
+    {
+     "n": 10,
+     "surfaceId": "f1-today-air-band",
+     "state": "alert: moderate, arrived from widget (section=air)",
+     "userSeesOrDoes": "Today opens with the air band in view, the crossing marked, and the EPA health statement.",
+     "momentOfTruth": "She doesn't have to scroll to find the tapped fact, and the pinned slot shows the active crossing for any arrival."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f7-today-widget",
+     "state": "stale per fact",
+     "userSeesOrDoes": "After a two-day trip the pickup and date lines still render correctly, and only the AQI row greys with 'Observed Mon 7:00 am'.",
+     "momentOfTruth": "Staleness is judged per fact. Rule-based facts are not greyed out."
+    },
+    {
+     "n": 12,
+     "surfaceId": "x-place-file",
+     "state": "widget row gone",
+     "userSeesOrDoes": "The 'Put today on your home screen' row no longer appears.",
+     "momentOfTruth": "The app knows a widget is placed (a snapshot read or a pin callback) and stops asking."
+    }
+   ],
+   "failureBranches": [
+    "The launcher doesn't support pinning. The how-to sheet falls back to gesture steps via the app icon: touch and hold \u2192 Widgets \u2192 drag.",
+    "iOS. There is no pin API; the sheet shows three illustrated steps ('Tap Edit, then Add Widget, and search for Pantopus'). She adds it from f7-widget-gallery, where the preview uses her own snapshot.",
+    "No snapshot was ever written. The preview shows the 'Sample' gallery composition.",
+    "No place. The widget reads 'Save an address to see today here', and the tap lands on f1-add-place-sheet. The labels 'Add a place', 'Save an address first' and 'Save an address to see today here' must lead to the same place.",
+    "Android maps 'today' to the hub briefing screen. The tap lands on a different payload and hard-errors for T1. This must be fixed or the widget is decoration.",
+    "Refresh fails. 'Couldn't refresh \u00b7 Retry' appears, with the last content intact.",
+    "Cold start. The full skeleton is allowed only when there is no prior content.",
+    "Whole snapshot past its horizon. Everything greys, with 'As of Mon 7:40 am \u00b7 Open to refresh'.",
+    "iOS StandBy or tinted mode. The small widget has no background and uses shape-only provenance, or StandBy is declared disfavoured.",
+    "Air reading missing. That row drops and the layout rebalances; the whole widget is never marked failed."
+   ],
+   "successMetric": "Activation (widget snapshot counts as the return trigger) and Week-four return with trigger=widget.",
+   "whyItNeedsAStoryboard": "This is the only return trigger that needs no permission. It runs from an in-app hint through the how-to sheet, the OS pin dialog or gallery, the home screen, overnight timeline changes and a deep-link landing. Four prompts disagree on sizes, labels, marks and where a tap lands, and the funnel is invisible without this storyboard."
+  },
+  {
+   "id": "flow-08",
+   "name": "Mail snap to paid (phase 2)",
+   "persona": "Dana Whitfield, 38, owner of 1428 NE Maple St, Camas (T3, finance.manage), on a Wednesday evening with a stack of 6 envelopes. Sam Okafor, the housemate, also pays bills sometimes.",
+   "goal": "Turn paper into confirmed bills with reminders, mark one paid, and make sure Sam doesn't pay it again.",
+   "platforms": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f10-mail-day-triage",
+     "state": "populated",
+     "userSeesOrDoes": "From the Mail tab she sees 'Mail Day \u00b7 Wednesday' and the persistent 'Scan today's stack', and taps it.",
+     "momentOfTruth": "The capture action is always available, not only in the empty hero."
+    },
+    {
+     "n": 2,
+     "surfaceId": "ext:system-document-scanner",
+     "state": "VisionKit / ML Kit batch session",
+     "userSeesOrDoes": "She scans three pages; auto-capture handles the edges.",
+     "momentOfTruth": "The claimed-home and finance checks run before the scanner opens."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f10-snap-capture-tray",
+     "state": "post-capture queue (proposed redraw)",
+     "userSeesOrDoes": "She sees three thumbnails uploading. She taps page 2 and chooses 'Same letter as previous'. The audience line reads 'Only your household can see these photos: you and Sam.' She taps Done (2).",
+     "momentOfTruth": "Pages are grouped into pieces, and the audience is named."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f10-mail-day-triage",
+     "state": "mid-upload rows",
+     "userSeesOrDoes": "Two rows show 'Unconfirmed' with thumbnails.",
+     "momentOfTruth": "The rows stay in 'Needs a call' until she decides."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f10-extraction-confirm",
+     "state": "extracted, low confidence (Piece 1 of 2)",
+     "userSeesOrDoes": "She sees the photo beside the fields. Amount $184.62 has a crop and 'Read beside \"Amount due\"'. Due date is flagged 'We weren't sure \u2014 check this' with 'Oct 2 (Due date) \u00b7 Sep 12 (Statement date)'. She taps Oct 2.",
+     "momentOfTruth": "Checking costs less than trusting; the correction happens in place with no reason picker."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f10-extraction-confirm",
+     "state": "saving \u2192 success",
+     "userSeesOrDoes": "She taps 'Add $184.62 due Oct 2 to bills' and reads 'Added $184.62 to your calendar. We'll remind you the day before.' with Undo.",
+     "momentOfTruth": "The commit button restates the values. The word 'Paid' never appears."
+    },
+    {
+     "n": 7,
+     "surfaceId": "f10-extraction-confirm",
+     "state": "extracted (Piece 2 of 2) \u2192 'Just file it'",
+     "userSeesOrDoes": "She files the Chase statement without creating a bill.",
+     "momentOfTruth": "Filing without a bill is a first-class commit."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f10-mail-day-triage",
+     "state": "reviewed today \u2192 Finish day",
+     "userSeesOrDoes": "Reviewed rows collapse, each with its own Undo (no countdown). She taps Finish day.",
+     "momentOfTruth": "Undo lasts until the day is finished, and the copy never claims 'all your mail'."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "ready with money row",
+     "userSeesOrDoes": "Today shows 'Clark PUD \u00b7 $184.62 \u00b7 in 12 days \u00b7 Fri 2 Oct' with a tick.",
+     "momentOfTruth": "The bill appears wherever the calendar renders."
+    },
+    {
+     "n": 10,
+     "surfaceId": "ext:os-push-tray",
+     "state": "Thu Oct 1 bill reminder",
+     "userSeesOrDoes": "She receives 'Clark PUD due tomorrow' with the body 'Maple St', and no amount on the lock screen.",
+     "momentOfTruth": "One reminder, and it lands on the bill itself."
+    },
+    {
+     "n": 11,
+     "surfaceId": "f3-bill-detail-web",
+     "state": "due today / unpaid (native BillDetail equivalent) with f10-bill-provenance block",
+     "userSeesOrDoes": "She sees the amount and due date as the headline, and under them 'From a photo you took \u00b7 Sep 16'. She pays at the utility, then taps Mark paid.",
+     "momentOfTruth": "The provenance is evidence beneath the number, not a banner."
+    },
+    {
+     "n": 12,
+     "surfaceId": "f3-bill-detail-web",
+     "state": "paid (proposed undo)",
+     "userSeesOrDoes": "She reads 'Marked paid \u00b7 Undo'. The bill_paid fan-out waits until the undo window closes, and the remaining reminders for everyone are cancelled.",
+     "momentOfTruth": "A mis-tap does not notify the household, and Sam is not reminded about a paid bill."
+    },
+    {
+     "n": 13,
+     "surfaceId": "f3-household-notifications",
+     "state": "unread list (Sam)",
+     "userSeesOrDoes": "Sam sees the quiet row 'Dana marked Clark PUD paid' and taps it.",
+     "momentOfTruth": "The name comes first and the row lands on the exact bill."
+    },
+    {
+     "n": 14,
+     "surfaceId": "f3-bill-detail-web",
+     "state": "paid \u2014 landing from notification",
+     "userSeesOrDoes": "Sam reads 'Paid by Dana \u00b7 Thu' in a calm state.",
+     "momentOfTruth": "It reads as reassurance, not an error."
+    },
+    {
+     "n": 15,
+     "surfaceId": "f10-bill-trend",
+     "state": "12 months present",
+     "userSeesOrDoes": "Dana scrolls to see her October column and the average of 14 homes nearby, drawn as a reference line.",
+     "momentOfTruth": "This is the monthly payoff, with the k stated and no household-vs-household bars."
+    }
+   ],
+   "failureBranches": [
+    "No claimed home (T1). Mail Day reads 'Mail snap needs a claimed address' and routes to x-date-sheet bill mode. That mode is described as pre-filled from a snap, which makes the route circular.",
+    "Member without finance.view. They see that a piece arrived but not the payee, amount or photo. 'Add to bills' is disabled with a reason; 'Just file it' is allowed.",
+    "AI unavailable. Fields are blank placeholders, never $0.00 or today's date; 'Needed to add a bill' appears only after she presses Add.",
+    "Unreadable photo. She is offered a retake or manual entry.",
+    "Duplicate suspected. 'You already have Clark Public Utilities \u00b7 $184.62 \u00b7 due Oct 2' with Keep both / Replace.",
+    "Scanner unsupported (iOS isSupported false, Android RAM under 1.7 GB). Fallback to Photo Picker or a single camera shot. Camera permission denied applies on iOS and web only.",
+    "Upload failed or offline. Pieces are held locally with per-item retry.",
+    "Sam also taps Mark paid at the same moment. The second sees 'Already marked paid by Dana'.",
+    "A member wants to record their own payment. 'I paid this' is not offered today, so the member caption must name who can mark it paid.",
+    "Bill deleted after the push. 'This bill was removed' with a route back.",
+    "'cancelled' vs 'canceled' filter bug. A deleted snapped bill stays listed.",
+    "She photographed a bank statement by mistake. f10-mail-snap-privacy lists the snaps and allows deleting one or all; the bills survive.",
+    "insufficientData. The trend draws bars with no reference line and 'Not enough homes nearby to compare yet'."
+   ],
+   "successMetric": "Week-four return (monthly return with investment) and Honesty (no unconfirmed read reaches bills; no reminder after paid).",
+   "whyItNeedsAStoryboard": "It spans the scanner, the queue, the review, triage, Today, a push, bill detail, a second person's notification list and the trend. The prompts use different fixtures, disagree on who added the bill, and don't say where 'paid' is confirmed or how undo works."
+  },
+  {
+   "id": "flow-09",
+   "name": "First open of the keeper (phase 2)",
+   "persona": "Maya Chen, 34 (T1 saved place, pickup confirmed, one date set), in week 3 on her iPhone at 7:40 am, checking whether recycling is tonight before work.",
+   "goal": "Answer 'what's due' first. Optionally give the place a face in one tap, or skip permanently at no cost.",
+   "platforms": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f1-today-tab",
+     "state": "4 \u00b7 saved place, keeper slot reserved",
+     "userSeesOrDoes": "Today loads with the pickup card first. The keeper slot holds a quiet inline invitation, 'Give your place a keeper'.",
+     "momentOfTruth": "Nothing auto-presents. She can use Today while ignoring the invitation."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f11-keeper-strip",
+     "state": "2 \u00b7 unnamed",
+     "userSeesOrDoes": "On her third visit she taps the invitation.",
+     "momentOfTruth": "The invitation appears only for a limited time and never as a badge or modal. The silhouette meets contrast."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f11-keeper-naming",
+     "state": "1 \u00b7 default",
+     "userSeesOrDoes": "She sees six species tiles, a name field, and 'Name the keeper' and 'Skip' as equal buttons. The scope line reads 'Only you see this.'",
+     "momentOfTruth": "Skip is a real, neutral button. No pronouns, traits or quiz."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f11-keeper-naming",
+     "state": "2 \u00b7 species picked",
+     "userSeesOrDoes": "She picks Octopus, and 'Ollie' is pre-filled with the counter at 5/24.",
+     "momentOfTruth": "One tap is enough. Selection is not styled like the focus ring, and focus does not jump to the field."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f11-keeper-naming",
+     "state": "4 \u00b7 saving",
+     "userSeesOrDoes": "She taps 'Name the keeper'.",
+     "momentOfTruth": "The save is announced as a status message."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f11-keeper-strip",
+     "state": "4 \u00b7 attentive",
+     "userSeesOrDoes": "The strip shows Ollie's pose settling into 'Recycling tomorrow.' and a count, '6 on file', with only the categories reachable at T1 drawn.",
+     "momentOfTruth": "The mood comes only from obligations; the pose is helpful, never distressed. There is no denominator or unreachable segments, and a static pose under Reduce Motion."
+    },
+    {
+     "n": 7,
+     "surfaceId": "x-place-file",
+     "state": "3 \u00b7 T1 saved place",
+     "userSeesOrDoes": "She taps the count and lands on her place file.",
+     "momentOfTruth": "The keeper's count and the place file's count are the same number."
+    },
+    {
+     "n": 8,
+     "surfaceId": "f11-keeper-strip",
+     "state": "relaxed / quiet day (next week)",
+     "userSeesOrDoes": "She reads 'Nothing due this week.'",
+     "momentOfTruth": "The relaxed state appears only when the checks succeed."
+    },
+    {
+     "n": 9,
+     "surfaceId": "f11-keeper-strip",
+     "state": "7 \u00b7 mood unavailable",
+     "userSeesOrDoes": "One morning a check fails, and she reads 'Couldn't check what's due \u00b7 Retry' with a neutral pose.",
+     "momentOfTruth": "It can never be mistaken for relaxed."
+    }
+   ],
+   "failureBranches": [
+    "She taps Skip. The keeper slot closes completely, with no leftover invitation. She can come back through a Place-section row in the place file or through Settings. The f11-keeper-naming 'Skipped' frame currently keeps the invitation.",
+    "An air alert is on screen. The avatar and mood are suppressed, and the alert owns the screen.",
+    "Offline. The last-known mood is greyed with 'as of 7:04 am'.",
+    "She later claims the address (flow-06). The keeper carries over and its scope line changes.",
+    "T3 member without rename rights. The strip shows 'Only Sam can rename this keeper'.",
+    "Remove. Optimistic with Undo, and the copy carries no creature emotion.",
+    "The doc's F11 says to auto-present on the second open. That must not ship.",
+    "The keeper never sends a push, carries promotions, or shows a streak."
+   ],
+   "successMetric": "Week-four return (does the face change return?) \u2014 measured also by removal rate; must not affect Honesty.",
+   "whyItNeedsAStoryboard": "The first encounter decides whether the keeper feels like a nag. The doc and the prompts disagree on auto-presenting it, on what happens after Skip, on the species list and on the count, and the strip, the sheet and the place file each draw part of the moment."
+  },
+  {
+   "id": "flow-10",
+   "name": "First alert push for a bookmarked address (air/NOAA) \u2192 landing \u2192 mute or threshold",
+   "persona": "Luis Ortega, 41 (flow-02). He also saved 'Mom's house' in Camas. During a Gorge smoke event he gets his first ever alert push from Pantopus, having only turned on the pickup reminder.",
+   "goal": "Understand which address the alert is about and why he got it, and turn alerts down if he wants, without losing the pickup reminder.",
+   "platforms": [
+    "ios",
+    "android",
+    "web"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "ext:os-push-tray",
+     "state": "Time Sensitive (AQI \u2265 151)",
+     "userSeesOrDoes": "He receives 'Unhealthy air: AQI 176' with the body 'AirNow, 4:00 PM \u00b7 Lacamas Dr'.",
+     "momentOfTruth": "The urgency level matches the event. The place label is there, with no house number."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f1-today-air-band",
+     "state": "alert: critical, saved place chip",
+     "userSeesOrDoes": "The landing shows the address label with 'Saved place \u00b7 Only you', the band with his chosen threshold marked 'Crossed 151 at 4:00 PM', EPA's health statement, and a separate Pantopus context line.",
+     "momentOfTruth": "The screen agrees with the push about which address and which threshold."
+    },
+    {
+     "n": 3,
+     "surfaceId": "x-provenance-sheet",
+     "state": "4 \u00b7 no source_url (AirNow)",
+     "userSeesOrDoes": "He taps the band and reads 'Preliminary reading from AirNow, observed 4:00 PM \u00b7 Covers: nearest monitors'.",
+     "momentOfTruth": "The reasons offered fit the reading ('reading looks wrong'), not 'the date is wrong'."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f4-notification-settings",
+     "state": "default populated",
+     "userSeesOrDoes": "From the row overflow 'Turn these off' he opens settings. Under Air & weather alerts he picks '201+' from a radio list and leaves the evening briefing on.",
+     "momentOfTruth": "There is a switch for alerts, and changing it does not touch the pickup reminder. The row reads the OS channel state."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f1-today-air-band",
+     "state": "still unhealthy, no new push",
+     "userSeesOrDoes": "Two hours later AQI is 182 and no second push has come.",
+     "momentOfTruth": "There is one push per crossing episode, updated in place."
+    }
+   ],
+   "failureBranches": [
+    "No reading. 'No reading for this address right now' looks different from Good.",
+    "Stale observation. The time is stated with its age.",
+    "The Android channel is blocked. The row reads 'Off in Android settings \u00b7 Open'.",
+    "Focus mode. Only the air group's helper text says alerts can break through Focus.",
+    "The alert is about 'Mom's house' but Today uses another place. The landing must still show which saved place triggered it; the rule for which saved places alert is undefined.",
+    "The settings default (151) and the backend (\u2265101) disagree. The landing would mark a threshold the user did not choose.",
+    "Location source is none. No alert is sent."
+   ],
+   "successMetric": "Honesty (no push that misstates urgency or address) and Week-four return (alerts must not drive opt-outs).",
+   "whyItNeedsAStoryboard": "For most T1 users this is the first push ever, about an address they only bookmarked. It crosses the tray, the landing, the provenance sheet and settings, and the prompts disagree about which threshold is drawn."
+  },
+  {
+   "id": "flow-11",
+   "name": "'This isn't right' from report to visible resolution (honesty counter)",
+   "persona": "Jordan Lee, 36 (flow-05), now a saved-place user at 6207 NE 42nd Ave, Vancouver. He believes both the seeded tax-appeal row and the county pickup day are wrong.",
+   "goal": "Report a fact once, fix what he can himself, and later see what happened, on the same row.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "seeded statewide/county rule row",
+     "userSeesOrDoes": "He taps the list row 'Property-tax appeal window closes' (not the dot).",
+     "momentOfTruth": "The row is the tap target, at least 44pt."
+    },
+    {
+     "n": 2,
+     "surfaceId": "x-date-sheet",
+     "state": "view-seeded (tax appeal as a rule with input)",
+     "userSeesOrDoes": "He reads 'Closes July 1, or 60 days after your value notice was mailed' and enters the mailing date. The row becomes a computed date with a tick.",
+     "momentOfTruth": "A conditional deadline is never shown as a single seeded date."
+    },
+    {
+     "n": 3,
+     "surfaceId": "x-provenance-sheet",
+     "state": "5 \u00b7 reason picker (schedule payload)",
+     "userSeesOrDoes": "On the pickup row he opens 'This isn't right' and picks 'Not my day'.",
+     "momentOfTruth": "The reasons fit the kind of fact."
+    },
+    {
+     "n": 4,
+     "surfaceId": "x-provenance-sheet",
+     "state": "6 \u00b7 report submitted",
+     "userSeesOrDoes": "He reads 'Reported Sep 16. We'll check by Sep 23 and tell you here.'",
+     "momentOfTruth": "The receipt promises a check-by date and names where the answer will appear."
+    },
+    {
+     "n": 5,
+     "surfaceId": "x-place-file",
+     "state": "'Your reports' row (proposed)",
+     "userSeesOrDoes": "He sees 'Pickup day \u00b7 Checking \u00b7 reported Sep 16'.",
+     "momentOfTruth": "There is a private list of his reports and their status."
+    },
+    {
+     "n": 6,
+     "surfaceId": "x-provenance-sheet",
+     "state": "resolved (proposed)",
+     "userSeesOrDoes": "A week later the sheet reads 'Fixed Sep 20: the county moved your route to Wednesday'. The pickup card updates to match.",
+     "momentOfTruth": "The correction appears where he already looks, with its source and a one-line reason even when nothing changed."
+    }
+   ],
+   "failureBranches": [
+    "Flood zone disputed. The sheet says 'Only FEMA can change this' and links to LOMA; it never promises to check.",
+    "Radon disputed. The answer is 'County zone, not a reading of your home' with a free kit link.",
+    "'We matched the wrong spot' (a Pantopus geocoding error) is a separate reason from 'the map is wrong'.",
+    "Report failed. Retry keeps the chosen reason.",
+    "Offline. The report control is disabled with a reason.",
+    "The check-by date slips. The founder must commit only to a window she can actually meet."
+   ],
+   "successMetric": "Honesty (the \u00a75 counter's 'not my schedule' reports, resolved and visible).",
+   "whyItNeedsAStoryboard": "The pilot's only zero-target metric reads this report. No prompt draws what happens after 'Thanks \u2014 we'll check it', or where the outcome shows up."
+  },
+  {
+   "id": "flow-12",
+   "name": "Dead invitation \u2192 sender reissue \u2192 recipient accepts",
+   "persona": "Tova Lindgren, 27, invited by username to 4312 NW Sierra Dr before the permissions migration; she taps the old link a week later. Dana Whitfield is the sender.",
+   "goal": "Neither person gets stuck: the sender learns an invitation died and fixes it in one tap, and the recipient gets a fresh working link.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f3b-invitation-decision",
+     "state": "INVITE_POLICY_CHANGED blocked",
+     "userSeesOrDoes": "Tova reads 'This home changed who can invite people. We've told Dana Whitfield.'",
+     "momentOfTruth": "She is not asked to chase someone who can see nothing wrong."
+    },
+    {
+     "n": 2,
+     "surfaceId": "f3-invite-banner",
+     "state": "needs reissue (sender)",
+     "userSeesOrDoes": "On Dana's landing, one banner reads '2 invitations need to be sent again \u00b7 Fix'.",
+     "momentOfTruth": "The precedence rule applies: invite > reissue > setup > verify, and only one banner shows."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f3-members-roster",
+     "state": "needs reissue",
+     "userSeesOrDoes": "Pending rows show 'Needs reissue' with a Reissue action.",
+     "momentOfTruth": "One tap per row."
+    },
+    {
+     "n": 4,
+     "surfaceId": "f3-invite-composer",
+     "state": "needs reissue \u2192 sending \u2192 sent",
+     "userSeesOrDoes": "Dana confirms, and a new link and expiry are shown.",
+     "momentOfTruth": "The old link stops working, and the new expiry is stated."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f3-invite-banner",
+     "state": "one invite (recipient)",
+     "userSeesOrDoes": "Tova's landing shows 'Dana Whitfield invited you to Sierra Dr \u00b7 Review'.",
+     "momentOfTruth": "The recipient does not need to find the email again."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f3b-invitation-decision",
+     "state": "offer \u2192 accepted",
+     "userSeesOrDoes": "She accepts and continues as in flow-04 from step 8.",
+     "momentOfTruth": "The grant list matches what the sender reviewed."
+    }
+   ],
+   "failureBranches": [
+    "Multiple invites. 'You have 3 invitations' opens an invitations list that no prompt draws.",
+    "Fetch failed. The slot stays silently empty and nothing below it shifts.",
+    "Tova is signed out. The token is preserved through registration.",
+    "Dana has no manage rights. The row explains who can reissue.",
+    "The new-invitation push has no defined copy or landing."
+   ],
+   "successMetric": "Activation (co-resident added within 7 days).",
+   "whyItNeedsAStoryboard": "This is a loop across two people that the migration creates on day one. The sender half has no entry point in the doc, and the banner, roster, composer and decision screen each hold one piece."
+  },
+  {
+   "id": "flow-13",
+   "name": "Mover's civic deadline: seasonal aha \u2192 plan \u2192 reminder \u2192 self-report",
+   "persona": "Jordan Lee, 36, moved from Portland, OR to Vancouver, WA in September, and has never registered in Washington.",
+   "goal": "Know which registration path is still open, make a plan, be reminded before that path's deadline, and record it for himself only.",
+   "platforms": [
+    "web",
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "f8-seasonal-aha",
+     "state": "seasonal deadline",
+     "userSeesOrDoes": "He reads 'Online or mail voter registration for Nov 3 must arrive by Oct 26 in Washington.' and the in-person line.",
+     "momentOfTruth": "The copy is specific to each method, uses 'must arrive' wording, and cites the Washington Secretary of State."
+    },
+    {
+     "n": 2,
+     "surfaceId": "x-place-file",
+     "state": "mover row 'Update your voter registration' (requires move-in date)",
+     "userSeesOrDoes": "After saving, he taps the row.",
+     "momentOfTruth": "The mover row appears at T1 because move-in is asked for or carried."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f6-place-section-details",
+     "state": "ready (civic registration block)",
+     "userSeesOrDoes": "He sees 'Online/mail: received by Mon Oct 26 \u00b7 In person: until 8 p.m. Tue Nov 3', an outbound 'Check or update at VoteWA', and a separate 'Remind me'.",
+     "momentOfTruth": "The app never states whether he is registered. The check goes to the official state site."
+    },
+    {
+     "n": 4,
+     "surfaceId": "x-date-sheet",
+     "state": "view-seeded voter registration + plan (proposed)",
+     "userSeesOrDoes": "He picks 'Online' as his plan, and the reminder targets Oct 26 with a series.",
+     "momentOfTruth": "The plan decides which deadline the reminder follows."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f5-today-calendar-strip",
+     "state": "seeded statewide rule (bar)",
+     "userSeesOrDoes": "Oct 26 appears as a full-height bar labelled 'Statewide \u2014 WA'.",
+     "momentOfTruth": "It is visibly not a claim about his house."
+    },
+    {
+     "n": 6,
+     "surfaceId": "x-date-sheet",
+     "state": "'I did this' person-scoped",
+     "userSeesOrDoes": "He taps 'You marked this done'. The footer reads 'Only you'.",
+     "momentOfTruth": "The self-report is never shown to the household as a fact."
+    }
+   ],
+   "failureBranches": [
+    "After Oct 26. The aha and block switch to 'You can still register in person until 8 p.m. Nov 3'; they are not suppressed.",
+    "No seeded rule for the state. The block is absent, not an empty shell.",
+    "T1 with no move-in date. The mover rows never appear (gap).",
+    "Unverified seed. A hollow mark plus the source.",
+    "Deadline passed for every method. The existing election banner shows."
+   ],
+   "successMetric": "Activation (one important date) and Honesty (never implies registration status).",
+   "whyItNeedsAStoryboard": "The deadline appears on five surfaces with conflicting wording ('closes Oct 26' against a per-method rule), and the path hands off from an anonymous aha to a person-scoped self-report."
+  },
+  {
+   "id": "flow-14",
+   "name": "Web saver installs a native app: continuity of place, first-week state and permission",
+   "persona": "Maya Chen, 34 (flow-01), who saved and confirmed pickup on the web and then taps the WallBar app-download link on her iPhone.",
+   "goal": "Open the app and find Today, her confirmed day and her dates already there, with no re-onboarding and an in-context notification ask.",
+   "platforms": [
+    "ios",
+    "android"
+   ],
+   "steps": [
+    {
+     "n": 1,
+     "surfaceId": "ext:app-store",
+     "state": "install from WallBar link",
+     "userSeesOrDoes": "She installs Pantopus.",
+     "momentOfTruth": "Nothing fires on first launch: the AppDelegate permission request has been removed."
+    },
+    {
+     "n": 2,
+     "surfaceId": "ext:native-sign-in",
+     "state": "sign in",
+     "userSeesOrDoes": "She signs in with the same email.",
+     "momentOfTruth": "There is no carousel and no location prompt."
+    },
+    {
+     "n": 3,
+     "surfaceId": "f1-today-tab",
+     "state": "4 \u00b7 saved place with chip",
+     "userSeesOrDoes": "Native Today shows 1402 NE 3rd Ave with the confirmed pickup card.",
+     "momentOfTruth": "The native Today uses the same composition as web; it is not a home-gated screen."
+    },
+    {
+     "n": 4,
+     "surfaceId": "x-place-file",
+     "state": "6 \u00b7 sync merge",
+     "userSeesOrDoes": "She reads 'Synced 3 items from your other device' once.",
+     "momentOfTruth": "Dismissals and ticks are stored on the server, so nothing re-asks."
+    },
+    {
+     "n": 5,
+     "surfaceId": "f4-briefing-optin-card",
+     "state": "one on (web push) / native not yet authorised",
+     "userSeesOrDoes": "The card reads the OS state and asks for this device only.",
+     "momentOfTruth": "The switch does not show on while this device has no permission."
+    },
+    {
+     "n": 6,
+     "surfaceId": "f4-notification-primer",
+     "state": "default",
+     "userSeesOrDoes": "Entered from the card's Yes, the OS dialog opens directly.",
+     "momentOfTruth": "The permission is asked once, in context."
+    }
+   ],
+   "failureBranches": [
+    "Android has no saved-places client. Today dead-ends until SavedPlacesApi ships.",
+    "A different account is signed in on the device. The chip and places reset with 'You switched accounts'.",
+    "The widget is added before any Today load. The widget shows 'no snapshot'.",
+    "The web briefing is on, but the native device token is not registered. Settings must show the per-device state honestly."
+   ],
+   "successMetric": "Week-four return (native triggers) and Activation (briefing/widget on native).",
+   "whyItNeedsAStoryboard": "The pilot runs on three platforms. The move from web to native is where device-local state, the launch-time permission request and native Today splits break the loop, and no prompt covers it."
+  }
+ ],
+ "handoffGaps": [
+  "f1-email-verify-handoff \u2194 f1-save-confirmation: the handoff says the server now holds the pending place (and calls the different-device frame identical), while save-confirmation's WHY and its recovery frame still assume a device-local 24h draft the user retypes ('the value the user retypes'). Their recovery copy also differs ('We stopped holding that address.' vs 'We couldn't read the address you previewed on this device.'). Neither shows a held address as a selectable row, and neither says how long the hold lasts.",
+  "f1-email-verify-handoff says 'Verify your email to save it' (the save waits on verification) and hands off 'into the save confirmation', but does not say whether it lands on save-confirmation frame 1 (pre-save 'Save' button) or frame 3 (saved). Save-confirmation lists the verification landing as an entry without naming a frame.",
+  "Scope caption wording differs across the save path: f1-email-verify-handoff 'Only you will see this.', f1-save-confirmation 'Only you can see this.', f1-your-places 'Only you can see these.', f1-today-tab chip 'Saved place \u00b7 Only you', f1-add-place-sheet saved frame chip '1402 NE 3rd Ave - Only you', f11-keeper-naming 'Only you see this.'",
+  "f1-save-confirmation body promises 'your morning briefing can use it'. The activation-critical trigger is the night-before briefing, which f4-briefing-optin-card presents as a separate row, so the save moment names the wrong return trigger.",
+  "f1-add-place-sheet lists its entry as Today's empty-state CTA 'Preview an address', and the sheet has no preview. The design doc routes that same label to /start. f7-today-widget's no-place copy is 'Save an address to see today here', f7-widget-tap-landing hands off to the 'Add a place' sheet, and f7-widget-howto-sheet's no-place footer is 'Save an address first' with no stated destination: three labels, two possible destinations.",
+  "f1-add-place-sheet refuses non-Clark addresses ('We only cover Clark County, Washington right now.'), while the /start preview (f8 prompts) and the design doc ('available nationwide') accept them. A person who previewed and saved a Portland address on /start is refused when adding the same address signed in.",
+  "f4-notification-primer lists 'tapping Yes on the briefing opt-in card' as an entry and then asks 'Yes / Not now' again, but f4-briefing-optin-card does not say whether its Yes goes to the primer or straight to the OS. The primer's granted frame shows the card flipped to '6:00pm - Change' even when the entry was the pickup card's 'That's my day', where no time was ever chosen.",
+  "After the first 'That's my day', f4-notification-primer says the primer sheet is presented, while f4-briefing-optin-card says the first pickup confirmation 'scrolls to and highlights this card'. Two different next steps for one tap.",
+  "f4-notification-primer promises 'nothing else unless something needs you tonight', but f4-notification-settings draws morning briefing, household activity, date reminders, bill reminders and air alerts all ON by default for the same user.",
+  "The pickup push text differs everywhere: f4-notification-primer 'Recycling and garbage tomorrow - City of Camas schedule, not yet confirmed'; f4-today-pickup-card 'Recycling and garbage tomorrow \u2014 not yet confirmed' with body 'Bins out tonight. 2418 NW Lacamas Dr.' (full address); f3-household-notifications 'Garbage + recycling is tomorrow (not yet confirmed)'; f1-today-tab pinned briefing 'Recycling and garbage tomorrow \u2014 city schedule, not yet confirmed'; design doc caveat in the body; f11-keeper-strip fixture 'Recycling goes out tonight'; f7-widget-gallery 'Recycling + garbage Tue'.",
+  "'Not my schedule' has three destinations: FINAL inventory / f4-today-pickup-card (provenance report, then Date sheet); x-date-sheet (opens the Date sheet directly); x-provenance-sheet (lists the pickup card as an entry, ends at 'Thanks \u2014 we'll check it.' with no hand-off to the Date sheet). x-place-file also puts a 'Not my schedule' CTA on its pickup row with no destination.",
+  "Pickup source and confidence disagree for Camas: f4-today-pickup-card 'City of Camas Public Works \u00b7 Route B', Tuesday, HOLLOW; x-provenance-sheet draws 'Recycling \u2014 every other Tuesday' from City of Camas as FILLED official; x-place-file 'Camas garbage Thursdays, recycling every other Thursday' hollow; f3b-invitation-decision 'Tuesday, Waste Connections'; f3-member-home-dashboard 'Garbage + recycling - Wed'. A user moving from the invitation screen to Today sees a different hauler and a different weekday.",
+  "After 'That's my day', f4-today-pickup-card flips the source to 'You \u00b7 Tuesday', f4-notification-settings shows 'Pickup day - Tuesday (confirmed by Sam)', x-place-file keeps its own row. No prompt says the widget snapshot (f7-today-widget) or the 14-day strip mark changes from hollow to tick on confirm, so the widget can keep showing a hollow guess.",
+  "Reminder deep links disagree: x-date-sheet uses /app/place/today?rule=cal_7f3a2 and opens the Date sheet; f5-today-calendar-strip says the rule push 'deep-links here and highlights that row'; f3-household-notifications says 'Today with the rule highlighted'. f1-today-tab says the /app/place/today route is to be renamed or deleted, and no prompt covers a reminder for a date outside the 14-day window that the strip cannot host.",
+  "Lease reminder fixtures do not agree and none draw the reminder or 'done': x-date-sheet has 'Lease ends \u2014 31 Mar 2027, remind 60 days' and an unlinked 'Notice to vacate \u2014 31 Jan 2027'; x-place-file has 'Lease ends \u00b7 May 31, 2027 \u00b7 Reminder set 60 days before' next to 'Notice deadline \u00b7 April 1, 2027' (the reminder fires on the deadline); f5-today-calendar-strip has 'Lease notice deadline \u2014 tell landlord by Oct 30'. Only the voter kind has 'I did this'; no user-entered kind can be marked done to stop reminders.",
+  "The Date sheet's save confirmation is not specified. The design doc toast says 'Saved to your calendar. Only you.' / 'Saved to your household calendar.' and x-date-sheet's footer says 'Only you will see this.' / 'Everyone in this household will see this.', and x-date-sheet's 'saved' frame has no copy.",
+  "x-place-file lists 'the claim-success receipt's \"See what we know\"' as an entry, but f1-claim-receipt has no such action. The receipt's one-time banner on the place file is not among x-place-file's ten states, and no persistent 'What moved when you claimed' entry exists anywhere.",
+  "f1-claim-receipt offers 'Keep them private to me' for carried dates, but x-date-sheet makes scope a prop that only switches the footer by home/saved_place. So at T3 every date says 'Everyone in this household will see this.', and a private-at-home date has no representation in the Date sheet, place file or household calendar.",
+  "f1-claim-receipt's consent copy is past tense ('are now visible to everyone in this household'), while the FINAL inventory's open question recommends defaulting to carry-and-share. The prompts do not say what happens if the user leaves without choosing.",
+  "f1-claim-receipt closes with 'Today now uses this home.' and strikes the 'Saved place - Only you' chip, but f1-today-tab has no first-open-after-claim notice. f1-your-places still draws the claimed address as a list row ('Our house - 2817 NW Sierra St'), while the FINAL inventory says the duplicate SavedPlace row is retired.",
+  "Keeper count and scope across the claim do not match: f1-claim-receipt 'Ollie, your keeper - knows 11 things'; f11-keeper-strip '11 on file' (T1 frame: integer 4); x-place-file '14 things on file'. f11-keeper-naming's scope line switches from 'Only you see this.' to 'Everyone in this household sees this.', but the claim receipt asks consent only for dates, not for the keeper.",
+  "f3-invite-composer's review manifest shows only 'Role offered \u2014 Member' with no capability list, while f3b-invitation-decision shows a grant/limit list the sender never reviewed. The composer's 'Expires Sep 30, 2026 (14 days)', 'Access \u2014 Ongoing' and note promising 'pickup day and household calendar' differ from the decision screen's 'Starts Sep 18, 2026' and 'expires Sep 25, 2026'.",
+  "Unlock lists differ between the screens a co-resident and an owner see: f3b-invitation-decision locked column (residency letter; Residency Pass; neighbor messages; Real Rent; Block Founder rank); f3b-verify-address-sheet (Send neighbor messages; Request a residency letter; +3: Show a Residency Pass, Set Real Rent, Claim Block Founder rank); f3b-owner-attestation grants only three rows but claims to reuse 'exactly the list the other person was shown'; f3b-locked-action-row adds 'send a postcard invite'.",
+  "f3b-invitation-decision's accepted state has 'Open Home' with no destination and makes 'Verify this address' primary. f3-member-home-dashboard is reached via 'Place file \u2192 this home', and f1-today-tab has no frame for the first open after accept, when HomeOccupancy silently switches Today to the new home.",
+  "f3b-verify-address-sheet offers 'Ask Sam Ortega to confirm \u00b7 Usually same day', but its only pending state is the postcard. f3b-locked-action-row's pending variant is also postcard-only, and f3b-owner-attestation's 'Not now' and 'declined' states never report back to the requester. The requester has no 'asked, waiting' or 'declined' frame.",
+  "f3-invite-banner says multiple invitations open 'the decision flow's index', and no prompt draws that list. The 'new invitation' push is named as an entry, but no prompt gives its copy.",
+  "Notification categories do not match: f3-household-notifications draws channels 'Household activity / Security / Reminders / Briefing'; f4-notification-settings draws 'Briefings / Household activity / Dates and bills / Air and weather alerts'. Security has no settings row and Air has no channel.",
+  "bill_paid landing disagrees: f3-household-notifications \u2192 the bill; f3-bills-list \u2192 scrolls to and highlights a list row; f3-bill-detail-web \u2192 bill detail. Mark paid has no Undo in f3-bills-list or f3-bill-detail-web, while f10-bill-provenance uses an Undo snackbar for delete.",
+  "f3b-invitation-decision gives the household's pickup as 'Tuesday, Waste Connections', but the household it describes (the Payne St house) has no pickup fixture elsewhere. f3-household-block, f3-member-home-dashboard and f3-bills-list use Maple St with a Wednesday pickup, so the co-resident storyboard cannot be drawn from consistent data.",
+  "Compare sender and strings disagree between the sheet and what arrives: f8-compare-sheet and f8-compare-arrival-header use 'Dana', f8-og-compare-card and the design doc use 'Maya'. Flood is 'Zone X \u2014 minimal risk' (sheet, header) vs 'Zone X \u2014 minimal' (OG, reveal). Radon is 'Zone 1 \u2014 highest predicted' vs 'Zone 1 \u2014 highest'. The OG headline limit is ~140 characters vs the token's \u226490.",
+  "Freshness does not carry across the compare hop: f8-compare-arrival-header shows 'Dana's card, as of Sep 12, 2026', but f8-compare-sheet's preview and f8-og-compare-card label the same frozen reading 'Air today' / 'AirNow, today', and f8-compare-reveal places the frozen and live AQI on one track.",
+  "f8-compare-reveal's 'Send yours back' opens f8-compare-sheet's reciprocal variant ('Send my card'). Neither says which address is minted (the recipient's typed, unsaved address), and the sheet's privacy line and name toggle are not restated for the recipient.",
+  "f8-compare-reveal draws the WallBar as 'Claim this address and be one of the first here', while f9-founding-meter-preview requires that CTA to follow founding_open, f8-native-share-compare's wall says 'Keep this address handy.' / 'Continue', and f8-seasonal-aha's follow-up says 'Claim this address to know the morning that changes.' The first account ask is worded as a claim on some surfaces and a save on others.",
+  "f8-compare-arrival-header's signed-in state swaps 'Sign in' for 'Save this address' with no destination (f1-add-place-sheet? f1-save-confirmation?). f8-native-share-compare says the native card is anonymous ('no name'), while the web sheet offers a name, and no prompt says whether a /start?vs= link opens the installed app.",
+  "f8-og-compare-card specifies only the PNG. The og:title the recipient actually reads ('What's true about Maya's place. Yours?' in the design doc), og:description and og:image:alt are in no prompt.",
+  "Widget and landing disagree: f7-today-widget and f7-widget-gallery label the place 'Garfield St \u00b7 Camas', while f7-widget-tap-landing's header shows '1420 NE Garfield St \u00b7 Saved place \u00b7 Only you'. f7-widget-gallery's sample pickup carries a FILLED mark and 'Recycling + garbage Tue', while f7-today-widget and f7-widget-howto-sheet carry HOLLOW and 'Recycling and garbage tomorrow'.",
+  "f7-today-widget says 'A tap deep-links to the Today tab' for every region, and f7-widget-tap-landing always lands at the top of Today with no section parameter. On an AQI-hero day the tapped fact (the air band) is below the fold, and f1-today-tab keeps air sixth.",
+  "x-place-file shows the widget row 'shown because no widget is placed', but no prompt says how the app learns a widget was placed. f7-widget-howto-sheet ends at 'Done' with no confirmation, and f4-notification-primer's declined frame promotes the widget row on Today, while f7-widget-howto-sheet lists only the place file and notification settings as entries.",
+  "f7-widget-howto-sheet rules out any add button on both platforms, while the Android pin API exists, and its iOS step 2 ('Tap the plus') contradicts current Edit \u2192 Add Widget wording. f7-today-widget and f7-widget-howto-sheet draw 364\u00d7170pt on a 393\u00d7852 screen, which is the Pro Max size.",
+  "Mail-snap audience differs by surface: f10-snap-capture-tray 'stored privately to your home and never shown to neighbors'; f10-mail-day-triage chip 'Your household'; f10-mail-snap-privacy 'Everyone in this household can see them'; f10-mail-piece-photo and f10-mail-day-triage hide photos from members without finance.view.",
+  "f10-snap-capture-tray commits 'Done (3)' shots, while f10-extraction-confirm counts 'Piece 3 of 5', and neither says how pages become pieces. f10-extraction-confirm's success says 'We'll remind you 7 days before' with a 60/30/7/1 control, while the design doc says bill reminders are day-before and day-of from home_reminders.",
+  "f10-bill-provenance says 'From a photo you took \u00b7 Oct 3' next to 'Added by Sam \u00b7 Oct 3' (who took it?), and its fixture ($142.18 due Oct 12) does not match f10-extraction-confirm ($184.62 due Oct 2) or f10-mail-day-triage, so the snap \u2192 confirm \u2192 bill storyboard cannot use one bill.",
+  "f10-mail-day-triage routes T1 users with 'Mail snap needs a claimed address' to the Date sheet, but x-date-sheet's bill mode is described as 'pre-filled from a mail snap', so the fallback depends on the thing it replaces. No prompt draws where 'Mark paid' is confirmed after a bill reminder beyond f3-bill-detail-web's button.",
+  "The keeper's first appearance disagrees: the design doc F11 auto-presents the naming sheet on the second Today open, while f11-keeper-naming and f11-keeper-strip say never auto-present. f11-keeper-naming's 'Skipped' frame keeps the inline invitation in the Today slot while also claiming Skip 'never asks again'. The species lists differ (doc: otter, owl, fox, heron, cat, dog; prompts: octopus, otter, heron, fox, raccoon, squirrel).",
+  "f11-keeper-strip's mood line 'Recycling tomorrow.' and fixture 'Recycling goes out tonight' do not match f4-today-pickup-card's 'Recycling and garbage tomorrow', and the keeper's T1 ring outlines money/people/proof while x-place-file's T1 frame renders them as 'Not here \u2014 this is a saved place'.",
+  "f1-today-tab's progress row reads '3 of 6 things on file \u2192' and x-place-file lists it as an entry, but the design doc's F2 checklist has seven keys and a three-question first week, and x-place-file forbids anything that reads as percent complete. The Today row and the place file do not share a defined step set.",
+  "f1-today-air-band marks 'the 101 threshold' on the alert landing, and its push says 'at 2418 NW Lacamas Dr', while f4-notification-settings sets the user's threshold to '151+' by default and the backend alert fires at AQI \u2265 101, so the landing can show a line the user did not choose.",
+  "x-provenance-sheet offers the same two reasons ('The date is wrong' / 'That's not my schedule') on every payload, including AQI, and ends at 'Thanks \u2014 we'll check it.' No surface (x-place-file, f4-today-pickup-card) has a 'You reported this \u00b7 checking' or resolved state, so the report has no place to come back to.",
+  "f6-place-section-details's civic 'Check or update' opens the Date sheet, while the design doc F6 sends the user to the state office. x-place-file's voter row reads 'October 26, 2026 \u00b7 Statewide \u2014 WA' as one date, while x-date-sheet and f6 give per-method dates. Mover rows are keyed on Home.move_in_date (f6-home-basics-rows), so a T1 mover never sees them."
+ ]
+}

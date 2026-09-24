@@ -29,7 +29,8 @@ final class BookingDetailViewModelTests: XCTestCase {
     ) -> BookingDetailViewModel {
         let session = SequencedURLProtocol.makeSession(routeResponses: routes)
         let actions = BookingActions(owner: owner, client: SchedulingClient(client: APIClient(session: session, retryPolicy: .none)))
-        return BookingDetailViewModel(owner: owner, bookingId: id, push: { _ in }, actions: actions)
+        let actor: @MainActor () -> String? = { "fixture-owner" }
+        return BookingDetailViewModel(owner: owner, bookingId: id, push: { _ in }, actions: actions, actor: actor)
     }
 
     private func detailBody(status: String, hostUserId: String? = nil) -> String {

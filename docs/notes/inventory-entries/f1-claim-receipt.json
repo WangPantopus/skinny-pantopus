@@ -1,0 +1,31 @@
+{
+ "id": "f1-claim-receipt",
+ "name": "Claimed \u2014 what came with you",
+ "feature": "F1 / F5 / F11",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The existing post-claim/post-verify success surface \u2014 web VerifiedSuccess at /app/place?verified=1; the native equivalents after the add-home / verify flow.",
+ "purpose": "Acknowledge the T1\u2192T3 promotion on screen, name what moved, and get consent for the one real privacy change it causes.",
+ "contents": "'Your pickup day, 2 dates and Ollie came with you.' A list of what was copied from the saved place to the home; one line that the private bookmark is now a home and that the dates you entered are now visible to everyone in this household (a genuine privacy delta that needs consent, not a silent migration); and a note that Today now uses this home.",
+ "states": [
+  "nothing to carry (plain success, no empty list)",
+  "dates carried",
+  "keeper carried (phase 2)",
+  "pickup rule carried",
+  "carry failed (explicit, with a retry \u2014 never silent loss)",
+  "household-visibility consent declined (dates stay private to the actor)"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Claim / verify completion",
+  "Place file after a claim (one-time banner)"
+ ],
+ "visualization": "A short receipt list \u2014 one row per carried item with its value and a tick \u2014 under the existing success headline. No illustration, no celebration: it is a manifest, and its job is to be checkable.",
+ "uxNote": "Every critique found this independently and no feature owns it. Today F5 keys rules to SavedPlace.id, F11 stores the keeper in two different preference slots, and \u00a76 lists five migrations with no promotion step \u2014 so the user loses everything they typed at the exact moment they invest most. Server-side, copy saved_place-scoped rules and preferences to home scope inside the same transaction that creates the home, and retire the duplicate SavedPlace row. Until this exists, F5 and F11 should not ship to T1 at all.",
+ "effortDays": 0.75
+}

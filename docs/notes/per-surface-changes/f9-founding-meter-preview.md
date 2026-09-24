@@ -1,0 +1,8 @@
+# Research-backed changes for f9-founding-meter-preview
+
+- Slots are shown as solid (taken) vs hatched (open) segments with a numeral ('3 of 5 open'). Never use filled vs hollow, which means provenance [trust, a11y]
+- Show the closing date in neutral tokens ('Closes Tue 22 Sep'). No live countdown and no warning tint [share, companion]
+- Fail closed: nothing renders on lookup failure, when closed, or at zero open. The 'first here' CTA uses the same founding_open value [trust]
+- State what the slot is and what you keep without it: 'A badge — no money or fee change. You can still claim this address' [share]
+- Add one frame with the density dots and the slot meter side by side to show they can't be confused [trust]
+- (research contradiction, topic trust-provenance-privacy: where facts co) v1: The slot meter uses filled = taken and hollow = open, next to density dots where filled = count. Meanwhile x-provenance-sheet declares filled / hollow / tick 'the three shapes used everywhere in Pantopus' for confirmed / unconfirmed / you-entered. | research: Kelley 2009 found empty or blank cells read inconsistently, and NN/g stresses that icon meaning comes from consistent prior exposure. Here one visual variable (filled vs hollow) carries three different meanings on the same pre-auth preview, where provenance marks also appear on chips. | do: Reserve the hollow circle product-wide for 'on record, not confirmed'. Encode slots with a different variable, e.g. segment length or a solid-vs-hatched fill, with a numeral label ('3 of 5 open'). Encode density with the qualitative label plus a different glyph. Show the two encodings side by side in one frame to prove they can't be confused.

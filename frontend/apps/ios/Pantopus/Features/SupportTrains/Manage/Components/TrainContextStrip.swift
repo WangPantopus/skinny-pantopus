@@ -16,11 +16,13 @@ public struct TrainContextStrip: View {
     private let title: String
     private let dateRangeLabel: String
     private let isActive: Bool
+    private let statusLabel: String
 
-    public init(title: String, dateRangeLabel: String, isActive: Bool) {
+    public init(title: String, dateRangeLabel: String, isActive: Bool, statusLabel: String? = nil) {
         self.title = title
         self.dateRangeLabel = dateRangeLabel
         self.isActive = isActive
+        self.statusLabel = statusLabel ?? (isActive ? "Active" : "Closed")
     }
 
     public var body: some View {
@@ -75,7 +77,7 @@ public struct TrainContextStrip: View {
                     .fill(Theme.Color.successSolid)
                     .frame(width: 5, height: 5)
             }
-            Text(isActive ? "ACTIVE" : "CLOSED")
+            Text(statusLabel.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.6)
                 .foregroundStyle(isActive ? Theme.Color.success : Theme.Color.appTextSecondary)
@@ -90,7 +92,7 @@ public struct TrainContextStrip: View {
             RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
                 .stroke(isActive ? Theme.Color.successLight : Theme.Color.appBorder, lineWidth: 1)
         )
-        .accessibilityLabel(isActive ? "Active" : "Closed")
+        .accessibilityLabel(statusLabel)
     }
 
     // MARK: - Tones

@@ -1,0 +1,38 @@
+# Last review findings for f11-keeper-naming (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The timeline clashes with the fixture and the strip prompt. HOME A already has "Keeper: Ollie (otter)", and the strip says Maya named it last week, yet this prompt has her naming it at TODAY 6:10 PM.
+  - evidence: house-style-v2.txt HOME A: "Keeper: Ollie (otter)." f11-keeper-strip prompt: "She named the River otter "Ollie" last week." This prompt: "Maya Chen at HOME A, Mon 19 Oct, 6:10 PM, week 3 ... then tapped the invitation."
+  - fix: Set the naming moment to a date last week (for example Mon 12 Oct, 6:10 PM), or list "naming happens before the fixture keeper exists" as an assumption on Notes.
+- [minor] (substance) The Notes list of invented strings is incomplete.
+  - evidence: COPY contains "We couldn't save that. Your name is still here.", "Give it a name, or tap Skip.", "Will save when you're back online" (the contract variant is "Will upload when you're back online"), "Save name" and "Save". Notes lists only "..."Saving…", "Retry saving", the landing and Skip lines".
+  - fix: Add these strings to the Notes invented-string list, and add the queued-write string change to the Notes normalisations.
+- [minor] (substance) Reusing KindGlyph's selected-tile state on a new species-tile variant adds a variant the contract doesn't have, and the household sentence touches ScopeChip's finance-permission rule. Notes flags neither.
+  - evidence: component-contract.md KindGlyph: "One drawn glyph per dated kind", with no species variant. ScopeChip doNot: "Never say 'Everyone in this household' where finance permissions differ". Prompt: "KindGlyph (selected-tile state only, reused on a species-tile variant, not ChoiceChip)" and "Everyone in this household will see this." plus "What it says is based on what each person can see."
+  - fix: In Notes deviations, add "KindGlyph species-tile variant proposed". Also note that the second scope line is the mitigation for ScopeChip's finance-permission rule.
+- [minor] (substance) The invitation's time limit (at most 14 days) and its after-FirstWeekRow condition appear only in the strip prompt. Entry point (1) here names only the value moment.
+  - evidence: f11-keeper-strip prompt: "after the FirstWeekRow has gone, for at most 14 days". flows-spec flow-09 step 2: "The invitation appears only for a limited time". This prompt, entry (1): "appears only after a first value moment (a confirmed pickup day or a saved date)."
+  - fix: Add "after the FirstWeekRow has gone, for at most 14 days" to entry point (1).
+- [major] (ux) The iOS sheet opens at medium detent, which is about half the screen. The listed content (title, two body lines, a 3x2 tile grid of 56pt poses with two-line labels, the field, the scope sentence and the button row) needs well over 500pt, so "Name the keeper" and "Skip" start below the fold. That breaks the promise of seeing the two equal buttons in the first five seconds.
+  - evidence: PLATFORMS: "iOS 393x852 (primary): a sheet with a grabber, opening at medium height and growing to large when the keyboard is up."; FIRST FIVE SECONDS: "Third the two equal buttons."
+  - fix: Replace with: "iOS: a sheet with a grabber at the large detent (or a custom detent sized to the content), with the button row pinned as a sticky footer and scroll padding reserved so the field is never hidden. Web 390: a bottom sheet at content height with the same pinned button row." In artboard 1, show both buttons visible without scrolling.
+- [minor] (ux) THE ONE JOB says naming takes one tap, but DONE WHEN says two taps (species, then save).
+  - evidence: THE ONE JOB: "Let someone name a keeper in one tap, or skip it for good at no cost."; DONE WHEN: "Naming takes one tap (a species) and one tap (save)."
+  - fix: Change THE ONE JOB to: "Let someone name a keeper with two taps (an animal, then save), or skip it for good with one."
+- [minor] (ux) The handoff after saving always goes to Today, but re-entry mode opens over the place file or Settings. Where the person lands, and what confirms the save there, is left undefined.
+  - evidence: "Save returns to Today. The strip's pose settles..." vs "Re-entry mode (opened from the place file or Settings) ... Close returns to the row."
+  - fix: Add: "From re-entry, Save closes the sheet back to the invoking row, which now reads 'Ollie · River otter' and announces 'Ollie is on Today now.' as role=status. Today shows the strip the next time it opens." Show this in artboard 14.
+- [minor] (ux) The empty-name error mentions Skip, but Rename and re-entry modes have no Skip button.
+  - evidence: COPY: "Give it a name, or tap Skip."; "Rename mode: ... only the field, pre-filled; primary "Save name"; Close."; "Re-entry mode ... no Skip"
+  - fix: Add to EDGE CASES: "In Rename and re-entry modes, the empty-name helper reads 'Give it a name.'" Add that string to COPY and Notes.
+- [minor] (ux) The entry-point rule here does not match the strip prompt, which also waits until the FirstWeekRow is gone and limits the invitation to 14 days.
+  - evidence: naming: "(1) The keeper invitation row on Today, which appears only after a first value moment (a confirmed pickup day or a saved date)."; strip: "appears only after a first value moment ... and after the FirstWeekRow has gone, for at most 14 days."
+  - fix: Change entry (1) to: "… after a first value moment and after the FirstWeekRow has gone, for at most 14 days."
+- [minor] (ux) The species tiles borrow KindGlyph's selected-tile state, but the contract defines KindGlyph only for dated kinds. This adds a variant to the contract without recording it.
+  - evidence: FOUNDATIONS: "KindGlyph (selected-tile state only, reused on a species-tile variant, not ChoiceChip)"; contract KindGlyph Purpose: "One drawn glyph per dated kind"
+  - fix: Add to the Notes open items: "The contract needs a species-tile variant (56pt pose, two-line label) that shares KindGlyph's selected-tile state."
+- [minor] (ux) The hero artboard is the sparse state with nothing picked, not the dense default. The v2 structure asks for the dense default first.
+  - evidence: ARTBOARDS: "1. f11-keeper-naming · ios · 01-default · light — HOME A, nothing picked, primary disabled"
+  - fix: Swap artboards 1 and 2 so "01-otter-picked" (River otter selected, 'Ollie', '5 / 24', both buttons enabled) comes first and "02-default" second, and update the dark-twin reference to "dark twin of 01".
+- [minor] (ux) The first body line is vague and harder to read than the rest of the copy, and it does not say what the keeper does.
+  - evidence: "A small face on Today, so the address feels like somewhere."
+  - fix: Change it to "A small animal on Today that sums up what's due here." and make the second line "You can rename or remove it any time." Update COPY and Notes to match.

@@ -177,10 +177,9 @@ public final class FeedContextBarViewModel {
         }
     }
 
-    private func applyCurrent(_ dto: ViewingLocationDTO?) {
-        guard let dto else { return }
-        locationLabel = dto.label
-        if let miles = dto.radiusMiles { radiusMiles = miles }
+    func applyCurrent(_ dto: ViewingLocationDTO?) {
+        locationLabel = dto?.label
+        radiusMiles = dto?.radiusMiles ?? 100
     }
 
     /// Flatten the three sources into one ordered option list —
@@ -372,6 +371,7 @@ struct FeedLocationSwitcherSheet: View {
                     Icon(.check, size: 16, color: Theme.Color.success)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("pulseLocationOption_\(option.id)")

@@ -1,0 +1,47 @@
+/* Tailwind input for components/bundle.css (tools/design-system).
+   Tailwind runs with the web app's own tailwind.config.js, adapted in
+   lib/styles.mjs for the design-system preview frame. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Page ground, as the web's globals.css paints <body>. */
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Legacy semantic utilities from globals.css (older components still use
+   them). The web reads "R G B" triplets through rgb(); tokens here are hex. */
+@layer utilities {
+  .bg-app { background-color: var(--app-bg); }
+  .bg-surface { background-color: var(--app-surface); }
+  .bg-surface-muted { background-color: var(--app-surface-muted); }
+  .bg-surface-raised { background-color: var(--app-surface-raised); }
+  .border-app { border-color: var(--app-border); }
+  .border-app-strong { border-color: var(--app-border-strong); }
+  .divide-app > :not([hidden]) ~ :not([hidden]) { border-color: var(--app-border); }
+  .ring-app { --tw-ring-color: var(--app-border-strong); }
+  .text-app { color: var(--app-text); }
+  .text-app-strong { color: var(--app-text-strong); }
+  .text-app-secondary { color: var(--app-text-secondary); }
+  .text-app-muted { color: var(--app-text-muted); }
+  .text-app-inverse { color: var(--app-text-inverse); }
+  .placeholder-app-muted::placeholder { color: var(--app-text-muted); }
+  .hover-bg-app:hover { background-color: var(--app-hover); }
+}
+
+/* Keyframes the sheets reference through arbitrary animate-[…] values. */
+@keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes slideUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

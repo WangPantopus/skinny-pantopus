@@ -1,0 +1,15 @@
+{
+ "id": "f8-scale-strips",
+ "export": "docs/design/exports/f8-scale-strips/f8-scale-strips.html",
+ "manifest": 21,
+ "mode": "bundle",
+ "pages": 21,
+ "exact": 21,
+ "labelled": 21,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-scale-strips/pages",
+ "placeholders": []
+}

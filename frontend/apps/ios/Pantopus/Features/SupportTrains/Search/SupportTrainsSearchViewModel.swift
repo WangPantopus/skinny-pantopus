@@ -156,6 +156,7 @@ public final class SupportTrainsSearchViewModel {
 
     private func statusChip(for status: String?) -> (text: String, variant: StatusChipVariant) {
         switch status ?? "" {
+        case "draft": ("Draft", .neutral)
         case "active": ("Active", .success)
         case "filling": ("Filling up", .info)
         case "full": ("Slots full", .neutral)

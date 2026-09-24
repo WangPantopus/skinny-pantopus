@@ -1,0 +1,15 @@
+{
+ "id": "f8-compare-sheet",
+ "export": "docs/design/exports/f8-compare-sheet/f8-compare-sheet.html",
+ "manifest": 18,
+ "mode": "bundle",
+ "pages": 18,
+ "exact": 18,
+ "labelled": 18,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-compare-sheet/pages",
+ "placeholders": []
+}

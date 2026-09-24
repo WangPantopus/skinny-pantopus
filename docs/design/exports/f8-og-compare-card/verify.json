@@ -1,0 +1,15 @@
+{
+ "id": "f8-og-compare-card",
+ "export": "docs/design/exports/f8-og-compare-card/f8-og-compare-card.html",
+ "manifest": 12,
+ "mode": "bundle",
+ "pages": 12,
+ "exact": 12,
+ "labelled": 12,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-og-compare-card/pages",
+ "placeholders": []
+}

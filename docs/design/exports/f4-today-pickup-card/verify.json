@@ -1,0 +1,19 @@
+{
+ "id": "f4-today-pickup-card",
+ "export": "docs/design/exports/f4-today-pickup-card/f4-today-pickup-card.html",
+ "manifest": 33,
+ "mode": "bundle",
+ "pages": 33,
+ "exact": 32,
+ "labelled": 33,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f4-today-pickup-card \u00b7 Notes"
+ ],
+ "extra": [
+  "Pickup card \u00b7 26-notes"
+ ],
+ "pagesDir": "docs/design/exports/f4-today-pickup-card/pages",
+ "placeholders": []
+}

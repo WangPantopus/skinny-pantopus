@@ -1,0 +1,33 @@
+{
+ "id": "f10-bill-provenance",
+ "name": "Bill provenance block (from a photo you took)",
+ "feature": "F10",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The bill detail route on web and BillDetailView / BillDetailScreen on the natives.",
+ "purpose": "Show a bill's origin honestly \u2014 a machine read a photograph and a human confirmed it \u2014 and give one place to correct, view or delete both together.",
+ "contents": "'From a photo you took \u00b7 Oct 3' with a thumbnail, the confirmation provenance line ('We read this from your photo. You confirmed the amount on Oct 3.'), 'View the photo', 'Fix what we read', and a delete that removes the bill and its photo together.",
+ "states": [
+  "created by snap (block present)",
+  "created manually (block absent \u2014 no empty provenance slot)",
+  "low-confidence extraction",
+  "photo deleted, bill kept",
+  "paid",
+  "overdue",
+  "permission-denied",
+  "error",
+  "offline"
+ ],
+ "phase": "phase2",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Bill detail (any arrival: list, notification, calendar row, mail piece link)"
+ ],
+ "visualization": "A subordinate evidence block beneath the amount and due date \u2014 never a banner above them \u2014 with the confirmation stated as a state ('You confirmed this'), not a confidence percentage, which would invite distrust of a value the user already checked.",
+ "uxNote": "The 'cancelled' vs 'canceled' filter bug lives directly under this work; deleting a snapped bill would reproduce that lie on the most visible new path.",
+ "effortDays": 0.75
+}

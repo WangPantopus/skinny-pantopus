@@ -1,0 +1,33 @@
+{
+ "id": "f1-save-confirmation",
+ "name": "Saved \u2014 Today now uses this address",
+ "feature": "F1",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web: PendingPlaceSaver at /app/place?preview=<id> \u2014 as the success STATE of the save, not a route. iOS: Features/Place/Launch/PendingPlaceView.swift. Android: ui/screens/place/launch/PendingPlaceScreen.kt.",
+ "purpose": "The one moment the user learns the save did anything. Say what changed, in one sentence, and hand them to Today.",
+ "contents": "Title swap 'Keep this address handy' \u2192 'Saved privately'. Body revised \u2014 today's 'a private bookmark\u2026 setting up a Home is a separate step' is now incomplete, because the save also sets Today and enables the briefing. Primary 'See Today', secondary 'Set up a Home', tertiary 'View saved places'. Carries the preview-lost recovery: when the local draft is unreadable, an inline address field with one-tap re-save instead of dropping to an empty Place.",
+ "states": [
+  "pre-save confirm",
+  "saving",
+  "saved",
+  "preview lost / expired / different device \u2014 inline recovery",
+  "save error (browser storage failure)",
+  "account switched (expectedUserId mismatch \u2014 must refuse)",
+  "offline"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "/start funnel continue-with-preview",
+  "Email verification landing",
+  "Add-a-place sheet (skips straight to saved)"
+ ],
+ "visualization": "Two-state title with a single confirming glyph; three actions in strict weight order with the privacy sentence as a caption, never a second paragraph. The recovery state replaces the body with a focused address field and keeps the title, so a lost draft reads as 'type it again', not as an error page.",
+ "uxNote": "Made a state rather than a dedicated route on web (it already is a route on both natives, which is fine). The recovery state is not optional: the previewed address lives in a device-local localStorage draft with a 24h TTL, so anyone who registers on a laptop and verifies on a phone arrives with nothing \u2014 the bridge silently fails for the most common signup path.",
+ "effortDays": 0.75
+}

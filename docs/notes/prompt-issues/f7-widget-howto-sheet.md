@@ -1,0 +1,29 @@
+# Last review findings for f7-widget-howto-sheet (round 2). The fix after this round was applied but not re-verified.
+
+- [major] (substance) The no-place state's 'Save an address first' button assumes the signed-in Add a place sheet exists. On Android it does not exist yet (critique blocker), and this no-place state is reachable from Notifications settings, so the button would dead-end. The widget prompt handles this case conditionally; this prompt does not.
+  - evidence: critique-findings: 'Until it exists, the widget must not advertise 'Save an address to see today here' on Android.' flows-spec: "The labels 'Add a place', 'Save an address first' and 'Save an address to see today here' must lead to the same place." Prompt: '"Save an address first" is the primary footer button and closes this sheet, then opens the Add a place sheet.'
+  - fix: Add: 'The no-place footer (and artboard 09) ships only on a platform where the signed-in Add a place sheet exists. Until then, show the sample with only "Done" and the line "Open Pantopus to see today at your address".' Record this on Notes.
+- [minor] (substance) The no-place footer contradicts itself: 'Save an address first' is called the primary button, yet 'Done' is a secondary button 'of equal weight'.
+  - evidence: Prompt: '"Save an address first" is the primary footer button ... "Done" stays as a secondary button of equal weight.' house-style: 'Declines are neutral and equal weight'.
+  - fix: Choose one: either two outlined buttons of equal weight with 'Save an address first' first, or a filled primary plus a text Done. Then say it once.
+- [minor] (substance) Entry point 3 names the Today button 'That's my day', but on Today the contract's PickupCard button is 'Yes, Tuesday is right'. 'That's My Day' is the push action.
+  - evidence: component-contract PickupCard: "two peer buttons ... 'Yes, Tuesday is right' / 'Change pickup day'"; PushCopy action 'That's My Day'. Prompt: 'right after "That's my day" confirms a pickup on Today.'
+  - fix: Change to 'right after "Yes, Tuesday is right" (or the tray's "That's My Day") confirms a pickup'.
+- [minor] (substance) The preview's spoken label leaves out the authority 'Waste Connections' and the AirNow observation time, so it does not match the widget's region labels.
+  - evidence: f7-today-widget prompt label: '... Waste Connections, on record, not confirmed.' and '... category 1 of 6, AirNow, observed 7 AM.' This prompt: '... bins out tonight, on record, not confirmed; next 14 days, 6 items; air quality index 42, Good.'
+  - fix: Add 'Waste Connections' and 'category 1 of 6, AirNow, observed 7 AM' to the preview label.
+- [minor] (ux) The inline-hint trigger names 'That's my day' as the confirm button on Today. In the contract, the PickupCard's confirm button is 'Yes, Tuesday is right'; 'That's my day' is the notification action.
+  - evidence: "3. A one-line inline hint shown once, right after \"That's my day\" confirms a pickup on Today."; contract PickupCard "two peer buttons... 'Yes, Tuesday is right' / 'Change pickup day'".
+  - fix: Change it to 'right after "Yes, Tuesday is right" confirms a pickup on Today (or after the notification's "That's my day" action)'.
+- [minor] (ux) The no-place footer contradicts itself: the button is called the primary, but 'Done' is to be of equal weight.
+  - evidence: "'Save an address first' is the primary footer button... 'Done' stays as a secondary button of equal weight."
+  - fix: Write: "'Save an address first' is the filled primary button; 'Done' is an outlined button of the same size directly beside or below it."
+- [minor] (ux) 'Save an address first' leads to the Add a place sheet with no guard for a platform where that signed-in sheet does not exist yet. The critique makes this a blocker for the widget's no-place text.
+  - evidence: critique-findings.md "Until it exists, the widget must not advertise 'Save an address to see today here' on Android."; the howto sheet's no-place state has no such condition.
+  - fix: Add to EDGE CASES and Notes: 'Until the signed-in Add a place sheet exists on a platform, hide the Notifications settings "Home screen widget" row for people with no place, so the no-place state is not reachable there.'
+- [minor] (ux) Artboard 03 draws the Android system pin dialog, but the prompt does not say to draw it in neutral system styling, so Pantopus tokens may leak into OS chrome.
+  - evidence: ARTBOARDS "3. ... 03-pin-dialog · light — the system pin dialog over the sheet."
+  - fix: Add to LAYOUT: 'Draw the pin dialog as neutral Material 3 system chrome with the system's own Add and Cancel; Pantopus tokens appear only inside its widget preview.'
+- [minor] (ux) The Notifications settings row label is an invented string, but it is missing from COPY.
+  - evidence: "Notifications settings → the 'Home screen widget' row"; COPY does not contain it.
+  - fix: Add 'Home screen widget' to COPY and to the Notes list of invented strings.

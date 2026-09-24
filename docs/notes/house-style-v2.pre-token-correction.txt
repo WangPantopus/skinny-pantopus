@@ -1,0 +1,54 @@
+PANTOPUS HOUSE STYLE v2. Paste once per project, then the surface prompt.
+
+PRODUCT. Pantopus: "See what's true about your address." Type an address and see what is on public record (flood, wildfire, air, radon, pickup, civic deadlines). Save it privately, claim it as your home, then verify it. It works with zero other users: a night-before pickup push, a briefing that stays silent unless a threshold is crossed, a widget, important dates, and co-residents sharing calendar and bills.
+USER. People who just moved, aged about 25 to 70, busy, some using large text. Pilot: Camas and Vancouver, WA, on web, iOS and Android.
+PLATFORMS. Web 1440x900 (left sidebar) and 390x844 (bottom tab bar). iOS 393x852, native navigation, sheets with detents. Android 412x915, Material 3, bottom sheets. Widgets on 393x852: 158x158, 338x158 and 338x354pt, with 16pt margins.
+NAVIGATION. Exactly four tabs: Place · Today · Nearby · Mail. There is no fifth tab or FAB. Tab labels are always visible. Every screen is reached from a tab or a deep link.
+
+DESIGN SYSTEM. This project uses the published "Pantopus" design system. Attached host screenshots are exact: change only what the prompt lists.
+Human reference, same source of truth (do not rely on opening these by link): https://claude.ai/design/p/019e16cb-d2a9-77b0-b9e0-370dbe3856ba?via=share · https://claude.ai/design/p/c65a37ac-191a-4cdc-9f30-602926979fd6?via=share. Match existing screens; no new card style, type scale or icon set.
+COMPONENTS: see the Foundations board (prompt 00) — use these by exact name.
+
+VISUAL SPECS (concrete, not mood). Type: the platform system sans only: SF Pro on iOS (Dynamic Type), Roboto on Android, and the system-ui stack on web (ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto). Use no serif display type and no italic accents. Backgrounds are surface.app, base or raised only. Never use cream, paper or tinted backgrounds. SCOPE NOTE: the marketing homepage (/) alone uses a serif display face on paper backgrounds. Keep that as-is on the homepage and nowhere else. Radii: xs 4 · sm 6 · md 8 (inputs) · lg 12 (buttons) · xl 16 (info notes, toasts) · 2xl (THE card radius: every section card, row card and sheet) · 3xl (large marketing panels) · pill. Web draws 2xl at 16px and native at 20; use the token, never a number. (The Foundations boards draw their specimen containers at radius lg: that is board chrome, not a product card.) Spacing: 4px base (4, 8, 12, 16, 20, 24, 32, 40, 48, 64). Elevation: shadow sm (y1, blur 3, 4%) for cards, md (y2, blur 6, 6%) for raised controls, lg for sheets. Warmth comes from the copy voice and primary.50 selected fills, not from colour. Use only the type scale below and never invent sizes.
+
+TOKENS (always by name, never raw hex)
+  Primary sky ramp 50-900 · DEFAULT #0284c7 · 500 #0ea5e9 · 700 #0369a1 · 800
+  Surfaces: base #FFFFFF · raised #F9FAFB · sunken #F3F4F6 · app #F6F7F9 · muted #F8FAFC
+  Text: primary #111827 · strong #374151 · secondary #6B7280 · muted #9CA3AF · inverse #FFFFFF
+  Borders: default #E5E7EB · strong #D1D5DB · focus #0284c7 · subtle #F3F4F6
+  Semantic: success #059669/#F0FDF4 · warning #D97706/#FFFBEB · error #DC2626/#FEF2F2 · info #0284c7/#F0F9FF
+  Pillars: personal #0284C7 · home #16A34A · business #7C3AED · professional #D97706
+  Dark: base #0F172A · raised #1E293B · app #020617 · text primary #E5E7EB · secondary #94A3B8 · border #1F2937 · focus/link #38BDF8
+  Type: h1 30/36/700 · h2 24/32/600 · h3 20/28/600 · body 16/24/400 · bodySmall 14/20/400 · label 13/18 · caption 12/16/400 · overline 11/16/600 caps +0.5
+HOUSE RULE: every colour is a semantic token; the codebase forbids hex literals in Features/**. If a colour isn't listed, use the nearest token.
+TOKEN USAGE. text.muted is only for placeholders and disabled controls, never for text someone must read. Readable secondary text is text.secondary on base, raised or app surfaces; on sunken, use text.strong. Filled buttons and inline links use primary.700 (in dark mode, links use #38BDF8). Semantic hues go on glyphs and borders only; text on a semantic tint is text.primary. Border tokens are decoration and never the only edge of a band, segment, mark or input; those edges use ink at text.secondary strength or darker.
+The one colour exception: the AQI track uses EPA ColorVision Assist hues (Green 158,255,145 · Yellow 255,201,5 · Orange 255,130,5 · Red 240,34,0 · Purple 137,9,151 · Maroon 100,0,21), with 2px surface gaps between segments, a keyline, and a two-tone marker.
+
+FIXTURES (use these exactly; each prompt lists only its deltas)
+  TODAY: Mon 19 Oct 2026, 6:10 PM Pacific.
+  HOME A (claimed, "Your household"): 2418 NE Larkspur Loop, Vancouver, WA 98684. Label on lock screens and widgets: "Larkspur Loop". People: Maya Chen (the viewer, owner) and Sam Ortega (member). Pending invite: priya@example.com, expires Mon 26 Oct. Pickup: garbage every Tuesday, recycling every other Tuesday (next Tue 20 Oct), Waste Connections, carts out by 6:30 AM. Bills: Clark Public Utilities $142.18 due Fri 23 Oct; City of Vancouver water $84.00 due Wed 28 Oct; Comcast $79.99 due Mon 2 Nov. HOA dues $285 due Sun 1 Nov. Lease ends Wed 31 Mar 2027 with 30 days' notice required, so the notice deadline is Mon 1 Mar 2027 and the reminder lead is 30 days, so the reminder is Sat 30 Jan 2027. Water-heater warranty ends Sat 12 Dec 2026. Keeper: Ollie (otter).
+  PLACE B (saved, "Saved place · Only you"): 1107 NE Birchfield Ct, Camas, WA 98607. Saved by Jordan Lee, 36, who moved from Portland, OR on Fri 9 Oct and saved it on Sat 10 Oct. Not claimed yet. Pickup weekday is Thursday per the City of Camas; frequency is Not set.
+  FRIEND C (compare sender): Dana · Camas, WA. Card as of Sat 12 Sep 2026.
+  Readings: Flood Zone X (minimal flood hazard, FEMA, effective Sep 2021) · Wildfire hazard Moderate 3 of 5 (USFS 2023) · Air AQI 42 Good, AirNow, observed 7:00 AM · Radon Zone 1, highest potential (EPA, county-wide). Alert variant: AQI 118, Unhealthy for Sensitive Groups, 4:00 PM.
+  Civic: online or mail voter registration must arrive by Mon 26 Oct; in person until 8:00 PM Tue 3 Nov. Property tax 2nd half is due Mon 2 Nov (Clark County Treasurer). The statutory date, 31 Oct, falls on a Saturday this year, so it moves to the next business day (RCW 1.12.070). Surfaces that show it say "due Mon 2 Nov" and may add "moved from Sat 31 Oct" in the detail.
+  Every email address uses @example.com. Any string you invent must be listed on the Notes artboard.
+
+INVARIANTS (product decisions; do not reopen them)
+  1. Unverified looks unverified. Provenance marks: FILLED = official or confirmed; HOLLOW = on record, not confirmed; FILLED WITH A KNOCKED-OUT TICK = you added it. Marks are at least 12pt with a stroke of at least 1.5px and at least 3:1 contrast. Each surface shows the matching word once (a legend or first-occurrence label). Standalone surfaces (widget, push, share card) print the word next to the mark. Filled vs hollow means provenance and nothing else.
+  2. Scope is always stated with one of two strings: "Saved place · Only you" or "Your household". Scope changes need an explicit choice.
+  3. No claims about a neighbour's home. Describe places and datasets, never people's houses.
+  4. Silence is a designed state. "Nothing needs your attention today" appears only when every check succeeded; show the receipt ("Checked 6:00 PM · weather · air · alerts · your calendar"). A failed check names the provider and offers Retry.
+  5. Sources are shown as a caption: authority · scope · as-of.
+  6. No grades, scores, percentages, verdicts, radar charts, rainbow ramps, streaks, completion fractions or confetti.
+
+ACCESSIBILITY. Text contrast is at least 4.5:1 and meaningful graphics at least 3:1, in light, dark and Increase Contrast. Tap targets are 44pt on iOS, 48dp on Android with 8dp gaps, and 44px on web; a small mark is never a target by itself (its row or cell is). Never use colour alone; every frame must still read correctly in greyscale. Charts, strips and bands get a one-sentence summary, a spoken label and a list of the same facts. No action is gesture-only or hover-only. Every sheet has a visible Close or Done and does not stack on another sheet. Undo stays available until the user leaves the screen: no countdowns. Selection must look different from focus. Sticky bars reserve scroll padding. At AX5 or 200% text, pairs stack, text wraps instead of truncating, and sheets may scroll. Orientation is never locked.
+
+MICROCOPY. Write at a grade 6 to 8 reading level, in sentence case. Buttons start with a verb ("Add a date", "Change pickup day"). Declines are neutral and equal weight ("Not now", "Skip", "Just me"). Plain meaning comes first, then the code: "Zone X — minimal flood hazard". Say "hazard" or "potential" as the authority does; never write "100-year flood". Pair a word with a number: "Moderate · 3 of 5". Dates show the weekday: "Mon 26 Oct"; beyond tomorrow, add the relative count: "in 7 days · Mon 26 Oct". Deadlines say "must arrive by". Never write "midnight". No "Oops", no "Are you sure?", no "Congratulations". Error text says what to do next.
+PUSH. Titles are 30 characters or fewer, with the caveat first: "Unconfirmed: pickup tomorrow". Bodies are 40 characters or fewer, with no house number and no amounts. Never "Open Pantopus to…".
+
+MOTION AND HAPTICS. Motion must have a purpose and last 300ms or less; idle loops stop within 5s. Reduce Motion: cross-fades and static poses, no shimmer. Deep-link landings scroll once and fade a highlight. Haptics: one light tick on confirm only.
+
+ARTBOARDS. Name each artboard "<surface-id> · <ios|android|web-390|web-1440> · <NN-state> · <light|dark>" and show that name as a visible label above the frame. Priority order: the dense default, then the states that change layout, then empty/loading/error/offline, then platform variants, then AX5/200% and greyscale, then the dark twins listed in the prompt. Deliver at most about 6 artboards per turn, following the prompt's BATCH PLAN, and wait for "continue". The last artboard is Notes: assumptions, invented strings, omitted states. Ask a question only if two readings would give materially different screens.
+
+AVOID (research-backed)
+  Permission asks at launch, or a primer button labelled "Allow"/"Yes" · tours and asks in modals · "Not now" that asks again · retyping a held value · full-page spinners · an all-clear shown early · stale data replaced by a blank · text on AQI fills · per-cell targets in strips · re-sorting compare rows · warning-tinted countdowns on perks · creature guilt or distress · keeper or marketing pushes · Time Sensitive for pickup · custom Android share choosers · text-heavy OG images · "Add it for me" on iOS.

@@ -1,0 +1,15 @@
+{
+ "id": "f3b-invitation-decision",
+ "export": "docs/design/exports/f3b-invitation-decision/f3b-invitation-decision.html",
+ "manifest": 26,
+ "mode": "bundle",
+ "pages": 26,
+ "exact": 26,
+ "labelled": 26,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3b-invitation-decision/pages",
+ "placeholders": []
+}

@@ -1,0 +1,138 @@
+{
+  "artifact": "https://claude.ai/artifact/MCub8DTnkdhoFnMbtF8QF5",
+  "note": "Asset uploads already stored in the artifact. sha256 is the local file that was uploaded; build.mjs reuses a blob while the regenerated file still matches it. size is the stored size the upload reported.",
+  "uploads": {
+    "assets/Logos/pantopus-mark.svg": {
+      "sha256": "9ff5fed9fe507a94ea3f22c4bbb6ea5e05c5fb3caaeaeb939e00b5e5c68241f0",
+      "blob": "8c918320b50019bdabe824c0619ba6a7",
+      "size": 1044,
+      "type": "image/svg+xml"
+    },
+    "assets/Logos/pantopus-mark-dark.svg": {
+      "sha256": "e525898a743f52ea4ae1b34d74dd9ae82a5f38cf004e2782923e2de491bfc97d",
+      "blob": "04e51c2f2e83b6e00844930cac478cbe",
+      "size": 1054,
+      "type": "image/svg+xml"
+    },
+    "assets/Logos/pantopus-lockup.svg": {
+      "sha256": "3e255bcf58d4124d3ed42e47379d2fe0cdbd1db0ff35a9722b142bd7fcb63279",
+      "blob": "505b4e043b06426c9acc0f55d6695ef5",
+      "size": 1266,
+      "type": "image/svg+xml"
+    },
+    "assets/Logos/pantopus-app-icon.svg": {
+      "sha256": "8d5af6aaa83010e23fd874d283bdf7a57c6c9742aa230730e582af81d21c6ae9",
+      "blob": "b389425c5317829c73845906d4622c5d",
+      "size": 1161,
+      "type": "image/svg+xml"
+    },
+    "assets/Logos/pantopus-icon-512.png": {
+      "sha256": "a0600389f1a5dd7086ab1604da635bea6c011d112ef159ec4c76a4c1421e9f9c",
+      "blob": "76d3e323508492a30ec07ff09d6423fd",
+      "size": 10007,
+      "type": "image/png"
+    },
+    "assets/Logos/pantopus-favicon.svg": {
+      "sha256": "41ae2bfe9abbb75cdd3f37a743fd0b6888282276e46325855f16cc09b28f38c2",
+      "blob": "7d583fc6ee1393d49877264ace0bb376",
+      "size": 1032,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/place-house.svg": {
+      "sha256": "936d9a139745f2a0d896ee20fcc68f7c7673dee1318aeb7ca141124525cb1968",
+      "blob": "bb852a93c45f601b063d2f7f3d61a06e",
+      "size": 361,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/today-sun.svg": {
+      "sha256": "61cdae2ea99c873ee73a998928bb80bb2f3c6380ed9498719de38ac60da4bcf3",
+      "blob": "76865e8911d30a1dc3de0eae34c9ef1a",
+      "size": 479,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/nearby-compass.svg": {
+      "sha256": "8826b88cd7c4b6eb8c4fdb9a731e60607d99eb0ed550b950579cd967df0f6936",
+      "blob": "bc1706adcfa0143e6e3f9691a56c5022",
+      "size": 331,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/mail.svg": {
+      "sha256": "8597aaf8f883630a65dcd8d4f83884823db3ac939b2dd004e90faba8e5c7110d",
+      "blob": "90bdf4453163fee837c9c2a61ff46dac",
+      "size": 294,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/hub-layout-dashboard.svg": {
+      "sha256": "523910756ea0aa7196fbc4fd0631725b4209e6050d36a8085423c0ad1dd519b4",
+      "blob": "d482970e0a425f4522c1fd4fe0d3c13a",
+      "size": 398,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/messages-message-circle.svg": {
+      "sha256": "20f596dbbfb703dda6cf8cae3b2bcee994788af59881b212f198b8811bf809c4",
+      "blob": "9b28bc7d6e519bfb773071b043b61f2f",
+      "size": 323,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/notifications-bell.svg": {
+      "sha256": "ec68545859ffea9f78324ed9037a14a33e63b0f0760b410937a0d5caf5d4ecf6",
+      "blob": "f4a6006a994df446e47694f51fabc070",
+      "size": 371,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/search.svg": {
+      "sha256": "103ad2722b061ffd76438eb8f9f1ee8139376339f6ea8c2a52d5b8384d28f4d3",
+      "blob": "0d8792ce85d87a574c509c8ec0c9dee6",
+      "size": 255,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/map.svg": {
+      "sha256": "a8f97abbd194cf4da84bb432b9f05a2cde0f17b0380ba2751916c71b2b083984",
+      "blob": "839207a5000ddcb5b2ac1cdcc3304bf8",
+      "size": 496,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/identity-shield-check.svg": {
+      "sha256": "b4855c9aeeff70efb3a7657c42e785d81bfa878bbb6f11a917bce593045fdbc1",
+      "blob": "02d6e947c97d0eab57d62d8aa58e4d9f",
+      "size": 393,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/profile-user.svg": {
+      "sha256": "ae9d6973d75c735466d81e6b551e232f8682d10962c789d7837e9a802dc22e12",
+      "blob": "64b0b7af14380f01ed7c214e7af2c3e2",
+      "size": 279,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/scheduling-calendar-clock.svg": {
+      "sha256": "601e9dd7ace5aac54e9e7620a970d7816c9fbc670bdb6446d53af6e6f4a894a4",
+      "blob": "d788c1d72b13ee274e08fb50e929adbf",
+      "size": 407,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/audience-radio.svg": {
+      "sha256": "cf0dfc2e418a4086eb1e541ac94ce7f4e4c532616f89815ec22e9d312fa0371c",
+      "blob": "a1d20d24e7adb14cf18d04bff2dccb16",
+      "size": 423,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/marketplace-shopping-bag.svg": {
+      "sha256": "ac504d0dfd7fac85cb925bc22d81b6356eb09cb112f153864db1a2047d046262",
+      "blob": "7a3512d4e4dc274a0abf506f83ab1d14",
+      "size": 402,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/tasks-briefcase.svg": {
+      "sha256": "17526314889439cdfeb2f38a8c2daf78d8ed8fc979d01a69e72d75ef655c14ca",
+      "blob": "868c2cec09377b515e4a7782b341d29b",
+      "size": 297,
+      "type": "image/svg+xml"
+    },
+    "assets/Icons/settings.svg": {
+      "sha256": "d5a09e6bee44374fc828b7e378ea909add51b3209884e07472a7aa05de8ba2db",
+      "blob": "b4b1dd5b89abfc7c8600faecf1471ef7",
+      "size": 566,
+      "type": "image/svg+xml"
+    }
+  }
+}
