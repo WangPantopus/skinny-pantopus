@@ -2537,7 +2537,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 // ── Wedge v2 D2: Place · Today · Nearby · Mail ──────────
                 composable(PantopusRoute.Today.path) {
-                    TodayTabScreen(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) })
+                    TodayTabScreen(
+                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onOpenPlace = { navController.navigateToRootTab(PantopusRoute.Place) },
+                    )
                 }
                 composable(PantopusRoute.Nearby.path) {
                     NearbyScreen(

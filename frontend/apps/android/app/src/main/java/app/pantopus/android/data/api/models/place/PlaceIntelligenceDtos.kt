@@ -872,6 +872,12 @@ data class PlaceCivicElectionData(
     @Json(name = "polling_place") val pollingPlace: PlacePollingPlace? = null,
     /** Ballot races; may be empty (summary only) on the dashboard. */
     val ballot: List<PlaceBallotRace> = emptyList(),
+    /**
+     * Ballot P0 card fields (`ballot_p0` flag); null when not sent. Read
+     * separately by [BallotSummary.decode] in `PlaceJsonAdapters`, so a
+     * malformed ballot field never fails this section.
+     */
+    @Transient val ballotCard: BallotSummary? = null,
 )
 
 // ─── Band-B payload (Your Home) ──────────────────────────────

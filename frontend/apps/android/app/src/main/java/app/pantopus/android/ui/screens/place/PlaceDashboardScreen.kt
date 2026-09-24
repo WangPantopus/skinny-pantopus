@@ -40,11 +40,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
+import app.pantopus.android.ui.screens.ballot.BallotPlacement
+import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
 import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
@@ -177,6 +181,8 @@ internal fun PlaceDashboardContent(
     val isVerified = intel.tier == PlaceTier.T4
     val isClaimed = intel.tier == PlaceTier.T3
     val pulse = PlacePresentation.derivePulse(intel)
+    val ballot = BallotPlacement.ballot(intel)
+    var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
         item {
@@ -250,7 +256,18 @@ internal fun PlaceDashboardContent(
                 )
             }
         }
-        items(items = intel.groups, key = { it.group }) { group ->
+        // Ballot P0 (ballot_p0): the "Your ballot" card leads under
+        // "This season" and leaves the civic group.
+        if (ballot != null) {
+            item(key = "ballot") {
+                BallotSeasonBlock(
+                    placed = ballot,
+                    onOpenGovernments = ballot.card.governments?.let { governments -> { ballotGovernments = governments } },
+                    modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
+                )
+            }
+        }
+        items(items = BallotPlacement.groups(intel), key = { it.group }) { group ->
             PlaceGroupBlockView(
                 group = group,
                 onOpenDetail = onOpenDetail,
@@ -267,6 +284,14 @@ internal fun PlaceDashboardContent(
             }
         }
         item { Spacer(modifier = Modifier.height(40.dp)) }
+    }
+
+    ballotGovernments?.let { governments ->
+        BallotGovernmentsSheet(
+            governments = governments,
+            address = intel.place.line1,
+            onDismiss = { ballotGovernments = null },
+        )
     }
 }
 

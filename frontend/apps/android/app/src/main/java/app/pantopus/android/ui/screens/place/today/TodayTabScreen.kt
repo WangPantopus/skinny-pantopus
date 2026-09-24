@@ -40,11 +40,13 @@ private const val PLACEHOLDER_ROWS = 3
 /**
  * The Today tab root (Wedge v2 D2). Four states: loading placeholders,
  * a claim prompt when there is no place yet, the Today group with the
- * address calendar, and an error with retry.
+ * address calendar, and an error with retry. [onOpenPlace] switches to
+ * the Place tab (the Ballot P0 card's "Open your ballot").
  */
 @Composable
 fun TodayTabScreen(
     onClaim: () -> Unit,
+    onOpenPlace: (() -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -64,7 +66,7 @@ fun TodayTabScreen(
                 Column(
                     modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 ) {
-                    PlaceTodayDetailContent(current.intelligence, viewModel)
+                    PlaceTodayDetailContent(current.intelligence, viewModel, onOpenBallot = onOpenPlace)
                     Spacer(modifier = Modifier.height(96.dp))
                 }
         }

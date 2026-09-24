@@ -124,7 +124,9 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 PlaceSectionId.CIVIC_DISTRICTS ->
                     parse(PlaceCivicDistrictsData::class.java)?.let(PlaceSectionData::CivicDistricts)
                 PlaceSectionId.CIVIC_ELECTION ->
-                    parse(PlaceCivicElectionData::class.java)?.let(PlaceSectionData::CivicElection)
+                    parse(PlaceCivicElectionData::class.java)
+                        ?.copy(ballotCard = BallotSummary.decode(moshi, data))
+                        ?.let(PlaceSectionData::CivicElection)
                 PlaceSectionId.ADDRESS_CALENDAR ->
                     parse(PlaceAddressCalendarData::class.java)?.let(PlaceSectionData::AddressCalendar)
                 PlaceSectionId.UNKNOWN -> null
