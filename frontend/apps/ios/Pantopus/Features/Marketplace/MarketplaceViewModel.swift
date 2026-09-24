@@ -41,6 +41,7 @@ public final class MarketplaceViewModel {
     /// search submitted mid-flight can never be clobbered by a stale
     /// response — and is never silently dropped.
     private var fetchGeneration = 0
+    private var firstPageInFlight = false
 
     /// Radius widening steps for the empty-state hint pill.
     private static let radiusSteps: [Double] = [2, 5, 10, 25]
@@ -106,7 +107,7 @@ public final class MarketplaceViewModel {
     /// Incremental page fetch, triggered when the grid scrolls near
     /// its end.
     public func loadMoreIfNeeded(currentId: String) async {
-        guard hasMore, !isLoadingMore,
+        guard hasMore, !isLoadingMore, !firstPageInFlight,
               case .loaded = state,
               loadedItems.suffix(4).contains(where: { $0.id == currentId })
         else { return }
@@ -118,24 +119,28 @@ public final class MarketplaceViewModel {
     private func fetch() async {
         fetchGeneration += 1
         let generation = fetchGeneration
-        if case .loaded = state {} else { state = .loading }
-        let center = await resolveCenter()
-        guard generation == fetchGeneration else { return }
-        guard let center else {
-            viewingCenter = nil
-            hasMore = false
-            hasLoadedOnce = true
-            state = .error(message: "Choose an area or turn on location to browse nearby listings.")
-            return
+        firstPageInFlight = true
+        isLoadingMore = false
+        defer {
+            if generation == fetchGeneration { firstPageInFlight = false }
         }
-        viewingCenter = center
-
+        if case .loaded = state {} else { state = .loading }
         do {
+            let center = try await resolveCenter()
+            guard generation == fetchGeneration else { return }
+            guard let center else {
+                hasMore = false
+                hasLoadedOnce = true
+                state = .error(message: "Choose an area or turn on location to browse nearby listings.")
+                return
+            }
             let response: ListingsNearbyResponse = try await api.request(
                 nearbyEndpoint(center: center, offset: 0)
             )
             guard generation == fetchGeneration else { return }
             hasLoadedOnce = true
+            // Coordinates and rows belong to the same accepted first page.
+            viewingCenter = center
             loadedItems = response.listings
             hasMore = response.pagination?.hasMore ?? false
             if response.listings.isEmpty {
@@ -146,6 +151,7 @@ public final class MarketplaceViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             hasLoadedOnce = true
+            hasMore = false
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load marketplace."
             state = .error(message: message)
         }
@@ -153,9 +159,11 @@ public final class MarketplaceViewModel {
 
     private func fetchNextPage() async {
         let generation = fetchGeneration
-        guard let center = viewingCenter else { return }
+        guard !firstPageInFlight, let center = viewingCenter else { return }
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        defer {
+            if generation == fetchGeneration { isLoadingMore = false }
+        }
         do {
             let response: ListingsNearbyResponse = try await api.request(
                 nearbyEndpoint(center: center, offset: loadedItems.count)
@@ -176,9 +184,10 @@ public final class MarketplaceViewModel {
         }
     }
 
-    private func resolveCenter() async -> UserCoordinate? {
-        let payload: ViewingLocationPayload? = try? await api.request(ViewingLocationEndpoints.current())
-        if let selected = payload?.viewingLocation {
+    private func resolveCenter() async throws -> UserCoordinate? {
+        // A failed selected-area read is not evidence that no area was saved.
+        let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
+        if let selected = payload.viewingLocation {
             return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
         }
         if let cached = location.cachedCoordinate() { return cached }
