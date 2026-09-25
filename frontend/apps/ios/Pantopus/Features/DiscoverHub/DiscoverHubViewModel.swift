@@ -179,7 +179,7 @@ public final class DiscoverHubViewModel: ListOfRowsDataSource {
     /// A11.2 — invoked by the "Open map" FAB to push the Explore map.
     private let onOpenMap: @MainActor () -> Void
     private let perTypeLimit: Int
-    private let magazineScenario: DiscoverHubMagazineScenario
+    private let magazineScenario: DiscoverHubMagazineScenario?
     private let magazineSeed: DiscoverHubMagazineContent
 
     private var people: [HubDiscoveryResponse.Item] = []
@@ -187,11 +187,12 @@ public final class DiscoverHubViewModel: ListOfRowsDataSource {
     private var gigs: [HubDiscoveryResponse.Item] = []
     private var listings: [HubDiscoveryResponse.Item] = []
     private var loadedOnce = false
+    private var magazineGeneration = 0
 
     init(
         api: APIClient = .shared,
         perTypeLimit: Int = 5,
-        magazineScenario: DiscoverHubMagazineScenario = .populated,
+        magazineScenario: DiscoverHubMagazineScenario? = nil,
         magazineSeed: DiscoverHubMagazineContent = DiscoverHubSampleData.populated,
         onSelect: @escaping @MainActor (DiscoverHubTarget) -> Void = { _ in },
         onOpenMap: @escaping @MainActor () -> Void = {}
@@ -225,15 +226,48 @@ public final class DiscoverHubViewModel: ListOfRowsDataSource {
     // MARK: - A11.3 Magazine state
 
     public func loadMagazine() async {
+        magazineGeneration += 1
+        let generation = magazineGeneration
         magazineState = .loading
-        switch magazineScenario {
-        case .loading:
-            break
-        case .empty:
-            magazineState = .empty
-        case .populated:
-            magazineState = .populated(magazineSeed)
-        case .error:
+        if let magazineScenario {
+            switch magazineScenario {
+            case .loading: break
+            case .empty: magazineState = .empty
+            case .populated: magazineState = .populated(magazineSeed)
+            case .error: magazineState = .error(message: "Couldn't load discovery. Try again.")
+            }
+            return
+        }
+        do {
+            async let tasks: HubDiscoveryResponse = api.request(HubEndpoints.discovery(filter: "gigs", limit: perTypeLimit))
+            async let items: HubDiscoveryResponse = api.request(HubEndpoints.discovery(filter: "listings", limit: perTypeLimit))
+            let (taskResponse, itemResponse) = try await (tasks, items)
+            guard generation == magazineGeneration, !Task.isCancelled else { return }
+            magazineState = .populated(DiscoverHubMagazineContent(
+                pins: [],
+                cluster: DiscoverHubMapCluster(count: 0, x: 0, y: 0),
+                tasks: taskResponse.items.map {
+                    DiscoverHubTaskCard(
+                        id: $0.id,
+                        title: $0.title,
+                        price: $0.price ?? "See details",
+                        distance: $0.category ?? "",
+                        bids: ""
+                    )
+                },
+                marketplace: itemResponse.items.map {
+                    DiscoverHubMarketplaceCard(
+                        id: $0.id,
+                        title: $0.title,
+                        price: $0.price ?? "See details",
+                        distance: $0.category ?? "",
+                        icon: Self.icon(forListingCategory: $0.category)
+                    )
+                },
+                posts: []
+            ))
+        } catch {
+            guard generation == magazineGeneration, !Task.isCancelled else { return }
             magazineState = .error(message: "Couldn't load discovery. Try again.")
         }
     }

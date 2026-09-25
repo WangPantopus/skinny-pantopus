@@ -1,10 +1,4 @@
-//
-//  HubViewModel.swift
-//  Pantopus
-//
-//  Fetches `/api/hub`, `/api/hub/today`, and `/api/hub/discovery` in
-//  parallel and projects them to the `HubState` consumed by `HubView`.
-//
+// Fetches the Hub overview and companion reads for `HubView`.
 
 // swiftlint:disable type_body_length
 
@@ -36,6 +30,11 @@ final class HubViewModel {
     /// True while a filter-tab refetch is in flight (rail shows its
     /// skeleton instead of stale rows).
     private(set) var discoveryLoading = false
+
+    /// True when the last discovery request failed, so the rail says so
+    /// instead of "Nothing nearby yet".
+    private(set) var discoveryFailed = false
+    private var discoveryGeneration = 0
 
     /// Status-strip pills the viewer dismissed this session. RN keeps the
     /// same session-scoped `Set<string>` — nothing is persisted server
@@ -120,12 +119,16 @@ final class HubViewModel {
 
     /// Re-request the Discover rail for the active filter.
     func refreshDiscovery() async {
+        discoveryGeneration += 1
+        let generation = discoveryGeneration
         discoveryLoading = true
-        defer { discoveryLoading = false }
+        defer { if generation == discoveryGeneration { discoveryLoading = false } }
         let filter = discoveryFilter.queryValue
         let response: HubDiscoveryResponse? = await optional {
             try await self.api.request(HubEndpoints.discovery(filter: filter, limit: 10))
         }
+        guard generation == discoveryGeneration, filter == discoveryFilter.queryValue else { return }
+        discoveryFailed = response == nil
         applyDiscovery(response?.items.prefix(10).map(Self.projectDiscovery(_:)) ?? [])
     }
 
@@ -187,16 +190,17 @@ final class HubViewModel {
         async let todayTask: HubTodayResponse? = optional {
             try await self.api.request(HubEndpoints.today())
         }
+        discoveryGeneration += 1
+        let generation = discoveryGeneration
+        discoveryLoading = true
+        defer { if generation == discoveryGeneration { discoveryLoading = false } }
         let filter = discoveryFilter.queryValue
         async let discoveryTask: HubDiscoveryResponse? = optional {
             try await self.api.request(HubEndpoints.discovery(filter: filter, limit: 10))
         }
         let today = await todayTask
         let discovery = await discoveryTask
-        // S5 — per-firewall unread split powers the megaphone shortcut
-        // into the Beacon notification zone. Sequenced (not raced) after
-        // the companions so a stubbed test sequence stays predictable;
-        // optional so its failure never blanks the hub.
+        // Optional unread counts power the Beacon notification shortcut.
         let unread: NotificationUnreadCountResponse? = await optional {
             try await self.api.request(NotificationsEndpoints.unreadCount)
         }
@@ -206,6 +210,8 @@ final class HubViewModel {
         let rebookable: RebookableGigsResponse? = await optional {
             try await self.api.request(GigExtrasEndpoints.rebookable())
         }
+        guard generation == discoveryGeneration, filter == discoveryFilter.queryValue else { return }
+        discoveryFailed = discovery == nil
         applyResults(
             hub: hub,
             today: today,

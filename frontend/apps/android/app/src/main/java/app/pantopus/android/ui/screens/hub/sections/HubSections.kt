@@ -636,6 +636,8 @@ fun HubDiscoveryRail(
     onSeeAll: (() -> Unit)? = null,
     onExploreMap: (() -> Unit)? = null,
     onFindBusinesses: (() -> Unit)? = null,
+    loadFailed: Boolean = false,
+    onRetry: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -646,8 +648,7 @@ fun HubDiscoveryRail(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            SectionHeader("Discover nearby")
-            Spacer(Modifier.weight(1f))
+            SectionHeader("Discover nearby", modifier = Modifier.weight(1f))
             if (onFindBusinesses != null) {
                 DiscoveryHeaderLink(
                     label = "Find Businesses",
@@ -693,6 +694,7 @@ fun HubDiscoveryRail(
         }
         when {
             isLoading -> DiscoverySkeletonRail()
+            loadFailed -> DiscoveryFailedRow(onRetry)
             items.isEmpty() -> DiscoveryEmptyRow()
             else ->
                 Row(
@@ -732,9 +734,8 @@ private fun DiscoveryHeaderLink(
 }
 
 /**
- * Tasks / People / Businesses / Posts — RN
- * `src/components/hub/HubDiscovery.tsx:9-14`. Selecting a tab re-requests
- * `GET /api/hub/discovery?filter=…`.
+ * Tasks / Businesses / Posts ([HubDiscoveryFilter.visibleTabs]). Selecting a
+ * tab re-requests `GET /api/hub/discovery?filter=…`.
  */
 @Composable
 private fun DiscoveryFilterTabs(
@@ -750,7 +751,7 @@ private fun DiscoveryFilterTabs(
                 .testTag("hubDiscoveryFilters"),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        HubDiscoveryFilter.entries.forEach { tab ->
+        HubDiscoveryFilter.visibleTabs.forEach { tab ->
             val selected = tab == active
             Box(
                 modifier =
@@ -806,6 +807,38 @@ private fun DiscoverySkeletonRail() {
                     Shimmer(width = 70.dp, height = 9.dp, cornerRadius = Radii.xs)
                 }
             }
+        }
+    }
+}
+
+/** A failed discovery request: say so and offer Try again. */
+@Composable
+private fun DiscoveryFailedRow(onRetry: (() -> Unit)?) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s4)
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
+                .padding(vertical = Spacing.s6)
+                .testTag("hubDiscoveryFailed"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(
+            "Couldn't load this right now.",
+            style = PantopusTextStyle.caption.copy(fontSize = 13.sp),
+            color = PantopusColors.appTextSecondary,
+        )
+        if (onRetry != null) {
+            Text(
+                "Try again",
+                style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.primary600,
+                modifier = Modifier.clickable { onRetry() }.testTag("hubDiscoveryRetry"),
+            )
         }
     }
 }
@@ -967,7 +1000,9 @@ private fun JumpBackCard(
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
                 .clickable(onClick = onTap)
                 .padding(Spacing.s3)
-                .semantics { contentDescription = "${item.kicker}, ${item.title}" },
+                .semantics {
+                    contentDescription = if (item.kicker.isEmpty()) item.title else "${item.kicker}, ${item.title}"
+                },
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Box(
@@ -986,16 +1021,18 @@ private fun JumpBackCard(
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                item.kicker.uppercase(),
-                style =
-                    PantopusTextStyle.caption.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                    ),
-                color = PantopusColors.appTextSecondary,
-            )
+            if (item.kicker.isNotEmpty()) {
+                Text(
+                    item.kicker.uppercase(),
+                    style =
+                        PantopusTextStyle.caption.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                        ),
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
             Text(
                 item.title,
                 style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
@@ -1046,8 +1083,7 @@ fun HubRecentActivity(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionHeader("Recent activity")
-            Spacer(Modifier.weight(1f))
+            SectionHeader("Recent activity", modifier = Modifier.weight(1f))
             Row(
                 modifier =
                     Modifier
