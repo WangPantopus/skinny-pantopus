@@ -54,6 +54,7 @@ import {
   pillarTokens,
 } from "@/components/scheduling";
 import { ShimmerBlock } from "@/components/ui/Shimmer";
+import ErrorState from "@/components/ui/ErrorState";
 import BookingSummaryCard from "./BookingSummaryCard";
 import { formatSlotRange, isPastBooking } from "./confirmUtils";
 import {
@@ -268,8 +269,8 @@ function ExpiredState({ hostEmail }: { hostEmail?: string | null }) {
           This link has expired
         </h1>
         <p className="mx-auto mt-2 max-w-[15rem] text-[12.5px] leading-[18px] text-app-text-strong">
-          For your security, manage links expire after a while. Request a fresh
-          one and we&rsquo;ll email it to you.
+          For your security, manage links expire after a while. Open the link
+          in your latest booking email.
         </p>
       </div>
       <div className="flex w-full max-w-xs flex-col gap-2">
@@ -277,24 +278,15 @@ function ExpiredState({ hostEmail }: { hostEmail?: string | null }) {
           href={APP_WEB_URL || "/"}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-info-solid text-[14px] font-bold text-white shadow-sm"
         >
-          <Mail className="h-4 w-4" aria-hidden />
-          Request a new link
+          Go to Pantopus
         </a>
-        {hostEmail ? (
+        {hostEmail && (
           <a
             href={`mailto:${hostEmail}`}
             className="flex h-10 w-full items-center justify-center rounded-xl text-[13px] font-semibold text-app-text-secondary hover:bg-app-hover"
           >
             Contact host
           </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            className="flex h-10 w-full items-center justify-center rounded-xl text-[13px] font-semibold text-app-text-secondary"
-          >
-            Contact host
-          </button>
         )}
       </div>
     </div>
@@ -307,12 +299,16 @@ export default function ManageBookingPanel({ token }: { token: string }) {
   const [view, setView] = useState<BookingManageView | null>(null);
   const [loading, setLoading] = useState(true);
   const [invalid, setInvalid] = useState(false);
+  // Any other failure is a read the visitor can retry, not an expired link.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
       setInvalid(false);
+      setLoadFailed(false);
       try {
         const res = await publicBooking.getBookingByToken(token);
         if (active) setView(res);
@@ -321,7 +317,7 @@ export default function ManageBookingPanel({ token }: { token: string }) {
         if (active) {
           if (decoded.kind === "not_found" || decoded.kind === "expired")
             setInvalid(true);
-          else setInvalid(true);
+          else setLoadFailed(true);
         }
       } finally {
         if (active) setLoading(false);
@@ -330,9 +326,17 @@ export default function ManageBookingPanel({ token }: { token: string }) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, attempt]);
 
   if (loading) return <ManageSkeleton />;
+  if (loadFailed)
+    return (
+      <ErrorState
+        title="Couldn't load your booking"
+        message="Check your connection and try again."
+        onRetry={() => setAttempt((n) => n + 1)}
+      />
+    );
   if (invalid || !view) return <ExpiredState hostEmail={null} />;
 
   const { booking, eventType, page, actions } = view;
