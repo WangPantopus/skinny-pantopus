@@ -527,10 +527,7 @@ private fun EmptyBody() {
         icon = PantopusIcon.Calendar,
         headline = "You haven't booked anything yet",
         subcopy = "Bookings you make show up here — everything in one place.",
-        // Mirrors iOS: the spec's primary CTA ships view-only until the
-        // discovery destination is wired into the scheduling routes.
-        ctaTitle = "Find something to book",
-        onCta = {},
+        // No discovery destination exists in the scheduling routes, so no CTA (web parity).
         modifier = Modifier.fillMaxSize(),
     )
 }

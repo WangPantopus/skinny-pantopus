@@ -80,29 +80,29 @@ struct SchedulingSettingsScreen: View {
 
     private var automationGroup: some View {
         SettingsGroup(title: "Automation", accent: accent, helper: "Reminders go out automatically before each booking.") {
+            // Subtitles describe each row, as web does; this screen loads no
+            // workflow, template or channel data, so it states no counts.
             SettingsRow(
                 label: "Default reminders",
-                sub: model.isFresh ? nil : (model.remindersValue ?? "1 day · 1 hr"),
-                trailing: model.isFresh ? .chipChevron(SettingsChip(text: "Off", tone: .warning)) : .chevron
+                sub: model.remindersValue,
+                trailing: model.remindersValue == nil ? .chipChevron(SettingsChip(text: "Off", tone: .warning)) : .chevron
             ) { model.openReminders() }
             SettingsDivider()
             SettingsRow(
                 label: "Workflows & follow-ups",
-                sub: model.isFresh ? "No workflows yet" : nil,
-                trailing: model.isFresh
-                    ? .chipChevron(SettingsChip(text: "Set up", icon: .plus, tone: .warning))
-                    : .chipChevron(SettingsChip(text: "3 active", tone: .success))
+                sub: "Automate messages around bookings",
+                trailing: .chevron
             ) { model.openWorkflows() }
             SettingsDivider()
             SettingsRow(
                 label: "Message templates",
-                sub: model.isFresh ? "No templates yet" : "5 templates",
-                trailing: model.isFresh ? .chipChevron(SettingsChip(text: "Set up", icon: .plus, tone: .warning)) : .chevron
+                sub: "Reusable booking messages",
+                trailing: .chevron
             ) { model.openTemplates() }
             SettingsDivider()
             SettingsRow(
                 label: "Booking notifications",
-                sub: model.isFresh ? "Using defaults" : "Push · Email",
+                sub: "Choose your channels",
                 trailing: .chevron
             ) { model.openNotifications() }
         }
@@ -120,13 +120,13 @@ struct SchedulingSettingsScreen: View {
             SettingsDivider()
             SettingsRow(
                 label: "Default availability",
-                sub: "Mon–Fri, 9–5",
+                sub: "Your weekly hours",
                 trailing: .chevron
             ) { model.openAvailability() }
             SettingsDivider()
             SettingsRow(
                 label: "Cancellation policy",
-                sub: model.savingRow == .cancellationPolicy ? nil : (model.isFresh ? nil : "24-hour notice"),
+                sub: nil,
                 trailing: cancellationTrailing
             ) { model.openCancellationPolicy() }
         }
@@ -140,7 +140,7 @@ struct SchedulingSettingsScreen: View {
     private var cancellationTrailing: SettingsRowTrailing {
         if model.savingRow == .cancellationPolicy { return .savingShimmer(width: 84) }
         if model.justSavedRow == .cancellationPolicy { return .savedChip }
-        if model.isFresh { return .chipChevron(SettingsChip(text: "Set up", icon: .plus, tone: .warning)) }
+        if !model.hasCancellationPolicy { return .chipChevron(SettingsChip(text: "Set up", icon: .plus, tone: .warning)) }
         return .chevron
     }
 
@@ -164,9 +164,8 @@ struct SchedulingSettingsScreen: View {
         SettingsGroup(title: "Team", accent: accent) {
             SettingsRow(
                 label: "Team & seats",
-                // Member/seat count sub-copy per scheduling-settings-frames.jsx TeamGroup
-                // (mirrored on Android SchedulingSettingsRootScreen).
-                sub: "4 members · 2 booking seats",
+                // No team data is loaded here, so no member/seat counts (web parity).
+                sub: "Manage who can take bookings",
                 trailing: .chevron
             ) { model.openTeam() }
             SettingsDivider()

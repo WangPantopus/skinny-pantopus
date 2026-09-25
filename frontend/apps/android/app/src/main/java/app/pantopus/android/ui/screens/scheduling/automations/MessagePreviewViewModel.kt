@@ -16,14 +16,11 @@ import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.pillar
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val TEST_NOTE_MS = 2600L
 
 /**
  * Stream A16 — H7 Message Preview. Renders the resolved message per channel
@@ -32,8 +29,8 @@ private const val TEST_NOTE_MS = 2600L
  * `GET /message-templates` since there is no GET-single route; iOS
  * `Source.template(id:)` parity). Variables are filled by
  * `POST /message-templates/preview` (sample values), with a local interpolation
- * fallback so the mock always renders. There is no send-test endpoint yet, so
- * "Send test" surfaces a coming-soon note honestly.
+ * fallback so the mock always renders. There is no send-test endpoint, so the
+ * preview offers no send action.
  */
 @HiltViewModel
 class MessagePreviewViewModel
@@ -61,9 +58,6 @@ class MessagePreviewViewModel
 
         private val _activeChannel = MutableStateFlow(WorkflowChannel.Email)
         val activeChannel: StateFlow<WorkflowChannel> = _activeChannel.asStateFlow()
-
-        private val _testNote = MutableStateFlow<String?>(null)
-        val testNote: StateFlow<String?> = _testNote.asStateFlow()
 
         private var lastKey: String? = null
 
@@ -137,15 +131,6 @@ class MessagePreviewViewModel
 
         fun selectChannel(index: Int) {
             _activeChannel.value = channelOrder.getOrElse(index) { WorkflowChannel.Push }
-        }
-
-        /** No send-test endpoint exists yet — surface a calm coming-soon note. */
-        fun sendTest() {
-            _testNote.value = "Test sends are coming soon. Save your message to use it."
-            viewModelScope.launch {
-                delay(TEST_NOTE_MS)
-                _testNote.value = null
-            }
         }
 
         private fun SchedulingError.loadMessage(): String = (this as? SchedulingError.Generic)?.message ?: "Couldn't load this message."
