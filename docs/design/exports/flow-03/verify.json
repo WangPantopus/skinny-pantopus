@@ -1,0 +1,25 @@
+{
+ "id": "flow-03",
+ "export": "docs/design/exports/flow-03/flow-03.html",
+ "mode": "bundle",
+ "manifest": 10,
+ "pages": 12,
+ "exact": 12,
+ "labelled": 12,
+ "named_by_order": false,
+ "note": "prompt ARTBOARDS lists 10 (skips 08a/08b; Notes as bare Notes). Export has 12 correctly labeled artboards per BATCH PLAN 8a/8b. Soft-accepted.",
+ "labels": [
+  "flow-03 \u00b7 storyboard \u00b7 01-entry-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 02-entry-branches \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 03-saved-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 04-reminder-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 05-reminder-branches \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 06-done-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 07-journey-overview \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 08a-handoff-checks \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 08b-handoff-checks \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 09-accessibility-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 10-platform-lane \u00b7 light",
+  "flow-03 \u00b7 storyboard \u00b7 11-notes \u00b7 light"
+ ]
+}

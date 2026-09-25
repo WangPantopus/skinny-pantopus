@@ -1,0 +1,23 @@
+{
+ "id": "flow-12",
+ "export": "docs/design/exports/flow-12/flow-12.html",
+ "manifest": 7,
+ "mode": "bundle",
+ "pages": 0,
+ "exact": 0,
+ "labelled": 0,
+ "named_by_order": false,
+ "order_conflicts": [],
+ "missing": [
+  "flow-12 \u00b7 storyboard \u00b7 01-journey-map \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 02-dead-link \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 03-sender-fix \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 04-recipient-accepts \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 04b-recipient-failures \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 05-handoff-checks \u00b7 light",
+  "flow-12 \u00b7 storyboard \u00b7 06-notes \u00b7 light"
+ ],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-12/pages",
+ "placeholders": []
+}

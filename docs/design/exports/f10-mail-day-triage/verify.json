@@ -1,0 +1,15 @@
+{
+ "id": "f10-mail-day-triage",
+ "export": "docs/design/exports/f10-mail-day-triage/f10-mail-day-triage.html",
+ "manifest": 24,
+ "mode": "bundle",
+ "pages": 24,
+ "exact": 24,
+ "labelled": 24,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f10-mail-day-triage/pages",
+ "placeholders": []
+}

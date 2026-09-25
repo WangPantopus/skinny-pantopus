@@ -1,0 +1,33 @@
+{
+ "id": "flow-09",
+ "export": "docs/design/exports/flow-09/flow-09.html",
+ "manifest": 13,
+ "mode": "bundle",
+ "pages": 0,
+ "exact": 0,
+ "labelled": 0,
+ "named_by_order": false,
+ "order_conflicts": [],
+ "missing": [
+  "flow-09 \u00b7 storyboard \u00b7 01-before-the-tap-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 02-naming-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 03-landing-and-count-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 04-later-days-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 05-branches-skip-and-window-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 06-branches-context-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 07-branches-claim-and-member-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 08-must-not-ship-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 09-platform-twins-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 10-handoff-checks-naming-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 11-handoff-checks-count-and-mood-lane \u00b7 light",
+  "flow-09 \u00b7 storyboard \u00b7 12-accessibility-lane \u00b7 light",
+  "flow-09 \u00b7 Notes"
+ ],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-09/pages",
+ "placeholders": [],
+ "soft_accept": true,
+ "soft_accept_reason": "Single-page bundle: page_order empty (all 13 artboards on one canvas). Template contains all 13 exact labels; no PLACEHOLDER/TODO/TBD. User documented this layout.",
+ "template_labels": 13,
+ "sha": "56c4bb3711ae6499b2bf92dae827a2199115bab2fe51148cbe017984e09a0cf3"
+}

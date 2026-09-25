@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bundled Page</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0369a1; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #0369a1; z-index: 9999; }
+    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    #__bundler_placeholder { color: #999; font-size: 14px; }
+  </style>
+  <noscript>
+    <style>#__bundler_loading { display: none; }</style>
+    <div style="position:fixed;bottom:12px;left:12px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#999;background:rgba(255,255,255,0.9);padding:6px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);z-index:10000;">
+      This page requires JavaScript to display.
+    </div>
+  </noscript>
+</head>
+<body>
+  <div id="__bundler_thumbnail"><svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg"><rect width="1200" height="800" fill="#0369a1"></rect><rect x="330" y="300" width="160" height="200" rx="20" fill="#fff"></rect><rect x="520" y="300" width="160" height="200" rx="20" fill="#fff"></rect><rect x="710" y="300" width="160" height="200" rx="20" fill="#fff"></rect><path d="M490 400h30M680 400h30" stroke="#fff" stroke-width="8"></path></svg></div>
+  <div id="__bundler_loading">Unpacking...</div>
+
+  <script>
+    
+document.addEventListener('DOMContentLoaded', async function() {
+  const loading = document.getElementById('__bundler_loading');
+  function setStatus(msg) { if (loading) loading.textContent = msg; }
+
+  const FONT_MIME = /^(font[/]|application[/](x-)?font-|application[/]vnd\.ms-fontobject)/i;
+  const MIME_TOKEN = /^[\w.+-]+[/][\w.+-]+$/;
+  function toBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  // Error sink persists across replaceWith since it's on window, not the DOM.
+  window.addEventListener('error', function(e) {
+    // Failed resource loads (CSP-blocked links, scripts, images) fire plain
+    // events at the element — warn only; real JS errors carry message/error.
+    if (!e.message && !e.error && e.target && e.target !== window) {
+      console.warn('[bundle] resource failed to load:',
+        e.target.tagName, String(e.target.src || e.target.href || ''));
+      return;
+    }
+    var p = document.body || document.documentElement;
+    var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
+    d.id = '__bundler_err';
+    d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
+      '[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+  }, true);
+
+  try {
+    const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
+    const templateEl = document.querySelector('script[type="__bundler/template"]');
+    if (!manifestEl || !templateEl) {
+      setStatus('Error: missing bundle data');
+      console.error('[bundler] Missing script tags — manifestEl:', !!manifestEl, 'templateEl:', !!templateEl);
+      return;
+    }
+
+    const manifest = JSON.parse(manifestEl.textContent);
+    let template = JSON.parse(templateEl.textContent);
+
+    // Nested page bundles (iframe targets). Each ships ONCE, in the ROOT
+    // document's manifest; frame srcs carry an about:blank#<uuid> marker
+    // instead of a substitutable uuid. Every document mints the blobs for
+    // its OWN frames — from local text at the root, or text obtained from
+    // its DIRECT parent over the relay protocol below — so each frame
+    // navigation stays same-origin with its initiator and a deduped page
+    // loads at any depth on any host, including a file:// download's
+    // opaque origins (where a blob minted by one document cannot be
+    // navigated to by another).
+    const pageOrderEl = document.querySelector('script[type="__bundler/page_order"]');
+    const pageOrder = pageOrderEl ? JSON.parse(pageOrderEl.textContent) : [];
+    const pageSet = new Set(pageOrder);
+    const pageTexts = {};
+
+    // ── Nested-page text protocol (parent-chain relay) ──
+    // Page bundles ship once, in the ROOT document's manifest. Every
+    // document mints the blobs for its OWN frames, obtaining page text
+    // through a strict parent-chain relay: a document only ever SENDS to
+    // its direct parent (which, for every document the publisher's own
+    // runtime minted, is another publisher document) and only ACCEPTS
+    // text from that direct parent; requests from below are honored only
+    // for the document's own child frames, and the ROOT never sends
+    // upward at all. That last rule is load-bearing: the artifact host's
+    // frame-ancestors allows claude.ai (and friends) to frame an
+    // artifact, so window.top can be a FOREIGN document — a top-addressed
+    // protocol would hand page uuids to that ancestor and accept forged
+    // "page text" from it, minting attacker HTML as an artifact-origin
+    // blob document. The chain never touches the ancestor: requests stop
+    // at the root, replies are origin-addressed per hop (never '*' when
+    // an origin exists), and both directions are origin-gated (on https
+    // a foreign sender's origin can never equal this document's; in
+    // opaque contexts — file:// — everything serializes as 'null', where
+    // an embedded EXTERNAL frame still fails the gate by carrying its
+    // own real origin, and a sandboxed child of such a frame is excluded
+    // by the own-child-frames check plus uuid unguessability). Shape is
+    // deny-by-default: one request form, one reply form, no error
+    // replies.
+    // window.origin is the SERIALIZED SECURITY origin ('null' in opaque
+    // contexts such as a sandboxed preview iframe) — location.origin is
+    // computed from the URL and stays 'https://…' even when the document
+    // is sandboxed, which would misgate every opaque chain.
+    const OWN_TARGET = /^https?:[/][/]/.test(window.origin || '')
+      ? window.origin
+      : '*';
+    function trustedOrigin(e) {
+      if (e.origin === window.origin) return true; // https chains; opaque==opaque
+      // file:// trees: Chrome serializes the file document's origin as
+      // 'file://' while the blob: documents it mints serialize as 'null',
+      // so the two legitimate shapes can never string-match — accept the
+      // pair in both directions. https origins never serialize as either,
+      // and sender identity (own child frame / direct parent) is checked
+      // separately.
+      return (
+        (e.origin === 'null' &&
+          (window.origin === 'file://' ||
+            window.location.protocol === 'file:')) ||
+        (/^file:/.test(e.origin) && window.origin === 'null')
+      );
+    }
+    // Non-empty only in the root document (nested bundles ship an empty
+    // island), so it doubles as the root marker: the root answers from
+    // local text and treats a miss as authoritative — never relaying to
+    // its (possibly foreign) parent.
+    const isPageRoot = pageOrder.length > 0;
+    const blobUrls = {};
+    const resourceBlobs = {};
+    const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const pendingFrames = {}; // uuid -> [{el, frag}] awaiting text for own frames
+    const pendingRelays = {}; // uuid -> [childWindow] awaiting text to pass down
+    function mountPage(el, frag, text) {
+      const pageBlob = new Blob([text], { type: 'text/html' });
+      const u = URL.createObjectURL(pageBlob);
+      resourceBlobs[u] = pageBlob;
+      el.src = u + frag;
+    }
+    function deliverPage(uuid, text) {
+      const frames = pendingFrames[uuid];
+      delete pendingFrames[uuid];
+      if (frames) for (const f of frames) mountPage(f.el, f.frag, text);
+      const relays = pendingRelays[uuid];
+      delete pendingRelays[uuid];
+      if (relays) {
+        for (const cw of relays) {
+          try { cw.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+        }
+      }
+    }
+    function ownFrameWindows() {
+      const out = [];
+      for (const f of Array.from(document.querySelectorAll('iframe'))) {
+        try { if (f.contentWindow) out.push(f.contentWindow); } catch (err) { /* detached */ }
+      }
+      return out;
+    }
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (!d || typeof d !== 'object' || !e.source) return;
+      // Origin gate first; the structural checks below (own-child-frames
+      // for requests, direct-parent + solicited-uuid for replies, the
+      // root's never-relay rule) are what hold in fully opaque chains
+      // where origin strings can't discriminate — a sandboxed root's
+      // FOREIGN wrapper still fails all three even though both serialize
+      // as real-vs-'null' rather than matching.
+      if (!trustedOrigin(e)) return;
+      if (typeof d.__bundler_need === 'string' && UUID_SHAPE.test(d.__bundler_need)) {
+        // Requests are honored only for this document's own child frames.
+        if (ownFrameWindows().indexOf(e.source) < 0) return;
+        const uuid = d.__bundler_need;
+        const text = pageTexts[uuid];
+        if (typeof text === 'string') {
+          try { e.source.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+          return;
+        }
+        if (isPageRoot || window.parent === window) return; // authoritative miss
+        const waiting = pendingRelays[uuid];
+        if (waiting) {
+          if (waiting.indexOf(e.source) < 0) waiting.push(e.source);
+          return;
+        }
+        // Never-answered uuids would otherwise accumulate forever under a
+        // request spray; past the cap (far above any real page count) new
+        // relays are dropped rather than remembered.
+        if (Object.keys(pendingRelays).length >= 128) return;
+        pendingRelays[uuid] = [e.source];
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      } else if (
+        typeof d.__bundler_page === 'string' &&
+        UUID_SHAPE.test(d.__bundler_page) &&
+        typeof d.__bundler_text === 'string'
+      ) {
+        // The shape test is load-bearing beyond tidiness: the solicited
+        // check below uses the in operator, which matches prototype keys
+        // ('__proto__', 'constructor') — an unshaped key would reach
+        // deliverPage and throw, painting the error banner.
+        // Text is accepted only from the direct parent — the document
+        // that minted this one.
+        if (e.source !== window.parent || window.parent === window) return;
+        if (!(d.__bundler_page in pendingFrames) && !(d.__bundler_page in pendingRelays)) return;
+        deliverPage(d.__bundler_page, d.__bundler_text);
+      }
+    });
+
+    const uuids = Object.keys(manifest);
+    setStatus('Unpacking ' + uuids.length + ' assets...');
+
+    await Promise.all(uuids.map(async (uuid) => {
+      const entry = manifest[uuid];
+      try {
+        const binaryStr = atob(entry.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        let finalBytes = bytes;
+        if (entry.compressed) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            const reader = ds.readable.getReader();
+            writer.write(bytes);
+            writer.close();
+            const chunks = [];
+            let totalLen = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              totalLen += value.length;
+            }
+            finalBytes = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const chunk of chunks) { finalBytes.set(chunk, offset); offset += chunk.length; }
+          } else {
+            console.warn('DecompressionStream not available, asset ' + uuid + ' may not render');
+          }
+        }
+
+        if (pageSet.has(uuid)) {
+          pageTexts[uuid] = new TextDecoder().decode(finalBytes);
+          return;
+        }
+        if (FONT_MIME.test(entry.mime) && MIME_TOKEN.test(entry.mime)) {
+          // Strict artifact hosts allow font-src data: but not blob:.
+          blobUrls[uuid] = 'data:' + entry.mime + ';base64,' +
+            (entry.compressed ? toBase64(finalBytes) : entry.data);
+        } else {
+          const blob = new Blob([finalBytes], { type: entry.mime });
+          blobUrls[uuid] = URL.createObjectURL(blob);
+          resourceBlobs[blobUrls[uuid]] = blob;
+        }
+      } catch (err) {
+        console.error('Failed to decode asset ' + uuid + ':', err);
+        const blob = new Blob([], { type: entry.mime });
+        blobUrls[uuid] = URL.createObjectURL(blob);
+        resourceBlobs[blobUrls[uuid]] = blob;
+      }
+    }));
+
+    const extResEl = document.querySelector('script[type="__bundler/ext_resources"]');
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    // Artifact-host CSP (connect-src 'self') refuses fetch() of blob: URLs —
+    // consumers read these Blobs directly. Survives the swap like the error sink.
+    window.__resourceBlobs = resourceBlobs;
+
+    setStatus('Rendering...');
+    // Page uuids have no blob here — they ride inside about:blank#<uuid>
+    // frame markers the pass below resolves after the swap.
+    for (const uuid of uuids) {
+      if (pageSet.has(uuid)) continue;
+      template = template.split(uuid).join(blobUrls[uuid]);
+    }
+
+    // Strip integrity + crossorigin — blob URLs from a file:// document inherit
+    // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
+    // The manifest bytes are ours; SRI protects against CDN compromise, not this.
+    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+
+    const resourceScript = '<script>window.__resources = ' +
+      JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
+      ';</' + 'script>';
+    // Inject after <head> so the DOCTYPE stays first; prepending the script
+    // would push the parser into quirks mode. DOMParser always emits a <head>
+    // (synthesizing one if the source HTML omitted it) but may carry
+    // attributes through, so match the full opening tag. slice() rather than
+    // replace() keeps us clear of $-pattern substitution in resourceScript.
+    const headOpen = template.match(/<head[^>]*>/i);
+    if (headOpen) {
+      const i = headOpen.index + headOpen[0].length;
+      template = template.slice(0, i) + resourceScript + template.slice(i);
+    }
+
+    // Parse the template and swap the root element. Scripts inserted via
+    // DOMParser/replaceWith are inert per spec — re-create each with
+    // createElement so they execute, awaiting onload for src scripts to
+    // preserve ordering (React before ReactDOM before Babel before text/babel).
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    document.documentElement.replaceWith(doc.documentElement);
+
+    // Resolve page-frame markers: mint this document's own blob for each
+    // framed page — from local text when this is the root, otherwise by
+    // asking the direct parent over the relay protocol above. An
+    // unanswered request leaves the frame on about:blank, the same
+    // degraded state as a refused embed.
+    {
+      const MARKER = /^about:blank#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(#.*)?$/;
+      const needed = [];
+      for (const el of Array.from(document.querySelectorAll('iframe'))) {
+        const m = MARKER.exec(el.getAttribute('src') || '');
+        if (!m) continue;
+        const text = pageTexts[m[1]];
+        if (typeof text === 'string') {
+          mountPage(el, m[2] || '', text);
+        } else if (window.parent !== window && !isPageRoot) {
+          const had = pendingFrames[m[1]];
+          (pendingFrames[m[1]] = had || []).push({ el: el, frag: m[2] || '' });
+          if (!had) needed.push(m[1]);
+        }
+      }
+      for (const uuid of needed) {
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      }
+    }
+
+    const dead = Array.from(document.scripts);
+    for (const old of dead) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      // text/babel scripts with a src: read and inline. transformScriptTags
+      // does XHR against the src, but blob:null/ from a file:// origin is
+      // silently dropped. Inlining makes it a plain inline babel script,
+      // which transformScriptTags handles unconditionally.
+      if ((s.type === 'text/babel' || s.type === 'text/jsx') && s.src) {
+        const pre = resourceBlobs[s.src.split('#')[0]];
+        s.textContent = pre ? await pre.text() : await (await fetch(s.src)).text();
+        s.removeAttribute('src');
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+      window.Babel.transformScriptTags();
+    }
+  } catch (err) {
+    setStatus('Error unpacking: ' + err.message);
+    console.error('Bundle unpack error:', err);
+  }
+});
+
+  </script>
+
+  <script type="__bundler/manifest">
+{"77d70c64-2bec-4b8f-b300-c210b6b91309":{"mime":"application/javascript","compressed":true,"data":"H4sIAAAAAAAAA42OwUrEQBBE7/MVTZ+SJe66IIITIh4UPIoel2UYk1YDSfcwPWEjSf5dgnsRD3p9VNWr3QbuGr14HbjpyMKEbxJ7n9BeFci+Jw2+JrT45DlJGPSetH3nl09N1D9T347ucn9D+2sssJY+CBMnRXs4FqgyxJoevX6Qop2WAlvuWqbmYUwU2Xfn3MA0BtGVB4nf7QU2O2OyLIfqFiZjamFN4FyjjhUqyE4tN3La/nULKvhvcp5hWvLyh0trCQQVTEtpTHbWb52jGCWuP36heYbDcV1Z8iwvzRdJmFpIXwEAAA=="},"b8d967b1-4274-40c7-ad07-cc89f4060047":{"mime":"text/javascript","compressed":true,"data":"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"}}
+  </script>
+
+  <script type="__bundler/ext_resources">
+[]
+  </script>
+
+  <script type="__bundler/page_order">
+[]
+  </script>
+
+  <script type="__bundler/template">
+"<!DOCTYPE html>\n<html><head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<script src=\"b8d967b1-4274-40c7-ad07-cc89f4060047\"><\u002Fscript>\n<\u002Fhead>\n<body>\n<x-dc><helmet>\n<meta name=\"design_doc_mode\" content=\"canvas\">\n<style>/* ============================================================\n   PANTOPUS — Colors & Type\n   Source of truth: frontend/packages/theme + apps/web/src/app/globals.css\n   ============================================================ */\n\n:root {\n  /* ── Primary (Sky) ─────────────────────────────────────── */\n  --color-primary-50:  #f0f9ff;\n  --color-primary-100: #e0f2fe;\n  --color-primary-200: #bae6fd;\n  --color-primary-300: #7dd3fc;\n  --color-primary-400: #38bdf8;\n  --color-primary-500: #0ea5e9;\n  --color-primary-600: #0284c7;  /* brand primary */\n  --color-primary-700: #0369a1;\n  --color-primary-800: #075985;\n  --color-primary-900: #0c4a6e;\n  --color-primary: var(--color-primary-600);\n\n  /* ── Semantic ──────────────────────────────────────────── */\n  --color-success:        #059669;\n  --color-success-light:  #D1FAE5;\n  --color-success-bg:     #F0FDF4;\n  --color-warning:        #D97706;\n  --color-warning-light:  #FDE68A;\n  --color-warning-bg:     #FFFBEB;\n  --color-error:          #DC2626;\n  --color-error-light:    #FECACA;\n  --color-error-bg:       #FEF2F2;\n  --color-info:           #0284c7;\n  --color-info-light:     #BAE6FD;\n  --color-info-bg:        #F0F9FF;\n\n  /* ── Identity pillars (Personal / Home / Business) ─────── */\n  --color-identity-personal:    #0284C7;\n  --color-identity-personal-bg: #DBEAFE;\n  --color-identity-home:        #16A34A;\n  --color-identity-home-bg:     #DCFCE7;\n  --color-identity-business:    #7C3AED;\n  --color-identity-business-bg: #F3E8FF;\n\n  /* ── App shell / neutrals ──────────────────────────────── */\n  --app-bg:              #f6f7f9;\n  --app-surface:         #ffffff;\n  --app-surface-raised:  #f9fafb;\n  --app-surface-sunken:  #f3f4f6;\n  --app-surface-muted:   #f8fafc;\n  --app-border:          #e5e7eb;\n  --app-border-strong:   #d1d5db;\n  --app-border-subtle:   #f3f4f6;\n  --app-text:            #111827;  /* fg1 */\n  --app-text-strong:     #374151;  /* fg2 */\n  --app-text-secondary:  #6b7280;  /* fg3 */\n  --app-text-muted:      #9ca3af;  /* fg4 */\n  --app-text-inverse:    #ffffff;\n  --app-hover:           #f3f4f6;\n\n  /* Semantic aliases */\n  --fg1: var(--app-text);\n  --fg2: var(--app-text-strong);\n  --fg3: var(--app-text-secondary);\n  --fg4: var(--app-text-muted);\n  --bg1: var(--app-bg);\n  --bg2: var(--app-surface);\n  --bg3: var(--app-surface-raised);\n  --bg4: var(--app-surface-sunken);\n\n  /* ── Category accents (used for map pins & badges) ─────── */\n  --cat-handyman:   #f97316;\n  --cat-cleaning:   #27ae60;\n  --cat-moving:     #8e44ad;\n  --cat-pet-care:   #e74c3c;\n  --cat-child-care: #f39c12;\n  --cat-tutoring:   #2980b9;\n  --cat-delivery:   #374151;\n  --cat-tech:       #3498db;\n  --cat-goods:      #7c3aed;\n  --cat-gigs:       #f97316;\n  --cat-rentals:    #16a34a;\n  --cat-vehicles:   #dc2626;\n\n  /* ── Spacing ───────────────────────────────────────────── */\n  --spacing-0: 0px;\n  --spacing-1: 4px;\n  --spacing-2: 8px;\n  --spacing-3: 12px;\n  --spacing-4: 16px;\n  --spacing-5: 20px;\n  --spacing-6: 24px;\n  --spacing-8: 32px;\n  --spacing-10: 40px;\n  --spacing-12: 48px;\n  --spacing-16: 64px;\n\n  /* ── Radii ─────────────────────────────────────────────── */\n  --radius-xs:  4px;\n  --radius-sm:  6px;\n  --radius-md:  8px;\n  --radius-lg:  12px;\n  --radius-xl:  16px;\n  --radius-2xl: 20px;\n  --radius-3xl: 24px;\n  --radius-pill: 9999px;\n\n  /* ── Shadows (web equivalents) ─────────────────────────── */\n  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);\n  --shadow-md: 0 2px 6px rgba(0,0,0,0.06);\n  --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);\n  --shadow-xl: 0 8px 24px rgba(0,0,0,0.10);\n  --shadow-primary: 0 6px 16px rgba(2,132,199,0.18);\n\n  /* ── Typography ────────────────────────────────────────── */\n  /* Web stack uses system UI (per Next.js default). Mobile uses system font.\n     No custom brand webfont is shipped in the codebase. */\n  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,\n               \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\",\n               sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\";\n  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,\n               \"Liberation Mono\", \"Courier New\", monospace;\n\n  /* Sizes (from @pantopus/theme typography tokens) */\n  --type-h1:    30px; --type-h1-lh:   36px; --type-h1-w:   700;\n  --type-h2:    24px; --type-h2-lh:   32px; --type-h2-w:   600;\n  --type-h3:    20px; --type-h3-lh:   28px; --type-h3-w:   600;\n  --type-body:  16px; --type-body-lh: 24px; --type-body-w: 400;\n  --type-small: 14px; --type-small-lh:20px; --type-small-w:400;\n  --type-cap:   12px; --type-cap-lh:  16px; --type-cap-w:  400;\n  --type-over:  11px; --type-over-lh: 16px; --type-over-w: 600;\n\n  /* Hero-scale display (landing page only) */\n  --type-display: clamp(48px, 6vw, 72px);\n  --type-display-lh: 1.05;\n  --type-display-w: 800;\n}\n\n/* ── Semantic element styles ─────────────────────────────── */\nhtml, body {\n  background: var(--app-bg);\n  color: var(--app-text);\n  font-family: var(--font-sans);\n  font-size: var(--type-body);\n  line-height: var(--type-body-lh);\n  -webkit-font-smoothing: antialiased;\n}\n\nh1, .h1 {\n  font-size: var(--type-h1);\n  line-height: var(--type-h1-lh);\n  font-weight: var(--type-h1-w);\n  letter-spacing: -0.02em;\n  color: var(--fg1);\n}\nh2, .h2 {\n  font-size: var(--type-h2);\n  line-height: var(--type-h2-lh);\n  font-weight: var(--type-h2-w);\n  letter-spacing: -0.015em;\n  color: var(--fg1);\n}\nh3, .h3 {\n  font-size: var(--type-h3);\n  line-height: var(--type-h3-lh);\n  font-weight: var(--type-h3-w);\n  color: var(--fg1);\n}\np, .body { font-size: var(--type-body); line-height: var(--type-body-lh); color: var(--fg2); }\n.small   { font-size: var(--type-small); line-height: var(--type-small-lh); color: var(--fg3); }\n.caption { font-size: var(--type-cap); line-height: var(--type-cap-lh); color: var(--fg3); }\n.overline{\n  font-size: var(--type-over); line-height: var(--type-over-lh);\n  font-weight: var(--type-over-w); letter-spacing: 0.06em; text-transform: uppercase;\n  color: var(--fg3);\n}\n.display {\n  font-size: var(--type-display);\n  line-height: var(--type-display-lh);\n  font-weight: var(--type-display-w);\n  letter-spacing: -0.03em;\n  color: var(--fg1);\n}\ncode, pre {\n  font-family: var(--font-mono);\n  font-size: 13px;\n  background: var(--app-surface-sunken);\n  padding: 0.1em 0.35em;\n  border-radius: var(--radius-xs);\n}\n\n/* ============================================================\n   PANTOPUS v2 — Ceremonial Extensions (additive)\n   Stationery, envelope inks, tier badges, paper serifs.\n   These tokens are appended; nothing above is modified.\n   ============================================================ */\n:root {\n  /* ── Paper serif stack (ceremonial surfaces only) ─────────\n     System \"old-style\" stack — looks at home on paper, no\n     webfont ships. Use --font-serif only inside stationery /\n     mailbox / persona \"letter\" surfaces, never in product UI. */\n  --font-serif: \"Iowan Old Style\", \"Hoefler Text\", \"Sitka Text\",\n                \"Charter\", \"Bitstream Charter\", \"Georgia\",\n                \"Cambria\", \"Source Serif Pro\", ui-serif, serif;\n\n  /* ── Stationery inks ──────────────────────────────────────\n     Three inks chosen so handwritten body sits warm on paper.\n     `ink-ivory` is reserved for dark-paper themes only. */\n  --stationery-ink-ivory:    #F6ECD8;\n  --stationery-ink-iron:     #2A2723;\n  --stationery-ink-mahogany: #4A1F1A;\n\n  /* ── Stationery themes ────────────────────────────────────\n     Each theme = paper + ink + accent (ornament / rule color).\n     Paper is a single light tone; depth comes from the porch\n     gradient + grain overlay, not from gradient on the paper\n     itself, so ink stays legible at body copy size. */\n\n  /* Fall — ochre cardstock, mahogany ink, copper ornament */\n  --stationery-fall-paper:    #F0E2C4;\n  --stationery-fall-ink:      var(--stationery-ink-mahogany);\n  --stationery-fall-accent:   #B45623;\n\n  /* Winter — bone paper, iron ink, slate ornament */\n  --stationery-winter-paper:  #ECE9E2;\n  --stationery-winter-ink:    var(--stationery-ink-iron);\n  --stationery-winter-accent: #4B6478;\n\n  /* Spring — soft cream, iron ink, sage ornament */\n  --stationery-spring-paper:  #F4EFDC;\n  --stationery-spring-ink:    var(--stationery-ink-iron);\n  --stationery-spring-accent: #6B8E5A;\n\n  /* Summer — pale rose paper, mahogany ink, sun-amber ornament */\n  --stationery-summer-paper:  #F6E6D3;\n  --stationery-summer-ink:    var(--stationery-ink-mahogany);\n  --stationery-summer-accent: #D9842E;\n\n  /* Evergreen — deep forest paper, ivory ink, gold ornament\n     (the only dark-paper theme — uses --stationery-ink-ivory) */\n  --stationery-evergreen-paper:  #1F2E26;\n  --stationery-evergreen-ink:    var(--stationery-ink-ivory);\n  --stationery-evergreen-accent: #C9A24A;\n\n  /* ── Wax seal colors (used by envelope SVGs) ──────────────\n     One per theme accent + neutral default. */\n  --seal-default:   #8B2E1F;   /* classic burgundy wax */\n  --seal-fall:      var(--stationery-fall-accent);\n  --seal-winter:    var(--stationery-winter-accent);\n  --seal-spring:    var(--stationery-spring-accent);\n  --seal-summer:    var(--stationery-summer-accent);\n  --seal-evergreen: var(--stationery-evergreen-accent);\n\n  /* ── Porch scene gradients (full-bleed backgrounds) ───────\n     Each is a layered radial+linear that reads as warm golden\n     hour. Pair with --porch-grain for a noise overlay. */\n  --porch-fall:\n    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.35) 0%, transparent 55%),\n    radial-gradient(70% 50% at 20% 25%, #F2B66A 0%, transparent 60%),\n    radial-gradient(80% 60% at 85% 30%, #E08A5B 0%, transparent 65%),\n    linear-gradient(180deg, #C46A3E 0%, #7E3326 60%, #3D1A18 100%); /* @kind color */\n\n  --porch-winter:\n    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.4) 0%, transparent 55%),\n    radial-gradient(70% 50% at 25% 20%, #C6D3DE 0%, transparent 60%),\n    radial-gradient(80% 60% at 80% 30%, #E8E1D2 0%, transparent 65%),\n    linear-gradient(180deg, #8AA0B3 0%, #4E6478 55%, #2A3744 100%); /* @kind color */\n\n  --porch-spring:\n    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.3) 0%, transparent 55%),\n    radial-gradient(70% 50% at 30% 20%, #F2E9A8 0%, transparent 60%),\n    radial-gradient(80% 60% at 80% 35%, #B8CDA0 0%, transparent 65%),\n    linear-gradient(180deg, #9DBE82 0%, #5E7C56 60%, #2E4030 100%); /* @kind color */\n\n  --porch-summer:\n    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.32) 0%, transparent 55%),\n    radial-gradient(70% 55% at 20% 30%, #F8C9A0 0%, transparent 60%),\n    radial-gradient(85% 60% at 80% 25%, #D6B2D8 0%, transparent 65%),\n    linear-gradient(180deg, #E89978 0%, #B26B83 55%, #4A2A50 100%); /* @kind color */\n\n  --porch-evergreen:\n    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.45) 0%, transparent 55%),\n    radial-gradient(60% 45% at 25% 22%, #E8DCC0 0%, transparent 60%),\n    radial-gradient(75% 55% at 80% 35%, #6B7A5C 0%, transparent 65%),\n    linear-gradient(180deg, #3E4F3C 0%, #1F2E26 55%, #0E1612 100%); /* @kind color */\n\n  /* Soft inline-svg noise — applied as separate layer, not\n     mixed into the gradient string, so opacity is tunable. */\n  --porch-grain:\n    url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/><\u002Ffilter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/><\u002Fsvg>\"); /* @kind other */\n\n  /* Paper grain — softer, lighter, applied INSIDE stationery\n     surfaces for subtle tooth. */\n  --paper-grain:\n    url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/><\u002Ffilter><rect width='100%25' height='100%25' filter='url(%23n)'/><\u002Fsvg>\"); /* @kind other */\n\n  /* ── Membership tier badges ───────────────────────────────\n     Used on persona profiles, DM threads, and beside the\n     beacon \"follow\" button. Fill + on-color text pair. */\n  --tier-free:        #6B7C8A;\n  --tier-free-on:     #FFFFFF;\n  --tier-free-bg:     #E6ECF1;\n\n  --tier-bronze:      #A0623A;\n  --tier-bronze-on:   #FFF5EC;\n  --tier-bronze-bg:   #F2DCC6;\n\n  --tier-silver:      #8C95A1;\n  --tier-silver-on:   #FFFFFF;\n  --tier-silver-bg:   #DDE2E8;\n\n  --tier-gold:        #C29230;\n  --tier-gold-on:     #2A1F0A;\n  --tier-gold-bg:     #F4E2A8;\n}\n\n/* ── Stationery surface helper ─────────────────────────────\n   Apply to a \"letter\" container to get paper + grain + serif.\n   Theme is set by adding .stationery-{fall|winter|...}. */\n.stationery {\n  font-family: var(--font-serif);\n  background-color: var(--stationery-winter-paper);\n  color: var(--stationery-winter-ink);\n  position: relative;\n  isolation: isolate;\n}\n.stationery::after {\n  content: \"\";\n  position: absolute; inset: 0;\n  background-image: var(--paper-grain);\n  background-size: 200px 200px;\n  mix-blend-mode: multiply;\n  pointer-events: none;\n  z-index: 1;\n}\n.stationery > * { position: relative; z-index: 2; }\n\n.stationery-fall      { background-color: var(--stationery-fall-paper);      color: var(--stationery-fall-ink); }\n.stationery-winter    { background-color: var(--stationery-winter-paper);    color: var(--stationery-winter-ink); }\n.stationery-spring    { background-color: var(--stationery-spring-paper);    color: var(--stationery-spring-ink); }\n.stationery-summer    { background-color: var(--stationery-summer-paper);    color: var(--stationery-summer-ink); }\n.stationery-evergreen { background-color: var(--stationery-evergreen-paper); color: var(--stationery-evergreen-ink); }\n<\u002Fstyle>\n<script src=\"77d70c64-2bec-4b8f-b300-c210b6b91309\"><\u002Fscript>\n<style>\n:root{--app-text-secondary:#4e5563;--app-text-muted:#5f6775;--color-success:#047857;--color-warning:#9a4a08;--color-error:#a81a1a}\nbody{margin:0;background:var(--app-surface-sunken);font-family:ui-sans-serif,system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif;color:var(--fg1);-webkit-font-smoothing:antialiased}\na{color:var(--color-primary-700);text-decoration:underline}a:hover{color:var(--color-primary-800)}\n<\u002Fstyle>\n<\u002Fhelmet><nav style=\"padding:16px 48px 0;display:flex;gap:12px;flex-wrap:wrap;font-size:13px\"><a href=\"flow-04 - storyboard - 01-journey-map - light.html\">01-journey-map<\u002Fa><a href=\"flow-04 - storyboard - 02-send - light.html\">02-send<\u002Fa><a href=\"flow-04 - storyboard - 02b-send-failures - light.html\">02b-send-failures<\u002Fa><a href=\"flow-04 - storyboard - 03-accept - light.html\">03-accept<\u002Fa><a href=\"flow-04 - storyboard - 03b-accept-failures - light.html\">03b-accept-failures<\u002Fa><a href=\"flow-04 - storyboard - 04-first-open - light.html\">04-first-open<\u002Fa><a href=\"flow-04 - storyboard - 05-locked-and-ask - light.html\">05-locked-and-ask<\u002Fa><a href=\"flow-04 - storyboard - 06-attest-and-result - light.html\">06-attest-and-result<\u002Fa><a href=\"flow-04 - storyboard - 06b-attest-failures - light.html\">06b-attest-failures<\u002Fa><a href=\"flow-04 - storyboard - 07-handoff-checks - light.html\">07-handoff-checks<\u002Fa><a href=\"flow-04 - storyboard - 08-notes - light.html\">08-notes<\u002Fa><\u002Fnav><section id=\"ab-02b\" data-screen-label=\"02b-send-failures\" style=\"padding:24px 48px 64px\">\n<div style=\"font-size:13px;line-height:18px;font-weight:600;color:var(--fg2);margin-bottom:8px\">flow-04 · storyboard · 02b-send-failures · light<\u002Fdiv>\n<div style=\"width:2400px;background:var(--bg1);border:1px solid var(--app-border-strong);border-radius:12px;box-sizing:border-box;padding:32px;display:flex;flex-direction:column;gap:32px\">\n<div style=\"font-size:24px;line-height:32px;font-weight:600\">Send failures and alternatives · B01–B03<\u002Fdiv>\n\n<div style=\"display:flex;gap:20px;align-items:flex-start\">\n<div style=\"width:200px;flex:none;display:flex;flex-direction:column;gap:6px\"><div style=\"font-size:16px;font-weight:600\">B01 · Send failed<\u002Fdiv><div style=\"width:79px;height:170px;background:var(--bg4);border:1px dashed var(--fg3);border-radius:4px;opacity:.6\"><\u002Fdiv><div style=\"font-size:12px;font-weight:600;color:var(--fg2)\">⤏ from F03 · send fails<\u002Fdiv><\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px\"><div style=\"font-size:13px;font-weight:600\">B01 · Mon 19 Oct, 5:10 PM<\u002Fdiv><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from f3-invite-composer · ios · 12-send-error<\u002Fdiv><div style=\"font-size:12px;font-weight:600\">MAYA · iPhone<\u002Fdiv>\n<div style=\"width:196.5px;height:213px;border:1px solid var(--app-border-strong);border-radius:8px;overflow:hidden\"><div style=\"zoom:.5;width:393px;height:426px;background:var(--app-surface);padding:24px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:22px\"><b style=\"font-size:20px\">Review invitation<\u002Fb><div>To · priya@example.com · Member<\u002Fdiv><div style=\"border:1.5px solid var(--color-error);border-radius:16px;padding:12px\">We couldn't send the invitation. Your details are still here.<\u002Fdiv><div style=\"min-height:48px;border-radius:12px;background:var(--color-primary-700);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center\">Try again<\u002Fdiv><\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:110px;font-size:13px;font-weight:600\">→ Try again · rejoins F04<\u002Fdiv>\n<\u002Fdiv>\n\n<div style=\"display:flex;gap:20px;align-items:flex-start;border-top:1px solid var(--app-border-strong);padding-top:24px\">\n<div style=\"width:200px;flex:none;display:flex;flex-direction:column;gap:6px\"><div style=\"font-size:16px;font-weight:600\">B02a · Share instead, single-use backend<\u002Fdiv><div style=\"font-size:12px;color:var(--fg2)\">Mon 19 Oct, 5:10 PM<\u002Fdiv><div style=\"width:79px;height:170px;background:var(--bg4);border:1px dashed var(--fg3);border-radius:4px;opacity:.6\"><\u002Fdiv><div style=\"font-size:12px;font-weight:600;color:var(--fg2)\">⤏ from F02 · picks Share instead<\u002Fdiv><\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:220px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 02-share-instead<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\"><b>✓ Share instead<\u002Fb><div style=\"margin-top:6px\">The first person who opens this link can join your household until it expires. Send it to one person.<\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:220px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 05-review, link path · PROPOSED<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\">To · Link — Works once<div style=\"color:var(--fg2)\">rest of the manifest as F03<\u002Fdiv><div style=\"margin-top:8px;min-height:44px;border-radius:10px;background:var(--color-primary-700);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center\">Create link<\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:220px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 08-link-ready<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\"><b>Link ready · Works once<\u002Fb><div>Expires in 7 days · Mon 26 Oct<\u002Fdiv><div>You can turn it off in Members.<\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:260px\"><div style=\"font-size:12px;color:var(--fg2)\">Members crop · InviteRow link-active<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px;display:flex;justify-content:space-between;gap:8px\"><div><svg width=\"14\" height=\"14\" sc-camel-view-box=\"0 0 24 24\" fill=\"none\" stroke=\"#374151\" stroke-width=\"2\" style=\"vertical-align:-2px\"><path d=\"M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7\"><\u002Fpath><path d=\"M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7\"><\u002Fpath><\u002Fsvg> Invite link<div style=\"color:var(--fg2)\">Works once · Expires in 7 days · Mon 26 Oct<\u002Fdiv><\u002Fdiv><span style=\"font-weight:600;color:var(--color-primary-700);white-space:nowrap\">Turn off link<\u002Fspan><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px;font-size:13px;font-weight:600\">→ Priya opens the link · rejoins F07<\u002Fdiv>\n<\u002Fdiv>\n\n<div style=\"display:flex;gap:20px;align-items:flex-start;border-top:1px solid var(--app-border-strong);padding-top:24px\">\n<div style=\"width:200px;flex:none;display:flex;flex-direction:column;gap:6px\"><div style=\"font-size:16px;font-weight:600\">B02b · Share instead, approval backend<\u002Fdiv><div style=\"font-size:12px;color:var(--fg2)\">alternative to B02a, never on the same link<\u002Fdiv><div style=\"width:79px;height:170px;background:var(--bg4);border:1px dashed var(--fg3);border-radius:4px;opacity:.6\"><\u002Fdiv><div style=\"font-size:12px;font-weight:600;color:var(--fg2)\">⤏ from F02 · picks Share instead<\u002Fdiv><\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:200px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 02-share-instead<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\">Anyone with this link can ask to join. You approve each person in Members.<\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:220px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 05-review<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\">Whoever joins with this link waits for your OK. They see nothing of the household until you approve.<div style=\"margin-top:8px;min-height:44px;border-radius:10px;background:var(--color-primary-700);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center\">Create link<\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:200px\"><div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from 08-link-ready · PROPOSED<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\"><b>Link ready<\u002Fb><div>Expires in 7 days · Mon 26 Oct<\u002Fdiv><div>You can turn it off in Members.<\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:200px\"><div style=\"font-size:12px;color:var(--fg2)\">f3b-invitation-decision · web-390 · 16-waiting-for-approval · PRIYA · mobile web<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\">Waiting for Maya's OK. You'll see the household once Maya approves.<\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px\">→<\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:4px;width:280px\"><div style=\"font-size:12px;color:var(--fg2)\">Members crop · InviteRow awaiting-approval · MAYA · iPhone · PROPOSED<\u002Fdiv><div style=\"background:var(--app-surface);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px;font-size:13px;line-height:18px\"><div style=\"display:flex;justify-content:space-between;gap:8px\"><span>Priya Raman<div style=\"color:var(--fg2)\">Waiting for your OK<\u002Fdiv><\u002Fspan><span style=\"display:flex;gap:10px;font-weight:600;color:var(--color-primary-700)\"><span>Approve<\u002Fspan><span>Remove<\u002Fspan><\u002Fspan><\u002Fdiv><div style=\"color:var(--fg2);margin-top:6px\">Priya sees no household data until you approve.<\u002Fdiv><div style=\"margin-top:8px;border-top:1px solid var(--app-border);padding-top:6px\">Priya Raman added · <u style=\"color:var(--color-primary-700);font-weight:600\">Undo<\u002Fu><\u002Fdiv><\u002Fdiv><\u002Fdiv>\n<div style=\"margin-top:40px;font-size:13px;font-weight:600\">→ Approve · rejoins F10<\u002Fdiv>\n<\u002Fdiv>\n\n<div style=\"display:flex;gap:20px;align-items:flex-start;border-top:1px solid var(--app-border-strong);padding-top:24px\">\n<div style=\"width:200px;flex:none;display:flex;flex-direction:column;gap:6px\"><div style=\"font-size:16px;font-weight:600\">B03 · Earlier path inset (not a failure)<\u002Fdiv><div style=\"font-size:12px;color:var(--fg2)\">Mon 5 Oct 2026 · MAYA · iPhone<\u002Fdiv><\u002Fdiv>\n<div style=\"display:flex;flex-direction:column;gap:8px;width:300px\">\n<div style=\"background:var(--bg3);border:1px solid var(--app-border-strong);border-radius:12px;padding:12px 16px\"><div style=\"font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--fg3)\">MOMENT OF TRUTH<\u002Fdiv><div style=\"font-size:14px;line-height:20px\">Mon 5 Oct: the ask is on the Place tab where Maya actually lands. 'Just me' is a real button of equal weight.<\u002Fdiv><\u002Fdiv>\n<div style=\"font-size:12px;color:var(--fg2)\">REDRAWN · from f3-household-block · ios · 01-visible<\u002Fdiv>\n<div style=\"background:var(--color-primary-50);border:1px solid var(--app-border);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:20px\"><b style=\"font-size:18px;line-height:24px\">Who lives here with you?<\u002Fb><span>They see the same pickup day, calendar and bills. Nothing about your home is shared with anyone else.<\u002Fspan><span style=\"min-height:44px;border-radius:10px;background:var(--color-primary-700);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center\">Invite by email<\u002Fspan><span style=\"min-height:44px;border:1.5px solid var(--fg2);border-radius:10px;font-weight:600;display:flex;align-items:center;justify-content:center\">Share a link<\u002Fspan><span style=\"min-height:44px;font-weight:600;color:var(--color-primary-700);display:flex;align-items:center;justify-content:center\">Just me<\u002Fspan><\u002Fdiv>\n<div style=\"font-size:12px;line-height:16px\">Mon 5 Oct: Maya alone. The first-week card is where the first invitation (Sam) started. It never shows once a second person is active.<\u002Fdiv>\n<\u002Fdiv>\n<div style=\"margin-top:120px;font-size:13px;font-weight:600;border-top:3px solid var(--fg1);padding-top:6px\">ends here<\u002Fdiv>\n<\u002Fdiv>\n<\u002Fdiv>\n<\u002Fsection><\u002Fx-dc>\n\n\n<\u002Fbody><\u002Fhtml>"
+  </script>
+</body>
+</html>

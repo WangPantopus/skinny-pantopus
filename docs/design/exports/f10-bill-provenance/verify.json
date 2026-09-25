@@ -1,0 +1,19 @@
+{
+ "id": "f10-bill-provenance",
+ "export": "docs/design/exports/f10-bill-provenance/f10-bill-provenance.html",
+ "manifest": 23,
+ "mode": "bundle",
+ "pages": 23,
+ "exact": 22,
+ "labelled": 23,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f10-bill-provenance \u00b7 Notes"
+ ],
+ "extra": [
+  "Bill provenance notes"
+ ],
+ "pagesDir": "docs/design/exports/f10-bill-provenance/pages",
+ "placeholders": []
+}

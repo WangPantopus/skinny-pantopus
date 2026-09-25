@@ -1,0 +1,15 @@
+{
+ "id": "flow-04",
+ "export": "docs/design/exports/flow-04/flow-04.html",
+ "manifest": 11,
+ "mode": "package",
+ "pages": 11,
+ "exact": 11,
+ "labelled": 11,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-04/pages",
+ "placeholders": []
+}

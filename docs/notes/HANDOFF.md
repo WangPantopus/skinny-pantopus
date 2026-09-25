@@ -241,3 +241,18 @@ This programme's entry: `screen-inventory-first-person-loop.md`. Related: `panto
    `docs/design/foundations/README.md` and in the session log.
 4. If a prompt turns out to be wrong, fix `docs/notes/prompts-final/<id>.md`, rebuild the page and republish to the
    same URL, so the pack and the repo never diverge.
+
+---
+
+## Build plan (24 Sep 2026)
+
+**[`docs/first-person-loop-build-plan-2026-09-24.md`](../first-person-loop-build-plan-2026-09-24.md)** maps every
+design to its feature slice, the backend work it waits on, the exact files it changes on web/iOS/Android (all
+resolved against `origin/master` `630bc49b5`), its design-verification status, and the escalations the coordinator
+must decide (new tables, permission/security policy, retention). It is a map, not a tracker: progress stays in
+`NEXT_STEPS.md` and the stream status files. Regenerate its Appendix A with `tools/export-render/gen_build_plan.py`.
+
+Findings recorded there: F1–F12 backend is essentially unbuilt on master; the F9 hygiene items are still open in
+source (the `effective_*` coordinate leak at `backend/services/feedService.js:199`, founding fail-open at
+`backend/routes/public.js:557`, the ungated Earn row, the seeder engagement prompt); all 59 screens and 14 journeys
+are exported, 17 verified.

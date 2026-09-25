@@ -1,0 +1,19 @@
+{
+ "id": "f11-keeper-strip",
+ "export": "docs/design/exports/f11-keeper-strip/f11-keeper-strip.html",
+ "manifest": 26,
+ "mode": "bundle",
+ "pages": 26,
+ "exact": 25,
+ "labelled": 26,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f11-keeper-strip \u00b7 Notes"
+ ],
+ "extra": [
+  "Keeper strip notes"
+ ],
+ "pagesDir": "docs/design/exports/f11-keeper-strip/pages",
+ "placeholders": []
+}

@@ -1,0 +1,28 @@
+{
+ "id": "flow-13",
+ "export": "docs/design/exports/flow-13/flow-13.html",
+ "mode": "bundle-single-page-soft",
+ "manifest": 11,
+ "pages": 0,
+ "page_order_empty": true,
+ "notes_name": "flow-13 \u00b7 storyboard \u00b7 11-notes \u00b7 light",
+ "labels_present": [
+  "flow-13 \u00b7 storyboard \u00b7 01-aha-to-place-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 02-aha-branches \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 03-move-in-and-plan-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 04-reminder-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 05-reminder-branches \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 06-self-report-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 07-journey-overview \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 08-handoff-checks \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 09-accessibility-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 10-platform-lane \u00b7 light",
+  "flow-13 \u00b7 storyboard \u00b7 11-notes \u00b7 light"
+ ],
+ "labels_missing": [],
+ "sha256": "d375e9ad136f50385e2d04d3a67ad24b1284afaae8d2a57f1501dd7947757bd4",
+ "size": 6246389,
+ "placeholder_hits": "css+#research-brief-text-only",
+ "soft_accepted": true,
+ "note": "Same single-page pattern as flow-09\u201312; all 11 artboard labels present; Notes uses storyboard naming."
+}

@@ -1,0 +1,12 @@
+9ecfff03fb3ca87641bb2f0a3767676c8052d371  01-journey-map.html
+9547c5e74fcae860722cafebace88e996227bc93  02-send.html
+f9e0dd03283d9f0dcb9833f0fa2d637a63036533  02b-send-failures.html
+11d0d75b974bf7e611027b1079df3c1b6b237875  03-accept.html
+8f5f4fd9bc46bd73ed17943d8bd2f05c89e11b6b  03b-accept-failures.html
+77dcd24ac9416b89f89d549df3b7261b1b9be24c  04-first-open.html
+6f8d3ab069b2889524e3416c2d5cd54b205a5259  05-locked-and-ask.html
+0ba07327e915b3918aa8f514aed85f2437b09260  06-attest-and-result.html
+27cf9615986ce683213c755925b0a0779acee9af  06b-attest-failures.html
+fbf4e07878e5104014b03c5aa39411eeeba3cf05  07-handoff-checks.html
+585a5ef85a761ccd99ad630151db395e5d0e69e8  08-notes.html
+60d9153dd1379b09fcd7209591b11feb1fed4c39  flow-04.html

@@ -1,0 +1,19 @@
+{
+ "id": "f10-bill-trend",
+ "export": "docs/design/exports/f10-bill-trend/f10-bill-trend.html",
+ "manifest": 19,
+ "mode": "bundle",
+ "pages": 19,
+ "exact": 18,
+ "labelled": 19,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f10-bill-trend \u00b7 Notes"
+ ],
+ "extra": [
+  "Bill trend notes"
+ ],
+ "pagesDir": "docs/design/exports/f10-bill-trend/pages",
+ "placeholders": []
+}

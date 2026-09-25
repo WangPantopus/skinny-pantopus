@@ -1,0 +1,23 @@
+{
+ "id": "flow-11",
+ "export": "docs/design/exports/flow-11/flow-11.html",
+ "manifest": 7,
+ "mode": "bundle",
+ "pages": 0,
+ "exact": 0,
+ "labelled": 0,
+ "named_by_order": false,
+ "order_conflicts": [],
+ "missing": [
+  "flow-11 \u00b7 storyboard \u00b7 01-tax-appeal-self-fix \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 02-pickup-report-and-receipt \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 03-resolution-where-he-looks \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 04-android-and-web \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 05-focus-and-no-notifications \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 06-handoff-checks \u00b7 light",
+  "flow-11 \u00b7 storyboard \u00b7 07-notes \u00b7 light"
+ ],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-11/pages",
+ "placeholders": []
+}

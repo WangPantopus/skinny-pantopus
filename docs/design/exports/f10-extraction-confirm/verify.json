@@ -1,0 +1,15 @@
+{
+ "id": "f10-extraction-confirm",
+ "export": "docs/design/exports/f10-extraction-confirm/f10-extraction-confirm.html",
+ "manifest": 28,
+ "mode": "bundle",
+ "pages": 28,
+ "exact": 28,
+ "labelled": 28,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f10-extraction-confirm/pages",
+ "placeholders": []
+}

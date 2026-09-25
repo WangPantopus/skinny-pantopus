@@ -1,0 +1,27 @@
+{
+ "id": "flow-14",
+ "export": "docs/design/exports/flow-14/flow-14.html",
+ "mode": "bundle-single-page-soft",
+ "manifest": 9,
+ "pages": 0,
+ "page_order_empty": true,
+ "notes_name": "flow-14 \u00b7 storyboard \u00b7 99-notes \u00b7 light",
+ "labels_present": [
+  "flow-14 \u00b7 storyboard \u00b7 01-map \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 02-web-before \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 03-install-and-first-open \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 04-device-ask \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 05-first-native-push \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 06-android-lane \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 07-branches \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 08-handoff-checks \u00b7 light",
+  "flow-14 \u00b7 storyboard \u00b7 99-notes \u00b7 light"
+ ],
+ "labels_missing": [],
+ "labels_extra": [],
+ "sha256": "f94fa8649a62a012e7dce5927ae6ea98442db27470f60d2326f4b5cb1b03bb0c",
+ "size": 6894727,
+ "placeholder_hits": null,
+ "soft_accepted": true,
+ "note": "Same single-page pattern as flow-09\u201313; all 9 artboard labels present (brief lists 9, not 11); Notes uses 99-notes naming."
+}

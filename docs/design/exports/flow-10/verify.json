@@ -1,0 +1,23 @@
+{
+ "id": "flow-10",
+ "export": "docs/design/exports/flow-10/flow-10.html",
+ "manifest": 7,
+ "mode": "bundle",
+ "pages": 0,
+ "exact": 0,
+ "labelled": 0,
+ "named_by_order": false,
+ "order_conflicts": [],
+ "missing": [
+  "flow-10 \u00b7 storyboard \u00b7 01-alert-to-landing \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 02-source-and-alert-level \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 03-two-hours-later \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 04-android-and-web \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 05-focus-and-no-notifications \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 06-handoff-checks \u00b7 light",
+  "flow-10 \u00b7 storyboard \u00b7 07-notes \u00b7 light"
+ ],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-10/pages",
+ "placeholders": []
+}

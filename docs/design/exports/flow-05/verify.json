@@ -1,0 +1,15 @@
+{
+ "id": "flow-05",
+ "export": "docs/design/exports/flow-05/flow-05.html",
+ "manifest": 15,
+ "mode": "bundle",
+ "pages": 15,
+ "exact": 15,
+ "labelled": 15,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-05/pages",
+ "placeholders": []
+}

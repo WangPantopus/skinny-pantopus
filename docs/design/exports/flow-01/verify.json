@@ -1,0 +1,30 @@
+{
+ "id": "flow-01",
+ "export": "docs/design/exports/flow-01/flow-01.html",
+ "manifest": 12,
+ "mode": "bundle",
+ "pages": 12,
+ "exact": 12,
+ "labelled": 12,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/flow-01/pages",
+ "placeholders": [
+  "page 11: {{ f }}",
+  "page 11: {{ h.id }}",
+  "page 11: {{ h.rule }}",
+  "page 1: {{ fr.id }}",
+  "page 1: {{ l.device }}",
+  "page 1: {{ l.gap }}",
+  "page 1: {{ l.lane }}",
+  "page 1: {{ l.when }}",
+  "page 1: {{ s.from }}",
+  "page 1: {{ s.text }}",
+  "page 3: {{ c.n }}",
+  "page 3: {{ c.w }}",
+  "page 4: {{ c.n }}",
+  "page 4: {{ c.w }}"
+ ]
+}

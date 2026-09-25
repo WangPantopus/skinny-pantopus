@@ -1,0 +1,15 @@
+{
+ "id": "f10-snap-capture-tray",
+ "export": "docs/design/exports/f10-snap-capture-tray/f10-snap-capture-tray.html",
+ "manifest": 25,
+ "mode": "bundle",
+ "pages": 25,
+ "exact": 25,
+ "labelled": 25,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f10-snap-capture-tray/pages",
+ "placeholders": []
+}

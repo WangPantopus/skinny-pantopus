@@ -1,0 +1,19 @@
+{
+ "id": "f10-mail-snap-privacy",
+ "export": "docs/design/exports/f10-mail-snap-privacy/f10-mail-snap-privacy.html",
+ "manifest": 23,
+ "mode": "bundle",
+ "pages": 23,
+ "exact": 22,
+ "labelled": 23,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "f10-mail-snap-privacy \u00b7 Notes"
+ ],
+ "extra": [
+  "Mail snaps privacy notes"
+ ],
+ "pagesDir": "docs/design/exports/f10-mail-snap-privacy/pages",
+ "placeholders": []
+}
