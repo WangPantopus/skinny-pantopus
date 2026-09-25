@@ -34,10 +34,12 @@ import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -430,23 +432,27 @@ class MailDetailViewModel
             _pendingDestructiveAction.value = null
             _categoryActionInFlight.value = action
             viewModelScope.launch {
-                when (val result = repo.itemAction(mailId, action.actionKey)) {
-                    is NetworkResult.Success -> {
-                        // RN only toasts (`detail.tsx:56-66`) — the generic
-                        // detail renders nothing derived from `lifecycle`, so
-                        // a refetch would buy a skeleton flash and nothing else.
-                        _toast.value = action.successToast
-                        _categoryActionInFlight.value = null
-                        // `file` and `shred` move the letter out of its Mailbox tab.
-                        if (action.actionKey == "file" || action.actionKey == "shred") {
-                            MailboxRepository.announceMailLeftList(mailId)
+                // NonCancellable: once sent, the answer is handled even if the letter
+                // was closed meanwhile, so the open list never keeps a moved letter.
+                withContext(NonCancellable) {
+                    when (val result = repo.itemAction(mailId, action.actionKey)) {
+                        is NetworkResult.Success -> {
+                            // RN only toasts (`detail.tsx:56-66`) — the generic
+                            // detail renders nothing derived from `lifecycle`, so
+                            // a refetch would buy a skeleton flash and nothing else.
+                            _toast.value = action.successToast
+                            _categoryActionInFlight.value = null
+                            // `file` and `shred` move the letter out of its Mailbox tab.
+                            if (action.actionKey == "file" || action.actionKey == "shred") {
+                                MailboxRepository.announceMailLeftList(mailId)
+                            }
+                            // Dismiss promised the letter leaves the mailbox: close it.
+                            if (action == MailCategoryAction.Dismiss) _didLeaveMailbox.value = true
                         }
-                        // Dismiss promised the letter leaves the mailbox: close it.
-                        if (action == MailCategoryAction.Dismiss) _didLeaveMailbox.value = true
-                    }
-                    is NetworkResult.Failure -> {
-                        _toast.value = result.error.displayMessage("Action failed")
-                        _categoryActionInFlight.value = null
+                        is NetworkResult.Failure -> {
+                            _toast.value = result.error.displayMessage("Action failed")
+                            _categoryActionInFlight.value = null
+                        }
                     }
                 }
             }
@@ -466,14 +472,17 @@ class MailDetailViewModel
             if (_state.value !is MailDetailUiState.Loaded || _archiveInFlight.value) return
             _archiveInFlight.value = true
             viewModelScope.launch {
-                when (val result = repo.archive(mailId)) {
-                    is NetworkResult.Success -> {
-                        _toast.value = "Archived"
-                        MailboxRepository.announceMailLeftList(mailId)
-                        _didLeaveMailbox.value = true
+                // NonCancellable, like the item actions above.
+                withContext(NonCancellable) {
+                    when (val result = repo.archive(mailId)) {
+                        is NetworkResult.Success -> {
+                            _toast.value = "Archived"
+                            MailboxRepository.announceMailLeftList(mailId)
+                            _didLeaveMailbox.value = true
+                        }
+                        is NetworkResult.Failure ->
+                            _toast.value = result.error.displayMessage("Couldn't archive this mail. Try again.")
                     }
-                    is NetworkResult.Failure ->
-                        _toast.value = result.error.displayMessage("Couldn't archive this mail. Try again.")
                 }
                 _archiveInFlight.value = false
             }
@@ -793,15 +802,18 @@ class MailDetailViewModel
                         recordsDetail = records.copy(isFiled = true, filedAtLabel = filedAtStamp()),
                     ),
                 )
-            when (val result = vaultRepo.file(mailId = mailId, folderId = folderId)) {
-                is NetworkResult.Success -> {
-                    val label = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
-                    _toast.value = label?.let { "Filed in $it" } ?: "Filed in Vault"
-                    MailboxRepository.announceMailLeftList(mailId)
-                }
-                is NetworkResult.Failure -> {
-                    _state.value = MailDetailUiState.Loaded(content)
-                    _toast.value = result.error.displayMessage("Couldn't file to vault. Try again.")
+            // NonCancellable, like the item actions above.
+            withContext(NonCancellable) {
+                when (val result = vaultRepo.file(mailId = mailId, folderId = folderId)) {
+                    is NetworkResult.Success -> {
+                        val label = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
+                        _toast.value = label?.let { "Filed in $it" } ?: "Filed in Vault"
+                        MailboxRepository.announceMailLeftList(mailId)
+                    }
+                    is NetworkResult.Failure -> {
+                        _state.value = MailDetailUiState.Loaded(content)
+                        _toast.value = result.error.displayMessage("Couldn't file to vault. Try again.")
+                    }
                 }
             }
         }
@@ -855,14 +867,17 @@ class MailDetailViewModel
             if (_saveToVaultInFlight.value) return
             _saveToVaultInFlight.value = true
             viewModelScope.launch {
-                when (val result = vaultRepo.file(mailId = mailId, folderId = folderId)) {
-                    is NetworkResult.Success -> {
-                        val folderLabel = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
-                        _toast.value = folderLabel?.let { "Saved to $it" } ?: "Saved to vault"
-                        MailboxRepository.announceMailLeftList(mailId)
+                // NonCancellable, like the item actions above.
+                withContext(NonCancellable) {
+                    when (val result = vaultRepo.file(mailId = mailId, folderId = folderId)) {
+                        is NetworkResult.Success -> {
+                            val folderLabel = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
+                            _toast.value = folderLabel?.let { "Saved to $it" } ?: "Saved to vault"
+                            MailboxRepository.announceMailLeftList(mailId)
+                        }
+                        is NetworkResult.Failure ->
+                            _toast.value = result.error.displayMessage("Couldn't save to vault. Try again.")
                     }
-                    is NetworkResult.Failure ->
-                        _toast.value = result.error.displayMessage("Couldn't save to vault. Try again.")
                 }
                 _showsSaveToVaultPicker.value = false
                 _saveToVaultInFlight.value = false
