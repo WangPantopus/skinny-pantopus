@@ -13,7 +13,9 @@ package app.pantopus.android.ui.screens.my_posts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -97,6 +99,16 @@ class MyPostsViewModel
         private var localArchiveOverrides: MutableMap<String, String?> = mutableMapOf()
         private var loadedAtLeastOnce = false
         private var nowProvider: () -> Instant = { Instant.now() }
+
+        /** Where the next page starts; null once the server has no older posts. */
+        private var nextPage: FeedCursor? = null
+        private var loadingMore = false
+
+        /** Bumped by every full reload so a late page can't add rows to the list that replaced it. */
+        private var fetchGeneration = 0L
+
+        /** Set by [applyState] while the current view can't be shown from the rows loaded so far. */
+        private var awaitingPages = false
 
         private var openPostHandler: (MyPostDto) -> Unit = {}
         private var composeHandler: () -> Unit = {}
@@ -227,29 +239,102 @@ class MyPostsViewModel
             applyState()
         }
 
-        fun loadMoreIfNeeded() = Unit
+        /**
+         * Footer reached: append the next (older) page. A failed page keeps
+         * the rows and the cursor, so the footer asks again when it scrolls
+         * back into view (as Notifications does).
+         */
+        fun loadMoreIfNeeded() {
+            if (loadingMore || nextPage == null) return
+            val generation = fetchGeneration
+            loadingMore = true
+            viewModelScope.launch {
+                val appended = fetchNextPage(generation) is NetworkResult.Success
+                if (generation != fetchGeneration) return@launch
+                loadingMore = false
+                // A filter applied while this page was in flight still needs the rest.
+                if (appended) pageThroughIfNeeded()
+            }
+        }
 
         private fun reload() {
+            val generation = ++fetchGeneration
+            // No paging off the old cursor while the list is being replaced.
+            loadingMore = true
             val userId = currentUserId()
             if (userId == null) {
                 posts = emptyList()
+                nextPage = null
+                loadingMore = false
                 loadedAtLeastOnce = true
                 applyState()
                 return
             }
             if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
+            // Keep the rows already paged in (bounded) rather than collapsing
+            // the list to its first page on every refresh.
+            val depth = posts.size.coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                when (val result = postsRepo.userPosts(userId)) {
+                val result = postsRepo.userPosts(userId, depth)
+                if (generation != fetchGeneration) return@launch
+                loadingMore = false
+                when (result) {
                     is NetworkResult.Success -> {
                         posts = result.data.posts
+                        nextPage = nextPageAfter(result.data)
                         loadedAtLeastOnce = true
                         applyState()
                     }
                     is NetworkResult.Failure -> {
-                        if (!loadedAtLeastOnce) {
+                        if (loadedAtLeastOnce) {
+                            // Keep the list; resume any paging this reload interrupted.
+                            applyState()
+                        } else {
                             _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
                         }
                     }
+                }
+            }
+        }
+
+        /**
+         * Appends the page after [nextPage]. Null when there was nothing to
+         * ask for or a newer reload replaced the list meanwhile.
+         */
+        private suspend fun fetchNextPage(generation: Long): NetworkResult<MyPostsResponse>? {
+            val cursor = nextPage ?: return null
+            val userId = currentUserId() ?: return null
+            val result = postsRepo.userPosts(userId, PAGE_SIZE, cursor.createdAt, cursor.id)
+            if (generation != fetchGeneration) return null
+            if (result is NetworkResult.Success) {
+                val known = posts.mapTo(HashSet()) { it.id }
+                posts = posts + result.data.posts.filterNot { it.id in known }
+                nextPage = nextPageAfter(result.data)
+                applyState()
+            }
+            return result
+        }
+
+        /**
+         * Keeps paging while the current view can't be shown from the rows
+         * loaded so far; a failed page ends in an error with Try again.
+         */
+        private fun pageThroughIfNeeded() {
+            if (!awaitingPages || loadingMore) return
+            val generation = fetchGeneration
+            loadingMore = true
+            viewModelScope.launch {
+                var failure: NetworkResult.Failure? = null
+                while (awaitingPages && nextPage != null && failure == null) {
+                    // Null: a newer reload replaced the list (or nothing was left to ask for).
+                    val result = fetchNextPage(generation) ?: break
+                    if (result is NetworkResult.Failure) failure = result
+                }
+                if (generation != fetchGeneration) return@launch
+                loadingMore = false
+                val failed = failure
+                if (failed != null && awaitingPages) {
+                    _state.value = ListOfRowsUiState.Error(failed.error.displayMessage("Couldn't load the list."))
                 }
             }
         }
@@ -267,7 +352,8 @@ class MyPostsViewModel
             val counts = tabCounts(projections)
             _tabs.value =
                 listOf(
-                    ListOfRowsTab(id = MyPostsTab.ACTIVE, label = "Active", count = counts.active),
+                    // No total while older posts are unpaged: the loaded count would under-report.
+                    ListOfRowsTab(id = MyPostsTab.ACTIVE, label = "Active", count = counts.active.takeIf { nextPage == null }),
                     ListOfRowsTab(id = MyPostsTab.ARCHIVED, label = "Archived", count = counts.archived),
                 )
 
@@ -280,6 +366,16 @@ class MyPostsViewModel
                     date = { parseInstant(it.dto.createdAt) },
                     value = { null },
                 )
+            // Type/date filters and sorts run over the loaded rows, so they need
+            // the whole list; an empty Active tab can't say "none" while older
+            // pages remain. Page through first.
+            awaitingPages = _selectedTab.value == MyPostsTab.ACTIVE && nextPage != null &&
+                (_activityFilter.value.isActive || visible.isEmpty())
+            if (awaitingPages) {
+                _state.value = ListOfRowsUiState.Loading
+                pageThroughIfNeeded()
+                return
+            }
             if (visible.isEmpty()) {
                 _state.value =
                     if (_activityFilter.value.isActive && tabItems.isNotEmpty()) {
@@ -293,7 +389,7 @@ class MyPostsViewModel
             _state.value =
                 ListOfRowsUiState.Loaded(
                     sections = listOf(RowSection(id = _selectedTab.value, rows = rows)),
-                    hasMore = false,
+                    hasMore = _selectedTab.value == MyPostsTab.ACTIVE && nextPage != null,
                 )
         }
 
@@ -494,6 +590,15 @@ class MyPostsViewModel
             )
 
         companion object {
+            /** Posts per page of `GET /api/posts/user/:userId`. */
+            const val PAGE_SIZE = 50
+
+            /** Deepest re-query a refresh makes to keep the rows already paged in. */
+            const val MAX_REFRESH_DEPTH = 200
+
+            /** The cursor for the page after [response], or null when the server reports no more. */
+            fun nextPageAfter(response: MyPostsResponse): FeedCursor? = response.pagination?.takeIf { it.hasMore == true }?.nextCursor
+
             fun tabCounts(projections: List<PostProjection>): TabCounts =
                 projections.fold(TabCounts()) { acc, proj ->
                     if (proj.isArchived) {

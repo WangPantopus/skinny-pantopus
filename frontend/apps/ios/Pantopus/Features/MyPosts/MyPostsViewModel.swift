@@ -107,7 +107,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: MyPostsTab.active, label: "Active", count: counts.active),
+            // No total while older posts are unpaged: the loaded count
+            // would under-report.
+            ListOfRowsTab(id: MyPostsTab.active, label: "Active", count: nextPage == nil ? counts.active : nil),
             ListOfRowsTab(id: MyPostsTab.archived, label: "Archived", count: counts.archived)
         ]
     }
@@ -215,6 +217,28 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         var archived = 0
     }
 
+    // MARK: - Paging
+
+    /// Posts per page of `GET /api/posts/user/:userId`.
+    static let pageSize = 50
+    /// Deepest re-query a refresh makes to keep the rows already paged in.
+    static let maxRefreshDepth = 200
+
+    private struct PageCursor {
+        let createdAt: String
+        let id: String
+    }
+
+    /// Where the next page starts; nil once the server has no older posts.
+    private var nextPage: PageCursor?
+    private var loadingMore = false
+    /// Bumped by every full fetch so a page that lands after a refresh
+    /// can't add rows or a cursor to the list that replaced it.
+    private var fetchGeneration = 0
+    /// Set by `rebuild()` while the current view can't be shown truthfully
+    /// from the rows loaded so far.
+    private var awaitingPages = false
+
     init(
         api: APIClient = .shared,
         currentUserId: @escaping @MainActor () -> String? = { MyPostsViewModel.defaultCurrentUserId() },
@@ -256,36 +280,113 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         await fetch()
     }
 
-    /// All posts come from a single (paginated) endpoint; the screen
-    /// currently fetches the first page only. Cursor pagination is a
-    /// follow-up.
-    public func loadMoreIfNeeded() async {}
+    /// Footer reached: append the next (older) page. A failed page keeps
+    /// the rows and the cursor, so the footer asks again when it scrolls
+    /// back into view (as Notifications does).
+    public func loadMoreIfNeeded() async {
+        guard !loadingMore, nextPage != nil else { return }
+        let generation = fetchGeneration
+        loadingMore = true
+        let appended = await (try? fetchNextPage(generation: generation)) ?? false
+        guard generation == fetchGeneration else { return }
+        loadingMore = false
+        // A filter applied while this page was in flight still needs the rest.
+        if appended { await pageThroughIfNeeded() }
+    }
 
     // MARK: - Fetching
 
     private func fetch() async {
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        // No paging off the old cursor while the list is being replaced.
+        loadingMore = true
         guard let userId = currentUserId() else {
             // No signed-in user — render the empty-active state. Defensive;
             // this VM is only reachable from the You/Me tab which requires
             // authentication.
             posts = []
+            nextPage = nil
+            loadingMore = false
             loadedAtLeastOnce = true
             rebuild()
             return
         }
+        // Keep the rows already paged in (bounded) rather than collapsing
+        // the list to its first page on every return and refresh.
+        let depth = min(max(Self.pageSize, posts.count), Self.maxRefreshDepth)
         do {
             let response: MyPostsResponse = try await api.request(
-                PostsEndpoints.userPosts(userId: userId)
+                PostsEndpoints.userPosts(userId: userId, limit: depth)
             )
+            guard generation == fetchGeneration else { return }
             posts = response.posts
+            nextPage = Self.nextPage(after: response)
+            loadingMore = false
             loadedAtLeastOnce = true
             rebuild()
         } catch {
-            if !loadedAtLeastOnce {
+            guard generation == fetchGeneration else { return }
+            loadingMore = false
+            if loadedAtLeastOnce {
+                // Keep the list; resume any paging this fetch interrupted.
+                rebuild()
+            } else {
                 let message = (error as? APIError)?.errorDescription ?? "Couldn't load your posts."
                 state = .error(message: message)
             }
         }
+    }
+
+    /// Append the page after `nextPage`. False when there was nothing to
+    /// ask for or a newer fetch replaced the list meanwhile.
+    private func fetchNextPage(generation: Int) async throws -> Bool {
+        guard let cursor = nextPage, let userId = currentUserId() else { return false }
+        let response: MyPostsResponse = try await api.request(
+            PostsEndpoints.userPosts(
+                userId: userId,
+                limit: Self.pageSize,
+                cursorCreatedAt: cursor.createdAt,
+                cursorId: cursor.id
+            )
+        )
+        guard generation == fetchGeneration else { return false }
+        let known = Set(posts.map(\.id))
+        posts += response.posts.filter { !known.contains($0.id) }
+        nextPage = Self.nextPage(after: response)
+        rebuild()
+        return true
+    }
+
+    /// Keep paging while the current view can't be shown from the rows
+    /// loaded so far; a failed page ends in an error with Try again.
+    private func pageThroughIfNeeded() async {
+        guard awaitingPages, !loadingMore else { return }
+        let generation = fetchGeneration
+        loadingMore = true
+        var failure: Error?
+        while awaitingPages, nextPage != nil {
+            do {
+                guard try await fetchNextPage(generation: generation) else { break }
+            } catch {
+                failure = error
+                break
+            }
+        }
+        guard generation == fetchGeneration else { return }
+        loadingMore = false
+        if let failure, awaitingPages {
+            state = .error(message: (failure as? APIError)?.errorDescription ?? "Couldn't load your posts.")
+        }
+    }
+
+    /// The cursor for the page after `response`, or nil when the server
+    /// reports no more (or sends no keyset cursor).
+    private static func nextPage(after response: MyPostsResponse) -> PageCursor? {
+        guard let pagination = response.pagination, pagination.hasMore == true,
+              let id = pagination.nextCursor, let createdAt = pagination.nextCursorCreatedAt
+        else { return nil }
+        return PageCursor(createdAt: createdAt, id: id)
     }
 
     // MARK: - State projection
@@ -311,6 +412,16 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             date: { Self.parseDate($0.dto.createdAt) },
             value: { _ in nil }
         )
+        // Type/date filters and sorts run over the loaded rows, so they need
+        // the whole list; an empty Active tab can't say "none" while older
+        // pages remain. Page through first.
+        awaitingPages = selectedTab == MyPostsTab.active && nextPage != nil
+            && (activityFilter.isActive || visible.isEmpty)
+        if awaitingPages {
+            state = .loading
+            if !loadingMore { Task { [weak self] in await self?.pageThroughIfNeeded() } }
+            return
+        }
         if visible.isEmpty {
             let isFiltered = activityFilter.isActive && !tabItems.isEmpty
             state = .empty(isFiltered ? filteredEmptyContent() : emptyContent(for: selectedTab))
@@ -323,7 +434,10 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 callbacks: callbacks(for: proj.dto)
             )
         }
-        state = .loaded(sections: [RowSection(id: selectedTab, rows: rows)], hasMore: false)
+        state = .loaded(
+            sections: [RowSection(id: selectedTab, rows: rows)],
+            hasMore: selectedTab == MyPostsTab.active && nextPage != nil
+        )
     }
 
     /// Map a post intent onto its filter chip id. `.all` is the Pulse
