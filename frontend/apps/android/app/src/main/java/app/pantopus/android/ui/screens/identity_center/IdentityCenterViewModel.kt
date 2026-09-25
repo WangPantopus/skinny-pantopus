@@ -136,12 +136,6 @@ class IdentityCenterViewModel
                             trailing = "${response.blockCounts?.personal ?: 0}",
                         ),
                         IdentityRowContent(
-                            id = "blockedAudience",
-                            icon = PantopusIcon.Shield,
-                            label = "Blocked followers",
-                            trailing = "${response.blockCounts?.audience ?: 0}",
-                        ),
-                        IdentityRowContent(
                             id = "privacyPreview",
                             icon = PantopusIcon.Eye,
                             label = "Privacy Preview",

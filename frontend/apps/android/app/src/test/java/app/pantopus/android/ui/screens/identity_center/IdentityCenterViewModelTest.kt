@@ -111,7 +111,7 @@ class IdentityCenterViewModelTest {
             assertEquals(2, loaded.content.bridges.size)
             assertEquals("showPublicOnLocal", loaded.content.bridges[0].id)
             assertEquals("showLocalOnPublic", loaded.content.bridges[1].id)
-            assertEquals(3, loaded.content.privacyRows.size)
+            assertEquals(2, loaded.content.privacyRows.size)
             assertEquals(3, loaded.content.disclosureRows.size)
             // BlockCounts trickle into trailing values.
             val blockedPersonal = loaded.content.privacyRows.first { it.id == "blockedPersonal" }
