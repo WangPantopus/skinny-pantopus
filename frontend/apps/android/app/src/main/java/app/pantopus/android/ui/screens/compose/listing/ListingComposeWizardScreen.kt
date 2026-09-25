@@ -46,8 +46,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,6 +81,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -136,9 +140,6 @@ fun ListingComposeWizardScreen(
         onListingUpdated = onListingUpdated,
     )
     ListingComposeInitialLoadEffect(state = state, viewModel = viewModel)
-    ListingComposeCameraPermissionEffect(
-        isCameraCaptureStep = viewModel.isCameraCaptureStep,
-    )
 
     val screenTag = if (viewModel.isEditMode) LISTING_EDIT_SCREEN_TAG else LISTING_COMPOSE_SCREEN_TAG
     WizardShell(
@@ -190,18 +191,28 @@ private fun ListingComposeEventEffect(
 }
 
 @Composable
-private fun ListingComposeCameraPermissionEffect(isCameraCaptureStep: Boolean) {
+private fun ListingComposeCameraPermissionEffect(): Boolean {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var granted by remember { mutableStateOf(listingComposeCameraGranted(context)) }
     val permissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
-            onResult = { /* CameraPreviewSurface re-reads grant state on recomposition. */ },
+            onResult = { granted = it },
         )
 
-    LaunchedEffect(isCameraCaptureStep) {
-        if (!isCameraCaptureStep || listingComposeCameraGranted(context)) return@LaunchedEffect
-        permissionLauncher.launch(Manifest.permission.CAMERA)
+    LaunchedEffect(Unit) {
+        if (!granted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) granted = listingComposeCameraGranted(context)
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    return granted
 }
 
 @Composable
@@ -350,6 +361,9 @@ private fun CameraCaptureStep(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val imageCapture = remember { ImageCapture.Builder().build() }
+    val cameraGranted = ListingComposeCameraPermissionEffect()
+    var hasFlash by remember { mutableStateOf(false) }
+    var flashMode by remember { mutableIntStateOf(imageCapture.flashMode) }
     val onShutter = {
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(context),
@@ -384,7 +398,11 @@ private fun CameraCaptureStep(
                 .background(Color(0xFF0A0B0D))
                 .testTag("listingComposeCameraStep"),
     ) {
-        CameraPreviewSurface(imageCapture = imageCapture)
+        CameraPreviewSurface(
+            imageCapture = imageCapture,
+            cameraGranted = cameraGranted,
+            onFlashAvailable = { hasFlash = it },
+        )
         CameraSceneOverlay()
         RuleOfThirdsGrid(modifier = Modifier.padding(horizontal = 28.dp, vertical = 96.dp))
         FramingBrackets(modifier = Modifier.padding(horizontal = 28.dp, vertical = 96.dp))
@@ -438,12 +456,29 @@ private fun CameraCaptureStep(
                 Box(modifier = Modifier.weight(1f))
                 ShutterButton(onClick = onShutter)
                 Box(modifier = Modifier.weight(1f))
-                CameraRailButton(
-                    icon = PantopusIcon.Zap,
-                    label = "Auto",
-                    testTag = "listingComposeFlash",
-                    onClick = {},
-                )
+                if (cameraGranted && hasFlash) {
+                    CameraRailButton(
+                        icon = PantopusIcon.Zap,
+                        label =
+                            when (flashMode) {
+                                ImageCapture.FLASH_MODE_AUTO -> "Auto"
+                                ImageCapture.FLASH_MODE_ON -> "On"
+                                else -> "Off"
+                            },
+                        testTag = "listingComposeFlash",
+                        onClick = {
+                            flashMode =
+                                when (flashMode) {
+                                    ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_AUTO
+                                    ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
+                                    else -> ImageCapture.FLASH_MODE_OFF
+                                }
+                            imageCapture.flashMode = flashMode
+                        },
+                    )
+                } else {
+                    Box(modifier = Modifier.size(48.dp))
+                }
             }
         }
     }
@@ -454,14 +489,18 @@ private fun listingComposeCameraGranted(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED
 
 @Composable
-private fun CameraPreviewSurface(imageCapture: ImageCapture) {
+private fun CameraPreviewSurface(
+    imageCapture: ImageCapture,
+    cameraGranted: Boolean,
+    onFlashAvailable: (Boolean) -> Unit,
+) {
     val inspectionMode = LocalInspectionMode.current
     if (inspectionMode) {
         Box(modifier = Modifier.fillMaxWidth().fillMaxHeight().background(Color(0xFF0A0B0D)))
         return
     }
     val context = LocalContext.current
-    if (!listingComposeCameraGranted(context)) {
+    if (!cameraGranted) {
         CameraPermissionPlaceholder()
         return
     }
@@ -481,12 +520,14 @@ private fun CameraPreviewSurface(imageCapture: ImageCapture) {
                                     it.setSurfaceProvider(surfaceProvider)
                                 }
                             provider.unbindAll()
-                            provider.bindToLifecycle(
-                                lifecycleOwner,
-                                CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview,
-                                imageCapture,
-                            )
+                            val camera =
+                                provider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview,
+                                    imageCapture,
+                                )
+                            onFlashAvailable(camera.cameraInfo.hasFlashUnit())
                         }
                     },
                     ContextCompat.getMainExecutor(context),
@@ -765,7 +806,8 @@ private fun ShutterButton(onClick: () -> Unit) {
                 .clip(CircleShape)
                 .border(4.dp, Color.White.copy(alpha = 0.95f), CircleShape)
                 .clickable(role = Role.Button, onClick = onClick)
-                .testTag("listingComposeShutter"),
+                .testTag("listingComposeShutter")
+                .semantics { contentDescription = "Take photo" },
         contentAlignment = Alignment.Center,
     ) {
         Box(modifier = Modifier.size(54.dp).clip(CircleShape).background(Color.White))
@@ -1437,7 +1479,7 @@ private fun SuggestedConditionControl(
             }
         }
         Text(
-            "Light wear on one cushion · minor sun fade. Add notes in description.",
+            state.form.bodyText.ifBlank { "Choose the item’s condition above." },
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
@@ -1482,23 +1524,17 @@ private fun PickupDeliveryPanel(
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        "412 Elm St · West Loop",
+                        state.form.locationLabel.ifBlank { "Pickup location not specified" },
                         style = PantopusTextStyle.caption,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.appText,
                     )
                     Text(
-                        "Shown as approximate location to buyers",
+                        "Confirm the meeting place with the buyer",
                         style = PantopusTextStyle.caption,
                         color = PantopusColors.appTextSecondary,
                     )
                 }
-                PantopusIconImage(
-                    icon = PantopusIcon.ChevronRight,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextMuted,
-                )
             }
             HorizontalDivider(color = PantopusColors.appBorder)
             Column(modifier = Modifier.padding(Spacing.s3), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -1512,14 +1548,14 @@ private fun PickupDeliveryPanel(
                 FulfillmentToggleRow(
                     icon = PantopusIcon.Package,
                     title = "Local delivery",
-                    subtitle = "Up to 3 mi · $40 fee",
+                    subtitle = "Arrange details with the buyer",
                     isOn = state.form.deliveryEnabled,
                     onClick = { vm.setDeliveryEnabled(!state.form.deliveryEnabled) },
                 )
                 FulfillmentToggleRow(
                     icon = PantopusIcon.Package,
                     title = "Ship nationwide",
-                    subtitle = "Too large to ship",
+                    subtitle = "Shipping isn’t available here",
                     isOn = false,
                     enabled = false,
                     onClick = {},
