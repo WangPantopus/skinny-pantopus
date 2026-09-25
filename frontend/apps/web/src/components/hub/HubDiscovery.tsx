@@ -38,6 +38,15 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
   const [failed, setFailed] = useState(false);
 
   const fetchDiscovery = useCallback(async (filter: DiscoveryFilter) => {
+    // Posts live in Pulse, which applies the viewer's chosen area and each
+    // post's visibility. The discovery endpoint has no such contract for posts,
+    // so the tab points there instead of reporting a false "Nothing nearby".
+    if (filter === 'posts') {
+      setItems([]);
+      setFailed(false);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFailed(false);
     try {
@@ -101,7 +110,17 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
 
       {/* Items */}
       <div className="bg-app-surface border border-app-border rounded-xl overflow-hidden">
-        {loading ? (
+        {activeFilter === 'posts' ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-app-text-muted">Local posts are in Pulse, where you choose the area.</p>
+            <button
+              onClick={() => router.push('/app/feed')}
+              className="mt-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+            >
+              Browse Pulse
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full" />
           </div>
