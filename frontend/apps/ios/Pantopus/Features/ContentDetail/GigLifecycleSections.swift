@@ -33,18 +33,41 @@ struct GigOwnerBidsPanel: View {
     /// `GET /api/v2/gigs/:gigId/offers`. Empty on the `/bids` fallback,
     /// which renders exactly as before.
     var rankings: [String: GigOfferRanking] = [:]
+    var readError: String?
+    var onRetry: @MainActor () -> Void = {}
+    var isRefreshing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text("Bids (\(bids.count))")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            if bids.isEmpty {
-                emptyCard
-            } else {
-                ForEach(bids) { bid in
-                    bidCard(bid)
+            if let readError {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text(readError)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    if !bids.isEmpty {
+                        Text("Showing the last loaded bids.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    Button(isRefreshing ? "Retrying…" : "Retry", action: onRetry)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primary600)
+                        .disabled(isRefreshing)
+                        .accessibilityIdentifier("gigDetail.bids.retry")
                 }
+                .padding(Spacing.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Color.appSurfaceMuted)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            }
+            if bids.isEmpty, readError == nil {
+                emptyCard
+            }
+            ForEach(bids) { bid in
+                bidCard(bid)
             }
         }
         .padding(.horizontal, Spacing.s5)
