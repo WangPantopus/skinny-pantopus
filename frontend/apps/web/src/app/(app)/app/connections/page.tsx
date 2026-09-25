@@ -11,6 +11,15 @@ import { queryKeys } from '@/lib/query-keys';
 import type { Relationship, ConnectionRequest, RelationshipUser } from '@pantopus/types';
 
 type Tab = 'connections' | 'pending' | 'sent' | 'blocked';
+const TABS: readonly Tab[] = ['connections', 'pending', 'sent', 'blocked'];
+
+/** A connection request links `?tab=requests` (backend
+ *  `notificationService.js`), which is the Requests (`pending`) tab here;
+ *  anything unknown opens Connections instead of an empty page. */
+function linkedTab(value: string | null): Tab {
+  if (value === 'requests') return 'pending';
+  return TABS.find((tab) => tab === value) ?? 'connections';
+}
 type BlockedUserEntry = {
   id: string;
   created_at: string;
@@ -21,7 +30,7 @@ type BlockedUserEntry = {
 function ConnectionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get('tab') as Tab) || 'connections';
+  const initialTab = linkedTab(searchParams.get('tab'));
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [actionLoading, setActionLoading] = useState<string | null>(null);

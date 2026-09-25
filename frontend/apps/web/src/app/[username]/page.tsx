@@ -20,6 +20,9 @@ export async function generateMetadata({
   const profile = result.data;
 
   if (!profile) {
+    // Only a 404 means there is no such profile. Any other failure is
+    // temporary, so the tab title must not claim the profile doesn't exist.
+    if (result.status !== 404) return { title: 'Pantopus' };
     return {
       title: 'Profile Not Found | Pantopus',
       description: 'This Pantopus profile could not be found.',
