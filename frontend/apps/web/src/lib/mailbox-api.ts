@@ -126,7 +126,7 @@ export async function getDrawerMeta(): Promise<DrawerMeta[]> {
 
 export async function getDrawerItems(
   drawer: DrawerParam,
-  params?: { page?: number; limit?: number; filter?: string },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
 ): Promise<MailboxPaginatedResponse<MailItemV2>> {
   return call(async () => {
     const res = await get<{ mail: MailItemV2[]; total: number; drawer: string }>(
@@ -134,6 +134,7 @@ export async function getDrawerItems(
       {
         limit: params?.limit ?? 20,
         offset: params?.page ? (params.page - 1) * (params.limit ?? 20) : 0,
+        ...(params?.tab ? { tab: params.tab } : {}),
         ...(params?.filter ? { filter: params.filter } : {}),
       },
     );
