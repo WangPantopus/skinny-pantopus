@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -436,31 +437,11 @@ private fun UnboxNav(onBack: () -> Unit) {
                 )
             }
             Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                NavIcon(icon = PantopusIcon.Image, label = "Photo library")
-                NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More actions")
-            }
+            // S2-16 — Photo library and More actions did nothing; this keeps
+            // their width so the title stays where it was.
+            Spacer(Modifier.width(70.dp))
         }
         HorizontalDivider(color = PantopusColors.appBorderSubtle)
-    }
-}
-
-@Composable
-private fun NavIcon(
-    icon: PantopusIcon,
-    label: String,
-) {
-    Box(
-        modifier =
-            Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(PantopusColors.appSurfaceSunken)
-                .clickable {}
-                .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextStrong)
     }
 }
 
@@ -569,12 +550,6 @@ private fun FiledActions(onOpenDrawer: () -> Unit) {
             onClick = onOpenDrawer,
             testTag = "unboxing_viewInDrawer",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
-            UbChip(icon = PantopusIcon.Package, label = "Open record", modifier = Modifier.weight(1f))
-            UbChip(icon = PantopusIcon.Share, label = "Share", modifier = Modifier.weight(1f))
-            UbChip(icon = PantopusIcon.Bell, label = "Reminders", modifier = Modifier.weight(1f))
-            UbChip(icon = PantopusIcon.Archive, label = "Archive", modifier = Modifier.weight(1f))
-        }
     }
 }
 
