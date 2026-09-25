@@ -38,6 +38,8 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [error, setError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,6 +67,7 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
 
   // Autocomplete search
   useEffect(() => {
+    setSearchFailed(false);
     if (!debouncedQuery || debouncedQuery.length < 3 || mode !== 'search') {
       setSuggestions([]);
       return;
@@ -82,16 +85,19 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
         if (!controller.signal.aborted) {
           setSuggestions(data?.suggestions || []);
         }
-      } catch (e: unknown) {
-        if (e instanceof Error && e.name !== 'AbortError') setSuggestions([]);
-        else if (!(e instanceof Error)) setSuggestions([]);
+      } catch {
+        // A failed search is not "No results found".
+        if (!controller.signal.aborted) {
+          setSuggestions([]);
+          setSearchFailed(true);
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
 
     return () => controller.abort();
-  }, [debouncedQuery, mode]);
+  }, [debouncedQuery, mode, searchAttempt]);
 
   // Select a suggestion
   const handleSelectSuggestion = async (suggestion: Record<string, any>) => {
@@ -321,7 +327,19 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
 
           {/* Results */}
           <div className="max-h-48 overflow-y-auto">
-            {suggestions.length === 0 && query.length >= 3 && !loading && (
+            {searchFailed && query.length >= 3 && !loading && (
+              <div className="px-3 py-4 text-center text-xs text-app-muted">
+                Couldn&apos;t search places right now.{' '}
+                <button
+                  type="button"
+                  onClick={() => setSearchAttempt((n) => n + 1)}
+                  className="font-semibold text-primary-600 hover:underline"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {!searchFailed && suggestions.length === 0 && query.length >= 3 && !loading && (
               <div className="px-3 py-4 text-center text-xs text-app-muted">No results found</div>
             )}
             {suggestions.length === 0 && query.length < 3 && (
