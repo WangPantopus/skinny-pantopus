@@ -5,7 +5,8 @@ import SwiftUI
 
 public extension Notification.Name {
     /// Posted with a letter's id as `object` after a confirmed action moved it
-    /// out of its Mailbox tab: Dismiss shreds it, File and Save to vault file it.
+    /// out of its Mailbox tab: Dismiss shreds it, File and Save to vault file it,
+    /// Archive archives it.
     static let mailboxMailLeftList = Notification.Name("mailboxMailLeftList")
 }
 
@@ -444,8 +445,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         await fetchPage(generation: loadGeneration)
     }
 
-    /// A letter dismissed or filed from its detail left this tab: drop its
-    /// row now instead of listing it until the next reload.
+    /// A letter dismissed, filed or archived from its detail left this tab:
+    /// drop its row now instead of listing it until the next reload.
     public func dropLoadedMail(_ mailId: String) {
         guard sampleProvider == nil, loadedMail.contains(where: { $0.id == mailId }) else { return }
         loadedMail.removeAll { $0.id == mailId }

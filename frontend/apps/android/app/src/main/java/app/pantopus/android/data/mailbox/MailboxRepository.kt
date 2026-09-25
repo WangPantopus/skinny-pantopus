@@ -206,8 +206,9 @@ class MailboxRepository
 
             /**
              * Ids of letters a confirmed action moved out of their Mailbox tab:
-             * Dismiss shreds one, File and Save to vault file one. An open
-             * Mailbox list drops the row instead of showing it until a reload.
+             * Dismiss shreds one, File and Save to vault file one, Archive
+             * archives one. An open Mailbox list drops the row instead of
+             * showing it until a reload.
              */
             val mailLeftList: SharedFlow<String> = mailLeftListFlow.asSharedFlow()
 

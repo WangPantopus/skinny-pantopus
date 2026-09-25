@@ -168,8 +168,8 @@ class MailboxRootViewModel
         private var drawerUnread: Map<String, Int> by mutableStateOf(emptyMap())
 
         init {
-            // A letter dismissed or filed from its detail leaves this tab: drop
-            // the row now rather than listing it until the next reload.
+            // A letter dismissed, filed or archived from its detail leaves this
+            // tab: drop the row now rather than listing it until the next reload.
             if (repo != null) {
                 viewModelScope.launch {
                     MailboxRepository.mailLeftList.collect { mailId -> dropLoadedMail(mailId) }
