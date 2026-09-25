@@ -1085,13 +1085,19 @@ router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) =
       .maybeSingle();
     if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
-    await supabaseAdmin
+    const { error: fileError } = await supabaseAdmin
       .from('Mail')
       .update({
         vault_folder_id: folderId,
         lifecycle: 'filed',
       })
       .eq('id', mailId);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the apps said "Saved to vault" for mail that did not move.
+    if (fileError) {
+      logger.error('Vault file update failed', { mailId, folderId, error: fileError.message });
+      return res.status(500).json({ error: "Couldn't file this mail. Please try again." });
+    }
 
     // Update folder count
     const { data: folder } = await supabaseAdmin
