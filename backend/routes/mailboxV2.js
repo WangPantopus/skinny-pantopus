@@ -716,10 +716,16 @@ router.patch('/package/:mailId/status', verifyToken, validate(updatePackageStatu
       if (deliveryLocationNote) updates.delivery_location_note = deliveryLocationNote;
     }
 
-    await supabaseAdmin
+    const { error: statusError } = await supabaseAdmin
       .from('MailPackage')
       .update(updates)
       .eq('id', pkg.id);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the apps showed the new status for a package that kept the old one.
+    if (statusError) {
+      logger.error('Package status update failed', { mailId, status, error: statusError.message });
+      return res.status(500).json({ error: "Couldn't update this package. Please try again." });
+    }
 
     // Add timeline event
     await supabaseAdmin
