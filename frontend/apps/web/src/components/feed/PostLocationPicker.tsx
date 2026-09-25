@@ -3,9 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { MapPin, Search } from 'lucide-react';
 import * as api from '@pantopus/api';
-import { getAuthToken } from '@pantopus/api';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface PostLocation {
   latitude: number;
@@ -80,15 +77,8 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
     (async () => {
       setLoading(true);
       try {
-        const token = getAuthToken();
-        const r = await fetch(
-          `${API_BASE}/api/geo/autocomplete?q=${encodeURIComponent(debouncedQuery)}`,
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            signal: controller.signal,
-          }
-        );
-        const data = await r.json();
+        // Same-origin shared client, so the web session cookie authenticates it.
+        const data = await api.geo.autocompleteWithAbort(debouncedQuery, controller.signal);
         if (!controller.signal.aborted) {
           setSuggestions(data?.suggestions || []);
         }
@@ -153,13 +143,12 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          const token = getAuthToken();
-          const r = await fetch(
-            `${API_BASE}/api/geo/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-          const data = await r.json();
-          const n = data?.normalized;
+          let n: { address?: string; city?: string } | undefined;
+          try {
+            n = (await api.geo.reverseGeocode(latitude, longitude))?.normalized;
+          } catch {
+            n = undefined; // Keep the GPS point with a coordinate label, as before.
+          }
 
           if (n?.address) {
             const city = n.city || '';

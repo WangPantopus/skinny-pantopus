@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import * as api from '@pantopus/api';
 import AddressAutocomplete from './AddressAutocomplete';
 import type { Home } from '@pantopus/types';
-import { getAuthToken } from '@pantopus/api';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Normalized payload the Gig create route expects.
 export type SelectedLocation = {
@@ -78,11 +75,11 @@ function homeLabel(h: Record<string, any>) {
   return [line1, line2].filter(Boolean).join(', ');
 }
 
+// Same-origin shared client: web sessions authenticate with httpOnly cookies,
+// which a direct cross-origin fetch with the session sentinel cannot carry.
 async function reverseGeocode(lat: number, lon: number) {
-  const r = await fetch(`${API_BASE}/api/geo/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { headers: { ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}) } });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data?.error || 'Reverse geocode failed');
-  const n = data?.normalized;
+  const data = await api.geo.reverseGeocode(lat, lon);
+  const n: Record<string, any> | undefined = data?.normalized;
   if (!n?.address) throw new Error('Could not resolve address for that location');
   return n;
 }
