@@ -233,9 +233,9 @@ class MailDetailViewModel
         private val _pendingDestructiveAction = MutableStateFlow<MailCategoryAction?>(null)
         val pendingDestructiveAction: StateFlow<MailCategoryAction?> = _pendingDestructiveAction.asStateFlow()
 
-        /** `true` once a confirmed Dismiss succeeded — the screen closes. */
-        private val _didDismiss = MutableStateFlow(false)
-        val didDismiss: StateFlow<Boolean> = _didDismiss.asStateFlow()
+        /** `true` once Dismiss or Archive succeeded — the letter left the mailbox, so the screen closes. */
+        private val _didLeaveMailbox = MutableStateFlow(false)
+        val didLeaveMailbox: StateFlow<Boolean> = _didLeaveMailbox.asStateFlow()
 
         val bidCheckout =
             GigBidCheckoutCoordinator(
@@ -442,13 +442,40 @@ class MailDetailViewModel
                             MailboxRepository.announceMailLeftList(mailId)
                         }
                         // Dismiss promised the letter leaves the mailbox: close it.
-                        if (action == MailCategoryAction.Dismiss) _didDismiss.value = true
+                        if (action == MailCategoryAction.Dismiss) _didLeaveMailbox.value = true
                     }
                     is NetworkResult.Failure -> {
                         _toast.value = result.error.displayMessage("Action failed")
                         _categoryActionInFlight.value = null
                     }
                 }
+            }
+        }
+
+        private val _archiveInFlight = MutableStateFlow(false)
+
+        /** `true` while Archive is saving; a second tap meanwhile is ignored. */
+        val archiveInFlight: StateFlow<Boolean> = _archiveInFlight.asStateFlow()
+
+        /**
+         * `PATCH /api/mailbox/:id/archive` — route `backend/routes/mailbox.js:2860`
+         * (the web Mailbox's Archive). The letter leaves Incoming, so the open
+         * list drops it and the screen closes, like Dismiss.
+         */
+        fun archive() {
+            if (_state.value !is MailDetailUiState.Loaded || _archiveInFlight.value) return
+            _archiveInFlight.value = true
+            viewModelScope.launch {
+                when (val result = repo.archive(mailId)) {
+                    is NetworkResult.Success -> {
+                        _toast.value = "Archived"
+                        MailboxRepository.announceMailLeftList(mailId)
+                        _didLeaveMailbox.value = true
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = result.error.displayMessage("Couldn't archive this mail. Try again.")
+                }
+                _archiveInFlight.value = false
             }
         }
 

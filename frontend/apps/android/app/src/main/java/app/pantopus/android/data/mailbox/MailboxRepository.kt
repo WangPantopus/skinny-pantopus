@@ -1,6 +1,8 @@
 package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mailbox.AckResponse
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailRequest
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsHistoryResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
@@ -86,6 +88,10 @@ class MailboxRepository
         /** `PATCH /api/mailbox/:id/ack` — used by the generic A17.1
          *  detail screen's primary Acknowledge action. */
         suspend fun acknowledge(mailId: String): NetworkResult<AckResponse> = safeApiCall { mailboxApi.acknowledge(mailId) }
+
+        /** `PATCH /api/mailbox/:id/archive` — moves the letter out of Incoming. */
+        suspend fun archive(mailId: String): NetworkResult<ArchiveMailResponse> =
+            safeApiCall { mailboxApi.archive(mailId, ArchiveMailRequest(archived = true)) }
 
         /** `GET /api/mailbox/v2/drawers`. */
         suspend fun drawers(): NetworkResult<DrawerListResponse> = safeApiCall { v2Api.drawers() }

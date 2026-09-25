@@ -79,10 +79,12 @@ fun GigDetailLayout(
     onAccept: () -> Unit,
     onOpenSenderProfile: (String) -> Unit = {},
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
 ) {
     Box(modifier = Modifier.testTag("mailDetail_gig")) {
         MailItemDetailShell(
-            topBar = makeTopBar(content = content, onBack = onBack, onSaveToVault = onSaveToVault),
+            topBar = makeTopBar(content = content, onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(gig = gig),
             attachments = makeAttachments(content = content),
             hero = { GigHeroCard(content = content, gig = gig) },
@@ -115,6 +117,7 @@ private fun makeTopBar(
     content: MailDetailContent,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         eyebrow = "Gig mail",
@@ -128,10 +131,8 @@ private fun makeTopBar(
             ),
         overflowItems =
             listOf(
-                MailOverflowItem("openGig", PantopusIcon.Briefcase, "Open gig thread") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("report", PantopusIcon.Info, "Report bidder") {},
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -474,29 +475,6 @@ private fun GigDetailActions(
                 onClick = onAccept,
                 modifier = Modifier.weight(1f),
             )
-            if (!pendingPayment) {
-                ActionButton(
-                    id = "counter",
-                    label = "Counter",
-                    icon = PantopusIcon.ArrowsRepeat,
-                    background = PantopusColors.appSurface,
-                    foreground = PantopusColors.appText,
-                    borderColor = PantopusColors.appBorder,
-                    inFlight = false,
-                    onClick = {},
-                    modifier = Modifier.weight(1f),
-                )
-                ActionButton(
-                    id = "decline",
-                    label = "Decline",
-                    icon = PantopusIcon.X,
-                    background = PantopusColors.error,
-                    foreground = PantopusColors.appTextInverse,
-                    inFlight = false,
-                    onClick = {},
-                    modifier = Modifier.weight(1f),
-                )
-            }
         }
     }
 }

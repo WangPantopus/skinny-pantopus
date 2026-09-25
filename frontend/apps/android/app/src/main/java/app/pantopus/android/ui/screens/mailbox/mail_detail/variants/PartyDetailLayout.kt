@@ -48,7 +48,6 @@ import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfStripContent
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailItemDetailShell
-import app.pantopus.android.ui.screens.shared.mail_item_detail.MailOverflowItem
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarConfig
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarTrailingAction
 import app.pantopus.android.ui.theme.PantopusColors
@@ -121,13 +120,6 @@ private fun makeTopBar(
                 icon = PantopusIcon.Bookmark,
                 contentDescription = "Save invite",
                 onClick = onSaveToVault,
-            ),
-        overflowItems =
-            listOf(
-                MailOverflowItem("share", PantopusIcon.Share, "Share invite") {},
-                MailOverflowItem("addToCalendar", PantopusIcon.CalendarPlus, "Add to calendar") {},
-                MailOverflowItem("mute", PantopusIcon.BellOff, "Mute invite") {},
-                MailOverflowItem("report", PantopusIcon.AlertTriangle, "Report") {},
             ),
     )
 

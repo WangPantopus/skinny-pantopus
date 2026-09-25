@@ -81,12 +81,14 @@ fun CouponDetailLayout(
     onRedeem: () -> Unit,
     onOpenSenderProfile: (String) -> Unit = {},
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
     today: LocalDate = LocalDate.now(),
 ) {
     val state = bodyState(content, coupon, today)
     Box(modifier = Modifier.testTag("mailDetail_coupon")) {
         MailItemDetailShell(
-            topBar = makeTopBar(content = content, onBack = onBack, onSaveToVault = onSaveToVault),
+            topBar = makeTopBar(content = content, onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(state = state, coupon = coupon),
             attachments = makeAttachments(content = content),
             hero = { CouponHeroCard(content = content) },
@@ -127,6 +129,7 @@ private fun makeTopBar(
     content: MailDetailContent,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         eyebrow = "Coupon",
@@ -140,16 +143,8 @@ private fun makeTopBar(
             ),
         overflowItems =
             listOf(
-                MailOverflowItem("share", PantopusIcon.Share, "Share") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("addToWallet", PantopusIcon.Wallet, "Add to wallet") {},
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
-                MailOverflowItem(
-                    id = "delete",
-                    icon = PantopusIcon.Trash2,
-                    label = "Delete",
-                    isDestructive = true,
-                ) {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -425,18 +420,6 @@ private fun CouponActionsRow(
                 icon = PantopusIcon.Bookmark,
                 label = "Save",
                 onClick = onSaveToVault,
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "share",
-                icon = PantopusIcon.Share,
-                label = "Share",
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "directions",
-                icon = PantopusIcon.MapPin,
-                label = "Get directions",
                 modifier = Modifier.weight(1f),
             )
         }
