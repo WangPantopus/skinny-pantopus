@@ -101,6 +101,7 @@ fun MailDetailScreen(
     val categoryActionInFlight by viewModel.categoryActionInFlight.collectAsStateWithLifecycle()
     val pendingDestructiveAction by viewModel.pendingDestructiveAction.collectAsStateWithLifecycle()
     val ceremonialRedirectMailId by viewModel.ceremonialRedirectMailId.collectAsStateWithLifecycle()
+    val didDismiss by viewModel.didDismiss.collectAsStateWithLifecycle()
     GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -111,6 +112,8 @@ fun MailDetailScreen(
             onOpenCeremonialMail(redirect)
         }
     }
+    // A dismissed letter has left the mailbox; the list below has dropped it.
+    LaunchedEffect(didDismiss) { if (didDismiss) onBack() }
     LaunchedEffect(toast) {
         if (toast != null) {
             kotlinx.coroutines.delay(1_800)

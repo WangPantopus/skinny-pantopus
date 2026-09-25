@@ -79,6 +79,10 @@ public struct MailDetailView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("mailDetail")
         .task { await viewModel.load() }
+        // A dismissed letter has left the mailbox; the list has dropped it.
+        .onChange(of: viewModel.didDismiss) { _, dismissed in
+            if dismissed { onBack() }
+        }
         .onChange(of: viewModel.ceremonialRedirectMailId) { _, redirect in
             guard let redirect, let onOpenCeremonialMail else { return }
             viewModel.acknowledgeCeremonialRedirect()

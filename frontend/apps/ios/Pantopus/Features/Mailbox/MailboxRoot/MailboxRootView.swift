@@ -104,6 +104,9 @@ public struct MailboxRootView: View {
         .accessibilityIdentifier("mailboxRoot")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        .onReceive(NotificationCenter.default.publisher(for: .mailboxMailLeftList)) { note in
+            if let mailId = note.object as? String { viewModel.dropLoadedMail(mailId) }
+        }
         .onAppear { Analytics.track(.screenMailboxRootViewed) }
     }
 }

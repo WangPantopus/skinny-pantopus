@@ -233,6 +233,10 @@ class MailDetailViewModel
         private val _pendingDestructiveAction = MutableStateFlow<MailCategoryAction?>(null)
         val pendingDestructiveAction: StateFlow<MailCategoryAction?> = _pendingDestructiveAction.asStateFlow()
 
+        /** `true` once a confirmed Dismiss succeeded — the screen closes. */
+        private val _didDismiss = MutableStateFlow(false)
+        val didDismiss: StateFlow<Boolean> = _didDismiss.asStateFlow()
+
         val bidCheckout =
             GigBidCheckoutCoordinator(
                 gigsRepo,
@@ -433,6 +437,12 @@ class MailDetailViewModel
                         // a refetch would buy a skeleton flash and nothing else.
                         _toast.value = action.successToast
                         _categoryActionInFlight.value = null
+                        // `file` and `shred` move the letter out of its Mailbox tab.
+                        if (action.actionKey == "file" || action.actionKey == "shred") {
+                            MailboxRepository.announceMailLeftList(mailId)
+                        }
+                        // Dismiss promised the letter leaves the mailbox: close it.
+                        if (action == MailCategoryAction.Dismiss) _didDismiss.value = true
                     }
                     is NetworkResult.Failure -> {
                         _toast.value = result.error.displayMessage("Action failed")
@@ -760,6 +770,7 @@ class MailDetailViewModel
                 is NetworkResult.Success -> {
                     val label = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
                     _toast.value = label?.let { "Filed in $it" } ?: "Filed in Vault"
+                    MailboxRepository.announceMailLeftList(mailId)
                 }
                 is NetworkResult.Failure -> {
                     _state.value = MailDetailUiState.Loaded(content)
@@ -821,6 +832,7 @@ class MailDetailViewModel
                     is NetworkResult.Success -> {
                         val folderLabel = _saveToVaultFolders.value.firstOrNull { it.id == folderId }?.label
                         _toast.value = folderLabel?.let { "Saved to $it" } ?: "Saved to vault"
+                        MailboxRepository.announceMailLeftList(mailId)
                     }
                     is NetworkResult.Failure ->
                         _toast.value = result.error.displayMessage("Couldn't save to vault. Try again.")

@@ -42,6 +42,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MailboxApi
 import app.pantopus.android.data.api.services.MailboxV2Api
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -191,4 +194,19 @@ class MailboxRepository
 
         /** `DELETE /api/mailbox/v2/p3/map/pin/:id` — A11.4 delete a pin. */
         suspend fun deleteMapPin(id: String): NetworkResult<DeleteMapPinResponse> = safeApiCall { v2Api.deleteMapPin(id) }
+
+        companion object {
+            private val mailLeftListFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /**
+             * Ids of letters a confirmed action moved out of their Mailbox tab:
+             * Dismiss shreds one, File and Save to vault file one. An open
+             * Mailbox list drops the row instead of showing it until a reload.
+             */
+            val mailLeftList: SharedFlow<String> = mailLeftListFlow.asSharedFlow()
+
+            fun announceMailLeftList(mailId: String) {
+                mailLeftListFlow.tryEmit(mailId)
+            }
+        }
     }
