@@ -1927,6 +1927,8 @@ private fun EmailFallbackDialog(
     )
 }
 
+private fun NavHostController.isOnBackStack(route: String): Boolean = runCatching { getBackStackEntry(route) }.isSuccess
+
 private fun NavHostController.navigateToRootTab(route: PantopusRoute) {
     navigate(route.path) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
@@ -1992,8 +1994,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
+    // Child screens keep the tab they were opened from lit (they used to fall
+    // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = PantopusRoute.fromPath(backStackEntry?.destination?.route) ?: PantopusRoute.Place
+    val currentRoute =
+        remember(backStackEntry) {
+            PantopusRoute.barTabFor(
+                top = PantopusRoute.fromPath(backStackEntry?.destination?.route),
+                rootsOnStack = PantopusRoute.all.filter { navController.isOnBackStack(it.path) },
+            )
+        }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
         if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Mail to resolvedInboxBadgeCount) else emptyMap()
