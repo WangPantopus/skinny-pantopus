@@ -143,7 +143,7 @@ export function useDrawerMeta(
 
 export function useDrawerItems(
   drawer: 'personal' | 'home' | 'business' | 'earn',
-  params?: { page?: number; limit?: number; filter?: string },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
   options?: Omit<
     UseQueryOptions<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>,
     'queryKey' | 'queryFn'

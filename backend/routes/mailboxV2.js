@@ -278,7 +278,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
 router.get('/drawer/:drawer', verifyToken, async (req, res) => {
   try {
     const { drawer } = req.params;
-    const { tab, limit = 50, offset = 0 } = req.query;
+    const { tab, filter, limit = 50, offset = 0 } = req.query;
     const userId = req.user.id;
 
     if (!['personal', 'home', 'business', 'earn'].includes(drawer)) {
@@ -317,6 +317,15 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.not('due_date', 'is', null).in('lifecycle', ['delivered', 'opened']).eq('archived', false);
     } else if (tab === 'vault') {
       query = query.eq('lifecycle', 'filed');
+    }
+
+    // Web drawer filter: the same fields the web row shows as unread, urgent and starred.
+    if (filter === 'unread') {
+      query = query.is('opened_at', null);
+    } else if (filter === 'urgent') {
+      query = query.in('urgency', ['time_sensitive', 'overdue', 'due_soon']);
+    } else if (filter === 'starred') {
+      query = query.eq('starred', true);
     }
 
     const { data: mail, error, count } = await query;
