@@ -1,24 +1,29 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-25T22:58Z (batches 11–13 merged; native batch 14 forming)
+## CURRENT RESUME POINT — 2026-09-25T23:48Z (batches 11–13 and 15 merged; native batch 14 forming)
 
 - **Integration (Stream 1 queue):**
   - Master is `243279b76`.
   - Batch 11 [#431](https://github.com/WangPantopus/skinny-pantopus/pull/431) merged #427 at 21:13:44Z.
   - Batch 12 [#434](https://github.com/WangPantopus/skinny-pantopus/pull/434) merged #425, #432 and #433 at 22:43:40Z, giving `32efcaa1c`.
   - Batch 13 [#438](https://github.com/WangPantopus/skinny-pantopus/pull/438) merged #435 and #437 at 22:55:39Z, giving `243279b76`.
+  - Batch 15 [#442](https://github.com/WangPantopus/skinny-pantopus/pull/442) (web) merged Stream 3's #440 and Stream 1's #441 at 23:47:26Z, giving `9ec9b18f0`. Master is now `9ec9b18f0`.
   - The queue is empty and the runner has stopped. Reviewed heads are in `/private/tmp/pantopus-tools/merge-queue/reviewed-heads.txt`.
 - **Next batch 14 (native, one CI run):**
   - Stream 3 [#436](https://github.com/WangPantopus/skinny-pantopus/pull/436) at `45c492d4e`. The source review is done with no conflict against Stream 1 native, and the §8.2 review is pending its native CI.
   - Stream 2's native Mail PR; head pending, and it depends on #435, now merged.
-  - Stream 1's native PR from `claude/stream1-native-nav-feeds` `416953ad8`, rebased on `243279b76`. Contents:
+  - Stream 1's native PR [#439](https://github.com/WangPantopus/skinny-pantopus/pull/439) from `claude/stream1-native-nav-feeds` `416953ad8`, rebased on `243279b76`. Contents:
     - The Android tab bar lights the owning tab on child screens (public NavController API; `currentBackStack` is `@RestrictTo`).
     - C-17 Tasks chip during load (iOS and Android).
     - My posts keyset paging (iOS and Android).
-    - Device afters are in progress.
+    - The iOS afters passed, as did the Android tab bar and C-17. The Android My posts after-check is pending: emulator-5558 stalls under host load (peaked around 290).
 - **Stream 1 inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md` in the recovery audits.
   - Web Hub journeys PASS.
-  - FIXED: web Hub posts (#432), web location pickers (#433), web My pulse paging/error (#437).
+  - FIXED: web Hub posts (#432), web location pickers (#433), web My pulse paging/error (#437), web My listings counts/error (#441).
+  - Web Listing offers failed-load fix is committed on `claude/stream1-web-listing-offers-error` and needs a fixture check.
+  - Proposals awaiting the user:
+    - iOS homeowners cannot reach You: make the drawer pill open the profile.
+    - "just posted" should depend on post age.
   - C-02, C-18 and C-20 PASS on iOS master. Android C-32 PASS: missing post keeps Back plus "Go back"; "Report submitted" in success green. The one `PostReport` row was deleted exactly.
   - Android account switch PASS.
   - Still OPEN, with the root cause recorded: "0 comments · just posted" on day-old posts. The copy is keyed on "no comments", not on post age, and golden-pinned, so a proposal comes before any change.
