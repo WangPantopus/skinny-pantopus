@@ -29,9 +29,9 @@ export function followUpTemplate(
     case "completed":
       return `${hi}thanks for the time today, good to connect. Want to book again?`;
     case "no_show":
-      return `${hi}sorry we missed each other today. Here's a link to grab another time.`;
+      return `${hi}sorry we missed each other today. Would you like to find another time?`;
     case "rebook":
-      return `${hi}let's find a better time. Here's a link to rebook whenever works for you.`;
+      return `${hi}let's find a better time. Let me know what works for you.`;
     default:
       return "";
   }

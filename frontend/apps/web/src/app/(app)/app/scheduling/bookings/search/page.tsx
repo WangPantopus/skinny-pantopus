@@ -136,10 +136,13 @@ export default function BookingsSearchPage() {
 
   // Reflect filters into the URL for shareability (no history spam).
   useEffect(() => {
-    const qs = serializeFilters(filters);
+    const params = new URLSearchParams(key);
+    new URLSearchParams(ownerQueryString(owner)).forEach((value, name) => {
+      params.set(name, value);
+    });
+    const qs = params.toString();
     router.replace(qs ? `?${qs}` : "?", { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, owner, router]);
 
   const activeCount = countActiveFilters(filters);
 
@@ -262,6 +265,7 @@ export default function BookingsSearchPage() {
                 onFollowUp={() =>
                   setFollowUp({
                     id: b.id,
+                    eventTypeId: b.event_type_id,
                     title: eventTypeName(b.event_type_id),
                     subtitle: `${b.invitee_name ?? "Invitee"} · ${fmtDateTime(b.start_at, b.invitee_timezone)}`,
                     inviteeName: b.invitee_name,
