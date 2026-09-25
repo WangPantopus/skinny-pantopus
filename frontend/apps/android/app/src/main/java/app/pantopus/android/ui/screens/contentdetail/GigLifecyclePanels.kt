@@ -83,6 +83,8 @@ import java.util.Locale
 @Composable
 fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val bids by viewModel.bids.collectAsStateWithLifecycle()
+    val bidsReadError by viewModel.bidsReadError.collectAsStateWithLifecycle()
+    val bidsRefreshing by viewModel.bidsRefreshing.collectAsStateWithLifecycle()
     val offerRankings by viewModel.offerRankings.collectAsStateWithLifecycle()
     val bidActionInFlight by viewModel.bidActionInFlight.collectAsStateWithLifecycle()
     val bidCheckout by viewModel.bidCheckout.state.collectAsStateWithLifecycle()
@@ -124,6 +126,9 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onReject = { rejectTarget = it },
             onWithdrawCounter = { withdrawCounterTarget = it },
             rankings = offerRankings,
+            readError = bidsReadError,
+            refreshing = bidsRefreshing,
+            onRetry = viewModel::retryOwnerBids,
         )
     }
 
@@ -377,6 +382,9 @@ private fun GigOwnerBidsPanel(
     onReject: (GigBidDto) -> Unit,
     onWithdrawCounter: (GigBidDto) -> Unit,
     rankings: Map<String, GigOfferRanking> = emptyMap(),
+    readError: String? = null,
+    refreshing: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -392,7 +400,18 @@ private fun GigOwnerBidsPanel(
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
         )
-        if (bids.isEmpty()) {
+        if (readError != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Text(readError, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                if (bids.isNotEmpty()) {
+                    Text("Showing the last loaded bids.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+                }
+                TextButton(onClick = onRetry, enabled = !refreshing) {
+                    Text(if (refreshing) "Retrying…" else "Retry")
+                }
+            }
+        }
+        if (bids.isEmpty() && readError == null) {
             Box(
                 modifier =
                     Modifier

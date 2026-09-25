@@ -290,7 +290,10 @@ public struct GigDetailView: View {
                     onReject: { bid in rejectCandidate = bid },
                     onWithdrawCounter: { bid in withdrawCounterCandidate = bid },
                     onCancelPayment: { bid in Task { await cancelBidPayment(bid) } },
-                    rankings: viewModel.offerRankings
+                    rankings: viewModel.offerRankings,
+                    readError: viewModel.ownerBidsReadError,
+                    onRetry: { Task { await viewModel.retryOwnerBids() } },
+                    isRefreshing: viewModel.ownerBidsRefreshing
                 )
             }
             // Urgent / starts-asap live stepper (RN `ActiveTaskPanel`).
