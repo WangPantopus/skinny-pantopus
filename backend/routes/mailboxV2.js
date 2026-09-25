@@ -329,6 +329,11 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
     }
 
     const { data: mail, error, count } = await query;
+    // A page past the end (letters left the tab since the last page) is an
+    // empty page, not a server error; at most `offset` letters remain.
+    if (error?.code === 'PGRST103') {
+      return res.json({ mail: [], total: parseInt(offset), drawer });
+    }
     if (error) {
       logger.error('Failed to fetch drawer mail', { error: error.message, drawer });
       return res.status(500).json({ error: 'Failed to fetch mail' });
