@@ -1,6 +1,20 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — September 23, 2026, 02:10 UTC
+## CURRENT STREAM 1 STATE — September 25, 2026, 22:58 UTC
+
+Peer session; the hub [README](README.md) has the queue and batch state.
+
+- **Merged today:**
+  - #425: native Hub/Discover recovered, and fabricated Discover samples removed. Goldens re-recorded from CI.
+  - #432: web Hub "Posts" points to Pulse instead of a false empty.
+  - #433: web "Use current location" and Pulse place search go through the shared authenticated client (401 fixed).
+  - #437: web My pulse pages past 50, says "N+ posts", and shows an error state.
+  - Bundles in `.pantopus-recovery/audits`: `20260925-stream1-web-hub-posts-r1`, `-web-location-reverse-r1`, `-web-my-pulse-pages-r1`.
+- **In flight:** `claude/stream1-native-nav-feeds` (Android tab bar on child screens, C-17 Tasks, native My posts paging). Device afters, then a PR for native batch 14.
+- **Inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`. Task posting with a resolved address is a BOUNDARY here: Mapbox is the only geocoder, and there is no token.
+- **Gated as before:** S1-08 money ownership and A17 (founder). S1-09, S1-22 and S1-25 boundaries are not yet re-examined this session.
+
+## Previous Stream 1 state — September 23, 2026, 02:10 UTC
 
 The live queue, merges and cross-stream decisions are in the [coordination summary](README.md). The accounting table below is still authoritative; new evidence for each row:
 
