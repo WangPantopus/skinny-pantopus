@@ -5357,7 +5357,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onOpenBroadcast = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
-                        onOpenSettings = { navController.navigate(ChildRoutes.placeholder("Inbox settings")) },
+                        // No native DM-policy editor exists; the Beacon (tiers, messaging)
+                        // is set up and managed from the audience profile.
+                        onOpenSettings = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
                     )
                 }
                 composable(

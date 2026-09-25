@@ -1943,7 +1943,9 @@ public struct YouTabRoot: View {
                     Task { @MainActor in path.append(.audienceProfile) }
                 },
                 onOpenSettings: {
-                    Task { @MainActor in path.append(.placeholder(label: "Inbox settings")) }
+                    // No native DM-policy editor exists; the Beacon (tiers,
+                    // messaging) is set up and managed from the audience profile.
+                    Task { @MainActor in path.append(.audienceProfile) }
                 }
             )
         case let .creatorInboxConversation(dest):
