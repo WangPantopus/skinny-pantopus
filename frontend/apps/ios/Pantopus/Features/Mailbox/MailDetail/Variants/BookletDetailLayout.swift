@@ -30,6 +30,8 @@ struct BookletDetailLayout: View {
     /// T6.5e (P19.5) — Opens the host's Save-to-vault picker. Defaults
     /// to a no-op so existing call sites compile unchanged.
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
     /// A17.2 — fetches the rendered booklet PDF
     /// (`POST …/p2/booklet/:mailId/download`). RN reports the file size
     /// in the confirmation (`src/app/mailbox/booklet.tsx:43`).
@@ -56,6 +58,7 @@ struct BookletDetailLayout: View {
             actions: {
                 ActionsRow(
                     onSaveToVault: onSaveToVault,
+                    onArchive: onArchive,
                     onDownloadPDF: onDownloadPDF,
                     downloadInFlight: downloadInFlight
                 )
@@ -73,15 +76,15 @@ struct BookletDetailLayout: View {
             onBack: { @Sendable in Task { @MainActor in onBack() } },
             trailingAction: nil,
             overflowItems: [
-                MailOverflowItem(id: "share", icon: .share, label: "Share") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
                 MailOverflowItem(id: "download", icon: .download, label: "Save PDF") { @Sendable in
                     Task { @MainActor in onDownloadPDF() }
                 },
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {},
-                MailOverflowItem(id: "delete", icon: .trash2, label: "Delete", isDestructive: true) {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -150,6 +153,7 @@ struct BookletDetailLayout: View {
 
     private struct ActionsRow: View {
         let onSaveToVault: @MainActor () -> Void
+        let onArchive: @MainActor () -> Void
         let onDownloadPDF: @MainActor () -> Void
         let downloadInFlight: Bool
 
@@ -170,7 +174,6 @@ struct BookletDetailLayout: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("mailDetail_booklet_saveToVault")
                 HStack(spacing: Spacing.s2) {
-                    secondary(icon: .share, label: "Share") {}
                     secondary(
                         icon: .download,
                         label: "PDF",
@@ -178,7 +181,7 @@ struct BookletDetailLayout: View {
                         isDisabled: downloadInFlight,
                         action: onDownloadPDF
                     )
-                    secondary(icon: .archive, label: "Archive") {}
+                    secondary(icon: .archive, label: "Archive", action: onArchive)
                 }
             }
         }

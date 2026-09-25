@@ -19,8 +19,7 @@
 //  the backend hasn't populated it yet.
 //
 //  Actions slot is the RSVP chip row: Going (primary) / Maybe /
-//  Can't make it · plus a secondary row of Ask / Add housemate /
-//  Mute thread. The going-state collapses to a single "You're going"
+//  Can't make it. The going-state collapses to a single "You're going"
 //  pill button (tap to change).
 //
 
@@ -66,7 +65,7 @@ struct CommunityDetailLayout: View {
                         )
                     }
                     if let pulse = community.pulseThread {
-                        CommunityPulseThreadCard(thread: pulse, going: community.rsvp == .going)
+                        CommunityPulseThreadCard(thread: pulse)
                     }
                 }
             },
@@ -94,19 +93,9 @@ struct CommunityDetailLayout: View {
                 isActive: false
             ) { @Sendable in Task { @MainActor in onSaveToVault() } },
             overflowItems: [
-                MailOverflowItem(id: "share", icon: .share, label: "Share") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
-                },
-                MailOverflowItem(id: "addToCalendar", icon: .calendar, label: "Add to calendar") {},
-                MailOverflowItem(id: "mute", icon: .bell, label: "Mute thread") {},
-                MailOverflowItem(id: "report", icon: .info, label: "Report") {},
-                MailOverflowItem(
-                    id: "delete",
-                    icon: .trash2,
-                    label: "Delete",
-                    isDestructive: true
-                ) {}
+                }
             ]
         )
     }
@@ -859,7 +848,6 @@ private struct CommunityBodyCard: View {
 
 private struct CommunityPulseThreadCard: View {
     let thread: CommunityPulseThread
-    let going: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -900,24 +888,6 @@ private struct CommunityPulseThreadCard: View {
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            Button(action: {}) {
-                HStack(spacing: Spacing.s1) {
-                    Text(going ? "Open thread · you're in" : "Join the thread")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Theme.Color.primary700)
-                    Icon(.arrowRight, size: 13, color: Theme.Color.primary700)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(Theme.Color.appSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Theme.Color.primary200, lineWidth: 1.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("mailDetail_community_pulseThread")
         }
         .padding(Spacing.s3)
         .background(Theme.Color.appSurface)
@@ -1011,7 +981,6 @@ struct CommunityRsvpActions: View {
             } else {
                 rsvpChipRow
             }
-            secondaryRow
         }
     }
 
@@ -1077,36 +1046,5 @@ struct CommunityRsvpActions: View {
         .buttonStyle(.plain)
         .disabled(inFlight)
         .accessibilityIdentifier("mailDetail_community_rsvp_\(status.rawValue)")
-    }
-
-    private var secondaryRow: some View {
-        HStack(spacing: Spacing.s2) {
-            secondaryChip(icon: .messageSquarePlus, label: "Ask a question", id: "mailDetail_community_ask")
-            secondaryChip(icon: .users, label: "Add housemate", id: "mailDetail_community_addHousemate")
-            secondaryChip(icon: .bell, label: "Mute thread", id: "mailDetail_community_mute")
-        }
-    }
-
-    private func secondaryChip(icon: PantopusIcon, label: String, id: String) -> some View {
-        Button(action: {}) {
-            VStack(spacing: Spacing.s1) {
-                Icon(icon, size: 16, color: Theme.Color.appTextStrong)
-                Text(label)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(Theme.Color.appTextStrong)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Theme.Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(id)
     }
 }

@@ -79,9 +79,9 @@ public struct MailDetailView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("mailDetail")
         .task { await viewModel.load() }
-        // A dismissed letter has left the mailbox; the list has dropped it.
-        .onChange(of: viewModel.didDismiss) { _, dismissed in
-            if dismissed { onBack() }
+        // A dismissed or archived letter has left the mailbox; the list has dropped it.
+        .onChange(of: viewModel.didLeaveMailbox) { _, left in
+            if left { onBack() }
         }
         .onChange(of: viewModel.ceremonialRedirectMailId) { _, redirect in
             guard let redirect, let onOpenCeremonialMail else { return }
@@ -186,6 +186,7 @@ public struct MailDetailView: View {
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: onOpenSenderProfile,
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } },
                 onDownloadPDF: { Task { await viewModel.downloadBookletPDF() } },
                 downloadInFlight: viewModel.bookletDownloadInFlight
             )
@@ -205,6 +206,7 @@ public struct MailDetailView: View {
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: onOpenSenderProfile,
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } },
                 onOpenExtractedTask: onOpenExtractedTask.map { open in
                     { @MainActor in open(mailId) }
                 },
@@ -244,7 +246,8 @@ public struct MailDetailView: View {
                 onBack: { onBack() },
                 onRedeem: { Task { await viewModel.redeemCoupon() } },
                 onOpenSenderProfile: onOpenSenderProfile,
-                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
+                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } }
             )
         } else {
             generic(content)
@@ -262,6 +265,7 @@ public struct MailDetailView: View {
                 onAccept: { Task { await viewModel.acceptGigBid() } },
                 onOpenSenderProfile: onOpenSenderProfile,
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } },
                 paymentPending: viewModel.gigPaymentPending,
                 onCancelPayment: { Task { await viewModel.cancelGigPayment() } }
             )
@@ -280,7 +284,8 @@ public struct MailDetailView: View {
                 onBack: { onBack() },
                 onSaveMemory: { Task { await viewModel.saveMemoryToVault() } },
                 onOpenSenderProfile: onOpenSenderProfile,
-                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
+                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } }
             )
         } else {
             generic(content)
@@ -298,6 +303,7 @@ public struct MailDetailView: View {
                 onAcknowledgeDelivery: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: onOpenSenderProfile,
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } },
                 onOpenUnboxing: onOpenUnboxing,
                 // Offered only while posting a package task is available.
                 onAskNeighbor: PackageGigAvailability.isAvailable ? onAskNeighbor : nil,
@@ -339,7 +345,8 @@ public struct MailDetailView: View {
                 onBack: { onBack() },
                 onFileInVault: { Task { await viewModel.fileRecordToVault() } },
                 onOpenSenderProfile: onOpenSenderProfile,
-                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
+                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                onArchive: { Task { await viewModel.archive() } }
             )
         } else {
             generic(content)
@@ -354,6 +361,7 @@ public struct MailDetailView: View {
             onAcknowledge: { Task { await viewModel.acknowledge() } },
             onOpenSenderProfile: onOpenSenderProfile,
             onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+            onArchive: { Task { await viewModel.archive() } },
             onTranslate: onTranslate,
             onCreateTask: onCreateTask,
             categoryActions: viewModel.categoryActions.filter { $0 != .createTask || onCreateTask != nil },

@@ -23,6 +23,8 @@ struct CouponDetailLayout: View {
     let onRedeem: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
 
     var body: some View {
         MailItemDetailShell(
@@ -75,13 +77,12 @@ struct CouponDetailLayout: View {
                 accessibilityLabel: "Save to vault"
             ) { @Sendable in Task { @MainActor in onSaveToVault() } },
             overflowItems: [
-                MailOverflowItem(id: "share", icon: .share, label: "Share") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
-                MailOverflowItem(id: "addToWallet", icon: .wallet, label: "Add to wallet") {},
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {},
-                MailOverflowItem(id: "delete", icon: .trash2, label: "Delete", isDestructive: true) {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -301,8 +302,6 @@ private struct CouponActionsRow: View {
             primaryButton
             HStack(spacing: Spacing.s2) {
                 secondary(id: "save", icon: .bookmark, label: "Save", action: onSaveToVault)
-                secondary(id: "share", icon: .share, label: "Share")
-                secondary(id: "directions", icon: .mapPin, label: "Get directions")
             }
         }
     }

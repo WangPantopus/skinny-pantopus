@@ -32,6 +32,8 @@ struct CertifiedDetailLayout: View {
     /// just signals the trigger. Defaults to a no-op so existing call
     /// sites compile unchanged.
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
     /// A17.12 — opens the Elf-extracted task Pantopus made from this
     /// certified notice. `nil` hides the affordance (e.g. snapshot
     /// fixtures), so existing call sites compile unchanged.
@@ -108,13 +110,12 @@ struct CertifiedDetailLayout: View {
                 isActive: false
             ) { @Sendable in Task { @MainActor in onSaveToVault() } },
             overflowItems: [
-                MailOverflowItem(id: "forward", icon: .send, label: "Forward") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {},
-                MailOverflowItem(id: "report", icon: .info, label: "Report") {},
-                MailOverflowItem(id: "delete", icon: .trash2, label: "Delete", isDestructive: true) {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -381,10 +382,7 @@ struct CertifiedDetailLayout: View {
             columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)],
             spacing: Spacing.s2
         ) {
-            secondaryTile(icon: .dollarSign, label: "Pay")
-            secondaryTile(icon: .calendar, label: "Calendar")
-            secondaryTile(icon: .flag, label: "Dispute")
-            secondaryTile(icon: .archive, label: "Archive")
+            secondaryTile(icon: .archive, label: "Archive", action: onArchive)
             // A17.3 — the legal delivery proof only exists after the
             // acknowledgement is on file, so the tile appears with it.
             if content.isAcknowledged {
@@ -423,8 +421,12 @@ struct CertifiedDetailLayout: View {
         .accessibilityIdentifier("mailDetail_certified_proof")
     }
 
-    private func secondaryTile(icon: PantopusIcon, label: String) -> some View {
-        Button(action: {}) {
+    private func secondaryTile(
+        icon: PantopusIcon,
+        label: String,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        Button(action: { action() }) {
             HStack(spacing: Spacing.s2) {
                 Icon(icon, size: 15, color: Theme.Color.primary600)
                 Text(label)

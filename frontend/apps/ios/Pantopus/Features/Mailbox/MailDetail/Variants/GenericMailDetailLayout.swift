@@ -21,6 +21,8 @@ struct GenericMailDetailLayout: View {
     let onAcknowledge: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     let onSaveToVault: @MainActor () -> Void
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
     /// When set, the overflow menu gains a "Translate" action (A17.13).
     var onTranslate: (@MainActor @Sendable () -> Void)?
     /// A17.12 — when set, the overflow surfaces "Create task", which opens
@@ -74,7 +76,8 @@ struct GenericMailDetailLayout: View {
                     categoryActionInFlight: categoryActionInFlight,
                     onCategoryAction: onCategoryAction,
                     onAck: onAcknowledge,
-                    onMove: onSaveToVault
+                    onMove: onSaveToVault,
+                    onArchive: onArchive
                 )
             }
         )
@@ -142,12 +145,12 @@ struct GenericMailDetailLayout: View {
             )
         }
         items.append(contentsOf: [
-            MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {},
+            MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                Task { @MainActor in onArchive() }
+            },
             MailOverflowItem(id: "move", icon: .folderPlus, label: "Move") { @Sendable in
                 Task { @MainActor in onSaveToVault() }
-            },
-            MailOverflowItem(id: "share", icon: .share, label: "Share") {},
-            MailOverflowItem(id: "unread", icon: .mailOpen, label: "Mark unread") {}
+            }
         ])
         return items
     }
@@ -510,6 +513,7 @@ private struct ActionsRow: View {
     let onCategoryAction: (@MainActor (MailCategoryAction) -> Void)?
     let onAck: @MainActor () -> Void
     let onMove: @MainActor () -> Void
+    let onArchive: @MainActor () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
@@ -603,10 +607,8 @@ private struct ActionsRow: View {
 
     private var secondaryRow: some View {
         HStack(spacing: Spacing.s2) {
-            secondaryTile(id: "archive", icon: .archive, label: "Archive")
+            secondaryTile(id: "archive", icon: .archive, label: "Archive", action: onArchive)
             secondaryTile(id: "move", icon: .folderPlus, label: "Move", action: onMove)
-            secondaryTile(id: "share", icon: .share, label: "Share")
-            secondaryTile(id: "markUnread", icon: .mailOpen, label: "Mark unread")
         }
     }
 

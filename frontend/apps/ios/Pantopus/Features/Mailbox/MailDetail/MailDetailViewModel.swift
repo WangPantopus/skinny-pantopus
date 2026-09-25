@@ -74,8 +74,8 @@ public final class MailDetailViewModel {
     /// A17.1 — destructive category action awaiting confirmation
     /// (today only `Dismiss`, which shreds the item).
     public var pendingDestructiveAction: MailCategoryAction?
-    /// `true` once a confirmed Dismiss succeeded — the view closes.
-    public private(set) var didDismiss = false
+    /// `true` once Dismiss or Archive succeeded — the letter left the mailbox, so the view closes.
+    public private(set) var didLeaveMailbox = false
     /// Set to this mail's id when the loaded item carries a stationery
     /// theme — i.e. it came out of the Ceremonial Mail compose flow and
     /// belongs in the ceremonial open experience (envelope tap-to-open,
@@ -510,9 +510,29 @@ public final class MailDetailViewModel {
                 NotificationCenter.default.post(name: .mailboxMailLeftList, object: mailId)
             }
             // Dismiss promised the letter leaves the mailbox: close it.
-            if action == .dismiss { didDismiss = true }
+            if action == .dismiss { didLeaveMailbox = true }
         } catch {
             toast = (error as? APIError)?.errorDescription ?? "Action failed"
+        }
+    }
+
+    /// `true` while Archive is saving; a second tap meanwhile is ignored.
+    public private(set) var archiveInFlight = false
+
+    /// `PATCH /api/mailbox/:id/archive` — route `backend/routes/mailbox.js:2860`
+    /// (the web Mailbox's Archive). The letter leaves Incoming, so the open
+    /// list drops it and the view closes, like Dismiss.
+    public func archive() async {
+        guard case .loaded = state, !archiveInFlight else { return }
+        archiveInFlight = true
+        defer { archiveInFlight = false }
+        do {
+            let _: ArchiveMailResponse = try await api.request(MailboxEndpoints.archive(mailId: mailId))
+            toast = "Archived"
+            NotificationCenter.default.post(name: .mailboxMailLeftList, object: mailId)
+            didLeaveMailbox = true
+        } catch {
+            toast = (error as? APIError)?.errorDescription ?? "Couldn't archive this mail. Try again."
         }
     }
 
