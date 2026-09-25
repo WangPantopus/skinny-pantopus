@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
 import type { ListingStatus } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
 import { Tag } from 'lucide-react';
 import type { Listing } from '@pantopus/types';
 import { ListArchetype } from '@/components/archetypes';
@@ -44,34 +45,41 @@ function formatDate(d: string) {
 
 export default function MyListingsPage() {
   const router = useRouter();
-  const [listings, setListings] = useState<Listing[]>([]);
+  // The full set, fetched once; the tabs bucket it client-side so every
+  // tab's count stays honest (as the iOS and Android My listings do).
+  const [allListings, setAllListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>('all');
+  // Bumped by every load so a response that lands after a newer one is dropped.
+  const loadGeneration = useRef(0);
 
-  useEffect(() => {
-    loadListings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
-
-  const loadListings = async () => {
+  const loadListings = useCallback(async () => {
     const token = getAuthToken();
     if (!token) { router.push('/login'); return; }
 
+    const generation = ++loadGeneration.current;
     setLoading(true);
+    setLoadError(false);
     try {
-      const result = await api.listings.getMyListings({
-        limit: 100,
-        status: filter === 'all' ? undefined : filter as Listing['status'],
-      });
+      const result = await api.listings.getMyListings({ limit: 100 });
+      if (generation !== loadGeneration.current) return;
       const resObj = result as Record<string, any>;
-      setListings((resObj?.listings || []) as Listing[]);
+      setAllListings((resObj?.listings || []) as Listing[]);
     } catch (err) {
+      if (generation !== loadGeneration.current) return;
       console.error('Failed to load my listings:', err);
-      setListings([]);
+      // A failed load is not an empty shop: say so and offer a retry.
+      setAllListings([]);
+      setLoadError(true);
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => { void loadListings(); }, [loadListings]);
+
+  const listings = filter === 'all' ? allListings : allListings.filter((l) => l.status === filter);
 
   const handleQuickStatus = async (listingId: string, status: string) => {
     try {
@@ -82,14 +90,14 @@ export default function MyListingsPage() {
     }
   };
 
-  // ── Counts per status (from current full dataset) ───────────
+  // ── Counts per status (from the full dataset) ───────────
   const counts: Record<string, number> = {
-    all: listings.length,
-    active: listings.filter(l => l.status === 'active').length,
-    pending_pickup: listings.filter(l => l.status === 'pending_pickup').length,
-    sold: listings.filter(l => l.status === 'sold').length,
-    archived: listings.filter(l => l.status === 'archived').length,
-    draft: listings.filter(l => l.status === 'draft').length,
+    all: allListings.length,
+    active: allListings.filter(l => l.status === 'active').length,
+    pending_pickup: allListings.filter(l => l.status === 'pending_pickup').length,
+    sold: allListings.filter(l => l.status === 'sold').length,
+    archived: allListings.filter(l => l.status === 'archived').length,
+    draft: allListings.filter(l => l.status === 'draft').length,
   };
 
   return (
@@ -97,7 +105,7 @@ export default function MyListingsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <ListArchetype<Listing>
           title="My listings"
-          subtitle={`${listings.length} total · ${counts.active} active`}
+          subtitle={loadError ? undefined : `${allListings.length} total · ${counts.active} active`}
           primaryAction={{
             label: 'New listing',
             onClick: () => router.push('/app/marketplace?create=true'),
@@ -105,7 +113,8 @@ export default function MyListingsPage() {
           tabs={STATUS_TABS.map((t) => ({
             key: t.key,
             label: t.label,
-            count: counts[t.key] ?? 0,
+            // No counts when loading failed: zero would read as an empty shop.
+            count: loadError ? null : counts[t.key] ?? 0,
           }))}
           activeTabKey={filter}
           onTabChange={(k) => setFilter(k as FilterStatus)}
@@ -136,6 +145,14 @@ export default function MyListingsPage() {
             ctaLabel: 'Create listing',
             onCtaClick: () => router.push('/app/marketplace?create=true'),
           }}
+          renderEmpty={loadError ? () => (
+            <div role="alert">
+              <ErrorState
+                message="We couldn't load your listings. Please try again."
+                onRetry={() => { void loadListings(); }}
+              />
+            </div>
+          ) : undefined}
         />
       </main>
     </div>

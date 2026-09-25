@@ -65,6 +65,8 @@ export default function ChatListPage() {
   );
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);
   const loading = conversationsQuery.isPending;
+  // A failed first read has no list to describe: no count, no empty-inbox card.
+  const listFailed = conversationsQuery.isError && !conversationsQuery.data;
   const error = conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
@@ -299,7 +301,7 @@ export default function ChatListPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <PageHeader
           title="Messages"
-          subtitle={totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} conversations`}
+          subtitle={listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} conversations`}
           ctaLabel="New message"
           ctaOnClick={openNewChat}
         >
@@ -342,7 +344,7 @@ export default function ChatListPage() {
               </div>
             ))}
           </div>
-        ) : conversations.length === 0 ? (
+        ) : listFailed ? null : conversations.length === 0 ? (
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><MessageCircle className="w-10 h-10 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No messages yet</div>
