@@ -3,9 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { MapPin, Search } from 'lucide-react';
 import * as api from '@pantopus/api';
-import { getAuthToken } from '@pantopus/api';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface PostLocation {
   latitude: number;
@@ -41,6 +38,8 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [error, setError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,6 +67,7 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
 
   // Autocomplete search
   useEffect(() => {
+    setSearchFailed(false);
     if (!debouncedQuery || debouncedQuery.length < 3 || mode !== 'search') {
       setSuggestions([]);
       return;
@@ -80,28 +80,24 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
     (async () => {
       setLoading(true);
       try {
-        const token = getAuthToken();
-        const r = await fetch(
-          `${API_BASE}/api/geo/autocomplete?q=${encodeURIComponent(debouncedQuery)}`,
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            signal: controller.signal,
-          }
-        );
-        const data = await r.json();
+        // Same-origin shared client, so the web session cookie authenticates it.
+        const data = await api.geo.autocompleteWithAbort(debouncedQuery, controller.signal);
         if (!controller.signal.aborted) {
           setSuggestions(data?.suggestions || []);
         }
-      } catch (e: unknown) {
-        if (e instanceof Error && e.name !== 'AbortError') setSuggestions([]);
-        else if (!(e instanceof Error)) setSuggestions([]);
+      } catch {
+        // A failed search is not "No results found".
+        if (!controller.signal.aborted) {
+          setSuggestions([]);
+          setSearchFailed(true);
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
 
     return () => controller.abort();
-  }, [debouncedQuery, mode]);
+  }, [debouncedQuery, mode, searchAttempt]);
 
   // Select a suggestion
   const handleSelectSuggestion = async (suggestion: Record<string, any>) => {
@@ -153,13 +149,12 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          const token = getAuthToken();
-          const r = await fetch(
-            `${API_BASE}/api/geo/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-          const data = await r.json();
-          const n = data?.normalized;
+          let n: { address?: string; city?: string } | undefined;
+          try {
+            n = (await api.geo.reverseGeocode(latitude, longitude))?.normalized;
+          } catch {
+            n = undefined; // Keep the GPS point with a coordinate label, as before.
+          }
 
           if (n?.address) {
             const city = n.city || '';
@@ -332,7 +327,19 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
 
           {/* Results */}
           <div className="max-h-48 overflow-y-auto">
-            {suggestions.length === 0 && query.length >= 3 && !loading && (
+            {searchFailed && query.length >= 3 && !loading && (
+              <div className="px-3 py-4 text-center text-xs text-app-muted">
+                Couldn&apos;t search places right now.{' '}
+                <button
+                  type="button"
+                  onClick={() => setSearchAttempt((n) => n + 1)}
+                  className="font-semibold text-primary-600 hover:underline"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {!searchFailed && suggestions.length === 0 && query.length >= 3 && !loading && (
               <div className="px-3 py-4 text-center text-xs text-app-muted">No results found</div>
             )}
             {suggestions.length === 0 && query.length < 3 && (
