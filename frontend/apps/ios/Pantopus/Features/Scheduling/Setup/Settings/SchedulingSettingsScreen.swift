@@ -123,12 +123,16 @@ struct SchedulingSettingsScreen: View {
                 sub: "Your weekly hours",
                 trailing: .chevron
             ) { model.openAvailability() }
-            SettingsDivider()
-            SettingsRow(
-                label: "Cancellation policy",
-                sub: nil,
-                trailing: cancellationTrailing
-            ) { model.openCancellationPolicy() }
+            // The policy editor is a paid surface; with paid scheduling off it only
+            // says "coming soon", so the row is gated like the Payments group.
+            if model.paidEnabled {
+                SettingsDivider()
+                SettingsRow(
+                    label: "Cancellation policy",
+                    sub: nil,
+                    trailing: cancellationTrailing
+                ) { model.openCancellationPolicy() }
+            }
         }
     }
 

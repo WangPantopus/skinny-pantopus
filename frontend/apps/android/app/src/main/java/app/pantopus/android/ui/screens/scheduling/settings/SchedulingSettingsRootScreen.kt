@@ -167,30 +167,39 @@ private fun SettingsBody(
                     }
                 },
             )
-            SettingsRow(label = "Default availability", sublabel = "Your weekly hours", onClick = { onNavigate(vm.availabilityRoute()) })
-            val cancelSaving = data.savingRow == "cancellation"
-            val cancelSaved = data.justSavedRow == "cancellation"
             SettingsRow(
-                label = "Cancellation policy",
-                sublabel = null,
-                showDivider = false,
-                onClick = { onNavigate(vm.cancellationPolicyRoute()) },
-                trailing = {
-                    when {
-                        cancelSaving -> SettingsRowShimmer(width = 84.dp)
-                        cancelSaved ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                            ) {
-                                SettingsSavedChip()
-                                SettingsChevron()
-                            }
-                        !data.hasCancellationPolicy -> SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus)
-                        else -> SettingsChevron()
-                    }
-                },
+                label = "Default availability",
+                sublabel = "Your weekly hours",
+                showDivider = data.paidEnabled,
+                onClick = { onNavigate(vm.availabilityRoute()) },
             )
+            // The policy editor is a paid surface; with paid scheduling off it only
+            // says "coming soon", so the row is gated like the Payments group.
+            if (data.paidEnabled) {
+                val cancelSaving = data.savingRow == "cancellation"
+                val cancelSaved = data.justSavedRow == "cancellation"
+                SettingsRow(
+                    label = "Cancellation policy",
+                    sublabel = null,
+                    showDivider = false,
+                    onClick = { onNavigate(vm.cancellationPolicyRoute()) },
+                    trailing = {
+                        when {
+                            cancelSaving -> SettingsRowShimmer(width = 84.dp)
+                            cancelSaved ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                ) {
+                                    SettingsSavedChip()
+                                    SettingsChevron()
+                                }
+                            !data.hasCancellationPolicy -> SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus)
+                            else -> SettingsChevron()
+                        }
+                    },
+                )
+            }
         }
         if (data.paidEnabled) {
             SettingsGroup(title = "Payments", accent = accent, helper = "Required only for paid event types.") {
