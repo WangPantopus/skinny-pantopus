@@ -1831,11 +1831,12 @@ public struct YouTabRoot: View {
             YourAudienceView { Task { @MainActor in pop() } }
         case .beaconsFeed:
             BeaconsFeedView(
-                onOpenPost: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Post")) }
+                // Same wiring as the Hub stack's Beacon Updates.
+                onOpenPost: { postId in
+                    Task { @MainActor in path.append(.pulsePost(postId: postId)) }
                 },
-                onCompose: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Compose")) }
+                onCompose: { intent in
+                    Task { @MainActor in path.append(.composePost(intent: intent.rawValue)) }
                 },
                 onDiscover: {
                     Task { @MainActor in path.append(.placeholder(label: "Discover beacons")) }
