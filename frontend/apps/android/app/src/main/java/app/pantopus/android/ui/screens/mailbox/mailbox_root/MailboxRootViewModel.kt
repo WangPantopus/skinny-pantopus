@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.mailbox.mailbox_root
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -160,8 +163,9 @@ class MailboxRootViewModel
         private var loadMoreError: String? = null
 
         /** Per-drawer unread counts from `GET /api/mailbox/v2/drawers`,
-         *  keyed by backend drawer key (`personal`/`home`/`business`/`earn`). */
-        private var drawerUnread: Map<String, Int> = emptyMap()
+         *  keyed by backend drawer key (`personal`/`home`/`business`/`earn`).
+         *  Compose state, so the drawer chips redraw when a refresh changes it. */
+        private var drawerUnread: Map<String, Int> by mutableStateOf(emptyMap())
 
         init {
             // A letter dismissed or filed from its detail leaves this tab: drop
@@ -339,6 +343,8 @@ class MailboxRootViewModel
                 refresh()
             } else {
                 applyLiveState(_selectedDrawer.value, _selectedTab.value)
+                // The letter no longer counts toward its drawer's unread badge.
+                viewModelScope.launch { fetchDrawerBadges() }
             }
         }
 

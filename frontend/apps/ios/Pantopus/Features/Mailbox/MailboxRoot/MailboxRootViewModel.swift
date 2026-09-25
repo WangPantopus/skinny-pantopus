@@ -456,6 +456,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             Task { @MainActor in await refresh() }
         } else {
             applyLiveState(drawer: selectedDrawer, tab: currentTab)
+            // The letter no longer counts toward its drawer's unread badge.
+            Task { @MainActor in await fetchDrawerBadges() }
         }
     }
 
