@@ -39,6 +39,7 @@ import {
   type Pillar,
 } from "@/components/scheduling/pillarTokens";
 import { decodeError } from "@/components/scheduling/decodeError";
+import { webFeatureFlags } from "@/lib/featureFlags";
 import TimezoneSelector, {
   zoneLabel,
 } from "@/components/scheduling/TimezoneSelector";
@@ -365,56 +366,63 @@ export default function BookingSettings() {
                   href={`${BASE}/availability`}
                   right={<Chevron />}
                 />
-                <Row
-                  icon={CalendarX}
-                  label="Cancellation policy"
-                  sub={cancellationLabel(page.cancellation_policy) ?? undefined}
-                  href={`${BASE}/payments/policy`}
-                  right={
-                    cancellationLabel(page.cancellation_policy) ? (
-                      <Chevron />
-                    ) : (
-                      <ChipChevron>
-                        <Chip tone="warning">Set up</Chip>
-                      </ChipChevron>
-                    )
-                  }
-                />
+                {/* The policy editor and payments pages only say "Paid
+                    scheduling is turned off" until paid scheduling is on,
+                    so their entries are hidden with it (native does the same). */}
+                {webFeatureFlags.schedulingPaid && (
+                  <Row
+                    icon={CalendarX}
+                    label="Cancellation policy"
+                    sub={cancellationLabel(page.cancellation_policy) ?? undefined}
+                    href={`${BASE}/payments/policy`}
+                    right={
+                      cancellationLabel(page.cancellation_policy) ? (
+                        <Chevron />
+                      ) : (
+                        <ChipChevron>
+                          <Chip tone="warning">Set up</Chip>
+                        </ChipChevron>
+                      )
+                    }
+                  />
+                )}
               </Card>
             </section>
 
-            <section>
-              <AccentOverline pillar={pillar} className="pb-2 pt-4">
-                Payments
-              </AccentOverline>
-              {/* stripeConnected: no backend field available yet — renders ConnectPill (fresh state) per design placeholder */}
-              {(() => {
-                const stripeConnected = !!(page as unknown as Record<string, unknown>)["payments_connected"];
-                return (
-                  <Card helper="Required only for paid event types.">
-                    <Row
-                      icon={CreditCard}
-                      label="Payments & payouts"
-                      sub={stripeConnected ? "Stripe · ••••" : "Take payment at booking"}
-                      href={stripeConnected ? `${BASE}/payments` : undefined}
-                      onClick={stripeConnected ? undefined : () => router.push(`${BASE}/payments`)}
-                      right={
-                        stripeConnected ? (
-                          <ChipChevron>
-                            <Chip tone="success" icon={Check}>Connected</Chip>
-                          </ChipChevron>
-                        ) : (
-                          <ConnectPill
-                            pillar={pillar}
-                            onClick={() => router.push(`${BASE}/payments`)}
-                          />
-                        )
-                      }
-                    />
-                  </Card>
-                );
-              })()}
-            </section>
+            {webFeatureFlags.schedulingPaid && (
+              <section>
+                <AccentOverline pillar={pillar} className="pb-2 pt-4">
+                  Payments
+                </AccentOverline>
+                {/* stripeConnected: no backend field available yet — renders ConnectPill (fresh state) per design placeholder */}
+                {(() => {
+                  const stripeConnected = !!(page as unknown as Record<string, unknown>)["payments_connected"];
+                  return (
+                    <Card helper="Required only for paid event types.">
+                      <Row
+                        icon={CreditCard}
+                        label="Payments & payouts"
+                        sub={stripeConnected ? "Stripe · ••••" : "Take payment at booking"}
+                        href={stripeConnected ? `${BASE}/payments` : undefined}
+                        onClick={stripeConnected ? undefined : () => router.push(`${BASE}/payments`)}
+                        right={
+                          stripeConnected ? (
+                            <ChipChevron>
+                              <Chip tone="success" icon={Check}>Connected</Chip>
+                            </ChipChevron>
+                          ) : (
+                            <ConnectPill
+                              pillar={pillar}
+                              onClick={() => router.push(`${BASE}/payments`)}
+                            />
+                          )
+                        }
+                      />
+                    </Card>
+                  );
+                })()}
+              </section>
+            )}
 
             <section>
               <AccentOverline
