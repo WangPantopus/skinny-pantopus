@@ -474,10 +474,16 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     // Update lifecycle based on action
     const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
     if (lifecycleMap[action]) {
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('Mail')
         .update({ lifecycle: lifecycleMap[action] })
         .eq('id', id);
+      // supabase-js reports a failed write instead of throwing: without this
+      // check the apps said "Dismissed"/"Filed" for mail that did not move.
+      if (updateError) {
+        logger.error('Mail action lifecycle update failed', { mailId: id, action, error: updateError.message });
+        return res.status(500).json({ error: "Couldn't update this mail. Please try again." });
+      }
     }
 
     await logMailEvent(`mail_action_clicked`, id, userId, { action_type: action });
