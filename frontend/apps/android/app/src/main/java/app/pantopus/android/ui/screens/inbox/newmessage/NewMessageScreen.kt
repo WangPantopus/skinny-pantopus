@@ -107,6 +107,12 @@ fun NewMessageScreen(
                     )
                 is NewMessageUiState.Loaded ->
                     LoadedFrame(sections = s.sections, onTap = viewModel::tapRow)
+                NewMessageUiState.SearchFailed ->
+                    ErrorFrame(
+                        title = "Couldn't search right now",
+                        message = "Check your connection and try again.",
+                        onRetry = viewModel::retrySearch,
+                    )
                 is NewMessageUiState.Error ->
                     ErrorFrame(message = s.message, onRetry = viewModel::refresh)
             }
@@ -704,6 +710,7 @@ private fun AvatarWithBadge(row: NewMessageContactRow) {
 private fun ErrorFrame(
     message: String,
     onRetry: () -> Unit,
+    title: String = "Couldn't load contacts",
 ) {
     Column(
         modifier =
@@ -722,7 +729,7 @@ private fun ErrorFrame(
         )
         Spacer(modifier = Modifier.size(Spacing.s3))
         Text(
-            text = "Couldn't load contacts",
+            text = title,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
