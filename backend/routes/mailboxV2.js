@@ -278,7 +278,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
 router.get('/drawer/:drawer', verifyToken, async (req, res) => {
   try {
     const { drawer } = req.params;
-    const { tab, limit = 50, offset = 0 } = req.query;
+    const { tab, filter, limit = 50, offset = 0 } = req.query;
     const userId = req.user.id;
 
     if (!['personal', 'home', 'business', 'earn'].includes(drawer)) {
@@ -319,7 +319,21 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.eq('lifecycle', 'filed');
     }
 
+    // Web drawer filter: the same fields the web row shows as unread, urgent and starred.
+    if (filter === 'unread') {
+      query = query.is('opened_at', null);
+    } else if (filter === 'urgent') {
+      query = query.in('urgency', ['time_sensitive', 'overdue', 'due_soon']);
+    } else if (filter === 'starred') {
+      query = query.eq('starred', true);
+    }
+
     const { data: mail, error, count } = await query;
+    // A page past the end (letters left the tab since the last page) is an
+    // empty page, not a server error; at most `offset` letters remain.
+    if (error?.code === 'PGRST103') {
+      return res.json({ mail: [], total: parseInt(offset), drawer });
+    }
     if (error) {
       logger.error('Failed to fetch drawer mail', { error: error.message, drawer });
       return res.status(500).json({ error: 'Failed to fetch mail' });
@@ -474,10 +488,16 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     // Update lifecycle based on action
     const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
     if (lifecycleMap[action]) {
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('Mail')
         .update({ lifecycle: lifecycleMap[action] })
         .eq('id', id);
+      // supabase-js reports a failed write instead of throwing: without this
+      // check the apps said "Dismissed"/"Filed" for mail that did not move.
+      if (updateError) {
+        logger.error('Mail action lifecycle update failed', { mailId: id, action, error: updateError.message });
+        return res.status(500).json({ error: "Couldn't update this mail. Please try again." });
+      }
     }
 
     await logMailEvent(`mail_action_clicked`, id, userId, { action_type: action });
