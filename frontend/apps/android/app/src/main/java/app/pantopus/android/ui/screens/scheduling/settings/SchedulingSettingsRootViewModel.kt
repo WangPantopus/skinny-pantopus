@@ -210,7 +210,7 @@ class SchedulingSettingsRootViewModel
 
         fun availabilityRoute() = SchedulingRoutes.AVAILABILITY_LIST
 
-        fun cancellationPolicyRoute() = SchedulingRoutes.CANCELLATION_REFUND_POLICY
+        fun cancellationPolicyRoute() = SchedulingRoutes.cancellationRefundPolicy(owner.routeKind, owner.ownerRouteId)
 
         fun paymentsRoute() = SchedulingRoutes.PAYMENTS_SETUP
 

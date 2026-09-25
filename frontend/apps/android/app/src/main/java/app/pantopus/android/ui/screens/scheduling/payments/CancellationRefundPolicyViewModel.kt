@@ -9,10 +9,10 @@ import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.models.scheduling.UpdateEventTypeRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
+import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -43,7 +43,6 @@ class CancellationRefundPolicyViewModel
     constructor(
         private val repo: SchedulingRepository,
         private val flags: SchedulingFeatureFlags,
-        auth: AuthRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /** The four refund presets. The raw name is what page-level stores. */
@@ -62,12 +61,14 @@ class CancellationRefundPolicyViewModel
         }
 
         private val eventTypeId: String? = savedStateHandle[EVENT_TYPE_ID_KEY]
+
+        // The owner being managed comes from the route (Personal, Home or a managed
+        // Business). Never the signed-in user's own id as a business.
         private val owner: SchedulingOwner =
-            (auth.state.value as? AuthRepository.State.SignedIn)
-                ?.user
-                ?.id
-                ?.let { SchedulingOwner.Business(it) }
-                ?: SchedulingOwner.Personal
+            SchedulingOwner.fromRoute(
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_KIND],
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_ID],
+            )
 
         private val _state = MutableStateFlow<CancellationPolicyUiState>(CancellationPolicyUiState.Loading)
         val state: StateFlow<CancellationPolicyUiState> = _state.asStateFlow()
