@@ -529,7 +529,7 @@ router.post('/route', verifyToken, async (req, res) => {
 
     if (result.drawer) {
       // Auto-route
-      await supabaseAdmin
+      const { error: routeError } = await supabaseAdmin
         .from('Mail')
         .update({
           drawer: result.drawer,
@@ -538,6 +538,11 @@ router.post('/route', verifyToken, async (req, res) => {
           routing_method: result.method,
         })
         .eq('id', mailId);
+      // supabase-js reports a failed write instead of throwing.
+      if (routeError) {
+        logger.error('Route update failed', { mailId, error: routeError.message });
+        return res.status(500).json({ error: "Couldn't route this mail. Please try again." });
+      }
 
       await logMailEvent('mail_delivered', mailId, req.user.id, {
         drawer: result.drawer,
@@ -590,7 +595,7 @@ router.post('/resolve', verifyToken, validate(resolveRoutingSchema), async (req,
     if (!mail || !(await canAccessMail(mail, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const privacyMap = { personal: 'private_to_person', home: 'shared_household', business: 'business_team' };
-    await supabaseAdmin
+    const { error: resolveError } = await supabaseAdmin
       .from('Mail')
       .update({
         drawer,
@@ -600,6 +605,12 @@ router.post('/resolve', verifyToken, validate(resolveRoutingSchema), async (req,
         recipient_user_id: drawer === 'personal' ? userId : mail.recipient_user_id,
       })
       .eq('id', mailId);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the queue entry was marked resolved for mail that never moved.
+    if (resolveError) {
+      logger.error('Resolve update failed', { mailId, drawer, error: resolveError.message });
+      return res.status(500).json({ error: "Couldn't move this mail. Please try again." });
+    }
 
     // Mark routing queue as resolved
     await supabaseAdmin
