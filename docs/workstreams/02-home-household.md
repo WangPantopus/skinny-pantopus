@@ -2,6 +2,19 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 12:05Z (#519 guest-pass entry opened; #512 in batch 27 #517)**
+
+- **#512 (decision 1)** is in batch 27 ([#517](https://github.com/WangPantopus/skinny-pantopus/pull/517)) with #509/#510/#511/#514/#516; Stream 1 reviewed the placement commit and the purge.
+- **New: PR [519](https://github.com/WangPantopus/skinny-pantopus/pull/519) (M02).** Branch `claude/stream2-guest-pass-entry`, head `ca14b603b` on `9ac4a7cdf`, 3 files; CI started.
+  - **Problem (reproduced on all three platforms as member B):** Home settings showed "Invite link" (apps) / "Guest Passes" (web) to every member. Without `members.manage`, opening it only errored ("This share link is no longer available to you."), with a Try again / create that could never work.
+  - **Fix:** the entry is gated on `/me` `members.manage`, the same flag the native Members screens already use; it still shows if `/me` fails.
+  - **Evidence:** bundle `20260926-stream2-guest-pass-entry-r1`, MANIFEST `030e8e4bac17dc27c55b0df2d773c306624a8b72158393f2ede368510b398cd0` (APK `e805c7da…`, dylib `22531f11…`).
+- **Heavy and devices:**
+  - Heavy 11:51:35–11:59:37Z.
+  - iOS driver 11:51–12:00:18Z. Device slot 1 was registered late (11:57:56Z) after booting at 11:52Z; noted and corrected.
+  - Everything shared is released to Stream 1.
+- **Possible follow-ups:** a member without `access.view_codes` still sees "Access codes", but that 403 message is clear; the native Dismiss confirm copy doesn't mention the household (after #512 lands).
+
 **Stream 2 — 2026-09-26 11:40Z (#503 merged; #512 green, in batch 27)**
 
 - **#503 (decision 4)** merged in batch 26 (#513, master `9ac4a7cdf`).
@@ -538,7 +551,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
 | M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
-| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
 | M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
 | M04 | **Partial/open.** 2026-09-26: certified Received/Read/Signed and recipient-only signing on all three platforms ([#503](https://github.com/WangPantopus/skinny-pantopus/pull/503), bundle `20260926-stream2-certified-statuses-r1`). | Reachable conversions, translations, physical-mail and neighbor-request behavior; no production path sends certified mail yet. |
 
