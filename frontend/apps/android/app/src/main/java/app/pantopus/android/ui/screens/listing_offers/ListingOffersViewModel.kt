@@ -569,7 +569,13 @@ class ListingOffersViewModel
                 }
             }
 
-            fun formatPrice(amount: Double?): String = if (amount == null) "$—" else "$${kotlin.math.round(amount).toInt()}"
+            /** `12` → `"$12"`, `12.5` → `"$12.50"`: an offer shows its exact amount, with cents only when it has them. */
+            fun formatPrice(amount: Double?): String =
+                when {
+                    amount == null -> "$—"
+                    amount % 1.0 == 0.0 -> "$${amount.toInt()}"
+                    else -> String.format(Locale.US, "$%.2f", amount)
+                }
 
             fun formatAskingSublabel(askingPrice: Double?): String? {
                 val price = askingPrice ?: return null

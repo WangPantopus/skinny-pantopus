@@ -1169,11 +1169,11 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// `12` → `"$12"`, `12.5` → `"$13"`. Truncated to whole dollars to
-    /// match the design's $-prefix headline price.
+    /// `12` → `"$12"`, `12.5` → `"$12.50"`: an offer shows its exact
+    /// amount, with cents only when it has them.
     public static func formatPrice(_ amount: Double?) -> String {
         guard let amount else { return "$—" }
-        return "$\(Int(amount.rounded()))"
+        return amount.truncatingRemainder(dividingBy: 1) == 0 ? "$\(Int(amount))" : String(format: "$%.2f", amount)
     }
 
     /// Sub-label used by the price stack: `"asking $240"`.
