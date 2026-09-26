@@ -134,13 +134,34 @@ public final class MailDetailViewModel {
                 ceremonialRedirectMailId = mailId
                 return
             }
-            state = .loaded(Self.project(detail: response.mail, now: now()))
+            let content = Self.project(detail: response.mail, now: now())
+            state = .loaded(content)
+            // Certified mail stays unread until it is signed: its Sign for
+            // delivery confirmation keys on unread.
+            let signable = content.certifiedDetail != nil && !content.isAcknowledged
+            // Unstructured so leaving the letter at once still records the
+            // read; awaited so the load finishes with it.
+            if !response.mail.item.viewed, !signable { await Task { await markViewed() }.value }
             await refreshGigPaymentProgress()
         } catch {
             state = .error(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't load this item."
             )
         }
+    }
+
+    /// Opening a letter reads it, as on the web: the same view endpoint marks
+    /// it read on every client (and sets an ad letter's payout pending once).
+    /// A failure leaves it unread for the next open.
+    private func markViewed() async {
+        let response: MarkMailViewedResponse? = try? await api.request(
+            MailboxEndpoints.markViewed(mailId: mailId)
+        )
+        guard response != nil else { return }
+        if case let .loaded(content) = state {
+            state = .loaded(MailDetailContent.replacingRead(content))
+        }
+        NotificationCenter.default.post(name: .mailboxMailViewed, object: mailId)
     }
 
     // MARK: - Mutations

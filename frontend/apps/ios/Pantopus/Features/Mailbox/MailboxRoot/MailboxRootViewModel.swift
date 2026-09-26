@@ -8,6 +8,8 @@ public extension Notification.Name {
     /// out of its Mailbox tab: Dismiss shreds it, File and Save to vault file it,
     /// Archive archives it.
     static let mailboxMailLeftList = Notification.Name("mailboxMailLeftList")
+    /// Posted with a letter's id as `object` after opening it marked it read.
+    static let mailboxMailViewed = Notification.Name("mailboxMailViewed")
 }
 
 /// The four mailbox drawers. `business` carries the "Biz" short label
@@ -248,6 +250,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     private var offset = 0
     private var hasMore = false
     private var loadedMail: [DrawerItemsResponse.DrawerMail] = []
+    /// Letters opened (and so read) since they loaded: their rows lose the
+    /// unread highlight without a reload.
+    private var viewedMailIds: Set<String> = []
     private var isLoadingPage = false
     /// Bumped on every combo reload so a late in-flight page from a
     /// previous (drawer, tab) is discarded instead of clobbering the
@@ -462,6 +467,17 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
     }
 
+    /// Opening a letter marked it read: clear its row's unread highlight and
+    /// refresh the drawer badges it counted toward.
+    public func markLoadedMailViewed(_ mailId: String) {
+        guard sampleProvider == nil else { return }
+        viewedMailIds.insert(mailId)
+        if loadedMail.contains(where: { $0.id == mailId }) {
+            applyLiveState(drawer: selectedDrawer, tab: currentTab)
+        }
+        Task { @MainActor in await fetchDrawerBadges() }
+    }
+
     public func selectDrawer(_ drawer: MailboxDrawer) {
         selectedDrawer = drawer
     }
@@ -573,7 +589,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             let rows = loadedMail.map { mail in
                 MailboxListViewModel.makeRow(
                     for: mail.item,
-                    trust: MailTrust.fromRaw(mail.senderTrust)
+                    trust: MailTrust.fromRaw(mail.senderTrust),
+                    viewed: viewedMailIds.contains(mail.id)
                 ) { [weak self] mailId in
                     Task { @MainActor in self?.onOpenMail(mailId) }
                 }

@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.mailbox.EarningsHistoryResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
+import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CancelVacationRequest
 import app.pantopus.android.data.api.models.mailbox.v2.CancelVacationResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpRequest
@@ -84,6 +85,9 @@ class MailboxRepository
         /** `GET /api/mailbox/:id` — V1 detail route used by the new
          *  generic A17.1 detail screen (T6.5b / P20). */
         suspend fun detail(mailId: String): NetworkResult<MailDetailResponse> = safeApiCall { mailboxApi.detail(mailId) }
+
+        /** `PATCH /api/mailbox/:id/view` — opening a letter reads it, as on the web. */
+        suspend fun markViewed(mailId: String): NetworkResult<MarkMailViewedResponse> = safeApiCall { mailboxApi.markViewed(mailId) }
 
         /** `PATCH /api/mailbox/:id/ack` — used by the generic A17.1
          *  detail screen's primary Acknowledge action. */
@@ -214,6 +218,15 @@ class MailboxRepository
 
             fun announceMailLeftList(mailId: String) {
                 mailLeftListFlow.tryEmit(mailId)
+            }
+
+            private val mailViewedFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /** Ids of letters that opening just marked read; an open list clears their unread state. */
+            val mailViewed: SharedFlow<String> = mailViewedFlow.asSharedFlow()
+
+            fun announceMailViewed(mailId: String) {
+                mailViewedFlow.tryEmit(mailId)
             }
         }
     }

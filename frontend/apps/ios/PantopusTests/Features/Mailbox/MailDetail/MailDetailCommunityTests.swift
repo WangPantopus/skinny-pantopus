@@ -17,6 +17,10 @@ final class MailDetailCommunityTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // Loading an unread letter marks it read; keep that PATCH off the FIFO.
+        SequencedURLProtocol.routeResponses["/api/mailbox/m1/view"] = [
+            .status(200, body: #"{"message":"Mail marked as viewed","alreadyViewed":false}"#)
+        ]
     }
 
     private func makeAPI() -> APIClient {

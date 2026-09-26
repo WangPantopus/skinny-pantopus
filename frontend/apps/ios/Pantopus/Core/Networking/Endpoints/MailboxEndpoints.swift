@@ -36,6 +36,13 @@ public enum MailboxEndpoints {
         Endpoint(method: .get, path: "/api/mailbox/\(mailId)")
     }
 
+    /// `PATCH /api/mailbox/:id/view` — route `backend/routes/mailbox.js:2768`
+    /// (the web Mailbox's mark-as-read). Idempotent: the first view marks the
+    /// letter read and, for an ad letter, sets its payout pending once.
+    public static func markViewed(mailId: String) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/mailbox/\(mailId)/view")
+    }
+
     /// `PATCH /api/mailbox/:id/ack` — route `backend/routes/mailbox.js:2702`.
     public static func acknowledge(mailId: String) -> Endpoint {
         Endpoint(method: .patch, path: "/api/mailbox/\(mailId)/ack")
