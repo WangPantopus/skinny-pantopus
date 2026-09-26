@@ -1,6 +1,24 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T13:14Z (batch 28 #525 queued)
+## CURRENT RESUME POINT — 2026-09-26T17:33Z (batch 28 merged; batch 29 #526 queued)
+
+- **Integration (Stream 1 queue):**
+  - Master is `be33552e8`: batch 28 [#525](https://github.com/WangPantopus/skinny-pantopus/pull/525) merged at 13:49:47Z with #518, #515, #519, #520, #521 and #522.
+  - **Batch 29 [#526](https://github.com/WangPantopus/skinny-pantopus/pull/526)**, tip `caa231a2b`, queued at 17:21:37Z: #523 (S3 mail notification label, `023fa8e4…`) → #524 (S1 web Reviewed step and reviewer names, `8786c694…`). They share no file. #524's task page combines exactly with #522 from master.
+  - **Next:** S1 [#527](https://github.com/WangPantopus/skinny-pantopus/pull/527) (tip copy for `CONNECT_REQUIRED`) is a draft until its iOS after; web and Android afters are verified. Stream 2 is preparing a web Members "Invite" fix.
+- **Heavy slot:**
+  - Stream 2's session stalled from about 12:53Z to 17:19Z while holding heavy; its build had ended at 12:53:31Z.
+  - With the user's approval, Stream 1 released the idle lock at 17:20:14Z and took it for one Android build (17:20:29–17:26:25Z). Stream 2 confirmed that was right.
+  - Order now: Stream 3 (chat-audit Android build, rerun after a ktlint fix) → Stream 1 (iOS build for #527).
+- **Stream 1 lifecycle audit** (bundle `20260926-stream1-free-task-lifecycle-r1`):
+  - Android and iOS: the helper's accept (200) and start (200) PASS; delivery proof is the S3 BOUNDARY (503, error shown, photo kept).
+  - Android: the poster's confirm completion PASS.
+  - Web: the helper's "Leave assignment" PASS (`stop-requests` 200, task reopened). The poster can't cancel a started task (`STARTED_POLICY_REVIEW`); that is policy, recorded, not changed.
+  - Fixtures T1–T9 are removed at the end (task data only; auth/session rows are documented and left).
+- **User decisions:** 1A–6A are merged. The native accept-a-counter proposal is still awaiting the user.
+- **Slots:** Stream 1 holds device slot 1 (iOS sim F4DBD47E, alice) and the iOS driver, plus emulator-5558 (slot 3, alice).
+
+## Resume point history — 2026-09-26T13:14Z (batch 28 #525 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `2e053fe9c` (batch 27 [#517](https://github.com/WangPantopus/skinny-pantopus/pull/517) merged at 12:16:08Z).
