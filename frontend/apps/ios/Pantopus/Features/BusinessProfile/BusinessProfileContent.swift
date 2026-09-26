@@ -354,6 +354,9 @@ public struct BusinessProfileContent: Sendable, Hashable {
     /// Surfaced so the host can switch chrome (Edit) when the viewer owns
     /// the business. B3.1 doesn't render owner chrome (that's B3.2 / A10.7).
     public let viewerIsOwner: Bool
+    /// The business's public page (web `/b/:username`) is live, so Share can
+    /// hand out that link.
+    public let hasPublicPage: Bool
 
     public init(
         businessId: String,
@@ -374,7 +377,8 @@ public struct BusinessProfileContent: Sendable, Hashable {
         isNewlyClaimed: Bool,
         phoneNumber: String?,
         websiteURL: URL?,
-        viewerIsOwner: Bool
+        viewerIsOwner: Bool,
+        hasPublicPage: Bool = false
     ) {
         self.businessId = businessId
         self.header = header
@@ -395,6 +399,7 @@ public struct BusinessProfileContent: Sendable, Hashable {
         self.phoneNumber = phoneNumber
         self.websiteURL = websiteURL
         self.viewerIsOwner = viewerIsOwner
+        self.hasPublicPage = hasPublicPage
     }
 }
 

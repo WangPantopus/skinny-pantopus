@@ -183,6 +183,13 @@ class PulseFeedViewModel
          */
         private var radiusSuggestionDismissed = false
 
+        /**
+         * True once the current query's posts have loaded. The banner counts
+         * real posts, never the empty list of a load that is still running
+         * or failed.
+         */
+        private var postsLoaded = false
+
         /** True while a pull-to-refresh refetch is in flight (drives the spinner). */
         private val _isRefreshing = MutableStateFlow(false)
         val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -320,6 +327,7 @@ class PulseFeedViewModel
             // Nearby-only (RN `useFeedFiltering.ts:24-27`).
             if (next != FeedSurface.Pulse) _activeTopic.value = null
             loadedPosts = emptyList()
+            postsLoaded = false
             overrides = emptyMap()
             removedPostIds = emptySet()
             _state.value = PulseFeedUiState.Loading
@@ -398,7 +406,7 @@ class PulseFeedViewModel
         }
 
         private fun recomputeRadiusSuggestion() {
-            if (_surface.value != FeedSurface.Pulse || radiusSuggestionDismissed) {
+            if (_surface.value != FeedSurface.Pulse || radiusSuggestionDismissed || !postsLoaded) {
                 _radiusSuggestion.value = null
                 return
             }
@@ -834,6 +842,7 @@ class PulseFeedViewModel
             _isLoadingMore.value = false
             _loadMoreError.value = null
             _radiusSuggestion.value = null
+            postsLoaded = false
             loading = true
             if (isRefresh) _isRefreshing.value = true
             // A different query must recreate the list, including its page-boundary effects.
@@ -864,6 +873,7 @@ class PulseFeedViewModel
                             lastArea = area
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
                             loadedPosts = response.posts
+                            postsLoaded = true
                             applyPagination(response.pagination)
                             recomputeRadiusSuggestion()
                             _state.value =

@@ -490,17 +490,25 @@ public struct BusinessCatalogItemsResponse: Decodable, Sendable, Hashable {
 /// `GET /api/businesses/public/:username` response (subset). Only the
 /// fields the Business Profile screen reads are decoded; the response
 /// is far larger (pages, blocks, founding slot, …).
-/// Route `backend/routes/businesses.js:3277`.
+/// Route `backend/routes/businesses.js:3416`.
 public struct BusinessPublicResponse: Decodable, Sendable, Hashable {
+    /// `business.id` — resolves a `/b/:username` link to the business id.
+    public let businessId: String?
     public let hours: [BusinessHoursDTO]
     public let catalog: [BusinessCatalogItemDTO]
 
     private enum CodingKeys: String, CodingKey {
-        case hours, catalog
+        case business, hours, catalog
+    }
+
+    private enum BusinessKeys: String, CodingKey {
+        case id
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let business = try? c.nestedContainer(keyedBy: BusinessKeys.self, forKey: .business)
+        businessId = try business?.decodeIfPresent(String.self, forKey: .id)
         hours = try c.decodeIfPresent([BusinessHoursDTO].self, forKey: .hours) ?? []
         catalog = try c.decodeIfPresent([BusinessCatalogItemDTO].self, forKey: .catalog) ?? []
     }

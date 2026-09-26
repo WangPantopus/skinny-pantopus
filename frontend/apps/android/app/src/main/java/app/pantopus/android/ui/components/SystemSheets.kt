@@ -50,6 +50,9 @@ object InviteLinks {
     /** A public web page such as `/terms`, using this build's web origin. */
     fun publicPageUrl(path: String): String = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + path
 
+    /** A business's public page (web `/b/:username`), which the app also opens. */
+    fun businessUrl(username: String): String = publicPageUrl("/b/${Uri.encode(username)}")
+
     const val INVITE_MESSAGE =
         "Join me on Pantopus — your neighborhood for trusted home help, " +
             "local gigs, and your whole household in one place. $DOWNLOAD_URL"

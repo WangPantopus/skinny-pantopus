@@ -174,16 +174,18 @@ public final class OffersViewModel: ListOfRowsDataSource {
 
     public let title = "Offers"
 
+    /// Uncounted until both lists load: a failed read must not claim "0".
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: OffersTab.received, label: "Received", count: received.count),
-            ListOfRowsTab(id: OffersTab.sent, label: "Sent", count: sent.count)
+            ListOfRowsTab(id: OffersTab.received, label: "Received", count: loadedAtLeastOnce ? received.count : nil),
+            ListOfRowsTab(id: OffersTab.sent, label: "Sent", count: loadedAtLeastOnce ? sent.count : nil)
         ]
     }
 
     public var selectedTab: String = OffersTab.received {
         didSet {
-            guard oldValue != selectedTab else { return }
+            // Before a successful load there is no list to show; keep the error.
+            guard oldValue != selectedTab, loadedAtLeastOnce else { return }
             rebuild()
         }
     }
@@ -227,7 +229,7 @@ public final class OffersViewModel: ListOfRowsDataSource {
     /// Store the applied filter and re-project the visible rows.
     public func applyFilter(_ filter: ActivityFilter) {
         activityFilter = filter
-        rebuild()
+        if loadedAtLeastOnce { rebuild() }
     }
 
     public private(set) var state: ListOfRowsState = .loading

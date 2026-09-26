@@ -112,6 +112,9 @@ public struct PulseTabRoot: View {
                 },
                 onContentLoaded: { router.completePostArrival(id: postId) }
             )
+            // A post link opened over another post replaces this stack entry;
+            // a new identity gives the new post its own view model and load.
+            .id(postId)
             .onDisappear { router.completePostArrival(id: postId) }
         case let .compose(intent):
             PulseComposeFlowView(

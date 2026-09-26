@@ -897,14 +897,27 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { data: home } = await supabaseAdmin
+    const { data: home, error: homeError } = await supabaseAdmin
       .from('Home')
       .select('security_state')
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
+    if (homeError) {
+      return res.status(503).json({ error: 'Couldn\'t check this home. Nothing was changed. Please try again.' });
+    }
+    if (!home) return res.status(404).json({ error: 'Home not found' });
 
     if (policy.isActionBlockedByState(home.security_state, 'TRANSFER_OWNERSHIP')) {
       return res.status(403).json({ error: 'Transfers are restricted in the current home state' });
+    }
+
+    // Resolve the buyer before anything changes: an unknown or mistyped email
+    // must not leave the home without an owner.
+    let buyerUserId;
+    try {
+      buyerUserId = await resolveTransferBuyer({ buyer_user_id, buyer_email }, userId);
+    } catch (err) {
+      return res.status(err.status || 503).json({ error: err.message, code: err.code });
     }
 
     const quorum = await policy.calculateQuorumRequirement('TRANSFER_OWNERSHIP', homeId);
@@ -923,7 +936,7 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
           min_rejects_to_block: quorum.minRejectsToBlock,
           expires_at: quorum.expiresAt.toISOString(),
           passive_approval_at: quorum.passiveApprovalAt?.toISOString() || null,
-          metadata: { buyer_email, buyer_phone, buyer_user_id, effective_date },
+          metadata: { buyer_email, buyer_phone, buyer_user_id: buyerUserId, effective_date },
         })
         .select()
         .single();
@@ -931,16 +944,20 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
       if (error) throw error;
 
       // Auto-approve with proposer's vote
-      await supabaseAdmin
+      const { error: voteError } = await supabaseAdmin
         .from('HomeQuorumVote')
         .insert({
           quorum_action_id: action.id,
           voter_user_id: userId,
           vote: 'approve',
         });
+      if (voteError) {
+        await supabaseAdmin.from('HomeQuorumAction').delete().eq('id', action.id);
+        return res.status(503).json({ error: 'Couldn\'t propose the transfer. Nothing was changed. Please try again.' });
+      }
 
       await writeAuditLog(homeId, userId, 'TRANSFER_PROPOSED', 'HomeQuorumAction', action.id, {
-        buyer_email, buyer_user_id,
+        buyer_email, buyer_user_id: buyerUserId,
       });
 
       return res.status(201).json({
@@ -950,19 +967,26 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
       });
     }
 
-    // Single owner — execute transfer directly (two-step: revoke seller + create buyer claim)
-    const transferResult = await executeOwnershipTransfer(homeId, {
-      buyer_email, buyer_phone, buyer_user_id, effective_date,
-    }, userId);
+    // Single owner — execute the transfer directly: the buyer's claim first,
+    // then the seller's ownership is revoked.
+    let transferResult;
+    try {
+      transferResult = await executeOwnershipTransfer(homeId, {
+        buyer_email, buyer_phone, buyer_user_id: buyerUserId, effective_date,
+      }, userId);
+    } catch (err) {
+      if (err.code?.startsWith('TRANSFER_')) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
 
     await writeAuditLog(homeId, userId, 'TRANSFER_INITIATED', null, null, {
-      buyer_email, buyer_phone, buyer_user_id, effective_date,
-      transfer_claim_id: transferResult?.claimId || null,
+      buyer_email, buyer_phone, buyer_user_id: buyerUserId, effective_date,
+      transfer_claim_id: transferResult.claimId,
     });
 
     res.json({
       message: 'Transfer initiated. The new owner must verify ownership before transfer completes.',
-      transfer_claim_id: transferResult?.claimId || null,
+      transfer_claim_id: transferResult.claimId,
     });
   } catch (err) {
     logger.error('Failed to initiate transfer', { error: err.message });
@@ -1572,7 +1596,9 @@ async function executeQuorumAction(homeId, action, actorUserId) {
         break;
       }
       case 'TRANSFER_OWNERSHIP': {
-        await executeOwnershipTransfer(homeId, meta, actorUserId);
+        // The seller is the owner who proposed the transfer, not whoever cast
+        // the deciding vote.
+        await executeOwnershipTransfer(homeId, meta, action.proposed_by);
         break;
       }
       default:
@@ -1588,109 +1614,179 @@ async function executeQuorumAction(homeId, action, actorUserId) {
 }
 
 
+function transferFailure(status, code, message) {
+  return Object.assign(new Error(message), { status, statusCode: status, code });
+}
+
 /**
- * Execute a two-step ownership transfer.
- *
- * Step 1 (immediate): Revoke current seller's ownership, clear Home.owner_id.
- * Step 2 (deferred):  Create an ownership claim for the buyer so they must
- *                      independently verify before gaining full owner access.
- *
- * If buyer_user_id is provided, the claim is created directly. Otherwise a
- * pending transfer record is stored and the buyer is notified by email.
+ * The buyer of an ownership transfer: an existing account that isn't the
+ * seller. Resolved before anything changes, so a mistyped or unregistered
+ * email can never leave the home without an owner.
  */
-async function executeOwnershipTransfer(homeId, meta, actorUserId) {
-  const now = new Date().toISOString();
-  const { buyer_email, buyer_phone, buyer_user_id, effective_date } = meta;
-
-  // ── Step 1: Revoke seller's ownership ──
-  // Find the current seller (the actor who initiated the transfer)
-  const { data: sellerOwner } = await supabaseAdmin
-    .from('HomeOwner')
-    .select('id, subject_id')
-    .eq('home_id', homeId)
-    .eq('subject_id', actorUserId)
-    .eq('owner_status', 'verified')
-    .maybeSingle();
-
-  if (sellerOwner) {
-    await supabaseAdmin
-      .from('HomeOwner')
-      .update({ owner_status: 'revoked', updated_at: now })
-      .eq('id', sellerOwner.id);
+async function resolveTransferBuyer({ buyer_user_id, buyer_email }, sellerUserId) {
+  let query = null;
+  if (buyer_user_id) {
+    query = supabaseAdmin.from('User').select('id').eq('id', buyer_user_id);
+  } else if (buyer_email) {
+    // Accounts keep the email as typed at signup: match it as entered or in
+    // lowercase.
+    const email = String(buyer_email).trim();
+    query = supabaseAdmin.from('User').select('id').in('email', [...new Set([email, email.toLowerCase()])]);
   }
-
-  // Clear Home.owner_id (legacy field) — it will be re-set when buyer claim is approved
-  await supabaseAdmin
-    .from('Home')
-    .update({ owner_id: null, updated_at: now })
-    .eq('id', homeId)
-    .eq('owner_id', actorUserId); // only clear if it was this seller
-
-  // Downgrade seller's occupancy permissions via applyOccupancyTemplate
-  await applyOccupancyTemplate(homeId, actorUserId, 'member', 'verified');
-
-  // ── Step 2: Create buyer claim ──
-  let claimId = null;
-  let targetUserId = buyer_user_id || null;
-
-  // Resolve buyer by email if no user_id provided
-  if (!targetUserId && buyer_email) {
-    const { data: buyerUser } = await supabaseAdmin
-      .from('User')
-      .select('id')
-      .eq('email', buyer_email)
-      .maybeSingle();
-    targetUserId = buyerUser?.id || null;
-  }
-
-  if (targetUserId) {
-    // Create a pre-seeded ownership claim for the buyer
-    const { data: claim, error: claimError } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .insert({
-        home_id: homeId,
-        claimant_user_id: targetUserId,
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'invite',
-        risk_score: 0, // Invited by prior owner — lowest risk
-        metadata: { transfer_from: actorUserId, effective_date },
-        ...(await homeClaimCompatService.buildInitialClaimCompatibilityFields({
-          homeId,
-          userId: targetUserId,
-          claimType: 'owner',
-          method: 'invite',
-          legacyState: 'submitted',
-        })),
-      })
-      .select('id')
-      .single();
-
-    if (!claimError && claim) {
-      claimId = claim.id;
-      await recalculateHouseholdResolutionState(homeId);
+  if (query) {
+    const { data, error } = await query.maybeSingle();
+    if (error) {
+      throw transferFailure(503, 'TRANSFER_UNAVAILABLE', 'Couldn\'t check the buyer\'s account. Nothing was changed. Please try again.');
     }
+    if (data?.id === sellerUserId) {
+      throw transferFailure(400, 'TRANSFER_TO_SELF', 'You already own this home. Enter the new owner\'s email.');
+    }
+    if (data?.id) return data.id;
+  }
+  throw transferFailure(400, 'TRANSFER_BUYER_NOT_FOUND',
+    'No Pantopus account uses that email yet. Ask the buyer to create an account, then try again.');
+}
 
-    // Notify the buyer
+/** Undo the steps a failed transfer already took (best effort, logged). */
+async function undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId = null, restoreOwnerId = false }) {
+  const steps = [];
+  if (restoreOwnerId) {
+    steps.push(['home_owner_id', supabaseAdmin.from('Home').update({ owner_id: sellerUserId }).eq('id', homeId).is('owner_id', null)]);
+  }
+  if (sellerOwnerId) {
+    steps.push(['seller_owner', supabaseAdmin.from('HomeOwner').update({ owner_status: 'verified' })
+      .eq('id', sellerOwnerId).eq('owner_status', 'revoked')]);
+  }
+  steps.push(['buyer_claim', supabaseAdmin.from('HomeOwnershipClaim').delete().eq('id', claimId).eq('home_id', homeId)]);
+  for (const [step, query] of steps) {
     try {
-      const notificationService = require('../services/notificationService');
-      notificationService.createNotification({
-        userId: targetUserId,
-        type: 'ownership_transfer_received',
-        title: 'Ownership transfer initiated',
-        body: 'You have been designated as the new owner. Please verify ownership to complete the transfer.',
-        // The buyer verifies ownership on the claim's evidence page (the web has
-        // no /ownership page).
-        link: claimId ? `/homes/${homeId}/claim-owner/evidence?claimId=${claimId}` : `/homes/${homeId}/owners`,
-        metadata: { home_id: homeId, claim_id: claimId },
-      });
-    } catch (notifErr) {
-      logger.warn('Failed to send transfer notification (non-fatal)', { error: notifErr.message });
+      const { error } = await query;
+      if (error) logger.error('Ownership transfer undo step failed', { homeId, step, error: error.message });
+    } catch (err) {
+      logger.error('Ownership transfer undo step failed', { homeId, step, error: err.message });
     }
+  }
+}
+
+/**
+ * Execute an ownership transfer for the seller: the owner who started it, or
+ * who proposed it when co-owners had to approve.
+ *
+ * Nothing changes unless the buyer is an existing account and the seller is
+ * still a verified owner. The buyer's claim is created first, so a failure
+ * never leaves the home without an owner; if a later step fails, the steps
+ * already taken are undone and the transfer reports failure.
+ *
+ * On success the seller's ownership is revoked (they stay a verified member),
+ * Home.owner_id is cleared, and the buyer verifies through their claim.
+ */
+async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
+  const now = new Date().toISOString();
+  const { buyer_email, effective_date } = meta;
+  const unavailable = () => transferFailure(503, 'TRANSFER_UNAVAILABLE',
+    'Couldn\'t complete the transfer. Nothing was changed. Please try again.');
+
+  const buyerUserId = await resolveTransferBuyer(meta, sellerUserId);
+
+  const [ownerRead, homeRead] = await Promise.all([
+    supabaseAdmin
+      .from('HomeOwner')
+      .select('id')
+      .eq('home_id', homeId)
+      .eq('subject_id', sellerUserId)
+      .eq('owner_status', 'verified')
+      .maybeSingle(),
+    supabaseAdmin
+      .from('Home')
+      .select('owner_id')
+      .eq('id', homeId)
+      .maybeSingle(),
+  ]);
+  if (ownerRead.error || homeRead.error || !homeRead.data) throw unavailable();
+  if (!ownerRead.data) {
+    throw transferFailure(409, 'TRANSFER_SELLER_NOT_OWNER', 'Only a current verified owner can transfer this home.');
+  }
+  const sellerOwnerId = ownerRead.data.id;
+  const sellerHeldOwnerId = homeRead.data.owner_id === sellerUserId;
+
+  // 1. The buyer's claim first: until it exists, nothing else changes.
+  const { data: claim, error: claimError } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .insert({
+      home_id: homeId,
+      claimant_user_id: buyerUserId,
+      claim_type: 'owner',
+      state: 'submitted',
+      method: 'invite',
+      risk_score: 0, // Invited by prior owner — lowest risk
+      // HomeOwnershipClaim has no metadata column; the seller and effective
+      // date are recorded in the TRANSFER_EXECUTED audit entry.
+      ...(await homeClaimCompatService.buildInitialClaimCompatibilityFields({
+        homeId,
+        userId: buyerUserId,
+        claimType: 'owner',
+        method: 'invite',
+        legacyState: 'submitted',
+      })),
+    })
+    .select('id')
+    .single();
+  if (claimError || !claim) throw unavailable();
+  const claimId = claim.id;
+
+  // 2. Revoke the seller's ownership.
+  const { data: revoked, error: revokeError } = await supabaseAdmin
+    .from('HomeOwner')
+    .update({ owner_status: 'revoked', updated_at: now })
+    .eq('id', sellerOwnerId)
+    .eq('owner_status', 'verified')
+    .select('id');
+  if (revokeError || !revoked?.length) {
+    await undoOwnershipTransfer(homeId, sellerUserId, { claimId });
+    throw unavailable();
+  }
+
+  // 3. Clear the legacy Home.owner_id when it pointed at the seller; it is set
+  // again when the buyer's claim is approved.
+  if (sellerHeldOwnerId) {
+    const { error: ownerIdError } = await supabaseAdmin
+      .from('Home')
+      .update({ owner_id: null, updated_at: now })
+      .eq('id', homeId)
+      .eq('owner_id', sellerUserId);
+    if (ownerIdError) {
+      await undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId });
+      throw unavailable();
+    }
+  }
+
+  // 4. The seller stays in the home as a verified member.
+  try {
+    await applyOccupancyTemplate(homeId, sellerUserId, 'member', 'verified');
+  } catch (err) {
+    await undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId, restoreOwnerId: sellerHeldOwnerId });
+    throw unavailable();
+  }
+
+  // The transfer is done. What follows records and announces it.
+  try {
+    const notificationService = require('../services/notificationService');
+    notificationService.createNotification({
+      userId: buyerUserId,
+      type: 'ownership_transfer_received',
+      title: 'Ownership transfer initiated',
+      body: 'You have been designated as the new owner. Please verify ownership to complete the transfer.',
+      // The buyer verifies ownership on the claim's evidence page (the web has
+      // no /ownership page).
+      link: `/homes/${homeId}/claim-owner/evidence?claimId=${claimId}`,
+      metadata: { home_id: homeId, claim_id: claimId },
+    });
+  } catch (notifErr) {
+    logger.warn('Failed to send transfer notification (non-fatal)', { error: notifErr.message });
   }
 
   // Activate claim window so other potential owners can also claim
-  await supabaseAdmin
+  const { error: windowError } = await supabaseAdmin
     .from('Home')
     .update({
       security_state: 'claim_window',
@@ -1698,10 +1794,11 @@ async function executeOwnershipTransfer(homeId, meta, actorUserId) {
       updated_at: now,
     })
     .eq('id', homeId);
+  if (windowError) logger.error('Transfer claim window could not be opened', { homeId, error: windowError.message });
 
-  await writeAuditLog(homeId, actorUserId, 'TRANSFER_EXECUTED', null, null, {
-    seller_user_id: actorUserId,
-    buyer_user_id: targetUserId,
+  await writeAuditLog(homeId, sellerUserId, 'TRANSFER_EXECUTED', null, null, {
+    seller_user_id: sellerUserId,
+    buyer_user_id: buyerUserId,
     buyer_email,
     claim_id: claimId,
     effective_date,
@@ -1709,9 +1806,9 @@ async function executeOwnershipTransfer(homeId, meta, actorUserId) {
 
   await recalculateHouseholdResolutionState(homeId);
 
-  logger.info('Ownership transfer executed', { homeId, seller: actorUserId, buyer: targetUserId, claimId });
+  logger.info('Ownership transfer executed', { homeId, seller: sellerUserId, buyer: buyerUserId, claimId });
 
-  return { claimId, targetUserId };
+  return { claimId, targetUserId: buyerUserId };
 }
 
 

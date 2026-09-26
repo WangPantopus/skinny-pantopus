@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.business_profile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav-arg key for the business UUID. */
@@ -76,7 +78,11 @@ class BusinessProfileViewModel
         private val businessPages: BusinessPagesRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
-        private val businessId: String =
+        /**
+         * The business id. A `/b/:username` link opens with the username, which
+         * [loadDetail] resolves to the id.
+         */
+        private var businessId: String =
             requireNotNull(savedStateHandle[BUSINESS_PROFILE_BUSINESS_ID_KEY]) {
                 "BusinessProfileViewModel requires a '$BUSINESS_PROFILE_BUSINESS_ID_KEY' nav arg."
             }
@@ -186,8 +192,29 @@ class BusinessProfileViewModel
             }
         }
 
+        /**
+         * `/b/:username` links (a business's shared public page) carry the
+         * username, but the detail read takes the id. When the id isn't found
+         * and isn't a UUID, the read-only public page resolves the username; an
+         * unknown or unpublished username stays not found.
+         */
+        private suspend fun loadDetail(): NetworkResult<BusinessDetailResponse> {
+            val detail = businesses.business(businessId)
+            val notFound = detail is NetworkResult.Failure && detail.error == NetworkError.NotFound
+            if (!notFound || runCatching { UUID.fromString(businessId) }.isSuccess) return detail
+            val resolvedId =
+                (businesses.publicBusiness(businessId) as? NetworkResult.Success)
+                    ?.data
+                    ?.business
+                    ?.id
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return detail
+            businessId = resolvedId
+            return businesses.business(resolvedId)
+        }
+
         private suspend fun fetch() {
-            when (val detail = businesses.business(businessId)) {
+            when (val detail = loadDetail()) {
                 is NetworkResult.Success -> {
                     val payload = detail.data
                     coroutineScope {
