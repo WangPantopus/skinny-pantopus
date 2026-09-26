@@ -3,7 +3,7 @@
 //  PantopusTests
 //
 //  Work item C — the gig-detail bookmark toggle. Covers the
-//  `saved_by_user` seed on load, the optimistic flip (save + unsave
+//  `viewer_has_saved` seed on load, the optimistic flip (save + unsave
 //  endpoints), the revert-on-failure path, and the in-flight debounce.
 //
 
@@ -40,7 +40,7 @@ final class GigDetailViewModelTests: XCTestCase {
         {"gig":{
           "id":"g1","title":"Hang 3 shelves","description":"IKEA Lack shelves.",
           "price":60,"category":"handyman","status":"open",
-          "user_id":"owner-1","saved_by_user":\(saved)
+          "user_id":"owner-1","viewer_has_saved":\(saved)
         }}
         """
     }

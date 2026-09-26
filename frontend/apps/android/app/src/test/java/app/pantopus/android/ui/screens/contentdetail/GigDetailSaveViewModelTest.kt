@@ -73,7 +73,7 @@ import org.junit.Test
 
 /**
  * P1.C — save/bookmark toggle on the gig detail: initial state from
- * `saved_by_user`, optimistic flip with the matching endpoint, and a
+ * `viewer_has_saved`, optimistic flip with the matching endpoint, and a
  * revert + error callback on failure.
  */
 
@@ -176,7 +176,7 @@ class GigDetailSaveViewModelTest {
     }
 
     @Test
-    fun initial_saved_state_comes_from_saved_by_user() =
+    fun initial_saved_state_comes_from_viewer_has_saved() =
         runTest {
             assertTrue(loadedVm(savedByUser = true).saved.value)
             assertFalse(loadedVm(savedByUser = false).saved.value)

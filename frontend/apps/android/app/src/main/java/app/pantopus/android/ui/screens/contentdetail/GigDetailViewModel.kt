@@ -368,7 +368,7 @@ class GigDetailViewModel
         private var canTip = false
         private var viewerIsOwner = false
 
-        /** P1.C — bookmark state for the top-bar toggle (`saved_by_user`). */
+        /** P1.C — bookmark state for the top-bar toggle (`viewer_has_saved`). */
         private val _saved = MutableStateFlow(false)
         val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
