@@ -1,6 +1,19 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T07:15Z
+## CURRENT STREAM 1 STATE — 2026-09-26T07:53Z
+
+- **Merged in batch 23 (#484, 07:51:21Z):** #476 and #480.
+- **Open for batch 24:**
+  - [#481](https://github.com/WangPantopus/skinny-pantopus/pull/481) `f1f283752`: task Q&A failure state. Green; bundle `ed36276d…`.
+  - [#487](https://github.com/WangPantopus/skinny-pantopus/pull/487) `567bfaec1`: saved-task state (`viewer_has_saved`). Afters pass on both apps; bundle `9569fcdf…`; CI running.
+- **Android sweep (inventory, all PASS):**
+  - Marketplace browse failure (seq 5348 → 5350).
+  - Listing detail failure (seq 5351 → 5352).
+  - Listing save double tap + reopen (seq 5354–5359). Exact cleanup.
+- **Low candidate:** a re-tap of the current bottom tab on a child screen is ignored on Android. That's a navigation choice, so no change without approval.
+- **Proposals for the user:** token refresh; Marketplace Snapshot rows; owner Message; buyer offer view/withdraw.
+
+## Previous Stream 1 state — 2026-09-26T07:15Z
 
 - **Merged in batch 22 (07:13:40Z):** #472 and #477.
 - **In batch 23 (#484):** #476 and #480.
