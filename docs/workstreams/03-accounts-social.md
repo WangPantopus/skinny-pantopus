@@ -2,6 +2,17 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 06:50Z: web B7 limits open as PR479 (master `e1509f346`, batch 21 merged)
+
+- **Batch 21 merged:** #465, #466 and #468. #470 and #475 are in batch 22 ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478)).
+- **[PR479](https://github.com/WangPantopus/skinny-pantopus/pull/479): open, CI running.** Web "Booking limits & notice rules" (B7) on Availability. Head `59a76e57d`, 3 existing files. This is a new finding, not an inventory row.
+  - Before (Member): the tab showed hard-coded 4 h / 8 per day / 20 per week / 2 per person. Done toasted "Limits updated." with no request, and the values reset when the tab reopened.
+  - After: like iOS and Android B7, it reads the first active event type, names it and shows its real values. A null cap shows as 0, "0 means no limit". Done sends only the moved fields with `PUT /event-types/:id`. Max per week is disabled, as on native. Loading, error/retry and empty states are handled.
+  - Verified with every write refused by the no-send proxy: request bodies `{"daily_cap":3}` and `{"per_booker_cap":1,"slot_interval_min":60}`; an injected 500 shows the retry state; DB fingerprint identical; ESLint, tsc and the affected Jest file (11/11) pass.
+  - Bundle `20260926-stream3-web-booking-limits-r1`, MANIFEST.json SHA-256 `cefe9fc83c183379ef7aa720501562156ce28fb59ed0f0c01bacb1dc1881b1c6`.
+  - Limits: the 200 save path wasn't exercised (a real save needs a reviewed scope); the empty state wasn't rendered.
+  - Follow-up candidate: the disabled "Max per week 20" placeholder on all three platforms.
+
 ## Update 2026-09-26 06:35Z: S3-47 open as PR475 (master `5bf1eb7f8`)
 
 - **[PR475](https://github.com/WangPantopus/skinny-pantopus/pull/475): open, CI running.** Web S3-47. Head `305f63cab`, 1 file (`EventTypeForm.tsx`).
