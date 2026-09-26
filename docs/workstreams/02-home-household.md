@@ -10,7 +10,7 @@
 
 ### 1. State at handoff
 - **Master:** `f885e0623` (batch 31 #534 merged at ~20:09Z).
-- **Open Stream 2 PR:** [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535).
+- **Open Stream 2 PRs:** [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535) (below) and [#538](https://github.com/WangPantopus/skinny-pantopus/pull/538) (decision 2a security fix, §2a). The session continued after the handoff at the user's request; 2b is in progress.
   - Native Add guest truth fixes; branch `claude/stream2-add-guest-truth`, head `89be05af7`, worktree `/private/tmp/pantopus-stream2-add-guest`.
   - CI was running at 21:55Z (4 pass / 5 skipped / 3 pending).
   - Stream 1 already has the details and puts it in the next batch once green. If CI fails, fix it on the same branch and re-verify.
@@ -25,7 +25,7 @@
 - **Re-checked:** Stream 1's #509 fixes the Android "Your account changed" when a letter opens during a token refresh (bundle `20260926-stream2-d1-refresh-recheck-r1`).
 
 ### 2. User decisions of 2026-09-26 ~22:00Z (approved; implement next, in this order)
-**2a. Guest-letter security fix, Proposal A. APPROVED. Backend only.**
+**2a. Guest-letter security fix, Proposal A. APPROVED. Backend only. DONE → PR [#538](https://github.com/WangPantopus/skinny-pantopus/pull/538)**, branch `claude/stream2-residency-guest-role` (`09ee447b8`), bundle `20260926-stream2-residency-guest-role-r1` (MANIFEST `69a0cf6c0594a04232036fdb74e8526ab6da19134f9b8d32e24852194c0e4125`). Reported to Stream 1; watch CI. Verified: API before/after, web checker pages, 3 existing test suites (38 tests); synthetic letters and passes revoked, B restored to member. The plan as written:
 - **Bug:** a resident whose role is changed to `guest` or `service_provider` keeps residency letters and Residency Passes that still verify.
   - `GET /api/public/residency-letters/:code` returned `valid: true` with the person's name and street address.
   - Write-up, repro steps and captures: bundle `20260926-stream2-r06-native-letters-r1/finding-guest-letter-verifies/`.
