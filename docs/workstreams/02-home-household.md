@@ -2,6 +2,22 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 02:20Z (adds to the 02:07Z block below)**
+
+- **#451 merged** in batch 17 (#452) at 02:08:04Z; master is `8a9a97757`.
+- **#453** (Home-links) is approved by Stream 1 at head `3f2b70b0b` for the next native batch, pending CI.
+- **SECURITY, escalated to the user (live, reproduced, restored):** `POST /api/mailbox/v2/p2/party/assign` checks only that the caller can read the letter.
+  - It then moves the letter to any `assignToUserId` and completes any `sessionId`, even one that doesn't exist.
+  - **Reproduction:** the owner "assigned" a letter on a Home the member isn't in, using a random session id. The route answered 200, and the member's read went from 404 to 200 with the content.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-party-assign-exposure-r1`, MANIFEST `e71f87e002ccb6a967c54b47b292c6ff4eeecd9316a435c4364b189ba01e169c`.
+  - **Proposal (backend only):** require a real session for that letter that includes the caller; require the assignee to be a session participant or an active occupant of the session's Home; check the write error before completing or logging.
+  - `/party/join` already checks the household. No code changes until the user decides.
+- **S2-03 remainder:** local commit `0b05448af` on `8a9a97757`.
+  - Earn help → the Help center, "Offer a service" → the Professional profile (the iOS Place stack reuses the You-stack route), and the populated dashboard's "See all" is hidden.
+  - Befores are done on both apps, using the new archived `ad` earning fixture `1fac1d44` ($0.25 pending, not cashable, outside Incoming).
+  - Waiting for heavy (Stream 3, then Stream 1, then me).
+- **Retained probe fixture:** home letter `d7ad725a` on Home `9d885f71` (archived, restored to the Home).
+
 **Stream 2 — 2026-09-26 02:07Z (supersedes the PR states and "Next" in the 00:57Z block below)**
 
 - **#445 merged** in native batch #449 at 01:29:12Z; master is `8f1a59f58`.
