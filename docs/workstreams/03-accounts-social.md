@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-**Time correction (2026-09-26 07:39Z):** four headings below were hand-estimated 5–8 min late. They now show their commits' `git log` times: 06:30Z, 06:42Z, 07:30Z and 07:37Z (previously 06:35Z, 06:50Z, 07:35Z and 07:40Z). The pushed commit subjects keep the old labels.
+**Time correction (2026-09-26 07:38Z, from git log):** four headings below were hand-estimated 5–8 min late. They now show their commits' `git log` times: 06:30Z, 06:42Z, 07:30Z and 07:37Z (previously 06:35Z, 06:50Z, 07:35Z and 07:40Z). The pushed commit subjects keep the old labels.
 
 ## Update 2026-09-26 07:37Z: S3-23 open as PR486
 
