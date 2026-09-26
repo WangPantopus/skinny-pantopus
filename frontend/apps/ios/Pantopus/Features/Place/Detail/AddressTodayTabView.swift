@@ -57,7 +57,7 @@ struct AddressTodayTabView: View {
             PlaceDetailSkeleton()
         } else if let detail {
             // The Ballot P0 card's "Open your ballot" lands on the Place tab.
-            AddressTodayLoaded(viewModel: detail) { rootTabs.selected = .place }
+            AddressTodayLoaded(viewModel: detail) { openBallot() }
         } else if loadFailed {
             couldNotLoad
         } else {
@@ -138,6 +138,17 @@ struct AddressTodayTabView: View {
             loadFailed = true
         }
         resolved = true
+    }
+
+    /// The ballot card is on this home's Place dashboard. Selecting the
+    /// Place tab alone can land on its hub or a detail page, so open the
+    /// dashboard through the place link, as the tab's own stack does.
+    private func openBallot() {
+        guard let homeId else {
+            rootTabs.selected = .place
+            return
+        }
+        DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
     }
 }
 

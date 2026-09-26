@@ -32,7 +32,10 @@ class TodayTabViewModel
         AddressCalendarActions {
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
-        private var homeId: String? = null
+
+        /** The home this tab shows, once resolved. */
+        var homeId: String? = null
+            private set
 
         private val _calendarBusy = MutableStateFlow(false)
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()

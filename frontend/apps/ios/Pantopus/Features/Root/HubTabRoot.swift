@@ -3257,7 +3257,10 @@ public struct HubTabRoot: View {
     /// there rather than leaving the stack — matching `.mailDay` above.
     /// An unrecognised slug degrades to the dashboard rather than a dead end.
     private func pushPlace(homeId: String, slug: String?) {
-        path.append(.placeDashboard(homeId: homeId))
+        // Already showing this dashboard: stay rather than push a copy.
+        if path.last != .placeDashboard(homeId: homeId) {
+            path.append(.placeDashboard(homeId: homeId))
+        }
         if let slug, let group = PlaceDetailGroup(rawValue: slug) {
             path.append(.placeDetail(homeId: homeId, group: group))
         }

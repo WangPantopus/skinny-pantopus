@@ -214,7 +214,7 @@ private struct ElectionCard: View {
                         Text(data.name)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
-                        PlaceChip(model: PlaceChipModel(tone: .sky, text: "\(data.daysUntil) days away"))
+                        PlaceChip(model: PlaceChipModel(tone: .sky, text: daysAway))
                     }
                     Spacer(minLength: 0)
                 }
@@ -260,6 +260,12 @@ private struct ElectionCard: View {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = Self.utc
         return "\(calendar.component(.day, from: d))"
+    }
+
+    /// "Today" on Election Day and "1 day away" the day before, not "0 days".
+    private var daysAway: String {
+        if data.daysUntil <= 0 { return "Today" }
+        return data.daysUntil == 1 ? "1 day away" : "\(data.daysUntil) days away"
     }
 }
 

@@ -770,7 +770,7 @@ private fun ElectionCard(data: PlaceCivicElectionData) {
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(data.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                    PlaceChip(PlaceChipModel(PlaceChipTone.SKY, "${data.daysUntil} days away"))
+                    PlaceChip(PlaceChipModel(PlaceChipTone.SKY, daysAway(data.daysUntil)))
                 }
             }
         }
@@ -806,3 +806,11 @@ private fun levelLabel(level: CivicLevel): String =
 private fun monthAbbrev(iso: String): String = runCatching { java.time.LocalDate.parse(iso.take(10)).month.name.take(3) }.getOrDefault("")
 
 private fun dayNumber(iso: String): String = runCatching { java.time.LocalDate.parse(iso.take(10)).dayOfMonth.toString() }.getOrDefault("")
+
+/** "Today" on Election Day and "1 day away" the day before, not "0 days". */
+private fun daysAway(daysUntil: Int): String =
+    when {
+        daysUntil <= 0 -> "Today"
+        daysUntil == 1 -> "1 day away"
+        else -> "$daysUntil days away"
+    }
