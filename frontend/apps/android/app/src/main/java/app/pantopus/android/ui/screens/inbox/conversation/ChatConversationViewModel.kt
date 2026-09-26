@@ -1751,7 +1751,8 @@ class ChatConversationViewModel
                 }
             }
             val existing = messages.map { it.id }.toSet()
-            val fresh = backfill.filterNot { existing.contains(it.id) }
+            // The room backfill carries every topic; a topic view keeps its own.
+            val fresh = backfill.filter { !existing.contains(it.id) && matchesTopicFilter(it) }
             if (fresh.isEmpty()) {
                 if (retiredPending) rebuild()
                 return

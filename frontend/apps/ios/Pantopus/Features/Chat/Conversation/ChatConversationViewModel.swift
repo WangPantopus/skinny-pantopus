@@ -1799,7 +1799,10 @@ public final class ChatConversationViewModel {
             retiredPending = true
         }
         let existingIds = Set(messages.map(\.id))
-        let newMessages = backfill.filter { !existingIds.contains($0.id) }
+        // The room backfill carries every topic; a topic view keeps its own.
+        let newMessages = backfill.filter {
+            !existingIds.contains($0.id) && (selectedTopicId == nil || $0.topicId == selectedTopicId)
+        }
         guard !newMessages.isEmpty else {
             if retiredPending { rebuild() }
             return
