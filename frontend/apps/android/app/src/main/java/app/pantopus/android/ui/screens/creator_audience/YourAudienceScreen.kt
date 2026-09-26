@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -72,6 +74,7 @@ fun YourAudienceScreen(
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val pendingUndo by viewModel.pendingUndo.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -101,7 +104,12 @@ fun YourAudienceScreen(
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val current = state) {
                 is YourAudienceUiState.Loading -> LoadingFrame()
-                is YourAudienceUiState.Empty -> EmptyFrame(onShareBeacon = viewModel::shareBeacon)
+                is YourAudienceUiState.Empty ->
+                    EmptyFrame(
+                        onShareBeacon = {
+                            viewModel.beaconShareUrl()?.let { context.shareText(it, "Share your Beacon") }
+                        },
+                    )
                 is YourAudienceUiState.Error -> ErrorFrame(message = current.message, onRetry = viewModel::refresh)
                 is YourAudienceUiState.Loaded ->
                     LoadedContent(
@@ -127,8 +135,6 @@ fun YourAudienceScreen(
         ModalBottomSheet(onDismissRequest = viewModel::dismissOverflow) {
             OverflowSheetContent(
                 member = member,
-                onMessage = { viewModel.message(member) },
-                onChangeTier = { viewModel.changeTier(member) },
                 onMute = { viewModel.mute(member) },
                 onUnmute = { viewModel.unmute(member) },
                 onRemove = { viewModel.remove(member) },
@@ -980,8 +986,6 @@ private fun LoadingFrame() {
 @Composable
 private fun OverflowSheetContent(
     member: AudienceMember,
-    onMessage: () -> Unit,
-    onChangeTier: () -> Unit,
     onMute: () -> Unit,
     onUnmute: () -> Unit,
     onRemove: () -> Unit,
@@ -1000,20 +1004,8 @@ private fun OverflowSheetContent(
         Text(text = member.displayName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
         Text(text = member.handle, fontSize = 12.5.sp, color = PantopusColors.appTextSecondary)
         Spacer(modifier = Modifier.height(Spacing.s2))
-        OverflowAction(
-            icon = PantopusIcon.MessageCircle,
-            label = "Message",
-            tint = PantopusColors.appText,
-            testTag = "audienceOverflow.message",
-            onClick = onMessage,
-        )
-        OverflowAction(
-            icon = PantopusIcon.Crown,
-            label = "Change tier",
-            tint = PantopusColors.appText,
-            testTag = "audienceOverflow.changeTier",
-            onClick = onChangeTier,
-        )
+        // No Message or Change tier: only fans can open a Beacon DM, and
+        // owners have no tier-move endpoint (approve/remove/mute only).
         // Reversible action first, so Remove/Block are harder to fat-finger —
         // mirrors RN's AudienceMemberSheet ordering.
         if (member.isMuted) {

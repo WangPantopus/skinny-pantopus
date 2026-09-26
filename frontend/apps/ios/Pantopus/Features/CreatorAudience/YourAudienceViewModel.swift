@@ -9,7 +9,7 @@
 //  a single `state` enum plus fine-grained published fields.
 //
 
-// swiftlint:disable large_tuple type_body_length
+// swiftlint:disable large_tuple
 
 import SwiftUI
 
@@ -55,6 +55,9 @@ public final class YourAudienceViewModel {
     /// Owning Beacon id, echoed on every `/me/audience` page. Needed by
     /// the block action, which goes through `/personas/:id/followers/…`.
     private var personaId: String?
+    /// The Beacon's public link for "Share your Beacon", the same
+    /// `https://pantopus.com/@handle` the Beacon profile shares.
+    public private(set) var beaconShareURL: URL?
 
     /// Timer that commits a destructive action once its undo window closes.
     private var undoTask: Task<Void, Never>?
@@ -149,6 +152,9 @@ public final class YourAudienceViewModel {
         )
         counts = parsed
         personaId = response.persona?.id ?? personaId
+        if let handle = response.persona?.handle, !handle.isEmpty {
+            beaconShareURL = URL(string: "https://pantopus.com/@\(handle)")
+        }
 
         let page = response.items.compactMap(AudienceMember.init(dto:))
         for member in page where !member.tierName.isEmpty {
@@ -345,19 +351,6 @@ public final class YourAudienceViewModel {
     /// (`src/app/identity/persona.tsx:600-604`).
     public func blockConfirmationMessage(for member: AudienceMember) -> String {
         "Block \(member.displayName) from this Beacon? They will lose access to follower-only updates."
-    }
-
-    /// Overflow → Message. No PII (user id) is exposed by the creator
-    /// serializer, so a direct thread can't be opened from here yet.
-    public func message(_ member: AudienceMember) {
-        overflowTarget = nil
-        toast = "Messaging \(member.displayName) is coming soon."
-    }
-
-    /// Overflow → Change tier. Tier moves aren't wired on mobile yet.
-    public func changeTier(_: AudienceMember) {
-        overflowTarget = nil
-        toast = "Changing tiers is coming soon."
     }
 
     private func perform(_ action: AudienceMemberAction, on member: AudienceMember) async {

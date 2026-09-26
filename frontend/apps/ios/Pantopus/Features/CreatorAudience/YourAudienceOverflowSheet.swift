@@ -3,7 +3,8 @@
 //  Pantopus
 //
 //  A22.2 "Your audience" — the per-member overflow (•••) action sheet:
-//  Message · Change tier · Mute/Unmute · Remove · Block (destructive).
+//  Mute/Unmute · Remove · Block (destructive). No Message or Change
+//  tier: only fans can open a Beacon DM, and owners have no tier move.
 //  Mute / unmute / remove map to
 //  `PATCH /me/audience/:membershipId { action }`; block goes through
 //  `PATCH /personas/:id/followers/:membershipId { status: "blocked" }`
@@ -16,8 +17,6 @@ import SwiftUI
 
 struct YourAudienceOverflowSheet: View {
     let member: AudienceMember
-    let onMessage: () -> Void
-    let onChangeTier: () -> Void
     let onMute: () -> Void
     let onUnmute: () -> Void
     let onRemove: () -> Void
@@ -36,26 +35,6 @@ struct YourAudienceOverflowSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .padding(.bottom, Spacing.s2)
-
-            actionRow(
-                icon: .messageCircle,
-                title: "Message",
-                tint: Theme.Color.appText,
-                id: "audienceOverflow.message"
-            ) {
-                onMessage()
-                dismiss()
-            }
-
-            actionRow(
-                icon: .crown,
-                title: "Change tier",
-                tint: Theme.Color.appText,
-                id: "audienceOverflow.changeTier"
-            ) {
-                onChangeTier()
-                dismiss()
-            }
 
             if member.isMuted {
                 actionRow(

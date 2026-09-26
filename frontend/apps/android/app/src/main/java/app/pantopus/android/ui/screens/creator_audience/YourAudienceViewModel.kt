@@ -92,6 +92,7 @@ class YourAudienceViewModel
         /** Owning Beacon id, echoed on every page. Needed by the block
          *  action, which goes through `/personas/:id/followers/…`. */
         private var personaId: String? = null
+        private var personaHandle: String? = null
 
         // MARK: - Loading
 
@@ -174,6 +175,7 @@ class YourAudienceViewModel
             val counts = AudienceCounts.from(response.counts)
             _counts.value = counts
             personaId = response.persona?.id ?: personaId
+            personaHandle = response.persona?.handle?.takeIf { it.isNotBlank() } ?: personaHandle
 
             val page = response.items.mapNotNull { it.toAudienceMember() }
             val mergedNames = _tierNames.value.toMutableMap()
@@ -401,22 +403,15 @@ class YourAudienceViewModel
             "Block ${member.displayName} from this Beacon? " +
                 "They will lose access to follower-only updates."
 
-        /** Overflow → Message. The creator serializer exposes no user id, so
-         *  a direct thread can't be opened from here yet. */
-        fun message(member: AudienceMember) {
-            _overflowTarget.value = null
-            _toast.value = "Messaging ${member.displayName} is coming soon."
-        }
-
-        /** Overflow → Change tier. Tier moves aren't wired on mobile yet. */
-        fun changeTier(member: AudienceMember) {
-            _overflowTarget.value = null
-            _toast.value = "Changing tiers for ${member.displayName} is coming soon."
-        }
-
-        /** Empty-state CTA — sharing the Beacon link isn't wired yet. */
-        fun shareBeacon() {
-            _toast.value = "Sharing your Beacon is coming soon."
+        /**
+         * Empty-state "Share your Beacon": the Beacon's public link for the
+         * system share sheet (the same `https://pantopus.com/@handle` the
+         * Beacon profile shares). Null, with a toast, before the handle loads.
+         */
+        fun beaconShareUrl(): String? {
+            val handle = personaHandle
+            if (handle == null) _toast.value = "Your Beacon link isn't ready yet. Try again."
+            return handle?.let { "https://pantopus.com/@$it" }
         }
 
         private fun performAction(
