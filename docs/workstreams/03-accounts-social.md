@@ -2,6 +2,67 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 11:35Z: chat audit (user request). #515 native media and #516 web media open; batch 26 (#513) carries #502, #507, #508
+
+**Merged**
+- **Batch 25 (#499, master `207eeb510`)**: #491 (S3-57), #494 (SEC-1) and #497 (chat pickers).
+
+**Batch 26 ([#513](https://github.com/WangPantopus/skinny-pantopus/pull/513), queued by Stream 1)**
+- [#502](https://github.com/WangPantopus/skinny-pantopus/pull/502): S3-31 / S3-54, native Messages filter empty states and the action-failure feedback.
+- [#507](https://github.com/WangPantopus/skinny-pantopus/pull/507): chat sockets join their rooms on connect and never drop an early `room:join`. Bundle r2, seal `19652bdb…`.
+- [#508](https://github.com/WangPantopus/skinny-pantopus/pull/508): web chat shows names again.
+
+**New PRs**
+- [#515](https://github.com/WangPantopus/skinny-pantopus/pull/515) (native, stacked on #502, head `5378ef4dc`):
+  - Photos keep their caption and show every photo ("+N").
+  - A tap opens the shared full-screen viewer.
+  - PDFs and videos open (Android in the app for the file type, iOS in Quick Look).
+  - The server's "Photo" label is not shown as a caption.
+  - Verified on emulator-5554 and simulator 0AE16FA0. Bundle `20260926-stream3-native-chat-media-r1` is sealed after one more iOS capture.
+- [#516](https://github.com/WangPantopus/skinny-pantopus/pull/516) (web, stacked on #508, head `962bf60ed`):
+  - The thread opens at the newest message, keeps its place on "Load earlier", and shows "New messages ↓" instead of pulling a reader down.
+  - Videos play inline. This needed a keyed message list: the first REST page used to remount every bubble after the socket's 50 recent messages.
+  - No "Photo" caption.
+  - Bundle `20260926-stream3-web-chat-media-r1`, seal `7890aea6732bd018c5d7a22367e45632fab55efe3a164302828322a9a3c3a030`.
+
+**Chat audit results so far**
+- **Latency:** fixed by #507. Android→web: server ~61–63 ms plus ~16–21 ms to render.
+- **Reactions:** live both ways.
+- **Sends:** photo, PDF and video from web, and photo from Android, work.
+- **Order:** chronological with the newest at the bottom on all three. Older pages load in order: iOS scrolls to message 01; web order was correct before, and #516 fixes the web jump.
+- **Names and media:** fixed by #508, #515 and #516.
+- **Still open:**
+  - sharing a gig or listing inside chat (needs a fixture gig and listing);
+  - the Android header with the keyboard open (seen once);
+  - the "New message" people search still reading the old user fields;
+  - `ChatRoomView`'s history header, which shows attachments as links.
+
+**Environment-only finding**
+- The local storage stand-in answers a matching `If-None-Match` with an empty 200 instead of 304.
+- Android's Coil cache then stored an empty photo body. Production S3 returns 304, which Coil 2.7.0 handles (bytecode checked).
+- Emulator-5554 now reaches storage through a private shim on 64533 (`adb reverse tcp:64531 tcp:64533`) that drops the two validators.
+
+**Fixtures**
+- CA0–CA3 are recorded in the manifest with exact reverts.
+- CA3: 22 messages and 3 files in DM `ea81a397`.
+
+**Pending user decision**
+- Nonprofit verification evidence: the CHECK constraint rejects `ein_verification` and `tax_exempt_letter` (a new migration, and the fee goes to 0%). Unchanged.
+
+**Candidates** (from Stream 2's FYI)
+- Both apps label every notification whose type contains "mail" as "Listing": the tag icon and green chip. That includes `mail_new`, `mail_urgent` and `home_mail_removed`. To check after the Beacon afters.
+
+**Runtime** (private)
+- **API 18134:** runs the #507 worktree (`23e518b11`) with local storage.
+- **Proxy 18130:** chat-audit mode is on. Chat writes are allowed for Owner and Member only; socket.io passes through.
+- **Next 18131:** runs `962bf60ed`.
+- **Supporting services:** file server 18198 and storage shim 64533.
+
+**Slots**
+- Heavy: Stream 1.
+- iOS driver: Stream 1 until about 11:50Z, then me for the Beacon afters (S3-12/13/33/68, head `3f0b98c71`), then back to Stream 1.
+- Emulator-5554 (slot 4): me.
+
 ## Update 2026-09-26 08:55Z: PR497 (web chat share pickers) open; batch 24 merged (master `dbd75332b`)
 
 - **Batch 24 (#489) merged** at 08:44:25Z, per Stream 1. It carried #483, #485, #486 and #488 from Stream 3.
