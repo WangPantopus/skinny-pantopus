@@ -298,6 +298,8 @@ class BusinessProfileViewModelTest {
     fun load_primary404EmitsNotFound() =
         runTest {
             coEvery { businesses.business("biz-1") } returns NetworkResult.Failure(NetworkError.NotFound)
+            // "biz-1" isn't a UUID, so the not-found detail read also tries it as a `/b/` username.
+            coEvery { businesses.publicBusiness("biz-1") } returns NetworkResult.Failure(NetworkError.NotFound)
 
             val vm = makeVm()
             vm.load()

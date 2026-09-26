@@ -2556,11 +2556,7 @@ public struct YouTabRoot: View {
                 onOpenMessages: { destination in
                     Task { @MainActor in path.append(.chatConversation(destination)) }
                 },
-                onShare: {
-                    systemSheet = .share(
-                        items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
-                    )
-                },
+                onShare: { text in systemSheet = .share(items: [text]) },
                 onOpenWebsite: { url in openURL(url) },
                 onEdit: {
                     Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) }

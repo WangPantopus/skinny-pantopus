@@ -4321,12 +4321,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ),
                             )
                         },
-                        onShare = {
-                            appContext.shareText(
-                                "Check out this business on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
-                                "Share business",
-                            )
-                        },
+                        onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
@@ -4364,12 +4359,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ),
                             )
                         },
-                        onShare = {
-                            appContext.shareText(
-                                "Check out this business on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
-                                "Share business",
-                            )
-                        },
+                        onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )

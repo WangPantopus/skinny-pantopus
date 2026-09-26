@@ -99,6 +99,7 @@ object BusinessProfileMapper {
             phoneNumber = phoneNumber,
             websiteUrl = normalizedWebsite(profile?.website),
             viewerIsOwner = detail.access?.isOwner == true,
+            hasPublicPage = publicResponse != null,
         )
     }
 
