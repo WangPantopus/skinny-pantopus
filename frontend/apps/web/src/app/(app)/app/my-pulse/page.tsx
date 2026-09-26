@@ -189,6 +189,7 @@ export default function MyPulsePage() {
               onReport={(id) => setReportPostId(id)}
               currentUserId={userId || undefined}
               isLiking={likingIds.has(post.id)}
+              showToast={(message) => toast.info(message)}
             />
           )}
           emptyState={{
