@@ -423,6 +423,8 @@ export default function GigsBrowsePage() {
         feedKind === 'tasks' &&
         !filtersActive &&
         !loading &&
+        // A failed load has no tasks to count: it isn't "No tasks within X mi".
+        !(fetchError && gigs.length === 0) &&
         (!showSectionFeed || !browseLoading) &&
         userLat != null &&
         userLng != null,
