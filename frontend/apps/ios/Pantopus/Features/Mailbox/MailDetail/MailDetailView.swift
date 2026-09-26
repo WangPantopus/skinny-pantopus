@@ -77,6 +77,12 @@ public struct MailDetailView: View {
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // A deleted or household-dismissed letter opens from its notice with Restore.
+        .safeAreaInset(edge: .top, spacing: Spacing.s0) {
+            if let removed = viewModel.removed {
+                removedBanner(removed)
+            }
+        }
         .accessibilityIdentifier("mailDetail")
         .task { await viewModel.load() }
         // A dismissed or archived letter has left the mailbox; the list has dropped it.
@@ -140,6 +146,21 @@ public struct MailDetailView: View {
         } message: {
             Text("It moves out of your mailbox and stops showing up in this drawer.")
         }
+    }
+
+    private func removedBanner(_ removed: MailRemovedDTO) -> some View {
+        let text = MailDetailViewModel.removedBannerText(removed)
+        return PauseBanner(
+            icon: .trash,
+            title: text.title,
+            subtitle: text.subtitle,
+            actionLabel: viewModel.restoreInFlight ? "Restoring…" : "Restore",
+            onAction: { Task { await viewModel.restore() } }
+        )
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, Spacing.s2)
+        .background(Theme.Color.appBg)
+        .accessibilityIdentifier("mailDetail_removedBanner")
     }
 
     /// Confirm-sheet title for the destructive category action (today only

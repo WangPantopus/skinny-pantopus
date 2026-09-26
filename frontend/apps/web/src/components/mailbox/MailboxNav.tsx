@@ -36,6 +36,7 @@ const inboxSection: NavEntry[] = [
 const mailboxSection: NavEntry[] = [
   { icon: MailboxIcons.counter, label: 'Counter', href: '/app/mailbox/counter', matchPrefix: '/app/mailbox/counter' },
   { icon: MailboxIcons.vault, label: 'Vault', href: '/app/mailbox/vault', matchPrefix: '/app/mailbox/vault' },
+  { icon: MailboxIcons.deleted, label: 'Recently deleted', href: '/app/mailbox/deleted', matchPrefix: '/app/mailbox/deleted' },
 ];
 
 const homeSection: NavEntry[] = [

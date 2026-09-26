@@ -23,6 +23,17 @@ export interface KeyFact {
   confidence: number;
 }
 
+/**
+ * Set on a letter that was deleted (restorable until restorable_until) or
+ * dismissed for the household; members who could see it can restore it.
+ */
+export interface MailRemovedInfo {
+  action: 'deleted' | 'dismissed';
+  at: string | null;
+  by_name: string | null;
+  restorable_until: string | null;
+}
+
 export interface MailItemV2 {
   id: string;
   drawer: Drawer;
@@ -40,6 +51,7 @@ export interface MailItemV2 {
   urgency: Urgency;
   privacy: Privacy;
   lifecycle: Lifecycle;
+  removed?: MailRemovedInfo | null;
   subject?: string;
   content?: string;
   preview_text?: string;

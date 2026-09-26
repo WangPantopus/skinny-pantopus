@@ -44,6 +44,8 @@ private class OpeningIdentityFixture {
                 MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
             }
         }
+        // No stored session id in these fixtures, so the session marker is the token one.
+        every { tokens.sessionMarker() } answers { tokens.accessTokenMarker() }
         coEvery { tokens.sessionCredentials() } coAnswers { credentials.await() }
         source =
             GigPaymentIdentitySource(

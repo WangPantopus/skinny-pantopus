@@ -48,7 +48,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const isEdited = msg.edited || msg.is_edited;
   const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;
 
-  const isAutoPlaceholder = msgText && /^\[.+ attachment\]$/i.test(msgText.trim());
+  // Text the server fills in for a message that is only attachments ("Photo",
+  // "Document"), or an older client's "[1 attachment]"; not a caption.
+  const isAutoPlaceholder = msgText && /^(\[.+ attachments?\]|Photo|Video|Document|Media)$/i.test(msgText.trim());
   const showText = msgText && !(isAutoPlaceholder && attachments.length > 0);
 
   const handleQuickReact = (emoji: string) => {
@@ -218,6 +220,20 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                           }}
                         />
                       </button>
+                    );
+                  }
+                  if (mime.startsWith('video/') && url) {
+                    return (
+                      <video
+                        key={`${msg.id}-att-${i}`}
+                        src={url}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        aria-label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'}
+                        className="block rounded-lg bg-black"
+                        style={{ width: 'min(100%, 280px)', maxHeight: 'min(220px, 56vw)' }}
+                      />
                     );
                   }
                   return (

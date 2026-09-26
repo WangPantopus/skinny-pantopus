@@ -61,6 +61,7 @@ import {
   HandCoins,
   ShieldCheck,
   Radio,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -189,6 +190,7 @@ export const MailboxIcons = {
   earn: Wallet,
   counter: AlertTriangle,
   vault: Archive,
+  deleted: Trash2,
   map: MapPin,
   community: Megaphone,
   tasks: CheckSquare,

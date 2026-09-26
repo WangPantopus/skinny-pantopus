@@ -127,6 +127,7 @@ export { getHomes, attachToHome, detachFromHome } from './endpoints/homes';
 export { getChatRooms, getBusinessChatRooms, sendMessage, markMessagesAsRead, markMessagesAsReadForIdentity, getConversationMessages, markConversationAsRead } from './endpoints/chat';
 export { uploadProfilePicture, uploadPortfolio, getPortfolio } from './endpoints/files';
 export { getMailbox, markMailAsRead, createAdCampaign } from './endpoints/mailbox';
+export type { DeletedMail } from './endpoints/mailbox';
 export { getBalance, createPaymentIntent, requestPayout } from './endpoints/payments';
 export {
   uploadGigMedia,
@@ -238,7 +239,7 @@ export type { AuditEntry, GuestPass, ScopedGrant } from './endpoints/homeIam';
 export type { GuestPassView, SharedResourceView, PasscodeRequired } from './endpoints/homeGuest';
 
 // Types from mailboxV2
-export type { MailItemV2, Drawer, Tab, PendingRouting, EarnOffer, EarnBalance, MailPackage, PackageEvent, SenderTrust, MailDaySummary as MailDaySummaryV2 } from './endpoints/mailboxV2';
+export type { MailItemV2, MailRemovedInfo, Drawer, Tab, PendingRouting, EarnOffer, EarnBalance, MailPackage, PackageEvent, SenderTrust, MailDaySummary as MailDaySummaryV2 } from './endpoints/mailboxV2';
 
 // Types from mailboxV2Phase2
 export type { BookletPage, BookletMail, CertifiedMail, AuditEvent, VaultFolder, VaultSearchResult } from './endpoints/mailboxV2Phase2';

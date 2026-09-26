@@ -76,6 +76,11 @@ public final class MailDetailViewModel {
     public var pendingDestructiveAction: MailCategoryAction?
     /// `true` once Dismiss or Archive succeeded — the letter left the mailbox, so the view closes.
     public private(set) var didLeaveMailbox = false
+    /// Set when the letter was deleted (restorable for 30 days) or dismissed
+    /// for the household: it opens from its notice with Restore.
+    public private(set) var removed: MailRemovedDTO?
+    /// `true` while Restore is saving; a second tap meanwhile is ignored.
+    public private(set) var restoreInFlight = false
     /// Set to this mail's id when the loaded item carries a stationery
     /// theme — i.e. it came out of the Ceremonial Mail compose flow and
     /// belongs in the ceremonial open experience (envelope tap-to-open,
@@ -126,6 +131,7 @@ public final class MailDetailViewModel {
             let response: MailDetailResponse = try await api.request(
                 MailboxEndpoints.detail(mailId: mailId)
             )
+            removed = response.mail.removed
             // Ceremonial mail never lands on the generic detail — hand it
             // straight to the open experience and hold the loading frame
             // so the plain layout never flashes (RN does the same by
@@ -563,6 +569,47 @@ public final class MailDetailViewModel {
         } catch {
             toast = (error as? APIError)?.errorDescription ?? "Couldn't archive this mail. Try again."
         }
+    }
+
+    /// `POST /api/mailbox/:id/restore` — puts a deleted or household-dismissed
+    /// letter back for everyone who could see it, then reloads it.
+    public func restore() async {
+        guard removed != nil, !restoreInFlight else { return }
+        restoreInFlight = true
+        defer { restoreInFlight = false }
+        do {
+            let _: RestoreMailResponse = try await api.request(MailboxEndpoints.restore(mailId: mailId))
+            removed = nil
+            toast = "Letter restored"
+            await refresh()
+        } catch {
+            toast = (error as? APIError)?.errorDescription ?? "Couldn't restore this letter. Try again."
+        }
+    }
+
+    /// Restore banner copy: who deleted it and until when, or that it was dismissed.
+    static func removedBannerText(_ removed: MailRemovedDTO) -> (title: String, subtitle: String) {
+        guard removed.isDeleted else {
+            return ("Dismissed for the household", "You can restore it")
+        }
+        let title = removed.byName.map { "Deleted by \($0)" } ?? "Deleted"
+        guard let until = shortDate(removed.restorableUntil) else {
+            return (title, "You can restore it for 30 days")
+        }
+        return (title, "You can restore it until \(until)")
+    }
+
+    private static func shortDate(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        let isoFull = ISO8601DateFormatter()
+        isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        guard let date = isoFull.date(from: iso) ?? plain.date(from: iso) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 
     // MARK: - Package dashboard actions (A17.8)
