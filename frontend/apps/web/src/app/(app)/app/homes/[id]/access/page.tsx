@@ -89,7 +89,7 @@ function AccessContent() {
         <div className="text-center py-16">
           <Lock className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No access codes stored</p>
-          <p className="text-xs text-app-text-muted mt-1">Add Wi-Fi, alarm codes, and more from settings</p>
+          <p className="text-xs text-app-text-muted mt-1">Wi-Fi, alarm codes and more added in the Pantopus app on your phone show up here</p>
         </div>
       ) : (
         <div className="space-y-6">
