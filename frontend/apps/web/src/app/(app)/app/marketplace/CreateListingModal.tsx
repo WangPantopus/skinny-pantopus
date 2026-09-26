@@ -440,16 +440,13 @@ export default function CreateListingModal({
                 </div>
               )}
 
-              {/* Delivery + Trade toggles */}
+              {/* Delivery toggle. "Open to trades / swaps" is hidden until trades have a
+                  full flow: buyers can't propose one yet and sellers can't answer one. */}
               {template?.layer === 'goods' && (
                 <div className="space-y-2">
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={deliveryAvailable} onChange={(e) => setDeliveryAvailable(e.target.checked)} className="rounded text-primary-600" />
                     <span className="text-sm text-app-text-strong">Delivery available</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={openToTrades} onChange={(e) => setOpenToTrades(e.target.checked)} className="rounded text-primary-600" />
-                    <span className="text-sm text-app-text-strong">Open to trades / swaps</span>
                   </label>
                 </div>
               )}
