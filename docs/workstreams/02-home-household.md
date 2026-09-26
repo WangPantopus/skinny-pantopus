@@ -1,6 +1,27 @@
 # CURRENT RESUME — Stream 2 peer takeover (September 25, 2026)
 
-Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` on master `02abf6bd3`. The September 22 block below and every older section stay historical/authoritative for their journeys.
+Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
+
+**Mail journey — 2026-09-26 ~00:58Z (supersedes the PR states and "Next" in the ~00:10Z block below)**
+
+- **#443** (Mail write routes truth) was merged at 00:15:41Z as `eaae991b0` and is in master `27eb23ad2` (batch 16, #446).
+- **#445** (native list/Dismiss/Archive/badge/vault): CI is all green at head `352202313`, including `android / Lint, test, assemble`. Stream 1 approved it into native batch 14, PR [449](https://github.com/WangPantopus/skinny-pantopus/pull/449) (#436 → #439 → #444 → #445 → #447, tip `b75f13ffb` on `27eb23ad2`). That PR merges when its batch CI is green.
+- **S2-16 opened as PR [451](https://github.com/WangPantopus/skinny-pantopus/pull/451).** Branch `claude/stream2-native-mail-s2-16`, head `4f4c3b396`, on master `27eb23ad2`. It was opened at 00:56:08Z and CI is running.
+  - Unboxing's dead Photo library and More actions icons and its filed-state Open record/Share/Reminders/Archive chips are hidden. So is the ceremonial reading view's dead Share. Same-width spacers keep the centred titles in place.
+  - The iOS reply-preview icons are now decorative, as on Android.
+  - Four source files and three Android baselines changed. The baselines are `unboxing_filed` 5.41%, `unboxing_capture` 0.105% and `ceremonial_mail_open_phase` 0.029%. The PR body discloses that they also pick up master's `4c15f4b70` success-green change.
+  - **Real-app befores and afters on both apps** (APK `bb2f64cb…`, iOS dylib `9f641b0a…`, both on :18142 only):
+    - The removed controls are gone.
+    - Back, the titles, Close and Archive keep identical bounds.
+    - Only GETs were sent.
+  - Bundle `.pantopus-recovery/audits/20260926-stream2-native-s2-16-r1`, MANIFEST `b45cdc8d430ce5e1074b1c21b4e2846f0ed09e4726378bdb9bb8e47b4e05aca6` (47 files).
+  - No file overlaps #449, and `git merge-tree` with `b75f13ffb` is clean. Stream 1 plans #451 for the next native batch with #448 and #450.
+- **Fixtures:** unchanged by S2-16, which only read the archived owner letters `a9ad531a` (unboxing) and `9f54982e` (ceremonial).
+- **Next:** once #449 lands, branch the Home-links PR (S2-06/S2-10/S2-17) from master. It avoids Stream 3's hunks (connections, identity center, blocked users, and the scheduling/user/chat router cases).
+- **Still waiting on the user:** native read state (A/B/C); household shared-row Archive/Dismiss/Delete semantics; the latent bundle auto-group privacy fix proposal.
+- **Heavy and iOS driver:**
+  - Heavy: held 00:35:26Z–00:41:51Z for the S2-16 builds.
+  - iOS driver: received from Stream 3 at 00:44:54Z, then passed to Stream 3 before 00:48:26Z for their header check. Stream 1 is next.
 
 **Mail journey — native afters, 2026-09-26 ~00:10Z (supersedes the "~22:15Z" native bullet above)**
 
