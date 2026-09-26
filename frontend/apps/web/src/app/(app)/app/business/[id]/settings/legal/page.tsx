@@ -76,7 +76,10 @@ export default function BusinessSettingsLegalPage() {
   const [attestSuccess, setAttestSuccess] = useState('');
 
   // Evidence upload form
-  const [evidenceForm, setEvidenceForm] = useState({ evidence_type: 'business_license', file_id: '' });
+  const [evidenceForm, setEvidenceForm] = useState({ evidence_type: 'business_license' });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  // Bumped after a submit so the file input clears.
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
@@ -170,18 +173,21 @@ export default function BusinessSettingsLegalPage() {
   const handleUploadEvidence = async () => {
     setUploadError('');
     setUploadSuccess('');
-    if (!evidenceForm.file_id.trim()) {
-      setUploadError('File ID is required');
+    if (!evidenceFile) {
+      setUploadError('Choose the document to upload.');
       return;
     }
     setUploading(true);
     try {
+      // Same two hops as iOS and Android: store the file, then register it as evidence.
+      const { file } = await api.upload.uploadVerificationDocument(evidenceFile);
       const res = await api.businesses.uploadVerificationEvidence(businessId, {
         evidence_type: evidenceForm.evidence_type,
-        file_id: evidenceForm.file_id.trim(),
+        file_id: file.id,
       });
       setUploadSuccess(res.message);
-      setEvidenceForm((f) => ({ ...f, file_id: '' }));
+      setEvidenceFile(null);
+      setFileInputKey((k) => k + 1);
       await load();
     } catch (e: unknown) {
       setUploadError(e instanceof Error ? e.message : 'Upload failed');
@@ -353,15 +359,16 @@ export default function BusinessSettingsLegalPage() {
                 </select>
               </label>
               <label className="block">
-                <div className="text-sm font-medium text-app-text-strong mb-1">File ID</div>
+                <div className="text-sm font-medium text-app-text-strong mb-1">Document</div>
                 <input
-                  value={evidenceForm.file_id}
-                  onChange={(e) => setEvidenceForm((f) => ({ ...f, file_id: e.target.value }))}
-                  placeholder="Upload your document via the file manager, then paste the file ID here"
-                  className="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                  key={fileInputKey}
+                  type="file"
+                  accept=".pdf,.doc,.docx,image/jpeg,image/png,image/heic,image/webp"
+                  onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-app-text file:mr-3 file:rounded-lg file:border-0 file:bg-violet-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-violet-700 hover:file:bg-violet-100"
                 />
                 <p className="text-xs text-app-text-muted mt-1">
-                  Upload your document through the file manager, then enter the file ID above.
+                  A PDF or photo of the document.
                 </p>
               </label>
               {uploadError && <div className="text-sm text-red-600">{uploadError}</div>}
