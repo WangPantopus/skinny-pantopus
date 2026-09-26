@@ -113,10 +113,9 @@ fun CertifiedDetailLayout(
     // `true` while the proof fetch is in flight.
     proofInFlight: Boolean = false,
 ) {
-    val shouldShowConfirmGate =
-        content.readStatusLabel.lowercase() == "unread" &&
-            !content.isAcknowledged &&
-            !content.isArchived
+    // The signing confirmation keys on signed, not on read: it shows until
+    // the recipient signs, however often the letter was opened.
+    val shouldShowConfirmGate = !content.isAcknowledged && !content.isArchived
     var showsConfirmGate by remember(content.mailId) { mutableStateOf(shouldShowConfirmGate) }
     var didAutoPresentConfirmGate by remember(content.mailId) { mutableStateOf(shouldShowConfirmGate) }
     var showsTermsSheet by remember { mutableStateOf(false) }
@@ -136,7 +135,8 @@ fun CertifiedDetailLayout(
             body = {
                 ChainOfCustodyTimeline(
                     events = makeChainEvents(certified),
-                    subtitle = "Postal scans · cryptographic receipts",
+                    subtitle =
+                        if (certified.isPostal) "Postal scans · cryptographic receipts" else "Received, read and signed in Pantopus",
                     status = chainStatus(certified),
                 )
             },
@@ -491,7 +491,8 @@ private fun HeroCard(
                         color = PantopusColors.appTextSecondary,
                     )
                 }
-                CertifiedStampBadge(trackingId = certified.referenceNumber)
+                // The USPS stamp is for postal certified mail only.
+                if (certified.isPostal) CertifiedStampBadge(trackingId = certified.referenceNumber)
             }
             if (content.isAcknowledged) {
                 AcknowledgedBanner()
@@ -532,7 +533,7 @@ private fun AcknowledgedBanner() {
             )
         }
         Text(
-            text = "Acknowledged · receipt on file",
+            text = "Signed · receipt on file",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.success,
@@ -672,7 +673,9 @@ private fun SenderAndNotice(
     onOpenExtractedTask: (() -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        if (onOpenExtractedTask != null) {
+        // The extracted-task card shows sample copy for postal notices;
+        // Pantopus certified mail has no extracted task.
+        if (onOpenExtractedTask != null && certified.isPostal) {
             ExtractedTaskCard(onTap = onOpenExtractedTask)
         }
         CombinedSenderCarrierCard(
@@ -724,12 +727,17 @@ private fun chainStatus(certified: CertifiedDetailDto): ChainOfCustodyStatus =
     }
 
 private fun defaultCarrier(certified: CertifiedDetailDto): MailCarrierInfo =
-    MailCarrierInfo(
-        service = "USPS Certified Mail",
-        trackingId = certified.referenceNumber.trim().takeIf { it.isNotEmpty() },
-        signatureRequired = true,
-        postmarkVerified = true,
-    )
+    // Pantopus certified mail has no postal carrier, tracking or postmark.
+    if (!certified.isPostal) {
+        MailCarrierInfo(service = "Pantopus certified mail", trackingId = null, signatureRequired = true, postmarkVerified = false)
+    } else {
+        MailCarrierInfo(
+            service = "USPS Certified Mail",
+            trackingId = certified.referenceNumber.trim().takeIf { it.isNotEmpty() },
+            signatureRequired = true,
+            postmarkVerified = true,
+        )
+    }
 
 private fun iconForChainStep(id: String): PantopusIcon {
     val lower = id.lowercase()

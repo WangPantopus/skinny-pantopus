@@ -136,12 +136,11 @@ public final class MailDetailViewModel {
             }
             let content = Self.project(detail: response.mail, now: now())
             state = .loaded(content)
-            // Certified mail stays unread until it is signed: its Sign for
-            // delivery confirmation keys on unread.
-            let signable = content.certifiedDetail != nil && !content.isAcknowledged
+            // Certified mail is read like any letter (Received → Read); its
+            // Sign for delivery confirmation keys on signed, not on read.
             // Unstructured so leaving the letter at once still records the
             // read; awaited so the load finishes with it.
-            if !response.mail.item.viewed, !signable { await Task { await markViewed() }.value }
+            if !response.mail.item.viewed { await Task { await markViewed() }.value }
             await refreshGigPaymentProgress()
         } catch {
             state = .error(
@@ -176,10 +175,19 @@ public final class MailDetailViewModel {
         let optimistic = MailDetailContent.replacingAck(content, with: true)
         state = .loaded(optimistic)
         do {
-            let _: AckResponse = try await api.request(
-                MailboxEndpoints.acknowledge(mailId: mailId)
-            )
-            toast = "Acknowledged"
+            if content.category == .certified {
+                // Signing certified mail goes through the recipient-only
+                // certified route, which records the receipt and its proof.
+                let _: CertifiedAcknowledgeResponse = try await api.request(
+                    MailboxDocumentEndpoints.certifiedAcknowledge(mailId: mailId)
+                )
+                toast = "Signed · receipt on file"
+            } else {
+                let _: AckResponse = try await api.request(
+                    MailboxEndpoints.acknowledge(mailId: mailId)
+                )
+                toast = "Acknowledged"
+            }
         } catch {
             state = .loaded(previous)
             toast = (error as? APIError)?.errorDescription ?? "Couldn't acknowledge"

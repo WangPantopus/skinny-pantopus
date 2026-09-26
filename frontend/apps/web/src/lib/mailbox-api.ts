@@ -151,9 +151,10 @@ export async function getDrawerItems(
 
 export async function getItemDetail(itemId: string): Promise<MailItemDetailResponse> {
   return call(async () => {
-    const res = await get<{ mail: MailItemV2 }>(`/api/mailbox/v2/item/${itemId}`);
+    const res = await get<{ mail: MailItemV2 & CertifiedFields }>(`/api/mailbox/v2/item/${itemId}`);
     // Map the flat MailItemV2 into the wrapper/inside/policy shape
     const mail = res.mail;
+    const certified = mail.certified === true;
     return {
       wrapper: {
         id: mail.id,
@@ -175,6 +176,9 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
         starred: mail.starred ?? false,
         created_at: mail.created_at,
         opened_at: mail.opened_at,
+        viewed_at: mail.viewed_at ?? undefined,
+        acknowledged_at: mail.acknowledged_at ?? undefined,
+        audit_trail: Array.isArray(mail.audit_trail) ? mail.audit_trail : undefined,
       },
       inside: {
         mail_id: mail.id,
@@ -193,13 +197,22 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
           size_bytes: 0,
         })),
       },
+      // A certified letter (Mail.certified) needs its named recipient's signature.
       policy: {
-        requires_acknowledgment: false,
-        certified: false,
+        requires_acknowledgment: certified,
+        certified,
       },
     };
   });
 }
+
+/** Certified-mail columns the item route returns with the Mail row. */
+type CertifiedFields = {
+  certified?: boolean;
+  viewed_at?: string | null;
+  acknowledged_at?: string | null;
+  audit_trail?: AuditEvent[] | null;
+};
 
 export async function fileItemToVault(itemId: string, folderId: string): Promise<void> {
   return call(async () => {

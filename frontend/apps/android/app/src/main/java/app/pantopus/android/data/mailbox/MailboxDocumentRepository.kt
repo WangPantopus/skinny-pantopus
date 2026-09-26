@@ -1,6 +1,8 @@
 package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDownloadResponse
+import app.pantopus.android.data.api.models.mailbox.v2.CertifiedAcknowledgeBody
+import app.pantopus.android.data.api.models.mailbox.v2.CertifiedAcknowledgeResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CertifiedProofResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
@@ -24,4 +26,8 @@ class MailboxDocumentRepository
 
         /** `GET api/mailbox/v2/p2/certified/:mailId/proof`. */
         suspend fun certifiedProof(mailId: String): NetworkResult<CertifiedProofResponse> = safeApiCall { api.certifiedProof(mailId) }
+
+        /** `POST api/mailbox/v2/p2/certified/acknowledge` — the named recipient signs. */
+        suspend fun certifiedAcknowledge(mailId: String): NetworkResult<CertifiedAcknowledgeResponse> =
+            safeApiCall { api.certifiedAcknowledge(CertifiedAcknowledgeBody(mailId)) }
     }

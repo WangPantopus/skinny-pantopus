@@ -129,12 +129,15 @@ public struct CombinedSenderCarrierCard: View {
                         background: Theme.Color.primary100,
                         foreground: Theme.Color.primary800
                     )
-                    pill(
-                        icon: nil,
-                        text: "Sender domain checked",
-                        background: Theme.Color.successBg,
-                        foreground: Theme.Color.success
-                    )
+                    // Only government, utility and business senders have a checked domain.
+                    if trust == .verified {
+                        pill(
+                            icon: nil,
+                            text: "Sender domain checked",
+                            background: Theme.Color.successBg,
+                            foreground: Theme.Color.success
+                        )
+                    }
                 }
                 .padding(.top, Spacing.s1)
             }

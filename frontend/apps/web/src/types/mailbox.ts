@@ -13,6 +13,8 @@
 //   - Everything exported
 // ============================================================
 
+import type { AuditEvent } from '@pantopus/api';
+
 // ── Re-exports from @pantopus/types ──────────────────────────
 
 export type {
@@ -256,6 +258,11 @@ export interface MailWrapper {
   starred: boolean;
   created_at: string;
   opened_at?: string;
+  /** Read in the apps (they record viewed_at rather than opened_at). */
+  viewed_at?: string;
+  /** Certified mail: when the named recipient signed for it. */
+  acknowledged_at?: string;
+  audit_trail?: AuditEvent[];
 }
 
 // ── Mail Inside ──────────────────────────────────────────────

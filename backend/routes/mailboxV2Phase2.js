@@ -670,10 +670,13 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
 
     const now = new Date().toISOString();
     const auditTrail = Array.isArray(mail.audit_trail) ? mail.audit_trail : [];
-    auditTrail.push(
-      { event: 'opened', timestamp: now, actor_id: req.user.id },
-      { event: 'acknowledged', timestamp: now, actor_id: req.user.id },
-    );
+    // Signing is the receipt. A letter read earlier (opened on the web, or
+    // viewed in the apps) keeps the time it was first read.
+    const readAt = mail.opened_at || mail.viewed_at || now;
+    if (!auditTrail.some((entry) => entry?.event === 'opened')) {
+      auditTrail.push({ event: 'opened', timestamp: readAt, actor_id: req.user.id });
+    }
+    auditTrail.push({ event: 'acknowledged', timestamp: now, actor_id: req.user.id });
 
     const { error: ackError } = await supabaseAdmin
       .from('Mail')
@@ -681,8 +684,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
         acknowledged_at: now,
         acknowledged_by: req.user.id,
         audit_trail: auditTrail,
-        lifecycle: 'opened',
-        opened_at: now,
+        ...(mail.opened_at ? {} : { lifecycle: 'opened', opened_at: readAt }),
       })
       .eq('id', mailId);
     // supabase-js reports a failed write instead of throwing: without this

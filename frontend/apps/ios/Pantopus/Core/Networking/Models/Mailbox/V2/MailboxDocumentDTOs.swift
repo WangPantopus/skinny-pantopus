@@ -37,6 +37,16 @@ public struct BookletDownloadResponse: Decodable, Sendable, Hashable {
     }
 }
 
+/// `POST /api/mailbox/v2/p2/certified/acknowledge` body.
+public struct CertifiedAcknowledgeBody: Encodable, Sendable {
+    public let mailId: String
+}
+
+/// `POST /api/mailbox/v2/p2/certified/acknowledge` response: the signed receipt.
+public struct CertifiedAcknowledgeResponse: Decodable, Sendable, Hashable {
+    public let acknowledgedAt: String?
+}
+
 /// `GET /api/mailbox/v2/p2/certified/:mailId/proof` envelope — route
 /// `backend/routes/mailboxV2Phase2.js:705`.
 public struct CertifiedProofResponse: Decodable, Sendable, Hashable {
