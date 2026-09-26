@@ -168,8 +168,8 @@ interface MarketplaceMapProps {
   /** UI callbacks */
   onOpenCategoryModal: () => void;
   onOpenCreateModal: () => void;
-  /** Total listings count in current bounds */
-  totalCount?: number;
+  /** Total listings count in current bounds; null while it isn't known (pending or failed read). */
+  totalCount?: number | null;
   /** Save toggle — owned by parent so grid + map share the same state */
   onSave?: (listingId: string) => void;
   /** Nearest activity center for empty viewport snap-to */
@@ -316,7 +316,7 @@ export default function MarketplaceMap({
     if (onSave) onSave(listingId);
   };
 
-  const displayCount = totalCount ?? listings.length;
+  const displayCount = totalCount === null ? null : (totalCount ?? listings.length);
 
   // ── Zoom gate + nearest activity ───────────────────────────
   const ZOOM_GATE = 8;
@@ -393,12 +393,14 @@ export default function MarketplaceMap({
       </button>
 
       {/* Listing count — top right */}
-      <button
-        onClick={fitAllPins}
-        className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-2 bg-app-surface rounded-lg shadow-md border border-app-border text-sm font-medium text-app-text-strong hover:bg-app-hover"
-      >
-        <Store className="w-4 h-4 inline-block" /> {displayCount} listing{displayCount !== 1 ? 's' : ''}
-      </button>
+      {displayCount !== null && (
+        <button
+          onClick={fitAllPins}
+          className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-2 bg-app-surface rounded-lg shadow-md border border-app-border text-sm font-medium text-app-text-strong hover:bg-app-hover"
+        >
+          <Store className="w-4 h-4 inline-block" /> {displayCount} listing{displayCount !== 1 ? 's' : ''}
+        </button>
+      )}
 
       {/* Re-center button — bottom left */}
       <button
