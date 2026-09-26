@@ -84,7 +84,7 @@ struct AddressTodayTabView: View {
                 savedPlace: savedPlace,
                 onAddHome: onAddHome,
                 onResolvePlace: resolveHome
-            ) { rootTabs.selected = .place }
+            ) { openBallot() }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             couldNotLoad
@@ -189,6 +189,19 @@ struct AddressTodayTabView: View {
             loadFailed = true
         }
         resolved = true
+    }
+
+    /// The ballot card is on this home's Place dashboard. Selecting the
+    /// Place tab alone can land on its hub or a detail page, so open the
+    /// dashboard through the place link, as the tab's own stack does.
+    private func openBallot() {
+        // Master's Today also opens for a saved place with no home
+        // (`calendarHomeId` is nil); there is no home dashboard to open then.
+        guard let homeId = detail?.calendarHomeId else {
+            rootTabs.selected = .place
+            return
+        }
+        DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
     }
 }
 

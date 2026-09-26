@@ -56,14 +56,14 @@ private const val PLACEHOLDER_ROWS = 3
 /**
  * The Today tab root (Wedge v2 D2). Four states: loading placeholders,
  * a claim prompt when there is no place yet, the Today group with the
- * address calendar, and an error with retry. [onOpenPlace] switches to
- * the Place tab (the Ballot P0 card's "Open your ballot").
+ * address calendar, and an error with retry. [onOpenPlace] opens this
+ * home's Place dashboard (the Ballot P0 card's "Open your ballot").
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayTabScreen(
     onClaim: () -> Unit,
-    onOpenPlace: (() -> Unit)? = null,
+    onOpenPlace: ((homeId: String) -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -118,7 +118,7 @@ fun TodayTabScreen(
                             radonFactory = viewModel.radonFactory.takeIf { current.calendarHomeId != null },
                             pilotEvents = viewModel.pilotEvents,
                             radonContext = viewModel.radonContext,
-                            onOpenBallot = onOpenPlace,
+                            onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
                         )
                         if (current.savedPlace != null) {
                             SavedPlaceReminders(onClaim)
