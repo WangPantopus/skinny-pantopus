@@ -1,6 +1,36 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T08:06Z (batch 23 merged; batch 24 #489 queued)
+## CURRENT RESUME POINT — 2026-09-26T08:54Z (batch 24 merged; batch 25 = 7 reviewed PRs gating on CI)
+
+- **Integration (Stream 1 queue):**
+  - Master is `dbd75332b`. Batch 24 [#489](https://github.com/WangPantopus/skinny-pantopus/pull/489) merged at 08:44:25Z. It carried #481 and #487 (S1), #482 (S2), and #483, #485, #486 and #488 (S3).
+  - **Batch 25** (every PR reviewed and its bundle verified; the dry-run chain on `dbd75332b` is clean) will be built when all are green:
+    - #490 (S1 web Discover "Couldn't load businesses"): green.
+    - #492 (S1 web Tasks map failure state): green.
+    - #495 (S1 iOS listing link over an open listing): CI running.
+    - #496 (S1 backend: Android listing/post views count): CI running.
+    - #494 (S3 SEC-1 evidence file ownership, user-approved): green.
+    - #491 (S3-57 native rollback toasts + iOS delete): CI running.
+    - #493 (S2 R06 decision 2): CI running.
+- **Stream 1 new this round:**
+  - **Web Discover (#490):** any failed business search said "No businesses found yet. Try adjusting your filters or check back later.". It now uses the native wording.
+  - **Web Tasks map (#492):** a failed pin read said "0 tasks in this area" and "No tasks in view", with no error. It now follows FeedMap's "Unavailable" + "Couldn't load tasks. Try again" pattern.
+  - **iOS listing link (#495):** a listing link over an open listing kept the old listing and made no request. `MarketplaceTabRoot` now gives the detail `.id(listingId)`, like Tasks and Pulse. Verified on the simulator.
+  - **Backend (#496):** the bot-UA pattern's `http` matched OkHttp, so Android listing and post views were never counted and sellers' "N views" missed Android. It's now `(?<!ok)http`. Verified with the real Android app before and after; the backend was restarted with SIGINT.
+  - **Sweeps, all PASS:** iOS Marketplace, listing detail and listing save; Android offline Save/Ask, post detail 500 and Hub pill; web Payments history. Web account switch clears the query cache (source).
+  - **Candidates:**
+    - Manage Train "No signups yet" on a failed read;
+    - web map counts remote tasks as pins;
+    - chat pickers, routed to Stream 3, who took them.
+- **Proposals awaiting the user (Stream 1):**
+  - Android token refresh. New 07:55Z evidence: a task opened by link fails on its own first load, which strengthens option A.
+  - Marketplace Snapshot rows.
+  - Owner Message.
+  - Native buyer offer view/withdraw.
+  - **New: saved items are unreachable.** Save works on all three apps, and web has finished `/app/gigs/saved` and `/app/saved-listings` pages, but nothing links to them. There is no saved-posts page, and native has no saved lists.
+- **Slots:** heavy is Stream 2's (since 08:43Z). The iOS driver went to Stream 2 at 08:47Z, with F4DBD47E shut down. Stream 1 holds only emulator-5558 (slot 3).
+
+## Resume point history — 2026-09-26T08:06Z (batch 23 merged; batch 24 #489 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `e00952e3e`. Batch 23 [#484](https://github.com/WangPantopus/skinny-pantopus/pull/484) merged at 07:51:21Z. It carried #479 (S3 B7 web limits), #480 (S1 web Payouts "—") and #476 (S1 My bids/tasks/posts + iOS Hub time).

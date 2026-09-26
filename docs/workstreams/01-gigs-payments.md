@@ -1,6 +1,20 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T08:06Z
+## CURRENT STREAM 1 STATE — 2026-09-26T08:54Z
+
+- **Merged in batch 24 (#489, 08:44:25Z):** #481 and #487.
+- **Open for batch 25:**
+
+  | PR | Head | What | Bundle | CI |
+  |---|---|---|---|---|
+  | [#490](https://github.com/WangPantopus/skinny-pantopus/pull/490) | `f36e42eac` | web Discover failed search | `980160fb…` | green |
+  | [#492](https://github.com/WangPantopus/skinny-pantopus/pull/492) | `5832003ea` | web Tasks map failure state | `3ca56cd6…` | green |
+  | [#495](https://github.com/WangPantopus/skinny-pantopus/pull/495) | `cbb9e9d23` | iOS listing link identity | `dabd2e05…` | CI |
+  | [#496](https://github.com/WangPantopus/skinny-pantopus/pull/496) | `efb0baa81` | backend Android views | `73edd0cf…` | CI |
+
+- **Proposals for the user:** token refresh (stronger evidence); Snapshot rows; owner Message; buyer offer; **saved items unreachable (new)**.
+
+## Previous Stream 1 state — 2026-09-26T08:06Z
 
 - **Merged in batch 23 (#484, 07:51:21Z):** #476 and #480.
 - **In batch 24 ([#489](https://github.com/WangPantopus/skinny-pantopus/pull/489), queued):**
