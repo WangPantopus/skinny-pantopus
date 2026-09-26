@@ -92,7 +92,14 @@ async function downloadLetterPdf(homeId: string, letter: ResidencyLetter): Promi
 }
 
 // ── Verification status — the green badge ───────────────────
-function VerifiedStatus({ name, address }: { name: string; address: string }) {
+// Guests and service providers have verified access here but don't live here.
+function verifiedTitle(roleBase: string | null): string {
+  if (roleBase === 'guest') return 'Verified guest';
+  if (roleBase === 'service_provider') return 'Verified service provider';
+  return 'Verified resident';
+}
+
+function VerifiedStatus({ name, address, roleBase, nonResident }: { name: string; address: string; roleBase: string | null; nonResident: boolean }) {
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
       <div className="flex items-center gap-3.5">
@@ -101,14 +108,16 @@ function VerifiedStatus({ name, address }: { name: string; address: string }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[18px] font-bold -tracking-[0.015em] text-app-text">Verified resident</span>
+            <span className="text-[18px] font-bold -tracking-[0.015em] text-app-text">{verifiedTitle(roleBase)}</span>
             <Chip label="Active" variant="success" icon={Check} />
           </div>
           <div className="text-[13.5px] text-app-text-secondary mt-0.5 truncate">{[name, address].filter(Boolean).join(' · ')}</div>
         </div>
       </div>
       <div className="text-[13px] text-app-text-strong leading-5 mt-[15px] pt-[15px] border-t border-app-border-subtle">
-        Your address is verified through Pantopus. You can generate a residency letter from it below.
+        {nonResident
+          ? 'Your access to this address is verified through Pantopus. Residency letters and passes are for the people who live here, so guest and service access can\'t issue them.'
+          : 'Your address is verified through Pantopus. You can generate a residency letter from it below.'}
       </div>
     </div>
   );
@@ -608,6 +617,46 @@ function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; addres
   );
 }
 
+// Guests and service providers can't issue, but letters and passes from when
+// they lived here stay listed so they can still download or revoke them.
+function EarlierLettersAndClaims({ homeId }: { homeId: string }) {
+  const lettersQuery = useQuery({
+    queryKey: queryKeys.residencyLetters(homeId),
+    queryFn: () => api.residencyLetters.listResidencyLetters(homeId),
+  });
+  const claimsQuery = useQuery({
+    queryKey: queryKeys.residencyClaims(homeId),
+    queryFn: () => api.residencyClaims.listResidencyClaims(homeId),
+  });
+  const letters = lettersQuery.data ?? [];
+  const claims = claimsQuery.data ?? [];
+
+  return (
+    <>
+      {letters.length > 0 && (
+        <>
+          <DetailSectionLabel>Issued letters</DetailSectionLabel>
+          <div className="flex flex-col gap-2.5">
+            {letters.map((letter) => (
+              <IssuedLetterCard key={letter.id} letter={letter} homeId={homeId} />
+            ))}
+          </div>
+        </>
+      )}
+      {claims.length > 0 && (
+        <>
+          <DetailSectionLabel>Issued claims</DetailSectionLabel>
+          <div className="flex flex-col gap-2.5">
+            {claims.map((claim) => (
+              <IssuedClaimCard key={claim.id} claim={claim} homeId={homeId} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 // ── Unlisted — your address, and how to take it back ─────────
 //
 // The claimed-home half of /unlisted. Same three rules as the public
@@ -755,11 +804,19 @@ export default function IdentityDetail({ intelligence, homeId, residentName }: {
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [unlistedOpen, setUnlistedOpen] = useState(false);
   const verified = intelligence.tier === 'T4';
+  // The server refuses guests and service providers residency letters and passes (NON_RESIDENT_ROLES).
+  const { data: access } = useQuery({
+    queryKey: queryKeys.placeAccess(homeId ?? ''),
+    queryFn: () => api.homeIam.getMyHomeAccess(homeId as string),
+    enabled: !!homeId,
+  });
+  const roleBase = access?.hasAccess ? access.role_base : null;
+  const nonResident = roleBase === 'guest' || roleBase === 'service_provider';
   const address = detailAddress(intelligence.place);
   const place = intelligence.place;
   const cityStateZip = [place.city, place.state].filter(Boolean).join(', ') + (place.postal_code ? ` ${place.postal_code}` : '');
 
-  if (letterOpen && verified && homeId) {
+  if (letterOpen && verified && !nonResident && homeId) {
     return (
       <ResidencyLetterLeaf
         facts={{ name: residentName, line1: place.line1 || place.label, cityStateZip }}
@@ -770,7 +827,7 @@ export default function IdentityDetail({ intelligence, homeId, residentName }: {
     );
   }
 
-  if (claimsOpen && verified && homeId) {
+  if (claimsOpen && verified && !nonResident && homeId) {
     return (
       <ResidencyPassLeaf
         homeId={homeId}
@@ -792,46 +849,51 @@ export default function IdentityDetail({ intelligence, homeId, residentName }: {
         <DetailSectionLabel>Verification</DetailSectionLabel>
         {verified ? (
           <>
-            <VerifiedStatus name={residentName} address={place.line1 || place.label} />
+            <VerifiedStatus name={residentName} address={place.line1 || place.label} roleBase={roleBase} nonResident={nonResident} />
             <SourceNote name="Address verification · Pantopus" asOf="active" />
 
-            <DetailSectionLabel>Residency letter</DetailSectionLabel>
-            <button
-              type="button"
-              onClick={() => setLetterOpen(true)}
-              className="w-full flex items-center gap-3.5 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
-            >
-              <span className="w-11 h-11 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
-                <FileText size={22} strokeWidth={2} className="text-primary-600" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">Generate a verified residency letter</div>
-                <div className="text-[12.5px] text-app-text-muted mt-0.5">An official PDF with a verification code anyone can check</div>
-              </div>
-              <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
-            </button>
-            <InfoNote>
-              A residency letter states your verified address for a purpose you choose — landlords, schools, libraries. Each letter carries a unique code a recipient can verify, and you can revoke it any time.
-            </InfoNote>
+            {!nonResident && (
+              <>
+                <DetailSectionLabel>Residency letter</DetailSectionLabel>
+                <button
+                  type="button"
+                  onClick={() => setLetterOpen(true)}
+                  className="w-full flex items-center gap-3.5 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
+                >
+                  <span className="w-11 h-11 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
+                    <FileText size={22} strokeWidth={2} className="text-primary-600" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">Generate a verified residency letter</div>
+                    <div className="text-[12.5px] text-app-text-muted mt-0.5">An official PDF with a verification code anyone can check</div>
+                  </div>
+                  <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+                </button>
+                <InfoNote>
+                  A residency letter states your verified address for a purpose you choose — landlords, schools, libraries. Each letter carries a unique code a recipient can verify, and you can revoke it any time.
+                </InfoNote>
 
-            <DetailSectionLabel>Residency Pass</DetailSectionLabel>
-            <button
-              type="button"
-              onClick={() => setClaimsOpen(true)}
-              className="w-full flex items-center gap-3.5 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
-            >
-              <span className="w-11 h-11 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
-                <Fingerprint size={22} strokeWidth={2} className="text-primary-600" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">Prove residency without sharing your address</div>
-                <div className="text-[12.5px] text-app-text-muted mt-0.5">Share one fact — your city, school district, or county — behind a live-checked link</div>
-              </div>
-              <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
-            </button>
-            <InfoNote>
-              A claim is checked live: it stops verifying the moment you revoke it, it expires on the date you pick, and every check is logged for you.
-            </InfoNote>
+                <DetailSectionLabel>Residency Pass</DetailSectionLabel>
+                <button
+                  type="button"
+                  onClick={() => setClaimsOpen(true)}
+                  className="w-full flex items-center gap-3.5 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
+                >
+                  <span className="w-11 h-11 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
+                    <Fingerprint size={22} strokeWidth={2} className="text-primary-600" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">Prove residency without sharing your address</div>
+                    <div className="text-[12.5px] text-app-text-muted mt-0.5">Share one fact — your city, school district, or county — behind a live-checked link</div>
+                  </div>
+                  <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+                </button>
+                <InfoNote>
+                  A claim is checked live: it stops verifying the moment you revoke it, it expires on the date you pick, and every check is logged for you.
+                </InfoNote>
+              </>
+            )}
+            {nonResident && homeId && <EarlierLettersAndClaims homeId={homeId} />}
           </>
         ) : (
           <LockedCard
