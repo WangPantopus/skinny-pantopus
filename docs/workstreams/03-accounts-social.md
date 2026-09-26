@@ -2,6 +2,18 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 06:35Z: S3-47 open as PR475 (master `5bf1eb7f8`)
+
+- **[PR475](https://github.com/WangPantopus/skinny-pantopus/pull/475): open, CI running.** Web S3-47. Head `305f63cab`, 1 file (`EventTypeForm.tsx`).
+  - The event type editor's Reminders row showed "1 day, 1 hour before" for everyone. It now shows the booking page's real `reminder_minutes` (existing `summarizeReminders`) and links to the Reminders page; a failed read shows WorkflowList's retry copy.
+  - The static, disabled "Booking limits · Off" row is removed. The per-event limits stay in the Advanced card.
+  - Reproduced and verified as Member (fixture F5d, page reminders `[120]`): before "1 day, 1 hour before", after "2 hours before"; the link lands on "Default reminders" with 2 hours selected; an injected 500 shows the failure copy; create mode makes no read. DB fingerprint identical during the afters; ESLint and web tsc clean.
+  - Bundle `20260926-stream3-event-type-reminders-r1`, MANIFEST.json SHA-256 `21988c0a1556ec7784033ce365a353fdb2f9c3932090d7eaaea5068110e3e5a7`.
+  - Fixture F5d (user-approved set, exact reverts): Member event type `4bc2310d` and Member's personal page `a1060a2b` (not live).
+  - Broad80: S3-47.
+- **New finding (not in the inventory):** web Availability → "Booking limits & notice rules" (B7, `BookingLimitsForm.tsx`) starts from hard-coded defaults and its Done only toasts "Limits updated."; nothing is read or saved. Next: reproduce on the real app and propose the fix.
+- **Harness gotcha:** in the hidden in-app pane, React 19 never reveals a streamed Suspense boundary (rAF doesn't fire), so a page can sit on its skeleton. Calling the pending boundary comment's `_reactRetry()` hydrates it.
+
 ## Update 2026-09-26 06:08Z: fixture set created (isolated DB `pantopus-stream3-block-r1` only)
 
 The user approved the full set and the keep decision for the three incidental rows.
