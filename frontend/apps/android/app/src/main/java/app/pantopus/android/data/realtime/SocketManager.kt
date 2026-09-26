@@ -4,6 +4,7 @@ import app.pantopus.android.BuildConfig
 import io.socket.client.Ack
 import io.socket.client.IO
 import io.socket.client.Socket
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
@@ -26,7 +29,9 @@ import kotlin.coroutines.resume
  *
  * - [connect] / [disconnect] manage lifecycle.
  * - [connectionState] is a StateFlow so the UI can react.
- * - [eventsOf] exposes a given event as a cold Flow of JSON payloads.
+ * - [eventsOf] exposes a given event as a cold Flow of JSON payloads that
+ *   follows the current socket, so a token refresh (which replaces the socket)
+ *   doesn't leave open screens listening to a dead one.
  * - [sessionRevoked] surfaces the server's `auth:session_revoked` push.
  */
 @Singleton
@@ -56,7 +61,14 @@ class SocketManager
         private val _sessionRevoked = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
         val sessionRevoked: SharedFlow<Unit> = _sessionRevoked.asSharedFlow()
 
-        private var socket: Socket? = null
+        // The live socket, observable so [eventsOf] collectors re-attach when
+        // [connect] replaces it after a token refresh.
+        private val currentSocket = MutableStateFlow<Socket?>(null)
+        private var socket: Socket?
+            get() = currentSocket.value
+            set(value) {
+                currentSocket.value = value
+            }
         private var authToken: String? = null
 
         fun connect(token: String) {
@@ -96,8 +108,9 @@ class SocketManager
                 Timber.i("Socket session revoked: ${args.joinToString()}")
                 _sessionRevoked.tryEmit(Unit)
             }
-            s.connect()
+            // Publish before connecting so collectors are listening when the rooms rejoin.
             socket = s
+            s.connect()
         }
 
         fun disconnect() {
@@ -113,20 +126,25 @@ class SocketManager
         /**
          * Listen to [event] as a cold Flow of JSONObject payloads.
          * Collectors are responsible for parsing the JSON into their own types.
+         * The listener moves to each new socket: [connect] with a refreshed
+         * token replaces the socket, and `disconnect()` strips the old one's
+         * listeners, which used to leave open chats silently deaf.
          */
+        @OptIn(ExperimentalCoroutinesApi::class)
         fun eventsOf(event: String): Flow<JSONObject> =
-            callbackFlow {
-                val s =
-                    socket ?: run {
-                        close()
-                        return@callbackFlow
+            currentSocket.flatMapLatest { s ->
+                if (s == null) {
+                    emptyFlow()
+                } else {
+                    callbackFlow {
+                        val listener =
+                            io.socket.emitter.Emitter.Listener { args ->
+                                (args.firstOrNull() as? JSONObject)?.let { trySend(it) }
+                            }
+                        s.on(event, listener)
+                        awaitClose { s.off(event, listener) }
                     }
-                val listener =
-                    io.socket.emitter.Emitter.Listener { args ->
-                        (args.firstOrNull() as? JSONObject)?.let { trySend(it) }
-                    }
-                s.on(event, listener)
-                awaitClose { s.off(event, listener) }
+                }
             }
 
         fun emit(
