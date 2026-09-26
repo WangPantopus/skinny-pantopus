@@ -1,6 +1,6 @@
 # Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
-## CURRENT RESUME — Stream 2 handoff, updated 2026-09-26T22:48Z (read this first)
+## CURRENT RESUME — Stream 2 handoff, updated 2026-09-26T23:02Z (read this first)
 
 **Who owns what.**
 - **Stream 2 (independent peer):** Home, residency, Place, Home intelligence, records, bills, Mail/guests and the related Support-train UX, on the real web app, iOS simulator and Android emulator.
@@ -14,6 +14,11 @@
   - #535 and #538 are in Stream 1's batch 32, [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), queued at 22:35:20Z (tip `543315762`, order #538, #535, #536, #537). All four heads showed CI OK at 22:34:37Z.
   - #539 goes in batch 33 once its CI is green. Stream 1 reviewed it and verified its bundle at ~22:35Z. A simulated chain of master + batch 32 + #539 merges clean.
   - [#541](https://github.com/WangPantopus/skinny-pantopus/pull/541) (web-only copy, §3 item 4) is for batch 33 too: head `c78e5087e` on `f885e0623`, bundle `20260926-stream2-docs-empty-copy-r1`.
+  - [#543](https://github.com/WangPantopus/skinny-pantopus/pull/543) (**security** + Place, backend only) is for batch 33: head `35f543dd8` on `f885e0623`, bundle `20260926-stream2-place-null-coords-r1`.
+    - A Home without coordinates was treated as 0°N 0°E (`Number(null)` is 0).
+    - Place Today showed Null Island's sun times, and Risk said "No EPA-registered sites within a mile" for a Portland address.
+    - Any two coordinate-less Homes passed the neighbor-message "same block" check.
+    - Reported to Stream 1.
   - Native Add guest truth fixes; branch `claude/stream2-add-guest-truth`, head `89be05af7`, worktree `/private/tmp/pantopus-stream2-add-guest`.
   - CI was running at 21:55Z (4 pass / 5 skipped / 3 pending).
   - Stream 1 already has the details and puts it in the next batch once green. If CI fails, fix it on the same branch and re-verify.
@@ -117,10 +122,10 @@
   - Supabase stack `pantopus-stream2-native-resume-r2` (API 64553, DB 64554), backend 18143 (main worktree; `HOME_DOCUMENTS_BUCKET=s2-home-documents`), proxy 18142 → 18143, Next 18144 (main worktree web).
   - emulator-5556 with APK `f3d4f3d8…` (#539 tree), owner signed in.
   - The iOS sim 6F914A30 is shut down, with dylib `b1591333…` (#539 tree), owner signed in.
-  - Backend 18143 runs the code it loaded at its 22:04Z start: the `09ee447b8` tree (master `f885e0623` + #538). Next 18144 hot-reloads, so it serves the main worktree's current tree.
+  - Backend 18143 (task started 22:58:5xZ) runs the #543 tree `35f543dd8` (master `f885e0623` + #543; without #538). Next 18144 hot-reloads, so it serves the main worktree's current tree.
 - **Main worktree:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss`.
   - It's a local build branch, never a PR. To serve or build a PR's tree: `git restore --source=<commit> --staged --worktree -- . ':!.claude/launch.json'`, then `git diff --cached --quiet <commit>`, then commit "build: tree = …".
-  - It currently equals #541's `c78e5087e` tree (build commit `a64834f97`, on master `f885e0623`). The #539 native builds on the devices came from `140d67668`. Leave its `.claude/launch.json` local change alone.
+  - It currently equals #543's `35f543dd8` tree (build commit `0f84afbb8`, on master `f885e0623`). The #539 native builds on the devices came from `140d67668`. Leave its `.claude/launch.json` local change alone.
 - **PR worktrees:** `/private/tmp/pantopus-stream2-*`. Open: `add-guest` (#535), `residency-guest` (#538), `add-guest-sections` (#539). #541 has no worktree: it was built with git plumbing to save disk.
   - At the user's request, Stream 3 removed the 18 merged Stream 2 worktrees at ~22:46Z (plain `git worktree remove`; branches kept). Stream 2 cleared this after checking each was clean and merged and that nothing used it.
   - Two old kit probe tools that required those worktrees are marked historical. Never remove worktrees; create new ones from `origin/master`.
@@ -152,6 +157,7 @@
 | `20260926-stream2-native-s2-16-r1` | `b45cdc8d430ce5e1…` | 47 |
 | `20260926-stream2-ownership-transfer-fix-r1` | `a14373fb1b347489…` | 168 |
 | `20260926-stream2-party-assign-exposure-r1` | `e71f87e002ccb6a9…` | 14 |
+| `20260926-stream2-place-null-coords-r1` | `d41bbd902b806287…` | 39 |
 | `20260926-stream2-r06-native-letters-r1` | `887521e000d5d4a5…` | 169 |
 | `20260926-stream2-residency-guest-role-r1` | `69a0cf6c0594a042…` | 14 |
 | `20260926-stream2-transfer-ownerless-exposure-r1` | `4eb55adcbdad51b2…` | 29 |
@@ -183,6 +189,18 @@
 ## Status log (newest first; each block is the state at its time)
 
 _Previous header (2026-09-25):_ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
+
+**Stream 2 — 2026-09-26 23:02Z (#543: Homes without coordinates were Null Island; security for neighbor messages)**
+
+- **Found while starting the I-rows:** the stale sun data on the Place Today tab read "5:48 AM sunrise, 12h 7m" for a Portland address.
+  - Both synthetic Homes have no coordinates. `placeSectionAdapters.homeLatLng` used `Number(null)` = 0, so every adapter queried 0°N 0°E (cache keys `geo:s0000…`).
+  - The same pattern in `neighborMessages.homeGeohash` put every coordinate-less Home on block `s00000`.
+  - `placeIntelligenceService.homeLatLng` had the guard since a74102c92 (2026-09-11).
+- **#543:** both guards, head `35f543dd8`.
+  - Verified on web, Android and API before/after, plus an adapter control through the real code under the egress guard.
+  - Neighbor send before (master): 422 past the block check; after: 400 "That address isn't on your block." No rows were written.
+  - 5 existing suites (108 tests) pass. Bundle `20260926-stream2-place-null-coords-r1`. Reported to Stream 1 (batch 33).
+- **Candidate (not changed):** stale sun data is labeled "today" on web ("Open-Meteo · today") and Android ("Your location · today").
 
 **Stream 2 — 2026-09-26 22:48Z (#541 web Documents empty-state copy; worktree cleanup)**
 
