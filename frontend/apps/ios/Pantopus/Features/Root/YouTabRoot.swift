@@ -1185,6 +1185,7 @@ public struct YouTabRoot: View {
             SettingsView(
                 onClose: { Task { @MainActor in pop() } },
                 onEditProfile: { showsEditProfile = true },
+                onOpenAudienceProfile: { Task { @MainActor in path.append(.audienceProfile) } },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case .paymentsSettings:
@@ -1192,6 +1193,7 @@ public struct YouTabRoot: View {
                 initialRoute: .payments,
                 onClose: { Task { @MainActor in pop() } },
                 onEditProfile: { showsEditProfile = true },
+                onOpenAudienceProfile: { Task { @MainActor in path.append(.audienceProfile) } },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case let .placeholder(label):

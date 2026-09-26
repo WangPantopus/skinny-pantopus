@@ -110,9 +110,12 @@ public struct RootTabView: View {
 
     public var body: some View {
         TabView(selection: tabBinding) {
-            HubTabRoot { showProfile = true }
-                .tabItem { tabLabel(.place) }
-                .tag(RootTab.place)
+            HubTabRoot(
+                onOpenProfile: { showProfile = true },
+                onOpenProfileScreen: { route in presentProfile(at: route) }
+            )
+            .tabItem { tabLabel(.place) }
+            .tag(RootTab.place)
 
             TodayTabRoot()
                 .tabItem { tabLabel(.today) }
@@ -122,10 +125,13 @@ public struct RootTabView: View {
                 .tabItem { tabLabel(.nearby) }
                 .tag(RootTab.nearby)
 
-            MailTabRoot { showProfile = true }
-                .tabItem { tabLabel(.mail) }
-                .tag(RootTab.mail)
-                .badge(model.messagesBadge)
+            MailTabRoot(
+                onOpenProfile: { showProfile = true },
+                onOpenProfileScreen: { route in presentProfile(at: route) }
+            )
+            .tabItem { tabLabel(.mail) }
+            .tag(RootTab.mail)
+            .badge(model.messagesBadge)
         }
         .tint(Theme.Color.primary600)
         .environment(model)
@@ -260,9 +266,14 @@ public struct RootTabView: View {
 
     /// Persona screens live in the profile cover's own stack.
     private func openProfile(at route: YouRoute) {
+        presentProfile(at: route)
+        _ = router.consume()
+    }
+
+    /// Opens the profile cover on one of its own screens.
+    private func presentProfile(at route: YouRoute) {
         profileInitialRoute = route
         showProfile = true
-        _ = router.consume()
     }
 
     private var tabBinding: Binding<RootTab> {
@@ -348,9 +359,14 @@ public struct MailTabRoot: View {
     @State private var store = MailTabStore.shared
     @State private var segment: MailSegment = .mailbox
     private let onOpenProfile: @MainActor () -> Void
+    private let onOpenProfileScreen: @MainActor (YouRoute) -> Void
 
-    public init(onOpenProfile: @escaping @MainActor () -> Void = {}) {
+    public init(
+        onOpenProfile: @escaping @MainActor () -> Void = {},
+        onOpenProfileScreen: @escaping @MainActor (YouRoute) -> Void = { _ in }
+    ) {
         self.onOpenProfile = onOpenProfile
+        self.onOpenProfileScreen = onOpenProfileScreen
     }
 
     public var body: some View {
@@ -372,7 +388,7 @@ public struct MailTabRoot: View {
 
             switch segment {
             case .mailbox:
-                HubTabRoot(mode: .mailbox, onOpenProfile: onOpenProfile)
+                HubTabRoot(mode: .mailbox, onOpenProfile: onOpenProfile, onOpenProfileScreen: onOpenProfileScreen)
             case .messages:
                 InboxTabRoot()
             }

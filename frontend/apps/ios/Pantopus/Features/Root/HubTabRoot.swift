@@ -513,19 +513,27 @@ public struct HubTabRoot: View {
     /// Identity Center presented when the drawer's context pill is tapped
     /// (LAUNCHER / Option A switching path).
     @State private var navDrawerIdentityCenter = false
+    /// Set when that Identity Center's Public profile card is tapped: the
+    /// profile cover opens on the audience profile once the sheet is gone.
+    @State private var opensAudienceProfileAfterIdentityCenter = false
     #if DEBUG
     @State private var debugSheet: HubRoute?
     #endif
 
     private let onOpenProfile: @MainActor () -> Void
+    /// Opens the profile cover on one of its own screens. Persona screens
+    /// (the audience profile) live in that cover's stack, not in this one.
+    private let onOpenProfileScreen: @MainActor (YouRoute) -> Void
     private let mode: HubStackMode
 
     public init(
         mode: HubStackMode = .hub,
-        onOpenProfile: @escaping @MainActor () -> Void = {}
+        onOpenProfile: @escaping @MainActor () -> Void = {},
+        onOpenProfileScreen: @escaping @MainActor (YouRoute) -> Void = { _ in }
     ) {
         self.mode = mode
         self.onOpenProfile = onOpenProfile
+        self.onOpenProfileScreen = onOpenProfileScreen
     }
 
     /// The root tab this instance serves — deep links are consumed only
@@ -686,13 +694,17 @@ public struct HubTabRoot: View {
         .sheet(item: $systemSheet) { request in request.makeView() }
         .findPeopleSheet(isPresented: $showFindPeople)
         .overlay { navigationDrawerOverlay }
-        .sheet(isPresented: $navDrawerIdentityCenter) {
-            IdentityCenterView(
-                onBack: { navDrawerIdentityCenter = false },
-                onOpenIdentity: { card in openFromIdentityCenter(Self.identityCenterRoute(forCard: card.kind)) },
-                onOpenRow: { row in openFromIdentityCenter(Self.identityCenterRoute(forRow: row.id)) }
-            )
-        }
+        .sheet(
+            isPresented: $navDrawerIdentityCenter,
+            onDismiss: { openPendingAudienceProfile() },
+            content: {
+                IdentityCenterView(
+                    onBack: { navDrawerIdentityCenter = false },
+                    onOpenIdentity: { card in openIdentityCard(card.kind) },
+                    onOpenRow: { row in openFromIdentityCenter(Self.identityCenterRoute(forRow: row.id)) }
+                )
+            }
+        )
     }
 
     /// The drawer's Identity Center is a sheet: close it, then open the
@@ -701,6 +713,23 @@ public struct HubTabRoot: View {
         guard let route else { return }
         navDrawerIdentityCenter = false
         path.append(route)
+    }
+
+    /// The Public profile card's audience profile is in the profile cover,
+    /// which can only open after this sheet has closed.
+    private func openIdentityCard(_ kind: IdentityKind) {
+        guard kind == .publicProfile else {
+            openFromIdentityCenter(Self.identityCenterRoute(forCard: kind))
+            return
+        }
+        opensAudienceProfileAfterIdentityCenter = true
+        navDrawerIdentityCenter = false
+    }
+
+    private func openPendingAudienceProfile() {
+        guard opensAudienceProfileAfterIdentityCenter else { return }
+        opensAudienceProfileAfterIdentityCenter = false
+        onOpenProfileScreen(.audienceProfile)
     }
 
     /// Identity Center cards this stack can open: the Local profile is what
@@ -2813,6 +2842,9 @@ public struct HubTabRoot: View {
                         push(.wallet)
                     }
                 },
+                // The audience profile lives in the profile cover's stack;
+                // closing the cover returns here.
+                onOpenAudienceProfile: { onOpenProfileScreen(.audienceProfile) },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case .helpCenter:
@@ -2834,6 +2866,7 @@ public struct HubTabRoot: View {
                         push(.wallet)
                     }
                 },
+                onOpenAudienceProfile: { onOpenProfileScreen(.audienceProfile) },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case .editProfile:
