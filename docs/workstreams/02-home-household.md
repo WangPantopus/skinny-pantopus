@@ -2,6 +2,33 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 03:50Z (adds to the 03:16Z block below)**
+
+- **Batch 19 (#459) merged** at 03:43:14Z; master is `a5fb4864c`. It includes #457 (Mail Party and bundle privacy) and #453 (Home links).
+- **#461 (S2-03)** was approved by Stream 1 and is in batch 20 ([#463](https://github.com/WangPantopus/skinny-pantopus/pull/463)).
+- **Read state opened as PR [464](https://github.com/WangPantopus/skinny-pantopus/pull/464)** at about 03:49Z. Branch `claude/stream2-native-mail-read-state`, head `1cc00d5e0`, on `a5fb4864c`. It's queued for batch 21 once CI is green.
+  - **Decision A:** both apps call the web's `PATCH /api/mailbox/:id/view` after the generic detail loads an unviewed letter.
+    - On success the row drops its unread highlight and the drawer badges refetch.
+    - A failure leaves the letter unread.
+    - Leaving at once still records the read (Android `NonCancellable`; iOS runs an unstructured task that the load awaits).
+    - The server sets an ad letter's payout `pending` once.
+  - **Certified:** unsigned certified letters stay unread, because their Sign for delivery confirmation keys on "unread".
+  - **Files and tests:** 16 native files. Existing test stubs are in 3 Android MailDetail VM test classes and iOS `MailDetailCommunityTests`. No new tests and no backend changes.
+  - **Real-app befores and afters on both apps:** read, ad payout once, 503 stays unread then recovers, and leaving at once with the reply held 5–8 s. Screenshots bracket the iOS case. 9 MailAction rows for 9 letters.
+  - **Builds:** APK `11e7185b…` and iOS dylib `b3a7502f…`, both on :18142 only.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-native-mail-read-state-r1`, MANIFEST `cd1cd25aa3e7ba71023f003d7b881167859f6e0ff54414bba9f70f89baecbfdc` (144 files).
+- **Fixtures (isolated DB 64554):**
+  - New ad letters `451a9615` and `705e9621` (owner, $0.25, `pending`) are archived and retained.
+  - The seven S2-Mail-List letters used were restored to unread by exact id, so Me is back to 25 unread.
+  - The 9 MailAction `viewed` rows are retained.
+- **New finding (code-level, for the user):** the native certified layout is unreachable with live data. The apps expect `object.reference_number`, but the V1 detail route sends the raw MailObject row. Its signing confirmation also keys on read state, which the web sets on open. This is a product and legal decision.
+- **Heavy and devices:**
+  - Heavy: held 03:33:07Z–03:41:55Z (from Stream 1, then to Stream 3).
+  - iOS driver and slot 4: held 03:35Z–03:47:32Z (from Stream 3 and back to it), with 6F914A30 shut down.
+  - The Claude panel auto-booted 6F914A30 at about 03:31Z. That wasn't any stream's call, and it was shut down at 03:34:45Z.
+- **Still waiting on the user:** household delete-recovery specifics.
+- **Next:** the remaining Stream 2 inventory rows, verified-first.
+
 **Stream 2 — 2026-09-26 03:16Z (supersedes the security, S2-03 and "still waiting" items below)**
 
 - **User decisions (2026-09-26):**
