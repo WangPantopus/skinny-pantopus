@@ -2,6 +2,37 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 12:25Z: #516 merged (batch 27); #515 queued for batch 28; #520 Beacon rows open; mail-notification label fix built next
+
+**PR status**
+- Batch 27 (#517) merged at 12:16:08Z (master `2e053fe9c`) and includes #516 (web chat scroll and media).
+- #515 (native chat media) is reviewed, green and sealed (`a4aba3a9…`); it's in batch 28 with #518 and #519.
+
+**[#520](https://github.com/WangPantopus/skinny-pantopus/pull/520): Beacon owner screens (S3-12, S3-13, S3-33, S3-68)**
+- Head `0e7bfcaea`, seal `a312b295e1b15ee3ecd6bfa16cd3e49d1f632d04fcbb946ecade704a8ff47d5b`.
+- Checked on iOS for all four rows, and on Android for S3-12 and S3-33.
+- Also fixes the Android Audience profile tab strip, which showed only "Updates" (a Row child with fillMaxWidth). The 11 Paparazzi baselines are re-recorded.
+- Fixture F10: the `audience_profile` flag is on for Member, with an exact revert in the manifest. It must be reverted at the end of the audit.
+
+**Chat: sharing items**
+- Web (Owner): Share a Task and Share a Listing send cards ("s3fx chat share task" $25, "s3fx chat share listing" $10).
+- Member receives them live on web and on Android; the Android cards open the task and listing detail pages.
+- Fixture CA4 is recorded.
+- Not checked: sending cards from the native apps.
+
+**Chat: Android keyboard (reproduced)**
+- With the keyboard open, the chat header is pushed off-screen: the window pans, and the chat screen has no IME padding.
+- The fix needs the chat to switch to resize mode while open, IME padding, and the bottom tab bar hidden while typing. That's queued as a separate careful change.
+
+**Mail notification label** (Stream 2's FYI, reproduced on Android with fixture F13)
+- mail_new and home_mail_removed showed a tag icon and "Listing".
+- Fix: branch `claude/stream3-notification-mail-label`, head `e98b73259`. Mail types map to System, before the home rule.
+- Builds wait for heavy, after Stream 2.
+
+**Web "New message" search:** works. Candidate only: result avatars read `profile_picture_url`, but the API returns `profilePicture`.
+
+**Process note:** at about 12:16Z my simulator booted briefly while Stream 2 held slot 1, because my script's slot claim failed and it didn't stop. Stream 2 was told, and the sim was shut down at once.
+
 ## Update 2026-09-26 11:35Z: chat audit (user request). #515 native media and #516 web media open; batch 26 (#513) carries #502, #507, #508
 
 **Merged**
