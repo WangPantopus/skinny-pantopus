@@ -63,6 +63,10 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
   - one iOS UI driver (device slot 1, by convention);
   - at most 4 booted devices (`device-slot.sh`).
   - Hand them over only through explicit peer messages.
+- **Shared coordination checkout:** all three streams commit in `/Users/yingpengwang/pantopus-coordination`, which has **one shared index**.
+  - Never leave files staged. Commit with explicit paths in one step: `git commit -m … -- <paths>`.
+  - At 22:12Z this note and the prompt were swept into Stream 2's commit `8a45c96b4` ("docs(stream2): finding 15 reachability…") because they sat staged. The content is correct.
+  - Update the checkout with `git fetch origin codex/workstream-coordination && git rebase origin/codex/workstream-coordination`; `git pull --rebase` fails there.
 - **App rule:** after opening a PR, bind it with the `ccd_pr` tools (`get_status`, then `bind_pr` if it isn't bound). Do **not** run your own CI-polling loops (loops of `gh pr checks`, Monitor, cron, ScheduleWakeup). A one-off `gh pr checks` right before building a batch is fine. The merge-queue runner (§4) is the established merge mechanism.
 
 ## 2. State at handoff (22:08Z)
