@@ -1,6 +1,27 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T17:33Z (batch 28 merged; batch 29 #526 queued)
+## CURRENT RESUME POINT — 2026-09-26T18:53Z (batch 30 merged; batch 31 pending CI)
+
+- **Integration (Stream 1 queue):**
+  - Master is `448ee8b4a`.
+  - Batch 29 [#526](https://github.com/WangPantopus/skinny-pantopus/pull/526) merged at 18:00:53Z: S3 #523, S1 #524.
+  - Batch 30 [#531](https://github.com/WangPantopus/skinny-pantopus/pull/531) merged at 18:49:34Z: S1 #527 tip copy, S2 #528 Members Invite, S2 #529 Home documents, S3 #530 Who's free loop.
+  - **Batch 31 candidates** (reviewed, bundles verified, no shared files):
+    - S3 [#532](https://github.com/WangPantopus/skinny-pantopus/pull/532), chat audit fixes (`c6a265c8…`);
+    - S1 [#533](https://github.com/WangPantopus/skinny-pantopus/pull/533), native accept-a-counter (`45e240d9…`).
+    - Both have CI running.
+- **User decision A (native buyers accept a seller's counter):** implemented in #533. "Accept $X" sits in the countered "Your offer" sheet, calls the existing accept route, then reloads to "Pickup pending" and the existing "Continue checkout". Android and iOS afters are verified, including an injected 500 that keeps the sheet open.
+- **Stream 1 audits sealed:**
+  - `20260926-stream1-free-task-lifecycle-r1` (`1855635d…`; fixtures removed at 18:16Z);
+  - `20260926-stream1-tip-unavailable-reason-r1` (`9bb90479…`);
+  - `20260926-stream1-accept-counter-r1` (`45e240d9…`; fixtures removed at 18:51Z).
+- **Runtime:** the Stream 1 runtime tree equals master `448ee8b4a` (clean); the isolated DB is at master's 92 migrations.
+- **Slots:** heavy, the iOS driver and slot 1 are free. Stream 1 keeps emulator-5558 (slot 3, alice); Stream 3 keeps emulator-5554 (slot 4); Stream 2 keeps emulator-5556 (slot 2).
+- **Open product notes:**
+  - Cancelling a started task is blocked by policy (`STARTED_POLICY_REVIEW`; copy mentions fees on $0 tasks). A user proposal is possible.
+  - S2 recorded that the web Mail Party page is dormant (a product question for its user).
+
+## Resume point history — 2026-09-26T17:33Z (batch 28 merged; batch 29 #526 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `be33552e8`: batch 28 [#525](https://github.com/WangPantopus/skinny-pantopus/pull/525) merged at 13:49:47Z with #518, #515, #519, #520, #521 and #522.

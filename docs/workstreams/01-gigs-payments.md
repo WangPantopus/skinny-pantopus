@@ -1,6 +1,16 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T13:14Z
+## CURRENT STREAM 1 STATE — 2026-09-26T18:53Z
+
+- **Merged today, after batch 27:**
+  - batch 28: #518 Manage Train, #522 web instant accept;
+  - batch 29: #524 web Reviewed step;
+  - batch 30: #527 tip copy for `CONNECT_REQUIRED` (web, iOS, Android).
+- **Open:** [#533](https://github.com/WangPantopus/skinny-pantopus/pull/533) `89f97a01b`, native accept-a-counter (user decision A). Android and iOS verified; bundle `45e240d9…`.
+- **Free-task lifecycle audit:** web, Android and iOS verified; S3 delivery proof and the Stripe paid path are the boundaries. Bundle `1855635d…`.
+- **Next:** batch 31 (#532 + #533), then the remaining low candidates in the inventory.
+
+## Previous Stream 1 state — 2026-09-26T13:14Z
 
 - **Merged:**
   - batch 26 (#513, 11:37Z): #498, #500, #501, #504, #505 and #506;
