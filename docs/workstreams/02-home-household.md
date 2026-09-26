@@ -2,6 +2,26 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 08:10Z (decision 2 / R06 in progress; security finding escalated)**
+
+- **Batch 24 (#489)** contains #482 (decision 3). Its iPhone 16 Pro job failed in `HomeTaskMediaViewModelTests` (timing, unrelated), passed on re-run, and is now green.
+- **R06:** worktree `/private/tmp/pantopus-stream2-r06`, branch `claude/stream2-r06-native-letters`. Local head `1302cf89a` on master `e00952e3e` (2 commits, unpushed).
+  - **Native Place dashboard:** an "Identity · Residency letters & passes" entry.
+  - **Letter PDFs:** iOS opens them in Quick Look; Android opens them through the FileProvider in the phone's PDF viewer.
+  - **Guests and service providers:** "Verified guest" / "Verified service provider" on iOS, Android and web. They get a note instead of the issue forms, and the letters and passes they issued as residents stay listed with PDF and Revoke.
+- **Verified so far:**
+  - **Befores:** on master for all three platforms. The guest is offered both generators, and issuing returns 403.
+  - **Afters (first build):** the member flow works on both apps. The dashboard entry opens Identity, and the PDF opens in the device viewer with the exact bytes the server sends (sha `8e871f59…` on both). The web guest view on the current tree is also done.
+  - **Still to run:** a rebuild for the "keep earlier letters" change, then the native guest afters.
+- **SECURITY (escalated to the user; no code):** a resident changed to guest keeps letters that still verify.
+  - The public check returned `valid: true` with B's name and address after B became a guest.
+  - Both live checks ignore `role_base`; passes have the same gap.
+  - **Proposal A:** treat guest and service-provider roles as residency ended in `verifyByCode` and `isStillVerifiedResident`. The write-up is in the scratchpad `evidence/r06/finding-guest-letter-verifies/FINDING.md`, to be sealed with the R06 bundle.
+- **Decision 4 notes (next):**
+  - Live certified letters render as ordinary letters on every platform. Web `getItemDetail` hard-codes `certified: false`. Native keys the certified layout on `mail_type == certified`, which `Mail_mail_type_check` forbids.
+  - The native "Sign for delivery" calls V1 `/ack`, which needs `ack_required` and lets any household member acknowledge.
+  - The only writer of `Mail.certified` is the dev seed route.
+
 **Stream 2 — 2026-09-26 07:12Z (decision 3 done)**
 
 - **Batch 21 merged** (master `e1509f346`, with #464 and #467). **#473 and #474 are in batch 22 (#478).**
