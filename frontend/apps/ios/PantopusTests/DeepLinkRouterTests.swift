@@ -144,11 +144,11 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pending, .homeMemberRequests(id: "h_1"))
     }
 
-    func testHomeMembersWithoutRequestsTabFallsBackToDetail() throws {
+    func testHomeMembersWithoutRequestsTabOpensMembers() throws {
         try DeepLinkRouter.shared.handle(
             url: XCTUnwrap(URL(string: "https://pantopus.app/homes/h_1/members"))
         )
-        XCTAssertEqual(DeepLinkRouter.shared.pending, .homeDetail(id: "h_1"))
+        XCTAssertEqual(DeepLinkRouter.shared.pending, .homeMembers(id: "h_1"))
     }
 
     func testHomeOwnersTransferRoute() throws {
