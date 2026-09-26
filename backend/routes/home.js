@@ -2632,8 +2632,11 @@ router.put('/:id/issues/:issueId', verifyToken, async (req, res) => {
     const { id: homeId, issueId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage issues' });
+    const access = await checkHomePermission(homeId, userId);
+    // Whoever manages the home's maintenance can update its issues, as can home editors.
+    if (!access.hasAccess || !['home.edit', 'maintenance.manage'].some(permission => access.permissions.includes(permission))) {
+      return res.status(403).json({ error: 'No permission to manage issues' });
+    }
 
     const allowed = ['title', 'description', 'status', 'severity', 'assigned_vendor_id', 'estimated_cost', 'photos', 'secret_fixes', 'linked_gig_id', 'resolved_at', 'details'];
     const updates = {};

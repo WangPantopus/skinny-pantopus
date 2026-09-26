@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Shield, Eye, Search, UserX, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Shield, Eye, Search, UserX } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import type {
   UserPrivacySettings,
-  UserProfileBlock,
   SearchVisibilityLevel,
   ProfileVisibilityLevel,
 } from '@pantopus/types';
@@ -21,8 +19,6 @@ export default function PrivacySettingsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [_settings, setSettings] = useState<UserPrivacySettings | null>(null);
-  const [blocks, setBlocks] = useState<UserProfileBlock[]>([]);
-  const [blocksLoading, setBlocksLoading] = useState(true);
 
   // Form state
   const [searchVisibility, setSearchVisibility] = useState<SearchVisibilityLevel>('everyone');
@@ -59,21 +55,9 @@ export default function PrivacySettingsPage() {
     }
   }, [router]);
 
-  const loadBlocks = useCallback(async () => {
-    try {
-      const res = await api.privacy.getBlocks();
-      setBlocks(res.blocks || []);
-    } catch {
-      // Ignore — might not have any blocks
-    } finally {
-      setBlocksLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     loadSettings();
-    loadBlocks();
-  }, [loadSettings, loadBlocks]);
+  }, [loadSettings]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -94,24 +78,6 @@ export default function PrivacySettingsPage() {
       toast.error(msg);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRemoveBlock = async (block: UserProfileBlock) => {
-    const yes = await confirmStore.open({
-      title: 'Remove block?',
-      description: `Unblock @${block.blocked?.username || 'this user'}? They will be able to find and interact with you again.`,
-      confirmLabel: 'Unblock',
-      variant: 'destructive',
-    });
-    if (!yes) return;
-    try {
-      await api.privacy.removeBlock(block.id);
-      setBlocks((prev) => prev.filter((b) => b.id !== block.id));
-      toast.success('Block removed');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to remove block';
-      toast.error(msg);
     }
   };
 
@@ -263,45 +229,15 @@ export default function PrivacySettingsPage() {
               People you&apos;ve blocked cannot find or interact with you. You can block someone from their profile page.
             </p>
 
-            {blocksLoading ? (
-              <div className="py-4 text-center text-app-secondary text-sm">Loading…</div>
-            ) : blocks.length === 0 ? (
-              <div className="py-6 text-center">
-                <p className="text-sm text-app-secondary">No blocked users</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-app">
-                {blocks.map((block) => (
-                  <div key={block.id} className="flex items-center justify-between py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-surface-muted flex items-center justify-center text-sm font-semibold text-app-secondary">
-                        {block.blocked?.name?.[0]?.toUpperCase() || block.blocked?.username?.[0]?.toUpperCase() || '?'}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-app">
-                          {block.blocked?.name || block.blocked?.username || 'Unknown'}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {block.blocked?.username && (
-                            <span className="text-xs text-app-secondary">@{block.blocked.username}</span>
-                          )}
-                          <span className="inline-flex items-center rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-app-secondary">
-                            {BLOCK_SCOPE_LABELS[block.block_scope] || block.block_scope}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveBlock(block)}
-                      className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition"
-                      title="Remove block"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Blocks live in three separate contracts; the Blocked users page lists and lifts all of them. */}
+            <button
+              type="button"
+              onClick={() => router.push('/app/profile/settings/blocked')}
+              className="w-full flex items-center justify-between rounded-lg border border-app px-4 py-3 text-sm font-medium text-app hover:bg-surface-muted transition"
+            >
+              See and unblock everyone you&apos;ve blocked
+              <ChevronRight className="w-4 h-4 text-app-secondary" />
+            </button>
           </div>
         </div>
       </main>
@@ -317,11 +253,6 @@ const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Only me' },
 ];
 
-const BLOCK_SCOPE_LABELS: Record<string, string> = {
-  full: 'Full block',
-  search_only: 'Search block',
-  business_context: 'Business context',
-};
 
 // ─── Helper Components ────────────────────────────────────────
 

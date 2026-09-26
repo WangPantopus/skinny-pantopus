@@ -114,6 +114,8 @@ export default function BusinessAddressFlow({
       routeDecision(res.verdict.decision.status);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Address validation failed');
+      // Leave "Verifying…" so Retry and Verify come back, as the suite re-check does.
+      setFlowState('ERROR');
     }
   };
 
@@ -497,19 +499,10 @@ export default function BusinessAddressFlow({
       {flowState === 'CONFLICT_OPTIONS' && verdict && (
         <DecisionCard accent="red" title="This location is already managed on Pantopus" testId="decision-conflict">
           <p className="text-sm text-app-text-secondary">
-            If you represent this business here, request access or verify ownership.
+            Use a different address, or add your unit if you&apos;re in a different suite at this building.
           </p>
           <div className="mt-3 space-y-2">
-            <OptionCard
-              label="Request access"
-              description="Ask the current manager for team access."
-              recommended
-              onClick={() => {
-                // Placeholder — show coming-soon toast
-                setError('Ownership request coming soon. Please use a different address for now.');
-              }}
-              testId="conflict-request"
-            />
+            {/* Requesting access to the existing listing has no route yet, so it isn't offered. */}
             <OptionCard
               label="Use a different address"
               description="Start over with another address."
@@ -543,14 +536,6 @@ export default function BusinessAddressFlow({
               className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
             >
               Edit address
-            </button>
-            <button
-              type="button"
-              onClick={() => setError("Manual review coming soon. Please try a different format.")}
-              data-testid="undeliverable-new-building"
-              className="text-sm text-app-text-secondary hover:text-app-text-strong underline"
-            >
-              I&apos;m in a new building
             </button>
           </div>
         </DecisionCard>

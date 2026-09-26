@@ -2413,6 +2413,9 @@ public struct YouTabRoot: View {
                 onOpenMaintenance: { maintenanceHomeId in
                     Task { @MainActor in path.append(.homeMaintenance(homeId: maintenanceHomeId)) }
                 },
+                onOpenIssues: { issuesHomeId in
+                    Task { @MainActor in path.append(.homeIssues(homeId: issuesHomeId)) }
+                },
                 onOpenMembers: { membersHomeId in
                     Task { @MainActor in path.append(.homeMembers(homeId: membersHomeId)) }
                 },

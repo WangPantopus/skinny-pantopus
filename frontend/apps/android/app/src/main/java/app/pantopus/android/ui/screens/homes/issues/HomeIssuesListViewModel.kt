@@ -6,10 +6,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.CreateHomeIssueRequest
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeIssueDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeIssueRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeIssuesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
@@ -98,6 +100,7 @@ open class HomeIssuesListViewModel
     @Inject
     constructor(
         private val repo: HomeIssuesRepository,
+        private val adminRepo: HomeAdminRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -125,6 +128,16 @@ open class HomeIssuesListViewModel
 
         private var issues: List<HomeIssueDto>? = null
 
+        /** The viewer's effective Home permissions; unreadable access leaves the list read-only. */
+        private var access: HomeAccessDto? = null
+
+        /** As the server allows: maintenance editors report issues; maintenance managers and home editors update them. */
+        private val canReport: Boolean
+            get() = access?.let { it.can("maintenance.edit") || it.can("maintenance.manage") } == true
+
+        private val canUpdate: Boolean
+            get() = access?.let { it.can("home.edit") || it.can("maintenance.manage") } == true
+
         fun load() = refresh()
 
         fun refresh() {
@@ -145,14 +158,18 @@ open class HomeIssuesListViewModel
             toast.value = null
         }
 
-        fun fab(): FabAction =
-            FabAction(
-                icon = PantopusIcon.Plus,
-                contentDescription = "Report issue",
-                variant = FabVariant.CanonicalCreate,
-                tint = FabTint.Home,
-                onClick = { pendingEvent.value = HomeIssuesEvent.OpenReport },
-            )
+        fun fab(): FabAction? =
+            if (!canReport) {
+                null
+            } else {
+                FabAction(
+                    icon = PantopusIcon.Plus,
+                    contentDescription = "Report issue",
+                    variant = FabVariant.CanonicalCreate,
+                    tint = FabTint.Home,
+                    onClick = { pendingEvent.value = HomeIssuesEvent.OpenReport },
+                )
+            }
 
         // MARK: - Mutations
 
@@ -213,6 +230,7 @@ open class HomeIssuesListViewModel
         private suspend fun fetch() {
             when (val result = repo.getHomeIssues(homeId)) {
                 is NetworkResult.Success -> {
+                    access = (adminRepo.myAccess(homeId) as? NetworkResult.Success)?.data
                     issues = result.data.issues
                     _tabs.value = tabsWithCounts(result.data.issues)
                     render(result.data.issues)
@@ -244,8 +262,11 @@ open class HomeIssuesListViewModel
             _banner.value = bannerFor(tab, loaded)
         }
 
-        private fun emptyState(tab: HomeIssuesTab): ListOfRowsUiState.Empty =
-            when (tab) {
+        private fun emptyState(tab: HomeIssuesTab): ListOfRowsUiState.Empty {
+            // Only viewers who can report an issue get the Report issue button.
+            val reportTitle = "Report issue".takeIf { canReport }
+            val report: (() -> Unit)? = { pendingEvent.value = HomeIssuesEvent.OpenReport }.takeIf { canReport }
+            return when (tab) {
                 HomeIssuesTab.Open ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Wrench,
@@ -253,26 +274,27 @@ open class HomeIssuesListViewModel
                         subcopy =
                             "Report a leak, a broken appliance, or anything else that needs " +
                                 "fixing. Everyone in the household sees it and can track the fix.",
-                        ctaTitle = "Report issue",
-                        onCta = { pendingEvent.value = HomeIssuesEvent.OpenReport },
+                        ctaTitle = reportTitle,
+                        onCta = report,
                     )
                 HomeIssuesTab.Scheduled ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Calendar,
                         headline = "Nothing scheduled",
                         subcopy = "Issues you schedule for a fix show up here until they're completed.",
-                        ctaTitle = "Report issue",
-                        onCta = { pendingEvent.value = HomeIssuesEvent.OpenReport },
+                        ctaTitle = reportTitle,
+                        onCta = report,
                     )
                 HomeIssuesTab.History ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.CheckCircle,
                         headline = "No history",
                         subcopy = "Completed and dismissed issues are archived here.",
-                        ctaTitle = "Report issue",
-                        onCta = { pendingEvent.value = HomeIssuesEvent.OpenReport },
+                        ctaTitle = reportTitle,
+                        onCta = report,
                     )
             }
+        }
 
         private fun bannerFor(
             tab: HomeIssuesTab,
@@ -313,6 +335,7 @@ open class HomeIssuesListViewModel
             title: String,
             status: HomeIssueChipStatus,
         ): RowFooter? {
+            if (!canUpdate) return null
             val actions = mutableListOf<RowFooterAction>()
             when (status) {
                 HomeIssueChipStatus.Open ->

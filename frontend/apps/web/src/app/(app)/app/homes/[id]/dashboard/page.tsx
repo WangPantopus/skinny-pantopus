@@ -367,6 +367,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         onClose={closeIssuePanel}
         onSave={handleIssueSave}
         issue={issuePanel.issue}
+        canEdit={can('home.edit') || can('maintenance.manage')}
       />
       <BillSlidePanel
         open={billPanel.open}

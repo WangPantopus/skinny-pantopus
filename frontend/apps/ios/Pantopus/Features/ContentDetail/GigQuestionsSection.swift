@@ -66,7 +66,8 @@ struct GigQuestionsSection: View {
 
     private var header: some View {
         HStack {
-            Text("Questions (\(viewModel.questions.count))")
+            // No count for a read that failed with nothing loaded.
+            Text(questionsFailedEmpty ? "Questions" : "Questions (\(viewModel.questions.count))")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Spacer()
@@ -154,6 +155,10 @@ struct GigQuestionsSection: View {
         viewModel.newQuestionText.trimmingCharacters(in: .whitespacesAndNewlines).count >= 5
     }
 
+    private var questionsFailedEmpty: Bool {
+        viewModel.questionsLoadFailed && viewModel.questions.isEmpty
+    }
+
     @ViewBuilder private var questionsBody: some View {
         if viewModel.questionsLoading {
             Text("Loading questions...")
@@ -161,6 +166,19 @@ struct GigQuestionsSection: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.s4)
+        } else if questionsFailedEmpty {
+            VStack(spacing: Spacing.s2) {
+                Text("Couldn't load questions.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                Button("Try again") { Task { await viewModel.loadQuestions() } }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primary600)
+                    .accessibilityIdentifier("gigQuestionsRetry")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.s4)
+            .accessibilityIdentifier("gigQuestionsFailed")
         } else if viewModel.questions.isEmpty {
             Text("No questions yet. Be the first to ask!")
                 .font(.system(size: 13))

@@ -109,7 +109,8 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         case pickupAddress = "pickup_address"
         case dropoffAddress = "dropoff_address"
         case bidCount = "bid_count"
-        case savedByUser = "saved_by_user"
+        // The server sends the viewer's saved state as `viewer_has_saved` (as web reads it).
+        case savedByUser = "viewer_has_saved"
         case distanceMiles = "distance_miles"
         case latitude
         case longitude

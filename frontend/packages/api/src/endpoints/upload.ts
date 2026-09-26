@@ -321,6 +321,26 @@ export async function uploadChatMedia(
 }
 
 /**
+ * Upload a business verification document (private) through the standalone
+ * file endpoint. This is the first of the two hops iOS and Android make: pass
+ * the returned file id to `businesses.uploadVerificationEvidence`.
+ */
+export async function uploadVerificationDocument(file: File | any): Promise<{
+  message: string;
+  file: { id: string; url?: string };
+}> {
+  const formData = new FormData();
+  await appendMultipartFile(formData, 'file', file, 'verification');
+  formData.append('file_type', 'business_verification');
+  formData.append('visibility', 'private');
+
+  const response = await apiClient.post('/api/files/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+/**
  * Upload ownership evidence document for a claim.
  * Used on mobile with React Native FormData (uri-based file objects).
  */

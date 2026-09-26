@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Lock, Award, CheckCircle, Clock } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -21,6 +21,9 @@ export default function LegalTab({ businessId, businessType }: Props) {
     ein_submitted: boolean; ein_approved: boolean; ein_pending: boolean; awaiting_verification: boolean;
   } | null>(null);
   const [uploadingEin, setUploadingEin] = useState(false);
+  // Which letter the file picker is choosing for.
+  const [pendingEvidenceType, setPendingEvidenceType] = useState<'ein_verification' | 'tax_exempt_letter' | null>(null);
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
 
   const isNonprofit = businessType === 'nonprofit_501c3';
 
@@ -67,15 +70,19 @@ export default function LegalTab({ businessId, businessType }: Props) {
     }
   };
 
-  const handleUploadEvidence = async (evidenceType: 'ein_verification' | 'tax_exempt_letter') => {
-    // Use file input to get file ID (simplified — real flow would upload first)
-    const fileId = window.prompt('Enter the file ID of your uploaded document');
-    if (!fileId?.trim()) return;
+  const pickEvidence = (evidenceType: 'ein_verification' | 'tax_exempt_letter') => {
+    setPendingEvidenceType(evidenceType);
+    evidenceInputRef.current?.click();
+  };
+
+  const handleUploadEvidence = async (evidenceType: 'ein_verification' | 'tax_exempt_letter', letter: File) => {
     setUploadingEin(true);
     try {
+      // Same two hops as iOS and Android: store the file, then register it as evidence.
+      const { file } = await api.upload.uploadVerificationDocument(letter);
       await api.businesses.uploadVerificationEvidence(businessId, {
         evidence_type: evidenceType,
-        file_id: fileId.trim(),
+        file_id: file.id,
       });
       toast.success('Document submitted for admin review');
       await loadNonprofitStatus();
@@ -131,11 +138,22 @@ export default function LegalTab({ businessId, businessType }: Props) {
                 Upload your IRS determination letter or EIN verification to confirm your 501(c)(3) status and unlock a 0% platform fee.
               </p>
               <div className="flex gap-2">
-                <button onClick={() => handleUploadEvidence('ein_verification')} disabled={uploadingEin}
+                <input
+                  ref={evidenceInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,image/jpeg,image/png,image/heic,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const chosen = e.target.files?.[0];
+                    e.target.value = '';
+                    if (chosen && pendingEvidenceType) void handleUploadEvidence(pendingEvidenceType, chosen);
+                  }}
+                />
+                <button onClick={() => pickEvidence('ein_verification')} disabled={uploadingEin}
                   className="flex-1 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition">
                   {uploadingEin ? 'Uploading...' : 'Upload EIN Letter'}
                 </button>
-                <button onClick={() => handleUploadEvidence('tax_exempt_letter')} disabled={uploadingEin}
+                <button onClick={() => pickEvidence('tax_exempt_letter')} disabled={uploadingEin}
                   className="flex-1 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition">
                   {uploadingEin ? 'Uploading...' : 'Upload 501(c)(3) Letter'}
                 </button>

@@ -368,7 +368,7 @@ class GigDetailViewModel
         private var canTip = false
         private var viewerIsOwner = false
 
-        /** P1.C — bookmark state for the top-bar toggle (`saved_by_user`). */
+        /** P1.C — bookmark state for the top-bar toggle (`viewer_has_saved`). */
         private val _saved = MutableStateFlow(false)
         val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
@@ -539,6 +539,9 @@ class GigDetailViewModel
         private val _questionsLoading = MutableStateFlow(false)
         val questionsLoading: StateFlow<Boolean> = _questionsLoading.asStateFlow()
 
+        private val _questionsLoadFailed = MutableStateFlow(false)
+        val questionsLoadFailed: StateFlow<Boolean> = _questionsLoadFailed.asStateFlow()
+
         private val _newQuestionText = MutableStateFlow("")
         val newQuestionText: StateFlow<String> = _newQuestionText.asStateFlow()
 
@@ -607,9 +610,11 @@ class GigDetailViewModel
         fun loadQuestions() {
             viewModelScope.launch {
                 _questionsLoading.value = true
+                _questionsLoadFailed.value = false
                 when (val result = repo.questions(gigId)) {
                     is NetworkResult.Success -> _questions.value = result.data.questions
-                    is NetworkResult.Failure -> _questions.value = emptyList()
+                    // Keep what's shown; a failed read isn't "No questions yet".
+                    is NetworkResult.Failure -> _questionsLoadFailed.value = true
                 }
                 _questionsLoading.value = false
             }

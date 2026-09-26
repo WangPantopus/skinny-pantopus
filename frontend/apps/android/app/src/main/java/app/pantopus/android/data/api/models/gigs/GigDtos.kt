@@ -100,7 +100,8 @@ data class GigDto(
     /** Uploaded photo URLs from `GET /api/gigs/:id` — prefill the V1 editor's grid (P4). */
     val attachments: List<String>? = null,
     @Json(name = "bid_count") val bidCount: Int? = null,
-    @Json(name = "saved_by_user") val savedByUser: Boolean? = null,
+    // The server sends the viewer's saved state as `viewer_has_saved` (as web reads it).
+    @Json(name = "viewer_has_saved") val savedByUser: Boolean? = null,
     @Json(name = "distance_miles") val distanceMiles: Double? = null,
     /** Spatial-RPC rows (browse sections, spatial list path) carry meters. */
     @Json(name = "distance_meters") val distanceMeters: Double? = null,
