@@ -339,6 +339,23 @@ export default function GigDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gigId, currentUserId, socketConnected]);
 
+  // After the owner confirms, read whether the viewer already reviewed this task so the
+  // timeline's Reviewed step completes instead of asking again. A failed read keeps the ask;
+  // the review page itself says "You already reviewed this gig".
+  const [myReviewAt, setMyReviewAt] = useState<string | null>(null);
+  const ownerConfirmedAt = gig?.owner_confirmed_at || null;
+  useEffect(() => {
+    if (!gigId || !currentUserId || !ownerConfirmedAt || !(isMyGig || iAmWorker)) { setMyReviewAt(null); return; }
+    let active = true;
+    api.reviews.getGigReviews(gigId)
+      .then((res) => {
+        const mine = (res?.reviews || []).find((r) => String(r.reviewer_id) === String(currentUserId));
+        if (active) setMyReviewAt(mine?.created_at || null);
+      })
+      .catch(() => { if (active) setMyReviewAt(null); });
+    return () => { active = false; };
+  }, [gigId, currentUserId, ownerConfirmedAt, isMyGig, iAmWorker]);
+
   // ── Dwell time tracking for affinity signals ──
   const mountTimeRef = useRef<number>(Date.now());
   useEffect(() => {
@@ -464,6 +481,7 @@ export default function GigDetailsPage() {
                 gig={gig}
                 isMyGig={isMyGig}
                 iAmWorker={iAmWorker}
+                myReviewAt={myReviewAt}
                 onAction={(action) => {
                   switch (action) {
                     case 'start_work': completionRef.current?.startWork(); break;
