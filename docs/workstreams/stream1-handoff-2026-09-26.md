@@ -1,5 +1,11 @@
 # Stream 1 handoff — 2026-09-26 (state as of 22:08Z)
 
+> **UPDATE 2026-09-26T22:24Z: this Stream 1 session resumed at the user's request.** It runs batch 32 itself and hands off after the merge.
+> - All four PRs (#535, #536, #537, #538) are reviewed, and their bundles verify.
+> - The chain is built and verified locally on master `f885e0623`: tip `5433157628726e5517e952766d1120d1460d1ed1`, merge order #538, #535, #536, #537, 17 files, no shared files.
+> - Nothing is pushed yet; the batch PR opens once the heads are green.
+> - If this session disappears before the batch PR exists, the successor rebuilds the batch (handoff §4).
+
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3).
 
 **Read order:**

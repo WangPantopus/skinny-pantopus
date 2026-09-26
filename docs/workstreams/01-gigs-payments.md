@@ -2,6 +2,12 @@
 
 ## CURRENT STREAM 1 STATE — 2026-09-26T22:10Z (session handoff)
 
+> **UPDATE 2026-09-26T22:24Z: this Stream 1 session resumed at the user's request.** It runs batch 32 itself and hands off after the merge.
+> - All four PRs (#535, #536, #537, #538) are reviewed, and their bundles verify.
+> - The chain is built and verified locally on master `f885e0623`: tip `5433157628726e5517e952766d1120d1460d1ed1`, merge order #538, #535, #536, #537, 17 files, no shared files.
+> - Nothing is pushed yet; the batch PR opens once the heads are green.
+> - If this session disappears before the batch PR exists, the successor rebuilds the batch (handoff §4).
+
 - **Handoff:** this session stopped at the user's request. The complete takeover note is [stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). **The next Stream 1 session runs batch 32.**
 - **Merged since the last state:** batch 31 [#534](https://github.com/WangPantopus/skinny-pantopus/pull/534) at 20:09:33Z brought master to `f885e0623`. It holds #533, native accept-a-counter (user decision A), and S3 #532.
 - **Open:** [#537](https://github.com/WangPantopus/skinny-pantopus/pull/537) `047b58ba2`, iOS task detail listens for `gig:qa-update`, so questions and answers update live. Stream 3 found the gap.

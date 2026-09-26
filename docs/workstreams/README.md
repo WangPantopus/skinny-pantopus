@@ -2,6 +2,12 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-26T22:24Z: this Stream 1 session resumed at the user's request.** It runs batch 32 itself and hands off after the merge.
+> - All four PRs (#535, #536, #537, #538) are reviewed, and their bundles verify.
+> - The chain is built and verified locally on master `f885e0623`: tip `5433157628726e5517e952766d1120d1460d1ed1`, merge order #538, #535, #536, #537, 17 files, no shared files.
+> - Nothing is pushed yet; the batch PR opens once the heads are green.
+> - If this session disappears before the batch PR exists, the successor rebuilds the batch (handoff §4).
+
 - **Who runs the queue:** this Stream 1 session stopped at the user's request. **The next Stream 1 session runs batch 32** and all later batches. Its takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and its prompt is [docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).
 - **Integration (Stream 1 queue):**
   - Master is `f885e0623`.
