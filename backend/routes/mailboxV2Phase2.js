@@ -3,7 +3,9 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 // canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
 // for a Home whose mail the caller may read), checked before any read or change.
-const { getAccessibleHomeIds, canAccessMail, readableMail } = require('../utils/homeMailAccess');
+const {
+  getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter,
+} = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -272,10 +274,14 @@ function calculateRiskScore(session) {
 async function routeAndGroup(userId, addressId) {
   // Step 1: Get today's unprocessed items for this address
   const today = new Date().toISOString().split('T')[0];
+  // Only letters the caller may see: an address also receives other members'
+  // private mail, which must never land in the caller's bundle.
+  const homeIds = await getAccessibleHomeIds(userId);
   const { data: items } = await supabaseAdmin
     .from('Mail')
     .select('*')
     .eq('recipient_address_id', addressId)
+    .or(visibleMailFilter(userId, homeIds))
     .is('bundle_id', null)
     .neq('mail_object_type', 'bundle')
     .gte('created_at', today + 'T00:00:00Z')
@@ -466,10 +472,13 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 
     if (!bundle || !(await canAccessMail(bundle, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
 
+    // Each item passes the per-item rule too: a bundle can hold letters the
+    // caller may not read.
     const { data: items } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('bundle_id', bundleId)
+      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id)))
       .order('urgency', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -493,6 +502,13 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       .eq('mail_object_type', 'bundle')
       .maybeSingle();
     if (!bundleMail || !(await canAccessMail(bundleMail, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
+    // Bulk actions touch only the items the caller may read (the per-item rule).
+    const homeIds = await getAccessibleHomeIds(req.user.id);
+    const visibleItems = () => supabaseAdmin
+      .from('Mail')
+      .select('id')
+      .eq('bundle_id', bundleId)
+      .or(visibleMailFilter(req.user.id, homeIds));
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
@@ -504,16 +520,18 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
         .eq('user_id', req.user.id)
         .maybeSingle();
       if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
-      const { data: items } = await supabaseAdmin
-        .from('Mail')
-        .select('id')
-        .eq('bundle_id', bundleId);
+      const { data: items, error: itemsError } = await visibleItems();
+      if (itemsError) throw itemsError;
 
       const ids = (items || []).map(i => i.id);
-      await supabaseAdmin
+      const { error: fileError } = await supabaseAdmin
         .from('Mail')
         .update({ lifecycle: 'filed', vault_folder_id: folderId })
         .in('id', ids);
+      if (fileError) {
+        logger.error('Bundle file_all failed', { bundleId, error: fileError.message });
+        return res.status(500).json({ error: "Couldn't file this bundle. Please try again." });
+      }
 
       // Update folder count
       const { data: folderData } = await supabaseAdmin
@@ -535,27 +553,34 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
     }
 
     if (action === 'open_all') {
-      const { data: items } = await supabaseAdmin
-        .from('Mail')
-        .select('id')
-        .eq('bundle_id', bundleId);
+      const { data: items, error: itemsError } = await visibleItems();
+      if (itemsError) throw itemsError;
 
       const ids = (items || []).map(i => i.id);
-      await supabaseAdmin
+      const { error: openError } = await supabaseAdmin
         .from('Mail')
         .update({ lifecycle: 'opened', opened_at: new Date().toISOString() })
         .in('id', ids);
+      if (openError) {
+        logger.error('Bundle open_all failed', { bundleId, error: openError.message });
+        return res.status(500).json({ error: "Couldn't open this bundle. Please try again." });
+      }
 
       return res.json({ message: `Opened ${ids.length} items`, count: ids.length });
     }
 
     if (action === 'extract_item') {
       if (!itemId) return res.status(400).json({ error: 'itemId required for extract_item' });
-      await supabaseAdmin
+      if (!(await readableMail(itemId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
+      const { error: extractError } = await supabaseAdmin
         .from('Mail')
         .update({ bundle_id: null })
         .eq('id', itemId)
         .eq('bundle_id', bundleId);
+      if (extractError) {
+        logger.error('Bundle extract_item failed', { bundleId, itemId, error: extractError.message });
+        return res.status(500).json({ error: "Couldn't take this item out of the bundle. Please try again." });
+      }
 
       // Update bundle item count
       const { data: remaining } = await supabaseAdmin
