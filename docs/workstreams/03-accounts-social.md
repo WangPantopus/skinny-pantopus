@@ -1,8 +1,8 @@
-# CURRENT STREAM 3 STATUS — 2026-09-25 peer session (supersedes the 2026-09-22 summary below)
+# CURRENT STREAM 3 STATUS — 2026-09-25/26 peer session (supersedes the 2026-09-22 summary below)
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## Git and integration (master `27eb23ad2`)
+## Git and integration (master `564bf220d`, 2026-09-26 02:40Z)
 
 - **PR427:** web booking actions, merged through batch PR431. The resolved booking-detail file matches the exercised 417+427 runtime.
 - **ID mapping:** sent to Stream 1 and accepted.
@@ -12,20 +12,20 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **[PR440](https://github.com/WangPantopus/skinny-pantopus/pull/440): merged** in web batch 15 (PR442, 23:47:26Z) at head `3354d7109699b8a605d94897363fb7f41efdedc0`.
   - Covers S3-40 list, S3-41 (profile, business, profile title), S3-45, S3-51 web parity and S3-63 web.
   - Bundle `20260925-stream3-web-load-failures-r1`, MANIFEST.json SHA-256 `b0718ec2dcc818443de0e0756620051f912cdff742c4c696c2636a2ab2ed2613`.
-- **[PR436](https://github.com/WangPantopus/skinny-pantopus/pull/436):** native scheduling truth, head `45c492d4e2f09cc40e038cf58ac94a316537e898`.
-  - CI green and approved by Stream 1 under §8.2. Queued in native batch 14 = PR449 (#436 → #439 → #444 → #445 → #447, tip `b75f13ffb`), which merges when its CI is green.
-  - Covers S3-51 native, S3-52 partial and two new findings (invented Booking settings values; the Android policy editor's wrong owner).
-  - Bundle `20260925-stream3-scheduling-automation-truth-r1`, MANIFEST.json SHA-256 `aed2e2cde9ee96fc322c15bc09433f89d18d57f5005feabd70c582e76739ee11`.
-- **[PR444](https://github.com/WangPantopus/skinny-pantopus/pull/444):** native social, head `059355cb42bcb94163221396ad6084d58e5e47a0`, 17 files. CI green after one rerun of a 500 ms Home-test flake. §8.2-approved and in PR449.
-  - Covers S3-58 (profile block confirms), S3-63 (connection requests open Pending), S3-60 (iOS Edit profile keeps edits on swipe) and S3-49 (failed people search says so).
-  - Befores and afters pass on the installed iOS and Android apps.
-  - The sequential merge master + #436 + #439 + #443 + #444 is clean.
-  - Bundle `20260925-stream3-social-confirm-requests-r1`, MANIFEST.json SHA-256 `623a8b5f6ce658ef2f90c52f8c33477ef0c1b147352840e955dc7b1f85c5ca93`.
-- **[PR450](https://github.com/WangPantopus/skinny-pantopus/pull/450):** native placeholder exits, head `bfd5e26489169a8b6ff2b472a58135cc4f1239b8`, 9 files, CI pending at open.
-  - Covers S3-06 (Identity Center cards and rows open real screens; Blocked followers hidden) and S3-11 (Creator inbox Settings open the audience profile).
-  - Also fixes a double Back found during the afters (Data export; Hub Edit profile).
-  - Befores and afters pass on both installed apps. Clean vs master and the PR449 tip.
+- **[PR436](https://github.com/WangPantopus/skinny-pantopus/pull/436) and [PR444](https://github.com/WangPantopus/skinny-pantopus/pull/444): merged** in native batch 14 (PR449, 2026-09-26 01:29:06Z, master `8f1a59f58`).
+  - PR436 is native scheduling truth: S3-51 native, S3-52 partial, the invented Booking settings values and the Android policy editor's wrong owner. Bundle `20260925-stream3-scheduling-automation-truth-r1`, MANIFEST.json SHA-256 `aed2e2cde9ee96fc322c15bc09433f89d18d57f5005feabd70c582e76739ee11`.
+  - PR444 is native social: S3-58, S3-63, S3-60 and S3-49. Bundle `20260925-stream3-social-confirm-requests-r1`, MANIFEST.json SHA-256 `623a8b5f6ce658ef2f90c52f8c33477ef0c1b147352840e955dc7b1f85c5ca93`.
+- **[PR450](https://github.com/WangPantopus/skinny-pantopus/pull/450): merged** in batch 17 (PR452, 02:08:00Z, merge `e920dc277`; master `8a9a97757`).
+  - Covers S3-06 and S3-11, plus the Data export / Hub Edit profile double Back.
   - Bundle `20260926-stream3-native-placeholder-exits-r1`, MANIFEST.json SHA-256 `0793d4a096118fd81dbc273e1b3b512564d71a62235670f05cfca2f477e70f51`.
+- **[PR455](https://github.com/WangPantopus/skinny-pantopus/pull/455): open, CI running**, awaiting Stream 1 review for the next native batch.
+  - Head `d91bd08197492431090ed2d79822d59868849944`, 3 commits and 15 files on `8f1a59f58`. It merge-trees clean onto `564bf220d`; batches 17 and 18 touched none of its files.
+  - **S3-50** (iOS + Android; the inventory listed iOS only): Follow and Connect wait for the relationship read, and a failed read hides them with a toast. Failed posts show "Couldn't load posts / Try again" instead of "Quiet for now".
+  - **S3-53:** the Call control is removed from person threads (iOS + Android).
+  - **S3-67** (iOS + Android): Terms and Privacy Share hand out the public `/terms` and `/privacy` pages on the build's web origin; "Hire to review" starts the Contact inquiry; the business footer Report and Share run the overflow actions.
+  - Befores and afters pass on the installed apps: iOS dylib `f35d6be8…`, Android APK `fb0f8c3e…`. ktlint, detekt, lint, SwiftLint strict and SwiftFormat are clean.
+  - Bundle `20260926-stream3-profile-share-truth-r1`, MANIFEST.json SHA-256 `23063f8a04d70032e0262d2ad16921eb7c49247ae201ab2e7149d73998dd0c26`.
+  - Broad80 advances, partial: N03, N04 and A05; no row closes.
 - **Parked local branch `claude/stream3-s313-beacon-updates-wip`** (`18edeaf58`): S3-13. It needs a Beacon owner with Beacon Updates to reproduce first.
 
 ## Runtime (private, `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`)
@@ -35,9 +35,15 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Reads pass through, except write-capable GETs. Refused are availability; booking-page for anything but Owner's personal page (the caller is read from the header or the `pantopus_access` cookie); `GET /api/b/:username`, which inserts a `BusinessProfileView` row on every read; and `GET /api/identity-center` (plus handle-less `/view-as`) for callers without a LocalProfile (ensureLocalProfile). Only Owner and Solo, who have rows, pass.
   - Mutations are refused, except local auth and the template preview POST.
   - Socket upgrades are refused.
+  - Per-path fault injection comes from `fault-control.json`, which is empty (`{}`) now.
 - **Retained DB `pantopus-stream3-block-r1`** (64531/64532): the Personal draft BookingPage `807dd420…` and 6 IdentityAuditLog rows are intact. `BusinessProfileView` has 0 rows.
-- **Devices:** iOS 0AE16FA0 is shut down and signed in as Solo. emulator-5554 is shut down. Device slots and the iOS driver are released, and heavy is with Stream 1 (#448).
-- **Web worktree:** `/private/tmp/pantopus-stream3-web-load-failures` has untracked `frontend/packages/*/node_modules` link directories, used only to run Next there. Removing them is local cleanup.
+- **Devices:**
+  - iOS 0AE16FA0 (signed in as Solo) was shut down at 02:24:49Z, and the iOS driver went to Stream 1.
+  - emulator-5554 (Owner) was shut down at 02:36:52Z.
+  - All Stream 3 device slots are released. Heavy was released to Stream 1 at 02:29:59Z.
+- **Worktrees:**
+  - PR455 is in `/private/tmp/pantopus-stream3-profile-share-r1`.
+  - `/private/tmp/pantopus-stream3-web-load-failures` still has untracked `frontend/packages/*/node_modules` link directories, used only to run Next there. Removing them is local cleanup.
 
 ## Side effects this session
 
@@ -46,6 +52,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - One PlaceSectionCache refresh.
 - One `LocalProfile` row for Solo, created 2026-09-26 00:36:11.802992Z by `GET /api/identity-center` (ensureLocalProfile) when Identity Center was opened on iOS. Exact cleanup awaits the user: `id='7e511c3f-86e8-4dd1-a16f-d27124870e50' AND user_id='1f13068b-86ef-4085-b0a1-cd5883ac816e'`. Remove Solo from the proxy's LocalProfile allowlist first.
 - No scheduling, template, workflow, booking, block, relationship or profile rows. Every block POST was refused before upstream.
+- PR455's befores and afters changed auth bookkeeping only. Its inquiry and read-receipt POSTs were refused before upstream.
 
 ## New findings and candidates
 
@@ -53,19 +60,34 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **Product decision with the user:** workflows and templates are stored but nothing executes them. A = honest copy, B = hide.
 - **Handed to Stream 1:** homeowner iOS can't reach You.
 - **Mine to fix later:** the Android scheduling Preview sheet (`MessagePreviewScreen`) draws its header under the status bar (Stream 1 asked).
+- **Blocked on a published-business fixture (user decision):**
+  - S3-66: business share should carry the business's own link. It reproduces on Android too, not only iOS.
+  - S3-65: web Unpublish confirm.
+  - Related: `pantopus://b/<username>` asks the id-only `/api/businesses/:id` and shows "Business not found". It could not be separated from "unpublished" with the one unpublished fixture.
 - **Candidates:**
+  - iOS business profile: the Contact / "Hire to review" failure toast is set but not visible, probably behind the floating tab bar. Android shows it.
+  - The persona header's "Share profile" opens Block/Report instead of sharing (seen on Android; iOS has the same code).
   - Template editors discard a non-empty draft without confirmation.
   - The Android page DTO types `cancellation_policy` as a String.
   - Auto-created pages default to America/New_York.
   - iOS login "Not you?" with two remembered accounts shows the next one by design (it cleared to blank with one). Product question: clear every hint, or offer "Use a different account"? Pair it with a confirm before the tap revokes that account's stored session, as ContinueAsView already does.
   - The iOS Edit profile footer says "All changes saved · just now" when nothing was saved.
   - S3-56: Android Messages has no pull-to-refresh (reproduced). Deferred to the chat group, which needs conversation fixtures.
+  - S3-53 "New chat" and the S3-67 broadcast "⋯" need conversation and Beacon fixtures.
 
 ## Next
 
-1. Confirm CI for PR450; PR449 merge follows Stream 1's batch CI.
-2. Needs the user's go-ahead: one scoped zero-cost fixture set in the isolated DB, plus the two exact-row cleanups (UserPrivacySettings for Owner, LocalProfile for Solo). The fixtures cover S3-50/52/57/48/43/13/56, S3-47 and the S3-51 no-show CTA.
-3. Next groups: S3-42 web profile stats and Earnings link; S3-47 event-type static rows; Android Preview sheet insets; the remaining chat group (S3-53/54/55/56) once conversation fixtures exist.
+1. PR455: CI, then Stream 1's review and the next native batch.
+2. Needs the user's go-ahead:
+   - One scoped zero-cost fixture set in the isolated DB. It now also needs a published business, for S3-66 and S3-65.
+   - The two exact-row cleanups: UserPrivacySettings for Owner and LocalProfile for Solo.
+   - The fixtures cover S3-50 real edges, 52, 57, 48, 43, 13, 56, S3-47 and the S3-51 no-show CTA.
+3. Next groups:
+   - S3-42 web profile stats and the Earnings link (still open; #454 changed My bids/My tasks, not `/app/profile`).
+   - S3-61 web profile field errors.
+   - S3-47 event-type static rows.
+   - Android Preview sheet insets.
+   - The remaining chat group (S3-53 New chat, 54, 55, 56) once conversation fixtures exist.
 
 # CURRENT STREAM 3 RESUME SUMMARY — 2026-09-22
 
