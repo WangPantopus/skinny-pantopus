@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails, ChatMessage } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage } from '../../hooks/useChatMessages';
+import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import { useSocketEvent } from '../../hooks/useSocket';
 import ChatMessageList from './ChatMessageList';
 import ErrorState from '@/components/ui/ErrorState';
@@ -248,12 +248,10 @@ export default function ChatRoomView({
           : ownerParticipant || nonCurrentParticipants[0])
       : (nonCurrentParticipants.find((p: Record<string, any>) => p.role !== 'owner') || nonCurrentParticipants[0]);
   const otherUser = (otherParticipant as Record<string, any>)?.user as Record<string, any> | undefined;
-  const chatTitle = (otherUser?.name as string)
-    || [(otherUser?.first_name as string), (otherUser?.last_name as string)].filter(Boolean).join(' ')
-    || (otherUser?.username as string)
+  const chatTitle = chatPersonName(otherUser)
     || roomInfo?.name
     || 'Conversation';
-  const otherProfileHref = otherUser?.username ? `/${String(otherUser.username)}` : null;
+  const otherProfileHref = chatPersonHref(otherUser);
 
   // ── Historical messages header ────────────────────────
   const historicalHeader = historicalMessages.length > 0 ? (
@@ -284,7 +282,7 @@ export default function ChatRoomView({
             {group.msgs.map((m: ChatMessage) => {
               const sender = m.sender as Record<string, any> | undefined;
               const isMine = isRepresented(m.user_id || m.sender_id || (sender?.id as string));
-              const who = (sender?.name as string) || (sender?.username as string) || 'Someone';
+              const who = chatPersonName(sender) || 'Someone';
               const ts = m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
               const msgText = m.message_text || m.message || '';
               const attachments = extractAttachments(m);
@@ -295,9 +293,9 @@ export default function ChatRoomView({
                       <div className="mb-0.5 ml-1">
                         <UserIdentityLink
                           userId={sender?.id as string}
-                          username={sender?.username as string}
+                          username={chatPersonHandle(sender)}
                           displayName={who}
-                          avatarUrl={sender?.profile_picture_url as string}
+                          avatarUrl={chatPersonAvatar(sender)}
                           textClassName="text-xs text-app-muted"
                         />
                       </div>

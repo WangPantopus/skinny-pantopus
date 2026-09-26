@@ -112,6 +112,35 @@ export function extractAttachments(msg: ChatMessageLike): Record<string, any>[] 
     .filter((x): x is Record<string, any> => x != null);
 }
 
+// Chat people (message senders, room participants) arrive either as a legacy user
+// row (name / username / profile_picture_url) or as the identity card the chat
+// routes now send (displayName / handle / avatarUrl / href). Read both.
+type ChatPerson = Record<string, any> | null | undefined;
+
+export function chatPersonName(person: ChatPerson): string | undefined {
+  if (!person) return undefined;
+  return (person.displayName as string)
+    || (person.name as string)
+    || [person.first_name ?? person.firstName, person.last_name ?? person.lastName].filter(Boolean).join(' ')
+    || (person.username as string)
+    || (person.handle as string)
+    || undefined;
+}
+
+export function chatPersonHandle(person: ChatPerson): string | undefined {
+  return (person?.username as string) || (person?.handle as string) || undefined;
+}
+
+export function chatPersonAvatar(person: ChatPerson): string | undefined {
+  return (person?.profile_picture_url as string) || (person?.avatarUrl as string) || undefined;
+}
+
+export function chatPersonHref(person: ChatPerson): string | null {
+  if (typeof person?.href === 'string' && person.href.startsWith('/')) return person.href;
+  const handle = chatPersonHandle(person);
+  return handle ? `/${handle}` : null;
+}
+
 export function resolveMessageType(msg: ChatMessageLike): string {
   const rawType = msg?.message_type || msg?.type || 'text';
   const metadata = msg?.metadata || {};
