@@ -45,8 +45,13 @@ The kit is git-ignored and durable. `/private/tmp` is wiped when the Mac restart
   - The DB restart and crash recovery were verified at 22:18Z, and the retained rows are intact.
   - Still set in files: `chat-audit.json` is enabled (chat-audit mode comes back when the proxy restarts), and `fault-control.json` is `{}`.
 - **Disk:** about 27 GB of Stream 3's own rebuildable build output was deleted: old app/APK copies in the runtime folder, and Android and web build output in the merged-PR worktrees.
-  - Kept: all worktrees, the #536 before/after builds, the iOS build caches, #536's Android build, and the web runtime tree's cache.
+  - Kept: the #536 before/after builds, the iOS build caches, #536's Android build, and the web runtime tree's cache.
   - Details are in the kit README.
+- **Worktrees:** with the user's approval (22:36Z), 22 merged, clean Stream 3 worktrees were removed with `git worktree remove`, no force. Their branches remain locally and on GitHub.
+  - Left: `/private/tmp/pantopus-stream3-chat-keyboard-r1` (#536), `/private/tmp/pantopus-stream3-chat-realtime-r1` (API source), `/private/tmp/pantopus-stream3-web-chat-names-r1` (web source, and the Playwright used by the login scripts), plus the app-managed session worktree `stream3-peer-takeover-d8df28`.
+  - The user's general "no worktree removal" rule still stands.
+  - Free disk space went from 12 to 66 GiB.
+- **#536** passed CI at 22:34Z and is in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), queued 22:35Z (Stream 1).
 
 ### 2. Remaining Stream 3 inventory rows (checked in master `f885e0623` code, 2026-09-26 22:10Z)
 The inventory (`coordinator-state-2026-09-23/tools/ux-inventory-2026-09-23.md`) has 69 S3 rows.
