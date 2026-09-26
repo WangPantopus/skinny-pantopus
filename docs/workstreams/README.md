@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T06:40Z (batch 21 merged; batch 22 = 7 PRs gating on CI)
+## CURRENT RESUME POINT — 2026-09-26T06:33Z (batch 21 merged; batch 22 = 7 PRs gating on CI)
 
 - **Integration (Stream 1 queue):**
   - Master is `e1509f346`. Batch 21 [#471](https://github.com/WangPantopus/skinny-pantopus/pull/471) merged at 06:32:20Z. It carried #464 (S2 read state), #465 (S3-08/36/34), #466 (S3-65), #467 (S2 D01), #468 (S3 scheduling hide + iOS hub Back), #462 (S1 wallet) and #469 (S1 web Marketplace).
