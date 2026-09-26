@@ -204,7 +204,7 @@
           "name": "Clark County",
           "election_office": "Clark County Elections",
           "official_links": [
-            { "key": "drop_boxes", "label": "Find a drop box", "owner": "Clark County Elections", "url": "https://clark.wa.gov/elections/drop-box-locator", "phases": ["in_season", "election_day"] },
+            { "key": "drop_boxes", "label": "Find a drop box", "owner": "Clark County Elections", "url": "https://clark.wa.gov/elections/ballot-deposit-locations", "phases": ["in_season", "election_day"] },
             { "key": "results", "label": "Election results", "owner": "Clark County Elections", "url": "https://clark.wa.gov/elections/results", "phases": ["after"] }
           ]
         }

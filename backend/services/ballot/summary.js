@@ -85,8 +85,9 @@ function governmentsSentence(items) {
   const names = items.map((item) => {
     if (item.level === 'federal') return 'the United States';
     if (item.level === 'state') return 'the state';
-    if (item.level === 'city') return `the ${item.name}`;
-    if (item.level === 'school' && /school district/i.test(item.name)) return `the ${item.name}`;
+    // "the Camas School District", "the City of Camas", "the City and
+    // County of Honolulu"; "Clark County" and "Carson City" read bare.
+    if (item.level === 'school' || /^(City|Town|Village|Borough) (and County )?of /.test(item.name)) return `the ${item.name}`;
     return item.name;
   });
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
@@ -96,8 +97,9 @@ function governmentsSentence(items) {
 // `federalOnBallot`: a federal general election puts every U.S. House seat
 // on the ballot; any other election (or none) leaves every item unknown.
 function governmentsBlock(result, { federalOnBallot = false } = {}) {
-  if (!result || !Array.isArray(result.items) || result.items.length < 3) return null;
-  const items = result.items.map((item) => ({
+  const counted = governments.countedGovernments(result && result.items);
+  if (counted.length < 3) return null;
+  const items = counted.map((item) => ({
     level: item.level,
     geoid: item.geoid,
     name: item.name,

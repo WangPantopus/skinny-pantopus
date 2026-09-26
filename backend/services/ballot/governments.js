@@ -25,6 +25,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 30 * DAY_MS;
 const MAX_STALE_MS = 7 * DAY_MS;
+// The Place page waits for every section, so a saved home's lookup gets
+// the /start preview's per-section budget rather than the fetch timeout.
+const HOME_BUDGET_MS = 3500;
 const SECTION_ID = '_ballot_governments';
 
 function geocoderUrl(lat, lng) {
@@ -115,31 +118,100 @@ function governmentsFromGeographies(geo) {
   return { items: typed, county_geoid: countyGeoid, state_geoid: stateGeoid };
 }
 
+// What counts as a government follows the Census of Governments, so the
+// count never names one government twice or an agency as its own.
+//
+// Consolidated city-counties in the covered states: the city and the county
+// are one government, counted once under one name. Honolulu has no
+// incorporated place, and Carson City's place carries no type ("Carson
+// City", not "City of Carson"), so the reviewed name comes from here.
+const CONSOLIDATED_COUNTIES = {
+  '06075': 'City of San Francisco',
+  '08014': 'City of Broomfield',
+  '08031': 'City of Denver',
+  '15003': 'City and County of Honolulu',
+  '32510': 'Carson City',
+};
+
+// Where the state, county, city or borough runs the public schools (no
+// independent school districts: Alaska, D.C., Hawaii, Maryland, North
+// Carolina, Virginia), the school system is part of a government already
+// counted, such as Hawaii's statewide Department of Education.
+const DEPENDENT_SCHOOL_STATES = new Set(['02', '11', '15', '24', '37', '51']);
+
+/**
+ * The governments to count and show, each independent government once.
+ * Applied when the card is composed, so cached lookups follow it too.
+ */
+function countedGovernments(items) {
+  const list = Array.isArray(items) ? items : [];
+  const state = list.find((item) => item.level === 'state');
+  const county = list.find((item) => item.level === 'county');
+  const merged = county ? CONSOLIDATED_COUNTIES[county.geoid] : null;
+  const schoolsCounted = !(state && DEPENDENT_SCHOOL_STATES.has(state.geoid));
+  return list.flatMap((item) => {
+    if (merged && item.level === 'county') return [{ ...item, level: 'city', name: merged }];
+    if (merged && item.level === 'city') return [];
+    if (!schoolsCounted && item.level === 'school') return [];
+    return [item];
+  });
+}
+
 function pointOf(home) {
   const lat = Number(home && home.map_center_lat);
   const lng = Number(home && home.map_center_lng);
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
-/** A saved home's governments, cached per home and exact point. */
-async function governmentsForHome(home) {
+// One Place load composes civic_election and civic_districts together, and
+// both ask for the same home's governments: share a lookup while it runs
+// so a cold cache calls the geocoder once.
+const inFlight = new Map();
+
+/**
+ * A saved home's governments, cached per home and exact point. Past the
+ * budget the caller gets null (the card goes out without the governments
+ * line) and the lookup keeps running, so its answer fills the cache for
+ * the next load.
+ */
+async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
   const point = pointOf(home);
   if (!point || !home.id) return null;
-  try {
-    const { payload, stale } = await readThrough({
-      cacheKey: `home:${home.id}:${encodeGeohash(point.lat, point.lng, 9)}`,
+  const cacheKey = `home:${home.id}:${encodeGeohash(point.lat, point.lng, 9)}`;
+  let lookup = inFlight.get(cacheKey);
+  if (!lookup) {
+    lookup = readThrough({
+      cacheKey,
       sectionId: SECTION_ID,
       ttlMs: CACHE_TTL_MS,
-      maxStaleMs: MAX_STALE_MS,
+      // readThrough counts the limit from fetched_at, and a row only goes
+      // stale after the TTL: this serves it up to 7 days past expiry.
+      maxStaleMs: CACHE_TTL_MS + MAX_STALE_MS,
       fetch: async () => {
         const geo = await fetchGeographies(point.lat, point.lng);
         return geo ? governmentsFromGeographies(geo) : null;
       },
-    });
-    return payload ? { ...payload, stale: Boolean(stale) } : null;
-  } catch (err) {
-    logger.warn('ballot: home governments lookup failed', { homeId: home.id, error: err.message });
-    return null;
+    })
+      .then(({ payload, stale }) => (payload ? { ...payload, stale: Boolean(stale) } : null))
+      .catch((err) => {
+        logger.warn('ballot: home governments lookup failed', { homeId: home.id, error: err.message });
+        return null;
+      })
+      .finally(() => inFlight.delete(cacheKey));
+    inFlight.set(cacheKey, lookup);
+  }
+  let timer = null;
+  const budget = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn('ballot: home governments lookup over budget', { homeId: home.id, budgetMs });
+      resolve(null);
+    }, budgetMs);
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+  try {
+    return await Promise.race([lookup, budget]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -157,6 +229,7 @@ async function governmentsForPoint(lat, lng, options = {}) {
 
 module.exports = {
   governmentsFromGeographies,
+  countedGovernments,
   governmentsForHome,
   governmentsForPoint,
   placeName,
