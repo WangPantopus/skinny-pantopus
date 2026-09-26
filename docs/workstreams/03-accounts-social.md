@@ -2,6 +2,20 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 17:28Z: batch 28 merged; #523 in batch 29 (#526); chat-audit fixes in the Android build
+
+- **Merged:** batch 28 (#525, 13:49Z, master `be33552e8`) carried #515 and #520.
+- **Batch 29 (#526, queued 17:21Z):** #523 and Stream 1's #524.
+- **Chat-audit fixes:** branch `claude/stream3-chat-audit-fixes`.
+  - Head `13657e0e5`: master `be33552e8` merged in, plus six commits: `2b61cd806`, `661e5091d`, `5045921f7`, `4499f9241`, `743a439ff`, `7885e9084`.
+  - Android build under heavy since 17:26:57Z. Handed over by Stream 1; it goes back to Stream 1 for an iOS build.
+  - Web recheck on the final head at 17:22Z: listing cards read "Tools" and "Books & Media".
+  - The user said to keep going and fix all of them.
+- **Correction to the 13:14Z note:** on iOS, a refresh does not reload the thread as the share topic. It merges a topic-only fetch into what is already shown, so, as on Android, the other person's next message never arrives. The commit message was corrected before any push.
+- **Closed:** Beacon search finding no "s3fx" Beacons is by design. `canDiscoverPersona` (`backend/routes/identitySearch.js:269`) excludes your own Beacon, and the only fixture Beacon is the searcher's.
+- **Dropped candidate:** in `ChatRoomView`'s "Earlier messages" header, attachments are plain filename links. Their URL is `/api/chat/files/:id`, the members-only route, so they open. That is presentation only.
+- **Stall:** heavy sat idle under Stream 2's name from about 12:53Z until Stream 1 released it at 17:20Z, with its user's approval.
+
 ## Update 2026-09-26 13:14Z: #523 open (batch 29); #515 and #520 in batch 28 (#525); chat-audit fixes branch waiting for heavy
 
 **PR status**
@@ -25,7 +39,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **Sharing on Android:**
   - Sending a listing card works end to end; the topic call returns 201.
   - But the share selected the item's topic without a refetch, so the Owner's next message was hidden until "All" was tapped. Evidence: CA6.
-  - iOS has the same selection, and there the next refresh reloads the thread as that topic alone.
+  - iOS has the same selection, and there the next refresh fetches only that topic (see the 17:28Z correction).
   - Fix: sharing keeps the current view, as on web.
 - **iOS "All" candidate:** a chat opened about an item re-selects that item's topic on every refresh.
   - Fix: the opening topic is used once, as on Android.
