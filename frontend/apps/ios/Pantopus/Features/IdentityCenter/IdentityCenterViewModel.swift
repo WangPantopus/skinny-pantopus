@@ -108,12 +108,6 @@ public final class IdentityCenterViewModel {
                 trailing: "\(response.blockCounts?.personal ?? 0)"
             ),
             IdentityRowContent(
-                id: "blockedAudience",
-                icon: .shield,
-                label: "Blocked followers",
-                trailing: "\(response.blockCounts?.audience ?? 0)"
-            ),
-            IdentityRowContent(
                 id: "privacyPreview",
                 icon: .eye,
                 label: "Privacy Preview",

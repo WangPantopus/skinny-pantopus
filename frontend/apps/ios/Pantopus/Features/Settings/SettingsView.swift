@@ -123,6 +123,14 @@ public struct SettingsView: View {
                     if card.kind == .publicProfile {
                         path.append(.audienceProfile)
                     }
+                },
+                onOpenRow: { row in
+                    // The rows this stack has screens for.
+                    switch row.id {
+                    case "blockedPersonal": path.append(.blockedUsers)
+                    case "dataExport": path.append(.dataExport)
+                    default: break
+                    }
                 }
             )
         case .audienceProfile:

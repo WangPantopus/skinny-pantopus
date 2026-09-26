@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 fun IdentityCenterScreen(
     onBack: () -> Unit = {},
     onOpenIdentity: (IdentityCardContent) -> Unit = {},
-    onOpenPlaceholder: (String) -> Unit = {},
+    onOpenRow: (String) -> Unit = {},
     onOpenViewAs: () -> Unit = {},
     viewModel: IdentityCenterViewModel = hiltViewModel(),
 ) {
@@ -96,8 +96,8 @@ fun IdentityCenterScreen(
                     onBridgeToggle = viewModel::setBridge,
                     onRowTap = { row ->
                         // A18.5 — the "Privacy Preview" row opens the "View
-                        // as" identity preview; other rows stay placeholders.
-                        if (row.id == "privacyPreview") onOpenViewAs() else onOpenPlaceholder(row.label)
+                        // as" identity preview; the host opens the other rows by id.
+                        if (row.id == "privacyPreview") onOpenViewAs() else onOpenRow(row.id)
                     },
                 )
             is IdentityCenterUiState.Error ->

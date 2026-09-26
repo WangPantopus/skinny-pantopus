@@ -687,10 +687,37 @@ public struct HubTabRoot: View {
         .findPeopleSheet(isPresented: $showFindPeople)
         .overlay { navigationDrawerOverlay }
         .sheet(isPresented: $navDrawerIdentityCenter) {
-            // `onBack` is not the trailing parameter of `IdentityCenterView`,
-            // so the argument label must stay explicit here.
-            // swiftlint:disable:next trailing_closure
-            IdentityCenterView(onBack: { navDrawerIdentityCenter = false })
+            IdentityCenterView(
+                onBack: { navDrawerIdentityCenter = false },
+                onOpenIdentity: { card in openFromIdentityCenter(Self.identityCenterRoute(forCard: card.kind)) },
+                onOpenRow: { row in openFromIdentityCenter(Self.identityCenterRoute(forRow: row.id)) }
+            )
+        }
+    }
+
+    /// The drawer's Identity Center is a sheet: close it, then open the
+    /// existing screen in this stack. Rows without a screen here do nothing.
+    private func openFromIdentityCenter(_ route: HubRoute?) {
+        guard let route else { return }
+        navDrawerIdentityCenter = false
+        path.append(route)
+    }
+
+    /// Identity Center cards this stack can open: the Local profile is what
+    /// Edit profile edits.
+    static func identityCenterRoute(forCard kind: IdentityKind) -> HubRoute? {
+        kind == .local ? .editProfile : nil
+    }
+
+    /// Identity Center rows this stack can open. A18.5 — "Privacy Preview"
+    /// opens the "View as" identity preview.
+    static func identityCenterRoute(forRow id: String) -> HubRoute? {
+        switch id {
+        case "privacyPreview": .viewAs
+        case "homes": .myHomes
+        case "businessProfiles": .myBusinesses
+        case "dataExport": .dataExport
+        default: nil
         }
     }
 
@@ -733,7 +760,8 @@ public struct HubTabRoot: View {
         case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
-             .homeNotifications, .privacySettings, .menu, .paymentsSettings, .mailItemDetail,
+             .homeNotifications, .privacySettings, .dataExport, .editProfile, .menu, .paymentsSettings,
+             .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
              .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,

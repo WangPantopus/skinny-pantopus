@@ -70,7 +70,7 @@ final class IdentityCenterViewModelTests: XCTestCase {
         XCTAssertEqual(loaded.bridges.count, 2)
         XCTAssertEqual(loaded.bridges[0].id, "showPublicOnLocal")
         XCTAssertEqual(loaded.bridges[1].id, "showLocalOnPublic")
-        XCTAssertEqual(loaded.privacyRows.count, 3)
+        XCTAssertEqual(loaded.privacyRows.count, 2)
         XCTAssertEqual(loaded.disclosureRows.count, 3)
         let blockedPersonal = loaded.privacyRows.first { $0.id == "blockedPersonal" }
         XCTAssertEqual(blockedPersonal?.trailing, "2")
