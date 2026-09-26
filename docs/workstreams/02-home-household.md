@@ -1,6 +1,153 @@
-# CURRENT RESUME — Stream 2 peer takeover (September 25, 2026)
+# Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
-Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
+## CURRENT RESUME — Stream 2 handoff, 2026-09-26T22:00Z (read this first)
+
+**Who owns what.**
+- **Stream 2 (independent peer):** Home, residency, Place, Home intelligence, records, bills, Mail/guests and the related Support-train UX, on the real web app, iOS simulator and Android emulator.
+- **Stream 1:** the coordinator and serial merge steward. It owns `docs/PROJECT_HANDOFF.md` and the batch merges.
+- **Stream 3:** accounts, social, notifications, chat and scheduling (including `components/scheduling/*`).
+- **Stream 2's files:** only this file in the coordination checkout (`/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`; always `git fetch` + `git merge --ff-only` before editing), plus its own PR branches and evidence.
+
+### 1. State at handoff
+- **Master:** `f885e0623` (batch 31 #534 merged at ~20:09Z).
+- **Open Stream 2 PR:** [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535).
+  - Native Add guest truth fixes; branch `claude/stream2-add-guest-truth`, head `89be05af7`, worktree `/private/tmp/pantopus-stream2-add-guest`.
+  - CI was running at 21:55Z (4 pass / 5 skipped / 3 pending).
+  - Stream 1 already has the details and puts it in the next batch once green. If CI fails, fix it on the same branch and re-verify.
+  - Bundle `20260926-stream2-add-guest-truth-r1`.
+- **Merged on 2026-09-25/26:**
+  - Mail and native: #435, #443, #445, #451, #453, #457, #461, #464.
+  - Home: #467.
+  - User decisions 6, 5, 3, 2, 4, 1: #473 (R04 ownership transfer), #474 (web role choice), #482 (issue permissions), #493 (R06 native letters/passes), #503 (certified statuses), #512 (30-day recoverable household-letter delete with notices).
+  - Guest passes: #519 (entry only for `members.manage`), #521 (app guest links use the web origin).
+  - Web: #528 (Members "Invite" opens the real Invite Member panel), #529 (web Documents delete for real; Documents/Issues/Access/Share show "could not be loaded" instead of false empty).
+  - The full PR list since #200 is in the status log below and in `gh pr list --search "head:claude/stream2"`.
+- **Re-checked:** Stream 1's #509 fixes the Android "Your account changed" when a letter opens during a token refresh (bundle `20260926-stream2-d1-refresh-recheck-r1`).
+
+### 2. User decisions of 2026-09-26 ~22:00Z (approved; implement next, in this order)
+**2a. Guest-letter security fix, Proposal A. APPROVED. Backend only.**
+- **Bug:** a resident whose role is changed to `guest` or `service_provider` keeps residency letters and Residency Passes that still verify.
+  - `GET /api/public/residency-letters/:code` returned `valid: true` with the person's name and street address.
+  - Write-up, repro steps and captures: bundle `20260926-stream2-r06-native-letters-r1/finding-guest-letter-verifies/`.
+- **Fix:**
+  - `backend` `residencyLetterService.verifyByCode`: read `role_base` with the issuer's occupancy. If it is in `NON_RESIDENT_ROLES` (the list issuing already refuses), retire the letter exactly like the existing end-of-admission path (`status revoked`, `revoke_reason residency_ended`) and return `{ valid: false, status: 'revoked' }`.
+  - `residencyClaimService.isStillVerifiedResident` must also require a resident role, so an active pass reads `no_longer_verified`.
+  - Re-promotion must not revive old letters (the existing rule).
+- **Verify (isolated runtime):**
+  1. Member B issues a letter (and a pass).
+  2. The owner sets B to guest: `POST /api/homes/:id/members/:userId/role`.
+  3. Public verify: master shows `valid: true`; the fix shows `valid: false` / revoked, and the pass shows `no_longer_verified`.
+  4. Check the web public checker page.
+  5. Restore B to `member`, and confirm the old letter stays revoked.
+  6. Run the existing letter/claim verify test files as a regression (no new tests).
+- **Hand-off:** seal a bundle and open a PR marked "security, user-approved 2026-09-26 (Proposal A)".
+
+**2b. Add guest "What they can see", privacy. APPROVED. Native iOS + Android.**
+- **Bug:** the native Add guest form's "Allowed areas" chips (Front door / Garage / Mailroom / Backyard / Garden shed) are never sent.
+  - The server then applies its default `guest` sections: wifi, parking, house_rules, entry_instructions, emergency.
+  - So app-created passes share the Wi-Fi password rows, all emergency info and the entry instructions, while the form says "Front door only". Web "Guest Pass" sends 4 sections (no emergency).
+  - Evidence: `20260926-stream2-add-guest-truth-r1/FINDING-original.md` (privacy update) and `20260926-stream2-guest-pass-link-r1/finding-add-guest-truth/`.
+- **Fix, keeping the same form and component:**
+  - Replace the area chips with "What they can see" chips using the web's keys and labels from `frontend/apps/web/src/components/home/share/CreateGuestPass.tsx`: WiFi `wifi`, Entry Instructions `entry_instructions`, House Rules `house_rules`, Parking `parking`, Trash Day `trash_day`, Local Tips `local_tips`, Emergency Info `emergency`.
+  - Preselect WiFi, Entry Instructions, House Rules, Parking (the web Guest Pass template).
+  - Send them as `included_sections` in the create request (extend `CreateGuestPassRequest` on both platforms if needed). The server rejects an empty array, so require at least one.
+  - Replace the false hints ("Front door only, unless you add more." and "<name>'s pass unlocks only what you pick.") with truthful copy.
+  - Update `AddGuestSampleData` on both platforms, then re-record and verify the Android `AddGuestFormSnapshotTest` Paparazzi frames. The iOS snapshot test is a skip-if-missing tripwire.
+- **Unchanged:** the contact field stays as it is (required, local only) unless the user decides otherwise.
+- **Base:** start from #535's branch (stack) or from master after #535 merges.
+- **Verify on both apps:**
+  1. Create a pass with a subset (for example, uncheck Emergency Info).
+  2. `HomeGuestPass.included_sections` equals the selection.
+  3. `/guest/<token>` on the web shows only those sections; master shows the 5 defaults.
+  4. Revoke the synthetic passes afterwards.
+
+**2c. Web Family Mail Party: deferred by the user. Awareness only; do not build or patch piecemeal.**
+- **Why it's dormant:**
+  - The letter-page party banner reads `session.participants`, which `MailPartySession` doesn't have, so it never appears.
+  - The standalone `/app/mailbox/party` page is linked from nowhere and reads `getHomeMembers(...).members`, while `/occupants` answers `occupants`.
+- **Android** has a working party flow (discover, join, decline, assign to active occupants).
+- **Status:** a known product gap. It may be built in the future as a feature, with a design pass.
+
+### 3. Other open items (not approved work; reproduce and propose before changing)
+1. **"Message household admin" for applicants (candidate).** The Verification Center link (`/app/homes/:id/messages`) probably tells every applicant "No household admin yet" even when the Home has an owner.
+   - Home detail returns `owner` only with `ownership.view`, and the occupants read needs `members.view`.
+   - Reproducing it needs an applicant fixture: a new synthetic user with a pending claim.
+   - Any fix touches the owner-identity privacy boundary, so propose it to the user first.
+2. **Unlinked web page `/app/homes/[id]/members/add-guest`.** It still fakes success ("<name> has been added as a guest", no API). Nothing links to it since #528. Proposal: remove it or redirect it (ask first; it removes a page).
+3. **Native Dismiss confirm.** It says "It moves out of your mailbox…", but for a household letter it's removed for everyone who can see it (restorable). Accurate wording needs a server signal for "others can see it" (`homeMailVisible`), so it's parked.
+4. **Web Documents empty state.** It says "Upload documents from the home dashboard", but the web has no document upload (native only). Copy follow-up.
+5. **`homeListService.checked()`** swallows the underlying error. One transient `GET /api/homes/primary` 503 `HOME_LIST_UNAVAILABLE` for member B; 120 concurrent requests didn't reproduce it. Logging gap only.
+6. **Member web pages without permission.** They now say "could not be loaded" (#529). Gating their sidebar/Settings entries by permission would be optional polish.
+7. **Backlog.** Continue the 40-row inventory (section "September 22 exact Home/residency/records/mail accounting", below): 8 closed / 32 partial-open.
+   - Rows updated on 2026-09-26: R04, R06, D01, D07, D09, M01, M02, M04.
+   - Methods that found real bugs quickly:
+     - `web-home-sweep.cjs`, a read-only sweep of the Home/Mail/Place web pages as owner and member;
+     - a handler-scoped scan for `toast.success` with no awaited API call;
+     - per-page request counting (it found the Who's free loop, fixed by Stream 3 in #530).
+
+### 4. Runtime, devices, tools
+- **Runtime kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/`. It is git-ignored and its README is the runtime manual: ports, start commands, fault proxy, accounts and fixtures, device recipes, tools, slot protocol. The credentials are there as private files; never print or commit them.
+- **Running at handoff** (these may die with the session; restart from the kit):
+  - Supabase stack `pantopus-stream2-native-resume-r2` (API 64553, DB 64554), backend 18143 (main worktree; `HOME_DOCUMENTS_BUCKET=s2-home-documents`), proxy 18142 → 18143, Next 18144 (main worktree web).
+  - emulator-5556 with APK `a88802fa…` (#535 tree), owner signed in.
+  - The iOS sim 6F914A30 is shut down, with dylib `b83ff4cd…` (#535 tree), owner signed in.
+- **Main worktree:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss`.
+  - It's a local build branch, never a PR. To serve or build a PR's tree: `git restore --source=<commit> --staged --worktree -- . ':!.claude/launch.json'`, then `git diff --cached --quiet <commit>`, then commit "build: tree = …".
+  - It currently equals #535's head. Leave its `.claude/launch.json` local change alone.
+- **PR worktrees:** `/private/tmp/pantopus-stream2-*` has one worktree per PR; all are merged except `add-guest`. Never remove worktrees; create new ones from `origin/master`.
+- **Slots:** Stream 2 keeps device slot 2 (emulator-5556). It holds no heavy slot and no iOS driver.
+  - Heavy is `/private/tmp/pantopus-tools/heavy-slot.sh`; devices are `/private/tmp/pantopus-tools/device-slot.sh` (release by exact owner prefix, e.g. `release "stream2: iOS sim 6F914A30"`).
+  - Get an explicit handoff from peers before taking heavy or the iOS driver, and release right after use. The kit's newest `heavy-window-addguest.sh` releases heavy itself via a trap; copy that.
+- **Evidence:** the audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Seal with `tools/seal-bundle.py` using git-derived SHAs and base.
+
+### 5. Evidence bundles sealed 2026-09-26 (MANIFEST sha256 prefix, file count)
+| Bundle | MANIFEST | Files |
+|---|---|---|
+| `20260926-stream2-add-guest-truth-r1` | `48869ca3e62a2760…` | 76 |
+| `20260926-stream2-certified-statuses-r1` | `84461224f16b4811…` | 109 |
+| `20260926-stream2-d1-refresh-recheck-r1` | `20b9ee94cf4fd4b3…` | 39 |
+| `20260926-stream2-guest-pass-entry-r1` | `030e8e4bac17dc27…` | 46 |
+| `20260926-stream2-guest-pass-link-r1` | `5a22c81702c13ec2…` | 81 |
+| `20260926-stream2-home-docs-r1` | `9fc992ffcec64101…` | 41 |
+| `20260926-stream2-home-issue-status-r1` | `170acadd3690f598…` | 125 |
+| `20260926-stream2-home-links-r1` | `37f730c776216e2b…` | 138 |
+| `20260926-stream2-issue-permissions-r1` | `c4d651ebb9b82b76…` | 153 |
+| `20260926-stream2-mail-party-bundle-privacy-r1` | `b7a9c2fc7fec7ba6…` | 10 |
+| `20260926-stream2-mail-recoverable-delete-r1` | `33dbd142a3bebcc1…` | 209 |
+| `20260926-stream2-members-invite-r1` | `e40925aea50ee0d5…` | 28 |
+| `20260926-stream2-native-earn-s2-03-r1` | `9d658fbb5713d7dc…` | 91 |
+| `20260926-stream2-native-mail-read-state-r1` | `cd1cd25aa3e7ba71…` | 144 |
+| `20260926-stream2-native-s2-16-r1` | `b45cdc8d430ce5e1…` | 47 |
+| `20260926-stream2-ownership-transfer-fix-r1` | `a14373fb1b347489…` | 168 |
+| `20260926-stream2-party-assign-exposure-r1` | `e71f87e002ccb6a9…` | 14 |
+| `20260926-stream2-r06-native-letters-r1` | `887521e000d5d4a5…` | 169 |
+| `20260926-stream2-transfer-ownerless-exposure-r1` | `4eb55adcbdad51b2…` | 29 |
+| `20260926-stream2-web-role-choice-r1` | `b0d7067f38dc0c27…` | 90 |
+
+### 6. Rules and lessons that matter here
+- **User boundaries:**
+  - Never touch `/Users/yingpengwang/skinny-pantopus`, founder stacks 64521/64522, backend :8000 or simulator EB5AD759.
+  - No search-filter security audit and no founder §7/A17/data/marketing work.
+  - Stripe TEST/manual only, never capture.
+  - No new unit tests and no local unit campaigns (targeted regression runs of existing tests are fine).
+  - No bare `git stash`, gc, maintenance, repack or worktree removal.
+  - Never wipe, reseed or replay data, or delete retained rows, without a reviewed scope.
+  - Escalate money, security, legal, retention and new-table decisions to the user with a concrete proposal.
+  - Preserve designs; make the smallest in-place repair; keep functional/privacy fixes separate from presentation.
+- **Honesty:**
+  - Take SHAs from `git rev-parse` and times from `date -u`; the Mac clock is PDT.
+  - Run `git merge-tree --write-tree` before saying PRs merge cleanly.
+  - Report unverified provider or device boundaries as unverified.
+- **Stalls:** this session stalled twice while holding shared slots (12:53→17:20Z heavy; 19:11→21:45Z iOS slot). Keep holds short and put the release inside the build script.
+- **Tool gotchas:**
+  - iOS: tap targets move when the keyboard shows (the Send pass bar sits at ~y503pt with the keyboard up). Screenshot before tapping, and start a `simctl io screenshot` burst before tapping to catch 2-second toasts.
+  - Android: `aui.py tap` matches substrings. Emulator Chrome is on its first-run Terms screen; don't accept it, open links from the host's Chrome instead.
+  - macOS has no `timeout`. For the web type check use `frontend/apps/web/node_modules/.bin/tsc` (`npx tsc` fails).
+  - The web login limiter allows ~10 per 15 min.
+
+## Status log (newest first; each block is the state at its time)
+
+_Previous header (2026-09-25):_ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
 **Stream 2 — 2026-09-26 21:48Z (#528/#529 merged in batch 30; #535 Add guest truth fixes opened)**
 
@@ -625,7 +772,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | R03 | **Partial/open.** Backend/browser/iOS/Android removal and current D10 self-leave use existing protected routes and receipts. | Complete re-entry, old unsubmitted reviewer originals and remaining occupancy lifecycle. |
 | R04 | **Partial/open.** Existing ordinary claim/review and relationship milestones are reused. 2026-09-26: transfer to an email with no account no longer leaves the Home ownerless ([#473](https://github.com/WangPantopus/skinny-pantopus/pull/473), bundle `20260926-stream2-ownership-transfer-fix-r1`). | Challenge/dispute and recovery paths; the rest of the transfer lifecycle. |
 | R05 | **Partial/open.** Existing lease approval/end/move-out/request repairs and native receipts are reused; PR176 only repairs the Home Settings caller. | Remaining lease attachment/provider/lifecycle combinations and broader release acceptance. |
-| R06 | **Partial/open.** 2026-09-26: native Identity entry, letter PDFs on both apps, and guest/service-provider wording and issue gating on all three platforms ([#493](https://github.com/WangPantopus/skinny-pantopus/pull/493), bundle `20260926-stream2-r06-native-letters-r1`). | Public verification after a resident becomes a guest (security finding with the user, Proposal A); pass view/revoke on native. |
+| R06 | **Partial/open.** 2026-09-26: native Identity entry, letter PDFs on both apps, and guest/service-provider wording and issue gating on all three platforms ([#493](https://github.com/WangPantopus/skinny-pantopus/pull/493), bundle `20260926-stream2-r06-native-letters-r1`). **User-approved 2026-09-26 (to implement): Proposal A: a guest or service-provider role ends residency in `verifyByCode` and `isStillVerifiedResident` (see CURRENT RESUME §2a).** | Public verification after a resident becomes a guest (security finding with the user, Proposal A); pass view/revoke on native. |
 | I01 | **Partial/open.** No new closure evidence; current Home work does not establish checklist generation/cache freshness. | Health-score lag and uncertain-save recovery after checklist generation. |
 | I02 | **Partial/open.** Existing malformed-card/read evidence is reused. | Nested row validation, metadata, generation races, carryover/history and pagination. |
 | I03 | **Partial/open.** No new closure evidence. | Seasonal checklist hire/correct-gig linkage and original-intent recovery. |
@@ -648,8 +795,8 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. | Place bill splits, malformed input, currency changes and permission-limited actions. |
 | F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
-| M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
-| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). Both merged in batch 28. The native Add guest form names the real Home and tells the truth about delivery and the note ([#535](https://github.com/WangPantopus/skinny-pantopus/pull/535), bundle `20260926-stream2-add-guest-truth-r1`); its Allowed areas chips remain a privacy decision with the user. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). **Known gap, deferred by the user on 2026-09-26:** web Family Mail Party is dormant (banner never appears; `/app/mailbox/party` unlinked); Android works. Maybe a future build; no piecemeal fixes (CURRENT RESUME §2c). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). Both merged in batch 28. The native Add guest form names the real Home and tells the truth about delivery and the note ([#535](https://github.com/WangPantopus/skinny-pantopus/pull/535), bundle `20260926-stream2-add-guest-truth-r1`); its Allowed areas chips remain a privacy decision with the user. **User-approved 2026-09-26 (to implement): native Add guest "What they can see" sections sent as `included_sections` (CURRENT RESUME §2b).** | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
 | M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
 | M04 | **Partial/open.** 2026-09-26: certified Received/Read/Signed and recipient-only signing on all three platforms ([#503](https://github.com/WangPantopus/skinny-pantopus/pull/503), bundle `20260926-stream2-certified-statuses-r1`). | Reachable conversions, translations, physical-mail and neighbor-request behavior; no production path sends certified mail yet. |
 
