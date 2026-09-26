@@ -2,6 +2,30 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 17:34Z (#519/#521 merged in batch 28; #528 Members Invite opened; #509 Mail re-check done)**
+
+- **Merged:** #519 and #521 in batch 28 ([#525](https://github.com/WangPantopus/skinny-pantopus/pull/525), master `be33552e8`). All Stream 2 PRs to date are merged.
+- **New: PR [528](https://github.com/WangPantopus/skinny-pantopus/pull/528) (D07).** Branch `claude/stream2-members-invite-panel`, head `31b0ff6e4` on `be33552e8`, 1 web file; reported to Stream 1 for batch 30.
+  - **Problem (owner, web):** Members "Invite" and "Invite New Member" opened the `/members/add-guest` stub. It toasts "<name> has been added as a guest" but calls no API (HomeInvite 0 → 0).
+  - **Fix:** both buttons open the Home's existing Invite Member panel (the dashboard's).
+  - **Verified:** a real invitation was saved (201) and listed as pending, then withdrawn in the panel; the row is retained as revoked.
+  - **Evidence:** bundle `20260926-stream2-members-invite-r1`, MANIFEST `e40925aea50ee0d5209f1a5028846c97e48a38e4192ac7504b27a43021a2921d`.
+- **#509 Mail re-check (decision 1 follow-up), done.** Trigger: the proxy returns an expired-token 401 once on the letter GET, so the app refreshes for real and replays.
+  - **Before** (APK `d4d59594`, without #509): "Your account changed", and Try again sends nothing.
+  - **After** (master `2e053fe9c` APK `c87aa42a`): the letter opens.
+  - **Evidence:** bundle `20260926-stream2-d1-refresh-recheck-r1`, MANIFEST `20b9ee94cf4fd4b31198ceb0ef34229cbb4178deaf7e141487891254e333833f`.
+- **Read-only web Home sweep** (53 pages, owner + member; all writes blocked):
+  - **Who's free request loop:** `/scheduling/whos-free` sends ~31 req/s each to occupants and whos-free (`useSchedulingOwner` fallback object). Reported to Stream 3, who owns it and is taking the fix.
+  - **Member false-empty states on 403:** Documents ("No documents uploaded" plus 2 error toasts), Issues/maintenance ("No open issues"), Access codes ("No access codes stored") and the Share page. Next Stream 2 follow-up (D09 class).
+  - **Candidate, unverified:** Verification Center → "Message household admin" may say "No household admin yet" to an applicant who can't read occupants. It needs an applicant fixture.
+- **New finding with the user (privacy):** the native Add guest form's "Allowed areas" (default "Front door only") is never sent.
+  - The server then applies the guest default: wifi, parking, house rules, entry instructions, emergency.
+  - All 4 native-created passes have these sections stored (the synthetic Home had no Wi-Fi secrets or emergency rows).
+  - Proposal: show the server's "What they can see" sections as on web, or remove the chips. The in-place truth fixes (sample header, "we'll text or email", "Pass sent") come with it.
+- **Heavy incident (mine):** my Android build ended 12:53:31Z, but my session stalled until ~17:19Z, so the heavy lock stayed idle under Stream 2. Stream 1 released it at 17:20:14Z with its user's approval, and I apologized to both peers. From now on my heavy scripts release the slot as their last step.
+- **Runtime:** proxy 18142 → master-tree backend 18143; backends 18145/18146 are stopped. The main worktree serves the #528 tree on 18144.
+- **Next:** watch #528 CI; member false-empty repair; Add guest decision; guest-letter decision (Proposal A, 08:10Z).
+
 **Stream 2 — 2026-09-26 12:34Z (#521 guest-pass link opened; #512 merged in batch 27)**
 
 - **#512 (decision 1)** merged in batch 27 ([#517](https://github.com/WangPantopus/skinny-pantopus/pull/517), master `2e053fe9c`).
@@ -578,7 +602,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | D04 | **Partial/open.** No new closure evidence. | One truthful lifecycle across HomeMaintenanceLog/HomeIssue and competing readers/writers. |
 | D05 | **Partial/open.** Settings read/save, permission, atomic and response-lifetime evidence is recorded. | General settings recovery, concurrent edits, retained intent, privacy and explicit clearing across clients. |
 | D06 | **Partial/open.** Home privacy read-failure repair and actual consumer recovery are recorded. | Every exposed privacy control and all native/other consumers. |
-| D07 | **Partial/open.** Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. 2026-09-26: web explicit role choice ([#474](https://github.com/WangPantopus/skinny-pantopus/pull/474), bundle `20260926-stream2-web-role-choice-r1`). | ShareCenter, Members/Security and provider-panel empty/error states. |
+| D07 | **Partial/open.** Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. 2026-09-26: web explicit role choice ([#474](https://github.com/WangPantopus/skinny-pantopus/pull/474), bundle `20260926-stream2-web-role-choice-r1`). Members "Invite" opens the real Invite Member panel instead of a stub that faked success ([#528](https://github.com/WangPantopus/skinny-pantopus/pull/528), bundle `20260926-stream2-members-invite-r1`). | ShareCenter, Members/Security and provider-panel empty/error states. |
 | D08 | **Partial/open.** Browser M02 share lifecycle and Android guest-pass issue/revoke/share evidence are accepted within limits. | Native/hosted external-share expiry, exact-resource scope, account changes and storage lifecycle. |
 | D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. | Remaining malformed-success readers and complete cross-client verification. |
 | D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
@@ -588,7 +612,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
 | M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
-| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). Both merged in batch 28. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
 | M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
 | M04 | **Partial/open.** 2026-09-26: certified Received/Read/Signed and recipient-only signing on all three platforms ([#503](https://github.com/WangPantopus/skinny-pantopus/pull/503), bundle `20260926-stream2-certified-statuses-r1`). | Reachable conversions, translations, physical-mail and neighbor-request behavior; no production path sends certified mail yet. |
 
