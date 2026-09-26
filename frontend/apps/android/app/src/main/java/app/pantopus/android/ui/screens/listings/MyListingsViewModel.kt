@@ -78,13 +78,16 @@ class MyListingsViewModel
         private val _selectedTab = MutableStateFlow(MyListingsTab.Active.id)
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
 
-        private val _tabs = MutableStateFlow(zeroCountTabs())
+        private val _tabs = MutableStateFlow(uncountedTabs())
         val tabs: StateFlow<List<ListOfRowsTab>> = _tabs.asStateFlow()
 
         private var onOpenListing: (String) -> Unit = {}
         private var onCompose: () -> Unit = {}
 
         private var allListings: List<ListingDto> = emptyList()
+
+        /** True once the latest load succeeded; counts and tab rows need it. */
+        private var listLoaded = false
 
         /** Override the clock in tests for deterministic relative-time labels. */
         var now: () -> Instant = { Instant.now() }
@@ -108,25 +111,30 @@ class MyListingsViewModel
                 when (val result = repo.myListings(limit = 100)) {
                     is NetworkResult.Success -> {
                         allListings = result.data.listings
+                        listLoaded = true
                         recomputeTabs()
                         rebuildState()
                     }
-                    is NetworkResult.Failure ->
+                    is NetworkResult.Failure -> {
+                        // A failed load knows no counts: don't show "0" on every
+                        // tab, and keep the error when the seller switches tabs.
+                        listLoaded = false
+                        _tabs.value = uncountedTabs()
                         _state.value =
                             ListOfRowsUiState.Error(
                                 result.error.displayMessage("Couldn't load the list."),
                             )
+                    }
                 }
             }
         }
 
         fun selectTab(id: String) {
             _selectedTab.value = id
-            rebuildState()
+            if (listLoaded) rebuildState()
         }
 
-        private fun zeroCountTabs(): List<ListOfRowsTab> =
-            MyListingsTab.entries.map { ListOfRowsTab(id = it.id, label = it.label, count = 0) }
+        private fun uncountedTabs(): List<ListOfRowsTab> = MyListingsTab.entries.map { ListOfRowsTab(id = it.id, label = it.label) }
 
         private fun recomputeTabs() {
             _tabs.value =
