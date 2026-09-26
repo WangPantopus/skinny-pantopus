@@ -298,12 +298,10 @@ class MailDetailViewModel
                         if (result.data.mail.stationeryTheme != null) {
                             _ceremonialRedirectMailId.value = mailId
                         } else {
-                            val content = project(result.data.mail)
-                            _state.value = MailDetailUiState.Loaded(content)
-                            // Certified mail stays unread until it is signed: its
-                            // Sign for delivery confirmation keys on unread.
-                            val signable = content.certifiedDetail != null && !content.isAcknowledged
-                            if (!result.data.mail.viewed && !signable) markViewed()
+                            _state.value = MailDetailUiState.Loaded(project(result.data.mail))
+                            // Certified mail is read like any letter (Received → Read);
+                            // its Sign for delivery confirmation keys on signed.
+                            if (!result.data.mail.viewed) markViewed()
                         }
                     is NetworkResult.Failure ->
                         _state.value = MailDetailUiState.Error(result.error.displayMessage("Couldn't load this item."))
@@ -322,7 +320,8 @@ class MailDetailViewModel
                 withContext(NonCancellable) {
                     if (repo.markViewed(mailId) !is NetworkResult.Success) return@withContext
                     (_state.value as? MailDetailUiState.Loaded)?.let {
-                        _state.value = MailDetailUiState.Loaded(it.content.copy(readStatusLabel = "Read"))
+                        val read = it.content.certifiedDetail?.completing("read", Instant.now().toString())
+                        _state.value = MailDetailUiState.Loaded(it.content.copy(readStatusLabel = "Read", certifiedDetail = read))
                     }
                     MailboxRepository.announceMailViewed(mailId)
                 }
@@ -337,12 +336,17 @@ class MailDetailViewModel
             val current = _state.value as? MailDetailUiState.Loaded ?: return
             if (_ackInFlight.value) return
             _ackInFlight.value = true
-            val optimistic = current.content.copy(isAcknowledged = true)
+            val signed = current.content.certifiedDetail?.completing("acknowledged", Instant.now().toString())
+            val optimistic = current.content.copy(isAcknowledged = true, certifiedDetail = signed)
             _state.value = MailDetailUiState.Loaded(optimistic)
+            // Signing certified mail goes through the recipient-only certified
+            // route, which records the receipt and its proof.
+            val isCertified = current.content.category == MailItemCategory.Certified
             viewModelScope.launch {
-                when (val result = repo.acknowledge(mailId)) {
+                val result = if (isCertified) documentRepo.certifiedAcknowledge(mailId) else repo.acknowledge(mailId)
+                when (result) {
                     is NetworkResult.Success -> {
-                        _toast.value = "Acknowledged"
+                        _toast.value = if (isCertified) "Signed · receipt on file" else "Acknowledged"
                     }
                     is NetworkResult.Failure -> {
                         _state.value = MailDetailUiState.Loaded(current.content)
@@ -908,6 +912,9 @@ class MailDetailViewModel
         }
 
         companion object {
+            /** Characters of the letter id in a Pantopus certified mail reference. */
+            private const val PANTOPUS_REFERENCE_LENGTH = 8
+
             /**
              * Pure projection from the backend [MailDetail] envelope to
              * the generic A17.1 content. Static so the test suite can
@@ -915,7 +922,9 @@ class MailDetailViewModel
              */
             @JvmStatic
             fun project(detail: MailDetail): MailDetailContent {
-                val category = MailItemCategory.fromRaw(detail.mailType ?: detail.type)
+                // `Mail.certified` makes a live letter certified mail (`Mail_mail_type_check` has no 'certified' type).
+                val category =
+                    if (detail.certified) MailItemCategory.Certified else MailItemCategory.fromRaw(detail.mailType ?: detail.type)
                 // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
                 val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName =
@@ -939,10 +948,11 @@ class MailDetailViewModel
                 val expiresAtLabel = formatLongDate(detail.expiresAt)
                 val bodyParagraphs = bodyParagraphs(detail.content)
                 val ackRequired = detail.ackRequired == true
-                val ackStatus = detail.ackStatus?.lowercase() == "acknowledged"
+                val ackStatus = detail.ackStatus?.lowercase() == "acknowledged" || detail.acknowledgedAt != null
                 val variants = decodeVariantDetails(category = category, payload = detail.`object`)
-                val resolvedAck = ackStatus || (variants.certified?.isAcknowledged == true)
-                val readStatusLabel = if (detail.viewed || resolvedAck) "Read" else "Unread"
+                val certifiedDetail = variants.certified ?: pantopusCertified(detail)
+                val resolvedAck = ackStatus || (certifiedDetail?.isAcknowledged == true)
+                val readStatusLabel = if (detail.viewed || detail.openedAt != null || resolvedAck) "Read" else "Unread"
                 return MailDetailContent(
                     mailId = detail.id,
                     category = category,
@@ -969,7 +979,7 @@ class MailDetailViewModel
                     isAcknowledged = resolvedAck,
                     isArchived = detail.archived,
                     bookletDetail = variants.booklet,
-                    certifiedDetail = variants.certified,
+                    certifiedDetail = certifiedDetail,
                     communityDetail = variants.community,
                     couponDetail = variants.coupon,
                     gigDetail = variants.gig,
@@ -979,6 +989,19 @@ class MailDetailViewModel
                     recordsDetail = variants.records,
                 )
             }
+
+            /** Pantopus certified mail (`Mail.certified`): Received → Read → Signed from the letter's timestamps. */
+            private fun pantopusCertified(detail: MailDetail): CertifiedDetailDto? =
+                if (!detail.certified) {
+                    null
+                } else {
+                    CertifiedDetailDto.pantopus(
+                        reference = "Ref ${detail.id.take(PANTOPUS_REFERENCE_LENGTH).uppercase()}",
+                        receivedAt = detail.createdAt,
+                        readAt = detail.openedAt ?: detail.viewedAt,
+                        signedAt = detail.acknowledgedAt,
+                    )
+                }
 
             /**
              * RN `getSenderTrust` (`src/components/mailbox/sender.ts:39-58`)

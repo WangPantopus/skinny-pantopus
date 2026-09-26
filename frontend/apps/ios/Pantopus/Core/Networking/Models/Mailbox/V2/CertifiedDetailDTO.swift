@@ -36,6 +36,9 @@ public struct CertifiedDetailDTO: Sendable, Hashable {
     public let noticeBody: String?
     public let termsURL: URL?
     public let isAcknowledged: Bool
+    /// `false` for Pantopus certified mail (`Mail.certified`), which has no
+    /// postal carrier, tracking number or postmark.
+    public let isPostal: Bool
 
     public init(
         referenceNumber: String,
@@ -44,7 +47,8 @@ public struct CertifiedDetailDTO: Sendable, Hashable {
         chain: [CertifiedChainStep],
         noticeBody: String?,
         termsURL: URL?,
-        isAcknowledged: Bool
+        isAcknowledged: Bool,
+        isPostal: Bool = true
     ) {
         self.referenceNumber = referenceNumber
         self.documentType = documentType
@@ -53,6 +57,31 @@ public struct CertifiedDetailDTO: Sendable, Hashable {
         self.noticeBody = noticeBody
         self.termsURL = termsURL
         self.isAcknowledged = isAcknowledged
+        self.isPostal = isPostal
+    }
+
+    /// Pantopus certified mail (`Mail.certified`): Received → Read → Signed,
+    /// from the letter's own timestamps.
+    public static func pantopus(
+        reference: String,
+        receivedAt: String,
+        readAt: String?,
+        signedAt: String?
+    ) -> CertifiedDetailDTO {
+        CertifiedDetailDTO(
+            referenceNumber: reference,
+            documentType: nil,
+            acknowledgeBy: nil,
+            chain: [
+                CertifiedChainStep(id: "delivered", label: "Received", occurredAt: receivedAt, isComplete: true),
+                CertifiedChainStep(id: "read", label: "Read", occurredAt: readAt, isComplete: readAt != nil),
+                CertifiedChainStep(id: "acknowledged", label: "Signed", occurredAt: signedAt, isComplete: signedAt != nil)
+            ],
+            noticeBody: nil,
+            termsURL: nil,
+            isAcknowledged: signedAt != nil,
+            isPostal: false
+        )
     }
 
     public static func decode(from value: JSONValue?) -> CertifiedDetailDTO? {

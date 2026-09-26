@@ -41,9 +41,14 @@ export default function CertifiedMailDetail({
         <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
           Certified Mail
         </span>
-        {isAcknowledged && (
+        {/* Opening this page reads the letter, so it is Read here until it is Signed. */}
+        {isAcknowledged ? (
           <span className="ml-auto px-2 py-0.5 text-[10px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full">
-            Acknowledged
+            Signed
+          </span>
+        ) : (
+          <span className="ml-auto px-2 py-0.5 text-[10px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded-full">
+            Read · not signed
           </span>
         )}
       </div>
@@ -54,7 +59,7 @@ export default function CertifiedMailDetail({
           {isIntendedRecipient ? (
             <>
               <p className="text-sm text-app-text-strong mb-3">
-                This certified mail requires your acknowledgment to confirm receipt.
+                This certified mail needs your signature to confirm delivery.
               </p>
               <button
                 type="button"
@@ -69,10 +74,10 @@ export default function CertifiedMailDetail({
                 {acknowledging ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin" />
-                    Acknowledging...
+                    Signing…
                   </span>
                 ) : (
-                  'Acknowledge Receipt'
+                  'Sign for delivery'
                 )}
               </button>
             </>
@@ -82,8 +87,9 @@ export default function CertifiedMailDetail({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-7V9m0 0V7m0 2h2m-2 0H10" />
               </svg>
               <p className="text-xs text-amber-800 dark:text-amber-300">
-                This item requires acknowledgment by{' '}
+                Only{' '}
                 <span className="font-semibold">{recipientName || 'the intended recipient'}</span>
+                {' '}can sign for this letter.
               </p>
             </div>
           )}
