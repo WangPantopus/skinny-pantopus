@@ -2,6 +2,35 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 03:16Z (supersedes the security, S2-03 and "still waiting" items below)**
+
+- **User decisions (2026-09-26):**
+  - **Party-assign security fix:** approved as proposed.
+  - **Bundle privacy:** approved as proposed.
+  - **Native read state:** delegated to Stream 2 after industry research. The decision is A: the apps call the web's `PATCH /api/mailbox/:id/view` when a letter opens.
+  - **Household Archive/Dismiss/Delete:** stays shared. The user asked for a deletion notice to the other members and a recovery window. The concrete proposal is with the user and awaits approval of the specifics.
+- **#457 opened** at 02:36:04Z: party create/assign and bundles reach only the reader's household letters. Backend only, head `df1bbe1e9`, bundle `20260926-stream2-mail-party-bundle-privacy-r1`.
+- **Batch 19 (#459):** Stream 1 queued #457 then #453. Stream 1 merges and reports it.
+- **S2-03 opened as PR [461](https://github.com/WangPantopus/skinny-pantopus/pull/461)** at 03:15:50Z. Branch `claude/stream2-native-earn-dead-ends`, head `3a5cdb21e`, on master `564bf220d`.
+  - **Change:** Earn help → Help center, Offer a service → Professional profile, and the dead "See all" is hidden. Android and iOS both, in 6 files. The Place and Mail stacks reuse the You stack's `.professionalProfile` route.
+  - **Baseline:** `earn_populated` is re-recorded at 0.1091%. 28% of that is the See all removal; 72% is existing master drift from `4c15f4b70`, which alone is under the tolerance.
+  - **Real-app befores and afters on both apps:**
+    - Help and Professional open, and Back returns to Earn.
+    - The populated Earnings tab has no See all.
+    - The only requests were GETs plus the app-start refresh.
+    - Builds: APK `8be739b5…`, iOS dylib `f5f33f04…`, both on :18142 only.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-native-earn-s2-03-r1`, MANIFEST `9d658fbb5713d7dc81dff403a0924dc1b10aed6f72d07caf898f840a0b8cbd96` (91 files).
+  - **Overlap:** it shares `RootTabScreen.kt` and `HubTabRoot.swift` with #453; `git merge-tree` is clean and keeps both. It has no files in common with #457.
+  - **Follow-up, not changed here:** on iOS the Professional profile shows two back controls, as it already does from the You stack. The view needs a header in every state before a stack can hide its bar.
+- **Heavy and devices:**
+  - Heavy: held 02:44:45Z–02:53:26Z for the S2-03 builds.
+  - iOS driver: held 02:55:43Z–03:00:04Z, then released to Streams 1 and 3.
+  - Simulator `6F914A30` was shut down at 03:03:07Z for device headroom.
+- **Next:**
+  - Read-state PR: Android and iOS, local, not yet built. It waits for a heavy window and then a simulator boot, both coordinated with the peers first.
+  - Household delete recovery: after user approval.
+- **Fixture:** the archived `ad` earning letter `1fac1d44` is retained, and S2-03 only read it.
+
 **Stream 2 — 2026-09-26 02:19Z (adds to the 02:07Z block below)**
 
 - **#451 merged** in batch 17 (#452) at 02:08:04Z; master is `8a9a97757`.
