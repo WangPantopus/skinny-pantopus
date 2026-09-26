@@ -2,6 +2,14 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 05:50Z (master `5bf1eb7f8`)
+
+- **[PR470](https://github.com/WangPantopus/skinny-pantopus/pull/470): open, CI running.** S3-66 on iOS and Android. Head `b99401990`, 15 files.
+  - Business Share now hands out "Check out <name> on Pantopus — <web>/b/<username>" when the public page is live, and the app link with the name while it's unpublished.
+  - It also fixes the link it shares: both apps showed "Business not found" for `/b/<username>` of a published business (reproduced), because the username went to the id-only detail read. A not-found, non-UUID id now resolves through the read-only public page.
+  - Bundle `20260926-stream3-business-share-link-r1`, MANIFEST.json SHA-256 `1811fddc8f4bd0f628a325757420a9a519af2c89c800ee7db8c775922193470c`.
+- **CI green:** #465, #466 and #468. All four are with Stream 1 for batch 21.
+
 ## Update 2026-09-26 05:10Z (master `5bf1eb7f8`, batch 20 merged)
 
 - **Merged in batch 20** ([PR463](https://github.com/WangPantopus/skinny-pantopus/pull/463), 04:22:41Z): [PR455](https://github.com/WangPantopus/skinny-pantopus/pull/455) (S3-50, S3-53 Call, S3-67) and [PR460](https://github.com/WangPantopus/skinny-pantopus/pull/460) (web S3-42, S3-61).
