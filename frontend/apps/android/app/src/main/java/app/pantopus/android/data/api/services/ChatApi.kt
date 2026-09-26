@@ -14,13 +14,17 @@ import app.pantopus.android.data.api.models.chats.ReactToChatMessageResponse
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 /**
  * Chat endpoints under `/api/chat/[*]` from `backend/routes/chats.js`.
@@ -96,6 +100,17 @@ interface ChatApi {
     suspend fun deleteMessage(
         @Path("id") id: String,
     ): Unit
+
+    /**
+     * `GET /api/chat/files/:fileId` — checks room membership, then redirects to a
+     * short-lived signed URL (OkHttp drops the bearer on that cross-host hop).
+     */
+    @Streaming
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/files/{fileId}")
+    suspend fun downloadFile(
+        @Path("fileId") fileId: String,
+    ): Response<ResponseBody>
 
     /** `POST /api/chat/messages/:id/react` — route `chats.js:2558`. */
     @POST("api/chat/messages/{id}/react")

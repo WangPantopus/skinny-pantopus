@@ -3,6 +3,8 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -110,6 +112,9 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.shared.media.MediaViewerDialog
+import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.PostMediaKind
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -171,6 +176,7 @@ fun ChatConversationScreen(
     val isReporting by viewModel.isReporting.collectAsStateWithLifecycle()
     val reportNotice by viewModel.reportNotice.collectAsStateWithLifecycle()
     val actionFailure by viewModel.actionFailure.collectAsStateWithLifecycle()
+    val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
@@ -192,6 +198,8 @@ fun ChatConversationScreen(
     var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    // Photos (and the tapped index) shown in the full-screen viewer.
+    var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val photoPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -407,6 +415,10 @@ fun ChatConversationScreen(
                             onResolveLink = viewModel::resolveLinkPreview,
                             onOpenUrl = { url ->
                                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                            },
+                            onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
+                            onOpenAttachment = { attachment ->
+                                viewModel.openAttachment(attachment, File(context.cacheDir, "chat-files").apply { mkdirs() })
                             },
                         )
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
@@ -722,6 +734,29 @@ fun ChatConversationScreen(
             val failure = actionFailure ?: return@LaunchedEffect
             snackbarHostState.showSnackbar(failure)
             viewModel.dismissActionFailure()
+        }
+        // A downloaded attachment opens in the app that handles its type.
+        LaunchedEffect(openFile) {
+            val opened = openFile ?: return@LaunchedEffect
+            viewModel.consumeOpenFile()
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", opened.file)
+            val intent =
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, opened.mimeType)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.clipData = ClipData.newRawUri(opened.file.name, uri)
+            try {
+                context.startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                snackbarHostState.showSnackbar("No app on this device can open this file.")
+            }
+        }
+        viewerPhotos?.let { (urls, index) ->
+            MediaViewerDialog(
+                items = urls.mapIndexed { i, url -> PostMediaItem(id = "chat-photo-$i", kind = PostMediaKind.Image, url = url) },
+                startIndex = index,
+                onDismiss = { viewerPhotos = null },
+            )
         }
         SnackbarHost(
             hostState = snackbarHostState,
@@ -2364,6 +2399,8 @@ internal fun PopulatedFrame(
     linkPreviews: Map<String, LinkPreview?> = emptyMap(),
     onResolveLink: (String) -> Unit = {},
     onOpenUrl: (String) -> Unit = {},
+    onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
+    onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     // Leading non-row items (pagination spacer + any pinned welcome card)
@@ -2463,6 +2500,8 @@ internal fun PopulatedFrame(
                         linkPreviews = linkPreviews,
                         onResolveLink = onResolveLink,
                         onOpenUrl = onOpenUrl,
+                        onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
+                        onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
                     )
             }
         }
@@ -2596,6 +2635,9 @@ private fun BubbleRow(
     linkPreviews: Map<String, LinkPreview?> = emptyMap(),
     onResolveLink: (String) -> Unit = {},
     onOpenUrl: (String) -> Unit = {},
+    // Null while selecting messages, so a tap selects instead of opening.
+    onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
+    onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
 ) {
     val isOut = content.side == ChatMessageSide.Outgoing
     // A15.2 link bubbles: first http(s) URL in a plain text body drives
@@ -2716,16 +2758,48 @@ private fun BubbleRow(
                                 }
                             }
                         }
-                    is ChatBubbleBody.Image ->
-                        PhotoBubble(
-                            url = body.url,
-                            isOut = isOut,
-                            hasTail = content.hasTail,
-                            isContinuation = content.isContinuation,
-                            lockedTier = content.lockedTier?.takeIf { !isOut },
-                            onLockedAction = onLockedAction,
-                            contentId = content.id,
-                        )
+                    is ChatBubbleBody.Image -> {
+                        val photos = listOfNotNull(body.url) + body.moreUrls
+                        val lockedTier = content.lockedTier?.takeIf { !isOut }
+                        Column(
+                            horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            PhotoBubble(
+                                url = body.url,
+                                isOut = isOut,
+                                hasTail = content.hasTail && body.caption == null,
+                                isContinuation = content.isContinuation,
+                                lockedTier = lockedTier,
+                                onLockedAction = onLockedAction,
+                                contentId = content.id,
+                                moreCount = body.moreUrls.size,
+                                onOpen =
+                                    onOpenPhotos
+                                        ?.takeIf { photos.isNotEmpty() && lockedTier == null }
+                                        ?.let { open -> { open(photos, 0) } },
+                                onLongPress = onLongPress,
+                            )
+                            if (body.caption != null && lockedTier == null) {
+                                BubbleContainer(
+                                    isOut = isOut,
+                                    hasTail = content.hasTail,
+                                    isContinuation = true,
+                                    bubbleColor = bubbleColor,
+                                    contentId = content.id,
+                                ) {
+                                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                        LinkifiedBubbleText(
+                                            text = body.caption,
+                                            isOut = isOut,
+                                            textColor = textColor,
+                                            onOpenUrl = onOpenUrl,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     is ChatBubbleBody.Attachment ->
                         BubbleContainer(
                             isOut = isOut,
@@ -2736,19 +2810,56 @@ private fun BubbleRow(
                             onLockedAction = onLockedAction,
                             contentId = content.id,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                                PantopusIconImage(
-                                    icon = PantopusIcon.File,
-                                    contentDescription = null,
-                                    size = 18.dp,
-                                    tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
-                                )
-                                Text(
-                                    text = body.filename,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textColor,
-                                )
+                            val openFile = onOpenAttachment?.takeIf { body.fileUrl != null }
+                            Column(
+                                modifier = Modifier.widthIn(max = bubbleMaxWidth),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+                            ) {
+                                Row(
+                                    modifier =
+                                        if (openFile != null) {
+                                            Modifier
+                                                .combinedClickable(
+                                                    onClickLabel = "Open ${body.filename}",
+                                                    onClick = { openFile(body) },
+                                                    onLongClick = onLongPress,
+                                                ).testTag("chatAttachmentOpen")
+                                        } else {
+                                            Modifier
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                ) {
+                                    PantopusIconImage(
+                                        icon = PantopusIcon.File,
+                                        contentDescription = null,
+                                        size = 18.dp,
+                                        tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+                                    )
+                                    Column {
+                                        Text(
+                                            text = body.filename,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textColor,
+                                        )
+                                        body.sizeLabel?.let { size ->
+                                            Text(
+                                                text = size,
+                                                fontSize = 11.sp,
+                                                color = textColor.copy(alpha = 0.75f),
+                                            )
+                                        }
+                                    }
+                                }
+                                body.caption?.let { caption ->
+                                    LinkifiedBubbleText(
+                                        text = caption,
+                                        isOut = isOut,
+                                        textColor = textColor,
+                                        onOpenUrl = onOpenUrl,
+                                    )
+                                }
                             }
                         }
                     is ChatBubbleBody.SystemLink -> SystemLinkPill(body)
@@ -3930,6 +4041,7 @@ private fun MiniAvatar(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun PhotoBubble(
     url: String?,
     isOut: Boolean,
@@ -3938,6 +4050,11 @@ private fun PhotoBubble(
     lockedTier: String? = null,
     onLockedAction: () -> Unit = {},
     contentId: String = "",
+    // Further photos in the same message; shown as a "+N" badge.
+    moreCount: Int = 0,
+    // Opens the full-screen viewer; null keeps the row's own tap behavior.
+    onOpen: (() -> Unit)? = null,
+    onLongPress: () -> Unit = {},
 ) {
     val shape =
         RoundedCornerShape(
@@ -3953,7 +4070,13 @@ private fun PhotoBubble(
                 .clip(shape)
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, if (isOut) Color.Transparent else PantopusColors.appBorder, shape)
-                .testTag("chatPhotoBubble"),
+                .then(
+                    if (onOpen != null) {
+                        Modifier.combinedClickable(onClickLabel = "Open photo", onClick = onOpen, onLongClick = onLongPress)
+                    } else {
+                        Modifier
+                    },
+                ).testTag("chatPhotoBubble"),
     ) {
         if (url != null) {
             AsyncImage(
@@ -3964,6 +4087,22 @@ private fun PhotoBubble(
             )
         } else {
             PhotoPlaceholder(modifier = Modifier.fillMaxSize())
+        }
+        if (moreCount > 0) {
+            Text(
+                text = "+$moreCount",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(Spacing.s2)
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = Spacing.s2, vertical = 2.dp)
+                        .semantics { contentDescription = "$moreCount more photos" },
+            )
         }
         if (lockedTier != null) {
             LockedPaywallOverlay(
