@@ -10,11 +10,12 @@
 //
 //  `submit()` issues the pass via `POST /api/homes/:id/guest-passes`
 //  (route `backend/routes/homeIam.js:667`), raises a success toast
-//  ("Pass sent to <name>") and publishes `createdShare` — the one-time
+//  ("Pass created for <name>") and publishes `createdShare` — the one-time
 //  share token composed into a viewer link. The host offers the OS share
 //  sheet (RN parity: `src/app/homes/[id]/share.tsx:60-82`) and then calls
 //  `acknowledgeShare()`, which flips `shouldDismiss` so the modal pops.
-//  The contact, welcome note, and allowed-area chips are UI affordances
+//  The welcome note rides along in the share message. The contact and
+//  allowed-area chips are UI affordances
 //  the create endpoint doesn't model, so they stay local.
 //
 
@@ -54,7 +55,9 @@ public final class AddGuestFormViewModel {
     // MARK: - Inputs
 
     public let homeId: String
-    public let homeContext: AddGuestSampleData.HomeContext
+    /// The Home this pass is for, from `GET /api/homes/:id`. The strip stays
+    /// hidden until it loads (and if it fails).
+    public private(set) var homeContext: AddGuestSampleData.HomeContext?
     public let durationOptions = AddGuestSampleData.durationOptions
     public let areaOptions = AddGuestSampleData.areaOptions
     public let welcomeMaxLength = AddGuestSampleData.welcomeMaxLength
@@ -64,12 +67,13 @@ public final class AddGuestFormViewModel {
 
     init(
         homeId: String,
+        homeContext: AddGuestSampleData.HomeContext? = nil,
         api: APIClient = .shared,
         onSent: @escaping (String) -> Void = { _ in }
     ) {
         self.homeId = homeId
         self.api = api
-        homeContext = AddGuestSampleData.homeContext(for: homeId)
+        self.homeContext = homeContext
         nameField = FormFieldState(id: "name", originalValue: "")
         contactField = FormFieldState(id: "contact", originalValue: "")
         welcomeField = FormFieldState(id: "welcome", originalValue: "")
@@ -180,9 +184,9 @@ public final class AddGuestFormViewModel {
         guard isValid, !isSaving else { return }
         isSaving = true
         // `label` carries the guest's name; the time window comes from the
-        // selected duration chip. Contact, welcome note, and allowed-area
-        // chips are UI affordances the create endpoint doesn't model, so
-        // they stay local (a backend follow-up would persist them).
+        // selected duration chip. Contact and allowed-area chips are UI
+        // affordances the create endpoint doesn't model, so they stay local;
+        // the welcome note goes in the share message.
         let window = guestPassWindow()
         let request = CreateGuestPassRequest(
             label: trimmedName,
@@ -208,15 +212,38 @@ public final class AddGuestFormViewModel {
         }
         isSaving = false
         let name = firstName ?? "your guest"
-        toast = ToastMessage(text: "Pass sent to \(name)", kind: .success)
+        toast = ToastMessage(text: "Pass created for \(name)", kind: .success)
         onSent(name)
         // The raw token is returned exactly once (homeIam.js:762-767) —
         // this is the only moment a shareable link can be built.
         createdShare = GuestPassShare(
             id: response.pass.id,
             guestName: firstName ?? "",
-            urlString: GuestPassShare.url(forToken: response.token)
+            urlString: GuestPassShare.url(forToken: response.token),
+            note: welcomeField.value.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+    }
+
+    /// Loads the Home this pass is for. A failure keeps the strip hidden
+    /// rather than naming a Home.
+    public func loadHomeContext() async {
+        guard homeContext == nil,
+              let response = try? await api.request(
+                  HomesEndpoints.detail(homeId: homeId),
+                  as: HomeDetailResponse.self
+              )
+        else { return }
+        homeContext = Self.homeContext(for: response.home.base)
+    }
+
+    /// Street over the Home's name (or its city); nil without either.
+    static func homeContext(for home: HomeDTO) -> AddGuestSampleData.HomeContext? {
+        let street = home.address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = home.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let city = home.city?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let title = street.isEmpty ? name : street
+        guard !title.isEmpty else { return nil }
+        return AddGuestSampleData.HomeContext(title: title, subtitle: !name.isEmpty && name != title ? name : city)
     }
 
     /// Called by the host once the user has either shared the new pass or
