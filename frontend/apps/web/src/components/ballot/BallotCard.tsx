@@ -14,7 +14,16 @@
 'use client';
 
 import { Calendar, ExternalLink } from 'lucide-react';
-import type { BallotOfficialLink, PlaceBallotElectionData } from '@pantopus/types';
+import type {
+  BallotDeadline,
+  BallotGovernments,
+  BallotMoverPrompt,
+  BallotOfficialLink,
+  BallotPrimaryAction,
+  BallotTeaser,
+  BallotWeek,
+  PlaceBallotElectionData,
+} from '@pantopus/types';
 import { BallotTile } from './BallotGlyph';
 import DeadlineTimeline from './DeadlineTimeline';
 import { asOfLabel } from './format';
@@ -22,10 +31,112 @@ import { asOfLabel } from './format';
 export const CARD_FRAME =
   'rounded-2xl border border-app-border bg-app-surface p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col';
 
-/** True when the civic_election payload carries the Ballot P0 card. */
-export function isBallotCard(data: unknown): data is PlaceBallotElectionData {
-  const d = data as PlaceBallotElectionData | null;
-  return Boolean(d && d.coverage && d.phase);
+// ── Tolerant reading, as the iOS and Android decoders do: a malformed
+// field is dropped, never the card and never the page around it. ──
+type Loose = Record<string, unknown>;
+const record = (v: unknown): Loose | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Loose) : null);
+const text = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const httpsUrl = (v: unknown): string | null => (typeof v === 'string' && /^https:\/\/\S+$/.test(v) ? v : null);
+
+/** Every item, or none: one bad item drops the list, as a native decode does. */
+function listOf<T>(v: unknown, read: (item: unknown) => T | null): T[] {
+  if (!Array.isArray(v)) return [];
+  const items = v.map(read);
+  return items.every((item): item is T => item !== null) ? items : [];
+}
+
+function readDeadline(v: unknown): BallotDeadline | null {
+  const o = record(v);
+  if (!o || !text(o.key) || !text(o.label) || !text(o.date) || !text(o.month_day) || num(o.days_until) === null) return null;
+  if (typeof o.needs_action !== 'boolean' || typeof o.timeline !== 'boolean') return null;
+  return o as unknown as BallotDeadline;
+}
+
+function readLink(v: unknown): BallotOfficialLink | null {
+  const o = record(v);
+  const url = o && httpsUrl(o.url);
+  if (!o || !url || !text(o.key) || !text(o.label) || !text(o.owner)) return null;
+  return { key: o.key as string, label: o.label as string, owner: o.owner as string, url };
+}
+
+/** The governments view's data (Place card and the Civic page's row). */
+export function ballotGovernments(v: unknown): BallotGovernments | null {
+  const o = record(v);
+  const count = o && num(o.count);
+  if (!o || count === null || count < 1 || typeof o.count_is_minimum !== 'boolean') return null;
+  if (!text(o.summary) || !text(o.caveat) || !text(o.source_line)) return null;
+  const items = listOf(o.items, (item) => {
+    const g = record(item);
+    return g && text(g.level) && text(g.name) ? (g as unknown as BallotGovernments['items'][number]) : null;
+  });
+  return items.length ? ({ ...o, count, items } as unknown as BallotGovernments) : null;
+}
+
+function readAction(v: unknown): BallotPrimaryAction | null {
+  const o = record(v);
+  if (!o || !text(o.label) || (o.kind !== 'governments' && o.kind !== 'link')) return null;
+  if (o.kind === 'link' && !httpsUrl(o.url)) return null;
+  return o as unknown as BallotPrimaryAction;
+}
+
+function readWeek(v: unknown): BallotWeek {
+  const o = record(v);
+  if (!o || o.show !== true) return { show: false };
+  return { show: true, overline: text(o.overline) ?? undefined, title: text(o.title) ?? undefined, body: text(o.body) ?? undefined };
+}
+
+function readMover(v: unknown): BallotMoverPrompt | null {
+  const o = record(v);
+  const days = o && num(o.days_left);
+  if (!o || !text(o.text) || days === null) return null;
+  return { text: o.text as string, days_left: days, url: httpsUrl(o.url) };
+}
+
+/** The /start teaser (`ballot_teaser`), or null when absent or unusable. */
+export function ballotTeaserData(v: unknown): BallotTeaser | null {
+  const o = record(v);
+  if (!o || (o.coverage !== 'supported' && o.coverage !== 'links_only') || !text(o.headline) || !text(o.source_line)) return null;
+  const next = record(o.next_deadline);
+  const days = next && num(next.days_left);
+  return {
+    ...(o as unknown as BallotTeaser),
+    note: text(o.note),
+    next_deadline: next && text(next.lead) && days !== null
+      ? { key: text(next.key) ?? '', lead: next.lead as string, days_left: days, detail: text(next.detail) }
+      : null,
+    governments: ballotGovernments(o.governments),
+    primary_action: readAction(o.primary_action),
+  };
+}
+
+/**
+ * The Ballot P0 card from a civic_election payload, or null when the
+ * server sent none. Each field is checked on its own.
+ */
+export function ballotCardData(data: unknown): PlaceBallotElectionData | null {
+  const d = record(data);
+  if (!d || (d.coverage !== 'supported' && d.coverage !== 'links_only')) return null;
+  if (d.phase !== 'far' && d.phase !== 'in_season' && d.phase !== 'election_day' && d.phase !== 'after') return null;
+  const notice = record(d.election_day_notice);
+  return {
+    ...(d as unknown as PlaceBallotElectionData),
+    today: text(d.today) ?? undefined,
+    title: text(d.title) ?? undefined,
+    subtitle: text(d.subtitle) ?? undefined,
+    chip: text(d.chip),
+    line: text(d.line),
+    note: text(d.note),
+    how_it_works: text(d.how_it_works),
+    deadlines: listOf(d.deadlines, readDeadline),
+    election_day_notice: notice && text(notice.lead) ? { lead: notice.lead as string, detail: text(notice.detail) ?? '' } : null,
+    primary_action: readAction(d.primary_action),
+    official_links: listOf(d.official_links, readLink),
+    governments: ballotGovernments(d.governments),
+    ballot_week: readWeek(d.ballot_week),
+    mover_prompt: readMover(d.mover_prompt),
+    source_line: text(d.source_line) ?? undefined,
+  };
 }
 
 export function BallotHeader({ title, subtitle, chip }: { title: string; subtitle?: string; chip?: string | null }) {

@@ -126,7 +126,7 @@ describe('the Place "Your ballot" card', () => {
     expect(within(card).getByText('November 3 general election')).toBeInTheDocument();
     expect(within(card).getByText('40 days')).toBeInTheDocument();
     expect(within(card).getByText('This address sits inside at least 5 governments.')).toBeInTheDocument();
-    expect(within(card).getByRole('img', { name: /Timeline: today, Sep 24; ballots mailed Oct 16; register online or by mail by Oct 26; return by 8 p.m. Nov 3/ })).toBeInTheDocument();
+    expect(within(card).getByRole('img', { name: /Timeline: today, Sep 24; ballots mailed Oct 16; register by Oct 26; return by 8 p.m. Nov 3/ })).toBeInTheDocument();
     fireEvent.click(within(card).getByRole('button', { name: 'See your governments' }));
     expect(open).toHaveBeenCalled();
     const links = within(card).getAllByRole('link');

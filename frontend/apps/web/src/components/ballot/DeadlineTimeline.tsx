@@ -36,10 +36,11 @@ export interface TimelineMarker {
   aria: string;
 }
 
+// Read from each deadline's own label: states differ ("By 7 p.m.",
+// "Ballots arrive", registration that stays open online).
+const lowerFirst = (s: string) => `${s.charAt(0).toLowerCase()}${s.slice(1)}`;
 const ARIA: Record<string, (d: BallotDeadline) => string> = {
-  ballots_mailed: (d) => `ballots mailed ${d.month_day}`,
-  register_online_mail: (d) => `register online or by mail by ${d.month_day}`,
-  return_by: (d) => `return by 8 p.m. ${d.month_day}`,
+  return_by: (d) => `return ${lowerFirst(d.label)} ${d.month_day}`,
 };
 
 /**
@@ -72,7 +73,7 @@ export function timelineLayout(deadlines: BallotDeadline[], today: string, width
       kind: final ? 'final' : 'deadline',
       needsAction: d.needs_action && !final,
       anchor: final ? 'end' : 'middle',
-      aria: (ARIA[d.key] || ((x: BallotDeadline) => `${x.label} ${x.month_day}`))(d),
+      aria: (ARIA[d.key] || ((x: BallotDeadline) => `${lowerFirst(x.label)} ${x.month_day}`))(d),
     });
   });
 

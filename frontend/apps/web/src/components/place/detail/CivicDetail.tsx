@@ -25,6 +25,7 @@ import type {
 import { Landmark, Check, Mail, Vote, Phone, Globe, ChevronRight, CalendarCheck, Info, Layers } from 'lucide-react';
 import Chip from '@/components/archetypes/primitives/Chip';
 import GovernmentsSheet from '@/components/ballot/GovernmentsSheet';
+import { ballotGovernments } from '@/components/ballot/BallotCard';
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import { statusToState } from './format';
@@ -154,6 +155,12 @@ function monthDay(iso: string): { mon: string; day: string } {
   return { mon: d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }), day: String(d.getUTCDate()) };
 }
 
+// "Today" on Election Day and "1 day away" the day before, not "0 days".
+function daysAway(n: number): string {
+  if (n <= 0) return 'Today';
+  return n === 1 ? '1 day away' : `${n} days away`;
+}
+
 function ElectionBanner({ data }: { data: PlaceCivicElectionData }) {
   const { mon, day } = monthDay(data.date);
   const dateLine = new Date(data.date);
@@ -169,7 +176,7 @@ function ElectionBanner({ data }: { data: PlaceCivicElectionData }) {
           <div className="text-[15.5px] font-bold text-app-text -tracking-[0.01em]">{data.name}</div>
           {dateLabel ? <div className="text-[12.5px] text-app-text-muted mt-0.5">{dateLabel}</div> : null}
         </div>
-        <Chip label={`${data.days_until} days away`} variant="info" />
+        <Chip label={daysAway(data.days_until)} variant="info" />
       </div>
     </div>
   );
@@ -333,7 +340,7 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
   const districtsReady = districtsEnv && (districtsEnv.status === 'ready' || districtsEnv.status === 'stale' || districtsEnv.status === 'partial') && districtsEnv.data;
   const districtsData = districtsReady ? (districtsEnv!.data as PlaceCivicDistrictsData) : null;
   const reps = districtsData?.representatives ?? [];
-  const governments = districtsData?.governments ?? null;
+  const governments = ballotGovernments(districtsData?.governments);
 
   const electionReady = electionEnv && (electionEnv.status === 'ready' || electionEnv.status === 'stale' || electionEnv.status === 'partial') && electionEnv.data;
   // With Ballot on, the section keeps a past election for the week after it

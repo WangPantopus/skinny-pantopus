@@ -22,7 +22,7 @@ import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import JustMovedCard from './JustMovedCard';
 import Overline from '@/components/archetypes/primitives/Overline';
-import BallotCard, { isBallotCard } from '@/components/ballot/BallotCard';
+import BallotCard, { ballotCardData } from '@/components/ballot/BallotCard';
 import GovernmentsSheet from '@/components/ballot/GovernmentsSheet';
 import { derivePulse, isUnavailableSection, renderSection, renderVerifyLocked, sectionTitle } from './presentation';
 import { IdentityGroup } from './PlaceIdentitySection';
@@ -74,9 +74,7 @@ export default function PlaceDashboardView({
   // Ballot P0: when the server sends the "Your ballot" card (ballot_p0),
   // it leads the page under "This season" and leaves the civic group.
   const electionSection = intelligence.groups.flatMap((g) => g.sections).find((s) => s.id === 'civic_election');
-  const ballot = electionSection && electionSection.status === 'ready' && isBallotCard(electionSection.data)
-    ? electionSection.data
-    : null;
+  const ballot = electionSection && electionSection.status === 'ready' ? ballotCardData(electionSection.data) : null;
   const groups = ballot
     ? intelligence.groups
       .map((g) => ({ ...g, sections: g.sections.filter((s) => s.id !== 'civic_election') }))
