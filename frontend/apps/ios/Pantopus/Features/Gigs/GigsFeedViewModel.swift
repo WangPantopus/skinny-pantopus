@@ -102,6 +102,10 @@ public final class GigsFeedViewModel {
     private var loadedTrains: [GigsFeedNearbyTrainDTO] = []
     private var undoSnapshot: [GigDTO] = []
     private var isLoading = false
+    /// Bumped by every `fetch()`: a newer query (chip, sort, filter, scope
+    /// or refresh) supersedes one still in flight instead of being dropped,
+    /// and a superseded response never writes state.
+    private var fetchGeneration = 0
     /// X-dismissed for the session — suppresses the radius banner until
     /// the VM is rebuilt.
     private var radiusSuggestionDismissed = false
@@ -337,18 +341,20 @@ public final class GigsFeedViewModel {
     // MARK: - Fetch
 
     private func fetch() async {
-        if isLoading { return }
+        fetchGeneration += 1
+        let generation = fetchGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == fetchGeneration { isLoading = false } }
         switch state {
         case .loaded, .browse: break
         default: state = .loading
         }
-        await fetchNearbySupportTrains()
+        await fetchNearbySupportTrains(generation: generation)
+        guard generation == fetchGeneration else { return }
         if isBrowseMode, let coordinate = resolvedCoordinate() {
-            await fetchBrowse(coordinate: coordinate)
+            await fetchBrowse(coordinate: coordinate, generation: generation)
         } else if feedScope.includesGigs {
-            await fetchFlat()
+            await fetchFlat(generation: generation)
         } else {
             // Support-Trains-only scope: no gig request at all.
             hasMore = false
@@ -360,7 +366,7 @@ public final class GigsFeedViewModel {
     /// Nearby Support Trains for the scopes that show them. Best-effort:
     /// a failure just leaves the train rows empty (RN swallows it too,
     /// `gigs.tsx:234-238`).
-    private func fetchNearbySupportTrains() async {
+    private func fetchNearbySupportTrains(generation: Int) async {
         guard feedScope.includesSupportTrains, let coordinate = resolvedCoordinate() else {
             loadedTrains = []
             supportTrains = []
@@ -376,8 +382,10 @@ public final class GigsFeedViewModel {
                     limit: Self.supportTrainsPageSize
                 )
             )
+            guard generation == fetchGeneration else { return }
             loadedTrains = response.supportTrains
         } catch {
+            guard generation == fetchGeneration else { return }
             loadedTrains = []
         }
         supportTrains = loadedTrains.map(Self.projectSupportTrain)
@@ -393,7 +401,7 @@ public final class GigsFeedViewModel {
         return location.cachedCoordinate()
     }
 
-    private func fetchBrowse(coordinate: UserCoordinate) async {
+    private func fetchBrowse(coordinate: UserCoordinate, generation: Int) async {
         // Browse is a fixed sectioned surface — the backend caps each
         // section server-side, so there is nothing to page through.
         hasMore = false
@@ -407,6 +415,7 @@ public final class GigsFeedViewModel {
                     radiusMeters: Int((radiusMiles * Self.metersPerMile).rounded())
                 )
             )
+            guard generation == fetchGeneration else { return }
             let content = Self.projectBrowse(response)
             state = content.isEmpty
                 ? .empty(GigsFeedEmpty(radiusMiles: radiusMiles))
@@ -417,6 +426,7 @@ public final class GigsFeedViewModel {
                 totalNearby: response.totalActive ?? 0
             )
         } catch {
+            guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load gigs."
             state = .error(message: message)
         }
@@ -425,7 +435,7 @@ public final class GigsFeedViewModel {
     /// One page of `GET /api/gigs`. `append == false` replaces the loaded
     /// window (first page / refresh); `append == true` is the infinite-
     /// scroll continuation and never downgrades the screen to `.error`.
-    private func fetchFlat(offset: Int = 0, append: Bool = false) async {
+    private func fetchFlat(offset: Int = 0, append: Bool = false, generation: Int) async {
         do {
             let response: GigsListResponse = try await api.request(
                 GigsEndpoints.list(
@@ -446,6 +456,7 @@ public final class GigsFeedViewModel {
                     offset: offset
                 )
             )
+            guard generation == fetchGeneration else { return }
             if append {
                 let seen = Set(loadedItems.map(\.id))
                 loadedItems.append(contentsOf: response.gigs.filter { !seen.contains($0.id) })
@@ -463,6 +474,7 @@ public final class GigsFeedViewModel {
                 totalNearby: response.total ?? loadedItems.count
             )
         } catch {
+            guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load gigs."
             if append {
                 // Keep the rows already on screen; stop the footer from
@@ -483,7 +495,7 @@ public final class GigsFeedViewModel {
         guard case .loaded = state else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
-        await fetchFlat(offset: nextOffset, append: true)
+        await fetchFlat(offset: nextOffset, append: true, generation: fetchGeneration)
     }
 
     /// Project `loadedItems` through the residual client-side filters

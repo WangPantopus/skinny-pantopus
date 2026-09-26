@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.posts
 
+import app.pantopus.android.data.api.models.feed.FeedPagination
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -40,6 +41,7 @@ data class MyPostDto(
 @JsonClass(generateAdapter = true)
 data class MyPostsResponse(
     val posts: List<MyPostDto> = emptyList(),
+    val pagination: FeedPagination? = null,
 )
 
 /** Response for `POST /api/posts/:id/archive` and `/unarchive`. */

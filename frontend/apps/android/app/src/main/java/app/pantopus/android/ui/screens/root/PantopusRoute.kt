@@ -63,5 +63,28 @@ sealed class PantopusRoute(
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }
+
+        /**
+         * The bar tab that owns [route]: bar tabs own themselves, the pillars
+         * (Pulse, Tasks, Marketplace) sit behind Nearby, and Messages sits
+         * inside Mail.
+         */
+        fun barTabFor(route: PantopusRoute): PantopusRoute =
+            when (route) {
+                Pulse, Tasks, Marketplace -> Nearby
+                Messages -> Mail
+                else -> route
+            }
+
+        /**
+         * The bar tab to highlight: the top destination's own tab when it is a
+         * root, else the tab owning the root destinations beneath it, so child
+         * screens keep their tab lit. Tab switches pop back to Place first, so
+         * at most one other tab's roots are on the stack.
+         */
+        fun barTabFor(
+            top: PantopusRoute?,
+            rootsOnStack: List<PantopusRoute>,
+        ): PantopusRoute = top?.let(::barTabFor) ?: rootsOnStack.map(::barTabFor).firstOrNull { it != Place } ?: Place
     }
 }

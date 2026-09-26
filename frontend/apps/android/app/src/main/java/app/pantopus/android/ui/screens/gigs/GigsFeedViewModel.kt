@@ -146,6 +146,13 @@ class GigsFeedViewModel
         private var radiusMiles: Double = RADIUS_LADDER_MILES.first()
         private var loading = false
 
+        /**
+         * Bumped by every [fetch]: a newer query (chip, sort, filter, scope or
+         * refresh) supersedes one still in flight instead of being dropped,
+         * and a superseded response never writes state.
+         */
+        private var fetchGeneration = 0L
+
         /** Offset the next [loadMore] page starts at (rows already loaded). */
         private var nextOffset = 0
 
@@ -572,7 +579,7 @@ class GigsFeedViewModel
                 !browseExited
 
         private fun fetch() {
-            if (loading) return
+            val generation = ++fetchGeneration
             loading = true
             _newTaskCount.value = 0
             val browse = isBrowseMode()
@@ -585,10 +592,12 @@ class GigsFeedViewModel
             viewModelScope.launch {
                 try {
                     ensureLocation()
-                    fetchNearbySupportTrains()
+                    if (generation != fetchGeneration) return@launch
+                    fetchNearbySupportTrains(generation)
+                    if (generation != fetchGeneration) return@launch
                     when {
-                        browse && latitude != null && longitude != null -> fetchBrowse()
-                        _feedScope.value.includesGigs -> fetchFlat()
+                        browse && latitude != null && longitude != null -> fetchBrowse(generation)
+                        _feedScope.value.includesGigs -> fetchFlat(generation = generation)
                         else -> {
                             // Support-Trains-only scope: no gig request at all.
                             _hasMore.value = false
@@ -597,7 +606,7 @@ class GigsFeedViewModel
                         }
                     }
                 } finally {
-                    loading = false
+                    if (generation == fetchGeneration) loading = false
                 }
             }
         }
@@ -607,7 +616,7 @@ class GigsFeedViewModel
          * a failure just leaves the train rows empty (RN swallows it too,
          * `gigs.tsx:234-238`).
          */
-        private suspend fun fetchNearbySupportTrains() {
+        private suspend fun fetchNearbySupportTrains(generation: Long) {
             val lat = latitude
             val lng = longitude
             if (!_feedScope.value.includesSupportTrains || lat == null || lng == null) {
@@ -615,15 +624,15 @@ class GigsFeedViewModel
                 trainSortKeys = emptyMap()
                 return
             }
-            when (
-                val result =
-                    gigsV2Repo.nearbySupportTrains(
-                        latitude = lat,
-                        longitude = lng,
-                        radiusMeters = radiusMiles * METERS_PER_MILE,
-                        limit = GigsV2Repository.DEFAULT_NEARBY_LIMIT,
-                    )
-            ) {
+            val result =
+                gigsV2Repo.nearbySupportTrains(
+                    latitude = lat,
+                    longitude = lng,
+                    radiusMeters = radiusMiles * METERS_PER_MILE,
+                    limit = GigsV2Repository.DEFAULT_NEARBY_LIMIT,
+                )
+            if (generation != fetchGeneration) return
+            when (result) {
                 is NetworkResult.Success -> {
                     val trains = result.data.supportTrains
                     loadedTrains = trains.map { projectSupportTrain(it) }
@@ -647,9 +656,9 @@ class GigsFeedViewModel
         }
 
         /** P1.F — sectioned browse fetch. Radius omitted ⇒ server default (~100 mi). */
-        private suspend fun fetchBrowse() {
-            val lat = latitude ?: return fetchFlat()
-            val lng = longitude ?: return fetchFlat()
+        private suspend fun fetchBrowse(generation: Long) {
+            val lat = latitude ?: return fetchFlat(generation = generation)
+            val lng = longitude ?: return fetchFlat(generation = generation)
             // The radius ladder is a flat-list concept — drop any stale banner.
             _radiusSuggestion.value = null
             // The sectioned frame renders its own rows.
@@ -658,7 +667,9 @@ class GigsFeedViewModel
             // section server-side, so there is nothing to page through.
             _hasMore.value = false
             nextOffset = 0
-            when (val result = repo.browse(lat, lng)) {
+            val result = repo.browse(lat, lng)
+            if (generation != fetchGeneration) return
+            when (result) {
                 is NetworkResult.Success -> {
                     val content = projectBrowse(result.data)
                     _state.value =
@@ -686,6 +697,7 @@ class GigsFeedViewModel
         private suspend fun fetchFlat(
             offset: Int = 0,
             append: Boolean = false,
+            generation: Long,
         ) {
             val category = _activeCategory.value
             val sort = _activeSort.value
@@ -718,6 +730,7 @@ class GigsFeedViewModel
                     )
             ) {
                 is NetworkResult.Success -> {
+                    if (generation != fetchGeneration) return
                     loadedGigs =
                         if (append) {
                             val seen = loadedGigs.mapTo(mutableSetOf()) { it.id }
@@ -739,6 +752,7 @@ class GigsFeedViewModel
                     writeWidgetSnapshot(loadedGigs)
                 }
                 is NetworkResult.Failure -> {
+                    if (generation != fetchGeneration) return
                     if (append) {
                         // Keep the rows already on screen; stop the footer
                         // retrying in a loop and surface what happened.
@@ -765,9 +779,10 @@ class GigsFeedViewModel
             if (loading || _loadingMore.value || !_hasMore.value) return
             if (_state.value !is GigsFeedUiState.Loaded) return
             _loadingMore.value = true
+            val generation = fetchGeneration
             viewModelScope.launch {
                 try {
-                    fetchFlat(offset = nextOffset, append = true)
+                    fetchFlat(offset = nextOffset, append = true, generation = generation)
                 } finally {
                     _loadingMore.value = false
                 }
