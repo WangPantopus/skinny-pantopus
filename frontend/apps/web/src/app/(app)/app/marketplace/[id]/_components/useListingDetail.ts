@@ -167,6 +167,18 @@ export function useListingDetail() {
       });
       return { wasSaved };
     },
+    onSuccess: (data) => {
+      // The endpoint toggles; settle on the state it reports (as the native apps do).
+      if (typeof data?.saved !== 'boolean') return;
+      setListing((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          userHasSaved: data.saved,
+          save_count: typeof data.saveCount === 'number' ? data.saveCount : prev.save_count,
+        };
+      });
+    },
     onError: (_err, _vars, context) => {
       if (!context) return;
       const { wasSaved } = context;
@@ -181,9 +193,16 @@ export function useListingDetail() {
     },
   });
 
+  // One toggle at a time: a second click while the first is in flight would undo it.
+  const saveInFlight = useRef(false);
   const handleSave = () => {
-    if (!listing) return;
-    saveMutation.mutate();
+    if (!listing || saveInFlight.current) return;
+    saveInFlight.current = true;
+    saveMutation.mutate(undefined, {
+      onSettled: () => {
+        saveInFlight.current = false;
+      },
+    });
   };
 
   const sendMessageMutation = useMutation({

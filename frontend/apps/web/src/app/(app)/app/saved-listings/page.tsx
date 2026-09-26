@@ -8,6 +8,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import type { Listing } from '@pantopus/types';
+import ErrorState from '@/components/ui/ErrorState';
 
 const CONDITION_LABELS: Record<string, string> = {
   new: 'New', like_new: 'Like New', good: 'Good', fair: 'Fair', poor: 'Poor',
@@ -17,18 +18,21 @@ export default function SavedListingsPage() {
   const router = useRouter();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is not "No saved listings yet": say so and offer a retry.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const fetchSaved = useCallback(async () => {
     const token = getAuthToken();
     if (!token) { router.push('/login'); return; }
 
     setLoading(true);
+    setLoadFailed(false);
     try {
       const result = await api.listings.getSavedListings({ limit: 50 });
       setListings(((result as Record<string, any>)?.listings || []) as Listing[]);
     } catch (err) {
       console.error('Failed to load saved listings:', err);
-      setListings([]);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -62,9 +66,11 @@ export default function SavedListingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-app-text">Saved Listings</h1>
-            <p className="text-sm text-app-text-secondary mt-0.5">
-              {listings.length} saved item{listings.length !== 1 ? 's' : ''}
-            </p>
+            {!(loadFailed && listings.length === 0) && (
+              <p className="text-sm text-app-text-secondary mt-0.5">
+                {listings.length} saved item{listings.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
           <button
             onClick={fetchSaved}
@@ -84,6 +90,12 @@ export default function SavedListingsPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
             <p className="mt-4 text-app-text-secondary">Loading saved listings...</p>
           </div>
+        ) : loadFailed && listings.length === 0 ? (
+          <ErrorState
+            title="Couldn't load saved listings"
+            message="Check your connection and try again."
+            onRetry={fetchSaved}
+          />
         ) : listings.length === 0 ? (
           /* ── Empty state ──────────────────────────────────── */
           <div className="text-center py-16 bg-app-surface rounded-xl border border-app-border">

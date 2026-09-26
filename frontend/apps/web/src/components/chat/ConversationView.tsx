@@ -8,7 +8,7 @@ import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
-import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY } from '../../hooks/useChatMessages';
+import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
@@ -314,12 +314,11 @@ export default function ConversationView({
   );
 
   // ── Derived values ────────────────────────────────────
-  const chatTitle = otherUser?.name
-    || [otherUser?.firstName, ((otherUser as Record<string, any>)?.last_name as string) ?? ((otherUser as Record<string, any>)?.lastName as string)].filter(Boolean).join(' ')
-    || otherUser?.username
-    || 'Conversation';
-  const avatarUrl = otherUser?.profile_picture_url;
-  const otherProfileHref = otherUser?.username ? `/${otherUser.username}` : null;
+  const otherPerson = otherUser as Record<string, any> | null | undefined;
+  const chatTitle = chatPersonName(otherPerson) || 'Conversation';
+  const avatarUrl = chatPersonAvatar(otherPerson);
+  const otherProfileHref = chatPersonHref(otherPerson);
+  const otherHandle = chatPersonHandle(otherPerson);
 
   const topicStatusColors: Record<string, string> = {
     active: 'bg-green-100 text-green-700',
@@ -497,7 +496,7 @@ export default function ConversationView({
                   ) : (
                     <div className="font-semibold text-app">{chatTitle}</div>
                   )}
-                  {otherUser?.username && <div className="text-sm text-app-text-secondary">@{otherUser.username}</div>}
+                  {otherHandle && <div className="text-sm text-app-text-secondary">@{otherHandle}</div>}
                 </div>
               </div>
 

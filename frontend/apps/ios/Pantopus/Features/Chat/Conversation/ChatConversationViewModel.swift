@@ -271,6 +271,10 @@ public final class ChatConversationViewModel {
     /// banner above the composer.
     public private(set) var sendLimitNotice: String?
 
+    /// Set when a delete, edit or reaction fails, so the rollback isn't
+    /// silent. The view shows it as a toast and clears it after display.
+    public var actionFailure: String?
+
     /// True while the block-user call is in flight.
     public private(set) var isBlocking = false
 
@@ -632,6 +636,7 @@ public final class ChatConversationViewModel {
                 cancelMessageAction()
             } catch {
                 setComposerTextSilently(trimmed)
+                actionFailure = "Couldn\u{2019}t save your edit. Try again."
                 logger.warning("chat edit failed: \(error)")
             }
             return
@@ -905,6 +910,7 @@ public final class ChatConversationViewModel {
                 applyReactions(reactions, to: messageId)
             }
         } catch {
+            actionFailure = "Couldn\u{2019}t add your reaction. Try again."
             logger.warning("chat react failed: \(error)")
         }
     }
@@ -940,17 +946,22 @@ public final class ChatConversationViewModel {
             messages.removeAll { $0.id == messageId }
             rebuild()
         } catch {
+            actionFailure = "Couldn\u{2019}t delete the message. Try again."
             logger.warning("chat delete failed: \(error)")
         }
     }
 
     /// Delete a batch of own messages by looping the single-message
     /// endpoint (`DELETE /api/chat/messages/:messageId` — no bulk route
-    /// exists). Per-id failures are logged and skipped so one bad id
-    /// doesn't strand the rest of the selection.
+    /// exists). Per-id failures are skipped so one bad id doesn't strand
+    /// the rest of the selection, then reported once in `actionFailure`.
     public func bulkDelete(ids: [String]) async {
         for id in ids {
             await delete(messageId: id)
+        }
+        let failed = ids.filter { id in messages.contains { $0.id == id } }.count
+        if failed > 1 {
+            actionFailure = "Couldn\u{2019}t delete \(failed) messages. Try again."
         }
     }
 

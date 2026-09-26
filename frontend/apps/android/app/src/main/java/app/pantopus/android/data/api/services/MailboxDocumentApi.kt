@@ -1,7 +1,10 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDownloadResponse
+import app.pantopus.android.data.api.models.mailbox.v2.CertifiedAcknowledgeBody
+import app.pantopus.android.data.api.models.mailbox.v2.CertifiedAcknowledgeResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CertifiedProofResponse
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -40,4 +43,14 @@ interface MailboxDocumentApi {
     suspend fun certifiedProof(
         @Path("mailId") mailId: String,
     ): CertifiedProofResponse
+
+    /**
+     * `POST api/mailbox/v2/p2/certified/acknowledge` — signs for certified
+     * mail. Only the named recipient may; it records `acknowledged_at` and
+     * the audit trail the proof reads, and answers 400 once already signed.
+     */
+    @POST("api/mailbox/v2/p2/certified/acknowledge")
+    suspend fun certifiedAcknowledge(
+        @Body body: CertifiedAcknowledgeBody,
+    ): CertifiedAcknowledgeResponse
 }

@@ -45,6 +45,8 @@ public struct ChatConversationView: View {
     @State private var isSelecting = false
     @State private var selectedMessageIds: Set<String> = []
     @State private var bulkDeleteConfirmPresented = false
+    /// Message awaiting the single-delete confirm.
+    @State private var pendingDeleteId: String?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
     /// populated frame first lays out, so the initial layout passes
     /// (which briefly report near-top geometry before the bottom anchor
@@ -295,6 +297,22 @@ public struct ChatConversationView: View {
         } message: {
             Text("Deleted messages are removed for everyone in this conversation.")
         }
+        .alert(
+            "Delete message?",
+            isPresented: Binding(
+                get: { pendingDeleteId != nil },
+                set: { if !$0 { pendingDeleteId = nil } }
+            ),
+            presenting: pendingDeleteId
+        ) { messageId in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.delete(messageId: messageId) }
+            }
+        } message: { _ in
+            Text("Deleted messages are removed for everyone in this conversation.")
+        }
+        .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
     }
 
@@ -1116,7 +1134,9 @@ extension ChatConversationView {
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
-            onDelete: { Task { await viewModel.delete(messageId: bubble.id) } },
+            // Deleting removes the message for everyone, so confirm it as
+            // bulk delete does.
+            onDelete: { pendingDeleteId = bubble.id },
             onBeginSelect: {
                 isSelecting = true
                 selectedMessageIds = [bubble.id]

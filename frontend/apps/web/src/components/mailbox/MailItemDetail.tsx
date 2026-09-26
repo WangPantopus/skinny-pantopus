@@ -346,11 +346,11 @@ export default function MailItemDetail({ detail, onAction }: MailItemDetailProps
           </div>
         )}
 
-        {/* Certified banner */}
-        {policy.certified && (
+        {/* Certified banner, until the named recipient signs */}
+        {policy.certified && !wrapper.acknowledged_at && (
           <div className="mt-3 p-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
             <p className="text-xs font-semibold text-red-700 dark:text-red-400">
-              Certified Mail — Acknowledgment required
+              Certified Mail — Signature required
             </p>
           </div>
         )}

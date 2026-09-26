@@ -61,7 +61,9 @@ struct CertifiedDetailLayout: View {
             keyFacts: { keyFactsCard },
             body: {
                 ChainOfCustodyTimeline(
-                    subtitle: "Postal scans · cryptographic receipts",
+                    subtitle: certified.isPostal
+                        ? "Postal scans · cryptographic receipts"
+                        : "Received, read and signed in Pantopus",
                     status: chainStatus,
                     events: makeChainEvents()
                 )
@@ -280,7 +282,9 @@ struct CertifiedDetailLayout: View {
 
     private var senderAndNotice: some View {
         VStack(spacing: Spacing.s3) {
-            if let onOpenExtractedTask {
+            // The extracted-task card shows sample copy for postal notices;
+            // Pantopus certified mail has no extracted task.
+            if let onOpenExtractedTask, certified.isPostal {
                 ExtractedTaskCard(onTap: onOpenExtractedTask)
             }
             senderCard
@@ -309,7 +313,16 @@ struct CertifiedDetailLayout: View {
     /// emit a sensible default per the design — USPS Certified Mail with
     /// the certified reference repurposed as the tracking number.
     private func defaultCarrier() -> MailCarrierInfo {
-        MailCarrierInfo(
+        // Pantopus certified mail has no postal carrier, tracking or postmark.
+        guard certified.isPostal else {
+            return MailCarrierInfo(
+                service: "Pantopus certified mail",
+                trackingId: nil,
+                signatureRequired: true,
+                postmarkVerified: false
+            )
+        }
+        return MailCarrierInfo(
             service: "USPS Certified Mail",
             trackingId: certifiedReference,
             signatureRequired: true,
@@ -363,10 +376,10 @@ struct CertifiedDetailLayout: View {
         return "Sign for delivery"
     }
 
+    /// The signing confirmation keys on signed, not on read: it shows
+    /// until the recipient signs, however often the letter was opened.
     private var shouldShowConfirmGate: Bool {
-        content.readStatusLabel.lowercased() == "unread"
-            && !content.isAcknowledged
-            && !content.isArchived
+        !content.isAcknowledged && !content.isArchived
     }
 
     private func handleAcknowledgeTap() {
@@ -548,7 +561,10 @@ private struct HeroCard: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .padding(.top, Spacing.s1)
                 }
-                CertifiedStampBadge(trackingId: certified.referenceNumber)
+                // The USPS stamp is for postal certified mail only.
+                if certified.isPostal {
+                    CertifiedStampBadge(trackingId: certified.referenceNumber)
+                }
             }
             if content.isAcknowledged {
                 acknowledgedRow
@@ -576,7 +592,7 @@ private struct HeroCard: View {
                 .background(Theme.Color.successSolid)
                 .clipShape(Circle())
             (
-                Text("Acknowledged").bold()
+                Text("Signed").bold()
                     + Text(" · receipt on file").foregroundColor(Theme.Color.success.opacity(0.85))
             )
             .pantopusTextStyle(.caption)

@@ -147,6 +147,11 @@ class ChatConversationViewModel
         private val _reportNotice = MutableStateFlow<String?>(null)
         val reportNotice: StateFlow<String?> = _reportNotice.asStateFlow()
 
+        // One-shot snackbar text when a delete, edit or reaction fails, so
+        // the rollback isn't silent. Cleared via [dismissActionFailure].
+        private val _actionFailure = MutableStateFlow<String?>(null)
+        val actionFailure: StateFlow<String?> = _actionFailure.asStateFlow()
+
         // Resolved link-preview metadata keyed by URL (A15.2 `.link-bubble`).
         // Held on the VM (not remember{}) so previews survive rotation. A
         // key mapped to null means resolution finished with no usable
@@ -749,6 +754,7 @@ class ChatConversationViewModel
                             }
                             is NetworkResult.Failure -> {
                                 _composerText.value = trimmed
+                                _actionFailure.value = "Couldn't save your edit. Try again."
                                 Timber.w("chat edit failed: ${result.error.message}")
                             }
                         }
@@ -1042,7 +1048,10 @@ class ChatConversationViewModel
         ) {
             viewModelScope.launch {
                 when (val result = repo.reactToMessage(messageId, reaction)) {
-                    is NetworkResult.Failure -> Timber.w("chat react failed: ${result.error.message}")
+                    is NetworkResult.Failure -> {
+                        _actionFailure.value = "Couldn't add your reaction. Try again."
+                        Timber.w("chat react failed: ${result.error.message}")
+                    }
                     is NetworkResult.Success -> result.data.reactions?.let { applyReactions(messageId, it) }
                     else -> Unit
                 }
@@ -1080,9 +1089,16 @@ class ChatConversationViewModel
                         messages.removeAll { it.id == messageId }
                         rebuild()
                     }
-                    is NetworkResult.Failure -> Timber.w("chat delete failed: ${result.error.message}")
+                    is NetworkResult.Failure -> {
+                        _actionFailure.value = "Couldn't delete the message. Try again."
+                        Timber.w("chat delete failed: ${result.error.message}")
+                    }
                 }
             }
+        }
+
+        fun dismissActionFailure() {
+            _actionFailure.value = null
         }
 
         fun dismissSendLimitNotice() {
@@ -1214,11 +1230,19 @@ class ChatConversationViewModel
                 return
             }
             viewModelScope.launch {
+                var failed = 0
                 ids.forEach { id ->
                     when (val result = repo.deleteMessage(id)) {
                         is NetworkResult.Success -> messages.removeAll { it.id == id }
-                        is NetworkResult.Failure -> Timber.w("bulk delete failed for $id: ${result.error.message}")
+                        is NetworkResult.Failure -> {
+                            failed++
+                            Timber.w("bulk delete failed for $id: ${result.error.message}")
+                        }
                     }
+                }
+                if (failed > 0) {
+                    _actionFailure.value =
+                        "Couldn't delete $failed ${if (failed == 1) "message" else "messages"}. Try again."
                 }
                 rebuild()
                 exitSelectionMode()

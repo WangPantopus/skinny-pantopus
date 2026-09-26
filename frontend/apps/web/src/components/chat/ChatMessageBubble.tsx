@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ChatMessage } from '@pantopus/types';
-import { extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
+import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
@@ -33,7 +33,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const [showQuickPicker, setShowQuickPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
-  const who = msg.sender?.name || msg.sender?.username || 'Someone';
+  const who = chatPersonName(msg.sender) || 'Someone';
   const ts = msg.created_at
     ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
@@ -113,9 +113,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
             <div className="mb-0.5 ml-1">
               <UserIdentityLink
                 userId={msg.sender?.id}
-                username={msg.sender?.username}
+                username={chatPersonHandle(msg.sender)}
                 displayName={who}
-                avatarUrl={msg.sender?.profile_picture_url}
+                avatarUrl={chatPersonAvatar(msg.sender)}
                 textClassName="text-xs text-app-muted hover:text-primary-600 hover:underline"
               />
             </div>
@@ -149,9 +149,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
             <div className="mb-0.5 ml-1">
               <UserIdentityLink
                 userId={msg.sender?.id}
-                username={msg.sender?.username}
+                username={chatPersonHandle(msg.sender)}
                 displayName={who}
-                avatarUrl={msg.sender?.profile_picture_url}
+                avatarUrl={chatPersonAvatar(msg.sender)}
                 textClassName="text-xs text-app-muted hover:text-primary-600 hover:underline"
               />
             </div>
@@ -205,7 +205,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                         {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
                         <img
                           src={url}
-                          alt={(a.original_filename as string) || 'Image'}
+                          alt={showText ? `Photo: ${msgText}` : 'Photo'}
                           className="rounded-lg transition-opacity hover:opacity-90"
                           loading="lazy"
                           decoding="async"

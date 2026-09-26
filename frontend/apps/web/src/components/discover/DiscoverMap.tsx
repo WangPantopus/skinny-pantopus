@@ -238,6 +238,9 @@ export default function DiscoverMap({
   const [loadingGigs, setLoadingGigs] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [postsError, setPostsError] = useState(false);
+  // A failed layer read is unknown, not empty: say so, as the posts layer does.
+  const [bizError, setBizError] = useState(false);
+  const [gigsError, setGigsError] = useState(false);
   const [nearestActivity, setNearestActivity] = useState<NearestActivityCenter | null>(null);
 
   const abortBiz = useRef<AbortController | null>(null);
@@ -262,9 +265,10 @@ export default function DiscoverMap({
         if (!ctrl.signal.aborted) {
           setBizMarkers(res.markers);
           setNearestActivity(res.nearest_activity_center ?? null);
+          setBizError(false);
         }
       } catch {
-        // Silently handle
+        if (!ctrl.signal.aborted) setBizError(true);
       } finally {
         if (!ctrl.signal.aborted) setLoadingBiz(false);
       }
@@ -284,9 +288,12 @@ export default function DiscoverMap({
         const res = await api.getGigsInBounds({
           min_lat: b.south, min_lon: b.west, max_lat: b.north, max_lon: b.east, status: 'open', limit: 200,
         });
-        if (!ctrl.signal.aborted) setGigPins(res.gigs as GigPin[]);
+        if (!ctrl.signal.aborted) {
+          setGigPins(res.gigs as GigPin[]);
+          setGigsError(false);
+        }
       } catch {
-        // Silently handle
+        if (!ctrl.signal.aborted) setGigsError(true);
       } finally {
         if (!ctrl.signal.aborted) setLoadingGigs(false);
       }
@@ -361,8 +368,14 @@ export default function DiscoverMap({
 
   // Clear data for toggled-off layers
   useEffect(() => {
-    if (!layers.has('businesses')) setBizMarkers([]);
-    if (!layers.has('gigs')) setGigPins([]);
+    if (!layers.has('businesses')) {
+      setBizMarkers([]);
+      setBizError(false);
+    }
+    if (!layers.has('gigs')) {
+      setGigPins([]);
+      setGigsError(false);
+    }
     if (!layers.has('posts')) {
       abortPosts.current?.abort();
       setPostPins([]);
@@ -379,6 +392,20 @@ export default function DiscoverMap({
   const isLoading = loadingBiz || loadingGigs || loadingPosts;
   const belowZoomGate = zoom < ZOOM_GATE;
   const allEmpty = bizMarkers.length === 0 && gigPins.length === 0 && postPins.length === 0;
+  const failedLayers = [
+    layers.has('businesses') && bizError && !loadingBiz ? 'businesses' : null,
+    layers.has('gigs') && gigsError && !loadingGigs ? 'tasks' : null,
+    layers.has('posts') && postsError && !loadingPosts ? 'posts' : null,
+  ].filter((name): name is string => name !== null);
+  const failedLabel = failedLayers.length > 1
+    ? `${failedLayers.slice(0, -1).join(', ')} and ${failedLayers[failedLayers.length - 1]}`
+    : failedLayers[0];
+  const retryFailedLayers = () => {
+    if (!bounds) return;
+    if (bizError) fetchBusinesses(bounds);
+    if (gigsError) fetchGigs(bounds);
+    if (postsError) fetchPosts(bounds);
+  };
   const viewCenter = bounds
     ? { latitude: (bounds.south + bounds.north) / 2, longitude: (bounds.west + bounds.east) / 2 }
     : { latitude: mapCenter[0], longitude: mapCenter[1] };
@@ -528,11 +555,11 @@ export default function DiscoverMap({
       {/* Top progress bar — replaces the old spinner overlay */}
       <MapProgressBar visible={isLoading} />
 
-      {layers.has('posts') && postsError && !loadingPosts && (
+      {failedLayers.length > 0 && (
         <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
-          <span>Couldn&apos;t load posts.</span>
+          <span>Couldn&apos;t load {failedLabel}.</span>
           <button
-            onClick={() => bounds && fetchPosts(bounds)}
+            onClick={retryFailedLayers}
             className="font-bold text-primary-600 dark:text-primary-300"
           >
             Try again
@@ -544,7 +571,7 @@ export default function DiscoverMap({
       <ZoomGateOverlay visible={belowZoomGate} contentLabel="businesses" />
 
       {/* Nearest activity prompt (when all layers are empty) */}
-      {!postsError && !isLoading && !belowZoomGate && allEmpty && bounds && (
+      {!postsError && !bizError && !gigsError && !isLoading && !belowZoomGate && allEmpty && bounds && (
         <NearestActivityPrompt
           viewCenter={viewCenter}
           nearest={nearestActivity}

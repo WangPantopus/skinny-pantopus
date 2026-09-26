@@ -75,9 +75,9 @@ export default function ItemDetailPage() {
     id: detail.wrapper.id,
     certified: true as const,
     requires_acknowledgment: detail.policy.requires_acknowledgment,
-    acknowledged_at: acknowledge.data?.acknowledged_at ?? (detail.wrapper as unknown as Record<string, any>).acknowledged_at as string | undefined,
+    acknowledged_at: acknowledge.data?.acknowledged_at ?? detail.wrapper.acknowledged_at,
     acknowledged_by: undefined,
-    audit_trail: acknowledge.data?.audit_trail ?? [],
+    audit_trail: acknowledge.data?.audit_trail ?? detail.wrapper.audit_trail ?? [],
   } : null;
 
   const auditTrail: AuditEvent[] = acknowledge.data?.audit_trail ?? certifiedItem?.audit_trail ?? [];
