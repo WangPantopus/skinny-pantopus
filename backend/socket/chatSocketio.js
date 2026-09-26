@@ -302,10 +302,11 @@ module.exports = (io) => {
     connectedUsers.get(userId).add(socket.id);
     emitSocketGauges();
 
-    // Load user's rooms and join them. Not awaited: the event handlers below must
-    // be registered before the client's first events arrive (clients emit
-    // room:join as soon as they connect), or socket.io drops those events.
-    (async () => {
+    // Load user's rooms and join them. Started here but awaited only at the end of
+    // this handler: the event handlers below must be registered before the
+    // client's first events arrive (clients emit room:join as soon as they
+    // connect), or socket.io drops those events.
+    const initialRoomsLoad = (async () => {
       try {
         const { data: rooms, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
           p_user_id: userId,
@@ -755,6 +756,8 @@ module.exports = (io) => {
     socket.on('error', (error) => {
       logger.error('Socket error', { sessionId, userId, error: error.message });
     });
+
+    await initialRoomsLoad;
   });
   
   // ============ PERIODIC CLEANUP ============
