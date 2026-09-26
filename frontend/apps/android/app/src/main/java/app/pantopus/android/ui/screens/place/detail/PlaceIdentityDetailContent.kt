@@ -85,13 +85,18 @@ fun PlaceIdentityDetailContent(
     PlaceUnlistedSection(viewModel)
 
     if (isVerified && isNonResident) {
+        // No issuing, but letters and passes from when they lived here
+        // stay listed so they can still open or revoke them.
         PlaceDetailSectionLabel("Residency letter")
-        PlaceDetailCard {
-            Text(
-                "Residency letters and passes are for the people who live here, so guest and service access can't issue them.",
-                fontSize = 13.5.sp,
-                color = PantopusColors.appTextMuted,
-            )
+        LaunchedEffect(Unit) {
+            viewModel.loadLetters()
+            viewModel.loadClaims()
+        }
+        ResidencyLetterSection(viewModel, canIssue = false)
+        val claims by viewModel.claims.collectAsStateWithLifecycle()
+        if ((claims as? ResidencyClaimsUiState.Loaded)?.claims?.isNotEmpty() == true) {
+            PlaceDetailSectionLabel("Residency Pass")
+            PlaceResidencyPassSection(viewModel, canIssue = false)
         }
     } else {
         ResidencySections(isVerified, viewModel)
@@ -308,7 +313,11 @@ private fun VerifiedStatusCard(
 }
 
 @Composable
-private fun ResidencyLetterSection(viewModel: PlaceDetailViewModel) {
+private fun ResidencyLetterSection(
+    viewModel: PlaceDetailViewModel,
+    // Guests and service providers can't issue letters (the server refuses them).
+    canIssue: Boolean = true,
+) {
     var purpose by remember { mutableStateOf("") }
     val isIssuing by viewModel.isIssuing.collectAsStateWithLifecycle()
     val state by viewModel.letters.collectAsStateWithLifecycle()
@@ -319,18 +328,26 @@ private fun ResidencyLetterSection(viewModel: PlaceDetailViewModel) {
         // is still live.
         PlaceActionToastLine(viewModel)
         PlaceDetailCard {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("What is this letter for?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                OutlinedTextField(value = purpose, onValueChange = {
-                    purpose = it
-                }, placeholder = { Text("e.g. New library card application") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                PrimaryButton(
-                    title = if (isIssuing) "Issuing…" else "Generate a residency letter",
-                    isLoading = isIssuing,
-                    isEnabled = !isIssuing && purpose.isNotBlank(),
-                    onClick = {
-                        viewModel.issueLetter(purpose) { purpose = "" }
-                    },
+            if (canIssue) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("What is this letter for?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    OutlinedTextField(value = purpose, onValueChange = {
+                        purpose = it
+                    }, placeholder = { Text("e.g. New library card application") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    PrimaryButton(
+                        title = if (isIssuing) "Issuing…" else "Generate a residency letter",
+                        isLoading = isIssuing,
+                        isEnabled = !isIssuing && purpose.isNotBlank(),
+                        onClick = {
+                            viewModel.issueLetter(purpose) { purpose = "" }
+                        },
+                    )
+                }
+            } else {
+                Text(
+                    "Residency letters and passes are for the people who live here, so guest and service access can't issue them.",
+                    fontSize = 13.5.sp,
+                    color = PantopusColors.appTextMuted,
                 )
             }
         }

@@ -210,6 +210,11 @@ struct PlaceIdentityDetailContent: View {
         intel.tier == .t4
     }
 
+    private var hasIssuedClaims: Bool {
+        if case let .loaded(claims) = pass.state { return !claims.isEmpty }
+        return false
+    }
+
     /// The residency letter and Residency Pass sections (residents only).
     @ViewBuilder
     private var residencySections: some View {
@@ -248,11 +253,17 @@ struct PlaceIdentityDetailContent: View {
             VerifiedStatusCard(isVerified: isVerified, roleBase: access.roleBase, address: placeDetailAddress(intel.place))
 
             if isVerified, access.isNonResident {
+                // No issuing, but letters and passes from when they lived
+                // here stay listed so they can still open or revoke them.
                 PlaceDetailSectionLabel(text: "Residency letter")
-                PlaceDetailCard {
-                    Text("Residency letters and passes are for the people who live here, so guest and service access can't issue them.")
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(Theme.Color.appTextMuted)
+                ResidencyLetterSection(vm: letters, canIssue: false)
+                    .task {
+                        await letters.load()
+                        await pass.load()
+                    }
+                if hasIssuedClaims {
+                    PlaceDetailSectionLabel(text: "Residency Pass")
+                    PlaceResidencyPassSection(vm: pass, canIssue: false)
                 }
             } else {
                 residencySections
@@ -426,6 +437,8 @@ private struct VerifiedStatusCard: View {
 
 private struct ResidencyLetterSection: View {
     @Bindable var vm: PlaceResidencyLetterViewModel
+    /// Guests and service providers can't issue letters (the server refuses them).
+    var canIssue = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -438,29 +451,41 @@ private struct ResidencyLetterSection: View {
                         vm.clearToast()
                     }
             }
-            PlaceDetailCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("What is this letter for?")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                    TextField("e.g. New library card application", text: $vm.purpose)
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    PrimaryButton(
-                        title: vm.isIssuing ? "Issuing…" : "Generate a residency letter",
-                        isLoading: vm.isIssuing,
-                        isEnabled: !vm.purpose.trimmingCharacters(in: .whitespaces).isEmpty
-                    ) {
-                        await vm.issue()
-                    }
+            if canIssue {
+                composer
+            } else {
+                PlaceDetailCard {
+                    Text("Residency letters and passes are for the people who live here, so guest and service access can't issue them.")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
                 }
             }
             history
         }
         .quickLookPreview($vm.pdfURL)
+    }
+
+    private var composer: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("What is this letter for?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                TextField("e.g. New library card application", text: $vm.purpose)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Theme.Color.appSurfaceSunken)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                PrimaryButton(
+                    title: vm.isIssuing ? "Issuing…" : "Generate a residency letter",
+                    isLoading: vm.isIssuing,
+                    isEnabled: !vm.purpose.trimmingCharacters(in: .whitespaces).isEmpty
+                ) {
+                    await vm.issue()
+                }
+            }
+        }
     }
 
     @ViewBuilder

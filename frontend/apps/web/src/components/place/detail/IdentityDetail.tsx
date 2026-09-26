@@ -617,6 +617,46 @@ function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; addres
   );
 }
 
+// Guests and service providers can't issue, but letters and passes from when
+// they lived here stay listed so they can still download or revoke them.
+function EarlierLettersAndClaims({ homeId }: { homeId: string }) {
+  const lettersQuery = useQuery({
+    queryKey: queryKeys.residencyLetters(homeId),
+    queryFn: () => api.residencyLetters.listResidencyLetters(homeId),
+  });
+  const claimsQuery = useQuery({
+    queryKey: queryKeys.residencyClaims(homeId),
+    queryFn: () => api.residencyClaims.listResidencyClaims(homeId),
+  });
+  const letters = lettersQuery.data ?? [];
+  const claims = claimsQuery.data ?? [];
+
+  return (
+    <>
+      {letters.length > 0 && (
+        <>
+          <DetailSectionLabel>Issued letters</DetailSectionLabel>
+          <div className="flex flex-col gap-2.5">
+            {letters.map((letter) => (
+              <IssuedLetterCard key={letter.id} letter={letter} homeId={homeId} />
+            ))}
+          </div>
+        </>
+      )}
+      {claims.length > 0 && (
+        <>
+          <DetailSectionLabel>Issued claims</DetailSectionLabel>
+          <div className="flex flex-col gap-2.5">
+            {claims.map((claim) => (
+              <IssuedClaimCard key={claim.id} claim={claim} homeId={homeId} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 // ── Unlisted — your address, and how to take it back ─────────
 //
 // The claimed-home half of /unlisted. Same three rules as the public
@@ -853,6 +893,7 @@ export default function IdentityDetail({ intelligence, homeId, residentName }: {
                 </InfoNote>
               </>
             )}
+            {nonResident && homeId && <EarlierLettersAndClaims homeId={homeId} />}
           </>
         ) : (
           <LockedCard

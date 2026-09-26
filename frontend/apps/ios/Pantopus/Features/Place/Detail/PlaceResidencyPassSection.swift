@@ -118,10 +118,14 @@ private let durationChoices = [1, 7, 30, 90]
 
 struct PlaceResidencyPassSection: View {
     @Bindable var vm: PlaceResidencyPassViewModel
+    /// Guests and service providers can't issue claims (the server refuses them).
+    var canIssue = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            composer
+            if canIssue {
+                composer
+            }
             claimsList
             if let toast = vm.toast {
                 Text(toast.message)
