@@ -5359,8 +5359,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val audienceViewModel: AudienceProfileViewModel = hiltViewModel()
                     AudienceProfileScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenFollower = { row ->
-                            navController.navigate(ChildRoutes.placeholder("Follower · ${row.displayName}"))
+                        // Followers are membership pseudonyms with no profile of
+                        // their own; "Your audience" holds the per-member actions.
+                        onOpenFollower = {
+                            navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                         },
                         onOpenThread = {
                             navController.navigate(ChildRoutes.CREATOR_INBOX)

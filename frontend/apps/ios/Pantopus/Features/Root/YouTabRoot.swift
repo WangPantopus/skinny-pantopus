@@ -1805,8 +1805,10 @@ public struct YouTabRoot: View {
         case .audienceProfile:
             AudienceProfileView(
                 onBack: { Task { @MainActor in pop() } },
+                // Followers are membership pseudonyms with no profile of their
+                // own; "Your audience" holds the per-member actions.
                 onOpenFollower: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Follower")) }
+                    Task { @MainActor in path.append(.creatorAudienceMembers) }
                 },
                 onOpenThread: { _ in
                     Task { @MainActor in path.append(.creatorInbox) }
@@ -1969,8 +1971,10 @@ public struct YouTabRoot: View {
                         path.append(.creatorInboxConversation(dest))
                     }
                 },
-                onOpenBroadcast: {
-                    Task { @MainActor in path.append(.audienceProfile) }
+                // "Send a broadcast · Compose" opens the composer; it resolves
+                // the Beacon from GET /api/personas/me if the id is still empty.
+                onOpenBroadcast: { personaId in
+                    Task { @MainActor in path.append(.composeBroadcast(personaId: personaId)) }
                 },
                 onOpenSettings: {
                     // No native DM-policy editor exists; the Beacon (tiers,
