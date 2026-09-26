@@ -1370,12 +1370,16 @@ class ChatConversationViewModel
                     _state.value = ChatConversationUiState.Empty
                     return@launch
                 }
+                val requestedTopicId = _selectedTopicId.value
                 val response =
                     when (val target = mode) {
                         is ChatThreadMode.Room -> repo.roomMessages(target.id, before)
-                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before, topicId = _selectedTopicId.value)
+                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before, topicId = requestedTopicId)
                         ChatThreadMode.Ai -> return@launch
                     }
+                // The topic changed while this page was in flight (the opening topic
+                // resolves alongside the first fetch); the fetch for it owns the thread.
+                if (requestedTopicId != _selectedTopicId.value) return@launch
                 when (response) {
                     is NetworkResult.Success -> {
                         // Drop ids we already hold — a send completing while
@@ -1390,23 +1394,7 @@ class ChatConversationViewModel
                         val incoming = response.data.messages.filterNot { existingIds.contains(it.id) }
                         messages.addAll(incoming)
                         messages.sortBy { it.createdAt }
-                        // A fetched row carrying one of our client ids means
-                        // that send landed server-side (e.g. the POST response
-                        // was lost, then a socket refetch ran) — retire every
-                        // trace of the optimistic copy so a delivered message
-                        // can never linger as "failed".
-                        response.data.messages.forEach { fetched ->
-                            val confirmedId = fetched.clientMessageId ?: return@forEach
-                            val held =
-                                pendingByClientId.containsKey(confirmedId) ||
-                                    sendContextsByClientId.containsKey(confirmedId) ||
-                                    failedClientIds.contains(confirmedId)
-                            if (held) {
-                                pendingByClientId.remove(confirmedId)
-                                sendContextsByClientId.remove(confirmedId)
-                                failedClientIds.remove(confirmedId)
-                            }
-                        }
+                        retireConfirmedSends(response.data.messages)
                         updateActiveRooms(response.data)
                         hasMore = response.data.hasMore ?: false
                         oldestCursor =
@@ -1508,7 +1496,11 @@ class ChatConversationViewModel
                                 ),
                             )
                     ) {
-                        is NetworkResult.Success -> _selectedTopicId.value = result.data.topic.id
+                        is NetworkResult.Success -> {
+                            _selectedTopicId.value = result.data.topic.id
+                            // The first fetch may already have left unfiltered.
+                            fetch(initial = true)
+                        }
                         is NetworkResult.Failure -> Timber.w("find/create topic failed: ${result.error.message}")
                     }
                     initialTopic = null
@@ -1729,16 +1721,17 @@ class ChatConversationViewModel
             }
         }
 
-        private fun mergeBackfill(backfill: List<ChatMessageDto>) {
-            // A backfill row carrying one of our client ids means that send
-            // landed server-side (lost POST response + missed `message:new`
-            // echo — exactly the gap room:join backfill covers). Retire the
-            // optimistic copy, same contract as the fetch success path, so
-            // the delivered message can't render alongside a duplicate
-            // "Failed — Retry" row.
-            var retiredPending = false
-            backfill.forEach { fetched ->
-                val confirmedId = fetched.clientMessageId ?: return@forEach
+        /**
+         * Rows carrying one of our client ids mean those sends landed server-side
+         * (e.g. the POST response was lost, then a socket refetch or backfill ran).
+         * Retire every trace of each optimistic copy so a delivered message never
+         * lingers as "failed" or renders next to a "Failed — Retry" twin.
+         * Returns whether anything was retired.
+         */
+        private fun retireConfirmedSends(rows: List<ChatMessageDto>): Boolean {
+            var retired = false
+            rows.forEach { row ->
+                val confirmedId = row.clientMessageId ?: return@forEach
                 val held =
                     pendingByClientId.containsKey(confirmedId) ||
                         sendContextsByClientId.containsKey(confirmedId) ||
@@ -1747,9 +1740,16 @@ class ChatConversationViewModel
                     pendingByClientId.remove(confirmedId)
                     sendContextsByClientId.remove(confirmedId)
                     failedClientIds.remove(confirmedId)
-                    retiredPending = true
+                    retired = true
                 }
             }
+            return retired
+        }
+
+        private fun mergeBackfill(backfill: List<ChatMessageDto>) {
+            // Backfill is exactly the gap a lost POST response plus a missed
+            // `message:new` echo leaves, so confirmed sends are retired here too.
+            val retiredPending = retireConfirmedSends(backfill)
             val existing = messages.map { it.id }.toSet()
             // The room backfill carries every topic; a topic view keeps its own.
             val fresh = backfill.filter { !existing.contains(it.id) && matchesTopicFilter(it) }
