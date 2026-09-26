@@ -2,6 +2,31 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 02:07Z (supersedes the PR states and "Next" in the 00:57Z block below)**
+
+- **#445 merged** in native batch #449 at 01:29:12Z; master is `8f1a59f58`.
+- **#451 (S2-16):** all CI green at `4f4c3b396`. Stream 1 approved it under §8.2, and it is queued in batch 17, PR #452 (#448 → #450 → #451).
+- **Home-links opened as PR [453](https://github.com/WangPantopus/skinny-pantopus/pull/453)** (S2-10, S2-17, S2-06). Branch `claude/stream2-native-home-notification-links`, head `3f2b70b0b`, on `8f1a59f58`. Opened at 02:06:35Z; CI is running.
+  - **Change:** the routers send Home notification links to existing screens:
+    - residency_claim → claim review on its Residency tab;
+    - `members` → Members, and `members?tab=requests` → its Requests tab;
+    - `dashboard?tab=members` → Members;
+    - `owners` → Owners;
+    - `claim-owner/evidence?claimId=` → the claim's documents (iOS) or My claims (Android);
+    - the landlord tenant_request → the Home (S2-06 minimum).
+  - The iOS Place stack gains Owners, claim-review and Requests-tab routes that reuse the You-stack views.
+  - Two existing router tests were updated; no new tests.
+  - **Befores and afters on both apps:** seven exact-format notification rows plus a claim fixture. All seven failed before and land correctly after. Back returns to Notifications, and only GETs were sent.
+  - **Builds:** APK `a00cfc81…`, iOS dylib `d891a959…`, both on :18142 only.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-home-links-r1`, MANIFEST `37f730c776216e2be5ad6718569d78910489a033050a4166db8c47e865ce0dc4` (138 files).
+- **New retained fixtures** (isolated DB 64554): owner notifications `6e5e1ba6`, `5ffc4bfa`, `a411ce85`, `35a45d5b`, `2a287c73`, `ee6a92f6` and `c0f7273c`, and HomeOwnershipClaim `31bce01d` (the owner's own claim on home `9d885f71`, `submitted`, `doc_upload`).
+- **Next: S2-03 remainder.** Earn help and "Offer a service" still open "isn't in the app yet" placeholders on both apps. The plan is to reuse the Help center and the Professional profile.
+  - iOS "See all" beside Recent earnings opens an "All earnings" placeholder.
+  - The static figures are already gone.
+- **Heavy and iOS driver:**
+  - Heavy: held 01:23:21Z–01:38:54Z.
+  - iOS driver: held 01:14:40Z–01:18:07Z (befores) and 01:54:19Z–01:57:47Z (afters). Every iOS call named `6F914A30`.
+
 **Mail journey — 2026-09-26 00:57Z (supersedes the PR states and "Next" in the ~00:10Z block below)**
 
 - **#443** (Mail write routes truth) was merged at 00:15:41Z as `eaae991b0` and is in master `27eb23ad2` (batch 16, #446).
