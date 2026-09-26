@@ -157,6 +157,7 @@ struct PlaceDashboardView: View {
                     ForEach(intel.groups, id: \.group) { group in
                         groupBlock(group)
                     }
+                    identityEntry
                     if isClaimed {
                         verifyLockedGroup
                     }
@@ -265,6 +266,20 @@ struct PlaceDashboardView: View {
                     subtitle: "Heads-ups from verified neighbors nearby."
                 ) { viewModel.onOpenInbox() }
             }
+        }
+    }
+
+    /// The Identity page (residency letters and passes) has no card group of
+    /// its own on the dashboard, so it gets this entry.
+    private var identityEntry: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            PlaceGroupLabel(text: "Identity")
+            PlaceMessagesActionRow(
+                icon: .idCard,
+                title: "Residency letters & passes",
+                subtitle: "Prove where you live, on your terms."
+            ) { viewModel.onOpenDetail(.identity) }
+                .accessibilityIdentifier("place.identityEntry")
         }
     }
 

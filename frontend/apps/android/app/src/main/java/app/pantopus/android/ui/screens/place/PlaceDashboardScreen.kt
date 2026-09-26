@@ -258,6 +258,12 @@ internal fun PlaceDashboardContent(
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
             )
         }
+        item {
+            PlaceIdentityEntry(
+                onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            )
+        }
         if (isClaimed) {
             item {
                 PlaceVerifyLockedGroup(
@@ -345,6 +351,25 @@ private fun PlaceMessagesEntry(
                 onTap = onOpenInbox,
             )
         }
+    }
+}
+
+// The Identity page (residency letters and passes) has no card group of its
+// own on the dashboard, so it gets this entry.
+@Composable
+private fun PlaceIdentityEntry(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        PlaceGroupLabel(text = "Identity")
+        PlaceMessagesActionRow(
+            icon = PantopusIcon.IdCard,
+            title = "Residency letters & passes",
+            subtitle = "Prove where you live, on your terms.",
+            onTap = onOpen,
+            modifier = Modifier.testTag("place.identityEntry"),
+        )
     }
 }
 

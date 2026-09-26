@@ -93,6 +93,8 @@ export const queryKeys = {
     ['place', 'rent-report', homeId] as const,
   unlisted: (homeId: string) =>
     ['place', 'unlisted', homeId] as const,
+  placeAccess: (homeId: string) =>
+    ['place', 'access', homeId] as const,
 
   // ── Businesses ────────────────────────────────────────────
   businessDetail: (id: string) =>
