@@ -2,11 +2,11 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
-> **UPDATE 2026-09-26T22:24Z: this Stream 1 session resumed at the user's request.** It runs batch 32 itself and hands off after the merge.
-> - All four PRs (#535, #536, #537, #538) are reviewed, and their bundles verify.
-> - The chain is built and verified locally on master `f885e0623`: tip `5433157628726e5517e952766d1120d1460d1ed1`, merge order #538, #535, #536, #537, 17 files, no shared files.
-> - Nothing is pushed yet; the batch PR opens once the heads are green.
-> - If this session disappears before the batch PR exists, the successor rebuilds the batch (handoff §4).
+> **UPDATE 2026-09-26T22:35Z: this Stream 1 session resumed at the user's request.** It is running batch 32 and hands off after the merge.
+> - **Batch 32 = [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540)**, queued at 22:35:20Z; the runner is active. Tip `5433157628726e5517e952766d1120d1460d1ed1` on master `f885e0623`, merge order #538, #535, #536, #537. All four heads showed "CI OK" passing at 22:34:37Z.
+> - **After it merges:** restart the Stream 1 backend (#538 is backend).
+> - **Batch 33:** Stream 2's [#539](https://github.com/WangPantopus/skinny-pantopus/pull/539) (decision 2b, stacked on #535, head `1dfe36a8e`, bundle `c714cec3…`) is reviewed; it joins once its CI is green, rebuilt on the new master.
+> - **#535's bundle** `baseMaster` field is corrected by `20260926-stream2-base-correction-r1` (`8eac3d5f…`); the PR was cut from `448ee8b4a`.
 
 - **Who runs the queue:** this Stream 1 session stopped at the user's request. **The next Stream 1 session runs batch 32** and all later batches. Its takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](workstreams/stream1-handoff-2026-09-26.md), and its prompt is [docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md](workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md).
 - **Integration (Stream 1 queue):**
