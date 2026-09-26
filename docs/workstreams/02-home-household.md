@@ -2,6 +2,39 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` on master `02abf6bd3`. The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Mail journey — native afters, 2026-09-26 ~00:10Z (supersedes the "~22:15Z" native bullet above)**
+
+- **Native PR** [445](https://github.com/WangPantopus/skinny-pantopus/pull/445) on branch `claude/stream2-native-mail-list-controls`, head `352202313`, on master `9ec9b18f0` (includes merged #435).
+  - List fix (S2-22), Dismiss close/drop (S2-11), S2-08 native (Archive works, dead menu items/tiles hidden), drawer badge refetch, Android NonCancellable action handling.
+  - Backend: `/drawers` counts incoming only; `vault/file` 500 on a failed write.
+  - 17 Paparazzi baselines were refreshed, only where controls were removed (each >0.1%); drift-only baselines were left untouched.
+- **Real-app afters** (Android APK `f6a41a64…`, iOS dylib `1a39334c…`): A1–A6 and I1–I7 passed; S2-08 Archive menu/tile success and 503 passed on both apps.
+  - Found and fixed during the afters, re-checked on the rebuilt apps (APK `5e4581cc…`, iOS dylib `b9d8fa43…`, built from content identical to the PR head):
+    - an Android slow-Dismiss+Back stale row;
+    - a badge that never refreshed.
+  - Bundle: `.pantopus-recovery/audits/20260925-stream2-native-mail-list-controls-r1`, MANIFEST `8faf5d29178ef64a68240b88015e5492c829e7349a0cc252549bd9392ad79b18` (252 files).
+- **Fixtures:**
+  - All 25 `S2-Mail-List` letters were restored (delivered, unarchived).
+  - Retained: new MailEvent/MailAction audit rows (ids in the bundle) and the owner's five system VaultFolders.
+  - Created and retained, all outside the owner's Incoming:
+    - member letters `b8978998` (certified) and `7d555b15` (package), with MailRoutingQueue `9f465b4d` and MailPackage `6154b730`;
+    - archived owner letters `9f54982e` (ceremonial) and `a9ad531a` (unboxing), with MailPackage `92e280f6`.
+- **Next:**
+  - `claude/stream2-native-mail-s2-16` `0a21baa5e` (unpushed) (S2-16: Unboxing and ceremonial dead controls hidden, iOS reply-preview icons made decorative). Needs a build, device afters and ceremonial baselines.
+  - **Opened as PR [443](https://github.com/WangPantopus/skinny-pantopus/pull/443)** (head `0e811d563`, on master `9ec9b18f0`). Stream 1's §8.2 source review passed and it is planned as backend batch 16 once CI is green. Bundle `20260925-stream2-mail-write-routes-truth-r1`, MANIFEST `0fdb748295976b6080f069a11e2447103099acacd4ab8a89207f07367acd75b0`. Three commits:
+    - certified acknowledge/reject 500 on a failed write (the web uses it; it gave a false "acknowledged");
+    - package status 500 on a failed write;
+    - resolve/route no longer clears the routing queue or reports "routed" for a letter that didn't move.
+    - Each was reproduced with an exact DB fault (unfixed 200 vs fixed 500), and each happy path passed.
+- **Dispositions:**
+  - S2-04 is moot: no Translate entry on either app, and no generated translation links (only a hand-typed iOS deep link reaches the screen).
+  - S2-23 and S2-24 are already fixed on master.
+  - Party shelf "Priya" hard-coding is latent (party decode returns nil).
+- **Decisions for the user:**
+  - Native read state (options A/B/C, pending).
+  - Household letters: Archive/Dismiss/Delete act on the shared row for every member, and web Delete is a hard delete.
+- **Heavy/iOS:** heavy was released to Stream 1 at 22:51:05Z and again at 00:04:24Z after my 23:53:40Z rebuild window (Stream 1 then held it for its #439 quiet check); the iOS driver was released to Stream 1 at 00:06Z; the iOS driver was first released to Stream 1 at 23:13Z.
+
 **Mail journey (S2-11, S2-22) — state at 2026-09-25 ~22:15Z**
 
 - The September 24 two-file Android draft was recovered verbatim from a private transcript (49+/6-, never built) and then superseded: real befores on current master showed the same failures plus more, so the repair was rebuilt on the existing Pulse/Marketplace append-failure pattern.
