@@ -15,6 +15,19 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - An owner could therefore point admin review (`adminVerification.js` lists `file_id`) at someone else's private file.
   - Proposed fix: before the insert, require the File row to be the caller's own, with `file_context` `business_verification`. Not changed without the user's go-ahead.
 
+## Update 2026-09-26 08:28Z: PR488 (S3-39) and PR491 (S3-57 native plus an iOS delete bug) open; batch 24 = #489
+
+- **Batch 23 merged** at 07:51:21Z (#479). Batch 24 = [PR489](https://github.com/WangPantopus/skinny-pantopus/pull/489), carrying #483, #485, #486 and #488 from Stream 3.
+- **[PR488](https://github.com/WangPantopus/skinny-pantopus/pull/488): web S3-39.** The business address step drops the "Request access · Recommended" and "I'm in a new building" placeholders, and a failed Verify gets Retry instead of an endless spinner.
+  - Verified with synthetic create, geo and verdict responses; DB unchanged.
+  - Bundle MANIFEST.json SHA-256 `0bb3d8a22617296973eb5bb98cdf3c5c267ff69d94c7a60a7818160b9d569d90`.
+- **[PR491](https://github.com/WangPantopus/skinny-pantopus/pull/491): S3-57 on iOS and Android**, plus a newly found iOS defect: Delete in "Delete notification?" never sent a request (the dialog binding cleared `pendingDelete` first).
+  - Built under heavy 07:54–08:18Z; APK `5b9202ae`, dylib `85e11958`. Before and after on both apps; all writes refused or synthetic.
+  - Bundle MANIFEST.json SHA-256 `56ed8237265f34fb56b7deae0bf4dcf4ef7757a85ae0a32ad153288f41f8c526`.
+- **S3-31:** befores recorded on both platforms (filtered-empty shows "No conversations yet" and drops the AI row). The fix waits for #485.
+- **Queued (from Stream 1):** web chat Gig/Listing pickers show a failed read as "No tasks yet" / "You have no listings".
+- **Harness:** proxy `rejectDelayMs` holds an injected answer, so a toast can be captured.
+
 **Time correction (2026-09-26 07:38Z, from git log):** four headings below were hand-estimated 5–8 min late. They now show their commits' `git log` times: 06:30Z, 06:42Z, 07:30Z and 07:37Z (previously 06:35Z, 06:50Z, 07:35Z and 07:40Z). The pushed commit subjects keep the old labels.
 
 ## Update 2026-09-26 07:37Z: S3-23 open as PR486
