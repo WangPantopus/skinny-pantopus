@@ -97,8 +97,8 @@ public enum NotificationsZone: String, Sendable, CaseIterable, Hashable {
 }
 
 /// Pending "delete this notification?" confirmation. The screen binds a
-/// `confirmationDialog` to this; the VM never destroys anything until
-/// `confirmDelete()` runs.
+/// `confirmationDialog` to this; the VM never destroys anything until the
+/// dialog's Delete calls `delete(id:)` with the request it presented.
 public struct NotificationDeleteRequest: Sendable, Identifiable, Hashable {
     public let id: String
     public let title: String
@@ -465,14 +465,9 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     }
 
     /// `DELETE /api/notifications/:id`. Optimistic — the row disappears
-    /// immediately and is restored if the call fails.
-    public func confirmDelete() async {
-        guard let request = pendingDelete else { return }
-        pendingDelete = nil
-        await delete(id: request.id)
-    }
-
-    /// Delete without the confirmation hop. Exposed for tests.
+    /// immediately and is restored (with a toast) if the call fails. The
+    /// dialog passes the request it presented: dismissing it has already
+    /// cleared `pendingDelete`.
     public func delete(id: String) async {
         guard let target = notifications.first(where: { $0.id == id }) else { return }
         let previous = notifications
