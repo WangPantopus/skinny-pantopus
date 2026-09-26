@@ -627,7 +627,7 @@ public struct YouTabRoot: View {
         switch route {
         case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .helpCenter, .publicProfile, .pulsePost,
-             .legalContent, .privacySettings, .legal, .settings, .paymentsSettings,
+             .legalContent, .privacySettings, .dataExport, .legal, .settings, .paymentsSettings,
              .mailItemDetail, .gigDetail, .listingDetail, .businessProfile, .editBusinessPage,
              .gigsFeed, .marketplace, .audienceProfile, .supportTrainDetail, .manageTrain,
              .chatConversation, .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold,
