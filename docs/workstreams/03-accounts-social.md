@@ -40,7 +40,13 @@ The kit is git-ignored and durable. `/private/tmp` is wiped when the Mac restart
   - iOS sim `0AE16FA0` was shut down at 21:54Z and slot 1 released (Stream 1 took it at 21:56Z). It still has dylib `36af1f371` with the Member signed in.
   - Emulator-5554 was shut down at 22:03Z and slot 4 released. It still has APK `36af1f371` with the Member signed in.
   - Heavy is not held.
-- **Runtime:** still running while this session lives: API 18134 (`23e518b11`), proxy 18130 (**chat-audit mode ON**), web 18131 (`75b6f2eab`), storage shim 64533, file server 18198, isolated DB 64531/64532. `fault-control.json` is `{}`.
+- **Runtime: stopped at the user's request, 22:16–22:19Z.** Start it from the kit README.
+  - Stopped: API 18134 (was `23e518b11`), proxy 18130, web 18131 (tree `75b6f2eab`), storage shim 64533 and file server 18198. The Docker stack `supabase_*_pantopus-stream3-block-r1` is stopped with its containers and volumes kept.
+  - The DB restart and crash recovery were verified at 22:18Z, and the retained rows are intact.
+  - Still set in files: `chat-audit.json` is enabled (chat-audit mode comes back when the proxy restarts), and `fault-control.json` is `{}`.
+- **Disk:** about 27 GB of Stream 3's own rebuildable build output was deleted: old app/APK copies in the runtime folder, and Android and web build output in the merged-PR worktrees.
+  - Kept: all worktrees, the #536 before/after builds, the iOS build caches, #536's Android build, and the web runtime tree's cache.
+  - Details are in the kit README.
 
 ### 2. Remaining Stream 3 inventory rows (checked in master `f885e0623` code, 2026-09-26 22:10Z)
 The inventory (`coordinator-state-2026-09-23/tools/ux-inventory-2026-09-23.md`) has 69 S3 rows.
