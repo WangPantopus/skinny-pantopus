@@ -358,7 +358,7 @@ class MyTasksViewModel
 
         fun applyFilter(filter: ActivityFilter) {
             _activityFilter.value = filter
-            applyState()
+            if (loadedAtLeastOnce) applyState()
         }
 
         private val _fab = MutableStateFlow<FabAction?>(null)
@@ -463,7 +463,8 @@ class MyTasksViewModel
         fun selectTab(id: String) {
             if (_selectedTab.value == id) return
             _selectedTab.value = id
-            applyState()
+            // Before a successful load there is no list to show; keep the error.
+            if (loadedAtLeastOnce) applyState()
         }
 
         fun loadMoreIfNeeded() = Unit
@@ -911,12 +912,13 @@ class MyTasksViewModel
             )
         }
 
+        /** Uncounted until the list loads: a failed read must not claim "0". */
         private fun defaultTabs() =
             listOf(
-                ListOfRowsTab(id = MyTasksTab.OPEN, label = "Open", count = 0),
-                ListOfRowsTab(id = MyTasksTab.ACTIVE, label = "Active", count = 0),
-                ListOfRowsTab(id = MyTasksTab.DONE, label = "Done", count = 0),
-                ListOfRowsTab(id = MyTasksTab.CLOSED, label = "Closed", count = 0),
+                ListOfRowsTab(id = MyTasksTab.OPEN, label = "Open"),
+                ListOfRowsTab(id = MyTasksTab.ACTIVE, label = "Active"),
+                ListOfRowsTab(id = MyTasksTab.DONE, label = "Done"),
+                ListOfRowsTab(id = MyTasksTab.CLOSED, label = "Closed"),
             )
 
         companion object {

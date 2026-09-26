@@ -447,6 +447,11 @@ function EarningsCard() {
   const totalSpentCents =
     Number(spendingSummary?.total_spent ?? spendingSummary?.totalSpent ?? 0) ||
     0;
+  // A figure that hasn't loaded (loading or failed) shows "—", never "$0.00".
+  const earnedLabel = earnings
+    ? `$${(totalEarnedCents / 100).toFixed(2)}`
+    : "—";
+  const spentLabel = spending ? `$${(totalSpentCents / 100).toFixed(2)}` : "—";
 
   return (
     <div className="bg-app-surface rounded-xl border border-app-border p-6">
@@ -468,16 +473,14 @@ function EarningsCard() {
             Total Earned
           </p>
           <p className="mt-1 text-2xl font-bold text-emerald-700">
-            ${(totalEarnedCents / 100).toFixed(2)}
+            {earnedLabel}
           </p>
         </div>
         <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
           <p className="text-xs text-blue-600 uppercase tracking-wider font-medium">
             Total Spent
           </p>
-          <p className="mt-1 text-2xl font-bold text-blue-700">
-            ${(totalSpentCents / 100).toFixed(2)}
-          </p>
+          <p className="mt-1 text-2xl font-bold text-blue-700">{spentLabel}</p>
         </div>
       </div>
       <p className="mt-3 text-xs text-app-text-secondary">

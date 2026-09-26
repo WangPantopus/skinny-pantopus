@@ -191,18 +191,20 @@ public final class MyBidsViewModel: ListOfRowsDataSource {
 
     public let title = "My bids"
 
+    /// Uncounted until the list loads: a failed read must not claim "0".
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: MyBidsTab.active, label: "Active", count: counts.active),
-            ListOfRowsTab(id: MyBidsTab.accepted, label: "Accepted", count: counts.accepted),
-            ListOfRowsTab(id: MyBidsTab.rejected, label: "Rejected", count: counts.rejected),
-            ListOfRowsTab(id: MyBidsTab.done, label: "Done", count: counts.done)
+            ListOfRowsTab(id: MyBidsTab.active, label: "Active", count: loadedAtLeastOnce ? counts.active : nil),
+            ListOfRowsTab(id: MyBidsTab.accepted, label: "Accepted", count: loadedAtLeastOnce ? counts.accepted : nil),
+            ListOfRowsTab(id: MyBidsTab.rejected, label: "Rejected", count: loadedAtLeastOnce ? counts.rejected : nil),
+            ListOfRowsTab(id: MyBidsTab.done, label: "Done", count: loadedAtLeastOnce ? counts.done : nil)
         ]
     }
 
     public var selectedTab: String = MyBidsTab.active {
         didSet {
-            guard oldValue != selectedTab else { return }
+            // Before a successful load there is no list to show; keep the error.
+            guard oldValue != selectedTab, loadedAtLeastOnce else { return }
             rebuild()
         }
     }
@@ -255,7 +257,7 @@ public final class MyBidsViewModel: ListOfRowsDataSource {
     /// Store the applied filter and re-project the visible rows.
     public func applyFilter(_ filter: ActivityFilter) {
         activityFilter = filter
-        rebuild()
+        if loadedAtLeastOnce { rebuild() }
     }
 
     public var banner: BannerConfig? {

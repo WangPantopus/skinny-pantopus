@@ -3,8 +3,9 @@
 // B5 Weekly hours editor + B6 Date overrides + B7 Limits (thin), as tabs on one
 // schedule. Weekly hours save name+timezone (PUT schedule) and the whole rule
 // set (PUT rules, whole-set). Overrides persist on each change (PUT overrides,
-// whole-set) optimistically. Limits are read-only here — they live on the event
-// type (W2). Availability is always personal; tz renders the schedule zone.
+// whole-set) optimistically. Limits live on the event type (W2); the Limits tab
+// edits the first active one, as native B7 does. Availability is always
+// personal; tz renders the schedule zone.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -508,16 +509,7 @@ export default function AvailabilityEditorPage() {
           />
         )}
 
-        {tab === "limits" && (
-          <BookingLimitsForm
-            onDone={async () => {
-              // NOTE: The backend has no schedule-level limits endpoint (limits live on
-              // event types). This saves to the event-type layer when that API is wired.
-              // For now the interaction is local-state only, matching the design's done CTA.
-              toast.success("Limits updated.");
-            }}
-          />
-        )}
+        {tab === "limits" && <BookingLimitsForm owner={owner} />}
       </div>
 
       {/* Sticky save bar — hours tab (not in isUnset state) */}

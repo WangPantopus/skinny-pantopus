@@ -261,7 +261,7 @@ class MyBidsViewModel
 
         fun applyFilter(filter: ActivityFilter) {
             _activityFilter.value = filter
-            applyState()
+            if (loadedAtLeastOnce) applyState()
         }
 
         private val _fab =
@@ -329,7 +329,8 @@ class MyBidsViewModel
         fun selectTab(id: String) {
             if (_selectedTab.value == id) return
             _selectedTab.value = id
-            applyState()
+            // Before a successful load there is no list to show; keep the error.
+            if (loadedAtLeastOnce) applyState()
         }
 
         fun loadMoreIfNeeded() = Unit
@@ -889,12 +890,13 @@ class MyBidsViewModel
             )
         }
 
+        /** Uncounted until the list loads: a failed read must not claim "0". */
         private fun defaultTabs() =
             listOf(
-                ListOfRowsTab(id = MyBidsTab.ACTIVE, label = "Active", count = 0),
-                ListOfRowsTab(id = MyBidsTab.ACCEPTED, label = "Accepted", count = 0),
-                ListOfRowsTab(id = MyBidsTab.REJECTED, label = "Rejected", count = 0),
-                ListOfRowsTab(id = MyBidsTab.DONE, label = "Done", count = 0),
+                ListOfRowsTab(id = MyBidsTab.ACTIVE, label = "Active"),
+                ListOfRowsTab(id = MyBidsTab.ACCEPTED, label = "Accepted"),
+                ListOfRowsTab(id = MyBidsTab.REJECTED, label = "Rejected"),
+                ListOfRowsTab(id = MyBidsTab.DONE, label = "Done"),
             )
 
         companion object {
