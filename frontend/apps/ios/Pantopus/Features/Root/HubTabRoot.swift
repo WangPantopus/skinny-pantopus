@@ -824,8 +824,10 @@ public struct HubTabRoot: View {
 
     /// §1C-b — the context-aware navigation drawer. The Hub menu is always the
     /// personal context (home / business dashboards adopt the drawer with their
-    /// own context); the pill opens the Identity Center and rows push existing
-    /// routes via `route(forDrawer:)`.
+    /// own context); the pill's name opens the profile (the You cover, also
+    /// reachable from the Place dashboard, which hides the Hub avatar), its
+    /// Switch chip opens the Identity Center, and rows push existing routes via
+    /// `route(forDrawer:)`.
     private var navigationDrawerOverlay: some View {
         NavigationDrawerView(
             viewModel: NavigationDrawerViewModel(context: .personal(name: currentUserName)),
@@ -836,7 +838,8 @@ public struct HubTabRoot: View {
                 }
             },
             onOpenIdentityCenter: { navDrawerIdentityCenter = true },
-            onBackToHub: { Task { @MainActor in path.removeAll { _ in true } } }
+            onBackToHub: { Task { @MainActor in path.removeAll { _ in true } } },
+            onOpenProfile: { onOpenProfile() }
         )
     }
 

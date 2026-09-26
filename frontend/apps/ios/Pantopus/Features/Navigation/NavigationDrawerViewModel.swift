@@ -182,6 +182,16 @@ final class NavigationDrawerViewModel {
         }
     }
 
+    /// The Personal pill's name opens the profile its subtitle names ("Your
+    /// profile"); its Switch chip, and the whole Home / Business pill, open
+    /// the Identity Center.
+    var pillOpensProfile: Bool {
+        switch context {
+        case .personal: true
+        case .home, .business: false
+        }
+    }
+
     /// `BackToHub` only renders for the Home / Business contexts.
     var showsBackToHub: Bool {
         switch context {

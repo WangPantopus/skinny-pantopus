@@ -2415,6 +2415,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 onBackToHub = {
                     navDrawerScope.launch { navDrawerState.close() }
                 },
+                // The pill's name opens the profile, as the Hub avatar does.
+                onOpenProfile = {
+                    navDrawerScope.launch { navDrawerState.close() }
+                    navController.navigate(ChildRoutes.profile())
+                },
             )
         },
     ) {
