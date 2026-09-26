@@ -3,7 +3,9 @@ export { default as DiscoveryFilterPanel, DEFAULT_FILTERS } from './DiscoveryFil
 export type { DiscoveryFilters } from './DiscoveryFilterPanel';
 export { default as BusinessResultCard, BusinessResultCardSkeleton } from './BusinessResultCard';
 export { default as InquiryChatDrawer } from './InquiryChatDrawer';
-export { default as DiscoverMap } from './DiscoverMap';
+// DiscoverMap is not re-exported: it loads Leaflet, which needs `window`. Its pages import it
+// with next/dynamic `ssr: false`; exporting it here put Leaflet in the server render of every
+// page that imports this barrel ("window is not defined" on /app/discover and /app/map).
 export type { MapLayerKey, MeasureFrom } from './DiscoverMap';
 export { default as MapLayerToggle } from './MapLayerToggle';
 export { default as MeasureFromChip } from './MeasureFromChip';
