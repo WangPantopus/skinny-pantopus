@@ -223,7 +223,7 @@ internal fun ChatListingOfferCardView(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                     card.category?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 11.sp, color = secondaryText(isOutgoing))
+                        Text(listingCategoryLabel(it), fontSize = 11.sp, color = secondaryText(isOutgoing))
                     }
                     card.condition?.takeIf { it.isNotBlank() }?.let {
                         Text(conditionLabel(it), fontSize = 11.sp, color = secondaryText(isOutgoing))
@@ -262,6 +262,33 @@ private fun secondaryText(isOutgoing: Boolean) =
     } else {
         PantopusColors.appTextSecondary
     }
+
+// Listing category keys and names from the marketplace contract
+// (`packages/ui-utils/src/marketplace-contract.ts`).
+private val LISTING_CATEGORY_LABELS =
+    mapOf(
+        "furniture" to "Furniture",
+        "electronics" to "Electronics",
+        "clothing" to "Clothing",
+        "kids_baby" to "Kids & Baby",
+        "tools" to "Tools",
+        "home_garden" to "Home & Garden",
+        "sports_outdoors" to "Sports & Outdoors",
+        "vehicles" to "Vehicles",
+        "books_media" to "Books & Media",
+        "collectibles" to "Collectibles",
+        "appliances" to "Appliances",
+        "free_stuff" to "Free Stuff",
+        "food_baked_goods" to "Food & Baked Goods",
+        "plants_garden" to "Plants & Garden",
+        "pet_supplies" to "Pet Supplies",
+        "arts_crafts" to "Arts & Crafts",
+        "tickets_events" to "Tickets & Events",
+        "other" to "Other",
+    )
+
+private fun listingCategoryLabel(raw: String): String =
+    LISTING_CATEGORY_LABELS[raw] ?: raw.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
 private fun conditionLabel(raw: String): String =
     when (raw) {
