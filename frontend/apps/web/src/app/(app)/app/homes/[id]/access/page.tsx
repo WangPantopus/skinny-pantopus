@@ -22,6 +22,8 @@ function AccessContent() {
 
   const [secrets, setSecrets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -32,8 +34,10 @@ function AccessContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeAccessSecrets(homeId);
+      setLoadError(null);
       setSecrets((res as any)?.secrets || []);
-    } catch { toast.error('Failed to load access codes'); }
+    } catch {
+      setLoadError('Current access codes could not be loaded. Retry to check current information.'); toast.error('Failed to load access codes'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchSecrets().finally(() => setLoading(false)); }, [fetchSecrets]);
@@ -76,7 +80,12 @@ function AccessContent() {
         <p className="text-xs text-emerald-700 font-medium">Values auto-hide after 30 seconds</p>
       </div>
 
-      {secrets.length === 0 ? (
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchSecrets().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : secrets.length === 0 ? (
         <div className="text-center py-16">
           <Lock className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No access codes stored</p>
