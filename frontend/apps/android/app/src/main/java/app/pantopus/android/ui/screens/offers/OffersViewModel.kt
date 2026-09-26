@@ -254,11 +254,12 @@ class OffersViewModel
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
 
+        // Uncounted until both lists load: a failed read must not claim "0".
         private val _tabs =
             MutableStateFlow(
                 listOf(
-                    ListOfRowsTab(id = OffersTab.RECEIVED, label = "Received", count = 0),
-                    ListOfRowsTab(id = OffersTab.SENT, label = "Sent", count = 0),
+                    ListOfRowsTab(id = OffersTab.RECEIVED, label = "Received"),
+                    ListOfRowsTab(id = OffersTab.SENT, label = "Sent"),
                 ),
             )
         val tabs: StateFlow<List<ListOfRowsTab>> = _tabs.asStateFlow()
@@ -315,7 +316,7 @@ class OffersViewModel
 
         fun applyFilter(filter: ActivityFilter) {
             _activityFilter.value = filter
-            applyState()
+            if (loadedAtLeastOnce) applyState()
         }
 
         /**
@@ -344,7 +345,8 @@ class OffersViewModel
         fun selectTab(id: String) {
             if (_selectedTab.value == id) return
             _selectedTab.value = id
-            applyState()
+            // Before a successful load there is no list to show; keep the error.
+            if (loadedAtLeastOnce) applyState()
         }
 
         /** Cross-tab paging isn't part of T5.2.4 — both endpoints return the full list. */
