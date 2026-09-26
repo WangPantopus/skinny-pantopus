@@ -36,6 +36,8 @@ public enum TasksRoute: Hashable {
 /// NavigationStack wrapper for the Tasks tab.
 public struct TasksTabRoot: View {
     @Environment(AuthManager.self) private var auth
+    /// Leaving Nearby for another tab closes this sheet (`NeighborhoodTabRoot`).
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
     @State private var path = RouteStack<TasksRoute>()
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
@@ -368,6 +370,11 @@ public struct TasksTabRoot: View {
                         initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: title)
                     )))
                 }
+            },
+            onOpenInbox: {
+                // The seller's own "Message" opens their Messages inbox.
+                MailTabStore.shared.pendingSegment = .messages
+                rootTabs?.selected = .mail
             },
             onViewOffers: { dto in
                 Task { @MainActor in

@@ -4713,6 +4713,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 )
                             }
                         },
+                        onOpenInbox = { navController.navigateToRootTab(PantopusRoute.Messages) },
                         onViewOffers = { dto ->
                             navController.navigate(ChildRoutes.listingOffers(dto.id, dto.title))
                         },

@@ -42,6 +42,11 @@ class ListingOffersRepository
             offerId: String,
         ): NetworkResult<ListingOfferResponseEnvelope> = safeApiCall { api.declineOffer(listingId, offerId) }
 
+        suspend fun withdraw(
+            listingId: String,
+            offerId: String,
+        ): NetworkResult<ListingOfferResponseEnvelope> = safeApiCall { api.withdrawOffer(listingId, offerId) }
+
         suspend fun counter(
             listingId: String,
             offerId: String,

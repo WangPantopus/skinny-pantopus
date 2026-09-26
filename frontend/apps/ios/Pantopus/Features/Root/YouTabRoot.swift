@@ -415,6 +415,8 @@ private struct DebugDisambiguateItem: Identifiable, Hashable {
 public struct YouTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.openURL) private var openURL
+    /// The tab bar under this cover (RootTabView passes it in).
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
     @State private var path = RouteStack<YouRoute>()
     @State private var showsSignOutConfirm = false
     @State private var showsEditProfile = false
@@ -1409,6 +1411,12 @@ public struct YouTabRoot: View {
                             verified: false
                         )))
                     }
+                },
+                onOpenInbox: {
+                    // The seller's own "Message" opens their Messages inbox, under this cover.
+                    MailTabStore.shared.pendingSegment = .messages
+                    rootTabs?.selected = .mail
+                    onClose?()
                 },
                 onViewOffers: { dto in
                     Task { @MainActor in
