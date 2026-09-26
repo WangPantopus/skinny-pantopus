@@ -10,7 +10,7 @@
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
-import { isBallotCard } from './BallotCard';
+import { ballotCardData } from './BallotCard';
 import BallotTodayCard, { hasBallotToday } from './BallotTodayCard';
 
 export default function BallotTodaySection({ enabled = true, className = '' }: { enabled?: boolean; className?: string }) {
@@ -32,7 +32,7 @@ export default function BallotTodaySection({ enabled = true, className = '' }: {
   });
 
   const section = ballotQuery.data?.groups.flatMap((g) => g.sections).find((s) => s.id === 'civic_election');
-  const data = section && section.status === 'ready' && isBallotCard(section.data) ? section.data : null;
+  const data = section && section.status === 'ready' ? ballotCardData(section.data) : null;
   if (!data || !hasBallotToday(data)) return null;
 
   return (

@@ -18,7 +18,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useReducedMotion } from '@/components/scheduling/polish/a11y';
+import { useFocusTrap, useReducedMotion, useReturnFocus } from '@/components/scheduling/polish/a11y';
 import GovernmentStack, { STACK_POLYGONS, STORY_STEP_MS } from './GovernmentStack';
 
 export interface GovernmentsSheetData {
@@ -150,8 +150,12 @@ export default function GovernmentsSheet({
 }) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  // A modal keeps Tab inside it and hands focus back to what opened it.
+  useReturnFocus(open);
+  useFocusTrap(dialogRef, open && mounted);
 
   useEffect(() => {
     if (!open || !mounted) return undefined;
@@ -174,6 +178,7 @@ export default function GovernmentsSheet({
   // header, tab bar and buttons, as AppShell's own composer does.
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -182,7 +187,8 @@ export default function GovernmentsSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="h-full w-full overflow-y-auto sm:h-[844px] sm:max-h-[calc(100dvh-32px)] sm:w-[390px] sm:overflow-hidden sm:rounded-2xl">
+      {/* Shorter windows scroll the 844-tall panel, so Done stays reachable. */}
+      <div className="h-full w-full overflow-y-auto sm:h-[844px] sm:max-h-[calc(100dvh-32px)] sm:w-[390px] sm:rounded-2xl">
         <GovernmentsView governments={governments} address={address} onClose={onClose} titleId={titleId} closeRef={closeRef} />
       </div>
     </div>,
