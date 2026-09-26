@@ -2,6 +2,27 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 06:08Z: fixture set created (isolated DB `pantopus-stream3-block-r1` only)
+
+The user approved the full set and the keep decision for the three incidental rows.
+- **Where it's recorded:** the private runtime's `fixtures-20260926/` holds `PLAN.md` and `manifest.json`. The manifest lists 129 rows, each with an exact revert.
+- **Guardrails:** no provider call (no email, push, SMS, AI or Stripe). Retained draft BookingPage `807dd420` unchanged (still not live); the 6 original IdentityAuditLog rows intact.
+- **Through the real API** (direct to the isolated API):
+  - F1: published business `s3sched_biz_da533f`.
+  - F2: Member's Beacon `s3fx_member_beacon`, followed by Owner, with 1 broadcast.
+  - F3a: Owner↔Member chat with 59 messages (more than one 50-message page).
+  - F4: Owner↔Member connection plus mutual follows.
+  - F5a: 2 event types on Owner's page.
+  - F5b: an upcoming confirmed booking, Mon 2026-09-28 10:00 ET.
+- **As DB rows, because the API path would call a provider or can't book the past:**
+  - F3b: Owner's AI thread (metadata only).
+  - F5c: a past confirmed booking, which puts it in the no-show window.
+  - F6: 30 tagged notifications, so Owner has 33 across 2 pages.
+  - F7: a paid $120 business invoice with no Stripe rows.
+- **Verified through read-only API calls:** every fixture surfaces for its user.
+- **Unblocks:** S3-13, S3-47, S3-48, S3-51 no-show, S3-53 New chat, S3-54, S3-55, S3-56, S3-67 broadcast "⋯", S3-68, S3-69, and S3-50 with real edges.
+- **Batches:** batch 21 (#471) holds #465, #466 and #468. #470 is planned for batch 22 with Stream 1's #472.
+
 ## Update 2026-09-26 05:50Z (master `5bf1eb7f8`)
 
 - **[PR470](https://github.com/WangPantopus/skinny-pantopus/pull/470): open, CI running.** S3-66 on iOS and Android. Head `b99401990`, 15 files.
