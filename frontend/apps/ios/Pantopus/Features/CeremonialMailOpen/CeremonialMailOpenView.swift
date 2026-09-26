@@ -26,7 +26,7 @@
 //  .open with no intermediate transitions.
 //
 
-// swiftlint:disable file_length type_body_length multiple_closures_with_trailing_closure
+// swiftlint:disable file_length type_body_length
 
 import SwiftUI
 
@@ -619,15 +619,10 @@ private struct ReadingFrame: View {
             }
             Spacer()
             HStack(spacing: 6) {
-                Button(action: {}) {
-                    Icon(.share, size: 13, color: letter.ink.color)
-                        .frame(width: 30, height: 30)
-                        .background(Color.white.opacity(0.55))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(letter.ink.color.opacity(0.14), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Share letter")
+                // S2-16 — Share did nothing; its place stays so the name doesn't move.
+                Color.clear
+                    .frame(width: 30, height: 30)
+                    .accessibilityHidden(true)
                 Button(action: onArchive) {
                     Icon(.archive, size: 13, color: letter.ink.color)
                         .frame(width: 30, height: 30)
@@ -1111,18 +1106,18 @@ private struct ReplyHandoffFrame: View {
         [letter.ink, .iron, .ivory]
     }
 
+    /// The reply preview's toolbar is a picture of the composer that
+    /// Continue opens, so its icons are decorative (as on Android).
     private func composeIcon(_ icon: PantopusIcon) -> some View {
-        Button(action: {}) {
-            Icon(icon, size: 15, color: letter.ink.color)
-                .frame(width: 34, height: 34)
-                .background(Color.white.opacity(0.45))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 9)
-                        .stroke(letter.ink.color.opacity(0.13), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(.plain)
+        Icon(icon, size: 15, color: letter.ink.color)
+            .frame(width: 34, height: 34)
+            .background(Color.white.opacity(0.45))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(letter.ink.color.opacity(0.13), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .accessibilityHidden(true)
     }
 }
 

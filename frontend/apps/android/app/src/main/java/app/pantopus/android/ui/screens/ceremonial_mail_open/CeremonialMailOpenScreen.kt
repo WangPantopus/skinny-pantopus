@@ -841,14 +841,8 @@ private fun ReadingTopBar(
             color = letter.ink.color,
         )
         Spacer(Modifier.weight(1f))
-        IconChip(
-            icon = PantopusIcon.Share,
-            ink = letter.ink.color,
-            id = "ceremonialMailReading_share",
-            label = "Share",
-            onClick = {},
-        )
-        Spacer(modifier = Modifier.width(6.dp))
+        // S2-16 — Share did nothing; its place stays so the name doesn't move.
+        Spacer(modifier = Modifier.width(36.dp))
         IconChip(
             icon = PantopusIcon.Archive,
             ink = letter.ink.color,

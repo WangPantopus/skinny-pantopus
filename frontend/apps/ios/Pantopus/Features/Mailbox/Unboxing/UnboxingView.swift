@@ -407,10 +407,11 @@ private struct UnboxNav: View {
 
             Spacer()
 
-            HStack(spacing: 2) {
-                navIcon(.image, label: "Photo library")
-                navIcon(.moreHorizontal, label: "More actions")
-            }
+            // S2-16 — Photo library and More actions did nothing; this keeps
+            // their width so the title stays where it was.
+            Color.clear
+                .frame(width: 70, height: 34)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, Spacing.s2)
         .frame(height: 44)
@@ -418,16 +419,6 @@ private struct UnboxNav: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
-    }
-
-    private func navIcon(_ icon: PantopusIcon, label: String) -> some View {
-        Button {} label: {
-            Icon(icon, size: 18, color: Theme.Color.appTextStrong)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Theme.Color.appSurfaceSunken))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 }
 
@@ -508,12 +499,6 @@ private struct FiledActions: View {
                 action: onOpenDrawer
             )
             .accessibilityIdentifier("unboxing_viewInDrawer")
-            HStack(spacing: Spacing.s2) {
-                UbChip(icon: .package, label: "Open record") {}
-                UbChip(icon: .share, label: "Share") {}
-                UbChip(icon: .bell, label: "Reminders") {}
-                UbChip(icon: .archive, label: "Archive") {}
-            }
         }
     }
 }
