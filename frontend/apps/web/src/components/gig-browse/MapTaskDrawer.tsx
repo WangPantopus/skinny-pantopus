@@ -22,6 +22,8 @@ function getLocationLabel(task: MapTaskListItem): string {
 interface MapTaskDrawerProps {
   open: boolean;
   loading: boolean;
+  /** The map's last tasks read failed, so `tasks` is unknown rather than empty. */
+  error?: boolean;
   tasks: MapTaskListItem[];
   selectedGigId?: string | null;
   onClose: () => void;
@@ -32,6 +34,7 @@ interface MapTaskDrawerProps {
 export default function MapTaskDrawer({
   open,
   loading,
+  error = false,
   tasks,
   selectedGigId,
   onClose,
@@ -108,7 +111,11 @@ export default function MapTaskDrawer({
               </button>
             </div>
             <div className="mt-3 inline-flex items-center rounded-full bg-app-surface-sunken px-3 py-1 text-xs font-semibold text-app-text-secondary">
-              {loading ? 'Updating tasks…' : `${tasks.length} task${tasks.length === 1 ? '' : 's'} visible`}
+              {loading
+                ? 'Updating tasks…'
+                : error && tasks.length === 0
+                  ? 'Unavailable'
+                  : `${tasks.length} task${tasks.length === 1 ? '' : 's'} visible`}
             </div>
           </div>
 
@@ -126,6 +133,14 @@ export default function MapTaskDrawer({
                     <div className="mt-2 h-3 w-5/6 rounded bg-app-border-subtle" />
                   </div>
                 ))}
+              </div>
+            ) : error && tasks.length === 0 ? (
+              <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-surface-sunken px-6 text-center">
+                <div className="text-3xl" aria-hidden="true">🗺️</div>
+                <h3 className="mt-3 text-sm font-semibold text-app-text">Couldn&apos;t load tasks</h3>
+                <p className="mt-2 max-w-xs text-sm text-app-text-secondary">
+                  Use Try again on the map, or move the map to reload this area.
+                </p>
               </div>
             ) : tasks.length === 0 ? (
               <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-surface-sunken px-6 text-center">
