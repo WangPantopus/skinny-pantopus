@@ -2248,6 +2248,9 @@ public extension GigDetailViewModel {
         "gig:worker-ack",
         "gig:completion-update",
         "gig:payment-update",
+        // Question writes (ask, answer, pin, delete) emit this; the refetch
+        // reloads the questions, as on Android.
+        "gig:qa-update",
         "gig:rescheduled",
         // Urgent live fulfillment — `POST /:gigId/status` emits this into
         // the same room (`gigs.js:8770`); the refetch pulls the new rung
