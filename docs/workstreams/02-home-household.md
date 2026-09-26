@@ -2,6 +2,26 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 11:05Z (decision 1 open as #512; #503 green in batch 26)**
+
+- **Decision 1 open as PR [512](https://github.com/WangPantopus/skinny-pantopus/pull/512).** Branch `claude/stream2-mail-recoverable-delete`, head `8ef35a388` on master `207eeb510`, 2 commits.
+  - `fccb659f9` is the verified change (tree `cfd223bc0`).
+  - `8ef35a388` changes placement only, so #512 merges cleanly with #503; merge-tree against #503/#509/#511/#507/#508 shows 0 conflicts.
+  - CI is running; reported to Stream 1 for the next batch.
+- **Evidence:** bundle `20260926-stream2-mail-recoverable-delete-r1`, MANIFEST `33dbd142a3bebcc1b59f47414a5c7c3306ad1331f1721a6ed6170687d5fc8d76` (209 files).
+  - `CORRECTION.txt`: a hand-typed base SHA in the first seal was replaced with the git value.
+  - **Afters on all platforms:** API, purge (synthetic letters only), push gate, web (Chrome desktop and 390px), old APK on the new backend, new Android APK `4b0b36b9…` and iOS dylib `a692c770…`.
+  - On the apps: member B restores from the owner's delete/dismiss notices, and B's native Dismiss notifies the owner.
+- **Pre-existing, not changed here:**
+  - The Android "Your account changed" after a token refresh is covered by Stream 1 #509 (1A). I'll re-run the letter-after-refresh check after it merges.
+  - Member B's PATCH /view on Home letters answers 400 in this runtime (the isolated DB's member role lacks `mailbox.view`; same on master).
+  - Both apps label mail notices "Listing"; Stream 3 took it.
+  - The native Dismiss confirm copy is unchanged ("It moves out of your mailbox…").
+- **Heavy and devices:** heavy 10:41:57–10:51:14Z, then handed to Stream 3. iOS driver 10:54–10:57:21Z (6F914A30 shut down), then Stream 3.
+- **Runtime:** the decision 1 backend runs on 18146, the proxy 18142 points to 18146, the master backend is on 18143, and the certified backend on 18145. Synthetic `S2-D1-*` letters are retained in 64554.
+- **Still with the user:** the guest-letter verification finding (Proposal A, 08:10Z block).
+- **Next:** watch #503/#512 CI and the merges, re-run the Android letter-after-refresh check after #509, then continue the Stream 2 inventory.
+
 **Stream 2 — 2026-09-26 10:45Z (decision 1 in progress: backend + web verified; native building)**
 
 - **#503 (decision 4)** is fully green (CI OK) and in Stream 1's batch 26.
