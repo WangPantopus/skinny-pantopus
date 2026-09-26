@@ -2,7 +2,7 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
-**Stream 2 — 2026-09-26 02:20Z (adds to the 02:07Z block below)**
+**Stream 2 — 2026-09-26 02:19Z (adds to the 02:07Z block below)**
 
 - **#451 merged** in batch 17 (#452) at 02:08:04Z; master is `8a9a97757`.
 - **#453** (Home-links) is approved by Stream 1 at head `3f2b70b0b` for the next native batch, pending CI.
