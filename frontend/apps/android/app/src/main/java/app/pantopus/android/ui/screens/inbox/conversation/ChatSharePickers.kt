@@ -233,7 +233,7 @@ internal fun ChatShareGigPickerSheet(
                                             Text(it, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
                                         }
                                         gig.price?.let {
-                                            Text("$$${it.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("$${it.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
