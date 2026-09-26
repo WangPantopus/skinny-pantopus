@@ -30,6 +30,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import type { HubToday } from '@pantopus/types';
+import BallotTodaySection from '@/components/ballot/BallotTodaySection';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -175,8 +176,11 @@ export default function HubTodayPage() {
 
         {/* Empty */}
         {!loading && !error && (!today || today.display_mode === 'hidden') && (
-          <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
-            <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
+              <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+            </div>
+            <BallotTodaySection enabled={hasToken} />
           </div>
         )}
 
@@ -274,6 +278,9 @@ export default function HubTodayPage() {
                 </div>
               )}
             </div>
+
+            {/* Ballot P0 (ballot_p0): ballot week and "Moved this year?" */}
+            <BallotTodaySection enabled={hasToken} />
 
             {/* Alerts */}
             {today.alerts.length > 0 && (

@@ -991,6 +991,21 @@ public struct PlaceCivicRepresentative: Decodable, Sendable, Hashable {
 public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     public let districts: [PlaceCivicDistrict]
     public let representatives: [PlaceCivicRepresentative]
+    /// Ballot P0 (`ballot_p0`): the governments view's data, all year; nil
+    /// when not sent.
+    public let governments: BallotGovernments?
+
+    private enum CodingKeys: String, CodingKey {
+        case districts, representatives, governments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        districts = try c.decode([PlaceCivicDistrict].self, forKey: .districts)
+        representatives = try c.decode([PlaceCivicRepresentative].self, forKey: .representatives)
+        // A malformed Ballot field never blanks the districts.
+        governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
+    }
 }
 
 public enum BallotRaceType: String, Sendable, Hashable {
@@ -1037,11 +1052,23 @@ public struct PlaceCivicElectionData: Decodable, Sendable, Hashable {
     public let pollingPlace: PlacePollingPlace?
     /// Ballot races; may be empty (summary only) on the dashboard.
     public let ballot: [PlaceBallotRace]
+    /// Ballot P0 card fields (`ballot_p0` flag); nil when not sent.
+    public let ballotCard: BallotSummary?
 
     private enum CodingKeys: String, CodingKey {
         case name, date, ballot
         case daysUntil = "days_until"
         case pollingPlace = "polling_place"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        date = try c.decode(String.self, forKey: .date)
+        daysUntil = try c.decode(Int.self, forKey: .daysUntil)
+        pollingPlace = try c.decodeIfPresent(PlacePollingPlace.self, forKey: .pollingPlace)
+        ballot = try c.decode([PlaceBallotRace].self, forKey: .ballot)
+        ballotCard = BallotSummary.decodeIfPresent(from: decoder, fallbackTitle: "Your ballot")
     }
 }
 

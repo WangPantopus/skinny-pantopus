@@ -18,6 +18,9 @@ import SwiftUI
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    /// Takes the Ballot P0 card's "Open your ballot" to the Place card;
+    /// without it the button is left out.
+    var onOpenBallot: (() -> Void)?
 
     /// Order (matches Android): what it is like now, what to do with it,
     /// what recurs at this address, then air, alerts and sun. The calendar
@@ -32,6 +35,16 @@ struct PlaceTodayDetailContent: View {
                 } else {
                     vm.fallbackCard(weather)
                 }
+            }
+
+            // Ballot P0 (ballot_p0): ballot week and "Moved this year?",
+            // only when the server says either applies.
+            if let election = vm.section(.civicElection, in: intel),
+               election.status == .ready,
+               let card = election.civicElection?.ballotCard,
+               BallotTodayCard.applies(card) {
+                BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
+                    .padding(.top, Spacing.s4)
             }
 
             // Verdicts, not readings. Silent when there is nothing to

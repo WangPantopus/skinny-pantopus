@@ -333,6 +333,34 @@ body {
   100% { box-shadow: 0 0 0 3px rgba(13,148,136,.3), 0 2px 8px rgba(0,0,0,.2); }
 }
 
+/* Ballot — the peel story (Board: The peel). One government is 1.2 s: in
+   by 0.18 s, held to 1.02 s, out by 1.2 s — the board's 12 s cycle
+   (1.5%, 8.5%, 10%) per step. Callers set each step's delay and play it
+   once; the final caption then holds. */
+@keyframes ballotCap {
+  0% { opacity: 0; transform: translateY(8px); }
+  15%, 85% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes ballotCapIn {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes ballotHi {
+  0% { opacity: 0; }
+  15%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes ballotLift {
+  0% { transform: translateY(0); }
+  15%, 85% { transform: translateY(-8px); }
+  100% { transform: translateY(0); }
+}
+@keyframes ballotBar {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
 /* ── Reduced motion: disable custom animations ───────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

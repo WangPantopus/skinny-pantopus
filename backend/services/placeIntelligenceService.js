@@ -45,7 +45,7 @@ const exemptionCheckService = require('./exemptionCheckService');
 const realRentService = require('./realRentService');
 
 const HOME_SELECT =
-  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type';
+  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type, move_in_date';
 
 // k-anon density bucket labels (mirror @pantopus/types PLACE_DENSITY_LABELS).
 const DENSITY_LABELS = {
@@ -911,8 +911,8 @@ const COMPOSER_SECTIONS = [
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId }) => composeRealRent(home, tier, userId) },
-  { ids: ['civic_districts'], run: ({ home }) => placeSectionAdapters.composeCivicDistricts(home) },
-  { ids: ['civic_election'], run: ({ home }) => placeSectionAdapters.composeCivicElection(home) },
+  { ids: ['civic_districts'], run: ({ home, userId }) => placeSectionAdapters.composeCivicDistricts(home, { userId }) },
+  { ids: ['civic_election'], run: ({ home, userId }) => placeSectionAdapters.composeCivicElection(home, { userId }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──

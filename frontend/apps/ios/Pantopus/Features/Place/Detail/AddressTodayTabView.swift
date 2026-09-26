@@ -56,7 +56,8 @@ struct AddressTodayTabView: View {
         if !resolved {
             PlaceDetailSkeleton()
         } else if let detail {
-            AddressTodayLoaded(viewModel: detail)
+            // The Ballot P0 card's "Open your ballot" lands on the Place tab.
+            AddressTodayLoaded(viewModel: detail) { openBallot() }
         } else if loadFailed {
             couldNotLoad
         } else {
@@ -138,12 +139,24 @@ struct AddressTodayTabView: View {
         }
         resolved = true
     }
+
+    /// The ballot card is on this home's Place dashboard. Selecting the
+    /// Place tab alone can land on its hub or a detail page, so open the
+    /// dashboard through the place link, as the tab's own stack does.
+    private func openBallot() {
+        guard let homeId else {
+            rootTabs.selected = .place
+            return
+        }
+        DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
+    }
 }
 
 /// The loaded Today content, driven by the same view model as the Place
 /// detail page so the calendar's pickup-day picker keeps working.
 private struct AddressTodayLoaded: View {
     @State var viewModel: PlaceDetailViewModel
+    let onOpenPlace: () -> Void
 
     var body: some View {
         Group {
@@ -153,7 +166,7 @@ private struct AddressTodayLoaded: View {
             case let .loaded(intel):
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        PlaceTodayDetailContent(intel: intel, vm: viewModel)
+                        PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onOpenPlace)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, Spacing.s10)

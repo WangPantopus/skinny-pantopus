@@ -21,6 +21,9 @@ import { Compass, ChevronRight, ShieldCheck } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import JustMovedCard from './JustMovedCard';
+import Overline from '@/components/archetypes/primitives/Overline';
+import BallotCard, { ballotCardData } from '@/components/ballot/BallotCard';
+import GovernmentsSheet from '@/components/ballot/GovernmentsSheet';
 import { derivePulse, isUnavailableSection, renderSection, renderVerifyLocked, sectionTitle } from './presentation';
 import { IdentityGroup } from './PlaceIdentitySection';
 import VerifyPromptSheet from './VerifyPromptSheet';
@@ -66,6 +69,17 @@ export default function PlaceDashboardView({
 }: PlaceDashboardViewProps) {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const openVerify = () => setVerifyOpen(true);
+  const [governmentsOpen, setGovernmentsOpen] = useState(false);
+
+  // Ballot P0: when the server sends the "Your ballot" card (ballot_p0),
+  // it leads the page under "This season" and leaves the civic group.
+  const electionSection = intelligence.groups.flatMap((g) => g.sections).find((s) => s.id === 'civic_election');
+  const ballot = electionSection && electionSection.status === 'ready' ? ballotCardData(electionSection.data) : null;
+  const groups = ballot
+    ? intelligence.groups
+      .map((g) => ({ ...g, sections: g.sections.filter((s) => s.id !== 'civic_election') }))
+      .filter((g) => g.sections.length > 0)
+    : intelligence.groups;
 
   const pulse = derivePulse(intelligence);
   // The first-week card ticks "Set your pickup day" itself once the
@@ -125,7 +139,17 @@ export default function PlaceDashboardView({
       </div>
 
       <div className="mt-6">
-        {intelligence.groups.map((group, gi) => {
+        {ballot ? (
+          <div className="mb-6">
+            <Overline as="div" className="mb-4 tracking-[0.08em]">This season</Overline>
+            <BallotCard
+              data={ballot}
+              asOf={electionSection?.as_of ?? null}
+              onOpenGovernments={ballot.governments ? () => setGovernmentsOpen(true) : undefined}
+            />
+          </div>
+        ) : null}
+        {groups.map((group, gi) => {
           const slug = GROUP_TO_SLUG[group.group];
           const onOpen = slug && onOpenSection ? () => onOpenSection(slug) : undefined;
           return (
@@ -198,6 +222,15 @@ export default function PlaceDashboardView({
           onClose={() => setVerifyOpen(false)}
           homeId={homeId}
           address={intelligence.place.label}
+        />
+      ) : null}
+
+      {ballot?.governments ? (
+        <GovernmentsSheet
+          open={governmentsOpen}
+          onClose={() => setGovernmentsOpen(false)}
+          governments={ballot.governments}
+          address={intelligence.place.line1 || intelligence.place.label}
         />
       ) : null}
     </div>

@@ -12,6 +12,12 @@ import SwiftUI
 struct PlaceCivicDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    @State private var showGovernments = false
+
+    /// Ballot P0 sends the governments all year (plan §11 item 7).
+    private var governments: BallotGovernments? {
+        vm.section(.civicDistricts, in: intel)?.civicDistricts?.governments
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,6 +26,10 @@ struct PlaceCivicDetailContent: View {
                 if let data = districts.civicDistricts, !data.districts.isEmpty {
                     DistrictsCard(districts: data.districts)
                     PlaceSourceNote(name: "District boundaries · public GIS records", asOf: "current")
+                    if let governments = data.governments {
+                        GovernmentsRow(governments: governments) { showGovernments = true }
+                            .padding(.top, 12)
+                    }
                     if !data.representatives.isEmpty {
                         PlaceDetailSectionLabel(text: "Your representatives")
                         VStack(spacing: 8) {
@@ -36,7 +46,11 @@ struct PlaceCivicDetailContent: View {
 
             if let election = vm.section(.civicElection, in: intel) {
                 PlaceDetailSectionLabel(text: "Election")
-                if let data = election.civicElection, election.status == .ready || election.status == .stale {
+                // With Ballot on, the section keeps a past election for the
+                // week after it (for the Place card's results link); it is
+                // not an upcoming one.
+                if let data = election.civicElection, data.ballotCard?.phase != .after,
+                   election.status == .ready || election.status == .stale {
                     ElectionCard(data: data)
                     PlaceSourceNote(name: "Official county elections", asOf: nil)
                 } else {
@@ -44,6 +58,47 @@ struct PlaceCivicDetailContent: View {
                 }
             }
         }
+        .sheet(isPresented: $showGovernments) {
+            if let governments {
+                BallotGovernmentsView(governments: governments, address: intel.place.line1) { showGovernments = false }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            }
+        }
+    }
+}
+
+/// "Your governments" (Board: P0 Civic page): opens the governments view
+/// all year, not only while the election card is up. Present only when
+/// Ballot sends the governments for this address.
+private struct GovernmentsRow: View {
+    let governments: BallotGovernments
+    let onOpen: () -> Void
+
+    private var count: String {
+        governments.countIsMinimum ? "at least \(governments.count)" : "\(governments.count)"
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            PlaceDetailCard(padding: 16) {
+                HStack(spacing: 12) {
+                    PlaceIconTile(icon: .layers, tone: .home, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Your governments")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.Color.appText)
+                        Text("This address sits inside \(count).")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
+                    Spacer(minLength: 0)
+                    PlaceChevron()
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("place.civic.governments")
     }
 }
 
@@ -159,7 +214,7 @@ private struct ElectionCard: View {
                         Text(data.name)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
-                        PlaceChip(model: PlaceChipModel(tone: .sky, text: "\(data.daysUntil) days away"))
+                        PlaceChip(model: PlaceChipModel(tone: .sky, text: daysAway))
                     }
                     Spacer(minLength: 0)
                 }
@@ -179,16 +234,38 @@ private struct ElectionCard: View {
         }
     }
 
+    /// The election date is a calendar day ("2026-11-03", or UTC midnight),
+    /// which `parseISO` rejects or US zones shift to the day before, so it
+    /// is read and shown in UTC, as `PlacePresentation.fmtYearMonth` does.
+    private static let utc = TimeZone(identifier: "UTC") ?? .current
+
+    private var electionDay: Date? {
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = Self.utc
+        parse.dateFormat = "yyyy-MM-dd"
+        return parse.date(from: String(data.date.prefix(10)))
+    }
+
     private var monthAbbrev: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
+        guard let d = electionDay else { return "" }
         let f = DateFormatter()
+        f.timeZone = Self.utc
         f.dateFormat = "MMM"
         return f.string(from: d).uppercased()
     }
 
     private var dayNumber: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
-        return "\(Calendar.current.component(.day, from: d))"
+        guard let d = electionDay else { return "" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = Self.utc
+        return "\(calendar.component(.day, from: d))"
+    }
+
+    /// "Today" on Election Day and "1 day away" the day before, not "0 days".
+    private var daysAway: String {
+        if data.daysUntil <= 0 { return "Today" }
+        return data.daysUntil == 1 ? "1 day away" : "\(data.daysUntil) days away"
     }
 }
 

@@ -57,6 +57,8 @@ import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
+import BallotTeaser from '@/components/ballot/BallotTeaser';
+import { ballotTeaserData } from '@/components/ballot/BallotCard';
 
 
 // ── Brand lockup + static region pill ───────────────────────
@@ -401,8 +403,12 @@ export function PreviewBody({ preview, onWall }: { preview: PlacePreview; onWall
   const aha = preview.aha;
   const ahaSection = aha?.section_id ? sections.find((s) => s.id === aha.section_id) : undefined;
 
+  // Ballot P0: the teaser carries the election, so the Civic group leaves
+  // out its "Next election" row, as the Place dashboard does.
+  const teaser = ballotTeaserData(preview.ballot_teaser);
+  const shown = teaser ? sections.filter((s) => s.id !== 'civic_election') : sections;
   const groups = GROUP_ORDER
-    .map((g) => ({ g, items: sections.filter((s) => s.group === g) }))
+    .map((g) => ({ g, items: shown.filter((s) => s.group === g) }))
     .filter((x) => x.items.length > 0);
 
   return (
@@ -417,6 +423,16 @@ export function PreviewBody({ preview, onWall }: { preview: PlacePreview; onWall
           onFollowUp={onWall}
           icon={aha.section_id ? AHA_ICON[aha.section_id] : undefined}
           source={ahaSection?.source ?? null}
+          className="mb-6"
+        />
+      ) : null}
+
+      {/* Ballot P0 (ballot_p0): the election card under the aha, per the
+          guide §5.8 — the aha ranking itself is unchanged. */}
+      {teaser ? (
+        <BallotTeaser
+          teaser={teaser}
+          address={preview.place?.address || 'This address'}
           className="mb-6"
         />
       ) : null}

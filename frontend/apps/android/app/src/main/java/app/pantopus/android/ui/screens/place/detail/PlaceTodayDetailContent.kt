@@ -45,20 +45,28 @@ import app.pantopus.android.data.api.models.place.PlaceWeatherAlert
 import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.models.place.WeatherConditionCode
+import app.pantopus.android.ui.screens.ballot.BallotPlacement
+import app.pantopus.android.ui.screens.ballot.BallotTodayCard
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 import kotlin.math.roundToInt
 
 /** The row shows at most five tiles; the rest stay in the group page. */
 private const val GOOD_DAY_TILE_CAP = 5
 
+/**
+ * [onOpenBallot] takes the Ballot P0 card's "Open your ballot" to the
+ * Place card; without it the button is left out.
+ */
 @Composable
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions? = null,
+    onOpenBallot: (() -> Unit)? = null,
 ) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
         PlaceDetailSectionLabel("Weather")
@@ -69,6 +77,11 @@ fun PlaceTodayDetailContent(
         } else {
             PlaceDetailFallbackCard(env)
         }
+    }
+    // Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
+    // the server says either applies.
+    BallotPlacement.today(intel)?.let { card ->
+        BallotTodayCard(card = card, onOpenBallot = onOpenBallot, modifier = Modifier.padding(top = Spacing.s4))
     }
     intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
         val data = env.goodDayTo

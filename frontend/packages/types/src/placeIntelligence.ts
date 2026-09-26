@@ -668,6 +668,8 @@ export interface PlaceCivicRepresentative {
 export interface PlaceCivicDistrictsData {
   districts: PlaceCivicDistrict[];
   representatives: PlaceCivicRepresentative[];
+  /** Ballot P0 (`ballot_p0`): the governments view's data, all year. */
+  governments?: BallotGovernments | null;
 }
 
 export interface PlaceBallotRace {
@@ -690,7 +692,7 @@ export interface PlacePollingPlace {
  * Launch layer #8 (seasonal half) — Civic election.
  * Off-season this section is `unavailable` while districts stay ready.
  */
-export interface PlaceCivicElectionData {
+export interface PlaceCivicElectionData extends BallotSummaryFields {
   name: string;
   /** ISO 8601. */
   date: string;
@@ -698,6 +700,132 @@ export interface PlaceCivicElectionData {
   polling_place: PlacePollingPlace | null;
   /** Ballot races; may be empty (summary only) on the dashboard. */
   ballot: PlaceBallotRace[];
+}
+
+// ── Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2–5.3) ──
+// Optional card fields the server adds to `civic_election` when the
+// `ballot_p0` flag is on for the viewer. Every word is composed on the
+// server; clients lay it out and never interpret provider data.
+
+/** `supported`: person-checked dates and links; `links_only`: the election date and an official link. */
+export type BallotCoverage = 'supported' | 'links_only';
+export type BallotPhase = 'far' | 'in_season' | 'election_day' | 'after';
+export type BallotGovernmentLevel = 'federal' | 'state' | 'county' | 'school' | 'city';
+
+export interface BallotDeadline {
+  key: string;
+  label: string;
+  /** Calendar date in the state's timezone, YYYY-MM-DD. */
+  date: string;
+  /** "Oct 16". */
+  month_day: string;
+  time_local: string | null;
+  timezone: string;
+  days_until: number;
+  needs_action: boolean;
+  /** Drawn as a marker on the deadline timeline. */
+  timeline: boolean;
+  cutoff: string;
+  detail: string | null;
+  source: string;
+  source_url: string;
+  teaser_lead?: string | null;
+  teaser_detail?: string | null;
+}
+
+export interface BallotOfficialLink {
+  key: string;
+  label: string;
+  owner: string;
+  url: string;
+}
+
+export interface BallotGovernment {
+  level: BallotGovernmentLevel;
+  geoid?: string;
+  name: string;
+  /** true only where certain; null = not known (never "nothing this year"). */
+  on_ballot?: boolean | null;
+}
+
+export interface BallotGovernments {
+  count: number;
+  /** Always true in P0: special districts are not counted yet. */
+  count_is_minimum: boolean;
+  items: BallotGovernment[];
+  summary: string;
+  caveat: string;
+  source_line: string;
+}
+
+export interface BallotPrimaryAction {
+  kind: 'governments' | 'link';
+  label: string;
+  url?: string;
+}
+
+export interface BallotWeek {
+  show: boolean;
+  overline?: string;
+  title?: string;
+  body?: string;
+}
+
+export interface BallotMoverPrompt {
+  text: string;
+  days_left: number;
+  url: string | null;
+}
+
+export interface BallotSummaryFields {
+  election_id?: string;
+  coverage?: BallotCoverage;
+  phase?: BallotPhase;
+  /** After Election Day, where certification dates are checked: counting, then certified. */
+  after_stage?: 'counting' | 'certified' | null;
+  state?: string;
+  state_name?: string;
+  /** The state's local date the summary was composed for. */
+  today?: string;
+  title?: string;
+  subtitle?: string;
+  chip?: string | null;
+  line?: string | null;
+  note?: string | null;
+  how_it_works?: string | null;
+  voting_method?: string | null;
+  deadlines?: BallotDeadline[];
+  election_day_notice?: { lead: string; detail: string } | null;
+  primary_action?: BallotPrimaryAction | null;
+  official_links?: BallotOfficialLink[];
+  governments?: BallotGovernments | null;
+  ballot_week?: BallotWeek;
+  mover_prompt?: BallotMoverPrompt | null;
+  source_line?: string;
+  checked_at?: string | null;
+}
+
+/** civic_election data with the Ballot P0 fields (all optional). */
+export type PlaceBallotElectionData = PlaceCivicElectionData & BallotSummaryFields;
+
+/** The anonymous /start teaser (`ballot_teaser` on the public preview). */
+export interface BallotTeaser {
+  coverage: BallotCoverage;
+  state: string;
+  election: { id: string; name: string; date: string; days_until: number };
+  headline: string;
+  note: string | null;
+  next_deadline: { key: string; lead: string; days_left: number; detail: string | null } | null;
+  governments: {
+    count: number;
+    count_is_minimum: boolean;
+    items: { level: BallotGovernmentLevel; name: string }[];
+    summary: string;
+    caveat: string;
+    source_line: string;
+  } | null;
+  primary_action: BallotPrimaryAction | null;
+  source_line: string;
 }
 
 // ════════════════════════════════════════════════════════════

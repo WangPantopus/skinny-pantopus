@@ -97,6 +97,20 @@ rebuild, no parallel tables, preserve screen designs, propose design changes bef
 
 Bill paying by the keeper · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
 
+## Ballot (added September 24)
+
+Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation-plan-2026-09-24.md). Visual source: the [Ballot canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq). P0 is the October edition of sections 2–3 above (voter-registration headline, election dates, voter step), not a parallel track. Everything stays behind `ballot_p0`, which is off.
+
+- [ ] Founder approves the "Proposed, September 24" canvas boards and the pilot (plan §11).
+- [x] P0 backend: reference data, exact-point governments, `civic_election` extension, `/start` teaser, flag row. On branch `claude/blissful-dijkstra-n8r31h`, not merged. Supported states: Washington plus California, Colorado, Hawaii, Nevada, Oregon, Utah and Vermont (plan §5.1.1). Every other state is links-only.
+- [x] P0 web: Place "Your ballot" card, governments view with the peel story, deadline timeline, `/start` teaser, Today card, "Moved this year?" line. On the branch; screenshots checked against the boards.
+- [ ] P0 iOS and Android: the same card, view and Today card. On the branch; PR CI (run 1518) compiled both and passed their unit, snapshot, simulator and emulator tests. They still need a device pass.
+- [x] After the election (plan §11 item 7, approved Sep 24): the card stays through certification with official results links, Washington's 2027 general is in the data, and the Civic page has the year-round "Your governments" row. Certification dates for six states need release check 1; Hawaii and Vermont keep the 7-day card.
+- [ ] Release checks: a person opens every source and link, now for eight states (plan §5.1.1 lists what to confirm first); real addresses in each supported state and one links-only state through the real API; device passes.
+- [ ] Next states, if wanted: the largest in-person states (Texas, Florida, New York, Pennsylvania and others). They need one more wording pattern ("polls close at 7 p.m.") but no app changes.
+- [ ] P0.5: one reminder opt-in (at most three per election) and the share card, once the push copy is approved.
+- [ ] P1 only if Washington voterInfo coverage checks out against official sample ballots.
+
 ## Parallel, unchanged
 
 The three verification workstreams on the 80-row acceptance backlog (`docs/REMAINING_WORK_2026-09-11.md`) continue; this checklist adds no scope to them.

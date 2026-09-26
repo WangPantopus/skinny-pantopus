@@ -830,6 +830,12 @@ data class PlaceCivicRepresentative(
 data class PlaceCivicDistrictsData(
     val districts: List<PlaceCivicDistrict> = emptyList(),
     val representatives: List<PlaceCivicRepresentative> = emptyList(),
+    /**
+     * Ballot P0 (`ballot_p0`): the governments view's data, all year; null
+     * when not sent. Read separately by [BallotGovernments.decodeIn] in
+     * `PlaceJsonAdapters`, so a malformed field never fails this section.
+     */
+    @Transient val governments: BallotGovernments? = null,
 )
 
 enum class BallotRaceType {
@@ -872,6 +878,12 @@ data class PlaceCivicElectionData(
     @Json(name = "polling_place") val pollingPlace: PlacePollingPlace? = null,
     /** Ballot races; may be empty (summary only) on the dashboard. */
     val ballot: List<PlaceBallotRace> = emptyList(),
+    /**
+     * Ballot P0 card fields (`ballot_p0` flag); null when not sent. Read
+     * separately by [BallotSummary.decode] in `PlaceJsonAdapters`, so a
+     * malformed ballot field never fails this section.
+     */
+    @Transient val ballotCard: BallotSummary? = null,
 )
 
 // ─── Band-B payload (Your Home) ──────────────────────────────

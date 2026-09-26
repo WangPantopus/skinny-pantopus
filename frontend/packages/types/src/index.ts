@@ -239,6 +239,19 @@ export type {
   PlaceAddressRef,
   PlaceGroupBlock,
   PlaceIntelligence,
+  BallotCoverage,
+  BallotPhase,
+  BallotGovernmentLevel,
+  BallotDeadline,
+  BallotOfficialLink,
+  BallotGovernment,
+  BallotGovernments,
+  BallotPrimaryAction,
+  BallotWeek,
+  BallotMoverPrompt,
+  BallotSummaryFields,
+  PlaceBallotElectionData,
+  BallotTeaser,
 } from './placeIntelligence';
 
 export {

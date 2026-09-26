@@ -2587,7 +2587,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 // ── Wedge v2 D2: Place · Today · Nearby · Mail ──────────
                 composable(PantopusRoute.Today.path) {
-                    TodayTabScreen(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) })
+                    TodayTabScreen(
+                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onOpenPlace = { homeId ->
+                            // The ballot card is on this home's dashboard; the Place
+                            // tab alone can come back on its hub or a detail page.
+                            navController.navigateToRootTab(PantopusRoute.Place)
+                            val top = navController.currentBackStackEntry
+                            val onDashboard =
+                                top?.destination?.route == ChildRoutes.PLACE_DASHBOARD &&
+                                    top.arguments?.getString(PLACE_DASHBOARD_HOME_ID_KEY) == homeId
+                            if (!onDashboard) navController.navigate(ChildRoutes.placeDashboard(homeId))
+                        },
+                    )
                 }
                 composable(PantopusRoute.Nearby.path) {
                     NearbyScreen(

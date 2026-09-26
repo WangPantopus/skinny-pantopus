@@ -2,6 +2,7 @@
 
 Status: build specification, September 23, 2026. Nothing in it is built yet.
 Review added September 23: [product, data and build-guide critique](ballot-product-review-2026-09-23.md). Appendix D records proposed amendments and unresolved contradictions; the research request does not authorize implementation, and the original specification below is preserved for comparison.
+Implementation plan added September 24: [corrected contracts, canvas-matching rules and build order](ballot-implementation-plan-2026-09-24.md). Where the plan and this guide disagree, the plan wins.
 Visual source of truth: the [Pantopus Ballot design canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq) (20 boards; board names are quoted in this guide as **[Board: Name]**).
 Owner of product decisions: the founder. Section 16 lists the open decisions and the default this guide builds until one is made.
 

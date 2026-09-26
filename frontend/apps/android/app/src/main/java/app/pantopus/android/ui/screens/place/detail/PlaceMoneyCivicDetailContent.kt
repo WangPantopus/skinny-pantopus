@@ -29,11 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.AssessmentStance
+import app.pantopus.android.data.api.models.place.BallotGovernments
+import app.pantopus.android.data.api.models.place.BallotPhase
 import app.pantopus.android.data.api.models.place.BenchmarkComparison
 import app.pantopus.android.data.api.models.place.CivicLevel
 import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
@@ -51,16 +55,20 @@ import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.RecordWatch
 import app.pantopus.android.data.api.models.place.RecordWatchEvaluation
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.place.PlacePresentation
+import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
+import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -567,12 +575,16 @@ private fun RentBandCard(data: PlaceRentBandData) {
 
 @Composable
 fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
+    var governmentsOpen by remember { mutableStateOf(false) }
     intel.section(PlaceSectionId.CIVIC_DISTRICTS)?.let { env ->
         val data = env.civicDistricts
         PlaceDetailSectionLabel("Your districts")
         if (data != null && data.districts.isNotEmpty()) {
             DistrictsCard(data.districts)
             PlaceSourceNote("District boundaries · public GIS records", "current")
+            data.governments?.let { governments ->
+                GovernmentsRow(governments, onOpen = { governmentsOpen = true }, modifier = Modifier.padding(top = Spacing.s3))
+            }
             if (data.representatives.isNotEmpty()) {
                 PlaceDetailSectionLabel("Your representatives")
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { data.representatives.forEach { RepRow(it) } }
@@ -584,7 +596,9 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
     }
     intel.section(PlaceSectionId.CIVIC_ELECTION)?.let { env ->
         PlaceDetailSectionLabel("Election")
-        val data = env.civicElection
+        // With Ballot on, the section keeps a past election for the week
+        // after it (for the Place card's results link); it is not upcoming.
+        val data = env.civicElection?.takeIf { it.ballotCard?.phase != BallotPhase.AFTER }
         if (data != null && env.isLive()) {
             ElectionCard(data)
             PlaceSourceNote("Official county elections")
@@ -601,6 +615,42 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
                 }
             }
         }
+    }
+    val governments = intel.section(PlaceSectionId.CIVIC_DISTRICTS)?.civicDistricts?.governments
+    if (governmentsOpen && governments != null) {
+        BallotGovernmentsSheet(governments = governments, address = intel.place.line1, onDismiss = { governmentsOpen = false })
+    }
+}
+
+/**
+ * "Your governments" (Board: P0 Civic page): opens the governments view all
+ * year, not only while the election card is up. Present only when Ballot
+ * sends the governments for this address.
+ */
+@Composable
+private fun GovernmentsRow(
+    governments: BallotGovernments,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val count = if (governments.countIsMinimum) "at least ${governments.count}" else "${governments.count}"
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .placeCard()
+                .clickable(role = Role.Button, onClick = onOpen)
+                .padding(Spacing.s4)
+                .testTag("place.civic.governments"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlaceIconTile(PantopusIcon.Layers, PlaceTileTone.HOME, 40.dp)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Your governments", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text("This address sits inside $count.", fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
+        }
+        PlaceChevron()
     }
 }
 
@@ -720,7 +770,7 @@ private fun ElectionCard(data: PlaceCivicElectionData) {
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(data.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                    PlaceChip(PlaceChipModel(PlaceChipTone.SKY, "${data.daysUntil} days away"))
+                    PlaceChip(PlaceChipModel(PlaceChipTone.SKY, daysAway(data.daysUntil)))
                 }
             }
         }
@@ -756,3 +806,11 @@ private fun levelLabel(level: CivicLevel): String =
 private fun monthAbbrev(iso: String): String = runCatching { java.time.LocalDate.parse(iso.take(10)).month.name.take(3) }.getOrDefault("")
 
 private fun dayNumber(iso: String): String = runCatching { java.time.LocalDate.parse(iso.take(10)).dayOfMonth.toString() }.getOrDefault("")
+
+/** "Today" on Election Day and "1 day away" the day before, not "0 days". */
+private fun daysAway(daysUntil: Int): String =
+    when {
+        daysUntil <= 0 -> "Today"
+        daysUntil == 1 -> "1 day away"
+        else -> "$daysUntil days away"
+    }
