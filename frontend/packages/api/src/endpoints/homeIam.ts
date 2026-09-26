@@ -105,9 +105,10 @@ export interface ScopedGrant {
  * Get members of a home (occupants + pending invites).
  * Alias so callers can use `api.homeIam.getHomeMembers(id)` alongside
  * other IAM helpers without reaching into homeProfile.
+ * The route answers `{ occupants, pendingInvites }` (homeDetailService.members).
  */
-export async function getHomeMembers(homeId: string): Promise<{ members: any[] }> {
-  return get<{ members: any[] }>(`/api/homes/${homeId}/occupants`);
+export async function getHomeMembers(homeId: string): Promise<{ occupants: any[]; pendingInvites?: any[] }> {
+  return get<{ occupants: any[]; pendingInvites?: any[] }>(`/api/homes/${homeId}/occupants`);
 }
 
 // ---- My Access ----
