@@ -1,6 +1,27 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T11:05Z (batch 25 merged; batch 26 #513 queued; user decisions 1A–6A all in PRs)
+## CURRENT RESUME POINT — 2026-09-26T11:48Z (batch 26 merged; batch 27 #517 queued)
+
+- **Integration (Stream 1 queue):**
+  - Master is `9ac4a7cdf`. Batch 26 [#513](https://github.com/WangPantopus/skinny-pantopus/pull/513) merged at 11:37:01Z. It carried #498, #500, #501, #504, #505 and #506 (S1, decisions 2A/5A/6A), #502, #507 and #508 (S3), and #503 (S2 decision 4).
+  - **Batch 27 [#517](https://github.com/WangPantopus/skinny-pantopus/pull/517)**, runner watching. Order: #509 (S1 1A) → #510 (S1 3A/4A) → #511 (S1 iOS offer send, stacked on #510) → #514 (S1 web Discover SSR) → #512 (S2 decision 1, recoverable delete + migration `20260926100000` + nightly purge) → #516 (S3 web chat scroll/media).
+    - Tip `a6c6b202a`.
+    - Every head is green on its exact SHA. All six bundles were re-verified; #512's placement-only commit on top of its bundle's recorded head was reviewed. The chain is clean.
+  - **Batch 28 candidates:**
+    - #515 (S3 native chat media; CI running; seal `a4aba3a9…`);
+    - S1 Manage Train "Couldn't load signups" (branch `f19e0ad38`; Android after done, iOS after pending the iOS driver).
+- **Stream 1 new:**
+  - **#514:** `/app/discover` and `/app/map` loaded Leaflet in the server render ("window is not defined" on every load), because the `components/discover` barrel re-exported the `ssr:false` map.
+  - **Manage Train (both apps):** a failed signups read said "No signups yet". It now says "Couldn't load signups".
+  - **Candidates, low:** iOS Manage Train says "All slots are filled!" for a train with no dates; web Tasks map pins coordinate-less remote tasks at 0,0 (the drawer lists them as Remote by design).
+- **Proposal for the user (Stream 1):** native accept-a-counter (web has Accept). Asked at 11:05Z; no answer yet.
+- **Runtime:** the Stream 1 worktree was merged to master (`538076509`) plus #514's file. The backend was restarted with SIGINT (pid 31757).
+- **Slots:**
+  - Heavy is free (Stream 1 released it at 11:45:44Z).
+  - iOS driver: Stream 3 (Beacon afters on 0AE16FA0), then Stream 1 at about 12:05Z for the Manage Train iOS after.
+  - Stream 1 holds emulator-5558 (slot 3).
+
+## Resume point history — 2026-09-26T11:05Z (batch 25 merged; batch 26 #513 queued; user decisions 1A–6A all in PRs)
 
 - **Integration (Stream 1 queue):**
   - Master is `207eeb510`. Batch 25 [#499](https://github.com/WangPantopus/skinny-pantopus/pull/499) merged at 09:58:07Z. It carried #490, #492, #495 and #496 (S1), #494 and #491 (S3), #493 (S2 R06) and #497 (S3).
