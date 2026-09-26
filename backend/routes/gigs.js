@@ -426,6 +426,15 @@ function redactGigTracking(gig, canViewPrivateWork = false) {
   return safe;
 }
 
+// A saved Gig row sent back by a write such as /start. Its raw PostGIS columns
+// are EWKB hex strings, which the apps decode as location objects and reject;
+// drop them (as the create reply does) with the tracking fields above.
+function savedGigReply(gig, canViewPrivateWork = false) {
+  const safe = redactGigTracking(gig, canViewPrivateWork);
+  if (safe) for (const key of ['exact_location', 'approx_location', 'pickup_location', 'dropoff_location']) delete safe[key];
+  return safe;
+}
+
 function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
   if (!gig) return null;
   const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
@@ -5322,7 +5331,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     if (gig.status !== 'assigned') {
       const { saved, error } = await recoverSavedStart();
       if (error) return res.status(503).json({ error: 'Unable to verify the current task' });
-      if (saved) return res.json({ gig: saved, reused: true });
+      if (saved) return res.json({ gig: savedGigReply(saved, true), reused: true });
       return res
         .status(400)
         .json({ error: `Gig must be assigned to start (current: ${gig.status})` });
@@ -5354,7 +5363,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
       // reporting a failure for work the same worker has already started.
       const { saved, error } = await recoverSavedStart();
       if (error) return res.status(503).json({ error: 'Unable to verify the current task' });
-      if (saved) return res.json({ gig: saved, reused: true });
+      if (saved) return res.json({ gig: savedGigReply(saved, true), reused: true });
       logger.error('Error starting gig', { error: updateError?.message || 'Payment snapshot changed', gigId, userId });
       if (updateError?.code === '23514') {
         return res.status(409).json({ error: 'Payment authorization changed. Please check its status before starting.', code: 'payer_authorization_required' });
@@ -5391,7 +5400,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     }
 
     emitGigUpdate(req, gigId, 'status-change');
-    return res.json({ gig: updatedGig });
+    return res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
     logger.error('Start gig error', { error: err.message });
     return res.status(500).json({ error: 'Failed to start gig' });
