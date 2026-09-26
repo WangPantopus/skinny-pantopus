@@ -76,6 +76,7 @@ const expirePopupBusinesses = require('./expirePopupBusinesses');
 const draftBusinessReminder = require('./draftBusinessReminder');
 // Mail escrow expiry
 const mailEscrowExpiry = require('./mailEscrowExpiry');
+const mailDeletedPurge = require('./mailDeletedPurge');
 // Home intelligence jobs
 const nfipTractWarm = require('./nfipTractWarm');
 const rateWatchEvaluate = require('./rateWatchEvaluate');
@@ -561,6 +562,15 @@ function startJobs(options = {}) {
   // Expires pending escrowed mail past its expiry date and
   // notifies senders that their letter wasn't picked up.
   scheduleCron('0 6 * * *', wrapJob('mailEscrowExpiry', mailEscrowExpiry), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Mail Deleted Purge ───
+  // Runs daily at 4:40 AM UTC.
+  // Removes letters deleted more than 30 days ago; until then a member
+  // who could see the letter can restore it.
+  scheduleCron('40 4 * * *', wrapJob('mailDeletedPurge', mailDeletedPurge), {
     scheduled: true,
     timezone: 'UTC',
   });

@@ -5,7 +5,8 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter,
+  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS } = require('../utils/homeMailAccess');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -785,6 +786,9 @@ const resolveSenderBusiness = async (senderId, requestedName) => {
 // a member sees the household's letters and their own, not a letter addressed
 // to another member or for another member's attention only.
 const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHomeIds }) => {
+  // Deleted letters (recoverable for 30 days) and dismissed ones leave the
+  // lists and their counts.
+  query = query.is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
   if (scope === 'home') {
     return query.eq('recipient_home_id', homeId).or(homeMailFilter(homeId, userId));
   }
@@ -1604,6 +1608,54 @@ router.get('/sender-businesses', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/mailbox/deleted
+ * Recently deleted: letters deleted in the last MAIL_RESTORE_DAYS that the
+ * caller could see (their own, and Home letters the Home rule shows them),
+ * newest first, with who deleted each and until when it can be restored.
+ */
+router.get('/deleted', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const accessibleHomeIds = await getAccessibleHomeIds(userId);
+    const since = new Date(Date.now() - MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: rows, error } = await supabaseAdmin
+      .from('Mail')
+      .select('id, display_title, subject, preview_text, sender_business_name, sender_address, sender_user_id, recipient_user_id, recipient_home_id, drawer, created_at, deleted_at, deleted_by')
+      .not('deleted_at', 'is', null)
+      .gte('deleted_at', since)
+      .or(visibleMailFilter(userId, accessibleHomeIds))
+      .order('deleted_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      logger.error('Error fetching deleted mail', { error: error.message, userId });
+      return res.status(500).json({ error: "Couldn't load recently deleted mail." });
+    }
+
+    const deleterIds = [...new Set((rows || []).map((row) => row.deleted_by).filter(Boolean))];
+    const names = new Map();
+    if (deleterIds.length) {
+      const { data: users } = await supabaseAdmin
+        .from('User')
+        .select('id, name, first_name, username')
+        .in('id', deleterIds);
+      for (const user of users || []) names.set(user.id, user.name || user.first_name || user.username || null);
+    }
+
+    res.json({
+      mail: (rows || []).map((row) => ({
+        ...row,
+        deleted_by_name: names.get(row.deleted_by) || null,
+        deleted_by_me: row.deleted_by === userId,
+        restorable_until: new Date(Date.parse(row.deleted_at) + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      })),
+    });
+  } catch (err) {
+    logger.error('Deleted mail fetch error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't load recently deleted mail." });
+  }
+});
+
+/**
  * GET /api/mailbox/:id
  * Get single mail item
  */
@@ -1629,10 +1681,13 @@ router.get('/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Mail not found' });
     }
 
-    const allowed = await canAccessMail(mail, userId);
+    // A deleted letter still opens for the members who could see it, so its
+    // notice can offer Restore; a dismissed one says so too.
+    const allowed = await canAccessMail(mail, userId, { includeDeleted: true });
     if (!allowed) {
       return res.status(403).json({ error: 'You do not have access to this mail' });
     }
+    mail.removed = await removedMailInfo(mail);
 
     if (mail.object_id) {
       const objectData = await getMailObjectPayload(mail.object_id);
@@ -2681,6 +2736,9 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
     const userId = req.user.id;
     const { clientMeta = {} } = req.body;
 
+    // A deleted letter (recoverable) cannot be read or marked until restored.
+    if (await isDeletedMail({ id })) return res.status(404).json({ error: 'Mail not found' });
+
     const { data, error } = await supabaseAdmin.rpc('open_mail_read_session', {
       p_mail_id: id,
       p_user_id: userId,
@@ -2769,6 +2827,9 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
+
+    // A deleted letter (recoverable) cannot be read or marked until restored.
+    if (await isDeletedMail({ id })) return res.status(404).json({ error: 'Mail not found' });
 
     // Use the SQL function to mark as viewed
     const { data, error } = await supabaseAdmin.rpc('mark_mail_viewed', {
@@ -2978,7 +3039,9 @@ router.patch('/:id/ack', verifyToken, async (req, res) => {
 
 /**
  * DELETE /api/mailbox/:id
- * Delete mail
+ * Delete mail. It hides for everyone at once and can be restored for
+ * MAIL_RESTORE_DAYS (the nightly purge removes it after that). The other
+ * members who could see a Home letter get a notice that opens it with Restore.
  */
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
@@ -2987,11 +3050,11 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
     const { data: mail, error: fetchError } = await supabaseAdmin
       .from('Mail')
-      .select('id, recipient_user_id, recipient_home_id')
+      .select('id, recipient_user_id, recipient_home_id, deleted_at')
       .eq('id', id)
       .single();
 
-    if (fetchError || !mail) {
+    if (fetchError || !mail || mail.deleted_at) {
       return res.status(404).json({ error: 'Mail not found' });
     }
 
@@ -3000,23 +3063,78 @@ router.delete('/:id', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this mail' });
     }
 
-    const { error } = await supabaseAdmin
+    const deletedAt = new Date().toISOString();
+    const { data: deleted, error } = await supabaseAdmin
       .from('Mail')
-      .delete()
-      .eq('id', id);
+      .update({ deleted_at: deletedAt, deleted_by: userId })
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select('id');
 
     if (error) {
       logger.error('Error deleting mail', { error: error.message, mailId: id });
       return res.status(500).json({ error: 'Failed to delete mail' });
     }
+    if (!deleted || deleted.length === 0) {
+      return res.status(404).json({ error: 'Mail not found' });
+    }
 
-    logger.info('Mail deleted', { mailId: id, userId });
+    logger.info('Mail deleted (restorable)', { mailId: id, userId });
+    await sendHomeMailRemovedNotice(mail, userId, 'deleted');
 
-    res.json({ message: 'Mail deleted successfully' });
+    res.json({
+      message: 'Mail deleted successfully',
+      restorable_until: new Date(Date.parse(deletedAt) + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
   } catch (err) {
     logger.error('Mail delete error', { error: err.message, mailId: req.params.id });
     res.status(500).json({ error: 'Failed to delete mail' });
+  }
+});
+
+/**
+ * POST /api/mailbox/:id/restore
+ * Restore a deleted letter within MAIL_RESTORE_DAYS, or a dismissed one, for
+ * any member who could see it.
+ */
+router.post('/:id/restore', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mail = await restorableMail(id, req.user.id);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+
+    let update;
+    let guard;
+    if (mail.deleted_at) {
+      if (Date.now() - Date.parse(mail.deleted_at) > MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000) {
+        return res.status(410).json({ error: 'This letter can no longer be restored.' });
+      }
+      update = { deleted_at: null, deleted_by: null };
+      guard = (query) => query.not('deleted_at', 'is', null);
+    } else if (mail.lifecycle === 'shredded') {
+      update = { lifecycle: mail.opened_at || mail.viewed_at ? 'opened' : 'delivered' };
+      guard = (query) => query.eq('lifecycle', 'shredded');
+    } else {
+      return res.status(409).json({ error: 'This letter is not deleted.' });
+    }
+
+    const { data: restored, error } = await guard(
+      supabaseAdmin.from('Mail').update(update).eq('id', id)
+    ).select('id');
+    if (error) {
+      logger.error('Error restoring mail', { error: error.message, mailId: id });
+      return res.status(500).json({ error: "Couldn't restore this letter. Please try again." });
+    }
+    if (!restored || restored.length === 0) {
+      return res.status(409).json({ error: 'This letter is not deleted.' });
+    }
+
+    logger.info('Mail restored', { mailId: id, userId: req.user.id });
+    res.json({ message: 'Mail restored' });
+  } catch (err) {
+    logger.error('Mail restore error', { error: err.message, mailId: req.params.id });
+    res.status(500).json({ error: "Couldn't restore this letter. Please try again." });
   }
 });
 

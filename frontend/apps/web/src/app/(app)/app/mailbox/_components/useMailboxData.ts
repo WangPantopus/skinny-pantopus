@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getErrorMessage } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
-import { toast } from '@/components/ui/toast-store';
+import { toast, toastStore } from '@/components/ui/toast-store';
 import type { MailItem, Summary, MailScope, MailType, AvailableHome } from './mailbox-types';
 import { DELIVERABLE_TYPE_META } from './mailbox-constants';
+
+// Long enough to reach Undo after a delete; Recently deleted keeps it for 30 days.
+const UNDO_TOAST_MS = 8000;
 
 export default function useMailboxData() {
   const router = useRouter();
@@ -230,15 +233,35 @@ export default function useMailboxData() {
   };
 
   const handleDelete = async (item: MailItem) => {
-    const yes = await confirmStore.open({ title: 'Delete this mail permanently?', confirmLabel: 'Delete', variant: 'destructive' });
+    const yes = await confirmStore.open({
+      title: 'Delete this mail?',
+      description: 'It leaves the mailbox for everyone who can see it. You can restore it for 30 days from Recently deleted.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
     if (!yes) return;
     try {
       if (selectedMail?.id === item.id) await closeReadSession('delete');
       await api.mailbox.deleteMail(item.id);
       setMail(prev => prev.filter(m => m.id !== item.id));
       setSelectedMail(null);
+      const toastId = toast.success(createElement('span', null, 'Mail deleted. ', createElement('button', {
+        type: 'button',
+        className: 'underline font-semibold',
+        onClick: () => { toastStore.dismiss(toastId); void handleUndoDelete(item); },
+      }, 'Undo')), UNDO_TOAST_MS);
     } catch (err) {
       toast.error(`Couldn't delete this mail. ${getErrorMessage(err, 'Please try again.')}`);
+    }
+  };
+
+  const handleUndoDelete = async (item: MailItem) => {
+    try {
+      await api.mailbox.restoreMail(item.id);
+      await loadMail();
+      toast.success('Mail restored');
+    } catch (err) {
+      toast.error(`Couldn't restore this mail. ${getErrorMessage(err, 'Please try again.')}`);
     }
   };
 

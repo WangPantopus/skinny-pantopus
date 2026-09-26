@@ -45,7 +45,8 @@ async function stampAwarder() {
       const { count: totalMail } = await supabaseAdmin
         .from('Mail')
         .select('*', { count: 'exact', head: true })
-        .eq('recipient_user_id', user.id);
+        .eq('recipient_user_id', user.id)
+        .is('deleted_at', null);
 
       const { count: packages } = await supabaseAdmin
         .from('MailPackage')
@@ -56,7 +57,8 @@ async function stampAwarder() {
         .from('Mail')
         .select('*', { count: 'exact', head: true })
         .eq('recipient_user_id', user.id)
-        .not('vault_folder_id', 'is', null);
+        .not('vault_folder_id', 'is', null)
+        .is('deleted_at', null);
 
       const counts = {
         totalMail: totalMail || 0,

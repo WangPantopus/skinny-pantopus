@@ -254,6 +254,8 @@ export interface MailWrapper {
   urgency: UrgencyLevel;
   privacy: Privacy;
   lifecycle: Lifecycle;
+  /** Deleted (restorable for 30 days) or dismissed for the household. */
+  removed?: import('@pantopus/api').MailRemovedInfo;
   category?: MailCategory;
   starred: boolean;
   created_at: string;

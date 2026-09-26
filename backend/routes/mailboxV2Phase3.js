@@ -352,7 +352,8 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
         .from('Mail')
         .select('*')
         .in('id', mailIds)
-        .or(visibleMailFilter(userId, homeIds));
+        .or(visibleMailFilter(userId, homeIds))
+        .is('deleted_at', null);
       if (mailError) throw mailError;
       mail = mailItems || [];
     }
@@ -534,6 +535,7 @@ router.post('/records/auto-detect', verifyToken, validate(autoDetectSchema), asy
       .from('Mail')
       .select('id, subject, key_facts, sender_name:sender_display')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .not('key_facts', 'is', null)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -583,6 +585,7 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
       .from('Mail')
       .select('id, subject, key_facts, sender_name:sender_display, category')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .not('key_facts', 'is', null)
       .order('created_at', { ascending: false })
       .limit(30);
@@ -723,7 +726,8 @@ router.get('/map/pin/:id', verifyToken, async (req, res) => {
         .from('Mail')
         .select('id, subject, sender_name, category, delivered_at')
         .eq('id', pin.mail_id)
-        .single();
+        .is('deleted_at', null)
+        .maybeSingle();
       linked_mail = mail;
     }
 
@@ -831,6 +835,7 @@ router.post('/community/publish', verifyToken, validate(publishSchema), async (r
       .select('*')
       .eq('id', mailId)
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Mail not found' });
@@ -1045,6 +1050,13 @@ router.get('/tasks', verifyToken, async (req, res) => {
 router.post('/tasks/from-mail', verifyToken, validate(createTaskSchema), async (req, res) => {
   try {
     const { mailId, homeId, title, description, dueAt, priority } = req.body;
+    // A deleted letter can't source a task: the Home task rule checks the
+    // letter itself but not its deletion (a missing letter is refused there).
+    if (mailId) {
+      const { data: source, error: sourceError } = await supabaseAdmin
+        .from('Mail').select('deleted_at').eq('id', mailId).maybeSingle();
+      if (sourceError || source?.deleted_at) return res.status(404).json({ error: 'Mail not found' });
+    }
     const result = await homeRecordService.mutate({ homeId, actorId: req.user.id, kind: 'task', action: 'create',
       sourceMailId: mailId, payload: { task_type: 'reminder', title, description: description ?? null,
         due_at: dueAt ?? null, priority, status: 'open' } });
@@ -1088,6 +1100,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', todayStart.toISOString())
       .order('created_at', { ascending: false });
     if (newErr) throw newErr;
@@ -1097,6 +1110,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .eq('viewed', false)
       .in('category', ['certified', 'government', 'bill', 'legal'])
       .order('created_at', { ascending: false })
@@ -1139,6 +1153,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       .from('Mail')
       .select('id, subject, sender_name:sender_display, delivered_at:created_at')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
       .lt('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
       .limit(3);
@@ -1392,6 +1407,7 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
         .from('Mail')
         .select('id, subject, sender_name:sender_display, category, delivered_at:created_at')
         .eq('recipient_user_id', userId)
+        .is('deleted_at', null)
         .gte('created_at', targetDate.toISOString())
         .lt('created_at', nextDay.toISOString())
         // Positive items only
@@ -1445,6 +1461,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .from('Mail')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', yearStart)
       .lt('created_at', yearEnd);
     if (totalErr) throw totalErr;
@@ -1454,6 +1471,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .from('Mail')
       .select('drawer')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', yearStart)
       .lt('created_at', yearEnd);
     if (drawerErr) throw drawerErr;
@@ -1468,6 +1486,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .from('Mail')
       .select('category')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', yearStart)
       .lt('created_at', yearEnd);
     if (typeErr) throw typeErr;
@@ -1482,6 +1501,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .from('Mail')
       .select('sender_name:sender_display, sender_trust, category')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', yearStart)
       .lt('created_at', yearEnd);
     if (sendersErr) throw sendersErr;
@@ -1515,6 +1535,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .from('Mail')
       .select('delivered_at:created_at')
       .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
       .gte('created_at', yearStart)
       .lt('created_at', yearEnd)
       .order('created_at')

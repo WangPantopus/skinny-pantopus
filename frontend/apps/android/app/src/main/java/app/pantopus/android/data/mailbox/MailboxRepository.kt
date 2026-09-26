@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
 import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
+import app.pantopus.android.data.api.models.mailbox.RestoreMailResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CancelVacationRequest
 import app.pantopus.android.data.api.models.mailbox.v2.CancelVacationResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpRequest
@@ -96,6 +97,9 @@ class MailboxRepository
         /** `PATCH /api/mailbox/:id/archive` — moves the letter out of Incoming. */
         suspend fun archive(mailId: String): NetworkResult<ArchiveMailResponse> =
             safeApiCall { mailboxApi.archive(mailId, ArchiveMailRequest(archived = true)) }
+
+        /** `POST /api/mailbox/:id/restore` — puts a deleted or household-dismissed letter back. */
+        suspend fun restore(mailId: String): NetworkResult<RestoreMailResponse> = safeApiCall { mailboxApi.restore(mailId) }
 
         /** `GET /api/mailbox/v2/drawers`. */
         suspend fun drawers(): NetworkResult<DrawerListResponse> = safeApiCall { v2Api.drawers() }

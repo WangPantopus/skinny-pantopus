@@ -7,7 +7,8 @@
 // Every function throws MailboxApiError on failure.
 // ============================================================
 
-import { get, post, uploadFile, apiRequest } from '@pantopus/api';
+import { get, post, uploadFile, apiRequest, mailbox } from '@pantopus/api';
+import type { DeletedMail } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -172,6 +173,7 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
         urgency: mail.urgency,
         privacy: mail.privacy,
         lifecycle: mail.lifecycle,
+        removed: mail.removed ?? undefined,
         category: mail.category as MailItemDetailResponse['wrapper']['category'],
         starred: mail.starred ?? false,
         created_at: mail.created_at,
@@ -828,5 +830,21 @@ export async function createVacationHold(data: {
 export async function cancelVacationHold(holdId: string): Promise<void> {
   return call(async () => {
     await post('/api/mailbox/v2/p3/vacation/cancel', { holdId });
+  });
+}
+
+// ============================================================
+// RECENTLY DELETED
+// ============================================================
+
+/** Letters deleted in the last 30 days that the caller could see, newest first. */
+export async function getDeletedMail(): Promise<DeletedMail[]> {
+  return call(async () => (await mailbox.getDeletedMail()).mail ?? []);
+}
+
+/** Restore a deleted letter (within 30 days) or one dismissed for the household. */
+export async function restoreMail(mailId: string): Promise<void> {
+  return call(async () => {
+    await mailbox.restoreMail(mailId);
   });
 }

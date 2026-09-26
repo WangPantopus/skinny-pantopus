@@ -50,14 +50,16 @@ async function vaultWeeklyDigest() {
         .eq('recipient_user_id', userId)
         .is('vault_folder_id', null)
         .eq('archived', true)  // archived but not in a folder
-        .in('lifecycle', ['delivered', 'opened', 'expired']);
+        .in('lifecycle', ['delivered', 'opened', 'expired'])
+        .is('deleted_at', null);
 
       // Count total vault items
       const { count: totalItems } = await supabaseAdmin
         .from('Mail')
         .select('*', { count: 'exact', head: true })
         .eq('recipient_user_id', userId)
-        .not('vault_folder_id', 'is', null);
+        .not('vault_folder_id', 'is', null)
+        .is('deleted_at', null);
 
       // Count folders
       const { count: folderCount } = await supabaseAdmin

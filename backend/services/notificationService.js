@@ -233,6 +233,8 @@ const HOME_TYPES = new Set([
   'tenant_request',
   // Home Record Watch (Wave 2b) — governed by the home-reminders toggle.
   'rate_watch',
+  // A household letter another member deleted or dismissed (with Restore).
+  'home_mail_removed',
 ]);
 const MAIL_TYPES = new Set([
   'mail_new', 'mail_summary', 'mail_urgent', 'mail_interrupt',
@@ -1198,6 +1200,28 @@ async function notifyMailDelivered({
 }
 
 /**
+ * Tell the other members who could see a Home letter that it was deleted or
+ * dismissed. The link opens the letter, which offers Restore.
+ */
+async function notifyHomeMailRemoved({ userIds, mailId, homeId, letterTitle, actorName, action, restoreDays }) {
+  const who = actorName || 'A member';
+  const what = letterTitle || 'a letter';
+  const title = action === 'deleted' ? 'A Home letter was deleted' : 'A Home letter was dismissed';
+  const body = action === 'deleted'
+    ? `${who} deleted "${what}". You can restore it for ${restoreDays} days.`
+    : `${who} dismissed "${what}" for the household. You can restore it.`;
+  return Promise.all((userIds || []).map((userId) => createNotification({
+    userId,
+    type: 'home_mail_removed',
+    title,
+    body,
+    icon: '🗑️',
+    link: `/app/mailbox/${mailId}`,
+    metadata: { mail_id: mailId, home_id: homeId, action },
+  })));
+}
+
+/**
  * Map backend envelope type to compose intent.
  * Used as fallback when tracking.mailIntent is not available.
  */
@@ -1400,6 +1424,7 @@ module.exports = {
   notifyOwnershipDispute,
   // Mail delivery notifications
   notifyMailDelivered,
+  notifyHomeMailRemoved,
   // Density milestone
   notifyDensityMilestone,
   notifyHouseholdAccessRequest,

@@ -160,21 +160,26 @@ async function visibleMailIds(mailIds, userId, homeIds = null) {
     .from('Mail')
     .select('id')
     .in('id', ids)
+    .is('deleted_at', null)
     .or(visibleMailFilter(userId, homes));
   if (error) throw new Error(error.message);
   return new Set((data || []).map((row) => row.id));
 }
 
-/** Whether the Home rule shows this Home letter to the member. Fails closed. */
-async function homeMailVisible(mailId, homeId, userId) {
+/**
+ * Whether the Home rule shows this Home letter to the member. Fails closed.
+ * A deleted letter is hidden unless includeDeleted (restore and its notice).
+ */
+async function homeMailVisible(mailId, homeId, userId, { includeDeleted = false } = {}) {
   if (!mailId || !homeId || !userId) return false;
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('Mail')
     .select('id')
     .eq('id', mailId)
     .eq('recipient_home_id', homeId)
-    .or(homeMailFilter(homeId, userId))
-    .maybeSingle();
+    .or(homeMailFilter(homeId, userId));
+  if (!includeDeleted) query = query.is('deleted_at', null);
+  const { data, error } = await query.maybeSingle();
   if (error) {
     logger.error('homeMailVisible: failing closed', { mailId, error: error.message });
     return false;
@@ -193,31 +198,152 @@ async function homeMailVisible(mailId, homeId, userId) {
 // (Moved from routes/mailbox.js so the v2 per-item routes share it.) A Home
 // letter also has to pass the Home mail rule above (M01); callers pass the
 // mail's id with its recipient fields.
-const canAccessMail = async (mail, userId) => {
+const canAccessMail = async (mail, userId, { includeDeleted = false } = {}) => {
+  // A deleted letter (recoverable for 30 days) is hidden from every route
+  // except restore, which passes includeDeleted.
+  if (!includeDeleted && await isDeletedMail(mail)) return false;
   if (mail.recipient_user_id === userId) return true;
   if (!mail.recipient_home_id) return false;
 
   const accessibleHomeIds = await getAccessibleHomeIds(userId);
   if (!accessibleHomeIds.includes(mail.recipient_home_id)) return false;
-  return homeMailVisible(mail.id, mail.recipient_home_id, userId);
+  return homeMailVisible(mail.id, mail.recipient_home_id, userId, { includeDeleted });
 };
 
 /**
+ * Whether the letter is deleted. Callers that selected deleted_at are
+ * answered from the row; otherwise it is read. Fails closed.
+ */
+async function isDeletedMail(mail) {
+  if (mail.deleted_at !== undefined) return Boolean(mail.deleted_at);
+  const { data, error } = await supabaseAdmin
+    .from('Mail')
+    .select('deleted_at')
+    .eq('id', mail.id)
+    .maybeSingle();
+  if (error) {
+    logger.error('isDeletedMail: failing closed', { mailId: mail.id, error: error.message });
+    return true;
+  }
+  return !data || Boolean(data.deleted_at);
+}
+
+/**
  * Load one mail's access fields and apply canAccessMail. Returns the row
- * (id, recipient_user_id, recipient_home_id) when the caller may read it,
- * otherwise null — callers answer their existing not-found.
+ * (id, recipient_user_id, recipient_home_id, deleted_at, lifecycle) when the
+ * caller may read it, otherwise null — callers answer their existing not-found.
  */
 async function readableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, lifecycle')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;
   return (await canAccessMail(mail, userId)) ? mail : null;
 }
 
-module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail,
+/**
+ * A letter the caller may restore: one they could see before it was deleted
+ * or dismissed (the same visibility rule, ignoring deletion). Returns the row
+ * or null.
+ */
+async function restorableMail(mailId, userId) {
+  if (!mailId || !userId) return null;
+  const { data: mail, error } = await supabaseAdmin
+    .from('Mail')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, deleted_by, lifecycle, opened_at, viewed_at, display_title, subject')
+    .eq('id', mailId)
+    .maybeSingle();
+  if (error || !mail) return null;
+  return (await canAccessMail(mail, userId, { includeDeleted: true })) ? mail : null;
+}
+
+/**
+ * The members, other than excludeUserId, who could see this Home letter before
+ * it was deleted or dismissed: active, trusted occupants the Home mail rule
+ * shows it to. A personal letter has no audience. Fails closed to [].
+ */
+async function homeMailAudience(mail, excludeUserId) {
+  if (!mail || !mail.recipient_home_id) return [];
+  const { data, error } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('user_id')
+    .eq('home_id', mail.recipient_home_id)
+    .eq('is_active', true);
+  if (error) {
+    logger.error('homeMailAudience: failing closed', { mailId: mail.id, error: error.message });
+    return [];
+  }
+  const members = [...new Set((data || []).map((row) => row.user_id))]
+    .filter((userId) => userId && userId !== excludeUserId);
+  const audience = [];
+  for (const userId of members) {
+    if (await canAccessMail(mail, userId, { includeDeleted: true })) audience.push(userId);
+  }
+  return audience;
+}
+
+/** How long a deleted letter can be restored before the nightly purge removes it. */
+const MAIL_RESTORE_DAYS = 30;
+
+/**
+ * What the Restore banner and notice need about a deleted or dismissed letter,
+ * or null when it is neither: action, when, who (name) and until when.
+ */
+async function removedMailInfo(mail) {
+  if (mail.deleted_at) {
+    let byName = null;
+    if (mail.deleted_by) {
+      const { data: user } = await supabaseAdmin
+        .from('User')
+        .select('name, first_name, username')
+        .eq('id', mail.deleted_by)
+        .maybeSingle();
+      byName = user ? (user.name || user.first_name || user.username || null) : null;
+    }
+    const until = new Date(new Date(mail.deleted_at).getTime() + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000);
+    return { action: 'deleted', at: mail.deleted_at, by_name: byName, restorable_until: until.toISOString() };
+  }
+  if (mail.lifecycle === 'shredded') {
+    return { action: 'dismissed', at: null, by_name: null, restorable_until: null };
+  }
+  return null;
+}
+
+/**
+ * Tell the other members who could see a Home letter that it was deleted or
+ * dismissed ('deleted' | 'dismissed'), and that they can restore it. Push
+ * follows their Home-updates setting. Non-blocking: a failed notice never
+ * fails the delete or dismiss.
+ */
+async function sendHomeMailRemovedNotice(mail, actorId, action) {
+  try {
+    const userIds = await homeMailAudience(mail, actorId);
+    if (!userIds.length) return;
+    const [{ data: letter }, { data: actor }] = await Promise.all([
+      supabaseAdmin.from('Mail').select('display_title, subject').eq('id', mail.id).maybeSingle(),
+      supabaseAdmin.from('User').select('name, first_name, username').eq('id', actorId).maybeSingle(),
+    ]);
+    // Loaded here rather than at the top so this access module stays free of
+    // service dependencies.
+    const notificationService = require('../services/notificationService');
+    await notificationService.notifyHomeMailRemoved({
+      userIds,
+      mailId: mail.id,
+      homeId: mail.recipient_home_id,
+      letterTitle: letter ? (letter.display_title || letter.subject) : null,
+      actorName: actor ? (actor.name || actor.first_name || actor.username) : null,
+      action,
+      restoreDays: MAIL_RESTORE_DAYS,
+    });
+  } catch (err) {
+    logger.warn('Home mail removal notice failed (non-blocking)', { mailId: mail.id, action, error: err.message });
+  }
+}
+
+module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, restorableMail,
+  isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,
 };

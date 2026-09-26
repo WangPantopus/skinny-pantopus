@@ -252,6 +252,7 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('recipient_user_id', userId)
           .eq('viewed', false)
           .eq('archived', false)
+          .is('deleted_at', null)
       ).catch(() => ({ data: null })),
       gigsNearby: Promise.resolve(
         supabaseAdmin

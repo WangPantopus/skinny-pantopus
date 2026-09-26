@@ -157,7 +157,7 @@ async function readResource({ homeId, actorId, kind, status, severity }) {
 function unreadMailQuery(homeId, actorId, now) {
   let query = db.from('Mail').select('id', { count: 'exact', head: true })
     .eq('recipient_home_id', homeId).eq('viewed', false).eq('archived', false)
-    .is('access_count_max', null).in('privacy', ['private_to_person', 'shared_household']);
+    .is('deleted_at', null).is('access_count_max', null).in('privacy', ['private_to_person', 'shared_household']);
   for (const key of ['expires_at', 'time_limited_expires_at']) query = query.or(`${key}.is.null,${key}.gt.${now}`);
   for (const key of ['address_home_id', 'address_id']) query = query.or(`${key}.is.null,${key}.eq.${homeId}`);
   query = query.or('lifecycle.is.null,lifecycle.neq.shredded');

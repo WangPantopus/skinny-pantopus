@@ -24,6 +24,7 @@ describe('AI mail access guards', () => {
         recipient_user_id: null,
         recipient_home_id: 'home-1',
         subject: 'Home bill',
+        deleted_at: null,
       },
     ]);
     supabaseAdmin.setRpcMock(async (fn, args) => {
@@ -53,6 +54,7 @@ describe('AI mail access guards', () => {
         recipient_user_id: null,
         recipient_home_id: 'home-2',
         subject: 'Restricted mail',
+        deleted_at: null,
       },
     ]);
     supabaseAdmin.setRpcMock(async () => ({ data: false, error: null }));

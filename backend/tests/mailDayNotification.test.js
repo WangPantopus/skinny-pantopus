@@ -49,6 +49,7 @@ function seedScannedMail(userId, kinds) {
       mail_object_type: kind === 'package' ? 'package' : 'envelope',
       subject: 'A piece of mail',
       created_at: new Date().toISOString(),
+      deleted_at: null,
     });
     getTable('MailRoutingQueue').push({
       id: `${userId}-q-${i}`,
