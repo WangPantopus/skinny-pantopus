@@ -28,10 +28,14 @@ public struct MembersListView: View {
     private let homeId: String
     private let onAddGuest: () -> Void
 
-    public init(homeId: String, onAddGuest: @escaping () -> Void = {}) {
+    /// `initialTab` opens a notification's section (Requests); the model
+    /// falls back to Members when the viewer can't review requests.
+    public init(homeId: String, initialTab: String = MembersTab.members, onAddGuest: @escaping () -> Void = {}) {
         self.homeId = homeId
         self.onAddGuest = onAddGuest
-        _viewModel = State(initialValue: MembersListViewModel(homeId: homeId))
+        let model = MembersListViewModel(homeId: homeId)
+        model.selectedTab = initialTab
+        _viewModel = State(initialValue: model)
     }
 
     public var body: some View {

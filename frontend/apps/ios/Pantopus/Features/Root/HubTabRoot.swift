@@ -95,6 +95,12 @@ public enum HubRoute: Hashable {
     case editMaintenance(homeId: String, taskId: String)
     /// Members sub-screen for a specific home (T6.3a / P9).
     case homeMembers(homeId: String)
+    /// The Members sub-screen opened on its Requests tab (access requests).
+    case homeMemberRequests(homeId: String)
+    /// The Owners list, and the owner's claim review (the lists the You
+    /// stack already hosts), for Home notification links.
+    case homeOwners(homeId: String)
+    case homeClaimReview(homeId: String, initialTab: HomeClaimReviewTab)
     /// A14.1 (P5.1) — Per-home Settings index. Reached from the home
     /// dashboard's top-bar settings affordance.
     case homeSettings(homeId: String)
@@ -797,7 +803,8 @@ public struct HubTabRoot: View {
              .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold, .wallet,
              .walletActivityList, .stamps, .mailTask, .mailTaskList, .mailTranslation,
              .packageGig, .earn, .businessOwner, .viewAs, .cancelClaim, .propertyCorrection,
-             .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay:
+             .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay,
+             .homeClaimReview:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -984,7 +991,19 @@ public struct HubTabRoot: View {
             path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
             _ = router.consume()
         case let .homeMemberRequests(id):
+            path.append(.homeMemberRequests(homeId: id))
+            _ = router.consume()
+        case let .homeMembers(id):
             path.append(.homeMembers(homeId: id))
+            _ = router.consume()
+        case let .homeOwners(id):
+            path.append(.homeOwners(homeId: id))
+            _ = router.consume()
+        case let .homeClaimReview(id):
+            path.append(.homeClaimReview(homeId: id, initialTab: .residency))
+            _ = router.consume()
+        case let .claimStatus(claimId):
+            path.append(.claimStatus(claimId: claimId))
             _ = router.consume()
         case let .homeOwnersTransfer(id):
             // Push the home's dashboard underneath so a back-tap from the
@@ -1907,6 +1926,23 @@ public struct HubTabRoot: View {
             MembersListView(homeId: homeId) {
                 modalRoute = HubModalRoute(route: .addGuest(homeId: homeId))
             }
+        case let .homeMemberRequests(homeId):
+            MembersListView(homeId: homeId, initialTab: MembersTab.requests) {
+                modalRoute = HubModalRoute(route: .addGuest(homeId: homeId))
+            }
+        case let .homeOwners(homeId):
+            OwnersListView(
+                homeId: homeId,
+                currentUserId: currentUserId.isEmpty ? nil : currentUserId,
+                onOpenClaimReview: {
+                    Task { @MainActor in push(.homeClaimReview(homeId: homeId, initialTab: .ownership)) }
+                },
+                onOpenTransfer: {
+                    Task { @MainActor in push(.transferOwnership(homeId: homeId)) }
+                }
+            )
+        case let .homeClaimReview(homeId, initialTab):
+            HomeClaimReviewView(homeId: homeId, initialTab: initialTab) { pop() }
         case let .homeSettings(homeId):
             HomeSettingsView(
                 viewModel: HomeSettingsViewModel(homeId: homeId) { route in

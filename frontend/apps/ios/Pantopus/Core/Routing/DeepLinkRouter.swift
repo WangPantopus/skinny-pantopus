@@ -42,6 +42,17 @@ final class DeepLinkRouter {
         case homeDashboard(id: String)
         case homeTask(homeId: String, taskId: String)
         case homeMemberRequests(id: String)
+        /// `pantopus://homes/:id/members` — the Members list on its default tab
+        /// (`challenge_window_opened`, `member_moved_out`, and
+        /// `dashboard?tab=members` from `home_invite_accepted`).
+        case homeMembers(id: String)
+        /// `pantopus://homes/:id/owners` — the Owners list (`claim_window_expiring`).
+        case homeOwners(id: String)
+        /// `pantopus://homes/:id/owners/review-claim` — the owner's claim review
+        /// on its Residency tab (`residency_claim`).
+        case homeClaimReview(id: String)
+        /// `pantopus://homes/:id/claim-owner/evidence?claimId=` — that claim's status.
+        case claimStatus(claimId: String)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
         /// bottom sheet.
@@ -526,7 +537,18 @@ final class DeepLinkRouter {
             if rest.count == 3, rest[0] == "membership", rest[2] == "inbox" { return .fanInbox(personaId: rest[1]) }
             return .unknown(url)
         case "homes":
-            return homeDestination(url: url, segments: segments, tabQuery: tabQuery)
+            return homeDestination(
+                url: url,
+                segments: segments,
+                tabQuery: tabQuery,
+                claimIdQuery: queryValue("claimId", in: comps)
+            )
+        case "landlord":
+            // `/app/landlord/properties/:homeId?tab=requests` (tenant_request).
+            // The apps have no landlord requests screen, so the tap opens the
+            // Home instead of doing nothing.
+            guard segments.count >= 3, segments[1] == "properties" else { return .unknown(url) }
+            return .homeDetail(id: segments[2])
         case "businesses":
             return businessesDestination(url: url, segments: segments)
         case "business":
@@ -698,7 +720,9 @@ final class DeepLinkRouter {
         }
     }
 
-    private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {
+    private func homeDestination(
+        url: URL, segments: [String], tabQuery: String?, claimIdQuery: String?
+    ) -> Destination {
         guard let id = segments.dropFirst().first else { return .unknown(url) }
         let trailing = Array(segments.dropFirst(2))
         if trailing.first == "tasks" {
@@ -711,13 +735,23 @@ final class DeepLinkRouter {
             return .homeResidency(id: id.lowercased())
         }
         if trailing.first == "dashboard" {
-            return .homeDashboard(id: id)
+            // `?tab=members` names the Members section.
+            return tabQuery == "members" ? .homeMembers(id: id) : .homeDashboard(id: id)
         }
-        if trailing.first == "members" && tabQuery == "requests" {
-            return .homeMemberRequests(id: id)
+        if trailing.first == "members" {
+            return tabQuery == "requests" ? .homeMemberRequests(id: id) : .homeMembers(id: id)
         }
-        if trailing.first == "owners" && trailing.dropFirst().first == "transfer" {
-            return .homeOwnersTransfer(id: id)
+        if trailing.first == "owners" {
+            switch trailing.dropFirst().first {
+            case "transfer": return .homeOwnersTransfer(id: id)
+            case "review-claim": return .homeClaimReview(id: id)
+            case nil: return .homeOwners(id: id)
+            default: break
+            }
+        }
+        if trailing.first == "claim-owner", trailing.dropFirst().first == "evidence",
+           let claimIdQuery, UUID(uuidString: claimIdQuery) != nil {
+            return .claimStatus(claimId: claimIdQuery.lowercased())
         }
         if trailing.first == "verify-landlord" || trailing.first == "verify_landlord" {
             return .verifyLandlord(id: id)
