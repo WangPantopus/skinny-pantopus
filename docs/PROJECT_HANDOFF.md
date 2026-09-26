@@ -1,6 +1,37 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T03:50Z (batch 19 merged; batch 20 #463 in CI; #462 and the Pulse banner fix next)
+## CURRENT RESUME POINT — 2026-09-26T05:55Z (batch 20 merged; batch 21 = 7 reviewed PRs gated on CI; Stream 1 Pulse+Offers build under heavy)
+
+- **Integration (Stream 1 queue):**
+  - Master is `5bf1eb7f8`. Batch 20 [#463](https://github.com/WangPantopus/skinny-pantopus/pull/463) merged #455 (S3-50/53/67), #460 (S3-42/61, web), #458 (Stream 1 native: My listings counts, exact offer amounts, drawer opens your profile, "just posted" by age) and #461 (S2-03) at 04:22:46Z.
+  - **Batch 21 candidates**, each reviewed. For every bundle the manifest hash, recorded head and per-file hashes were verified:
+    - #464 (S2 read state, green);
+    - #465 (S3-08/36/34, green);
+    - #466 (S3-65 web, green);
+    - #467 (S2 D01 Home issue statuses, CI running);
+    - #468 (S3 hide Workflows/Templates + iOS Scheduling hub Back, CI running);
+    - #462 (S1 wallet, re-running an iOS SE flake, `MarketplaceViewModelTests.testCategorySelectedMidFlightIsNotClobberedByStaleResponse`, a 100 ms sleep race);
+    - #470 (S3-66 share link, CI running).
+    - A trial merge-tree chain of all seven on `5bf1eb7f8` is clean (tip `fd802a5f4`). The batch is built as soon as CI settles.
+  - Stream 1 [#469](https://github.com/WangPantopus/skinny-pantopus/pull/469) `e03a40214` (web Marketplace: no "0 listings" / "In view 0" after a failed read) is in CI. Bundle `20260926-stream1-web-marketplace-counts-r1`, MANIFEST `010a8a74…`.
+- **Stream 1 in flight:** `claude/stream1-native-pulse-radius-banner` `d7ccdf43a`, building under heavy since 05:43Z. It fixes two things in both apps:
+  - the Pulse "No posts within 1 mi. Expand?" banner over a failed feed;
+  - Offers "Received 0 · Sent 0" and a false "No offers sent yet" after a failed load.
+  - Android afters follow on emulator-5558, then a PR.
+- **Proposals awaiting the user (Stream 1):**
+  - Owner "Message" on their own listing (A/B/C).
+  - Native buyer offer view/withdraw (A/B).
+  - NEW: an Android same-account token refresh (every ~30 min) retires any open task detail, Offers or Mail bid screen with "Your account changed" and a dead Try again. Android binds screens to the access token; iOS binds them to the server session. Options: A align Android with iOS, B Reopen, C leave. Bundle `20260926-stream1-android-refresh-retires-screens-r1`, MANIFEST `e7213ca0…`.
+  - NEW: the web Marketplace Snapshot rows "New in 24h", "Urgent deadlines" and "Your pending offers" are hardcoded 0 for everyone (A/B/C).
+- **Stream 2:** the user decided six items (see `02-home-household.md`). R04 ownership transfer (security, proposal A) is the next Stream 2 PR.
+- **Slots and devices:**
+  - Heavy: Stream 1 since 05:43Z; it will be released by message.
+  - iOS driver: free (Stream 3 released it at 05:32:21Z).
+  - Stream 1: emulator-5558 (slot 3).
+  - The Claude app's simulator panel auto-boots simulators. Always pass `device=`.
+- **Side effects awaiting the user:** LocalProfile-on-read (Stream 3) and Wallet-on-read (`GET /api/wallet` getOrCreateWallet). Both are existing backend behaviour.
+
+## Resume point history — 2026-09-26T03:50Z (batch 19 merged; batch 20 #463 in CI; #462 and the Pulse banner fix next)
 
 - **Integration (Stream 1 queue):**
   - Master is `a5fb4864c`. Batch 19 [#459](https://github.com/WangPantopus/skinny-pantopus/pull/459) merged #457 (Mail Party and bundle privacy, security) and #453 (Home links) at 03:43:14Z. The known iOS flake `TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer` passed on re-run.

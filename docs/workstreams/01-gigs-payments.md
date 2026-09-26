@@ -1,6 +1,25 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T03:50Z
+## CURRENT STREAM 1 STATE — 2026-09-26T05:55Z
+
+- **Merged in batch 20 (#463, 04:22:46Z):** #458.
+- **Open:**
+  - [#462](https://github.com/WangPantopus/skinny-pantopus/pull/462) (wallet). Re-running an iOS SE Marketplace flake; in batch 21.
+  - [#469](https://github.com/WangPantopus/skinny-pantopus/pull/469) `e03a40214`, web Marketplace. There's no "0 listings" chip and no "In view 0" snapshot after a failed browse read.
+    - Before: seq 4059–4062 / 4110–4112. After: seq 4135–4138 / 4161–4163 / 4186.
+    - Bundle `20260926-stream1-web-marketplace-counts-r1`, MANIFEST `010a8a74…`.
+  - `claude/stream1-native-pulse-radius-banner` `d7ccdf43a`: the Pulse banner fix (`9b77b8421`) plus Offers failed-load counts (`d7ccdf43a`).
+    - Android before: seq 3939/3940 showed "Received 0 · Sent 0"; tapping Sent showed "No offers sent yet". The iOS source has the same logic.
+    - Building under heavy since 05:43Z.
+    - Combined bundle `20260926-stream1-native-pulse-offers-failed-reads-r1` (befores done).
+- **New proposals for the user:**
+  - **Android token refresh retires open task, Offers or Mail bid screens.** Natural reproduction at 03:56:03Z: refresh 200, then the reload 200, then "Your account changed", with a dead Try again.
+    - Android binds to the access token; iOS binds to the session.
+    - Bundle `20260926-stream1-android-refresh-retires-screens-r1`, MANIFEST `e7213ca0…`.
+  - **Web Marketplace Snapshot:** three rows are hardcoded 0.
+- **Reviewed for batch 21:** #464, #465, #466, #467, #468 and #470. Bundles verified; the trial chain is clean.
+
+## Previous Stream 1 state — 2026-09-26T03:50Z
 
 - **In batch 20 (#463):** #458, native My listings counts, exact offer amounts, drawer → profile and just-posted by age.
 - **Open:**
