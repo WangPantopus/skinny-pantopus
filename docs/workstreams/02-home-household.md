@@ -2,6 +2,30 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 06:09Z (decision 6 done; adds to the decisions block below)**
+
+- **R04 fix open as PR [473](https://github.com/WangPantopus/skinny-pantopus/pull/473).** Branch `claude/stream2-ownership-transfer-safety`, head `ad0c1f162`, on `5bf1eb7f8`. Changes `backend/routes/homeOwnership.js` plus 4 lines in the web `owners/transfer/page.tsx`. No native changes, no migration. CI started.
+  - **Buyer check:** the buyer must be an existing account before any write. Otherwise 400 `TRANSFER_BUYER_NOT_FOUND` or `TRANSFER_TO_SELF`, with nothing changed.
+  - **Right seller:** an approved co-owner transfer runs for the proposer. On master, the deciding voter was revoked.
+  - **Claim first:** the buyer's claim is created before the seller is revoked. On master the insert always failed: PGRST204, because it sends a `metadata` column that `HomeOwnershipClaim` lacks.
+  - **Clean failure:** if any later save fails, the earlier steps are undone and the request returns 503 "Nothing was changed".
+  - **Web landing:** after a direct transfer, the page opens the home dashboard, because the former owner gets 403 on Owners.
+- **Evidence:** bundle `.pantopus-recovery/audits/20260926-stream2-ownership-transfer-fix-r1`, MANIFEST `a14373fb1b347489d84f636912cdd18182fba5c3139b1d73c7a7149dc469d993` (168 files).
+  - Master befores for the co-owner path and the claim insert.
+  - API afters: unknown email, self, fault-injected revoke failure, single-owner success, co-owner success with post-access checks, mixed-case email.
+  - Web journeys through the real page: an unknown email shows the error toast; the buyer's email lands on the dashboard as Member.
+  - Every test home was restored by exact ids. Retained history (synthetic buyer `cb6c7225`, 2 quorum actions, audit rows, 7 buyer notices) is listed in RESULT.md.
+  - Native apps were not driven.
+- **Follow-ups noted, not changed:**
+  - A failed quorum execution still reports "approved". This predates the PR and affects every action type.
+  - `Home.owner_id` is cleared when it pointed at the seller, even with a co-owner remaining. That is the existing legacy-pointer policy, and the co-owner keeps full access.
+  - The native transfer screens' comments still mention off-platform buyers.
+- **Runtime notes:**
+  - My main worktree's build tree equals the #473 tree (`66e790c4a`, tree `dd38c745`).
+  - Master's new `qrcode` web dependency was missing from that worktree's install. I linked it (git-ignored) from the Stream 2 home worktree's pnpm store; no founder checkout was touched.
+  - The fixed backend runs on 18145; my proxy on 18142 is back on 18143.
+- **Next:** decision 5 (web Members explicit role choice).
+
 **Stream 2 — user decisions recorded 2026-09-26 (supersede the pending list in the 05:15Z block below)**
 
 1. **Household letter delete:** proposal approved as sent.
