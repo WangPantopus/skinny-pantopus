@@ -107,16 +107,18 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     public var tabs: [ListOfRowsTab] {
         [
-            // No total while older posts are unpaged: the loaded count
-            // would under-report.
-            ListOfRowsTab(id: MyPostsTab.active, label: "Active", count: nextPage == nil ? counts.active : nil),
-            ListOfRowsTab(id: MyPostsTab.archived, label: "Archived", count: counts.archived)
+            // No total before the list loads (a failed read isn't "0") or
+            // while older posts are unpaged (the loaded count would
+            // under-report).
+            ListOfRowsTab(id: MyPostsTab.active, label: "Active", count: loadedAtLeastOnce && nextPage == nil ? counts.active : nil),
+            ListOfRowsTab(id: MyPostsTab.archived, label: "Archived", count: loadedAtLeastOnce ? counts.archived : nil)
         ]
     }
 
     public var selectedTab: String = MyPostsTab.active {
         didSet {
-            guard oldValue != selectedTab else { return }
+            // Before a successful load there is no list to show; keep the error.
+            guard oldValue != selectedTab, loadedAtLeastOnce else { return }
             rebuild()
         }
     }
@@ -170,7 +172,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     /// Store the applied filter and re-project the visible rows.
     public func applyFilter(_ filter: ActivityFilter) {
         activityFilter = filter
-        rebuild()
+        if loadedAtLeastOnce { rebuild() }
     }
 
     public private(set) var state: ListOfRowsState = .loading

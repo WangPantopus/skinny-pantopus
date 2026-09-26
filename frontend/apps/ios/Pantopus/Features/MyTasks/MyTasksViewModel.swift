@@ -297,18 +297,20 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     public let title = "My tasks"
 
+    /// Uncounted until the list loads: a failed read must not claim "0".
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: visibleCounts.open),
-            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: visibleCounts.active),
-            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: visibleCounts.done),
-            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: visibleCounts.closed)
+            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: loadedAtLeastOnce ? visibleCounts.open : nil),
+            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: loadedAtLeastOnce ? visibleCounts.active : nil),
+            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: loadedAtLeastOnce ? visibleCounts.done : nil),
+            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: loadedAtLeastOnce ? visibleCounts.closed : nil)
         ]
     }
 
     public var selectedTab: String = MyTasksTab.open {
         didSet {
-            guard oldValue != selectedTab else { return }
+            // Before a successful load there is no list to show; keep the error.
+            guard oldValue != selectedTab, loadedAtLeastOnce else { return }
             rebuild()
         }
     }
@@ -390,7 +392,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     public func applyFilter(_ filter: ActivityFilter) {
         guard canDisplay else { return }
         activityFilter = filter
-        rebuild()
+        if loadedAtLeastOnce { rebuild() }
     }
 
     public var banner: BannerConfig? {
