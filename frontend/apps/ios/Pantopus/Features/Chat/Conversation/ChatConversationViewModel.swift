@@ -353,7 +353,8 @@ public final class ChatConversationViewModel {
     private let locationProvider: any LocationProviding
     private let mode: ChatThreadMode
     private let currentUserId: String
-    private let initialTopic: ChatInitialTopic?
+    /// Topic the thread opened on. Used once, like Android, so "All" stays selected after a refresh.
+    private var initialTopic: ChatInitialTopic?
     /// Gig backing a `.room` thread (from the unified-conversations
     /// row's `gig_id`). Drives the pinned context strip. `nil` for
     /// non-gig rooms, person threads, and AI.
@@ -1457,6 +1458,7 @@ public final class ChatConversationViewModel {
             } catch {
                 logger.warning("find/create topic failed: \(error)")
             }
+            self.initialTopic = nil
         }
         do {
             let response: ConversationTopicsResponse = try await api.request(ChatEndpoints.conversationTopics(otherUserId: otherUserId))
