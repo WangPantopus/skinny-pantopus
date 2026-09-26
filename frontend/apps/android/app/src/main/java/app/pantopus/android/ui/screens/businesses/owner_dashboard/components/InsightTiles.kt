@@ -38,12 +38,13 @@ import app.pantopus.android.ui.theme.Spacing
  * A10.7 — the owner's "This week" insight strip: a bordered card with a
  * header row ("This week" + an "Insights" link) over equal-width Views /
  * Saves / Contacts tiles, each a value with an optional week-over-week delta
- * pill. Sample-driven in B3.2. Mirrors iOS `InsightTiles.swift`.
+ * pill. Sample-driven in B3.2. Mirrors iOS `InsightTiles.swift`. A null
+ * [onOpenInsights] hides the link (no native Insights screen yet).
  */
 @Composable
 fun InsightTiles(
     insights: List<OwnerInsightTile>,
-    onOpenInsights: () -> Unit,
+    onOpenInsights: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -71,26 +72,28 @@ fun InsightTiles(
                 letterSpacing = 0.3.sp,
             )
             Box(modifier = Modifier.weight(1f))
-            Row(
-                modifier =
-                    Modifier
-                        .clickable(onClick = onOpenInsights)
-                        .testTag("businessOwner.openInsights"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = "Insights",
-                    color = PantopusColors.business,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                PantopusIconImage(
-                    icon = PantopusIcon.ChevronRight,
-                    contentDescription = null,
-                    size = 12.dp,
-                    tint = PantopusColors.business,
-                )
+            if (onOpenInsights != null) {
+                Row(
+                    modifier =
+                        Modifier
+                            .clickable(onClick = onOpenInsights)
+                            .testTag("businessOwner.openInsights"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = "Insights",
+                        color = PantopusColors.business,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    PantopusIconImage(
+                        icon = PantopusIcon.ChevronRight,
+                        contentDescription = null,
+                        size = 12.dp,
+                        tint = PantopusColors.business,
+                    )
+                }
             }
         }
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))

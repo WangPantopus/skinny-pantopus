@@ -51,7 +51,7 @@ enum class HomeIssueChipStatus { Open, Scheduled, InProgress, Completed, Dismiss
  * (`src/app/homes/[id]/maintenance.tsx:36`):
  *   Open      → `suggested` | `open`
  *   Scheduled → `scheduled` | `in_progress`
- *   History   → `completed` | `dismissed`
+ *   History   → `resolved` | `canceled` (the server's `HomeIssue.status`)
  */
 enum class HomeIssuesTab(val id: String) {
     Open("open"),
@@ -203,10 +203,10 @@ open class HomeIssuesListViewModel
         }
 
         /**
-         * Dismiss — RN `maintenance.tsx:75` sends `status: 'dismissed'`
-         * after a destructive confirm.
+         * Dismiss after a destructive confirm. The server stores a dismissed
+         * issue as `canceled`; it refuses RN's `dismissed`.
          */
-        fun dismissIssue(issueId: String) = updateStatus(issueId, "dismissed")
+        fun dismissIssue(issueId: String) = updateStatus(issueId, "canceled")
 
         // MARK: - Fetch + render
 
@@ -331,7 +331,7 @@ open class HomeIssuesListViewModel
                             icon = PantopusIcon.CheckCircle,
                             variant = CompactButtonVariant.Primary,
                             testTag = "homeIssues.row_$issueId.complete",
-                            onClick = { updateStatus(issueId, "completed") },
+                            onClick = { updateStatus(issueId, "resolved") },
                         )
                 HomeIssueChipStatus.Completed,
                 HomeIssueChipStatus.Dismissed,
@@ -419,7 +419,7 @@ open class HomeIssuesListViewModel
                     "scheduled" -> HomeIssueChipStatus.Scheduled
                     "in_progress" -> HomeIssueChipStatus.InProgress
                     "completed", "resolved" -> HomeIssueChipStatus.Completed
-                    "dismissed" -> HomeIssueChipStatus.Dismissed
+                    "dismissed", "canceled" -> HomeIssueChipStatus.Dismissed
                     else -> HomeIssueChipStatus.Unknown
                 }
 

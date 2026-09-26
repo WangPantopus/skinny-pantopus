@@ -124,6 +124,9 @@ public enum YouRoute: Hashable {
     /// T6.3f / P14 — My businesses (avatar-first roster). The
     /// "me.businesses" Activity-section row pushes here.
     case myBusinesses
+    /// Discover businesses — where My businesses' "Claim an existing page"
+    /// looks for the page to claim, as in the Hub.
+    case discoverBusinesses
     /// Public business profile reached from My businesses.
     case businessProfile(businessId: String)
     /// P4.2 — A13.10 Edit Business Page (owner-only). Pushed from the
@@ -1182,6 +1185,7 @@ public struct YouTabRoot: View {
             SettingsView(
                 onClose: { Task { @MainActor in pop() } },
                 onEditProfile: { showsEditProfile = true },
+                onOpenAudienceProfile: { Task { @MainActor in path.append(.audienceProfile) } },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case .paymentsSettings:
@@ -1189,6 +1193,7 @@ public struct YouTabRoot: View {
                 initialRoute: .payments,
                 onClose: { Task { @MainActor in pop() } },
                 onEditProfile: { showsEditProfile = true },
+                onOpenAudienceProfile: { Task { @MainActor in path.append(.audienceProfile) } },
                 onSignedOut: { Task { @MainActor in pop() } }
             )
         case let .placeholder(label):
@@ -2324,11 +2329,33 @@ public struct YouTabRoot: View {
                         Task { @MainActor in path.append(.createBusiness) }
                     },
                     onClaim: {
-                        // The You tab has no Discover-businesses route; the
-                        // claim affordance falls back to the create flow.
-                        Task { @MainActor in path.append(.createBusiness) }
+                        Task { @MainActor in path.append(.discoverBusinesses) }
                     }
                 )
+            )
+        case .discoverBusinesses:
+            DiscoverBusinessesView(
+                viewModel: DiscoverBusinessesViewModel { target in
+                    Task { @MainActor in
+                        switch target {
+                        case let .business(businessId, _):
+                            path.append(.businessProfile(businessId: businessId))
+                        case .setHomeAddress:
+                            path.append(.addHome)
+                        case .inviteBusiness:
+                            let draft = MailDraft(
+                                subject: "Join Pantopus",
+                                body: "I'd love to see your business on Pantopus — neighbors near me are "
+                                    + "looking for trusted local pros. \(InviteLinks.downloadURLString)"
+                            )
+                            if MailDraft.canSendMail {
+                                systemSheet = .mail(draft)
+                            } else if let url = draft.mailtoURL {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    }
+                }
             )
         case .businessWaitlist, .createBusiness:
             // Waitlist is retired — both routes open the create wizard.
@@ -2691,8 +2718,9 @@ public struct YouTabRoot: View {
                 businessId: businessId,
                 onBack: { Task { @MainActor in pop() } },
                 onEditPage: { Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) } },
-                onOpenInsights: { Task { @MainActor in path.append(.placeholder(label: "Insights")) } },
-                onOpenSettings: { Task { @MainActor in path.append(.placeholder(label: "Business settings")) } },
+                // Business settings are the page's profile fields, which the
+                // page editor edits (web `/app/business/[id]/settings/profile`).
+                onOpenSettings: { Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) } },
                 onOpenTeam: { Task { @MainActor in path.append(.businessTeam(businessId: businessId)) } },
                 onOpenPages: { Task { @MainActor in path.append(.businessPages(businessId: businessId)) } },
                 onOpenPayments: {

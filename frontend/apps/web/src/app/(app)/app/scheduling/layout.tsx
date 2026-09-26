@@ -24,12 +24,10 @@ import {
   Inbox,
   LayoutDashboard,
   Link2,
-  MessageSquare,
   Package,
   Radio,
   Search,
   Users,
-  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -95,8 +93,8 @@ const SECTIONS: NavSection[] = [
     title: "Automation",
     items: [
       { href: `${BASE}/reminders`, label: "Reminders", icon: Bell },
-      { href: `${BASE}/workflows`, label: "Workflows", icon: Workflow },
-      { href: `${BASE}/templates`, label: "Templates", icon: MessageSquare },
+      // Workflows and Templates stay hidden until something sends them:
+      // nothing runs a saved workflow or sends a template yet.
       { href: `${BASE}/insights`, label: "Insights", icon: BarChart3 },
     ],
   },

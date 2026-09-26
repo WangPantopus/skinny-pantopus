@@ -45,12 +45,13 @@ private val LOGO_PROTRUDE = 34.dp
 
 /**
  * A10.7 — "Business" + violet "Owner view" eyebrow with chart / settings
- * actions. Sits below the status bar. Mirrors iOS `OwnerTopBar`.
+ * actions. Sits below the status bar. Mirrors iOS `OwnerTopBar`. A null
+ * [onOpenInsights] hides the chart action (no native Insights screen yet).
  */
 @Composable
 fun OwnerTopBar(
     onBack: () -> Unit,
-    onOpenInsights: () -> Unit,
+    onOpenInsights: (() -> Unit)?,
     onOpenSettings: () -> Unit,
 ) {
     Column(
@@ -98,7 +99,9 @@ fun OwnerTopBar(
                     )
                 }
             }
-            IconButton(icon = PantopusIcon.BarChart3, label = "Insights", onClick = onOpenInsights)
+            if (onOpenInsights != null) {
+                IconButton(icon = PantopusIcon.BarChart3, label = "Insights", onClick = onOpenInsights)
+            }
             IconButton(icon = PantopusIcon.SlidersHorizontal, label = "Settings", onClick = onOpenSettings)
         }
         HairlineBottom()

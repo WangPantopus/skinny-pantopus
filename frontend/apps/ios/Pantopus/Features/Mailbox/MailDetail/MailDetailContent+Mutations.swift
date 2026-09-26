@@ -12,6 +12,11 @@ extension MailDetailContent {
         rebuild(content, readStatusLabel: value ? "Read" : content.readStatusLabel, isAcknowledged: value)
     }
 
+    /// Return a copy of `content` marked read once opening it was recorded.
+    static func replacingRead(_ content: MailDetailContent) -> MailDetailContent {
+        rebuild(content, readStatusLabel: "Read")
+    }
+
     /// Return a copy of `content` with the community detail's RSVP
     /// status flipped. Used by the optimistic `setRsvp` mutation.
     static func replacingRsvp(

@@ -194,6 +194,12 @@ public struct AckResponse: Decodable, Sendable, Hashable {
     public let ackStatus: String
 }
 
+/// `PATCH /api/mailbox/:id/view` response — route `backend/routes/mailbox.js:2768`.
+public struct MarkMailViewedResponse: Decodable, Sendable, Hashable {
+    public let message: String
+    public let alreadyViewed: Bool
+}
+
 /// `PATCH /api/mailbox/:id/archive` body — route `backend/routes/mailbox.js:2860`.
 public struct ArchiveMailBody: Encodable, Sendable {
     public let archived: Bool

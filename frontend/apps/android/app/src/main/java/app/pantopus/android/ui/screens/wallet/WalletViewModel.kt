@@ -107,12 +107,27 @@ class WalletViewModel
             if (showLoading) _state.value = WalletUiState.Loading
             when (val balance = repository.balance()) {
                 is NetworkResult.Success -> {
-                    // Transactions + pending-release + Connect status are
-                    // supplementary — their failure degrades gracefully
-                    // rather than sinking the screen.
+                    // Activity and pending-release are money figures: a failed
+                    // read takes the balance's error + Try again rather than
+                    // showing "$0.00 this month" or "Nothing in escrow" (iOS
+                    // already treats activity this way). Connect status stays
+                    // supplementary — a failure there only offers "Set up payouts".
                     val transactions =
-                        (repository.transactions() as? NetworkResult.Success)?.data?.transactions ?: emptyList()
-                    val pending = (repository.pendingRelease() as? NetworkResult.Success)?.data
+                        when (val result = repository.transactions()) {
+                            is NetworkResult.Success -> result.data.transactions
+                            is NetworkResult.Failure -> {
+                                _state.value = WalletUiState.Error(result.error.message)
+                                return
+                            }
+                        }
+                    val pending =
+                        when (val result = repository.pendingRelease()) {
+                            is NetworkResult.Success -> result.data
+                            is NetworkResult.Failure -> {
+                                _state.value = WalletUiState.Error(result.error.message)
+                                return
+                            }
+                        }
                     val connectAccount =
                         (connectRepository.accountStatus() as? NetworkResult.Success)?.data?.account
                     val enabled = connectAccount?.payoutsEnabled ?: false

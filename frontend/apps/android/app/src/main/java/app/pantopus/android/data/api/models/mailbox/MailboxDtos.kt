@@ -139,6 +139,13 @@ data class AckResponse(
     val ackStatus: String,
 )
 
+/** `PATCH /api/mailbox/:id/view` response — route `backend/routes/mailbox.js:2768`. */
+@JsonClass(generateAdapter = true)
+data class MarkMailViewedResponse(
+    val message: String,
+    val alreadyViewed: Boolean,
+)
+
 /** `PATCH /api/mailbox/:id/archive` body — route `backend/routes/mailbox.js:2860`. */
 @JsonClass(generateAdapter = true)
 data class ArchiveMailRequest(

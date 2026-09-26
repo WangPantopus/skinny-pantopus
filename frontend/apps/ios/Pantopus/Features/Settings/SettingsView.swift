@@ -16,10 +16,6 @@ public enum SettingsStackRoute: Hashable {
     case notifications
     case privacy
     case identityCenter
-    case audienceProfile
-    /// A03.2 — Beacon Updates feed, reached from the Audience Profile
-    /// "Beacon Updates" entry row.
-    case beaconsFeed
     case blockedUsers
     case password
     /// Persistent login — Settings → Security & devices (trusted-device
@@ -52,6 +48,9 @@ public struct SettingsView: View {
     private let onEditProfile: @MainActor () -> Void
     private let onOpenReviewClaims: @MainActor () -> Void
     private let onOpenWallet: @MainActor () -> Void
+    /// Identity Center's Public profile card. The host opens its audience
+    /// profile, where setup, sharing, broadcasts and the inbox are wired.
+    private let onOpenAudienceProfile: @MainActor () -> Void
     private let onSignedOut: @MainActor () -> Void
 
     public init(
@@ -60,6 +59,7 @@ public struct SettingsView: View {
         onEditProfile: @escaping @MainActor () -> Void = {},
         onOpenReviewClaims: @escaping @MainActor () -> Void = {},
         onOpenWallet: @escaping @MainActor () -> Void = {},
+        onOpenAudienceProfile: @escaping @MainActor () -> Void = {},
         onSignedOut: @escaping @MainActor () -> Void = {}
     ) {
         _path = State(initialValue: initialRoute.map { [$0] } ?? [])
@@ -68,6 +68,7 @@ public struct SettingsView: View {
         self.onEditProfile = onEditProfile
         self.onOpenReviewClaims = onOpenReviewClaims
         self.onOpenWallet = onOpenWallet
+        self.onOpenAudienceProfile = onOpenAudienceProfile
         self.onSignedOut = onSignedOut
     }
 
@@ -121,7 +122,7 @@ public struct SettingsView: View {
                 onBack: { popLast() },
                 onOpenIdentity: { card in
                     if card.kind == .publicProfile {
-                        path.append(.audienceProfile)
+                        onOpenAudienceProfile()
                     }
                 },
                 onOpenRow: { row in
@@ -132,15 +133,6 @@ public struct SettingsView: View {
                     default: break
                     }
                 }
-            )
-        case .audienceProfile:
-            AudienceProfileView(onBack: popLast) { path.append(.beaconsFeed) }
-        case .beaconsFeed:
-            BeaconsFeedView(
-                onOpenPost: { _ in path.append(.placeholder(label: "Post")) },
-                onCompose: { _ in path.append(.placeholder(label: "Compose")) },
-                onDiscover: { path.append(.placeholder(label: "Discover beacons")) },
-                onBack: popLast
             )
         case .legal:
             LegalIndexView(

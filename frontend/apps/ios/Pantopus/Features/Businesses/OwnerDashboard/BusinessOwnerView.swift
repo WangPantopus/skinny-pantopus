@@ -36,8 +36,9 @@ public struct BusinessOwnerView: View {
     /// Opens Edit Business Page (A13.10) — the "Edit page" primary + every
     /// owner edit affordance.
     private let onEditPage: @MainActor () -> Void
-    /// Owner-only deep dives (insights / settings) — stubbed by the host.
-    private let onOpenInsights: @MainActor () -> Void
+    /// Owner-only deep dives. There's no native Insights screen yet, so hosts
+    /// pass nil and its entries stay hidden (the tiles still show the numbers).
+    private let onOpenInsights: (@MainActor () -> Void)?
     private let onOpenSettings: @MainActor () -> Void
     /// B2C — opens the Team & roles management screen.
     private let onOpenTeam: @MainActor () -> Void
@@ -57,7 +58,7 @@ public struct BusinessOwnerView: View {
         businessId: String,
         onBack: @escaping @MainActor () -> Void,
         onEditPage: @escaping @MainActor () -> Void = {},
-        onOpenInsights: @escaping @MainActor () -> Void = {},
+        onOpenInsights: (@MainActor () -> Void)? = nil,
         onOpenSettings: @escaping @MainActor () -> Void = {},
         onOpenTeam: @escaping @MainActor () -> Void = {},
         onOpenPages: @escaping @MainActor () -> Void = {},
@@ -212,7 +213,7 @@ struct OwnerEditFrame: View {
     let content: BusinessOwnerContent
     let onBack: @MainActor () -> Void
     let onEditPage: @MainActor () -> Void
-    let onOpenInsights: @MainActor () -> Void
+    let onOpenInsights: (@MainActor () -> Void)?
     let onOpenSettings: @MainActor () -> Void
     let onOpenTeam: @MainActor () -> Void
     /// C4 — opens the custom Pages CMS.
@@ -911,7 +912,8 @@ private struct OwnerLoadingLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            OwnerTopBar(onBack: onBack, onOpenInsights: {}, onOpenSettings: {})
+            // swiftlint:disable:next trailing_closure
+            OwnerTopBar(onBack: onBack, onOpenSettings: {})
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     LinearGradient(
@@ -950,7 +952,8 @@ private struct OwnerMessageLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            OwnerTopBar(onBack: onBack, onOpenInsights: {}, onOpenSettings: {})
+            // swiftlint:disable:next trailing_closure
+            OwnerTopBar(onBack: onBack, onOpenSettings: {})
             EmptyState(
                 icon: icon,
                 headline: headline,

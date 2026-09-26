@@ -127,7 +127,7 @@ private fun SettingsBody(
         val accentBg = data.pillar.accentBg
         SettingsGroup(title = "Automation", accent = accent, helper = "Reminders go out automatically before each booking.") {
             // Subtitles describe each row, as web does; this screen loads no
-            // workflow, template or channel data, so it states no counts.
+            // channel data, so it states no counts.
             SettingsRow(
                 label = "Default reminders",
                 sublabel = data.remindersValue,
@@ -136,16 +136,8 @@ private fun SettingsBody(
                     if (data.remindersValue == null) SettingsChipChevron("Off", SettingsChipTone.Warning) else SettingsChevron()
                 },
             )
-            SettingsRow(
-                label = "Workflows & follow-ups",
-                sublabel = "Automate messages around bookings",
-                onClick = { onNavigate(vm.workflowsRoute()) },
-            )
-            SettingsRow(
-                label = "Message templates",
-                sublabel = "Reusable booking messages",
-                onClick = { onNavigate(vm.templatesRoute()) },
-            )
+            // Workflows and Message templates stay hidden until something sends
+            // them: nothing runs a saved workflow or sends a template yet.
             SettingsRow(
                 label = "Booking notifications",
                 sublabel = "Choose your channels",

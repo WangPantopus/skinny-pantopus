@@ -157,9 +157,9 @@ public final class WalletViewModel {
         do {
             let balance: WalletBalanceResponse = try await api.request(WalletEndpoints.balance())
             let history: WalletTransactionsResponse = try await api.request(WalletEndpoints.transactions())
-            // Pending-release is supplementary — a failure there shouldn't sink
-            // the whole screen, so it degrades to nil (zero pending).
-            let pending: WalletPendingReleaseResponse? = try? await api.request(
+            // Pending-release is a money figure like the balance: a failed read
+            // takes the same error + Try again instead of "Nothing in escrow".
+            let pending: WalletPendingReleaseResponse = try await api.request(
                 WalletEndpoints.pendingRelease()
             )
             // Connect payout status gates the Withdraw CTA. A 404 (no account

@@ -199,14 +199,10 @@ class SchedulingSettingsRootViewModel
 
         // Navigation route helpers. The automations rows carry this root's owner
         // (iOS parity: `.defaultReminders(owner:)` etc.) — reminders persist onto
-        // the owner's BookingPage and workflows/templates mutate the owner's rows.
+        // the owner's BookingPage.
         fun notificationsRoute() = SchedulingRoutes.notifications(owner.routeKind, owner.ownerRouteId)
 
         fun remindersRoute() = SchedulingRoutes.remindersQuickSetup(owner.routeKind, owner.ownerRouteId)
-
-        fun workflowsRoute() = SchedulingRoutes.workflowsList(owner.routeKind, owner.ownerRouteId)
-
-        fun templatesRoute() = SchedulingRoutes.templateLibrary(owner.routeKind, owner.ownerRouteId)
 
         fun availabilityRoute() = SchedulingRoutes.AVAILABILITY_LIST
 

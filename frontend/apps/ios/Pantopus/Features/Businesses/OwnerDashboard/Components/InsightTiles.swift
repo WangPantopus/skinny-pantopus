@@ -6,7 +6,7 @@
 //  header row ("This week" + an "Insights" link) over equal-width Views /
 //  Saves / Contacts tiles, each a value with an optional week-over-week
 //  delta pill. Sample-driven in B3.2 (no analytics backend); the "Insights"
-//  link is wired to the host's deep-dive.
+//  link shows only when the host has a deep-dive to open.
 //
 //  Design reference: `docs/designs/A10/business-owner-frames.jsx`
 //  (InsightsStrip). The design's sky `primary` accent renders as business
@@ -18,7 +18,8 @@ import SwiftUI
 @MainActor
 struct InsightTiles: View {
     let insights: [OwnerInsightTile]
-    let onOpenInsights: @MainActor () -> Void
+    /// Nil hides the "Insights" link (no native Insights screen yet).
+    var onOpenInsights: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -43,16 +44,18 @@ struct InsightTiles: View {
                 .tracking(0.3)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer()
-            Button { onOpenInsights() } label: {
-                HStack(spacing: 3) {
-                    Text("Insights")
-                        .font(.system(size: 11.5, weight: .semibold))
-                    Icon(.chevronRight, size: 12, color: Theme.Color.business)
+            if let onOpenInsights {
+                Button { onOpenInsights() } label: {
+                    HStack(spacing: 3) {
+                        Text("Insights")
+                            .font(.system(size: 11.5, weight: .semibold))
+                        Icon(.chevronRight, size: 12, color: Theme.Color.business)
+                    }
+                    .foregroundStyle(Theme.Color.business)
                 }
-                .foregroundStyle(Theme.Color.business)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("businessOwner.openInsights")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("businessOwner.openInsights")
         }
         .padding(.horizontal, 14)
         .padding(.top, 9)

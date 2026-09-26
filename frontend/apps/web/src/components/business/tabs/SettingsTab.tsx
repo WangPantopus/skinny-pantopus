@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
 import type { BusinessProfile } from '@pantopus/api';
+import { confirmStore } from '@/components/ui/confirm-store';
 
 interface SettingsTabProps {
   businessId: string;
@@ -14,6 +15,17 @@ export default function SettingsTab({ businessId, profile, onUpdate }: SettingsT
   const [error, setError] = useState('');
 
   const togglePublish = async () => {
+    // Unpublishing takes the page offline at once, so it asks first.
+    if (profile?.is_published) {
+      const ok = await confirmStore.open({
+        title: 'Unpublish this page?',
+        description: "Your page goes offline right away. Neighbors can't find or view it until you publish it again.",
+        confirmLabel: 'Unpublish',
+        cancelLabel: 'Cancel',
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     setError('');
     try {

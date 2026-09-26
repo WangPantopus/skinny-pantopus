@@ -298,10 +298,33 @@ class MailDetailViewModel
                         if (result.data.mail.stationeryTheme != null) {
                             _ceremonialRedirectMailId.value = mailId
                         } else {
-                            _state.value = MailDetailUiState.Loaded(project(result.data.mail))
+                            val content = project(result.data.mail)
+                            _state.value = MailDetailUiState.Loaded(content)
+                            // Certified mail stays unread until it is signed: its
+                            // Sign for delivery confirmation keys on unread.
+                            val signable = content.certifiedDetail != null && !content.isAcknowledged
+                            if (!result.data.mail.viewed && !signable) markViewed()
                         }
                     is NetworkResult.Failure ->
                         _state.value = MailDetailUiState.Error(result.error.displayMessage("Couldn't load this item."))
+                }
+            }
+        }
+
+        /**
+         * Opening a letter reads it, as on the web: the same view endpoint marks
+         * it read on every client (and sets an ad letter's payout pending once).
+         * NonCancellable: leaving at once still records the read. A failure
+         * leaves it unread for the next open.
+         */
+        private fun markViewed() {
+            viewModelScope.launch {
+                withContext(NonCancellable) {
+                    if (repo.markViewed(mailId) !is NetworkResult.Success) return@withContext
+                    (_state.value as? MailDetailUiState.Loaded)?.let {
+                        _state.value = MailDetailUiState.Loaded(it.content.copy(readStatusLabel = "Read"))
+                    }
+                    MailboxRepository.announceMailViewed(mailId)
                 }
             }
         }

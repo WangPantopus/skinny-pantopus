@@ -15,8 +15,8 @@ const STATUS_META: Record<string, { icon: typeof AlertCircle; color: string; lab
   open:        { icon: AlertCircle,  color: '#f59e0b', label: 'Open' },
   scheduled:   { icon: CalendarDays, color: '#0284c7', label: 'Scheduled' },
   in_progress: { icon: Wrench,       color: '#7c3aed', label: 'In Progress' },
-  completed:   { icon: CheckCircle,  color: '#16a34a', label: 'Completed' },
-  dismissed:   { icon: XCircle,      color: '#6b7280', label: 'Dismissed' },
+  resolved:    { icon: CheckCircle,  color: '#16a34a', label: 'Completed' },
+  canceled:    { icon: XCircle,      color: '#6b7280', label: 'Dismissed' },
 };
 
 function MaintenanceContent() {
@@ -46,7 +46,7 @@ function MaintenanceContent() {
 
   const openItems = items.filter((i) => i.status === 'suggested' || i.status === 'open');
   const scheduledItems = items.filter((i) => i.status === 'scheduled' || i.status === 'in_progress');
-  const historyItems = items.filter((i) => i.status === 'completed' || i.status === 'dismissed');
+  const historyItems = items.filter((i) => i.status === 'resolved' || i.status === 'canceled');
   const currentList = tab === 'open' ? openItems : tab === 'scheduled' ? scheduledItems : historyItems;
 
   const handleCreate = useCallback(async () => {
@@ -69,7 +69,7 @@ function MaintenanceContent() {
   const handleDismiss = useCallback(async (itemId: string) => {
     const yes = await confirmStore.open({ title: 'Dismiss Issue', description: 'Are you sure?', confirmLabel: 'Dismiss', variant: 'destructive' });
     if (!yes) return;
-    try { await api.homeProfile.updateHomeIssue(homeId!, itemId, { status: 'dismissed' }); toast.success('Issue dismissed'); await fetchItems(); }
+    try { await api.homeProfile.updateHomeIssue(homeId!, itemId, { status: 'canceled' }); toast.success('Issue dismissed'); await fetchItems(); }
     catch { toast.error('Failed to dismiss issue'); }
   }, [homeId, fetchItems]);
 
@@ -141,13 +141,15 @@ function MaintenanceContent() {
                     </button>
                   )}
                   {item.status === 'scheduled' && (
-                    <button onClick={() => updateStatus(item.id, 'completed')} title="Mark complete" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition">
+                    <button onClick={() => updateStatus(item.id, 'resolved')} title="Mark complete" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition">
                       <CheckCircle className="w-4 h-4" />
                     </button>
                   )}
-                  <button onClick={() => handleDismiss(item.id)} title="Dismiss" className="p-1.5 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {item.status !== 'resolved' && item.status !== 'canceled' && (
+                    <button onClick={() => handleDismiss(item.id)} title="Dismiss" className="p-1.5 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
