@@ -56,7 +56,9 @@ public final class BusinessProfileViewModel {
     /// C4 — the named custom page, when the entry point carried a slug.
     public private(set) var namedPage: BusinessProfileNamedPageState = .none
 
-    private let businessId: String
+    /// The business id. A `/b/:username` link opens with the username, which
+    /// `loadDetail()` resolves to the id.
+    private var businessId: String
     /// C4 — slug from `pantopus://b/:username/:slug` (RN's `?pageSlug=`).
     private let pageSlug: String?
     private let client: APIClient
@@ -141,10 +143,7 @@ public final class BusinessProfileViewModel {
 
     private func fetch() async {
         do {
-            let detail = try await client.request(
-                BusinessesEndpoints.business(businessId: businessId),
-                as: BusinessDetailResponse.self
-            )
+            let detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
             let reviewsResponse = await loadReviewsAndStats()
             await loadNamedPage(username: detail.business.username)
@@ -166,6 +165,30 @@ public final class BusinessProfileViewModel {
         } catch {
             logger.warning("Business detail load failed: \(error)")
             state = .error(message: "Something went wrong")
+        }
+    }
+
+    /// `/b/:username` links (a business's shared public page) carry the
+    /// username, but the detail read takes the id. When the id isn't found and
+    /// isn't a UUID, the read-only public page resolves the username; an
+    /// unknown or unpublished username stays not found.
+    private func loadDetail() async throws -> BusinessDetailResponse {
+        do {
+            return try await client.request(
+                BusinessesEndpoints.business(businessId: businessId),
+                as: BusinessDetailResponse.self
+            )
+        } catch APIError.notFound where UUID(uuidString: businessId) == nil {
+            let publicPage = try? await client.request(
+                BusinessesEndpoints.publicBusiness(username: businessId),
+                as: BusinessPublicResponse.self
+            )
+            guard let id = publicPage?.businessId, !id.isEmpty else { throw APIError.notFound }
+            businessId = id
+            return try await client.request(
+                BusinessesEndpoints.business(businessId: id),
+                as: BusinessDetailResponse.self
+            )
         }
     }
 
@@ -342,7 +365,8 @@ extension BusinessProfileViewModel {
             isNewlyClaimed: isNewlyClaimed,
             phoneNumber: profile?.publicPhone ?? primaryLocation?.phone,
             websiteURL: normalizedWebsite(profile?.website),
-            viewerIsOwner: detail.access?.isOwner ?? false
+            viewerIsOwner: detail.access?.isOwner ?? false,
+            hasPublicPage: publicResponse != nil
         )
     }
 

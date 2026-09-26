@@ -154,6 +154,8 @@ data class BusinessProfileContent(
     val phoneNumber: String?,
     val websiteUrl: String?,
     val viewerIsOwner: Boolean,
+    /** The business's public page (web `/b/:username`) is live, so Share can hand out that link. */
+    val hasPublicPage: Boolean = false,
 )
 
 /** Observed UI state for the Business Profile screen. */

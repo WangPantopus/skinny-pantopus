@@ -266,13 +266,15 @@ data class BusinessCatalogItemsResponse(
 /**
  * `GET /api/businesses/public/:username` response (subset). Only the
  * fields the Business Profile screen reads are decoded; the response is
- * far larger (pages, blocks, founding slot, …).
- * Route `backend/routes/businesses.js:3277`.
+ * far larger (pages, blocks, founding slot, …). [business] resolves a
+ * `/b/:username` link to the business id.
+ * Route `backend/routes/businesses.js:3416`.
  */
 @JsonClass(generateAdapter = true)
 data class BusinessPublicResponse(
     val hours: List<BusinessHoursDto> = emptyList(),
     val catalog: List<BusinessCatalogItemDto> = emptyList(),
+    val business: BusinessUserDto? = null,
 )
 
 // ---------------------------------------------------------------------------

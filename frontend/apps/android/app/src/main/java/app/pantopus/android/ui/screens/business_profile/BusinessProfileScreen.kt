@@ -60,6 +60,7 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.GalleryStrip
 import app.pantopus.android.ui.components.GalleryTile
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.MapPreview
 import app.pantopus.android.ui.components.RatingDistribution
 import app.pantopus.android.ui.components.Shimmer
@@ -101,7 +102,8 @@ fun BusinessProfileScreen(
     onBack: () -> Unit,
     onOpenMessages: (roomId: String, displayName: String, initials: String, verified: Boolean) -> Unit =
         { _, _, _, _ -> },
-    onShare: () -> Unit = {},
+    /** Host opens the share sheet with this text. */
+    onShare: (String) -> Unit = {},
     onOpenWebsite: (String) -> Unit = {},
     onBook: () -> Unit = {},
     onEdit: () -> Unit = {},
@@ -168,7 +170,7 @@ fun BusinessProfileScreen(
                         content = current.content,
                         isSaved = isSaved,
                         onBack = onBack,
-                        onShare = onShare,
+                        onShare = { onShare(businessShareText(current.content)) },
                         onMore = { viewModel.setShowOverflow(true) },
                         onToggleSavedPlace = { pending?.let(savedPlacesStore::toggle) },
                         onContact = viewModel::startInquiry,
@@ -253,7 +255,7 @@ fun BusinessProfileScreen(
                     },
                     onShare = {
                         viewModel.setShowOverflow(false)
-                        onShare()
+                        content?.let { onShare(businessShareText(it)) }
                     },
                     onReport = {
                         viewModel.setShowOverflow(false)
@@ -264,6 +266,16 @@ fun BusinessProfileScreen(
             }
         }
     }
+}
+
+/**
+ * The business's own public page when it's live; the app link while the page
+ * is unpublished (it has no public URL yet).
+ */
+private fun businessShareText(content: BusinessProfileContent): String {
+    val handle = content.header.handle?.takeIf { it.isNotBlank() }
+    val link = if (content.hasPublicPage && handle != null) InviteLinks.businessUrl(handle) else InviteLinks.DOWNLOAD_URL
+    return "Check out ${content.header.displayName} on Pantopus — $link"
 }
 
 private fun telUri(phone: String?): String? {

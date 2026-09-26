@@ -2159,11 +2159,7 @@ public struct HubTabRoot: View {
                 onOpenMessages: { destination in
                     Task { @MainActor in push(.chatConversation(destination)) }
                 },
-                onShare: {
-                    systemSheet = .share(
-                        items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
-                    )
-                },
+                onShare: { text in systemSheet = .share(items: [text]) },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessProfilePage(businessId, pageSlug):
@@ -2174,11 +2170,7 @@ public struct HubTabRoot: View {
                 onOpenMessages: { destination in
                     Task { @MainActor in push(.chatConversation(destination)) }
                 },
-                onShare: {
-                    systemSheet = .share(
-                        items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
-                    )
-                },
+                onShare: { text in systemSheet = .share(items: [text]) },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessPages(businessId):
@@ -3504,7 +3496,7 @@ private struct BusinessProfileDestination: View {
     var pageSlug: String?
     let onBack: @MainActor () -> Void
     let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
-    let onShare: @MainActor () -> Void
+    let onShare: @MainActor (String) -> Void
     let onEdit: @MainActor () -> Void
 
     @Environment(\.openURL) private var openURL

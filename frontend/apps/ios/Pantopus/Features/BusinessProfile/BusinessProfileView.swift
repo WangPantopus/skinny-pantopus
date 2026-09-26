@@ -27,7 +27,8 @@ public struct BusinessProfileView: View {
     private let onBack: @MainActor () -> Void
     /// Host pushes the chat conversation after Contact resolves a room.
     private let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
-    private let onShare: @MainActor () -> Void
+    /// Host presents the share sheet with this text.
+    private let onShare: @MainActor (String) -> Void
     private let onOpenWebsite: @MainActor (URL) -> Void
     /// "Book" dock action — stubbed by the host (real booking ships later).
     private let onBook: @MainActor () -> Void
@@ -39,7 +40,7 @@ public struct BusinessProfileView: View {
         pageSlug: String? = nil,
         onBack: @escaping @MainActor () -> Void,
         onOpenMessages: @escaping @MainActor (InboxConversationDestination) -> Void = { _ in },
-        onShare: @escaping @MainActor () -> Void = {},
+        onShare: @escaping @MainActor (String) -> Void = { _ in },
         onOpenWebsite: @escaping @MainActor (URL) -> Void = { _ in },
         onBook: @escaping @MainActor () -> Void = {},
         onEdit: @escaping @MainActor () -> Void = {}
@@ -87,7 +88,7 @@ public struct BusinessProfileView: View {
                     savedStore.toggle(pending)
                 }
             }
-            Button("Share business") { onShare() }
+            Button("Share business") { shareBusiness() }
             Button("Report", role: .destructive) { showsReportSheet = true }
             Button("Cancel", role: .cancel) {}
         }
@@ -128,6 +129,19 @@ public struct BusinessProfileView: View {
             return payload.viewerIsOwner
         }
         return false
+    }
+
+    /// The business's own public page when it's live; the app link while the
+    /// page is unpublished (it has no public URL yet).
+    private func shareBusiness() {
+        guard case let .loaded(payload) = viewModel.state else { return }
+        let name = payload.header.displayName
+        let link = if payload.hasPublicPage, let handle = payload.header.handle, !handle.isEmpty {
+            InviteLinks.businessURLString(username: handle)
+        } else {
+            InviteLinks.downloadURLString
+        }
+        onShare("Check out \(name) on Pantopus — \(link)")
     }
 
     private var loadedSavedPlace: PendingSavePlace? {
@@ -194,7 +208,7 @@ public struct BusinessProfileView: View {
                 isSaved: payload.savedPlace.map(savedPlaceIsSaved) ?? false,
                 namedPage: viewModel.namedPage,
                 onBack: onBack,
-                onShare: onShare,
+                onShare: shareBusiness,
                 onMore: presentOverflow,
                 onToggleSavedPlace: {
                     if let pending = payload.savedPlace {
