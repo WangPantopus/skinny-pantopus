@@ -194,10 +194,44 @@ export async function markMailAsRead(mailId: string): Promise<{
 }
 
 /**
- * Delete mail
+ * Delete mail. It hides for everyone who could see it and can be restored
+ * until `restorable_until` (30 days).
  */
-export async function deleteMail(mailId: string): Promise<ApiResponse> {
-  return del<ApiResponse>(`/api/mailbox/${mailId}`);
+export async function deleteMail(mailId: string): Promise<ApiResponse & { restorable_until?: string }> {
+  return del<ApiResponse & { restorable_until?: string }>(`/api/mailbox/${mailId}`);
+}
+
+/**
+ * Restore a deleted letter (within 30 days) or a dismissed one.
+ */
+export async function restoreMail(mailId: string): Promise<{ message: string }> {
+  return post<{ message: string }>(`/api/mailbox/${mailId}/restore`);
+}
+
+/** A letter in Recently deleted. */
+export interface DeletedMail {
+  id: string;
+  display_title?: string | null;
+  subject?: string | null;
+  preview_text?: string | null;
+  sender_business_name?: string | null;
+  sender_address?: string | null;
+  recipient_user_id?: string | null;
+  recipient_home_id?: string | null;
+  drawer?: string | null;
+  created_at: string;
+  deleted_at: string;
+  deleted_by_name: string | null;
+  deleted_by_me: boolean;
+  restorable_until: string;
+}
+
+/**
+ * Recently deleted: letters deleted in the last 30 days that the caller
+ * could see, newest first.
+ */
+export async function getDeletedMail(): Promise<{ mail: DeletedMail[] }> {
+  return get<{ mail: DeletedMail[] }>('/api/mailbox/deleted');
 }
 
 /**

@@ -23,6 +23,7 @@ import {
 import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
+import type { DeletedMail } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -65,6 +66,7 @@ export const mailboxKeys = {
     [...mailboxKeys.all, 'drawer', drawer, params] as const,
   itemDetail: (itemId: string) =>
     [...mailboxKeys.all, 'item', itemId] as const,
+  deleted: () => [...mailboxKeys.all, 'deleted'] as const,
 
   // Counter
   counter: () => [...mailboxKeys.all, 'counter'] as const,
@@ -933,6 +935,38 @@ export function useCancelVacationHold(
     mutationFn: api.cancelVacationHold,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: mailboxKeys.vacationHold() });
+    },
+    ...options,
+  });
+}
+
+// ============================================================
+// RECENTLY DELETED HOOKS
+// ============================================================
+
+export function useDeletedMail(
+  options?: Omit<UseQueryOptions<DeletedMail[], MailboxApiError>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery<DeletedMail[], MailboxApiError>({
+    queryKey: mailboxKeys.deleted(),
+    queryFn: api.getDeletedMail,
+    ...options,
+  });
+}
+
+/** Restore a deleted or dismissed letter; it returns to every list and count. */
+export function useRestoreMail(
+  options?: UseMutationOptions<void, MailboxApiError, string>,
+) {
+  const qc = useQueryClient();
+  return useMutation<void, MailboxApiError, string>({
+    mutationFn: api.restoreMail,
+    onSuccess: (_data, itemId) => {
+      qc.invalidateQueries({ queryKey: mailboxKeys.deleted() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
+      qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
+      qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
     },
     ...options,
   });

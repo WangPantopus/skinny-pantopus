@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mailbox.MailDetail
+import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.CertifiedDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityDetailDto
@@ -239,6 +240,17 @@ class MailDetailViewModel
         private val _didLeaveMailbox = MutableStateFlow(false)
         val didLeaveMailbox: StateFlow<Boolean> = _didLeaveMailbox.asStateFlow()
 
+        /**
+         * Set when the letter was deleted (restorable for 30 days) or dismissed
+         * for the household: it opens from its notice with Restore.
+         */
+        private val _removed = MutableStateFlow<MailRemovedDto?>(null)
+        val removed: StateFlow<MailRemovedDto?> = _removed.asStateFlow()
+
+        /** `true` while Restore is saving; a second tap meanwhile is ignored. */
+        private val _restoreInFlight = MutableStateFlow(false)
+        val restoreInFlight: StateFlow<Boolean> = _restoreInFlight.asStateFlow()
+
         val bidCheckout =
             GigBidCheckoutCoordinator(
                 gigsRepo,
@@ -289,6 +301,7 @@ class MailDetailViewModel
                     _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
                     return@launch
                 }
+                _removed.value = (result as? NetworkResult.Success)?.data?.mail?.removed
                 when (result) {
                     is NetworkResult.Success ->
                         // Ceremonial mail never lands on the generic detail —
@@ -508,6 +521,27 @@ class MailDetailViewModel
                     }
                 }
                 _archiveInFlight.value = false
+            }
+        }
+
+        /**
+         * `POST /api/mailbox/:id/restore` — puts a deleted or household-dismissed
+         * letter back for everyone who could see it, then reloads it.
+         */
+        fun restore() {
+            if (_removed.value == null || _restoreInFlight.value) return
+            _restoreInFlight.value = true
+            viewModelScope.launch {
+                when (val result = repo.restore(mailId)) {
+                    is NetworkResult.Success -> {
+                        _removed.value = null
+                        _toast.value = "Letter restored"
+                        refresh()
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = result.error.displayMessage("Couldn't restore this letter. Try again.")
+                }
+                _restoreInFlight.value = false
             }
         }
 

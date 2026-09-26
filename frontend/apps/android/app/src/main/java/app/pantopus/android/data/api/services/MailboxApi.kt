@@ -8,9 +8,11 @@ import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
 import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
+import app.pantopus.android.data.api.models.mailbox.RestoreMailResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -58,6 +60,15 @@ interface MailboxApi {
         @Path("id") id: String,
         @Body body: ArchiveMailRequest,
     ): ArchiveMailResponse
+
+    /**
+     * `POST /api/mailbox/:id/restore` — restores a letter deleted in the last
+     * 30 days, or one dismissed for the household, for everyone who could see it.
+     */
+    @POST("api/mailbox/{id}/restore")
+    suspend fun restore(
+        @Path("id") id: String,
+    ): RestoreMailResponse
 
     /** `GET /api/mailbox/earnings/summary` — route `backend/routes/mailbox.js:2899`. */
     @GET("api/mailbox/earnings/summary")

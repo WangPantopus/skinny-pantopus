@@ -196,7 +196,7 @@ export function useLegacyMailDetail() {
 
   const handleDelete = async () => {
     if (!mail) return;
-    const confirmed = await confirmStore.open({ title: 'Delete this mail permanently?', confirmLabel: 'Delete', variant: 'destructive' });
+    const confirmed = await confirmStore.open({ title: 'Delete this mail?', description: 'You can restore it for 30 days from Recently deleted.', confirmLabel: 'Delete', variant: 'destructive' });
     if (!confirmed) return;
     setActionError('');
     setActionSuccess('');

@@ -54,6 +54,12 @@ public enum MailboxEndpoints {
         Endpoint(method: .patch, path: "/api/mailbox/\(mailId)/archive", body: ArchiveMailBody(archived: true))
     }
 
+    /// `POST /api/mailbox/:id/restore` — restores a letter deleted in the last
+    /// 30 days, or one dismissed for the household, for everyone who could see it.
+    public static func restore(mailId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/\(mailId)/restore")
+    }
+
     /// `GET /api/mailbox/earnings/summary` — route
     /// `backend/routes/mailbox.js:2899`. `{ pendingEarnings, totalEarned,
     /// currency }`. Backs the Earn dashboard's balance hero.

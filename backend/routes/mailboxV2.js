@@ -6,6 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // before reading or changing anything and otherwise answers its not-found.
 const {
   getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
+  removedMailInfo, sendHomeMailRemovedNotice,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -222,7 +223,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
         .eq('drawer', drawer)
         .eq('viewed', false)
         .in('lifecycle', ['delivered', 'opened'])
-        .eq('archived', false);
+        .eq('archived', false)
+        .is('deleted_at', null);
 
       if (filter) filter(query);
 
@@ -294,6 +296,7 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       .from('Mail')
       .select('*, sender:sender_user_id(name, username)', { count: 'exact' })
       .eq('drawer', drawer)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -392,9 +395,13 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (error || !mail || !(await canAccessMail(mail, userId))) {
+    // A deleted letter still opens for the members who could see it, so its
+    // notice can offer Restore; a dismissed one says so too. Neither is marked
+    // opened by viewing it.
+    if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
       return res.status(404).json({ error: 'Mail not found' });
     }
+    mail.removed = await removedMailInfo(mail);
 
     // Enrich with package data if needed
     let packageInfo = null;
@@ -418,7 +425,7 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     }
 
     // Mark as opened if not already
-    if (!mail.opened_at) {
+    if (!mail.opened_at && !mail.removed) {
       await supabaseAdmin
         .from('Mail')
         .update({ opened_at: new Date().toISOString(), lifecycle: 'opened', viewed: true, viewed_at: new Date().toISOString() })
@@ -486,7 +493,8 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     if (!validActions.includes(action)) {
       return res.status(400).json({ error: 'Invalid action' });
     }
-    if (!(await readableMail(id, userId))) return res.status(404).json({ error: 'Mail not found' });
+    const readable = await readableMail(id, userId);
+    if (!readable) return res.status(404).json({ error: 'Mail not found' });
 
     // Update lifecycle based on action
     const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
@@ -504,6 +512,11 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     }
 
     await logMailEvent(`mail_action_clicked`, id, userId, { action_type: action });
+    // Dismissing a household letter hides it for everyone: the other members
+    // who could see it get the same notice as a delete, and can restore it.
+    if (action === 'shred' && readable.recipient_home_id && readable.lifecycle !== 'shredded') {
+      await sendHomeMailRemovedNotice(readable, userId, 'dismissed');
+    }
     return res.json({ message: `Action '${action}' recorded`, action });
   } catch (err) {
     logger.error('Action error', { error: err.message });
@@ -1091,7 +1104,8 @@ router.get('/summary', verifyToken, async (req, res) => {
         .select('category, urgency, mail_object_type', { count: 'exact' })
         .eq('drawer', drawer)
         .in('lifecycle', ['delivered', 'opened'])
-        .eq('archived', false);
+        .eq('archived', false)
+        .is('deleted_at', null);
 
       if (drawer === 'personal') {
         query = query.eq('recipient_user_id', userId);

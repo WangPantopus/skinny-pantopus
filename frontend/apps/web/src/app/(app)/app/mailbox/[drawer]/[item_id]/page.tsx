@@ -11,6 +11,7 @@ import {
   useFileItemToVault,
   useAcknowledgeCertifiedMail,
   useVaultFolders,
+  useRestoreMail,
 } from '@/lib/mailbox-queries';
 import { MailItemDetail } from '@/components/mailbox';
 import { toast } from '@/components/ui/toast-store';
@@ -143,6 +144,19 @@ export default function ItemDetailPage() {
 
   // ── Family Mail Party ─────────────────────────────────────
   const isSharedHome = drawer === 'home';
+
+  // ── Deleted or dismissed letter ───────────────────────────
+  // Members who could see it open it from the notice and can restore it; a
+  // deleted letter refuses every other action until then.
+  const removed = detail?.wrapper.removed;
+  const isDeleted = removed?.action === 'deleted';
+  const restore = useRestoreMail();
+  const handleRestore = useCallback(() => {
+    restore.mutate(itemId, {
+      onSuccess: () => toast.success('Letter restored'),
+      onError: (err) => toast.error(`Couldn't restore this letter. ${err.message || 'Please try again.'}`),
+    });
+  }, [restore, itemId]);
   const [, setPartyRevealed] = useState(false);
 
   const checkPresence = useCallback(async (mailId: string) => {
@@ -297,7 +311,7 @@ export default function ItemDetailPage() {
         <div className="flex-1" />
 
         {/* File to Vault button */}
-        <div ref={vaultRef} className="relative">
+        <div ref={vaultRef} className={isDeleted ? 'hidden' : 'relative'}>
           <button
             type="button"
             onClick={() => setVaultOpen(!vaultOpen)}
@@ -362,8 +376,32 @@ export default function ItemDetailPage() {
 
       {/* ── Scrollable content ────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        {/* Deleted / dismissed letter — Restore */}
+        {removed && (
+          <div
+            className="mx-6 mt-4 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-3 flex-shrink-0"
+            role="status"
+          >
+            <p className="flex-1 min-w-0 text-xs text-amber-700 dark:text-amber-300 font-medium">
+              {removed.action === 'deleted'
+                ? `Deleted${removed.by_name ? ` by ${removed.by_name}` : ''}${removed.restorable_until
+                  ? ` · You can restore it until ${new Date(removed.restorable_until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                  : ''}`
+                : 'Dismissed for the household · You can restore it'}
+            </p>
+            <button
+              type="button"
+              onClick={handleRestore}
+              disabled={restore.isPending}
+              className="flex-shrink-0 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:underline disabled:opacity-60"
+            >
+              {restore.isPending ? 'Restoring…' : 'Restore'}
+            </button>
+          </div>
+        )}
+
         {/* Family Mail Party banner — home drawer + presence detected */}
-        {isSharedHome && currentUserId && (
+        {isSharedHome && currentUserId && !isDeleted && (
           <FamilyMailParty
             itemId={itemId}
             currentUserId={currentUserId}
