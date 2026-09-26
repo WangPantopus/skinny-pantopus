@@ -178,7 +178,7 @@ struct ChatListingOfferCardView: View {
                             .multilineTextAlignment(.leading)
                         HStack(spacing: Spacing.s2) {
                             if let category = card.category, !category.isEmpty {
-                                Text(category)
+                                Text(Self.categoryLabel(category))
                                     .font(.system(size: 11))
                                     .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse.opacity(0.75) : Theme.Color.appTextSecondary)
                             }
@@ -219,6 +219,33 @@ struct ChatListingOfferCardView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Listing: \(card.title)")
     }
+
+    /// Listing category name for a marketplace category key, from the marketplace contract
+    /// (`packages/ui-utils/src/marketplace-contract.ts`).
+    static func categoryLabel(_ raw: String) -> String {
+        listingCategoryLabels[raw] ?? raw.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private static let listingCategoryLabels: [String: String] = [
+        "furniture": "Furniture",
+        "electronics": "Electronics",
+        "clothing": "Clothing",
+        "kids_baby": "Kids & Baby",
+        "tools": "Tools",
+        "home_garden": "Home & Garden",
+        "sports_outdoors": "Sports & Outdoors",
+        "vehicles": "Vehicles",
+        "books_media": "Books & Media",
+        "collectibles": "Collectibles",
+        "appliances": "Appliances",
+        "free_stuff": "Free Stuff",
+        "food_baked_goods": "Food & Baked Goods",
+        "plants_garden": "Plants & Garden",
+        "pet_supplies": "Pet Supplies",
+        "arts_crafts": "Arts & Crafts",
+        "tickets_events": "Tickets & Events",
+        "other": "Other"
+    ]
 
     private static func conditionLabel(_ raw: String) -> String {
         switch raw {

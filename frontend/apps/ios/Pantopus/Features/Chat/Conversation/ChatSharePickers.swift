@@ -120,7 +120,7 @@ struct ChatShareListingPickerSheet: View {
                                         .foregroundStyle(Theme.Color.appText)
                                     HStack(spacing: Spacing.s2) {
                                         if let category = listing.category, !category.isEmpty {
-                                            Text(category)
+                                            Text(ChatListingOfferCardView.categoryLabel(category))
                                                 .pantopusTextStyle(.caption)
                                                 .foregroundStyle(Theme.Color.appTextSecondary)
                                         }

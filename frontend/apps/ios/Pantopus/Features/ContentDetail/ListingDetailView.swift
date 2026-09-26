@@ -17,7 +17,9 @@ public struct ListingDetailView: View {
     /// The buyer's open offer ("Your offer $X"): shown with Withdraw, as on web.
     @State private var myOfferSheetVisible = false
     @State private var withdrawing = false
-    @State private var withdrawError: String?
+    @State private var accepting = false
+    /// The open-offer sheet's refused action (accept or withdraw), with the server's reason.
+    @State private var myOfferError: String?
     @State private var toast: ToastMessage?
     @State private var shareSheetVisible = false
     private let onBack: @MainActor () -> Void
@@ -145,7 +147,7 @@ public struct ListingDetailView: View {
            let onViewOffers {
             onViewOffers(listing)
         } else if viewModel.myOffer != nil {
-            withdrawError = nil
+            myOfferError = nil
             myOfferSheetVisible = true
         } else {
             offerError = nil
@@ -206,7 +208,7 @@ public struct ListingDetailView: View {
     }
 
     /// The buyer's open offer, as web shows it: waiting for the seller (their
-    /// amount and note) or the seller's counter, and Withdraw.
+    /// amount and note) or the seller's counter with Accept, and Withdraw.
     private func myOfferSheet(_ offer: ListingOfferDTO) -> some View {
         let countered = offer.status == "countered"
         let amount = (countered ? offer.counterAmount : offer.amount).flatMap { $0 > 0 ? $0 : nil }
@@ -230,12 +232,13 @@ public struct ListingDetailView: View {
                     .italic()
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
-            if let withdrawError {
-                Text(withdrawError)
+            if let myOfferError {
+                Text(myOfferError)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.Color.error)
                     .accessibilityIdentifier("listingDetailWithdrawError")
             }
+            if countered { acceptCounterButton(amount: amount) }
             Button {
                 Task { await withdraw() }
             } label: {
@@ -252,7 +255,7 @@ public struct ListingDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(withdrawing)
+            .disabled(withdrawing || accepting)
             .accessibilityIdentifier("listingDetailWithdrawOffer")
         }
         .padding(Spacing.s5)
@@ -261,17 +264,53 @@ public struct ListingDetailView: View {
 
     /// One request at a time; a refused withdrawal keeps the sheet open with the server's reason.
     private func withdraw() async {
-        guard !withdrawing, viewModel.myOffer != nil else { return }
+        guard !withdrawing, !accepting, viewModel.myOffer != nil else { return }
         withdrawing = true
-        withdrawError = nil
+        myOfferError = nil
         defer { withdrawing = false }
         let free = listingIsFree
         if let error = await viewModel.withdrawOffer() {
-            withdrawError = error
+            myOfferError = error
             return
         }
         myOfferSheetVisible = false
         toast = ToastMessage(text: free ? "Interest withdrawn." : "Offer withdrawn.", kind: .success)
+    }
+}
+
+// MARK: - Accepting the seller's counter
+
+private extension ListingDetailView {
+    /// Accept the seller's counter, as web's "Accept": the listing is then held for this buyer.
+    func acceptCounterButton(amount: Double?) -> some View {
+        Button {
+            Task { await acceptCounter() }
+        } label: {
+            Text(accepting ? "Accepting…" : amount.map { "Accept \(ListingDetailViewModel.usd($0))" } ?? "Accept")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Theme.Color.appTextInverse)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Theme.Color.primary600)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(accepting || withdrawing)
+        .accessibilityIdentifier("listingDetailAcceptCounter")
+    }
+
+    /// One request at a time; a refused accept keeps the sheet open with the server's reason.
+    func acceptCounter() async {
+        guard !accepting, !withdrawing, viewModel.myOffer?.status == "countered" else { return }
+        accepting = true
+        myOfferError = nil
+        defer { accepting = false }
+        if let error = await viewModel.acceptCounter() {
+            myOfferError = error
+            return
+        }
+        myOfferSheetVisible = false
+        toast = ToastMessage(text: "Counter-offer accepted.", kind: .success)
     }
 }
 

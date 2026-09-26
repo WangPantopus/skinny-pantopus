@@ -201,7 +201,7 @@ fun ListingDetailScreen(
         MyOfferSheet(
             viewModel = viewModel,
             onDismiss = { myOfferSheetVisible = false },
-            onWithdrawn = { message ->
+            onDone = { message ->
                 myOfferSheetVisible = false
                 toastKind = ToastKind.Success
                 toastText = message
@@ -260,17 +260,21 @@ private fun onListingPrimaryAction(
     }
 }
 
-/** The buyer's open offer; one withdrawal at a time, and a refused one keeps the sheet open with the server's reason. */
+/**
+ * The buyer's open offer; one action at a time (accept a counter, or withdraw), and a refused one keeps the sheet open
+ * with the server's reason.
+ */
 @Composable
 private fun MyOfferSheet(
     viewModel: ListingDetailViewModel,
     onDismiss: () -> Unit,
-    onWithdrawn: (String) -> Unit,
+    onDone: (String) -> Unit,
 ) {
     val offer = viewModel.myOfferSnapshot() ?: return
     val isFree = viewModel.listingSnapshot()?.isFree == true
     var withdrawing by remember { mutableStateOf(false) }
-    var withdrawError by remember { mutableStateOf<String?>(null) }
+    var accepting by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -279,14 +283,25 @@ private fun MyOfferSheet(
             offer = offer,
             isFree = isFree,
             withdrawing = withdrawing,
-            errorText = withdrawError,
+            accepting = accepting,
+            errorText = actionError,
+            onAccept = {
+                if (!withdrawing && !accepting) {
+                    accepting = true
+                    actionError = null
+                    viewModel.acceptCounter(onFailure = { actionError = it }) { ok ->
+                        accepting = false
+                        if (ok) onDone("Counter-offer accepted")
+                    }
+                }
+            },
             onWithdraw = {
-                if (!withdrawing) {
+                if (!withdrawing && !accepting) {
                     withdrawing = true
-                    withdrawError = null
-                    viewModel.withdrawOffer(onFailure = { withdrawError = it }) { ok ->
+                    actionError = null
+                    viewModel.withdrawOffer(onFailure = { actionError = it }) { ok ->
                         withdrawing = false
-                        if (ok) onWithdrawn(if (isFree) "Interest withdrawn" else "Offer withdrawn")
+                        if (ok) onDone(if (isFree) "Interest withdrawn" else "Offer withdrawn")
                     }
                 }
             },
@@ -399,13 +414,18 @@ private fun OfferSheetContent(
     }
 }
 
-/** The buyer's open offer, as web shows it: waiting for the seller (their amount and note) or the seller's counter, and Withdraw. */
+/**
+ * The buyer's open offer, as web shows it: waiting for the seller (their amount and note), or the seller's counter with
+ * Accept; and Withdraw.
+ */
 @Composable
 private fun MyOfferSheetContent(
     offer: app.pantopus.android.data.api.models.listing_offers.ListingOfferDto,
     isFree: Boolean,
     withdrawing: Boolean,
+    accepting: Boolean,
     errorText: String?,
+    onAccept: () -> Unit,
     onWithdraw: () -> Unit,
 ) {
     val countered = offer.status == "countered"
@@ -448,6 +468,14 @@ private fun MyOfferSheetContent(
             )
         }
         Spacer(modifier = Modifier.height(Spacing.s1))
+        if (countered) {
+            AcceptCounterButton(
+                amount = amount,
+                accepting = accepting,
+                enabled = !accepting && !withdrawing,
+                onAccept = onAccept,
+            )
+        }
         Box(
             modifier =
                 Modifier
@@ -455,7 +483,7 @@ private fun MyOfferSheetContent(
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(PantopusColors.appSurface)
                     .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                    .clickable(enabled = !withdrawing) { onWithdraw() }
+                    .clickable(enabled = !withdrawing && !accepting) { onWithdraw() }
                     .heightIn(min = 48.dp)
                     .testTag("listingDetail.withdrawOffer"),
             contentAlignment = Alignment.Center,
@@ -473,6 +501,39 @@ private fun MyOfferSheetContent(
             )
         }
         Spacer(modifier = Modifier.height(Spacing.s5))
+    }
+}
+
+/** Accept the seller's counter, as web's "Accept": the listing is then held for this buyer. */
+@Composable
+private fun AcceptCounterButton(
+    amount: Double?,
+    accepting: Boolean,
+    enabled: Boolean,
+    onAccept: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.primary600)
+                .clickable(enabled = enabled) { onAccept() }
+                .heightIn(min = 48.dp)
+                .testTag("listingDetail.acceptCounter"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text =
+                when {
+                    accepting -> "Accepting…"
+                    amount != null -> "Accept ${ListingDetailViewModel.Projection.usd(amount)}"
+                    else -> "Accept"
+                },
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = PantopusColors.appTextInverse,
+        )
     }
 }
 
