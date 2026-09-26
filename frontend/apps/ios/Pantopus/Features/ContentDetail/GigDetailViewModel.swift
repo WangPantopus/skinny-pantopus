@@ -26,7 +26,7 @@ public final class GigDetailViewModel {
     public private(set) var rawGig: GigDTO?
 
     /// Bookmark state for the top-bar toggle. Seeded from
-    /// `saved_by_user` on load and flipped optimistically by
+    /// `viewer_has_saved` on load and flipped optimistically by
     /// `toggleSave()`.
     public private(set) var isSaved: Bool = false
 
