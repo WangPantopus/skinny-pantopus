@@ -34,10 +34,10 @@ extension HubViewModel {
         }
     }
 
+    /// Server timestamps carry fractional seconds ("…55.905022+00:00"),
+    /// which a default `ISO8601DateFormatter` rejects; the Recent activity
+    /// list's parser accepts both forms.
     static func relative(timestamp: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: timestamp) else { return timestamp }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        RecentActivityViewModel.relative(timestamp: timestamp, now: Date())
     }
 }
