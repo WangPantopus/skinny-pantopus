@@ -116,7 +116,11 @@ public struct EditBusinessPageView: View {
                 onSaveDraft: { Task { await viewModel.saveDraft() } },
                 onPublish: { Task { await viewModel.publish() } },
                 onFieldChange: { key, value in viewModel.update(key, to: value) },
-                onBeginDescription: { viewModel.beginDescriptionEditing() }
+                onBeginDescription: { viewModel.beginDescriptionEditing() },
+                onPickMedia: { kind, data, mimeType in
+                    Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
+                },
+                uploadingMedia: viewModel.uploadingMedia
             )
         case .empty:
             VStack(spacing: Spacing.s0) {
@@ -175,6 +179,8 @@ public struct EditBusinessPageLoadedView: View {
     public let onPublish: @MainActor () -> Void
     public let onFieldChange: @MainActor (EditBusinessPageFieldKey, String) -> Void
     public let onBeginDescription: @MainActor () -> Void
+    public let onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
+    public let uploadingMedia: BusinessMediaKind?
 
     public init(
         content: EditBusinessPageContent,
@@ -185,7 +191,9 @@ public struct EditBusinessPageLoadedView: View {
         onSaveDraft: @escaping @MainActor () -> Void = {},
         onPublish: @escaping @MainActor () -> Void = {},
         onFieldChange: @escaping @MainActor (EditBusinessPageFieldKey, String) -> Void = { _, _ in },
-        onBeginDescription: @escaping @MainActor () -> Void = {}
+        onBeginDescription: @escaping @MainActor () -> Void = {},
+        onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil,
+        uploadingMedia: BusinessMediaKind? = nil
     ) {
         self.content = content
         self.onBack = onBack
@@ -196,6 +204,8 @@ public struct EditBusinessPageLoadedView: View {
         self.onPublish = onPublish
         self.onFieldChange = onFieldChange
         self.onBeginDescription = onBeginDescription
+        self.onPickMedia = onPickMedia
+        self.uploadingMedia = uploadingMedia
     }
 
     public var body: some View {
@@ -210,15 +220,21 @@ public struct EditBusinessPageLoadedView: View {
             stripUnderTopBar
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
-                    EditBusinessBannerLogoEditor(banner: content.banner, logo: content.logo)
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.top, Spacing.s4)
+                    EditBusinessBannerLogoEditor(
+                        banner: content.banner,
+                        logo: content.logo,
+                        uploading: uploadingMedia,
+                        onPick: onPickMedia
+                    )
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s4)
 
                     nameAndTaglineSection
                     descriptionSection
                     hoursSection
                     servicesSection
-                    gallerySection
+                    // No gallery backend yet: the Gallery section only held add
+                    // tiles that did nothing, so it stays hidden until one exists.
                     contactSection
                     locationSection
 
@@ -338,15 +354,6 @@ public struct EditBusinessPageLoadedView: View {
                 }
             case let .prompt(prompt):
                 PromptBlock(prompt: prompt)
-            }
-        }
-    }
-
-    private var gallerySection: some View {
-        EditBusinessSection(overline: "Gallery") {
-            VStack(alignment: .leading, spacing: 6) {
-                BizLabel(label: "Photos", hint: content.gallery.hintLabel)
-                EditBusinessGalleryEditor(state: content.gallery)
             }
         }
     }

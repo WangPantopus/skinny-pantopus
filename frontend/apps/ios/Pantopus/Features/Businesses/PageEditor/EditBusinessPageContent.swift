@@ -60,10 +60,12 @@ public struct EditBusinessPageField: Sendable, Hashable {
 }
 
 /// Banner + logo composite — empty drop targets or a filled hero
-/// (`dirty == true` adds the amber "New" chip + rim).
+/// (`dirty == true` adds the amber "New" chip + rim). `imageURL` is the
+/// business's real banner (`cover_photo_url`); without one the hero is a
+/// neutral surface, never stock art.
 public enum EditBusinessPageBannerState: Sendable, Hashable {
     case empty
-    case filled(dirty: Bool, palette: BannerPalette)
+    case filled(dirty: Bool, palette: BannerPalette, imageURL: String? = nil)
 
     public enum BannerPalette: String, Sendable, Hashable {
         /// Roost-Café-style golden-hour storefront (only filled palette
@@ -73,10 +75,11 @@ public enum EditBusinessPageBannerState: Sendable, Hashable {
     }
 }
 
-/// Logo state — empty drop target or filled with a colored disc + initial.
+/// Logo state — empty drop target or filled with the real logo
+/// (`profile_picture_url`), falling back to a colored disc + initial.
 public enum EditBusinessPageLogoState: Sendable, Hashable {
     case empty
-    case filled(initial: String, palette: LogoPalette)
+    case filled(initial: String, palette: LogoPalette, imageURL: String? = nil)
 
     public enum LogoPalette: String, Sendable, Hashable {
         case sunrise

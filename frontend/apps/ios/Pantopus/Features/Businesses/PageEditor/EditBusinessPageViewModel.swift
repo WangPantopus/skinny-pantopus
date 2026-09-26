@@ -56,9 +56,12 @@ public final class EditBusinessPageViewModel {
     public private(set) var state: EditBusinessPageState
     public var toastMessage: String?
     public var showsDiscardConfirm = false
+    /// The banner or logo upload in flight, if any.
+    public private(set) var uploadingMedia: BusinessMediaKind?
 
     private let businessId: String
     private let api: APIClient
+    private let uploader: MultipartUploader
     private let localPreviewPersistenceEnabled: Bool
 
     /// Primary location id for hours / address PATCH.
@@ -76,10 +79,12 @@ public final class EditBusinessPageViewModel {
     init(
         businessId: String,
         preview: EditBusinessPageContent? = nil,
-        api: APIClient = .shared
+        api: APIClient = .shared,
+        uploader: MultipartUploader = .shared
     ) {
         self.businessId = businessId
         self.api = api
+        self.uploader = uploader
         localPreviewPersistenceEnabled = preview != nil
         if let preview {
             state = .loaded(preview)
@@ -169,6 +174,55 @@ public final class EditBusinessPageViewModel {
                 )
             }
             hasLoadedOnce = false
+        }
+    }
+
+    // MARK: - Banner and logo
+
+    /// Uploads a picked banner or logo with
+    /// `POST /api/upload/business-media/:businessId?type=banner|logo`. The
+    /// route stores it at once, so the editor shows the returned image and
+    /// doesn't count it as an unsaved edit.
+    public func uploadMedia(_ kind: BusinessMediaKind, data: Data, mimeType: String) async {
+        guard uploadingMedia == nil, case .loaded = state else { return }
+        uploadingMedia = kind
+        defer { uploadingMedia = nil }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        do {
+            let response = try await uploader.uploadBusinessMedia(
+                businessId: businessId,
+                kind: kind,
+                file: MultipartFile(
+                    fieldName: "file",
+                    // Randomised name, as in the create wizard: the picker's
+                    // `IMG_xxxx` never reaches storage or access logs.
+                    filename: "business-\(kind.rawValue)-\(UUID().uuidString.prefix(8)).\(ext)",
+                    mimeType: mimeType,
+                    data: data
+                )
+            )
+            guard case let .loaded(content) = state else { return }
+            let updated = switch kind {
+            case .banner:
+                EditBusinessPageMapper.copy(
+                    content,
+                    banner: .filled(dirty: false, palette: .cafeGoldenHour, imageURL: response.url)
+                )
+            case .logo:
+                EditBusinessPageMapper.copy(
+                    content,
+                    logo: .filled(
+                        initial: String(content.name.original.prefix(1)).uppercased(),
+                        palette: .sunrise,
+                        imageURL: response.url
+                    )
+                )
+            }
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(updated))
+            toastMessage = kind == .banner ? "Banner updated." : "Logo updated."
+        } catch {
+            let reason = (error as? APIError)?.errorDescription ?? "Please try again."
+            toastMessage = "Couldn't upload the \(kind.rawValue). \(reason)"
         }
     }
 
@@ -422,10 +476,10 @@ public final class EditBusinessPageViewModel {
     /// Saved state, keeping the media dirt the save couldn't clear.
     private func savedContent(_ content: EditBusinessPageContent) -> EditBusinessPageContent {
         var cleaned = promoteCurrentToOriginal(content)
-        if case let .filled(dirty, palette) = content.banner, dirty {
+        if case let .filled(dirty, palette, imageURL) = content.banner, dirty {
             cleaned = EditBusinessPageMapper.copy(
                 cleaned,
-                banner: .filled(dirty: true, palette: palette)
+                banner: .filled(dirty: true, palette: palette, imageURL: imageURL)
             )
         }
         if content.gallery.freshAddTile {
@@ -497,13 +551,13 @@ public final class EditBusinessPageViewModel {
     }
 
     private func hasUnresolvedMediaDirty(_ content: EditBusinessPageContent) -> Bool {
-        if case let .filled(dirty, _) = content.banner, dirty { return true }
+        if case let .filled(dirty, _, _) = content.banner, dirty { return true }
         return content.gallery.freshAddTile
     }
 
     private func mediaDirtyCount(_ content: EditBusinessPageContent) -> Int {
         var count = 0
-        if case let .filled(dirty, _) = content.banner, dirty { count += 1 }
+        if case let .filled(dirty, _, _) = content.banner, dirty { count += 1 }
         if content.gallery.freshAddTile { count += 1 }
         return count
     }
@@ -599,7 +653,7 @@ private extension EditBusinessPageBannerState {
     var cleaned: EditBusinessPageBannerState {
         switch self {
         case .empty: self
-        case let .filled(_, palette): .filled(dirty: false, palette: palette)
+        case let .filled(_, palette, imageURL): .filled(dirty: false, palette: palette, imageURL: imageURL)
         }
     }
 
