@@ -2,6 +2,22 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 08:42Z: SEC-1 open as PR494 (user-approved); nonprofit evidence-type defect escalated
+
+- **[PR494](https://github.com/WangPantopus/skinny-pantopus/pull/494): SEC-1, approved by the user in chat.** Branch `claude/stream3-evidence-file-ownership`, head `ffa04bb7d`, one file (`backend/routes/businessVerification.js`, +17).
+  - `upload-evidence` now files a document only when the caller uploaded it, it isn't deleted, and its `file_context` is `business_verification`.
+  - Unknown and foreign IDs share one 400.
+  - **Before** (isolated API on master `e00952e3e`): Owner filed Viewer's File as the business's evidence → 201 pending.
+  - **After** (API on `ffa04bb7d`): foreign, wrong-purpose, deleted and unknown files all get 400. A duplicate type still gets 409. The owner's own verification upload gets 201. Only the valid case wrote.
+  - Bundle `20260926-stream3-evidence-file-ownership-r1`, MANIFEST.json SHA-256 `24ac015c38cb2640c194abe1e232788424be38e0da01ef9b952f8b0e8fc4fb00`.
+  - Side effects (isolated DB, exact reverts): fixture F8 (4 File rows plus 2 trigger-created FileQuota rows), 2 pending evidence rows with their audit rows, and login sessions.
+  - Device journeys were not re-run: the upload hop needs S3 credentials this runtime lacks.
+  - The API on 18134 is back on master `e00952e3e`.
+- **New defect, escalated to the user (money):** `bve_evidence_type_check` (baseline migration) rejects `ein_verification` and `tax_exempt_letter`, which all three clients offer in the 501(c)(3) section.
+  - Nonprofit evidence therefore always returns 500. Reproduced, with no rows written.
+  - The repair is a forward migration widening the CHECK. Admin approval of that evidence then sets the nonprofit's fee to 0%, so the decision is the user's; nothing was changed.
+- **Next:** the web chat Gig/Listing pickers (worktree `/private/tmp/pantopus-stream3-pickers-r1`, branch `claude/stream3-web-chat-picker-failures`). #489 (batch 24) and #491 CI are running.
+
 ## Update 2026-09-26 07:46Z: S3-57 fix committed (native); security item escalated to the user
 
 - **S3-57, both platforms:** branch `claude/stream3-native-rollback-feedback`, head `bac788aa0`, 8 existing files.
