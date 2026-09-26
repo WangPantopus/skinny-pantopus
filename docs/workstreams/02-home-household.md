@@ -2,6 +2,23 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 08:40Z (decision 2 / R06 done as #493)**
+
+- **Decision 2 open as PR [493](https://github.com/WangPantopus/skinny-pantopus/pull/493).** Branch `claude/stream2-r06-native-letters`, head `1302cf89a` on master `e00952e3e`, 2 commits, no backend change. CI started. Reported to Stream 1 for batch 25.
+  - **Native:** a Place dashboard "Identity · Residency letters & passes" entry, and letter-row PDF (iOS Quick Look; Android FileProvider → the phone's PDF viewer).
+  - **All three platforms:** a guest reads "Verified guest" / "Verified service provider". Guests and service providers get a note instead of the issue forms, and keep the letters and passes they issued as residents (PDF + Revoke).
+- **Evidence:** bundle `20260926-stream2-r06-native-letters-r1`, MANIFEST `887521e000d5d4a5e091cff45714812ab2c81bf50ac084ff3a2715cbe6eb18ca` (169 files).
+  - Befores on master for all three platforms, then afters on both builds.
+  - The app PDFs equal the server bytes.
+  - Android checks and Paparazzi `PlaceDashboardSnapshotTest` unchanged. APK `4e638cbb…` and dylib `f8e870e2…` installed and hash-verified.
+  - One emulator ANR is recorded, and didn't recur on a repeat.
+- **Restore:** B is back to member (only `membership_version`/`updated_at` differ). Letter `17e892d2` and 4 role-change audit rows are retained.
+- **Heavy and devices:**
+  - Heavy: held 07:38:53Z–07:54:28Z and 08:19:06Z–08:26:46Z.
+  - iOS driver: Stream 1 → me 07:40Z. Lent to Stream 3 07:48Z–07:52:30Z and 08:06:52Z–08:26:40Z. Then to Stream 1 at 08:28:51Z, with 6F914A30 shut down.
+- **Still with the user:** the guest-letter verification finding (Proposal A, see 08:10Z block).
+- **Next:** decision 4 (certified). The code is local in `/private/tmp/pantopus-stream2-certified` (`claude/stream2-certified-statuses`, `fa29286b0` on `e00952e3e`) and not yet built or verified.
+
 **Stream 2 — 2026-09-26 08:10Z (decision 2 / R06 in progress; security finding escalated)**
 
 - **Batch 24 (#489)** contains #482 (decision 3). Its iPhone 16 Pro job failed in `HomeTaskMediaViewModelTests` (timing, unrelated), passed on re-run, and is now green.
