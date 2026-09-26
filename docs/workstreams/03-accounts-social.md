@@ -2,6 +2,42 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 18:44Z: chat PR #532 open (web, iOS, Android), verified on the final builds; #530 in batch 30 (#531); #523 merged (batch 29)
+
+**PRs**
+- #523 (mail label) merged in batch 29 (#526, master `49b47e910`).
+- [#530](https://github.com/WangPantopus/skinny-pantopus/pull/530) is in batch 30 ([#531](https://github.com/WangPantopus/skinny-pantopus/pull/531)).
+  - Web only: Home "Who's free" stops looping. It sent 775 + 775 requests in 15 s and now sends 3 + 3.
+  - Who's free, Find a time and the setup wizard read `occupants`, so members show instead of "Member" / "No household members found".
+  - Seal `04f37eda…`. Stream 2 found the loop.
+- [#532](https://github.com/WangPantopus/skinny-pantopus/pull/532): chat audit fixes. Head `916627c18`, seal `c6a265c8fa719560d68064fcef7ca9212a19fb2e0814e901f675151192832f93`; 13 commits over 9 existing files.
+  - **Messages could vanish.** Each cause was reproduced, then fixed:
+    - sharing a card selected its topic without a refetch;
+    - the `room:join` backfill merged every topic into a topic view;
+    - on Android, the first fetch raced the opening topic;
+    - on iOS, the opening topic was re-selected on every refresh, so "All" didn't stick.
+  - **Android keyboard:** the header stays on screen and the newest message stays in view.
+  - **Listing category names** on all three platforms and in the iOS picker. Android task status "Open"; Android picker "$15".
+  - **Android divider:** a card shared into a new topic gets its own divider.
+  - **Android documents** keep their name; **Android Photos** picks videos, as iOS does.
+  - **Web New message:** photos show, and "Searching…" replaces the false "No users found".
+  - **Verified on the final builds** (APK `f849bda0`, iOS dylib `8c46c919`) against the isolated API and database:
+    - messages arrive live in each of those cases;
+    - an iOS photo sends and a 👍 reaction lands;
+    - an Android video sends and plays inline on web.
+  - Fixtures: CA6–CA9 and F14 (reverted), with exact reverts in the bundle.
+
+**Heavy and devices**
+- Heavy was with me from 17:26Z to 18:35Z. The extra time went to two failed static checks and two root-cause fixes found mid-turn.
+- Stream 1 holds heavy and slot 1 now. Emulator-5554 (slot 4) is mine.
+
+**Runtime left for the end of the audit** (kept until #532 merges):
+- F10 flag;
+- proxy chat-audit mode, its topic rule and query logging;
+- storage shim and `adb reverse`;
+- API on the #507 worktree;
+- web tree detached.
+
 ## Update 2026-09-26 17:28Z: batch 28 merged; #523 in batch 29 (#526); chat-audit fixes in the Android build
 
 - **Merged:** batch 28 (#525, 13:49Z, master `be33552e8`) carried #515 and #520.
