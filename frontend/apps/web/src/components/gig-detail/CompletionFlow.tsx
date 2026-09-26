@@ -473,7 +473,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       {!isOwner && isWorker && (
         <div className="bg-green-50 rounded-xl p-6 border border-green-200">
           <h3 className="text-lg font-semibold text-green-900 mb-2"><Wrench className="w-4 h-4 inline-block" /> You&apos;re the worker</h3>
-          <p className="text-sm text-green-800 mb-4">The owner selected you. Coordinate timing and complete the task.</p>
+          <p className="text-sm text-green-800 mb-4">
+            {/* An instant-accept task goes to the first helper who accepts; nobody selected them. */}
+            {gig?.engagement_mode === 'instant_accept' ? 'You accepted this task.' : 'The owner selected you.'} Coordinate timing and complete the task.
+          </p>
           <div className="flex gap-2">
             <button
               onClick={onOpenChat}
@@ -541,8 +544,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {/* Stripe Connect Onboarding CTA for workers */}
-      {isWorker && !isOwner && (
+      {/* Stripe Connect Onboarding CTA for workers; a free task pays nothing out. */}
+      {isWorker && !isOwner && isPaidGig && (
         <StripeConnectOnboarding variant="banner" />
       )}
 
