@@ -2,6 +2,18 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 05:15Z (adds to the 04:59Z block below)**
+
+- **SECURITY, escalated to the user (R04; reproduced and restored; no code change):** a single owner's `POST /api/homes/:id/owners/transfer` to an email with no account returns 200 "Transfer initiated" with `transfer_claim_id: null`.
+  - It revokes the owner, clears `Home.owner_id` and demotes the owner to member before resolving the buyer, and creates no claim.
+  - The Home enters `security_state` claim_window for 14 days. The former owner has no ownership permissions and no undo (403).
+  - Web and iOS show the message as success.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-transfer-ownerless-exposure-r1`, MANIFEST `4eb55adcbdad51b227d40a8809b12dbbc0093cba2813529c58eb799fc50715c9`.
+  - **Restored** by exact ids; only trigger-managed columns differ, and 3 audit rows are retained.
+  - **Proposal:** A (backend only) resolves the buyer, then creates the claim, then revokes, checking each write. B keeps the seller as owner until approval (policy).
+- **D07 web role change (reproduced, no change):** Members "Change role" cycles one real change per confirm, and a lease resident is offered Admin. Proposed matching the native explicit role list (design change, awaiting the user).
+- **Pending user decisions:** household delete specifics; R06 native entry/PDF/guest/manager; issue permissions and Android reachability; certified mail; web role picker; transfer ownership (security).
+
 **Stream 2 — 2026-09-26 04:59Z (adds to the 03:50Z block below)**
 
 - **Batch 20 (#463) merged**; master is `5bf1eb7f8`. It includes #461 (S2-03).
