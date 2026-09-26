@@ -1,6 +1,15 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T02:52Z
+## CURRENT STREAM 1 STATE — 2026-09-26T03:50Z
+
+- **In batch 20 (#463):** #458, native My listings counts, exact offer amounts, drawer → profile and just-posted by age.
+- **Open:**
+  - [#462](https://github.com/WangPantopus/skinny-pantopus/pull/462): Wallet activity and escrow failures show the error, not $0.00. Bundle `20260926-stream1-native-wallet-failure-states-r1`, MANIFEST `82361913…`.
+  - `claude/stream1-native-pulse-radius-banner` `9b77b8421`: the Pulse radius banner only after a successful load. Build pending.
+- **Verified PASS (Android):** comment add/delete; Hub Discover failure/retry; buyer-offer double tap sends one POST; Pulse feed failure/retry (apart from the banner).
+- **Proposals for the user:** owner Message on their own listing; buyer offer view/withdraw on native.
+
+## Previous Stream 1 state — 2026-09-26T02:52Z
 
 - **Merged:** #454, web My bids / My tasks failure states (batch 18, #456).
 - **Open:** [#458](https://github.com/WangPantopus/skinny-pantopus/pull/458) `5975b918a`, native. My listings counts; exact offer and bid amounts; drawer name → profile (user-approved); "just posted" by age (user-approved).

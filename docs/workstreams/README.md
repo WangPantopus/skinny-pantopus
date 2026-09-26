@@ -1,6 +1,31 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T02:52Z (batches 17–18 merged; batch 19 #459 queued; #455 + #458 next)
+## CURRENT RESUME POINT — 2026-09-26T03:50Z (batch 19 merged; batch 20 #463 in CI; #462 and the Pulse banner fix next)
+
+- **Integration (Stream 1 queue):**
+  - Master is `a5fb4864c`. Batch 19 [#459](https://github.com/WangPantopus/skinny-pantopus/pull/459) merged #457 (Mail Party and bundle privacy, security) and #453 (Home links) at 03:43:14Z. The known iOS flake `TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer` passed on re-run.
+  - **Batch 20 [#463](https://github.com/WangPantopus/skinny-pantopus/pull/463)** = #455 (S3-50/53/67) → #460 (S3-42/61, web) → #458 (Stream 1 native) → #461 (S2-03). Tip `3e28ced4b`. It's queued, and the runner started at about 03:49Z.
+- **Next (batch 21 candidates):**
+  - Stream 1 [#462](https://github.com/WangPantopus/skinny-pantopus/pull/462) `792619e50`: Wallet activity and escrow failures no longer show $0.00 (Android afters pass; iOS Wallet sits behind a device passcode). CI is running.
+  - Stream 1 `claude/stream1-native-pulse-radius-banner` `9b77b8421`: the Pulse "No posts within 1 mi. Expand?" banner showed over a failed load. It needs the heavy window after Stream 3.
+  - Stream 2's read-state PR and Stream 3's owner-settings PR, when green.
+- **Proposals awaiting the user:**
+  - Owner "Message" on their own listing opens a chat with themselves. Verified on iOS and Android; options A/B/C.
+  - NEW: native buyers can't see or withdraw their listing offer. After sending, "Make offer" stays, and a second send fails "already have an active offer". Web shows View Offer and Withdraw.
+- **Stream 1 inventory** (`20260925-stream1-domain-inventory-r1/INVENTORY.md`), this session:
+  - Android comment add/delete (C-18) PASS.
+  - Hub Discover failure/retry PASS.
+  - Buyer-offer double tap sends a single POST.
+  - The Pulse failure banner (above) and wallet zeros (#462) found and fixed.
+  - The iOS post deep link candidate is unconfirmed; retries were made under host load of about 255.
+- **Slots and devices:**
+  - Heavy: Stream 3 since 03:42:07Z, then Stream 1 (Pulse fix), by explicit ask.
+  - iOS driver: Stream 3 (0AE16FA0).
+  - Stream 1: emulator-5558 (slot 3); F4DBD47E is off.
+  - The Claude app's simulator panel keeps auto-booting simulators (F4, 6F914A30, 0AE16FA0). Always pass `device=`.
+- **Side effects awaiting the user:** LocalProfile-on-read (Stream 3) and Wallet-on-read (`GET /api/wallet` getOrCreateWallet, Stream 3's #460 afters). Both are existing backend behaviour.
+
+## Resume point history — 2026-09-26T02:52Z (batches 17–18 merged; batch 19 #459 queued; #455 + #458 next)
 
 - **Integration (Stream 1 queue):**
   - Master is `564bf220d`.
