@@ -2,6 +2,19 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 06:21Z (decision 5 done)**
+
+- **D07 fix open as PR [474](https://github.com/WangPantopus/skinny-pantopus/pull/474)** (web only, `members/page.tsx`). Branch `claude/stream2-web-role-choice`, head `82f385560`, on `5bf1eb7f8`. CI started.
+  - "Change role" opens a menu: "Current role: X", then the roles the viewer may give. It's hidden when there are none.
+  - The rules follow the native pickers and `mutate_home_member`: never Owner, never self, and a non-owner can only give roles below their own rank.
+  - The existing confirm then saves exactly that role.
+- **Evidence:** bundle `20260926-stream2-web-role-choice-r1`, MANIFEST `b0d7067f38dc0c27f2013207beb974f06cb671eb46f7128563780380df564f33` (90 files).
+  - **Befores (master):** Admin B's own row offers "Set as Manager", which returns 403. The owner is offered only the next role in the cycle.
+  - **Afters:** the owner gets full menus. As Admin, B has no control on their own row and the member is offered Manager, Restricted and Guest; Manager saved. The owner moved B from Admin to Member with one confirm. As Member-rank, B has no control on a Manager.
+  - **Fixtures restored by exact ids:** the third member row for synthetic `cb6c7225`, B's two permission overrides and the cached `can_manage_access` flag. Only trigger-managed columns differ.
+- **Fixture note for peers:** the reference role matrix gives admins and managers no `members.view` / `members.manage`; only owners get them by default. Non-owner member management needs owner-granted overrides.
+- **Next:** decision 3 (issue permissions plus an Android Issues entry). That needs heavy and an Android install later, which I'll ask for first.
+
 **Stream 2 — 2026-09-26 06:09Z (decision 6 done; adds to the decisions block below)**
 
 - **R04 fix open as PR [473](https://github.com/WangPantopus/skinny-pantopus/pull/473).** Branch `claude/stream2-ownership-transfer-safety`, head `ad0c1f162`, on `5bf1eb7f8`. Changes `backend/routes/homeOwnership.js` plus 4 lines in the web `owners/transfer/page.tsx`. No native changes, no migration. CI started.
