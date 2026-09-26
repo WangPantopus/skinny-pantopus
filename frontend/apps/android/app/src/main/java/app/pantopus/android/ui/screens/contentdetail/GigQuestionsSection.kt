@@ -48,6 +48,7 @@ fun GigQuestionsSection(
 ) {
     val questions by viewModel.questions.collectAsStateWithLifecycle()
     val loading by viewModel.questionsLoading.collectAsStateWithLifecycle()
+    val loadFailed by viewModel.questionsLoadFailed.collectAsStateWithLifecycle()
     val newQuestion by viewModel.newQuestionText.collectAsStateWithLifecycle()
     val answeringId by viewModel.answeringQuestionId.collectAsStateWithLifecycle()
     val answerDraft by viewModel.answerDraftText.collectAsStateWithLifecycle()
@@ -73,7 +74,8 @@ fun GigQuestionsSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Questions (${questions.size})",
+                // No count for a read that failed with nothing loaded.
+                text = if (loadFailed && questions.isEmpty()) "Questions" else "Questions (${questions.size})",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
@@ -97,6 +99,29 @@ fun GigQuestionsSection(
                     color = PantopusColors.appTextSecondary,
                     modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s4),
                 )
+            loadFailed && questions.isEmpty() ->
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = Spacing.s4)
+                            .testTag("gigQuestionsFailed"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                ) {
+                    Text(
+                        text = "Couldn't load questions.",
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                    Text(
+                        text = "Try again",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.primary600,
+                        modifier = Modifier.clickable { viewModel.loadQuestions() }.testTag("gigQuestionsRetry"),
+                    )
+                }
             questions.isEmpty() ->
                 Text(
                     text = "No questions yet. Be the first to ask!",
