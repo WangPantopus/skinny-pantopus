@@ -507,6 +507,13 @@ export default function GigsBrowsePage() {
           >
             My Support Trains
           </button>
+          <span className="text-app-text-muted">·</span>
+          <button
+            onClick={() => router.push('/app/gigs/saved')}
+            className="font-semibold text-primary-600 transition hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
+          >
+            Saved tasks
+          </button>
         </div>
       </div>
     </div>
