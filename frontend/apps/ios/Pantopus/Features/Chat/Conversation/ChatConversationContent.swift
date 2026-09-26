@@ -410,8 +410,18 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public enum Body: Sendable, Hashable {
         case text(String)
         case textWithImages(text: String, imageURLs: [URL])
-        case image(url: URL?)
-        case attachment(filename: String, sizeLabel: String?)
+        /// One or more photos. `caption` is the text sent with them;
+        /// `moreURLs` are the message's further photos after `url`.
+        case image(url: URL?, caption: String? = nil, moreURLs: [URL] = [])
+        /// A file (document, video, …). `fileURL` is its stored
+        /// `/api/chat/files/:id` path, fetched on tap to open it.
+        case attachment(
+            filename: String,
+            sizeLabel: String?,
+            fileURL: String? = nil,
+            mimeType: String? = nil,
+            caption: String? = nil
+        )
         case locationCard(ChatLocationCard)
         case gigOfferCard(ChatGigOfferCard)
         case listingOfferCard(ChatListingOfferCard)

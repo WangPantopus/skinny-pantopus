@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.ui.theme.PantopusIcon
+import java.io.File
 
 /**
  * Presentation mode for the conversation surface. Orthogonal to
@@ -319,6 +320,12 @@ data class ChatShareListingOption(
     val imageUrl: String? = null,
 )
 
+/** A downloaded chat attachment, ready to open in another app. */
+data class ChatOpenFile(
+    val file: File,
+    val mimeType: String,
+)
+
 /** Body of a single bubble. */
 sealed interface ChatBubbleBody {
     data class Text(val text: String) : ChatBubbleBody
@@ -328,11 +335,26 @@ sealed interface ChatBubbleBody {
         val imageUrls: List<String>,
     ) : ChatBubbleBody
 
-    data class Image(val url: String?) : ChatBubbleBody
+    /**
+     * One or more photos. [caption] is the text sent with them; [moreUrls]
+     * are the message's further photos after [url].
+     */
+    data class Image(
+        val url: String?,
+        val caption: String? = null,
+        val moreUrls: List<String> = emptyList(),
+    ) : ChatBubbleBody
 
+    /**
+     * A file (document, video, …). [fileUrl] is its `/api/chat/files/:id`
+     * proxy URL, fetched with the session to open it in another app.
+     */
     data class Attachment(
         val filename: String,
         val sizeLabel: String? = null,
+        val caption: String? = null,
+        val fileUrl: String? = null,
+        val mimeType: String? = null,
     ) : ChatBubbleBody
 
     data class LocationCard(val card: ChatLocationCard) : ChatBubbleBody

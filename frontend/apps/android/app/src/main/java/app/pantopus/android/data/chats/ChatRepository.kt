@@ -17,8 +17,16 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.ChatApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import retrofit2.HttpException
+import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** The largest chat upload (a video) is 100 MB, so a larger download isn't a chat file. */
+private const val CHAT_FILE_MAX_BYTES = 100L * 1024 * 1024
 
 /** Wraps the chat endpoints in the [NetworkResult] taxonomy. */
 @Singleton
@@ -60,6 +68,39 @@ class ChatRepository
         ): NetworkResult<SendChatMessageResponse> = safeApiCall { api.editMessage(messageId, EditChatMessageBody(messageText)) }
 
         suspend fun deleteMessage(messageId: String): NetworkResult<Unit> = safeApiCall { api.deleteMessage(messageId) }
+
+        /** Streams a chat attachment into [destination], so it can be opened in another app. */
+        suspend fun downloadFile(
+            fileId: String,
+            destination: File,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                val response = api.downloadFile(fileId)
+                if (!response.isSuccessful) {
+                    response.errorBody()?.close()
+                    throw HttpException(response)
+                }
+                // IOExceptions, so safeApiCall reports them as a failed download.
+                val body = response.body() ?: throw IOException("chat file response has no body")
+                body.use {
+                    if (body.contentLength() > CHAT_FILE_MAX_BYTES) throw IOException("chat file is too large")
+                    withContext(Dispatchers.IO) {
+                        body.byteStream().use { input ->
+                            destination.outputStream().use { output ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                var total = 0L
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    total += read
+                                    if (total > CHAT_FILE_MAX_BYTES) throw IOException("chat file is too large")
+                                    output.write(buffer, 0, read)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
         suspend fun reactToMessage(
             messageId: String,
