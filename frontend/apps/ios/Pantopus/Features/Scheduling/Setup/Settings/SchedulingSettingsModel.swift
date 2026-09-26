@@ -152,14 +152,6 @@ final class SchedulingSettingsModel {
         push(.defaultReminders(owner: owner))
     }
 
-    func openWorkflows() {
-        push(.workflowsList(owner: owner))
-    }
-
-    func openTemplates() {
-        push(.messageTemplateLibrary(owner: owner))
-    }
-
     func openAvailability() {
         push(.availabilityScheduleList)
     }

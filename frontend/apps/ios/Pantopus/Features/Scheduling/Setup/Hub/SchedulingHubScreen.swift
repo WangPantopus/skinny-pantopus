@@ -14,6 +14,7 @@ import SwiftUI
 import UIKit
 
 struct SchedulingHubScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var model: SchedulingHubModel
     @State private var didLoad = false
     @State private var showCopyToast = false
@@ -27,7 +28,10 @@ struct SchedulingHubScreen: View {
         VStack(spacing: Spacing.s0) {
             SetupTopBar(
                 title: "Scheduling",
-                leading: .none,
+                // The hub is pushed from You (tiles and rows) and hides the system
+                // back button, so it draws its own Back.
+                leading: .back,
+                onLeading: { dismiss() },
                 // Owners get the `.moreHorizontal` settings affordance; a non-editor
                 // sees the design's `.info` glyph (scheduling-hub-frames FramePermission
                 // right={info}, mirrored on Android) as a view-only indicator — inert,

@@ -19,10 +19,8 @@ import {
   Globe,
   Lock,
   LockOpen,
-  MessageSquare,
   RotateCcw,
   Users,
-  Workflow,
 } from "lucide-react";
 import * as api from "@pantopus/api";
 import type {
@@ -301,20 +299,8 @@ export default function BookingSettings() {
                     )
                   }
                 />
-                <Row
-                  icon={Workflow}
-                  label="Workflows & follow-ups"
-                  sub="Automate messages around bookings"
-                  href={`${BASE}/workflows`}
-                  right={<Chevron />}
-                />
-                <Row
-                  icon={MessageSquare}
-                  label="Message templates"
-                  sub="Reusable booking messages"
-                  href={`${BASE}/templates`}
-                  right={<Chevron />}
-                />
+                {/* Workflows and Message templates stay hidden until something
+                    sends them: nothing runs a saved workflow or sends a template yet. */}
                 <Row
                   icon={Bell}
                   label="Booking notifications"
