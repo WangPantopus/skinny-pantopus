@@ -41,14 +41,12 @@ public struct YourAudienceView: View {
         .sheet(item: $bindable.overflowTarget) { member in
             YourAudienceOverflowSheet(
                 member: member,
-                onMessage: { viewModel.message(member) },
-                onChangeTier: { viewModel.changeTier(member) },
                 onMute: { Task { await viewModel.mute(member) } },
                 onUnmute: { Task { await viewModel.unmute(member) } },
                 onRemove: { Task { await viewModel.remove(member) } },
                 onBlock: { viewModel.requestBlock(member) }
             )
-            .presentationDetents([.height(460)])
+            .presentationDetents([.height(360)])
         }
         .alert(
             "Block follower?",
@@ -536,22 +534,22 @@ public struct YourAudienceView: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
-            Button {
-                viewModel.toast = "Sharing your Beacon is coming soon."
-            } label: {
-                HStack(spacing: Spacing.s2) {
-                    Icon(.share, size: 16, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text("Share your Beacon")
-                        .font(.system(size: 14.5, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
+            if let url = viewModel.beaconShareURL {
+                ShareLink(item: url) {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.share, size: 16, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                        Text("Share your Beacon")
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(Theme.Color.appTextInverse)
+                    }
+                    .padding(.horizontal, Spacing.s6)
+                    .frame(height: 46)
+                    .background(Theme.Color.primary600)
+                    .clipShape(Capsule())
                 }
-                .padding(.horizontal, Spacing.s6)
-                .frame(height: 46)
-                .background(Theme.Color.primary600)
-                .clipShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("audienceShareBeacon")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("audienceShareBeacon")
 
             HStack(spacing: Spacing.s2) {
                 Icon(.megaphone, size: 13, color: Theme.Color.primary600)

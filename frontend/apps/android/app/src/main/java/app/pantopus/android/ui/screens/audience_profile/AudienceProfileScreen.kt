@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -709,9 +710,12 @@ private fun TabStrip(
         ) {
             AudienceProfileTab.values().forEach { tab ->
                 val isActive = activeTab == tab
+                // As wide as its label: a full-width underline let the first
+                // tab take the whole row and push Followers and Threads out.
                 Column(
                     modifier =
                         Modifier
+                            .width(IntrinsicSize.Max)
                             .heightIn(min = 44.dp)
                             .clickable { onSelect(tab) }
                             .testTag("audienceProfileTab_${tab.key}"),

@@ -27,8 +27,9 @@ public final class CreatorInboxViewModel {
     private let api: APIClient
     private var threads: [PersonaThreadDTO] = []
     /// Persona whose inbox this is — the `:id` path segment every
-    /// `/api/personas/:id/dms/...` call from a row needs.
-    private var personaId: String = ""
+    /// `/api/personas/:id/dms/...` call from a row needs, and the Beacon
+    /// the "Send a broadcast" prompt composes for.
+    public private(set) var personaId: String = ""
     private var header = CreatorInboxHeader(
         title: "Creator Inbox",
         handle: nil,

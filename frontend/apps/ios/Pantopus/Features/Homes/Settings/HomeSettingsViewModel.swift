@@ -74,6 +74,10 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     /// carries `home.edit`. The backend enforces the same gate on
     /// `PATCH /api/homes/:id` (`home.js:3110`).
     public private(set) var canEditHome = false
+    /// "Invite link" opens the guest-pass manager, which only viewers with
+    /// `members.manage` may use (the server answers everyone else 403). Shown
+    /// when `GET /:id/me` didn't load, as before.
+    private var showsGuestPasses = true
     /// True while the identity card renders the text field instead of
     /// the home name.
     public private(set) var isRenaming = false
@@ -248,6 +252,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         let isPending = detail.isPendingOwner || detail.pendingClaimId != nil
         frame = isPending ? .pending : .populated
         canEditHome = Self.canEdit(detail: detail, access: access)
+        showsGuestPasses = access?.canManageMembers ?? true
 
         let homeName = detail.base.name?.nonEmpty
             ?? detail.base.address?.nonEmpty
@@ -390,9 +395,10 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
 
     private func membersGroup() -> GroupedListGroup {
         let rows: [GroupedListRow] = [
-            GroupedListRow(id: "people", label: "People", subtext: subtexts.people, control: .chevron),
-            GroupedListRow(id: "inviteLink", label: "Invite link", subtext: subtexts.inviteLink, control: .chevron)
-        ]
+            GroupedListRow(id: "people", label: "People", subtext: subtexts.people, control: .chevron)
+        ] + (showsGuestPasses
+            ? [GroupedListRow(id: "inviteLink", label: "Invite link", subtext: subtexts.inviteLink, control: .chevron)]
+            : [])
         return GroupedListGroup(id: "members", overline: "Members", rows: rows)
     }
 

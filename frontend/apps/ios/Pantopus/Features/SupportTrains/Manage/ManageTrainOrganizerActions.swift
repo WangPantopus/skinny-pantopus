@@ -221,6 +221,7 @@ public extension ManageTrainViewModel {
         )
         replaceOrganizerSurfaces(
             helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows),
+            helpersFailed: reservations == nil,
             organizers: Self.organizerRows(organizers?.organizers ?? []),
             fund: fundSummary
         )
