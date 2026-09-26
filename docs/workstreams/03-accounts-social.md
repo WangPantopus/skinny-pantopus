@@ -2,6 +2,48 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 13:14Z: #523 open (batch 29); #515 and #520 in batch 28 (#525); chat-audit fixes branch waiting for heavy
+
+**PR status**
+- Batch 28 is [#525](https://github.com/WangPantopus/skinny-pantopus/pull/525) (queued by Stream 1 at 13:13Z). It carries #515 (native chat media) and #520 (Beacon S3-12/13/33/68 plus the Android Audience tab strip).
+- [#523](https://github.com/WangPantopus/skinny-pantopus/pull/523): mail notifications are no longer labeled "Listing".
+  - Head `e98b73259`, seal `023fa8e4d3dbd1b0523d6bc7adf7858988092397a511a3a7ec842371815edc93`.
+  - Reviewed by Stream 1; goes in batch 29.
+  - Before and after screenshots on both apps: the tag icon and "Listing" become the info icon and "System".
+
+**Chat audit: new findings, all reproduced** (branch `claude/stream3-chat-audit-fixes`, not pushed yet)
+- **Android keyboard:** the header was pushed off-screen and the composer sat half under the keyboard.
+  - Fix: resize instead of pan while the chat is open, plus keyboard padding.
+  - Waiting for the heavy build.
+- **Listing cards (web, iOS, Android) and the iOS listing picker:** they showed the stored key ("books_media", "tools"); they now show "Books & Media" and "Tools".
+  - Web reads `CATEGORY_LABELS` from `@pantopus/ui-utils`.
+  - Web after is verified.
+- **Web "New message":**
+  - Results never showed photos: the dialog read `profile_picture_url`, but the search returns `profilePicture`.
+  - It said "No users found." for the whole typing pause, 19–656 ms after the first keystroke.
+  - Both are fixed and web-verified. Fixture F14 (a temporary Owner avatar) is already reverted.
+- **Sharing on Android:**
+  - Sending a listing card works end to end; the topic call returns 201.
+  - But the share selected the item's topic without a refetch, so the Owner's next message was hidden until "All" was tapped. Evidence: CA6.
+  - iOS has the same selection, and there the next refresh reloads the thread as that topic alone.
+  - Fix: sharing keeps the current view, as on web.
+- **iOS "All" candidate:** a chat opened about an item re-selects that item's topic on every refresh.
+  - Fix: the opening topic is used once, as on Android.
+  - To reproduce on the installed app before the after check.
+
+**Fixtures** (manifest, with exact reverts)
+- CA6: the Android listing share, its topic, and the Owner's test message.
+- CA7: a Member task, for task sharing from the native apps.
+- F14: reverted.
+
+**Runtime**
+- In chat-audit mode, the proxy now also allows the find-or-create topic call. The earlier iOS listing share at 12:29Z had it refused, so that share's topic step was unverified.
+
+**Slots**
+- Heavy order: Stream 2 → Stream 1 (Android) → me (one Android build of the fixes branch) → Stream 1 (iOS).
+- Stream 1 holds the iOS driver.
+- Emulator-5554 (slot 4): me.
+
 ## Update 2026-09-26 12:25Z: #516 merged (batch 27); #515 queued for batch 28; #520 Beacon rows open; mail-notification label fix built next
 
 **PR status**
