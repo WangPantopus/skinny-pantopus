@@ -3832,6 +3832,19 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const savedGigIds = await getViewerSavedGigIds(currentUserId, [gig.id]);
     gig.viewer_has_saved = savedGigIds.has(String(gig.id));
 
+    // The public task list shows how many bids a task has (every GigBid row).
+    // Say the same here: a viewer who can't list the bids (anyone but the
+    // poster) was otherwise told "No bids yet" about a task that has some.
+    const { count: bidCount, error: bidCountError } = await supabaseAdmin
+      .from('GigBid')
+      .select('id', { count: 'exact', head: true })
+      .eq('gig_id', gig.id);
+    if (bidCountError) {
+      logger.warn('Failed to count bids for gig detail', { gigId: gig.id, error: bidCountError.message });
+    } else {
+      gig.bid_count = bidCount || 0;
+    }
+
     delete gig.exact_location;
     delete gig.approx_location;
 
