@@ -26,7 +26,9 @@ class GigPaymentIdentitySource
                     AuthRepository.State.SignedOut -> "anonymous"
                     else -> "unavailable"
                 }
-            return "$principal|${tokens.accessTokenMarker().orEmpty()}|${retrofit.baseUrl()}"
+            // The session, not the access token: a same-session token refresh keeps the marker (as
+            // iOS binds), while another account, sign-out or a new sign-in still changes it.
+            return "$principal|${tokens.sessionMarker().orEmpty()}|${retrofit.baseUrl()}"
         }
 
         /** Anonymous reads require affirmative sign-out and no stored request credential. */

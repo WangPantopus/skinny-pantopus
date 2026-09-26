@@ -99,7 +99,8 @@ async function collectInternalContext(userId, homeId = null) {
       .select('id', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
       .in('lifecycle', ['delivered', 'opened'])
-      .eq('archived', false),
+      .eq('archived', false)
+      .is('deleted_at', null),
 
     urgentMail: supabaseAdmin
       .from('Mail')
@@ -107,6 +108,7 @@ async function collectInternalContext(userId, homeId = null) {
       .eq('recipient_user_id', userId)
       .in('lifecycle', ['delivered', 'opened'])
       .eq('archived', false)
+      .is('deleted_at', null)
       .neq('urgency', 'none'),
 
     activeGigs: supabaseAdmin

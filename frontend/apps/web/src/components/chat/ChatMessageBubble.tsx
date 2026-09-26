@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ChatMessage } from '@pantopus/types';
-import { extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
+import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
@@ -33,7 +33,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const [showQuickPicker, setShowQuickPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
-  const who = msg.sender?.name || msg.sender?.username || 'Someone';
+  const who = chatPersonName(msg.sender) || 'Someone';
   const ts = msg.created_at
     ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
@@ -48,7 +48,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const isEdited = msg.edited || msg.is_edited;
   const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;
 
-  const isAutoPlaceholder = msgText && /^\[.+ attachment\]$/i.test(msgText.trim());
+  // Text the server fills in for a message that is only attachments ("Photo",
+  // "Document"), or an older client's "[1 attachment]"; not a caption.
+  const isAutoPlaceholder = msgText && /^(\[.+ attachments?\]|Photo|Video|Document|Media)$/i.test(msgText.trim());
   const showText = msgText && !(isAutoPlaceholder && attachments.length > 0);
 
   const handleQuickReact = (emoji: string) => {
@@ -113,9 +115,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
             <div className="mb-0.5 ml-1">
               <UserIdentityLink
                 userId={msg.sender?.id}
-                username={msg.sender?.username}
+                username={chatPersonHandle(msg.sender)}
                 displayName={who}
-                avatarUrl={msg.sender?.profile_picture_url}
+                avatarUrl={chatPersonAvatar(msg.sender)}
                 textClassName="text-xs text-app-muted hover:text-primary-600 hover:underline"
               />
             </div>
@@ -149,9 +151,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
             <div className="mb-0.5 ml-1">
               <UserIdentityLink
                 userId={msg.sender?.id}
-                username={msg.sender?.username}
+                username={chatPersonHandle(msg.sender)}
                 displayName={who}
-                avatarUrl={msg.sender?.profile_picture_url}
+                avatarUrl={chatPersonAvatar(msg.sender)}
                 textClassName="text-xs text-app-muted hover:text-primary-600 hover:underline"
               />
             </div>
@@ -205,7 +207,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                         {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
                         <img
                           src={url}
-                          alt={(a.original_filename as string) || 'Image'}
+                          alt={showText ? `Photo: ${msgText}` : 'Photo'}
                           className="rounded-lg transition-opacity hover:opacity-90"
                           loading="lazy"
                           decoding="async"
@@ -218,6 +220,20 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                           }}
                         />
                       </button>
+                    );
+                  }
+                  if (mime.startsWith('video/') && url) {
+                    return (
+                      <video
+                        key={`${msg.id}-att-${i}`}
+                        src={url}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        aria-label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'}
+                        className="block rounded-lg bg-black"
+                        style={{ width: 'min(100%, 280px)', maxHeight: 'min(220px, 56vw)' }}
+                      />
                     );
                   }
                   return (

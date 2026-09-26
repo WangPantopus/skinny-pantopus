@@ -100,11 +100,24 @@ class TokenStorage
         private val _accessTokenFlow = MutableStateFlow<String?>(null)
         val accessTokenFlow: Flow<String?> = _accessTokenFlow.asStateFlow()
 
+        // The server session id (nonsecret), kept in step with the stored value. Set before
+        // the token on every write so a token change never shows the previous session.
+        @Volatile
+        private var storedSessionId: String? = null
+
         /** Nonsecret opening marker; never waits for disk or binds a later login to an existing screen. */
         fun accessTokenMarker(): String? =
             _accessTokenFlow.value?.let { token ->
                 MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
             }
+
+        /**
+         * Nonsecret marker of the signed-in session. The server keeps a session's id across
+         * token refreshes, so this stays the same when the token rotates and changes on a new
+         * sign-in or sign-out. Sessions stored without an id fall back to [accessTokenMarker].
+         * Never log it.
+         */
+        fun sessionMarker(): String? = storedSessionId?.let { "session:$it" } ?: accessTokenMarker()?.let { "token:$it" }
 
         private suspend fun <T> withPrefs(block: (SharedPreferences) -> T): T =
             withContext(Dispatchers.IO) {
@@ -133,6 +146,7 @@ class TokenStorage
             migrationMutex.withLock {
                 if (migrationCompleted) return@withLock
                 if (prefs.getBoolean(Keys.V2_MIGRATED, false)) {
+                    storedSessionId = prefs.getString(Keys.SESSION_ID, null)?.takeIf(String::isNotBlank)
                     _accessTokenFlow.value = prefs.getString(Keys.ACCESS, null)
                     migrationCompleted = true
                     return@withLock
@@ -157,6 +171,7 @@ class TokenStorage
                     // retry on every call. There's nothing to recover.
                     prefs.edit().putBoolean(Keys.V2_MIGRATED, true).commit()
                 }
+                storedSessionId = prefs.getString(Keys.SESSION_ID, null)?.takeIf(String::isNotBlank)
                 _accessTokenFlow.value = prefs.getString(Keys.ACCESS, null)
                 migrationCompleted = true
             }
@@ -246,6 +261,7 @@ class TokenStorage
                         if (sessionContext != null) putString(Keys.SESSION_CONTEXT, sessionContext) else remove(Keys.SESSION_CONTEXT)
                     }.commit()
             }
+            storedSessionId = sessionId?.takeIf(String::isNotBlank)
             _accessTokenFlow.value = accessToken
         }
 
@@ -272,6 +288,8 @@ class TokenStorage
                         if (sessionId != null) putString(Keys.SESSION_ID, sessionId)
                     }.commit()
             }
+            // A refresh without a session id keeps the stored one, so the marker stays too.
+            if (sessionId != null) storedSessionId = sessionId.takeIf(String::isNotBlank)
             _accessTokenFlow.value = accessToken
         }
 
@@ -292,6 +310,7 @@ class TokenStorage
                         remove(Keys.SESSION_CONTEXT)
                     }.commit()
             }
+            storedSessionId = null
             _accessTokenFlow.value = null
         }
     }

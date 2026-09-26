@@ -12,7 +12,9 @@ extension MailDetailViewModel {
         now _: Date = Date()
     ) -> MailDetailContent {
         let item = detail.item
-        let category = MailItemCategory.fromRaw(item.mailType ?? item.type)
+        // `Mail.certified` is what makes a live letter certified mail
+        // (`Mail_mail_type_check` has no 'certified' mail type).
+        let category = item.certified ? MailItemCategory.certified : MailItemCategory.fromRaw(item.mailType ?? item.type)
         // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
         let trust = MailTrust.fromRaw(item.senderTrust)
         let senderDisplayName = detail.sender?.name
@@ -31,9 +33,15 @@ extension MailDetailViewModel {
         let createdAtLabel = formatLongDate(item.createdAt)
         let expiresAtLabel = formatLongDate(item.expiresAt)
         let ackRequired = item.ackRequired ?? false
-        let isAcknowledged = (item.ackStatus ?? "").lowercased() == "acknowledged"
+        let isAcknowledged = (item.ackStatus ?? "").lowercased() == "acknowledged" || item.acknowledgedAt != nil
         let variants = decodeVariantDetails(category: category, object: detail.object)
-        let resolvedAck = isAcknowledged || (variants.certified?.isAcknowledged ?? false)
+        let certifiedDetail = variants.certified ?? (item.certified ? CertifiedDetailDTO.pantopus(
+            reference: "Ref \(item.id.prefix(8).uppercased())",
+            receivedAt: item.createdAt,
+            readAt: item.openedAt ?? item.viewedAt,
+            signedAt: item.acknowledgedAt
+        ) : nil)
+        let resolvedAck = isAcknowledged || (certifiedDetail?.isAcknowledged ?? false)
         let detailTrust: MailDetailTrust = switch category {
         case .certified, .community, .legal, .tax, .records: .verified
         case .party: .celebration
@@ -57,7 +65,7 @@ extension MailDetailViewModel {
             referenceLabel: referenceLabel,
             createdAtLabel: createdAtLabel,
             expiresAtLabel: expiresAtLabel,
-            readStatusLabel: item.viewed || resolvedAck ? "Read" : "Unread",
+            readStatusLabel: item.viewed || item.openedAt != nil || resolvedAck ? "Read" : "Unread",
             bodyParagraphs: bodyParagraphs(from: item.content),
             attachments: item.attachments ?? [],
             aiSummary: nil,
@@ -65,7 +73,7 @@ extension MailDetailViewModel {
             isAcknowledged: resolvedAck,
             isArchived: item.archived,
             bookletDetail: variants.booklet,
-            certifiedDetail: variants.certified,
+            certifiedDetail: certifiedDetail,
             communityDetail: variants.community,
             couponDetail: variants.coupon,
             gigDetail: variants.gig,

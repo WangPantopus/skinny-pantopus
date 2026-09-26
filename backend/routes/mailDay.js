@@ -39,7 +39,7 @@ const logger = require('../utils/logger');
 const { ensureTodayItems, getAccessibleHomeIds, kindFor } = require('../services/mailDayService');
 // readableMail: the mailbox's per-item rule (own mail, or mail for a Home whose
 // mail the caller may read), checked before a triage piece links or changes a Mail.
-const { readableMail } = require('../utils/homeMailAccess');
+const { readableMail, sendHomeMailRemovedNotice } = require('../utils/homeMailAccess');
 
 const UNDO_SECONDS = 5;
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -259,7 +259,8 @@ async function setupNudges(userId) {
 async function resolveLinkedMail(item, action, drawer, userId) {
   if (!item.mail_id) return;
   try {
-    if (!(await readableMail(item.mail_id, userId))) return;
+    const readable = await readableMail(item.mail_id, userId);
+    if (!readable) return;
     const nowIso = new Date().toISOString();
     if (action === 'routed') {
       const privacyMap = { personal: 'private_to_person', home: 'shared_household', business: 'business_team' };
@@ -274,6 +275,11 @@ async function resolveLinkedMail(item, action, drawer, userId) {
       await supabaseAdmin.from('Mail').update(update).eq('id', item.mail_id);
     } else if (action === 'junked') {
       await supabaseAdmin.from('Mail').update({ lifecycle: 'shredded' }).eq('id', item.mail_id);
+      // Junking a household letter dismisses it for everyone: the same notice
+      // (and Restore) as a Dismiss in the mailbox.
+      if (readable.recipient_home_id && readable.lifecycle !== 'shredded') {
+        await sendHomeMailRemovedNotice(readable, userId, 'dismissed');
+      }
     }
     await supabaseAdmin
       .from('MailRoutingQueue')
@@ -287,6 +293,24 @@ async function resolveLinkedMail(item, action, drawer, userId) {
   } catch (err) {
     logger.warn('resolveLinkedMail failed (non-fatal)', { error: err.message });
   }
+}
+
+/**
+ * Today's pieces without those whose letter was deleted: a deleted letter's
+ * piece hides with it (and cannot hold up Finish) and returns if the letter
+ * is restored.
+ */
+async function withoutDeletedLetters(items) {
+  const mailIds = [...new Set(items.map((i) => i.mail_id).filter(Boolean))];
+  if (!mailIds.length) return items;
+  const { data: deleted, error } = await supabaseAdmin
+    .from('Mail')
+    .select('id')
+    .in('id', mailIds)
+    .not('deleted_at', 'is', null);
+  if (error) throw error;
+  const deletedIds = new Set((deleted || []).map((m) => m.id));
+  return items.filter((i) => !deletedIds.has(i.mail_id));
 }
 
 async function loadOwnedItem(itemId, userId) {
@@ -328,7 +352,7 @@ router.get('/today', verifyToken, async (req, res) => {
       .select('*')
       .eq('user_id', userId)
       .eq('day_date', today);
-    const all = items || [];
+    const all = await withoutDeletedLetters(items || []);
 
     const unreviewed = all
       .filter((i) => i.status === 'unreviewed')
@@ -510,7 +534,7 @@ router.post('/finish', verifyToken, async (req, res) => {
       .select('*')
       .eq('user_id', userId)
       .eq('day_date', today);
-    const all = items || [];
+    const all = await withoutDeletedLetters(items || []);
     const remaining = all.filter((i) => i.status === 'unreviewed').length;
     const reviewed = all.filter((i) => i.status === 'reviewed');
 

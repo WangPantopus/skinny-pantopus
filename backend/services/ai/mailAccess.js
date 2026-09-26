@@ -44,6 +44,7 @@ async function getAuthorizedMail({ mailItemId, userId, select }) {
     .from('Mail')
     .select(projection)
     .eq('id', mailItemId)
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (error || !row) {

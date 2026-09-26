@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -180,9 +180,16 @@ export default function PostDetailPage() {
     },
   });
 
+  // One toggle at a time: a second click while the first is in flight would undo it.
+  const saveInFlight = useRef(false);
   const handleSave = useCallback(() => {
-    if (!post) return;
-    saveMutation.mutate(post.id);
+    if (!post || saveInFlight.current) return;
+    saveInFlight.current = true;
+    saveMutation.mutate(post.id, {
+      onSettled: () => {
+        saveInFlight.current = false;
+      },
+    });
   }, [post, saveMutation]);
 
   const handleAddComment = async ({ text, parentId, files = [] }: { text: string; parentId?: string; files?: File[] }) => {

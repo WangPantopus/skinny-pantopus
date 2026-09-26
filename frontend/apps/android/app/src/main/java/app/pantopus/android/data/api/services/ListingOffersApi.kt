@@ -58,6 +58,16 @@ interface ListingOffersApi {
     ): ListingOfferResponseEnvelope
 
     /**
+     * `POST /api/listings/:listingId/offers/:offerId/withdraw` — route
+     * `backend/routes/listingOffers.js:198`. The buyer withdraws their pending or countered offer.
+     */
+    @POST("api/listings/{listingId}/offers/{offerId}/withdraw")
+    suspend fun withdrawOffer(
+        @Path("listingId") listingId: String,
+        @Path("offerId") offerId: String,
+    ): ListingOfferResponseEnvelope
+
+    /**
      * `POST /api/listings/:listingId/offers/:offerId/counter` — route
      * `backend/routes/listingOffers.js:144`.
      */

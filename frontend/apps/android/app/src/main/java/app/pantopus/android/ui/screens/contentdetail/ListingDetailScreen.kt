@@ -4,6 +4,7 @@
 package app.pantopus.android.ui.screens.contentdetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -49,6 +51,8 @@ import com.stripe.android.paymentsheet.rememberPaymentSheet
 fun ListingDetailScreen(
     onBack: () -> Unit = {},
     onOpenMessages: (app.pantopus.android.data.api.models.listings.ListingDto) -> Unit = {},
+    /** The seller's own "Message": their Messages inbox (a chat with themselves isn't one). */
+    onOpenInbox: (() -> Unit)? = null,
     onViewOffers: ((app.pantopus.android.data.api.models.listings.ListingDto) -> Unit)? = null,
     onEditListing: ((app.pantopus.android.data.api.models.listings.ListingDto) -> Unit)? = null,
     /** A sold listing's "Find similar": the host opens the marketplace. */
@@ -63,6 +67,8 @@ fun ListingDetailScreen(
     // One offer request at a time; a refused offer keeps the sheet open with the server's reason.
     var offerSending by remember { mutableStateOf(false) }
     var offerError by remember { mutableStateOf<String?>(null) }
+    // The buyer's open offer ("Your offer $X"): shown with Withdraw, as on web.
+    var myOfferSheetVisible by remember { mutableStateOf(false) }
     var toastText by remember { mutableStateOf<String?>(null) }
     var toastKind by remember { mutableStateOf(ToastKind.Success) }
 
@@ -106,7 +112,11 @@ fun ListingDetailScreen(
     }
 
     val openMessages: () -> Unit = {
-        viewModel.listingSnapshot()?.let { onOpenMessages(it) }
+        if (viewModel.isOwnedByMe()) {
+            onOpenInbox?.invoke()
+        } else {
+            viewModel.listingSnapshot()?.let { onOpenMessages(it) }
+        }
     }
 
     // Owner-only overflow: "Edit listing" surfaces here so the dock can
@@ -133,18 +143,17 @@ fun ListingDetailScreen(
         state = state,
         onBack = onBack,
         onPrimaryAction = {
-            val listing = viewModel.listingSnapshot()
-            if (viewModel.hasCheckoutAction()) {
-                continueCheckout()
-            } else if (viewModel.isSold()) {
-                // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
-                onFindSimilar?.invoke()
-            } else if (listing != null && viewModel.isOwnedByMe() && onViewOffers != null) {
-                onViewOffers(listing)
-            } else {
-                offerError = null
-                sheetVisible = true
-            }
+            onListingPrimaryAction(
+                viewModel = viewModel,
+                continueCheckout = continueCheckout,
+                onFindSimilar = onFindSimilar,
+                onViewOffers = onViewOffers,
+                showMyOffer = { myOfferSheetVisible = true },
+                showOfferSheet = {
+                    offerError = null
+                    sheetVisible = true
+                },
+            )
         },
         onSecondaryAction = openMessages,
         onRetry = { viewModel.load() },
@@ -188,6 +197,18 @@ fun ListingDetailScreen(
         }
     }
 
+    if (myOfferSheetVisible) {
+        MyOfferSheet(
+            viewModel = viewModel,
+            onDismiss = { myOfferSheetVisible = false },
+            onWithdrawn = { message ->
+                myOfferSheetVisible = false
+                toastKind = ToastKind.Success
+                toastText = message
+            },
+        )
+    }
+
     toastText?.let { text ->
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -209,6 +230,67 @@ fun ListingDetailScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * The dock's primary button: checkout once an offer is accepted, "Find similar" on a sold listing, the seller's
+ * offers, the buyer's open offer, or a new offer.
+ */
+private fun onListingPrimaryAction(
+    viewModel: ListingDetailViewModel,
+    continueCheckout: () -> Unit,
+    onFindSimilar: (() -> Unit)?,
+    onViewOffers: ((app.pantopus.android.data.api.models.listings.ListingDto) -> Unit)?,
+    showMyOffer: () -> Unit,
+    showOfferSheet: () -> Unit,
+) {
+    val listing = viewModel.listingSnapshot()
+    if (viewModel.hasCheckoutAction()) {
+        continueCheckout()
+    } else if (viewModel.isSold()) {
+        // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
+        onFindSimilar?.invoke()
+    } else if (listing != null && viewModel.isOwnedByMe() && onViewOffers != null) {
+        onViewOffers(listing)
+    } else if (viewModel.myOfferSnapshot() != null) {
+        showMyOffer()
+    } else {
+        showOfferSheet()
+    }
+}
+
+/** The buyer's open offer; one withdrawal at a time, and a refused one keeps the sheet open with the server's reason. */
+@Composable
+private fun MyOfferSheet(
+    viewModel: ListingDetailViewModel,
+    onDismiss: () -> Unit,
+    onWithdrawn: (String) -> Unit,
+) {
+    val offer = viewModel.myOfferSnapshot() ?: return
+    val isFree = viewModel.listingSnapshot()?.isFree == true
+    var withdrawing by remember { mutableStateOf(false) }
+    var withdrawError by remember { mutableStateOf<String?>(null) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        MyOfferSheetContent(
+            offer = offer,
+            isFree = isFree,
+            withdrawing = withdrawing,
+            errorText = withdrawError,
+            onWithdraw = {
+                if (!withdrawing) {
+                    withdrawing = true
+                    withdrawError = null
+                    viewModel.withdrawOffer(onFailure = { withdrawError = it }) { ok ->
+                        withdrawing = false
+                        if (ok) onWithdrawn(if (isFree) "Interest withdrawn" else "Offer withdrawn")
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -311,6 +393,83 @@ private fun OfferSheetContent(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,
+            )
+        }
+        Spacer(modifier = Modifier.height(Spacing.s5))
+    }
+}
+
+/** The buyer's open offer, as web shows it: waiting for the seller (their amount and note) or the seller's counter, and Withdraw. */
+@Composable
+private fun MyOfferSheetContent(
+    offer: app.pantopus.android.data.api.models.listing_offers.ListingOfferDto,
+    isFree: Boolean,
+    withdrawing: Boolean,
+    errorText: String?,
+    onWithdraw: () -> Unit,
+) {
+    val countered = offer.status == "countered"
+    val amount = (if (countered) offer.counterAmount else offer.amount)?.takeIf { it > 0 }
+    val note = if (countered) offer.counterMessage else offer.message
+    val status =
+        when {
+            !countered -> "Waiting for the seller"
+            amount != null -> "The seller countered with"
+            else -> "The seller countered"
+        }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(Spacing.s5).testTag("listingDetail.myOffer"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Text(text = "Your offer", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+        Text(text = status, fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+        amount?.let {
+            Text(
+                text = ListingDetailViewModel.Projection.usd(it),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.appText,
+            )
+        }
+        note?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = "“$it”",
+                fontSize = 13.sp,
+                fontStyle = FontStyle.Italic,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        errorText?.let {
+            Text(
+                text = it,
+                style = PantopusTextStyle.small,
+                color = PantopusColors.error,
+                modifier = Modifier.testTag("listingDetail.withdrawError"),
+            )
+        }
+        Spacer(modifier = Modifier.height(Spacing.s1))
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Radii.lg))
+                    .background(PantopusColors.appSurface)
+                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
+                    .clickable(enabled = !withdrawing) { onWithdraw() }
+                    .heightIn(min = 48.dp)
+                    .testTag("listingDetail.withdrawOffer"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text =
+                    when {
+                        withdrawing -> "Withdrawing…"
+                        isFree -> "Withdraw interest"
+                        else -> "Withdraw offer"
+                    },
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.appText,
             )
         }
         Spacer(modifier = Modifier.height(Spacing.s5))

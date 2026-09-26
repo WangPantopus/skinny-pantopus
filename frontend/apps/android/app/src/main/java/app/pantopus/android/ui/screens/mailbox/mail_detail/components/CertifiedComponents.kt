@@ -230,12 +230,15 @@ private fun SenderRow(
                     background = PantopusColors.primary100,
                     foreground = PantopusColors.primary800,
                 )
-                Pill(
-                    icon = null,
-                    text = "Sender domain checked",
-                    background = PantopusColors.successBg,
-                    foreground = PantopusColors.success,
-                )
+                // Only government, utility and business senders have a checked domain.
+                if (trust == MailTrust.Verified) {
+                    Pill(
+                        icon = null,
+                        text = "Sender domain checked",
+                        background = PantopusColors.successBg,
+                        foreground = PantopusColors.success,
+                    )
+                }
             }
         }
         if (senderUserId != null) {

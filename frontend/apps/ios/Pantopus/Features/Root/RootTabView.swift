@@ -158,6 +158,8 @@ public struct RootTabView: View {
                 YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt, initialRoute: profileInitialRoute) {
                     showProfile = false
                 }
+                // A cover doesn't see the tab view's environment; the profile can switch tabs under it.
+                .environment(model)
             }
         )
         .fullScreenCover(item: $pendingInviteToken) { item in

@@ -39,6 +39,12 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let senderTrust: String?
     public let viewed: Bool
     public let viewedAt: String?
+    /// `Mail.certified` — certified mail its named recipient signs for.
+    public let certified: Bool
+    /// When the web first opened it (the apps record `viewed_at`).
+    public let openedAt: String?
+    /// Certified mail: when the named recipient signed for it.
+    public let acknowledgedAt: String?
     public let archived: Bool
     public let starred: Bool
     public let payoutAmount: Double?
@@ -74,6 +80,9 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case senderTrust = "sender_trust"
         case viewed
         case viewedAt = "viewed_at"
+        case certified
+        case openedAt = "opened_at"
+        case acknowledgedAt = "acknowledged_at"
         case archived, starred
         case payoutAmount = "payout_amount"
         case payoutStatus = "payout_status"
@@ -109,6 +118,9 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         senderTrust = try c.decodeIfPresent(String.self, forKey: .senderTrust)
         viewed = try c.decodeIfPresent(Bool.self, forKey: .viewed) ?? false
         viewedAt = try c.decodeIfPresent(String.self, forKey: .viewedAt)
+        certified = try c.decodeIfPresent(Bool.self, forKey: .certified) ?? false
+        openedAt = try c.decodeIfPresent(String.self, forKey: .openedAt)
+        acknowledgedAt = try c.decodeIfPresent(String.self, forKey: .acknowledgedAt)
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
         starred = try c.decodeIfPresent(Bool.self, forKey: .starred) ?? false
         payoutAmount = try c.decodeIfPresent(Double.self, forKey: .payoutAmount)
@@ -146,6 +158,9 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         /// the V2 item route exposes under `object_payload`, and the
         /// backend itself falls back to it (`routes/mailCompose.js:556`).
         public let mailExtracted: JSONValue?
+        /// Set when the letter was deleted or dismissed for the household;
+        /// members who could see it open it from the notice and restore it.
+        public let removed: MailRemovedDTO?
 
         public var id: String {
             item.id
@@ -170,6 +185,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             contentFormat = try c.decodeIfPresent(String.self, forKey: .contentFormat)
             links = try c.decodeIfPresent([JSONValue].self, forKey: .links) ?? []
             mailExtracted = try c.decodeIfPresent(JSONValue.self, forKey: .mailExtracted)
+            removed = try c.decodeIfPresent(MailRemovedDTO.self, forKey: .removed)
         }
 
         public struct Sender: Decodable, Sendable, Hashable, Identifiable {
@@ -184,7 +200,26 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             case contentFormat = "content_format"
             case links
             case mailExtracted = "mail_extracted"
+            case removed
         }
+    }
+}
+
+/// `removed` on `GET /api/mailbox/:id`: `deleted` (restorable until
+/// `restorable_until`, 30 days) or `dismissed` for the household.
+public struct MailRemovedDTO: Decodable, Sendable, Hashable {
+    public let action: String
+    public let byName: String?
+    public let restorableUntil: String?
+
+    public var isDeleted: Bool {
+        action == "deleted"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case byName = "by_name"
+        case restorableUntil = "restorable_until"
     }
 }
 
@@ -207,5 +242,10 @@ public struct ArchiveMailBody: Encodable, Sendable {
 
 /// `PATCH /api/mailbox/:id/archive` response.
 public struct ArchiveMailResponse: Decodable, Sendable, Hashable {
+    public let message: String
+}
+
+/// `POST /api/mailbox/:id/restore` response.
+public struct RestoreMailResponse: Decodable, Sendable, Hashable {
     public let message: String
 }

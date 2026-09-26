@@ -2482,6 +2482,11 @@ public struct HubTabRoot: View {
                         )))
                     }
                 },
+                onOpenInbox: {
+                    // The seller's own "Message" opens their Messages inbox.
+                    MailTabStore.shared.pendingSegment = .messages
+                    rootTabs.selected = .mail
+                },
                 onViewOffers: { dto in
                     Task { @MainActor in
                         push(.listingOffers(listingId: dto.id, title: dto.title))

@@ -5,16 +5,22 @@
 //  Local copy helpers for optimistic mail-detail state changes.
 //
 
+import Foundation
+
 extension MailDetailContent {
     /// Return a copy of `content` with `isAcknowledged` flipped to the
     /// supplied value. Used by the optimistic acknowledge mutation.
     static func replacingAck(_ content: MailDetailContent, with value: Bool) -> MailDetailContent {
-        rebuild(content, readStatusLabel: value ? "Read" : content.readStatusLabel, isAcknowledged: value)
+        guard value, let certified = content.certifiedDetail else {
+            return rebuild(content, readStatusLabel: value ? "Read" : content.readStatusLabel, isAcknowledged: value)
+        }
+        return rebuild(content, readStatusLabel: "Read", isAcknowledged: true, certifiedDetail: certified.completing("acknowledged"))
     }
 
     /// Return a copy of `content` marked read once opening it was recorded.
     static func replacingRead(_ content: MailDetailContent) -> MailDetailContent {
-        rebuild(content, readStatusLabel: "Read")
+        guard let certified = content.certifiedDetail else { return rebuild(content, readStatusLabel: "Read") }
+        return rebuild(content, readStatusLabel: "Read", certifiedDetail: certified.completing("read"))
     }
 
     /// Return a copy of `content` with the community detail's RSVP
@@ -161,6 +167,27 @@ extension MailDetailContent {
             packageDetail: packageDetail ?? content.packageDetail,
             partyDetail: partyDetail ?? content.partyDetail,
             recordsDetail: recordsDetail ?? content.recordsDetail
+        )
+    }
+}
+
+extension CertifiedDetailDTO {
+    /// A copy with chain step `id` done now; the "acknowledged" step also marks it signed.
+    func completing(_ id: String, at date: Date = Date()) -> CertifiedDetailDTO {
+        let stamp = ISO8601DateFormatter().string(from: date)
+        return CertifiedDetailDTO(
+            referenceNumber: referenceNumber,
+            documentType: documentType,
+            acknowledgeBy: acknowledgeBy,
+            chain: chain.map { step in
+                step.id == id && !step.isComplete
+                    ? CertifiedChainStep(id: step.id, label: step.label, occurredAt: stamp, isComplete: true)
+                    : step
+            },
+            noticeBody: noticeBody,
+            termsURL: termsURL,
+            isAcknowledged: isAcknowledged || id == "acknowledged",
+            isPostal: isPostal
         )
     }
 }

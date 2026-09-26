@@ -43,6 +43,16 @@ public enum ListingOffersEndpoints {
         )
     }
 
+    /// `POST /api/listings/:listingId/offers/:offerId/withdraw` — the buyer
+    /// withdraws their pending or countered offer. Route
+    /// `backend/routes/listingOffers.js:198`.
+    public static func withdraw(listingId: String, offerId: String) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/listings/\(listingId)/offers/\(offerId)/withdraw"
+        )
+    }
+
     /// `POST /api/listings/:listingId/offers/:offerId/counter`. Route
     /// `backend/routes/listingOffers.js:144`.
     public static func counter(

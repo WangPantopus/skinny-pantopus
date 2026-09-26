@@ -282,6 +282,7 @@ async function routeAndGroup(userId, addressId) {
     .select('*')
     .eq('recipient_address_id', addressId)
     .or(visibleMailFilter(userId, homeIds))
+    .is('deleted_at', null)
     .is('bundle_id', null)
     .neq('mail_object_type', 'bundle')
     .gte('created_at', today + 'T00:00:00Z')
@@ -479,6 +480,7 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
       .select('*')
       .eq('bundle_id', bundleId)
       .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id)))
+      .is('deleted_at', null)
       .order('urgency', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -508,7 +510,8 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       .from('Mail')
       .select('id')
       .eq('bundle_id', bundleId)
-      .or(visibleMailFilter(req.user.id, homeIds));
+      .or(visibleMailFilter(req.user.id, homeIds))
+      .is('deleted_at', null);
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
@@ -632,6 +635,7 @@ router.get('/certified/:mailId', async (req, res, next) => {
       .select('*')
       .eq('id', mailId)
       .eq('certified', true)
+      .is('deleted_at', null)
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -658,6 +662,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
       .select('*')
       .eq('id', mailId)
       .eq('certified', true)
+      .is('deleted_at', null)
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -670,10 +675,13 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
 
     const now = new Date().toISOString();
     const auditTrail = Array.isArray(mail.audit_trail) ? mail.audit_trail : [];
-    auditTrail.push(
-      { event: 'opened', timestamp: now, actor_id: req.user.id },
-      { event: 'acknowledged', timestamp: now, actor_id: req.user.id },
-    );
+    // Signing is the receipt. A letter read earlier (opened on the web, or
+    // viewed in the apps) keeps the time it was first read.
+    const readAt = mail.opened_at || mail.viewed_at || now;
+    if (!auditTrail.some((entry) => entry?.event === 'opened')) {
+      auditTrail.push({ event: 'opened', timestamp: readAt, actor_id: req.user.id });
+    }
+    auditTrail.push({ event: 'acknowledged', timestamp: now, actor_id: req.user.id });
 
     const { error: ackError } = await supabaseAdmin
       .from('Mail')
@@ -681,8 +689,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
         acknowledged_at: now,
         acknowledged_by: req.user.id,
         audit_trail: auditTrail,
-        lifecycle: 'opened',
-        opened_at: now,
+        ...(mail.opened_at ? {} : { lifecycle: 'opened', opened_at: readAt }),
       })
       .eq('id', mailId);
     // supabase-js reports a failed write instead of throwing: without this
@@ -715,6 +722,7 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
       .select('*')
       .eq('id', mailId)
       .eq('certified', true)
+      .is('deleted_at', null)
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -750,6 +758,7 @@ router.get('/certified/:mailId/proof', async (req, res, next) => {
       .select('*')
       .eq('id', mailId)
       .eq('certified', true)
+      .is('deleted_at', null)
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -1005,6 +1014,7 @@ router.get('/party/active', async (req, res, next) => {
       .from('MailPartySession')
       .select('*, Mail!inner(id, sender_display, subject, sender_trust)')
       .in('home_id', homeIds)
+      .is('Mail.deleted_at', null)
       .in('status', ['pending', 'active'])
       .order('created_at', { ascending: false });
 
@@ -1120,6 +1130,7 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
       .from('Mail')
       .select('*', { count: 'exact' })
       .eq('vault_folder_id', folderId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -1195,6 +1206,7 @@ router.post('/vault/auto-file', async (req, res, next) => {
       .select('*')
       .eq('recipient_user_id', req.user.id)
       .is('vault_folder_id', null)
+      .is('deleted_at', null)
       .in('lifecycle', ['delivered', 'opened'])
       .order('created_at', { ascending: false })
       .limit(100);
@@ -1254,7 +1266,8 @@ router.get('/vault/search', async (req, res, next) => {
     let query = supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact' })
-      .eq('recipient_user_id', req.user.id);
+      .eq('recipient_user_id', req.user.id)
+      .is('deleted_at', null);
 
     if (drawer) query = query.eq('drawer', drawer);
     if (folderId) query = query.eq('vault_folder_id', folderId);

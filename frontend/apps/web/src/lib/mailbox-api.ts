@@ -7,7 +7,8 @@
 // Every function throws MailboxApiError on failure.
 // ============================================================
 
-import { get, post, uploadFile, apiRequest } from '@pantopus/api';
+import { get, post, uploadFile, apiRequest, mailbox } from '@pantopus/api';
+import type { DeletedMail } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -151,9 +152,10 @@ export async function getDrawerItems(
 
 export async function getItemDetail(itemId: string): Promise<MailItemDetailResponse> {
   return call(async () => {
-    const res = await get<{ mail: MailItemV2 }>(`/api/mailbox/v2/item/${itemId}`);
+    const res = await get<{ mail: MailItemV2 & CertifiedFields }>(`/api/mailbox/v2/item/${itemId}`);
     // Map the flat MailItemV2 into the wrapper/inside/policy shape
     const mail = res.mail;
+    const certified = mail.certified === true;
     return {
       wrapper: {
         id: mail.id,
@@ -171,10 +173,14 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
         urgency: mail.urgency,
         privacy: mail.privacy,
         lifecycle: mail.lifecycle,
+        removed: mail.removed ?? undefined,
         category: mail.category as MailItemDetailResponse['wrapper']['category'],
         starred: mail.starred ?? false,
         created_at: mail.created_at,
         opened_at: mail.opened_at,
+        viewed_at: mail.viewed_at ?? undefined,
+        acknowledged_at: mail.acknowledged_at ?? undefined,
+        audit_trail: Array.isArray(mail.audit_trail) ? mail.audit_trail : undefined,
       },
       inside: {
         mail_id: mail.id,
@@ -193,13 +199,22 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
           size_bytes: 0,
         })),
       },
+      // A certified letter (Mail.certified) needs its named recipient's signature.
       policy: {
-        requires_acknowledgment: false,
-        certified: false,
+        requires_acknowledgment: certified,
+        certified,
       },
     };
   });
 }
+
+/** Certified-mail columns the item route returns with the Mail row. */
+type CertifiedFields = {
+  certified?: boolean;
+  viewed_at?: string | null;
+  acknowledged_at?: string | null;
+  audit_trail?: AuditEvent[] | null;
+};
 
 export async function fileItemToVault(itemId: string, folderId: string): Promise<void> {
   return call(async () => {
@@ -815,5 +830,21 @@ export async function createVacationHold(data: {
 export async function cancelVacationHold(holdId: string): Promise<void> {
   return call(async () => {
     await post('/api/mailbox/v2/p3/vacation/cancel', { holdId });
+  });
+}
+
+// ============================================================
+// RECENTLY DELETED
+// ============================================================
+
+/** Letters deleted in the last 30 days that the caller could see, newest first. */
+export async function getDeletedMail(): Promise<DeletedMail[]> {
+  return call(async () => (await mailbox.getDeletedMail()).mail ?? []);
+}
+
+/** Restore a deleted letter (within 30 days) or one dismissed for the household. */
+export async function restoreMail(mailId: string): Promise<void> {
+  return call(async () => {
+    await mailbox.restoreMail(mailId);
   });
 }

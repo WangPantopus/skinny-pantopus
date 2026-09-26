@@ -28,6 +28,7 @@ async function mailInterruptNotification() {
       .from('Mail')
       .select('recipient_user_id, sender_display')
       .eq('id', mailId)
+      .is('deleted_at', null)
       .single();
 
     if (mail?.recipient_user_id) {
@@ -55,6 +56,7 @@ async function mailInterruptNotification() {
     .from('Mail')
     .select('id, recipient_user_id, sender_display, urgency')
     .in('urgency', ['time_sensitive', 'overdue'])
+    .is('deleted_at', null)
     .gte('created_at', fiveMinAgo);
 
   for (const item of (timeSensitive || [])) {
@@ -83,6 +85,7 @@ async function mailInterruptNotification() {
     .select('id, recipient_user_id, sender_display')
     .eq('ack_required', true)
     .eq('ack_status', 'pending')
+    .is('deleted_at', null)
     .gte('created_at', fiveMinAgo);
 
   for (const item of (certified || [])) {

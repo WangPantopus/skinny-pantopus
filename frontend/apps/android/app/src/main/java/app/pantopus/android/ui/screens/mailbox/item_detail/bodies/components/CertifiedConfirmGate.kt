@@ -49,7 +49,7 @@ import app.pantopus.android.ui.theme.Spacing
 const val CERTIFIED_CONFIRM_GATE_TAG = "certifiedConfirmGate"
 
 /**
- * Modal delivery-signing gate for unread certified mail. The user must
+ * Modal delivery-signing gate for certified mail not yet signed. The user must
  * explicitly confirm recipient intent before the Sign for delivery action
  * can record a receipt.
  */
@@ -164,7 +164,7 @@ private fun ConfirmGateHeader() {
             )
             Text(
                 text =
-                    "This certified item is unread. Signing records a delivery receipt " +
+                    "This certified item isn't signed yet. Signing records a delivery receipt " +
                         "in the chain of custody.",
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,

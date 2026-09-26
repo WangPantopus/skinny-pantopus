@@ -28,9 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.PauseBanner
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
@@ -50,6 +52,10 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * T6.5b (P20) — Android generic A17.1 mail item detail. Mirror of iOS
@@ -102,6 +108,8 @@ fun MailDetailScreen(
     val pendingDestructiveAction by viewModel.pendingDestructiveAction.collectAsStateWithLifecycle()
     val ceremonialRedirectMailId by viewModel.ceremonialRedirectMailId.collectAsStateWithLifecycle()
     val didLeaveMailbox by viewModel.didLeaveMailbox.collectAsStateWithLifecycle()
+    val removed by viewModel.removed.collectAsStateWithLifecycle()
+    val restoreInFlight by viewModel.restoreInFlight.collectAsStateWithLifecycle()
     GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -125,56 +133,60 @@ fun MailDetailScreen(
         when (val current = state) {
             MailDetailUiState.Loading -> LoadingLayout(onBack = onBack)
             is MailDetailUiState.Loaded ->
-                LoadedLayout(
-                    content = current.content,
-                    ackInFlight = ackInFlight,
-                    rsvpInFlight = rsvpInFlight,
-                    couponRedeemInFlight = couponRedeemInFlight,
-                    gigBidInFlight = gigBidInFlight,
-                    partyRsvpInFlight = partyRsvpInFlight,
-                    recordsFileInFlight = recordsFileInFlight,
-                    saveToVaultInFlight = saveToVaultInFlight,
-                    onBack = onBack,
-                    onAcknowledge = viewModel::acknowledge,
-                    onRsvp = viewModel::setRsvp,
-                    onRedeemCoupon = viewModel::redeemCoupon,
-                    onAcceptGigBid = viewModel::acceptGigBid,
-                    onSaveMemory = viewModel::saveMemoryToVault,
-                    onPartyRsvp = viewModel::setPartyRsvp,
-                    onPartyAdjustPlusOne = viewModel::setPartyPlusOneCount,
-                    onPartyClaimBring = { index -> viewModel.togglePartyBringClaim(index, "You") },
-                    onPartyReleaseBring = { index -> viewModel.togglePartyBringClaim(index, null) },
-                    onFileRecord = viewModel::fileRecordToVault,
-                    onOpenSenderProfile = onOpenSenderProfile,
-                    onSaveToVault = viewModel::openSaveToVaultPicker,
-                    onArchive = viewModel::archive,
-                    categoryActionInFlight = categoryActionInFlight,
-                    onCategoryAction = viewModel::tapCategoryAction,
-                    onTranslate = onTranslate,
-                    onOpenExtractedTask =
-                        onOpenExtractedTask?.let { open ->
-                            { open(current.content.mailId) }
-                        },
-                    onCreateTask =
-                        onCreateTask?.let { open ->
-                            { open(current.content.mailId) }
-                        },
-                    onOpenUnboxing =
-                        onOpenUnboxing?.let { open ->
-                            { open(current.content.mailId) }
-                        },
-                    onAskNeighbor =
-                        onAskNeighbor?.let { open ->
-                            { isPreDelivery: Boolean -> open(current.content.mailId, isPreDelivery) }
-                        },
-                    onShareEta = viewModel::sharePackageEta,
-                    onReportIssue = viewModel::reportPackageIssue,
-                    onDownloadBookletPdf = viewModel::downloadBookletPdf,
-                    bookletDownloadInFlight = bookletDownloadInFlight,
-                    onDownloadCertifiedProof = viewModel::downloadCertifiedProof,
-                    certifiedProofSaved = certifiedProofSaved,
-                    certifiedProofInFlight = certifiedProofInFlight,
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // A deleted or household-dismissed letter opens from its notice with Restore.
+                    removed?.let { RemovedBanner(removed = it, restoring = restoreInFlight, onRestore = viewModel::restore) }
+                    LoadedLayout(
+                        content = current.content,
+                        ackInFlight = ackInFlight,
+                        rsvpInFlight = rsvpInFlight,
+                        couponRedeemInFlight = couponRedeemInFlight,
+                        gigBidInFlight = gigBidInFlight,
+                        partyRsvpInFlight = partyRsvpInFlight,
+                        recordsFileInFlight = recordsFileInFlight,
+                        saveToVaultInFlight = saveToVaultInFlight,
+                        onBack = onBack,
+                        onAcknowledge = viewModel::acknowledge,
+                        onRsvp = viewModel::setRsvp,
+                        onRedeemCoupon = viewModel::redeemCoupon,
+                        onAcceptGigBid = viewModel::acceptGigBid,
+                        onSaveMemory = viewModel::saveMemoryToVault,
+                        onPartyRsvp = viewModel::setPartyRsvp,
+                        onPartyAdjustPlusOne = viewModel::setPartyPlusOneCount,
+                        onPartyClaimBring = { index -> viewModel.togglePartyBringClaim(index, "You") },
+                        onPartyReleaseBring = { index -> viewModel.togglePartyBringClaim(index, null) },
+                        onFileRecord = viewModel::fileRecordToVault,
+                        onOpenSenderProfile = onOpenSenderProfile,
+                        onSaveToVault = viewModel::openSaveToVaultPicker,
+                        onArchive = viewModel::archive,
+                        categoryActionInFlight = categoryActionInFlight,
+                        onCategoryAction = viewModel::tapCategoryAction,
+                        onTranslate = onTranslate,
+                        onOpenExtractedTask =
+                            onOpenExtractedTask?.let { open ->
+                                { open(current.content.mailId) }
+                            },
+                        onCreateTask =
+                            onCreateTask?.let { open ->
+                                { open(current.content.mailId) }
+                            },
+                        onOpenUnboxing =
+                            onOpenUnboxing?.let { open ->
+                                { open(current.content.mailId) }
+                            },
+                        onAskNeighbor =
+                            onAskNeighbor?.let { open ->
+                                { isPreDelivery: Boolean -> open(current.content.mailId, isPreDelivery) }
+                            },
+                        onShareEta = viewModel::sharePackageEta,
+                        onReportIssue = viewModel::reportPackageIssue,
+                        onDownloadBookletPdf = viewModel::downloadBookletPdf,
+                        bookletDownloadInFlight = bookletDownloadInFlight,
+                        onDownloadCertifiedProof = viewModel::downloadCertifiedProof,
+                        certifiedProofSaved = certifiedProofSaved,
+                        certifiedProofInFlight = certifiedProofInFlight,
+                    )
+                }
             is MailDetailUiState.Error ->
                 ErrorLayout(message = current.message, onBack = onBack, onRetry = viewModel::refresh)
         }
@@ -503,4 +515,43 @@ private fun ErrorLayout(
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+/** Restore banner for a deleted or household-dismissed letter, above the letter. */
+@Composable
+private fun RemovedBanner(
+    removed: MailRemovedDto,
+    restoring: Boolean,
+    onRestore: () -> Unit,
+) {
+    val (title, subtitle) = removedBannerText(removed)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(PantopusColors.appBg)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .testTag("mailDetail_removedBanner"),
+    ) {
+        PauseBanner(
+            icon = PantopusIcon.Trash,
+            title = title,
+            subtitle = subtitle,
+            actionLabel = if (restoring) "Restoring…" else "Restore",
+            onAction = onRestore,
+        )
+    }
+}
+
+/** Who deleted it and until when it can be restored, or that it was dismissed. */
+private fun removedBannerText(removed: MailRemovedDto): Pair<String, String> {
+    if (!removed.isDeleted) return "Dismissed for the household" to "You can restore it"
+    val title = removed.byName?.let { "Deleted by $it" } ?: "Deleted"
+    val until =
+        removed.restorableUntil?.let {
+            runCatching {
+                DateTimeFormatter.ofPattern("MMM d", Locale.US).withZone(ZoneId.systemDefault()).format(Instant.parse(it))
+            }.getOrNull()
+        }
+    return title to (until?.let { "You can restore it until $it" } ?: "You can restore it for 30 days")
 }

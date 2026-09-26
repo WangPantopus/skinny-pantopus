@@ -95,6 +95,12 @@ data class MailDetail(
     @Json(name = "ack_status") val ackStatus: String? = null,
     val viewed: Boolean = false,
     @Json(name = "viewed_at") val viewedAt: String? = null,
+    /** `Mail.certified` — certified mail its named recipient signs for. */
+    val certified: Boolean = false,
+    /** When the web first opened it (the apps record [viewedAt]). */
+    @Json(name = "opened_at") val openedAt: String? = null,
+    /** Certified mail: when the named recipient signed for it. */
+    @Json(name = "acknowledged_at") val acknowledgedAt: String? = null,
     val archived: Boolean = false,
     val attachments: List<String>? = null,
     @Json(name = "expires_at") val expiresAt: String? = null,
@@ -113,6 +119,11 @@ data class MailDetail(
      * it (`backend/routes/mailCompose.js:556`).
      */
     @Json(name = "mail_extracted") val mailExtracted: JsonValue? = null,
+    /**
+     * Set when the letter was deleted or dismissed for the household; members
+     * who could see it open it from the notice and restore it.
+     */
+    val removed: MailRemovedDto? = null,
 ) {
     /**
      * Stationery theme when this mail came out of the Ceremonial Mail
@@ -155,5 +166,25 @@ data class ArchiveMailRequest(
 /** `PATCH /api/mailbox/:id/archive` response. */
 @JsonClass(generateAdapter = true)
 data class ArchiveMailResponse(
+    val message: String,
+)
+
+/**
+ * `removed` on `GET /api/mailbox/:id`: `deleted` (restorable until
+ * [restorableUntil], 30 days) or `dismissed` for the household.
+ */
+@JsonClass(generateAdapter = true)
+data class MailRemovedDto(
+    val action: String,
+    @Json(name = "by_name") val byName: String? = null,
+    @Json(name = "restorable_until") val restorableUntil: String? = null,
+) {
+    val isDeleted: Boolean
+        get() = action == "deleted"
+}
+
+/** `POST /api/mailbox/:id/restore` response. */
+@JsonClass(generateAdapter = true)
+data class RestoreMailResponse(
     val message: String,
 )
