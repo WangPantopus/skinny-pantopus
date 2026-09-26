@@ -72,18 +72,18 @@ struct AddGuestFormContent: View {
                 .accessibilityIdentifier("durationHint")
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                GuestFieldLabel("Allowed areas", isRequired: false)
+                GuestFieldLabel("What they can see", isRequired: true)
                 ChipPicker(
-                    options: viewModel.areaOptions,
-                    selection: $viewModel.selectedAreas,
+                    options: viewModel.sectionOptions,
+                    selection: $viewModel.selectedSections,
                     style: .tinted,
-                    identifier: "field_areas"
+                    identifier: "field_sections"
                 )
-                Text(viewModel.areasHint)
+                Text(viewModel.sectionsHint)
                     .pantopusTextStyle(.caption)
                     .italic()
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                    .accessibilityIdentifier("areasHint")
+                    .accessibilityIdentifier("sectionsHint")
             }
         }
 

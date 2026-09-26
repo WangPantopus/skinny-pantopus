@@ -5,8 +5,8 @@
 //  A13.1 — Backs the Add Guest form (issue a short-term guest pass for a
 //  home). Built on the shared `FormShell` archetype: name + contact +
 //  welcome are tracked as `FormFieldState`s; duration (single-select) and
-//  allowed-areas (multi-select) are enum-ish chip selections held
-//  directly.
+//  the "What they can see" sections (multi-select) are enum-ish chip
+//  selections held directly.
 //
 //  `submit()` issues the pass via `POST /api/homes/:id/guest-passes`
 //  (route `backend/routes/homeIam.js:667`), raises a success toast
@@ -14,8 +14,8 @@
 //  share token composed into a viewer link. The host offers the OS share
 //  sheet (RN parity: `src/app/homes/[id]/share.tsx:60-82`) and then calls
 //  `acknowledgeShare()`, which flips `shouldDismiss` so the modal pops.
-//  The welcome note rides along in the share message. The contact and
-//  allowed-area chips are UI affordances
+//  The chosen sections are sent as `included_sections`, and the welcome
+//  note rides along in the share message. The contact is a UI affordance
 //  the create endpoint doesn't model, so they stay local.
 //
 
@@ -36,8 +36,9 @@ public final class AddGuestFormViewModel {
     /// picks one. `"custom"` opens the date-range sheet.
     public var duration: String?
 
-    /// Selected allowed-area chip ids (multi-select, optional).
-    public var selectedAreas: Set<String> = []
+    /// Selected "What they can see" section ids (multi-select, at least
+    /// one), preselected like the web's Guest Pass.
+    public var selectedSections: Set<String> = AddGuestSampleData.defaultSectionIds
 
     /// Custom date range, populated when the user commits the picker.
     public private(set) var customStart: Date?
@@ -59,7 +60,7 @@ public final class AddGuestFormViewModel {
     /// hidden until it loads (and if it fails).
     public private(set) var homeContext: AddGuestSampleData.HomeContext?
     public let durationOptions = AddGuestSampleData.durationOptions
-    public let areaOptions = AddGuestSampleData.areaOptions
+    public let sectionOptions = AddGuestSampleData.sectionOptions
     public let welcomeMaxLength = AddGuestSampleData.welcomeMaxLength
 
     private let onSent: (String) -> Void
@@ -83,11 +84,12 @@ public final class AddGuestFormViewModel {
     // MARK: - Aggregate
 
     /// Required: name non-empty, contact valid (email OR phone), duration
-    /// chosen. Areas + welcome are optional.
+    /// chosen, at least one section. The welcome note is optional.
     public var isValid: Bool {
         !trimmedName.isEmpty
             && Self.isContactValid(contactField.value)
             && duration != nil
+            && !selectedSections.isEmpty
     }
 
     /// Any input touched — drives the dirty-close confirm in `FormShell`.
@@ -95,7 +97,7 @@ public final class AddGuestFormViewModel {
         !trimmedName.isEmpty
             || !contactField.value.isEmpty
             || duration != nil
-            || !selectedAreas.isEmpty
+            || selectedSections != AddGuestSampleData.defaultSectionIds
             || !welcomeField.value.isEmpty
     }
 
@@ -129,15 +131,15 @@ public final class AddGuestFormViewModel {
         }
     }
 
-    /// Italic helper under the allowed-areas chips.
-    public var areasHint: String {
-        guard !selectedAreas.isEmpty else { return "Front door only, unless you add more." }
+    /// Italic helper under the "What they can see" chips.
+    public var sectionsHint: String {
+        guard !selectedSections.isEmpty else { return "Pick at least one." }
         let possessive = firstName.map { "\($0)'s" } ?? "Their"
-        return "\(possessive) pass unlocks only what you pick."
+        return "\(possessive) pass page shows only what you pick."
     }
 
     /// First word of the entered name, if any — used for the toast and
-    /// the areas-hint possessive.
+    /// the sections-hint possessive.
     public var firstName: String? {
         trimmedName.split(separator: " ").first.map(String.init)
     }
@@ -184,16 +186,18 @@ public final class AddGuestFormViewModel {
         guard isValid, !isSaving else { return }
         isSaving = true
         // `label` carries the guest's name; the time window comes from the
-        // selected duration chip. Contact and allowed-area chips are UI
-        // affordances the create endpoint doesn't model, so they stay local;
-        // the welcome note goes in the share message.
+        // selected duration chip; the chosen sections go as
+        // `included_sections` (in chip order). The contact is a UI affordance
+        // the create endpoint doesn't model, so it stays local; the welcome
+        // note goes in the share message.
         let window = guestPassWindow()
         let request = CreateGuestPassRequest(
             label: trimmedName,
             kind: "guest",
             durationHours: window.durationHours,
             startAt: window.startAt,
-            endAt: window.endAt
+            endAt: window.endAt,
+            includedSections: sectionOptions.map(\.id).filter { selectedSections.contains($0) }
         )
         let response: CreateGuestPassResponse
         do {
