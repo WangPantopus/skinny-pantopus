@@ -11,6 +11,7 @@ import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
+import InviteMemberModal from '@/components/home/InviteMemberModal';
 import { failureMessage } from '@/components/home/share/shareFailure';
 
 // Roles "Change role" can give, and each role's rank on the server (home_role_rank). Owners change
@@ -79,6 +80,8 @@ function MembersContent() {
   const [requestsError, setRequestsError] = useState('');
   const [auditError, setAuditError] = useState('');
   const [roleMenuFor, setRoleMenuFor] = useState<string | null>(null);
+  // Invite opens the Home's existing Invite Member panel, as on the dashboard.
+  const [inviteOpen, setInviteOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
@@ -260,7 +263,7 @@ function MembersContent() {
           <h1 className="text-xl font-bold text-app-text">Members</h1>
         </div>
         {canManage && (
-          <button onClick={() => router.push(`/app/homes/${homeId}/members/add-guest`)}
+          <button onClick={() => setInviteOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
             <UserPlus className="w-4 h-4" /> Invite
           </button>
@@ -356,7 +359,7 @@ function MembersContent() {
           )}
 
           {canManage && (
-            <button onClick={() => router.push(`/app/homes/${homeId}/members/add-guest`)}
+            <button onClick={() => setInviteOpen(true)}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition mt-4">
               <UserPlus className="w-5 h-5" /> Invite New Member
             </button>
@@ -446,6 +449,8 @@ function MembersContent() {
           ))}
         </div>
       )}
+
+      <InviteMemberModal open={inviteOpen} onClose={() => setInviteOpen(false)} homeId={homeId} />
     </div>
   );
 }
