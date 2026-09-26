@@ -2,7 +2,87 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## Update 2026-09-26 18:44Z: chat PR #532 open (web, iOS, Android), verified on the final builds; #530 in batch 30 (#531); #523 merged (batch 29)
+## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
+
+The user asked the 2026-09-25/26 Stream 3 session to stop and hand off. Everything a successor needs is here and in two private files:
+- **Runtime manual:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream3-runtime-kit/README.md`. It covers ports, start commands, the proxy and fault rules, fixture users and data, devices, builds and end-of-audit reverts.
+- **Takeover prompt:** [NEXT-STREAM3-PROMPT-2026-09-26.md](NEXT-STREAM3-PROMPT-2026-09-26.md), in this folder.
+
+The kit is git-ignored and durable. `/private/tmp` is wiped when the Mac restarts, and the kit can rebuild it.
+
+### 1. State at handoff (verify again: `git fetch`, `gh pr view 536`)
+- **Master:** `f885e0623` (batch 31 [#534](https://github.com/WangPantopus/skinny-pantopus/pull/534), which carried #532).
+- **The only open Stream 3 PR:** [#536](https://github.com/WangPantopus/skinny-pantopus/pull/536), "live chat keeps working after a token refresh; Android reactions update in place".
+  - Branch `claude/stream3-realtime-after-refresh`, head `36af1f3715c03610b234c3d3e6a65af1a18a09d9`, worktree `/private/tmp/pantopus-stream3-chat-keyboard-r1`.
+  - Two commits over three existing files:
+    - `e121e7fdc`: Android `data/realtime/SocketManager.kt` (`eventsOf` follows a `StateFlow` of the current socket through `flatMapLatest`) and iOS `Core/Realtime/SocketClient.swift` (a subscription registry re-attached on each `connect(token:)`).
+    - `36af1f371`: Android `ChatConversationViewModel.kt`. S3-55: a `message:reaction_updated` event with `users` patches the row in place instead of `fetch(initial = true)`.
+  - Its base, `916627c18` (#532), is in master, and master has not touched these files. `git merge-tree` is clean.
+  - Seal `13cf585ecf535ff4bb2dbb7910c61fa199c421b0fbec8a78d2679a40b0e98fc7`; bundle `20260926-stream3-realtime-after-refresh-r1` (25 files). The seal comment is posted.
+  - CI started at 21:59Z (run 36274720988): Android lint/test/assemble and instrumented, iOS lint and test bundles, safeguards.
+  - Stream 1 has head, seal, side effects, CI and limits, and plans it for **batch 32** with Stream 2's #535 and Stream 1's qa-live PR.
+  - **Next:** when CI finishes, report the result to Stream 1 (or its successor). If CI fails, fix on the same branch, rebuild under heavy, re-verify the affected journey and re-seal.
+- **Verified for #536:**
+  - Android APK `51d5ffc1…` on emulator-5554:
+    - before: a natural refresh at 18:52Z; a forced refresh (one-time 401) in chat and on task detail (question 2 got no refetch); the reaction reload;
+    - after: chat live after a forced refresh, 😂 patched in place, question 4 live.
+  - iOS:
+    - old dylib `8c46c919`: an **in-thread** 401 (topic chip) left the Owner's message 17 unshown until reopen;
+    - fixed dylib `d2644903`: message 18 appeared live, with a refetch 22 ms after the send.
+  - A 401 during a thread's **first** load doesn't reproduce the bug: `load()` subscribes after its first fetch.
+  - **Not verified:** real devices and push; iOS task detail (Stream 1's `gig:qa-update` PR covers it); driving the chat list, badge and tasks feed (same stream, not separately exercised).
+- **Merged in this session, 2026-09-25 20:00Z to 2026-09-26 20:09Z (29 Stream 3 PRs):**
+  - #427, #436, #440, #444, #450, #455, #460, #465, #466, #468, #470;
+  - #475, #479, #483, #485, #486, #488, #491, #494 (SEC-1, user-approved security fix), #497;
+  - #502, #507, #508, #515, #516, #520, #523, #530, #532.
+  - Bundles: `.pantopus-recovery/audits/2026092[56]-stream3-*` (33 folders).
+- **Devices and slots:** none held.
+  - iOS sim `0AE16FA0` was shut down at 21:54Z and slot 1 released (Stream 1 took it at 21:56Z). It still has dylib `36af1f371` with the Member signed in.
+  - Emulator-5554 was shut down at 22:03Z and slot 4 released. It still has APK `36af1f371` with the Member signed in.
+  - Heavy is not held.
+- **Runtime:** still running while this session lives: API 18134 (`23e518b11`), proxy 18130 (**chat-audit mode ON**), web 18131 (`75b6f2eab`), storage shim 64533, file server 18198, isolated DB 64531/64532. `fault-control.json` is `{}`.
+
+### 2. Remaining Stream 3 inventory rows (checked in master `f885e0623` code, 2026-09-26 22:10Z)
+The inventory (`coordinator-state-2026-09-23/tools/ux-inventory-2026-09-23.md`) has 69 S3 rows.
+- **59** are named as fixed by merged Stream 3 PRs. Rows once reported as partial (S3-13, S3-50, S3-51, S3-66, S3-67) were completed by later PRs per their descriptions; they were not re-driven for this handoff.
+- **1** is in #536 (S3-55).
+- **9** remain, below.
+
+My earlier answer to the user named only S3-22/37/59/64 plus 35/46. S3-26, S3-62 and S3-69 are also open; I missed them.
+
+| Row | Client | Still wrong on master | Fix direction (inventory) | What is needed first |
+|---|---|---|---|---|
+| S3-22 | Web | `PublicBlockRenderer.tsx:85-99`: hero CTA buttons have no `onClick`. The CTA block (`:297-313`) opens `b.url` or the inquiry chat, whatever the action. | Call → `tel:`; Directions → the maps link already built in `BusinessPublicProfile.tsx`; Link → a URL field | The public `/b/` page's read inserts a BusinessProfileView row, and the proxy refuses `GET /api/b/:username`. Propose a scope to the user (allow that GET for Owner/Member and record/remove the view rows), or find a non-writing render path. |
+| S3-26 | Web | `AIDraftCard.tsx:307-319`: the mail-summary "recommended actions" are `<button>`s with no handler. | Render them as plain text. Making them work needs the mail id in the tool output (backend) plus S2-07's caveats. | An AI mail-summary message to render. The Owner AI thread `fd545dad` (F3b) likely has none, so check it; a new fixture needs a proposal. No AI provider calls. |
+| S3-37 | iOS | `BannerLogoEditor.swift` "Change/Add banner", "Change logo", gallery "Add" / "Add cover photo" do nothing; the banner draws `CafeGoldenHourBanner` (`EditBusinessPageMapper.swift:44`). | Upload with the existing `POST /api/upload/business-media/:businessId?type=logo\|banner` (`MultipartUploader.swift`); render the real image; hide the gallery controls | The upload is a write the proxy refuses, so verify the request and the failure UI. A real 200 upload needs a reviewed scope. |
+| S3-59 | iOS | `BusinessOwnerViewModel.swift:110-116`: a failed review reply is only logged, rolls back and loses the draft. | Use the screen's existing toast (`:148-158`) and keep the draft | There is no Review for business `2b3c28da` (0 rows with `reviewee_id`). Propose and record one tagged Review fixture. The proxy's refusal then reproduces the failure. |
+| S3-62 | Web | `EndorsementButton.tsx`: the catch reverts silently; the 403 reason is dropped. | Toast the rejection's message | The same `/b/` read blocker as S3-22. |
+| S3-64 | iOS (+ Android) | `NotificationChannelManagerView` is only instantiated in its previews (`:473-485`). | Wire the iOS view into scheduling settings (reads pass; saves are refused writes). Android would need a **new screen**, low priority. | Propose the Android part to the user before building anything new. |
+| S3-69 | Web + iOS | Web `InvoiceDetail.tsx:195-200`: a disabled "Download PDF" (title "PDF download coming soon"). iOS: "Download PDF", "Mark paid" and overflow do nothing. | Hide the PDF action and the dead iOS buttons until a route exists | F7 paid invoice `f13065e9` exists. Check that the invoice screens are reachable with paid scheduling off (the web launcher forces paid off). |
+| S3-35 | iOS + Android | "Set up payments" on the audience profile opens your own follow handshake. | Start persona Stripe onboarding (`POST /api/personas/:id/payments/onboard`) and open the URL, as web does | **Money: escalate to the user with evidence.** No provider call; Stripe TEST/manual only. |
+| S3-46 | Web | The paid follow toasts "Stripe Checkout is coming in the next release. Your handshake is saved." (`follow/page.tsx:176`); the Audience "Inbox — Coming soon" tab (`audience/page.tsx:218`) though `/app/audience/inbox` works. | A retryable checkout error; link the tab to the inbox | The checkout message is money-adjacent: **escalate**. The Inbox-tab link is not money and could go separately. The Audience nav needs the `audience_profile` flag (F10 enables it for the Member). |
+
+### 3. Candidates noticed, not inventory rows, not changed
+- **Empty topic view:** it shows the generic "This is the start of your conversation with …" copy. That's existing design.
+- **B7 "Max per week 20":** a disabled placeholder on all three platforms.
+- **Persona header "Share profile":** opened the Block/Report sheet on iOS and Android (seen 2026-09-25). Check master before acting.
+- **Handed to Stream 2:** escrowed mail to a phone recipient uses the placeholder `smsService`, yet the API says "Mail sent successfully" (their finding 15).
+
+### 4. Runtime state to revert when the chat audit ends (after #536 merges)
+- F10 flag: revert SQL is in the manifest and the kit README.
+- Proxy chat-audit mode: set `chat-audit.json` to `enabled: false`. Optionally restore `no-send-proxy.cjs.pre-topics-20260926T1305Z`, then restart the proxy.
+- Storage shim and `adb reverse tcp:64531 tcp:64533`: use `tcp:64531 tcp:64531` on the next boot.
+- API on `23e518b11` and web on `75b6f2eab`: move to master only after deciding about master's migration `20260926100000_mail_recoverable_delete.sql`, which this isolated DB lacks.
+- Keep fixtures CA0–CA11 and F13 unless the user asks for cleanup. Exact reverts are in `fixtures-20260926/manifest.json`; CA10 and CA11 were recorded at 21:56Z.
+
+### 5. User decisions in force (2026-09-26)
+- **Fixtures:** the listed set is approved in full: isolated DB only, rows tagged "s3fx", an exact-removal manifest, no provider calls.
+- **Incidental rows:** Stream 3 kept the three incidental rows (Owner UserPrivacySettings, Solo LocalProfile, Owner Wallet) as baseline.
+- **Workflows/Templates:** hidden on all three platforms (#468). iOS booking Nudge's "Use a template" stays working.
+- **SEC-1:** fix approved; merged as #494.
+- **Chat audit:** "fix all of them" (#502, #507, #508, #515, #516, #532, and #536 open).
+- **Still pending with the user:** the money decisions for S3-35 and S3-46.
+
 
 **PRs**
 - #523 (mail label) merged in batch 29 (#526, master `49b47e910`).
