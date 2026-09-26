@@ -2,6 +2,30 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 04:59Z (adds to the 03:50Z block below)**
+
+- **Batch 20 (#463) merged**; master is `5bf1eb7f8`. It includes #461 (S2-03).
+- **#464 (read state):** all CI green at `1cc00d5e0`, so it's ready for Stream 1's batch 21 review.
+- **New D01 defect, reproduced and fixed as PR [467](https://github.com/WangPantopus/skinny-pantopus/pull/467).** Branch `claude/stream2-home-issue-status`, head `ca475c47f`, on `5bf1eb7f8`.
+  - **Defect:** Home issue Mark complete and Dismiss fail on web, iOS and Android. The clients send `completed`/`dismissed`, but `HomeIssue_status_chk` (application baseline) allows only `open`, `scheduled`, `in_progress`, `resolved` and `canceled`. Every save is a 500, issues never leave open, and the health score stays down.
+  - **Fix (3 files):** the web Maintenance page and both `HomeIssuesListViewModel`s send and read `resolved`/`canceled`. The rest of the web already did. Web History rows no longer offer Dismiss, as on native.
+  - **Befores:** API, real web page and Android all 500. **Afters:** web, iOS and Android all 200, with History correct across clients.
+  - **Builds:** APK `cce36e56…` (the first install failed silently under load; the verified reinstall is `android-install-note`) and iOS dylib `4d9424e2…`, both on :18142 only.
+  - **Bundle:** `.pantopus-recovery/audits/20260926-stream2-home-issue-status-r1`, MANIFEST `170acadd3690f59856b0eb55f97b12af8f610ae155d02483db8c5106fee56ba5` (125 files).
+  - **Fixtures:** 10 synthetic probe HomeIssue rows, all now `resolved` or `canceled` and retained. The DB had none before, and HomeIssueSensitive has 0 rows.
+- **Findings for the user** (decisions, not changed):
+  - Issue updates need `home.edit` while reporting needs `maintenance.*`, and the buttons show for every viewer.
+  - Android's Issues list is reachable only from the health card when maintenance is the worst dimension; the Home-context drawer is preview-only.
+- **Checked and dispositioned:**
+  - All 24 S2-xx inventory rows now have a fix or disposition on master (S2-09/12/13/14/18/19 are verified fixed in source).
+  - R06: all repairs are merged. The remainder is design/founder decisions: native Identity entry, native letter PDF, guest wording, manager role.
+  - Stream 3's SMS-escrow lead is latent: no client sends phone or email recipients to mail send.
+- **Heavy and devices:**
+  - Heavy: held 04:17:10Z–04:29:26Z, then handed to Stream 1.
+  - Short APK reinstall at 04:43Z, with Stream 3's explicit OK during its window.
+  - iOS driver: from Stream 3 04:23:49Z, released 04:29:50Z, with 6F914A30 shut down.
+  - emulator-5556 soft-restarted its system_server under host load (package service missing 04:37Z–04:42:38Z).
+
 **Stream 2 — 2026-09-26 03:50Z (adds to the 03:16Z block below)**
 
 - **Batch 19 (#459) merged** at 03:43:14Z; master is `a5fb4864c`. It includes #457 (Mail Party and bundle privacy) and #453 (Home links).
