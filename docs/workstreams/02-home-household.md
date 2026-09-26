@@ -2,6 +2,25 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 07:12Z (decision 3 done)**
+
+- **Batch 21 merged** (master `e1509f346`, with #464 and #467). **#473 and #474 are in batch 22 (#478).**
+- **Decision 3 open as PR [482](https://github.com/WangPantopus/skinny-pantopus/pull/482).** Branch `claude/stream2-issue-permissions`, head `07faa0324`, on `e1509f346`, in 2 commits. CI started.
+  - **Server:** `PUT /api/homes/:id/issues/:issueId` accepts `home.edit` or `maintenance.manage` (master: `home.edit` only).
+  - **Web:** the Maintenance page shows Report only to maintenance editors/managers, and Schedule / Complete / Dismiss only to those who can update. The dashboard issue panel is read-only for everyone else.
+  - **iOS/Android Issues lists:** the same rule for the FAB, the empty-state button and the row actions.
+  - **Home dashboard Issues entry** (`maintenance.view`): an Android Overview row, and an iOS link.
+  - **iOS premise corrected:** I had said iOS had a drawer entry, but its Home drawer is preview-only as on Android, so the entry is added on iOS for parity. Flagged to the user.
+- **Evidence:** bundle `20260926-stream2-issue-permissions-r1`, MANIFEST `c4d651ebb9b82b765a58aca6ebaac40e8a88e2226250bc3133998b045c37f760` (153 files).
+  - **API:** a member with `maintenance.manage` gets 403 on master and 200 on the fix.
+  - **Web, Android and iOS:** befores on master and afters on the fix, for owner, view-only member and member with manage.
+  - **Android build:** ktlint, detekt, Paparazzi verify of `HomeDashboardSnapshotTest` (3/3 unchanged), assemble. The APK is installed and hash-verified.
+  - **iOS:** rebuilt, installed and hash-verified; strict SwiftLint and SwiftFormat clean.
+  - **Fixtures:** restored by exact key. Probe issue `8315f50f` is retained as `canceled`.
+  - **Device state:** both apps are now signed in as member B.
+- **Runtime:** the PR backend runs on 18145 (`runtime/start-backend-wt.sh`, S2_WT/S2_PORT); my proxy on 18142 targets 18145. 6F914A30 is shut down, and the iOS driver is released.
+- **Next:** decision 2 (R06 native letters/passes entry, PDF viewer, guest card wording).
+
 **Stream 2 — 2026-09-26 06:21Z (decision 5 done)**
 
 - **D07 fix open as PR [474](https://github.com/WangPantopus/skinny-pantopus/pull/474)** (web only, `members/page.tsx`). Branch `claude/stream2-web-role-choice`, head `82f385560`, on `5bf1eb7f8`. CI started.
