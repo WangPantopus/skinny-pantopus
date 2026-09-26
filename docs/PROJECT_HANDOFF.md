@@ -1,10 +1,13 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T08:54Z (batch 24 merged; batch 25 = 7 reviewed PRs gating on CI)
+## CURRENT RESUME POINT — 2026-09-26T09:21Z (batch 24 merged; batch 25 #499 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `dbd75332b`. Batch 24 [#489](https://github.com/WangPantopus/skinny-pantopus/pull/489) merged at 08:44:25Z. It carried #481 and #487 (S1), #482 (S2), and #483, #485, #486 and #488 (S3).
-  - **Batch 25** (every PR reviewed and its bundle verified; the dry-run chain on `dbd75332b` is clean) will be built when all are green:
+  - **Batch 25 [#499](https://github.com/WangPantopus/skinny-pantopus/pull/499)**, runner watching. Order: #490 → #492 → #495 → #496 → #494 → #491 → #493 → #497 (S3 chat pickers).
+    - Tip `882f8dfd9`.
+    - Every head is green on its exact SHA. All eight bundles were re-verified, and the chain is clean.
+  - **Batch 26 candidates:** #498 (S1 web: a double click on Save no longer undoes the save; listings and posts). Status of the batch 25 PRs when it was built:
     - #490 (S1 web Discover "Couldn't load businesses"): green.
     - #492 (S1 web Tasks map failure state): green.
     - #495 (S1 iOS listing link over an open listing): CI running.
@@ -28,6 +31,7 @@
   - Owner Message.
   - Native buyer offer view/withdraw.
   - **New: saved items are unreachable.** Save works on all three apps, and web has finished `/app/gigs/saved` and `/app/saved-listings` pages, but nothing links to them. There is no saved-posts page, and native has no saved lists.
+  - **New: trades are a dead promise.** Web's "Open to trades / swaps" checkbox is saved, but the API never returns `open_to_trades`, so "Propose a Trade" never shows, and no platform has a seller trade inbox.
 - **Slots:** heavy is Stream 2's (since 08:43Z). The iOS driver went to Stream 2 at 08:47Z, with F4DBD47E shut down. Stream 1 holds only emulator-5558 (slot 3).
 
 ## Resume point history — 2026-09-26T08:06Z (batch 23 merged; batch 24 #489 queued)
