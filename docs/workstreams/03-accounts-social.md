@@ -2,6 +2,19 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 07:46Z: S3-57 fix committed (native); security item escalated to the user
+
+- **S3-57, both platforms:** branch `claude/stream3-native-rollback-feedback`, head `bac788aa0`, 8 existing files.
+  - iOS and Android now toast when a notification delete, Mark all read or unblock rolls back, and confirm a successful unblock.
+  - Android befores are recorded on master-equal APK `c65d76a1`: the refused DELETE, read-all and unblock all rolled back silently.
+  - SwiftLint strict and SwiftFormat are clean.
+  - Waiting on the iOS driver for iOS befores, then heavy for the build.
+- **S3-31 (Messages filter empty state):** Android before recorded (Gigs filter shows "No conversations yet" and drops the AI row). The fix changes the same chat-list block as #485, so it follows #485's merge.
+- **Security item, escalated to the user** (found by Stream 1 while reviewing #486; confirmed in code):
+  - `POST /api/businesses/:id/verify/upload-evidence` (`backend/routes/businessVerification.js` ~170–245) only checks that `file_id` is a UUID before inserting the evidence. It never checks that the File belongs to the caller.
+  - An owner could therefore point admin review (`adminVerification.js` lists `file_id`) at someone else's private file.
+  - Proposed fix: before the insert, require the File row to be the caller's own, with `file_context` `business_verification`. Not changed without the user's go-ahead.
+
 **Time correction (2026-09-26 07:38Z, from git log):** four headings below were hand-estimated 5–8 min late. They now show their commits' `git log` times: 06:30Z, 06:42Z, 07:30Z and 07:37Z (previously 06:35Z, 06:50Z, 07:35Z and 07:40Z). The pushed commit subjects keep the old labels.
 
 ## Update 2026-09-26 07:37Z: S3-23 open as PR486
