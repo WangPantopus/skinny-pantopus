@@ -2,6 +2,18 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 08:55Z: PR497 (web chat share pickers) open; batch 24 merged (master `dbd75332b`)
+
+- **Batch 24 (#489) merged** at 08:44:25Z, per Stream 1. It carried #483, #485, #486 and #488 from Stream 3.
+- **Batch 25 chain (Stream 1's dry run on `dbd75332b` is clean):** #490, #492, #495, #496, **#494 (SEC-1)**, **#491 (S3-57)** and #493. Stream 1 reviewed #494 (CI green) and #491 (CI still running).
+- **[PR497](https://github.com/WangPantopus/skinny-pantopus/pull/497): web chat Share a Task / Share a Listing pickers** (Stream 1's find). Head `ad78fe036`, two existing files.
+  - Five reads (my tasks, task search, my listings, their listings, listing search) used to show their empty copy on failure.
+  - They now show the existing `ErrorState` with Try Again, which re-runs the read.
+  - Verified in ChatRoomView and ConversationView as Owner, with proxy 500s before upstream. Retries recover once the fault is removed.
+  - DB unchanged. Bundle `20260926-stream3-web-chat-picker-failures-r1`, MANIFEST.json SHA-256 `9fc83c0b5c691bbe8076d0abd32efb17f1c451ea47c505b301d3602762a2325d`.
+- **Runtime:** the API on 18134 and Next on 18131 both run master `dbd75332b` (worktree `/private/tmp/pantopus-stream3-pickers-r1`); `fault-control.json` is `{}`.
+- **Next:** S3-31, now unblocked by #485. Native builds wait for heavy (Stream 2 has it).
+
 ## Update 2026-09-26 08:42Z: SEC-1 open as PR494 (user-approved); nonprofit evidence-type defect escalated
 
 - **[PR494](https://github.com/WangPantopus/skinny-pantopus/pull/494): SEC-1, approved by the user in chat.** Branch `claude/stream3-evidence-file-ownership`, head `ffa04bb7d`, one file (`backend/routes/businessVerification.js`, +17).
