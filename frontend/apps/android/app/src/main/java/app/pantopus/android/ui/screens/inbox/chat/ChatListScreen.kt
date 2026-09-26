@@ -22,7 +22,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +53,7 @@ import app.pantopus.android.ui.theme.Spacing
  * compose action on the top bar + empty-state CTA, row tap dispatches
  * to [onOpenConversation].
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
     onOpenConversation: (ConversationRowContent) -> Unit = {},
@@ -61,6 +64,7 @@ fun ChatListScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
     val unreadByFilter by viewModel.unreadByFilter.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
     DisposableEffect(Unit) {
@@ -86,12 +90,20 @@ fun ChatListScreen(
             ChatListUiState.Loading -> LoadingFrame()
             ChatListUiState.Empty -> EmptyFrame(onCompose = onCompose)
             is ChatListUiState.Loaded ->
-                PopulatedFrame(
-                    rows = s.rows,
-                    onTap = onOpenConversation,
-                    onMute = viewModel::toggleMute,
-                    onHide = viewModel::hideConversation,
-                )
+                // Pull to re-read the list, as on iOS; it can go stale if the
+                // live connection drops.
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    PopulatedFrame(
+                        rows = s.rows,
+                        onTap = onOpenConversation,
+                        onMute = viewModel::toggleMute,
+                        onHide = viewModel::hideConversation,
+                    )
+                }
             is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
         }
     }

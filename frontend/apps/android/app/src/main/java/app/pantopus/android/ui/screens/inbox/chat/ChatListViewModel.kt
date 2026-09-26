@@ -44,6 +44,10 @@ class ChatListViewModel
         private val _unreadByFilter = MutableStateFlow<Map<ChatFilter, Int>>(emptyMap())
         val unreadByFilter: StateFlow<Map<ChatFilter, Int>> = _unreadByFilter.asStateFlow()
 
+        /** Drives the pull-to-refresh indicator. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
         private var allRows: List<ConversationRowContent> = emptyList()
         private var serverTotalUnread: Int = 0
         private var hiddenKeys: Set<String> = emptySet()
@@ -74,7 +78,14 @@ class ChatListViewModel
             subscribeToSockets()
         }
 
-        fun refresh() = fetch()
+        /**
+         * Pull-to-refresh and the error frame's Try again. The rows stay while
+         * the list is re-read, so it can't go stale if the live connection drops.
+         */
+        fun refresh() {
+            _refreshing.value = true
+            fetch()
+        }
 
         fun selectFilter(filter: ChatFilter) {
             if (_activeFilter.value == filter) return
@@ -120,6 +131,7 @@ class ChatListViewModel
                 val statsDeferred = async { repo.stats() }
                 val conversationsResult = conversationsDeferred.await()
                 val statsResult = statsDeferred.await()
+                _refreshing.value = false
 
                 val response =
                     (conversationsResult as? NetworkResult.Success)?.data

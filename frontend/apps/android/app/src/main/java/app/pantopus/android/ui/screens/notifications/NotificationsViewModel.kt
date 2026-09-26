@@ -246,6 +246,12 @@ class NotificationsViewModel
         private var loading = false
         private var notifications: MutableList<NotificationDto> = mutableListOf()
 
+        /** Bumped by every reload so a late page from the previous tab or zone is dropped. */
+        private var fetchGeneration = 0
+
+        /** Why the next page failed; the rows stay and the list end offers Try again. */
+        private var loadMoreError: String? = null
+
         /**
          * Per-context pagination cursors. The Personal zone fans out over
          * two contexts, so a single `notifications.size` offset would skip
@@ -351,9 +357,18 @@ class NotificationsViewModel
         /** Pull-to-refresh / retry. */
         fun refresh() = reload()
 
-        /** Called when the list nears the bottom — fetches the next page. */
+        /** Called when the list nears the bottom — fetches the next page.
+         *  After a failed page only [retryLoadMore] asks again. */
         fun loadMoreIfNeeded() {
-            if (!hasMore || loading) return
+            if (loadMoreError != null || !hasMore || loading) return
+            fetchPage(reset = false)
+        }
+
+        /** Try again on a failed page: the same offsets, rows kept. */
+        fun retryLoadMore() {
+            if (loadMoreError == null || loading) return
+            loadMoreError = null
+            applyState()
             fetchPage(reset = false)
         }
 
@@ -500,6 +515,11 @@ class NotificationsViewModel
         }
 
         private fun reload() {
+            // A tab or zone switch mid-load must refetch with the new filter:
+            // retire the running request instead of skipping this one.
+            fetchGeneration++
+            loading = false
+            loadMoreError = null
             _state.value = ListOfRowsUiState.Loading
             notifications = mutableListOf()
             offsets = mutableMapOf()
@@ -511,6 +531,7 @@ class NotificationsViewModel
             if (loading) return
             loading = true
             if (reset) offsets = mutableMapOf()
+            val generation = fetchGeneration
             val unreadOnly = _selectedTab.value == NotificationsTab.UNREAD
             // A null context means "unscoped legacy list"; the fan-out below
             // walks one request per context so the Personal zone can merge
@@ -530,6 +551,9 @@ class NotificationsViewModel
                             unreadOnly = unreadOnly,
                             context = context.takeIf { it != UNSCOPED },
                         )
+                    // A reload since this request started owns the list, offsets
+                    // and loading flag now; drop this late page.
+                    if (generation != fetchGeneration) return@launch
                     when (result) {
                         is NetworkResult.Success -> {
                             val body = result.data
@@ -551,6 +575,11 @@ class NotificationsViewModel
                         _state.value =
                             ListOfRowsUiState.Error(failed.error.displayMessage("Couldn't load the list."))
                         _topBarAction.value = makeTopBarAction(enabled = _unreadCount.value > 0)
+                    } else {
+                        // A later page failed: keep the rows and offer Try again
+                        // instead of an endless spinner.
+                        loadMoreError = failed.error.displayMessage("Couldn't load more notifications.")
+                        applyState()
                     }
                     return@launch
                 }
@@ -626,7 +655,13 @@ class NotificationsViewModel
                     onDelete = ::requestDelete,
                     onTap = ::handleTap,
                 )
-            _state.value = ListOfRowsUiState.Loaded(sections = sections, hasMore = hasMore)
+            _state.value =
+                ListOfRowsUiState.Loaded(
+                    sections = sections,
+                    hasMore = hasMore,
+                    loadMoreError = loadMoreError,
+                    onRetryLoadMore = ::retryLoadMore,
+                )
             _topBarAction.value = makeTopBarAction(enabled = _unreadCount.value > 0)
         }
 
