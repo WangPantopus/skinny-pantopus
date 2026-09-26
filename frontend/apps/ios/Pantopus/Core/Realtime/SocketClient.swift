@@ -29,6 +29,12 @@ final class SocketClient {
     /// auth-error path reconnected with the rotated token).
     private(set) var authToken: String?
     private var connectionContinuations: [UUID: AsyncStream<ConnectionState>.Continuation] = [:]
+    /// Live `events(named:)` subscriptions. `connect(token:)` replaces the
+    /// socket on every token refresh, so each subscription is re-attached to
+    /// the new socket; before, an open chat kept listening to the dead one.
+    private var eventSubscriptions: [UUID: (event: String, callback: ([Any]) -> Void)] = [:]
+    /// Each subscription's handler id on the current socket.
+    private var attachedHandlers: [UUID: UUID] = [:]
     private let logger = Logger(label: "app.pantopus.ios.SocketClient")
     private let environment: AppEnvironment
 
@@ -110,6 +116,9 @@ final class SocketClient {
         self.manager = manager
         let socket = manager.defaultSocket
         self.socket = socket
+        attachedHandlers = eventSubscriptions.mapValues { subscription in
+            socket.on(subscription.event) { data, _ in subscription.callback(data) }
+        }
         let generation = connectionGeneration
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
@@ -158,6 +167,7 @@ final class SocketClient {
     private func disconnectTransport() {
         connectionGeneration += 1
         socket?.removeAllHandlers()
+        attachedHandlers.removeAll()
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -261,11 +271,8 @@ final class SocketClient {
         as _: T.Type = T.self
     ) -> AsyncStream<T> {
         AsyncStream { continuation in
-            guard let socket else {
-                continuation.finish()
-                return
-            }
-            let uuid = socket.on(event) { data, _ in
+            let subscriptionId = UUID()
+            let callback: ([Any]) -> Void = { data in
                 guard let first = data.first else { return }
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: first, options: [])
@@ -279,9 +286,18 @@ final class SocketClient {
                     // if they care about this.
                 }
             }
+            // Registered even before a socket exists: `connect(token:)` attaches it.
+            eventSubscriptions[subscriptionId] = (event, callback)
+            if let socket {
+                attachedHandlers[subscriptionId] = socket.on(event) { data, _ in callback(data) }
+            }
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in
-                    self?.socket?.off(id: uuid)
+                    guard let self else { return }
+                    self.eventSubscriptions[subscriptionId] = nil
+                    if let handlerId = self.attachedHandlers.removeValue(forKey: subscriptionId) {
+                        self.socket?.off(id: handlerId)
+                    }
                 }
             }
         }
