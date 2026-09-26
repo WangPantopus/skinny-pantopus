@@ -459,4 +459,21 @@ public extension ListingDetailViewModel {
             return (error as? LocalizedError)?.errorDescription ?? "Couldn't withdraw your offer. Please try again."
         }
     }
+
+    /// The buyer accepts the seller's counter → `POST /api/listings/:id/offers/:offerId/accept`,
+    /// as web's "Accept". The listing is then held for them, so the detail reloads and the dock
+    /// offers the accepted offer's checkout. Returns `nil` on success, or the reason for the
+    /// sheet to show.
+    func acceptCounter() async -> String? {
+        guard let offer = myOffer, offer.status == "countered" else { return nil }
+        do {
+            let _: ListingOfferResponse = try await api.request(
+                ListingOffersEndpoints.accept(listingId: listingId, offerId: offer.id)
+            )
+        } catch {
+            return (error as? LocalizedError)?.errorDescription ?? "Couldn't accept the counter-offer. Please try again."
+        }
+        await load()
+        return nil
+    }
 }

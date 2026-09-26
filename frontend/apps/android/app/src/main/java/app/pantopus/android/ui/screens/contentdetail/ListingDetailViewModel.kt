@@ -327,6 +327,30 @@ class ListingDetailViewModel
             }
         }
 
+        /**
+         * The buyer accepts the seller's counter → `POST /api/listings/:id/offers/:offerId/accept`, as web's "Accept".
+         * The listing is then held for them, so the detail reloads and the dock offers the accepted offer's checkout.
+         * [onFailure] gets the server's reason.
+         */
+        fun acceptCounter(
+            onFailure: (String) -> Unit = {},
+            onResult: (Boolean) -> Unit = {},
+        ) {
+            val offer = myOffer?.takeIf { it.status == "countered" } ?: return onResult(false)
+            viewModelScope.launch {
+                when (val result = offersRepo.accept(listingId, offer.id)) {
+                    is NetworkResult.Success -> {
+                        onResult(true)
+                        refreshContent()
+                    }
+                    is NetworkResult.Failure -> {
+                        onFailure(result.error.displayMessage("Couldn't accept the counter-offer. Please try again."))
+                        onResult(false)
+                    }
+                }
+            }
+        }
+
         object Projection {
             fun project(
                 listing: ListingDto,
