@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { ProfileFormData, User } from '@pantopus/types';
+import { extractApiError, extractFieldErrors } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
+
+/** Server messages for rejected fields, keyed like the form. */
+export type FieldErrors = Partial<Record<keyof ProfileFormData, string>>;
 
 // ── Helpers ──
 
@@ -77,6 +81,8 @@ export interface UseProfileFormReturn {
   /** Why the profile could not load; null when it loaded (or is loading). */
   loadError: string | null;
   saving: boolean;
+  /** Server messages for the fields a save rejected, keyed like the form. */
+  fieldErrors: FieldErrors;
   user: User | null;
   skills: string[];
   setSkills: React.Dispatch<React.SetStateAction<string[]>>;
@@ -99,6 +105,7 @@ export function useProfileForm(): UseProfileFormReturn {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   // Non-form-field state that still lives here
   const [skills, setSkills] = useState<string[]>([]);
@@ -112,10 +119,17 @@ export function useProfileForm(): UseProfileFormReturn {
 
   const setField = useCallback((field: keyof ProfileFormData, value: string) => {
     dispatch({ type: 'SET_FIELD', field, value });
+    // Editing a field the server rejected clears that field's message.
+    setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
   }, []);
 
   const setFields = useCallback((fields: Partial<ProfileFormData>) => {
     dispatch({ type: 'SET_FIELDS', fields });
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(fields) as (keyof ProfileFormData)[]) delete next[key];
+      return next;
+    });
   }, []);
 
   const reset = useCallback((data?: Partial<ProfileFormData>) => {
@@ -184,6 +198,8 @@ export function useProfileForm(): UseProfileFormReturn {
   const saveProfile = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
     setSaving(true);
+    setFieldErrors({});
+    let profileSaved = false;
 
     try {
       const updates: Record<string, unknown> = {};
@@ -227,13 +243,27 @@ export function useProfileForm(): UseProfileFormReturn {
       }
 
       await api.users.updateProfile(updates as Record<string, unknown>);
+      profileSaved = true;
+      initialSnapshot.current = { ...form };
       await api.users.updateSkills(skills);
       toast.success('Profile updated successfully');
-      initialSnapshot.current = { ...form };
       router.push('/app/profile');
     } catch (err: unknown) {
       console.error('Failed to update profile:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to update profile. Please try again.');
+      if (profileSaved) {
+        // The profile is saved; only the skills are not. Say so, and stay so
+        // Save can retry the skills.
+        toast.error("Your profile was saved, but your skills weren't. Try saving again.");
+        return;
+      }
+      const fields = extractFieldErrors(err) as FieldErrors;
+      const message = extractApiError(err, 'Failed to update profile. Please try again.');
+      // The phone conflict comes back without field details; it is the phone field.
+      if (message === 'Phone number already in use') fields.phoneNumber = message;
+      setFieldErrors(fields);
+      // One rejected field: its own message. Several: point at the highlighted fields.
+      const rejected = Object.values(fields).filter((m): m is string => Boolean(m));
+      toast.error(rejected.length === 1 ? rejected[0] : rejected.length > 1 ? 'Please correct the highlighted fields.' : message);
     } finally {
       setSaving(false);
     }
@@ -259,6 +289,7 @@ export function useProfileForm(): UseProfileFormReturn {
     loading,
     loadError,
     saving,
+    fieldErrors,
     user,
     skills,
     setSkills,
