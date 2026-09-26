@@ -2,7 +2,9 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## Update 2026-09-26 07:40Z: S3-23 open as PR486
+**Time correction (2026-09-26 07:39Z):** four headings below were hand-estimated 5–8 min late. They now show their commits' `git log` times: 06:30Z, 06:42Z, 07:30Z and 07:37Z (previously 06:35Z, 06:50Z, 07:35Z and 07:40Z). The pushed commit subjects keep the old labels.
+
+## Update 2026-09-26 07:37Z: S3-23 open as PR486
 
 - **[PR486](https://github.com/WangPantopus/skinny-pantopus/pull/486): open.** Web S3-23. Head `a1e25c026`, 3 files.
   - Business Settings → Legal asked for a "file ID" from a file manager web doesn't have, and the nonprofit tab used `window.prompt`. Both are now file pickers.
@@ -12,7 +14,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - The nonprofit tab can't render with the fixture, so it's checked by lint and tsc only. Its letters can unlock the 0% fee after admin review; this change adds no fee logic.
 - **S3-39 still reproduces in code:** the address step's "Request access" and "I'm in a new building" show "coming soon", and a failed verify keeps the spinner. The step needs address autocomplete, and providers are off in this runtime, so it's queued behind synthetic-data work.
 
-## Update 2026-09-26 07:35Z: PR483 (S3-43) and PR485 (S3-48, S3-56) open; batch 22 merged (master `a916e6bd9`)
+## Update 2026-09-26 07:30Z: PR483 (S3-43) and PR485 (S3-48, S3-56) open; batch 22 merged (master `a916e6bd9`)
 
 - **Merged in batch 22** ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478), 07:13:40Z): #475 (S3-47) and #470 (S3-66). Batch 23 = [PR484](https://github.com/WangPantopus/skinny-pantopus/pull/484), carrying #479.
 - **Addenda and a correction for #475 and #479** (Stream 1 verified the hashes):
@@ -39,7 +41,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Open: S3-43, S3-48, S3-56, plus the B7 finding.
   - About 18 rows remain, and 2 need money decisions: S3-35 and S3-46.
 
-## Update 2026-09-26 06:50Z: web B7 limits open as PR479 (master `e1509f346`, batch 21 merged)
+## Update 2026-09-26 06:42Z: web B7 limits open as PR479 (master `e1509f346`, batch 21 merged)
 
 - **Batch 21 merged:** #465, #466 and #468. #470 and #475 are in batch 22 ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478)).
 - **[PR479](https://github.com/WangPantopus/skinny-pantopus/pull/479): open, CI running.** Web "Booking limits & notice rules" (B7) on Availability. Head `59a76e57d`, 3 existing files. This is a new finding, not an inventory row.
@@ -50,7 +52,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Limits: the 200 save path wasn't exercised (a real save needs a reviewed scope); the empty state wasn't rendered.
   - Follow-up candidate: the disabled "Max per week 20" placeholder on all three platforms.
 
-## Update 2026-09-26 06:35Z: S3-47 open as PR475 (master `5bf1eb7f8`)
+## Update 2026-09-26 06:30Z: S3-47 open as PR475 (master `5bf1eb7f8`)
 
 - **[PR475](https://github.com/WangPantopus/skinny-pantopus/pull/475): open, CI running.** Web S3-47. Head `305f63cab`, 1 file (`EventTypeForm.tsx`).
   - The event type editor's Reminders row showed "1 day, 1 hour before" for everyone. It now shows the booking page's real `reminder_minutes` (existing `summarizeReminders`) and links to the Reminders page; a failed read shows WorkflowList's retry copy.
