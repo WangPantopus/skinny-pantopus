@@ -322,6 +322,9 @@ public enum HubRoute: Hashable {
     /// Drawer Help & Support → existing Help center (parity with You tab /
     /// Settings → Help).
     case helpCenter
+    /// Earn → "Offer a service" opens the existing professional profile
+    /// (the You stack's `.professionalProfile`).
+    case professionalProfile
     /// A14.6 — Settings → Payments deep-link target.
     case paymentsSettings
     /// A14.7 — Privacy preferences. Pushed from the A18.5 "View as"
@@ -2817,6 +2820,8 @@ public struct HubTabRoot: View {
             )
         case .helpCenter:
             HelpCenterView { Task { @MainActor in pop() } }
+        case .professionalProfile:
+            ProfessionalProfileView { Task { @MainActor in pop() } }
         case .paymentsSettings:
             SettingsView(
                 initialRoute: .payments,
@@ -3113,14 +3118,13 @@ public struct HubTabRoot: View {
         case .earn:
             EarnView(
                 onBack: pop,
-                onHelp: { Task { @MainActor in push(.placeholder(label: "Earn help")) } },
+                onHelp: { Task { @MainActor in push(.helpCenter) } },
                 onCashOut: { Task { @MainActor in push(.paymentsSettings) } },
                 onBrowseTasks: { Task { @MainActor in push(.gigsFeed) } },
                 onReferNeighbor: { Task { @MainActor in push(.placeholder(label: "Refer a neighbor")) } },
-                onOfferService: { Task { @MainActor in push(.placeholder(label: "Offer a service")) } },
+                onOfferService: { Task { @MainActor in push(.professionalProfile) } },
                 onManagePayout: { Task { @MainActor in push(.paymentsSettings) } },
                 onAddBank: { Task { @MainActor in push(.paymentsSettings) } },
-                onSeeAllEarnings: { Task { @MainActor in push(.placeholder(label: "All earnings")) } },
                 onOpenTaxDocs: { Task { @MainActor in push(.placeholder(label: "Tax documents")) } }
             )
         case let .businessOwner(businessId):

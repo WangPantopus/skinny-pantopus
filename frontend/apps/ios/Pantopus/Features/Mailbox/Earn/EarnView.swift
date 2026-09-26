@@ -31,7 +31,6 @@ public struct EarnView: View {
     private let onOfferService: () -> Void
     private let onManagePayout: () -> Void
     private let onAddBank: () -> Void
-    private let onSeeAllEarnings: () -> Void
     private let onOpenTaxDocs: () -> Void
 
     public init(
@@ -45,7 +44,6 @@ public struct EarnView: View {
         onOfferService: @escaping () -> Void = {},
         onManagePayout: @escaping () -> Void = {},
         onAddBank: @escaping () -> Void = {},
-        onSeeAllEarnings: @escaping () -> Void = {},
         onOpenTaxDocs: @escaping () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
@@ -58,7 +56,6 @@ public struct EarnView: View {
         self.onOfferService = onOfferService
         self.onManagePayout = onManagePayout
         self.onAddBank = onAddBank
-        self.onSeeAllEarnings = onSeeAllEarnings
         self.onOpenTaxDocs = onOpenTaxDocs
     }
 
@@ -127,7 +124,7 @@ public struct EarnView: View {
                 section(overline: "Ways to earn", action: "Find work", onAction: onBrowseTasks) {
                     EarnWaysToEarnCard(items: content.waysToEarn, onSelect: dispatchWay)
                 }
-                section(overline: "Recent earnings", action: "See all", onAction: onSeeAllEarnings) {
+                section(overline: "Recent earnings") {
                     if content.earnings.isEmpty {
                         EarnLockedRow(
                             title: "No mail offer earnings",

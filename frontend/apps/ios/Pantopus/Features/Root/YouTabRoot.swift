@@ -2677,14 +2677,13 @@ public struct YouTabRoot: View {
         case .earn:
             EarnView(
                 onBack: { Task { @MainActor in pop() } },
-                onHelp: { path.append(.placeholder(label: "Earn help")) },
+                onHelp: { path.append(.helpCenter) },
                 onCashOut: { path.append(.paymentsSettings) },
                 onBrowseTasks: { path.append(.gigsFeed) },
                 onReferNeighbor: { path.append(.placeholder(label: "Refer a neighbor")) },
-                onOfferService: { path.append(.placeholder(label: "Offer a service")) },
+                onOfferService: { path.append(.professionalProfile) },
                 onManagePayout: { path.append(.paymentsSettings) },
                 onAddBank: { path.append(.paymentsSettings) },
-                onSeeAllEarnings: { path.append(.placeholder(label: "All earnings")) },
                 onOpenTaxDocs: { path.append(.placeholder(label: "Tax documents")) }
             )
         case let .businessOwner(businessId):
