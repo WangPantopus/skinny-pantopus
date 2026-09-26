@@ -73,6 +73,7 @@ class NewMessageViewModel
         private var loadedOnce: Boolean = false
         private var searchJob: Job? = null
         private var searchSequence: Int = 0
+        private var searchFailed: Boolean = false
 
         fun load() {
             if (loadedOnce) return
@@ -87,11 +88,19 @@ class NewMessageViewModel
         fun updateSearch(value: String) {
             if (_searchText.value == value) return
             _searchText.value = value
+            searchFailed = false
             rebuild()
             scheduleSearch(value)
         }
 
         fun clearSearch() = updateSearch("")
+
+        /** Runs the failed people search again for the same text. */
+        fun retrySearch() {
+            searchFailed = false
+            rebuild()
+            scheduleSearch(_searchText.value)
+        }
 
         fun tapRow(row: NewMessageContactRow) {
             _destination.value =
@@ -178,11 +187,13 @@ class NewMessageViewModel
             when (result) {
                 is NetworkResult.Success -> {
                     verifiedResults = result.data.users
+                    searchFailed = false
                     rebuild()
                 }
                 is NetworkResult.Failure -> {
                     Timber.w("User search failed: %s", result.error)
                     verifiedResults = emptyList()
+                    searchFailed = true
                     rebuild()
                 }
             }
@@ -211,7 +222,11 @@ class NewMessageViewModel
             val queryActive = _searchText.value.trim().isNotEmpty()
             if (sections.isEmpty()) {
                 _state.value =
-                    if (queryActive) NewMessageUiState.Loaded(emptyList()) else NewMessageUiState.Empty
+                    when {
+                        !queryActive -> NewMessageUiState.Empty
+                        searchFailed -> NewMessageUiState.SearchFailed
+                        else -> NewMessageUiState.Loaded(emptyList())
+                    }
                 return
             }
             _state.value = NewMessageUiState.Loaded(sections)

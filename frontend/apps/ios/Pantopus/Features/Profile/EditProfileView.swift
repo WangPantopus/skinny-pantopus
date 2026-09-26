@@ -44,6 +44,9 @@ public struct EditProfileView: View {
             }
         }
         .background(Theme.Color.appBg)
+        // Presented as a sheet from You: a swipe down would drop unsaved
+        // edits without the Close button's "Discard changes?" prompt.
+        .interactiveDismissDisabled(viewModel.isDirty)
         .task { await viewModel.load() }
         .onAppear { Analytics.track(.screenEditProfileViewed) }
         .overlay(alignment: .bottom) {

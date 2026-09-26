@@ -368,7 +368,7 @@ class DeepLinkRouterTest {
 
     @Test
     fun connections_route() {
-        assertEquals(DeepLinkRouter.Destination.Connections, DeepLinkRouter.resolveString("pantopus://connections"))
+        assertEquals(DeepLinkRouter.Destination.Connections(), DeepLinkRouter.resolveString("pantopus://connections"))
     }
 
     // MARK: - Short-link aliases (mirrors iOS `DeepLinkRouterAliasTests`)

@@ -56,6 +56,7 @@ public final class NewMessageViewModel {
     /// responses with a stale value are dropped so the rendered
     /// "All verified" rows always reflect the most recent query.
     private var searchSequence: Int = 0
+    private var searchFailed = false
 
     init(
         api: APIClient = .shared,
@@ -84,12 +85,20 @@ public final class NewMessageViewModel {
     public func updateSearch(_ value: String) {
         guard searchText != value else { return }
         searchText = value
+        searchFailed = false
         rebuild()
         scheduleSearch(value)
     }
 
     public func clearSearch() {
         updateSearch("")
+    }
+
+    /// Runs the failed people search again for the same text.
+    public func retrySearch() {
+        searchFailed = false
+        rebuild()
+        scheduleSearch(searchText)
     }
 
     public func tapCancel() {
@@ -199,13 +208,16 @@ public final class NewMessageViewModel {
             // Drop the response if the user has typed again since.
             guard sequence == searchSequence else { return }
             verifiedResults = response.users
+            searchFailed = false
             rebuild()
         } catch {
             guard sequence == searchSequence else { return }
             // Search failures don't tip the whole screen into error
             // state — the Connections + Recent sections stay visible.
-            // We just clear "All verified" and keep going.
+            // We clear "All verified"; with nothing else to show, the
+            // body says the search failed rather than "No matches".
             verifiedResults = []
+            searchFailed = true
             rebuild()
             logger.warning("User search failed: \(error)")
         }
@@ -230,7 +242,11 @@ public final class NewMessageViewModel {
             // No connections / recents / search hits → pivot the body
             // to the search-affordance empty frame. The search bar
             // remains sticky above.
-            state = queryActive ? .loaded(sections: []) : .empty
+            if !queryActive {
+                state = .empty
+            } else {
+                state = searchFailed ? .searchFailed : .loaded(sections: [])
+            }
             return
         }
         state = .loaded(sections: sections)

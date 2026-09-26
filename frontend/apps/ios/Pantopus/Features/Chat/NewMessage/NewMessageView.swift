@@ -120,6 +120,11 @@ public struct NewMessageView: View {
         case .loading: loadingFrame
         case .empty: emptyFrame
         case let .loaded(sections): loadedFrame(sections)
+        case .searchFailed:
+            errorFrame(
+                "Check your connection and try again.",
+                title: "Couldn't search right now"
+            ) { viewModel.retrySearch() }
         case let .error(message): errorFrame(message)
         }
     }
@@ -305,19 +310,29 @@ public struct NewMessageView: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         }
     }
+}
 
-    private func errorFrame(_ message: String) -> some View {
+/// The error frames, kept out of the struct body so it stays within the
+/// type-body limit.
+extension NewMessageView {
+    private func errorFrame(
+        _ message: String,
+        title: String = "Couldn't load contacts",
+        retry: (@MainActor () -> Void)? = nil
+    ) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
             Icon(.alertCircle, size: 40, color: Theme.Color.error)
-            Text("Couldn't load contacts")
+            Text(title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(message)
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button { Task { await viewModel.refresh() } } label: {
+            Button {
+                if let retry { retry() } else { Task { await viewModel.refresh() } }
+            } label: {
                 Text("Try again")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)

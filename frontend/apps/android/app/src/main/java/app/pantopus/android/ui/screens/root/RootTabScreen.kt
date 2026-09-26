@@ -984,6 +984,19 @@ private object ChildRoutes {
      *  or via `pantopus://connections`. */
     const val CONNECTIONS = "connections"
 
+    /**
+     * The same screen with the optional `tab` arg from a `connections?tab=`
+     * link. The NavHost registers this pattern, so a plain [CONNECTIONS]
+     * navigate still matches with `tab == null`.
+     */
+    const val CONNECTIONS_ROUTE = "connections?tab={tab}"
+
+    /** Query-arg key for [CONNECTIONS_ROUTE]. */
+    const val CONNECTIONS_TAB_KEY = "tab"
+
+    /** Builder for Connections opened on a linked tab. */
+    fun connections(tab: String): String = "connections?tab=${Uri.encode(tab)}"
+
     /** Cross-listing Offers (T5.2.4). Reached from the You tab. */
     const val OFFERS = "offers"
 
@@ -2044,8 +2057,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Nearby)
                 DeepLinkRouter.consume()
             }
-            DeepLinkRouter.Destination.Connections -> {
-                navController.navigate(ChildRoutes.CONNECTIONS)
+            is DeepLinkRouter.Destination.Connections -> {
+                navController.navigate(pending.tab?.let(ChildRoutes::connections) ?: ChildRoutes.CONNECTIONS)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Beacons -> {
@@ -4977,7 +4990,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                     )
                 }
-                composable(ChildRoutes.CONNECTIONS) {
+                composable(
+                    route = ChildRoutes.CONNECTIONS_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(ChildRoutes.CONNECTIONS_TAB_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
                     ConnectionsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenChat = { target: ConnectionsChatTarget ->

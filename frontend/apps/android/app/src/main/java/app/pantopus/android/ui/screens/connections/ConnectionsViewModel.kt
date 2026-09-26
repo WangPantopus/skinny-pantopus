@@ -11,6 +11,7 @@
 
 package app.pantopus.android.ui.screens.connections
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipDto
@@ -66,6 +67,17 @@ object ConnectionsTab {
 
     /** S5 — people the viewer has blocked. RN `connections.tsx:20`. */
     const val BLOCKED = "blocked"
+
+    /**
+     * The tab a `connections?tab=` link opens. A connection request links
+     * `/app/connections?tab=requests` (backend `notificationService.js`), which
+     * is the Pending tab here; anything unknown opens All.
+     */
+    fun linked(tab: String?): String {
+        val id = tab?.lowercase() ?: return ALL
+        if (id == "requests") return PENDING
+        return if (id in listOf(NEIGHBORS, PENDING, SENT, BLOCKED)) id else ALL
+    }
 }
 
 /**
@@ -148,6 +160,8 @@ class ConnectionsViewModel
         // repository so this feature doesn't contend with the trust-graph
         // half of `/api/relationships`.
         private val connectionsRepo: ConnectionsRepository,
+        // Targeted tests may omit navigation arguments; Hilt supplies the real handle.
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         private var accepted: List<RelationshipDto> = emptyList()
         private var pending: List<PendingRequestDto> = emptyList()
@@ -162,7 +176,7 @@ class ConnectionsViewModel
         private val _pendingRemoval = MutableStateFlow<ConnectionRemovalRequest?>(null)
         val pendingRemoval: StateFlow<ConnectionRemovalRequest?> = _pendingRemoval.asStateFlow()
 
-        private val _selectedTab = MutableStateFlow(ConnectionsTab.ALL)
+        private val _selectedTab = MutableStateFlow(ConnectionsTab.linked(savedStateHandle.get<String>("tab")))
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
 
         private val _searchText = MutableStateFlow("")
