@@ -57,6 +57,9 @@ function SettingsContent() {
 
   const canEdit = myAccess?.isOwner || myAccess?.permissions?.includes('home.edit') || myAccess?.role_base === 'owner' || myAccess?.role_base === 'admin';
   const canManageSecurity = myAccess?.isOwner || myAccess?.role_base === 'owner';
+  // Guest passes need members.manage (the server answers everyone else 403);
+  // shown when the viewer's access didn't load, as before.
+  const canManageGuestPasses = !myAccess || myAccess?.isOwner || myAccess?.permissions?.includes('members.manage');
 
   const saveNickname = useCallback(async () => {
     if (!nickname.trim() || !canEdit) return;
@@ -80,7 +83,7 @@ function SettingsContent() {
   const MENU_ITEMS = [
     canManageSecurity && { icon: ShieldCheck, color: 'text-emerald-600', label: 'Security & Privacy', href: `/app/homes/${homeId}/settings/security` },
     { icon: Users, color: 'text-green-600', label: 'Members & Roles', href: `/app/homes/${homeId}/members` },
-    { icon: Share2, color: 'text-purple-600', label: 'Guest Passes', href: `/app/homes/${homeId}/share` },
+    canManageGuestPasses && { icon: Share2, color: 'text-purple-600', label: 'Guest Passes', href: `/app/homes/${homeId}/share` },
     { icon: Key, color: 'text-amber-600', label: 'Access & Codes', href: `/app/homes/${homeId}/access` },
   ].filter(Boolean) as { icon: typeof ShieldCheck; color: string; label: string; href: string }[];
 
