@@ -188,13 +188,19 @@ class ChatListViewModel
                     ChatFilter.Gigs -> visibleRows.filter { it.topicKinds.contains("gig") }
                     ChatFilter.Market -> visibleRows.filter { it.topicKinds.contains("marketplace") }
                 }
-            if (filtered.isEmpty()) {
+            val filter = _activeFilter.value
+            if (filtered.isEmpty() && filter == ChatFilter.All) {
                 _state.value = ChatListUiState.Empty
                 return
             }
+            // A filter with no matches keeps the AI row and says what it filtered
+            // for, instead of claiming there are no conversations at all.
             val combined = listOf(aiRow) + filtered
             _state.value =
-                ChatListUiState.Loaded(rows = combined.sortedByDescending { it.pinned })
+                ChatListUiState.Loaded(
+                    rows = combined.sortedByDescending { it.pinned },
+                    emptyFilter = filter.takeIf { filtered.isEmpty() },
+                )
             updateUnreadByFilter()
         }
 

@@ -170,6 +170,7 @@ fun ChatConversationScreen(
     val isBlocking by viewModel.isBlocking.collectAsStateWithLifecycle()
     val isReporting by viewModel.isReporting.collectAsStateWithLifecycle()
     val reportNotice by viewModel.reportNotice.collectAsStateWithLifecycle()
+    val actionFailure by viewModel.actionFailure.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
@@ -190,6 +191,7 @@ fun ChatConversationScreen(
     var showReportSheet by remember { mutableStateOf(false) }
     var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val photoPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -566,7 +568,9 @@ fun ChatConversationScreen(
                         actionTarget = null
                     },
                     onDelete = {
-                        viewModel.delete(target.id)
+                        // Deleting removes the message for everyone, so confirm
+                        // it as bulk delete does.
+                        pendingDeleteId = target.id
                         actionTarget = null
                     },
                     onReact = { reaction ->
@@ -683,11 +687,41 @@ fun ChatConversationScreen(
                 },
             )
         }
+        pendingDeleteId?.let { id ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteId = null },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Delete message?") },
+                text = { Text(text = "Deleted messages are removed for everyone in the conversation.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingDeleteId = null
+                            viewModel.delete(id)
+                        },
+                        modifier = Modifier.testTag("chatDeleteConfirm"),
+                    ) {
+                        Text(text = "Delete", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteId = null }) {
+                        Text(text = "Cancel", color = PantopusColors.appTextSecondary)
+                    }
+                },
+            )
+        }
         // One-shot report outcome toast (success or friendly failure).
         LaunchedEffect(reportNotice) {
             val notice = reportNotice ?: return@LaunchedEffect
             snackbarHostState.showSnackbar(notice)
             viewModel.dismissReportNotice()
+        }
+        // A failed delete, edit or reaction says so instead of rolling back silently.
+        LaunchedEffect(actionFailure) {
+            val failure = actionFailure ?: return@LaunchedEffect
+            snackbarHostState.showSnackbar(failure)
+            viewModel.dismissActionFailure()
         }
         SnackbarHost(
             hostState = snackbarHostState,
