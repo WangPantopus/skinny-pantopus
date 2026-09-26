@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import type { AvailabilitySchedule, AvailabilityRule } from "@pantopus/types";
+
+// BookingLimitsForm reads the owner's event types; the other components here
+// don't touch the API.
+const listEventTypes = jest.fn();
+jest.mock("@pantopus/api", () => ({
+  scheduling: {
+    listEventTypes: (...args: unknown[]) => listEventTypes(...args),
+    updateEventType: jest.fn(),
+  },
+}));
+jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }));
+
 import ScheduleList from "@/components/scheduling/availability/ScheduleList";
 import WeeklyHoursGrid from "@/components/scheduling/availability/WeeklyHoursGrid";
 import BlockOffForm from "@/components/scheduling/availability/BlockOffForm";
@@ -180,8 +192,26 @@ describe("BookingLimitsForm (B7)", () => {
   // This surface used to be a read-only link-out to event types. The design specifies real
   // StepperRows (booking-limits-frames.jsx), and the component was rebuilt to match, so the
   // old "is read-only and hands off" assertions no longer describe the intended behaviour.
-  it("renders the designed limit steppers", () => {
-    render(<BookingLimitsForm />);
+  // The limits come from the owner's first active event type.
+  beforeEach(() => {
+    listEventTypes.mockResolvedValue({
+      eventTypes: [
+        {
+          id: "et1",
+          name: "Intro call",
+          is_active: true,
+          min_notice_min: 0,
+          max_horizon_days: 60,
+          daily_cap: null,
+          per_booker_cap: null,
+          slot_interval_min: 15,
+        },
+      ],
+    });
+  });
+
+  it("renders the designed limit steppers", async () => {
+    render(<BookingLimitsForm owner={{ ownerType: "user" }} />);
     for (const label of [
       "Minimum notice",
       "Book up to",
@@ -189,13 +219,13 @@ describe("BookingLimitsForm (B7)", () => {
       "Max per week",
       "Per-person limit",
     ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(await screen.findByText(label)).toBeInTheDocument();
     }
   });
 
-  it("exposes working increment and decrement controls", () => {
-    render(<BookingLimitsForm />);
-    expect(screen.getAllByLabelText("Increase").length).toBeGreaterThan(0);
+  it("exposes working increment and decrement controls", async () => {
+    render(<BookingLimitsForm owner={{ ownerType: "user" }} />);
+    expect((await screen.findAllByLabelText("Increase")).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Decrease").length).toBeGreaterThan(0);
   });
 });
