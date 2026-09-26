@@ -302,32 +302,37 @@ module.exports = (io) => {
     connectedUsers.get(userId).add(socket.id);
     emitSocketGauges();
 
-    // Load user's rooms and join them
-    try {
-      const { data: rooms, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
-        p_user_id: userId,
-        p_limit: 100
-      });
-      
-      if (!error && rooms) {
-        const roomIds = new Set();
-        
-        for (const room of rooms) {
-          const roomId = room.room_id;
-          socket.join(roomId);
-          roomIds.add(roomId);
-          
-          logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
+    // Load user's rooms and join them. Not awaited: the event handlers below must
+    // be registered before the client's first events arrive (clients emit
+    // room:join as soon as they connect), or socket.io drops those events.
+    (async () => {
+      try {
+        const { data: rooms, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
+          p_user_id: userId,
+          p_limit: 100
+        });
+
+        if (!error && rooms) {
+          const roomIds = userRooms.get(userId) || new Set();
+
+          for (const room of rooms) {
+            // get_user_chat_rooms returns the room id as `id`.
+            const roomId = room.id;
+            socket.join(roomId);
+            roomIds.add(roomId);
+
+            logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
+          }
+
+          userRooms.set(userId, roomIds);
+
+          // Send initial room list
+          socket.emit('rooms:list', rooms);
         }
-        
-        userRooms.set(userId, roomIds);
-        
-        // Send initial room list
-        socket.emit('rooms:list', rooms);
+      } catch (err) {
+        logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
       }
-    } catch (err) {
-      logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
-    }
+    })();
 
     // Send initial badge counts immediately on connect
     badgeService.emitBadgeUpdate(userId);
