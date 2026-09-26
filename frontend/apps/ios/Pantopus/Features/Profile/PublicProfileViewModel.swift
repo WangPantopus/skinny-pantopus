@@ -323,6 +323,14 @@ public final class PublicProfileViewModel {
     /// profile, viewed by a signed-in user. Mirrors RN, which hides the whole
     /// action row on your own profile (`src/app/user/[id].tsx:522`).
     public private(set) var canFollow: Bool = false
+    /// `true` once `GET /api/users/:id/relationship` has answered. Follow
+    /// and Connect stay hidden until then and after a failed read, so a
+    /// failure can't offer "Connect" or "Follow" to someone the viewer is
+    /// already connected to or follows.
+    public private(set) var relationshipLoaded: Bool = false
+    /// `true` when the Local post feed couldn't load. The feed then offers
+    /// Try again instead of the "Quiet for now" empty state.
+    public private(set) var postsLoadFailed: Bool = false
 
     /// The raw route param — may be a UUID or a `@handle`.
     private let routeIdentifier: String
@@ -375,9 +383,10 @@ public final class PublicProfileViewModel {
 
     /// The control is hidden entirely on your own profile, for a signed-out
     /// viewer, and once the edge is `blocked` — RN drops the whole action
-    /// row in those cases (`src/app/user/[id].tsx:522-523`).
+    /// row in those cases (`src/app/user/[id].tsx:522-523`). It also waits
+    /// for the relationship read, so a failed read never shows "Connect".
     public var showsConnectAction: Bool {
-        canFollow && connection != .blocked
+        canFollow && relationshipLoaded && connection != .blocked
     }
 
     /// Tapping is a no-op while a request is outstanding or in flight.
@@ -684,8 +693,11 @@ public final class PublicProfileViewModel {
             case .none, .pendingReceived, .blocked:
                 connectState = .idle
             }
+            relationshipLoaded = true
         } catch {
             logger.debug("Relationship load failed: \(error)")
+            relationshipLoaded = false
+            toastMessage = "Couldn't load connection status. Try again later."
         }
     }
 
@@ -734,18 +746,20 @@ public final class PublicProfileViewModel {
     }
 
     /// A21.2 — the Local profile's post feed. Mirrors the RN
-    /// `components/profile/PostsTab` fetch. Failures degrade to an empty
-    /// feed (which renders the design's "Quiet for now" state) rather than
-    /// failing the whole profile.
+    /// `components/profile/PostsTab` fetch. A failure doesn't fail the whole
+    /// profile: the feed stays empty and `postsLoadFailed` makes it offer
+    /// Try again rather than the design's "Quiet for now" state.
     private func loadUserPosts(id: String) async -> [PublicProfilePost] {
         do {
             let response = try await client.request(
                 PostsEndpoints.userPosts(userId: id),
                 as: MyPostsResponse.self
             )
+            postsLoadFailed = false
             return response.posts.map { project(post: $0) }
         } catch {
             logger.debug("Profile posts load failed: \(error)")
+            postsLoadFailed = true
             return []
         }
     }

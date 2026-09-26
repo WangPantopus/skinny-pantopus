@@ -121,12 +121,16 @@ function AddressAutocomplete({
   );
 }
 
+// The same field-error treatment as the sign-up form.
+const inputErrorClass = ' border-red-300 dark:border-red-700 bg-red-50/40 dark:bg-red-950/20';
+const fieldErrorClass = 'mt-1 text-xs text-red-600 dark:text-red-300';
+
 export default function EditProfilePage() {
   const router = useRouter();
 
   const {
     form, setField, setFields,
-    loading, loadError, saving, user,
+    loading, loadError, saving, fieldErrors, user,
     skills, newSkill, setNewSkill, addSkill, removeSkill,
     addressVerified, setAddressVerified,
     profilePictureUrl, setProfilePictureUrl,
@@ -186,9 +190,11 @@ export default function EditProfilePage() {
                   type="text"
                   value={form.firstName}
                   onChange={(e) => setField('firstName', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.firstName ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.firstName ? inputErrorClass : '')}
                   placeholder="John"
                 />
+                {fieldErrors.firstName ? <p className={fieldErrorClass}>{fieldErrors.firstName}</p> : null}
               </div>
 
               <div>
@@ -197,9 +203,11 @@ export default function EditProfilePage() {
                   type="text"
                   value={form.middleName}
                   onChange={(e) => setField('middleName', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.middleName ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.middleName ? inputErrorClass : '')}
                   placeholder="(optional)"
                 />
+                {fieldErrors.middleName ? <p className={fieldErrorClass}>{fieldErrors.middleName}</p> : null}
                 <p className="text-xs text-app-secondary mt-1">You can clear this field and save.</p>
               </div>
 
@@ -209,9 +217,11 @@ export default function EditProfilePage() {
                   type="text"
                   value={form.lastName}
                   onChange={(e) => setField('lastName', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.lastName ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.lastName ? inputErrorClass : '')}
                   placeholder="Doe"
                 />
+                {fieldErrors.lastName ? <p className={fieldErrorClass}>{fieldErrors.lastName}</p> : null}
               </div>
             </div>
 
@@ -221,8 +231,10 @@ export default function EditProfilePage() {
                 type="date"
                 value={form.dateOfBirth}
                 onChange={(e) => setField('dateOfBirth', e.target.value)}
-                className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                aria-invalid={fieldErrors.dateOfBirth ? true : undefined}
+                className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.dateOfBirth ? inputErrorClass : '')}
               />
+              {fieldErrors.dateOfBirth ? <p className={fieldErrorClass}>{fieldErrors.dateOfBirth}</p> : null}
               <p className="text-xs text-app-secondary mt-1">Optional. You can leave blank.</p>
             </div>
 
@@ -232,9 +244,11 @@ export default function EditProfilePage() {
                 type="text"
                 value={form.tagline}
                 onChange={(e) => setField('tagline', e.target.value)}
-                className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                aria-invalid={fieldErrors.tagline ? true : undefined}
+                className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.tagline ? inputErrorClass : '')}
                 placeholder="Quick one-liner (optional)"
               />
+              {fieldErrors.tagline ? <p className={fieldErrorClass}>{fieldErrors.tagline}</p> : null}
             </div>
 
             <div className="mt-4">
@@ -242,11 +256,13 @@ export default function EditProfilePage() {
               <textarea
                 value={form.bio}
                 onChange={(e) => setField('bio', e.target.value)}
+                aria-invalid={fieldErrors.bio ? true : undefined}
                 rows={4}
                 maxLength={2000}
-                className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none text-app bg-surface"
+                className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none text-app bg-surface" + (fieldErrors.bio ? inputErrorClass : '')}
                 placeholder="Tell people about yourself..."
               />
+              {fieldErrors.bio ? <p className={fieldErrorClass}>{fieldErrors.bio}</p> : null}
               <p className="text-sm text-app-secondary mt-1">{form.bio.length}/2000</p>
             </div>
           </div>
@@ -274,6 +290,7 @@ export default function EditProfilePage() {
                 }}
                 placeholder="123 Main St"
               />
+              {fieldErrors.address ? <p className={fieldErrorClass}>{fieldErrors.address}</p> : null}
 
               <div className="mt-2 flex items-center gap-2">
                 <span
@@ -302,9 +319,11 @@ export default function EditProfilePage() {
                   type="text"
                   value={form.city}
                   onChange={(e) => setField('city', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.city ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.city ? inputErrorClass : '')}
                   placeholder="Portland"
                 />
+                {fieldErrors.city ? <p className={fieldErrorClass}>{fieldErrors.city}</p> : null}
               </div>
 
               <div>
@@ -312,7 +331,8 @@ export default function EditProfilePage() {
                 <select
                   value={form.state}
                   onChange={(e) => setField('state', e.target.value.toUpperCase())}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-surface text-app"
+                  aria-invalid={fieldErrors.state ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-surface text-app" + (fieldErrors.state ? inputErrorClass : '')}
                 >
                   <option value="">Select state</option>
                   {US_STATES.map((s: { code: string; name: string }) => (
@@ -321,6 +341,7 @@ export default function EditProfilePage() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.state ? <p className={fieldErrorClass}>{fieldErrors.state}</p> : null}
               </div>
 
               <div>
@@ -329,9 +350,11 @@ export default function EditProfilePage() {
                   type="text"
                   value={form.zipcode}
                   onChange={(e) => setField('zipcode', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.zipcode ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.zipcode ? inputErrorClass : '')}
                   placeholder="97205"
                 />
+                {fieldErrors.zipcode ? <p className={fieldErrorClass}>{fieldErrors.zipcode}</p> : null}
               </div>
             </div>
           </div>
@@ -346,9 +369,11 @@ export default function EditProfilePage() {
                   type="tel"
                   value={form.phoneNumber}
                   onChange={(e) => setField('phoneNumber', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.phoneNumber ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.phoneNumber ? inputErrorClass : '')}
                   placeholder="+14155552671"
                 />
+                {fieldErrors.phoneNumber ? <p className={fieldErrorClass}>{fieldErrors.phoneNumber}</p> : null}
                 <p className="text-xs text-app-secondary mt-1">
                   Server requires E.164. Example: +14155552671. We auto-normalize common US formats on save.
                 </p>
@@ -360,9 +385,11 @@ export default function EditProfilePage() {
                   type="url"
                   value={form.website}
                   onChange={(e) => setField('website', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.website ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.website ? inputErrorClass : '')}
                   placeholder="https://yourwebsite.com"
                 />
+                {fieldErrors.website ? <p className={fieldErrorClass}>{fieldErrors.website}</p> : null}
                 <p className="text-xs text-app-secondary mt-1">Leave blank to clear.</p>
               </div>
             </div>
@@ -426,9 +453,11 @@ export default function EditProfilePage() {
                   type="url"
                   value={form.linkedin}
                   onChange={(e) => setField('linkedin', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.linkedin ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.linkedin ? inputErrorClass : '')}
                   placeholder="https://linkedin.com/in/yourprofile"
                 />
+                {fieldErrors.linkedin ? <p className={fieldErrorClass}>{fieldErrors.linkedin}</p> : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-app-strong mb-2">Twitter</label>
@@ -436,9 +465,11 @@ export default function EditProfilePage() {
                   type="url"
                   value={form.twitter}
                   onChange={(e) => setField('twitter', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.twitter ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.twitter ? inputErrorClass : '')}
                   placeholder="https://twitter.com/yourhandle"
                 />
+                {fieldErrors.twitter ? <p className={fieldErrorClass}>{fieldErrors.twitter}</p> : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-app-strong mb-2">Instagram</label>
@@ -446,9 +477,11 @@ export default function EditProfilePage() {
                   type="url"
                   value={form.instagram}
                   onChange={(e) => setField('instagram', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.instagram ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.instagram ? inputErrorClass : '')}
                   placeholder="https://instagram.com/yourhandle"
                 />
+                {fieldErrors.instagram ? <p className={fieldErrorClass}>{fieldErrors.instagram}</p> : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-app-strong mb-2">Facebook</label>
@@ -456,9 +489,11 @@ export default function EditProfilePage() {
                   type="url"
                   value={form.facebook}
                   onChange={(e) => setField('facebook', e.target.value)}
-                  className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                  aria-invalid={fieldErrors.facebook ? true : undefined}
+                  className={"w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface" + (fieldErrors.facebook ? inputErrorClass : '')}
                   placeholder="https://facebook.com/yourprofile"
                 />
+                {fieldErrors.facebook ? <p className={fieldErrorClass}>{fieldErrors.facebook}</p> : null}
               </div>
             </div>
             <p className="text-xs text-app-secondary mt-3">Leave blank to clear.</p>

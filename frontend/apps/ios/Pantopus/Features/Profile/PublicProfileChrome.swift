@@ -416,7 +416,8 @@ private struct IntentChip: View {
 /// caption for the full `EmptyState` card the design pins: a 72pt
 /// identity-tinted disc + icon + headline + body + a primary CTA wired
 /// to the kind's first-touch action (Follow for personas, Send a message
-/// for locals).
+/// for locals). When the Local posts couldn't load, the same card says so
+/// and offers Try again.
 @MainActor
 struct PublicProfilePostsFeed: View {
     let kind: PublicProfileKind
@@ -430,6 +431,10 @@ struct PublicProfilePostsFeed: View {
     /// can name the neighbour ("… — Priya just moved in."). `nil` falls
     /// back to the un-personalised copy.
     var localName: String?
+    /// `true` when the posts couldn't load: the card says so and offers
+    /// Try again instead of presenting the feed as empty.
+    var loadFailed = false
+    var onRetry: @MainActor () -> Void = {}
 
     var body: some View {
         if posts.isEmpty {
@@ -486,7 +491,7 @@ struct PublicProfilePostsFeed: View {
                 .frame(maxWidth: 260)
                 .padding(.top, Spacing.s2)
 
-            Button(action: onEmptyCTA) {
+            Button(action: loadFailed ? onRetry : onEmptyCTA) {
                 HStack(spacing: 6) {
                     Icon(emptyCTAIcon, size: 14, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
                     Text(emptyCTALabel)
@@ -501,13 +506,13 @@ struct PublicProfilePostsFeed: View {
             .buttonStyle(.plain)
             .padding(.top, Spacing.s4)
             .accessibilityLabel(emptyCTALabel)
-            .accessibilityIdentifier("publicProfilePostsEmptyCTA")
+            .accessibilityIdentifier(loadFailed ? "publicProfilePostsRetry" : "publicProfilePostsEmptyCTA")
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s12)
         .padding(.bottom, Spacing.s5)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("publicProfilePostsEmpty")
+        .accessibilityIdentifier(loadFailed ? "publicProfilePostsFailed" : "publicProfilePostsEmpty")
     }
 
     private var headerLabel: String {
@@ -525,17 +530,22 @@ struct PublicProfilePostsFeed: View {
     }
 
     private var emptyIcon: PantopusIcon {
-        kind == .persona ? .radioTower : .home
+        if loadFailed { return .alertCircle }
+        return kind == .persona ? .radioTower : .home
     }
 
     private var emptyHeadline: String {
-        kind == .persona ? "No broadcasts yet" : "Quiet for now"
+        if loadFailed { return "Couldn't load posts" }
+        return kind == .persona ? "No broadcasts yet" : "Quiet for now"
     }
 
     /// A21.2 names the neighbour when we know them ("No posts yet — Priya
     /// just moved in. …"); without a name we fall back to the neutral
     /// sentence rather than printing an empty gap.
     private var emptyBody: String {
+        if loadFailed {
+            return "Check your connection and try again."
+        }
         if kind == .persona {
             return "Be the first to follow — you'll get a ping the moment they go live."
         }
@@ -553,11 +563,13 @@ struct PublicProfilePostsFeed: View {
     }
 
     private var emptyCTALabel: String {
-        kind == .persona ? "Follow" : "Send a message"
+        if loadFailed { return "Try again" }
+        return kind == .persona ? "Follow" : "Send a message"
     }
 
     private var emptyCTAIcon: PantopusIcon {
-        kind == .persona ? .plus : .messageSquare
+        if loadFailed { return .refreshCw }
+        return kind == .persona ? .plus : .messageSquare
     }
 }
 

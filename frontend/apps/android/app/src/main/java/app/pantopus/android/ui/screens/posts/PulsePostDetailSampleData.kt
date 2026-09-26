@@ -105,6 +105,7 @@ object PulsePostDetailSampleData {
             authorIdentity = IdentityPillar.Personal,
             authorVerified = true,
             timeAndLocality = "22m · Elm Park · 5th & Elm",
+            postedWithinHour = true,
             intent = intent,
             media = emptyList(),
             reactions = reactions,

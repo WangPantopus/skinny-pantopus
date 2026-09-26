@@ -203,7 +203,8 @@ public struct BusinessProfileView: View {
                 },
                 onContact: { Task { await openContact() } },
                 onBook: onBook,
-                onCall: callBusiness
+                onCall: callBusiness,
+                onReport: openReport
             )
         case .notFound:
             NotFoundLayout(onBack: onBack) { Task { await viewModel.refresh() } }
@@ -214,6 +215,10 @@ public struct BusinessProfileView: View {
 
     private func presentOverflow() {
         viewModel.showOverflow = true
+    }
+
+    private func openReport() {
+        showsReportSheet = true
     }
 
     /// Contact dock → `POST …/inbox/start` → host chat push.
@@ -251,6 +256,8 @@ struct BusinessProfileLoadedView: View {
     let onContact: @MainActor () -> Void
     let onBook: @MainActor () -> Void
     let onCall: @MainActor () -> Void
+    /// Opens the report sheet from the footer. The owner preview leaves it inert.
+    var onReport: @MainActor () -> Void = {}
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -270,10 +277,15 @@ struct BusinessProfileLoadedView: View {
                     StatStrip(stats: content.stats)
                     BusinessProfileNamedPageSection(state: namedPage)
                         .padding(.horizontal, Spacing.s4)
-                    BusinessProfileSections(content: content)
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.top, 14)
-                        .padding(.bottom, 132)
+                    BusinessProfileSections(
+                        content: content,
+                        onContact: onContact,
+                        onShare: onShare,
+                        onReport: onReport
+                    )
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, 14)
+                    .padding(.bottom, 132)
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -310,6 +322,10 @@ struct BusinessProfileLoadedView: View {
 @MainActor
 private struct BusinessProfileSections: View {
     let content: BusinessProfileContent
+    /// "Hire to review" starts the same inquiry as the Contact dock.
+    let onContact: @MainActor () -> Void
+    let onShare: @MainActor () -> Void
+    let onReport: @MainActor () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -436,7 +452,7 @@ private struct BusinessProfileSections: View {
                 title: "No reviews yet",
                 message: "Be the first to hire \(content.header.displayName). Your review helps "
                     + "the next neighbor decide.",
-                cta: EmptyBlock.CTA(label: "Hire to review", icon: .pencil) {}
+                cta: EmptyBlock.CTA(label: "Hire to review", icon: .pencil, action: onContact)
             )
         }
     }
@@ -445,21 +461,28 @@ private struct BusinessProfileSections: View {
 
     private var footer: some View {
         HStack(spacing: 18) {
-            footerItem(icon: .flag, label: "Report")
-            footerItem(icon: .share, label: "Share")
+            footerItem(icon: .flag, label: "Report", action: onReport)
+            footerItem(icon: .share, label: "Share", action: onShare)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s4)
     }
 
-    private func footerItem(icon: PantopusIcon, label: String) -> some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(icon, size: 11, color: Theme.Color.appTextMuted)
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.Color.appTextMuted)
+    /// Report and Share run the same actions as the overflow menu.
+    private func footerItem(
+        icon: PantopusIcon,
+        label: String,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.s1) {
+                Icon(icon, size: 11, color: Theme.Color.appTextMuted)
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+            }
         }
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 

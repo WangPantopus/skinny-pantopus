@@ -36,6 +36,15 @@ public enum LegalDocument: String, CaseIterable, Sendable, Hashable, Identifiabl
         case .openSource: "Libraries Pantopus is built on"
         }
     }
+
+    /// The public web page Share hands out. Only Terms and Privacy have one.
+    var publicPath: String? {
+        switch self {
+        case .terms: "/terms"
+        case .privacy: "/privacy"
+        case .acceptableUse, .cookies, .openSource: nil
+        }
+    }
 }
 
 @Observable

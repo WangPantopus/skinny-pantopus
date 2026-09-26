@@ -2437,6 +2437,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 onBackToHub = {
                     navDrawerScope.launch { navDrawerState.close() }
                 },
+                // The pill's name opens the profile, as the Hub avatar does.
+                onOpenProfile = {
+                    navDrawerScope.launch { navDrawerState.close() }
+                    navController.navigate(ChildRoutes.profile())
+                },
             )
         },
     ) {
@@ -6003,14 +6008,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.EARN) {
                     EarnScreen(
                         onBack = { navController.popBackStack() },
-                        onHelp = { navController.navigate(ChildRoutes.placeholder("Earn help")) },
+                        onHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
                         onCashOut = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onBrowseTasks = { navController.navigate(ChildRoutes.GIGS_FEED) },
                         onReferNeighbor = { navController.navigate(ChildRoutes.placeholder("Refer a neighbor")) },
-                        onOfferService = { navController.navigate(ChildRoutes.placeholder("Offer a service")) },
+                        onOfferService = { navController.navigate(ChildRoutes.PROFESSIONAL_PROFILE) },
                         onManagePayout = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onAddBank = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
-                        onSeeAllEarnings = { navController.navigate(ChildRoutes.placeholder("All earnings")) },
                         onOpenTaxDocs = { navController.navigate(ChildRoutes.placeholder("Tax documents")) },
                     )
                 }

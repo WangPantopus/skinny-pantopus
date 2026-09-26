@@ -58,7 +58,7 @@ final class MyListingsViewModel: ListOfRowsDataSource {
 
     var tabs: [ListOfRowsTab] {
         MyListingsTab.allCases.map { tab in
-            ListOfRowsTab(id: tab.rawValue, label: tab.label, count: counts[tab] ?? 0)
+            ListOfRowsTab(id: tab.rawValue, label: tab.label, count: counts?[tab])
         }
     }
 
@@ -82,7 +82,9 @@ final class MyListingsViewModel: ListOfRowsDataSource {
     private let onCompose: @Sendable () -> Void
 
     private var allListings: [ListingDTO] = []
-    private var counts: [MyListingsTab: Int] = [:]
+    /// Nil until a load succeeds, and again after one fails: a failed load
+    /// knows no counts, so the tabs show none and a tab switch keeps the error.
+    private var counts: [MyListingsTab: Int]?
 
     init(
         api: APIClient = .shared,
@@ -117,6 +119,7 @@ final class MyListingsViewModel: ListOfRowsDataSource {
             recomputeCounts()
             rebuildState()
         } catch {
+            counts = nil
             state = .error(message: (error as? APIError)?.errorDescription ?? "Something went wrong.")
         }
     }
@@ -132,6 +135,7 @@ final class MyListingsViewModel: ListOfRowsDataSource {
     }
 
     private func rebuildState() {
+        guard counts != nil else { return }
         let active = MyListingsTab(rawValue: selectedTab) ?? .active
         let filtered = allListings.filter { listing in
             active.statuses.contains(listing.status ?? "")

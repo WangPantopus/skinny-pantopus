@@ -400,12 +400,19 @@ fun PublicProfilePostsFeed(
      * back to the un-personalised copy.
      */
     localName: String? = null,
+    /**
+     * `true` when the posts couldn't load: the card says so and offers Try
+     * again instead of presenting the feed as empty.
+     */
+    loadFailed: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     if (posts.isEmpty()) {
         BeaconPostsEmptyState(
             kind = kind,
-            onCta = onEmptyCta,
+            onCta = if (loadFailed) onRetry else onEmptyCta,
             localName = localName,
+            loadFailed = loadFailed,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
     } else {
@@ -432,44 +439,83 @@ fun PublicProfilePostsFeed(
     }
 }
 
+/** Icon and copy for the posts feed card: failed, persona empty or Local empty. */
+private data class PostsCardCopy(
+    val icon: PantopusIcon,
+    val headline: String,
+    val body: String,
+    val ctaLabel: String,
+    val ctaIcon: PantopusIcon,
+)
+
+private fun postsCardCopy(
+    persona: Boolean,
+    loadFailed: Boolean,
+    localName: String?,
+): PostsCardCopy {
+    if (loadFailed) {
+        return PostsCardCopy(
+            icon = PantopusIcon.AlertCircle,
+            headline = "Couldn't load posts",
+            body = "Check your connection and try again.",
+            ctaLabel = "Try again",
+            ctaIcon = PantopusIcon.RefreshCw,
+        )
+    }
+    if (persona) {
+        return PostsCardCopy(
+            icon = PantopusIcon.RadioTower,
+            headline = "No broadcasts yet",
+            body = "Be the first to follow — you'll get a ping the moment they go live.",
+            ctaLabel = "Follow",
+            ctaIcon = PantopusIcon.Plus,
+        )
+    }
+    // A21.2 names the neighbour when we know them ("No posts yet — Priya
+    // just moved in. …"); without a name we fall back to the neutral
+    // sentence rather than printing an empty gap.
+    val firstName = localName?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
+    val body =
+        if (firstName != null) {
+            "No posts yet — $firstName just moved in. Say hi or send a message to break the ice."
+        } else {
+            "No posts yet — say hi or send a message to break the ice."
+        }
+    return PostsCardCopy(
+        icon = PantopusIcon.Home,
+        headline = "Quiet for now",
+        body = body,
+        ctaLabel = "Send a message",
+        ctaIcon = PantopusIcon.MessageSquare,
+    )
+}
+
 /**
  * P8.6 — Full empty-state card for the posts feed: a 72dp identity-
  * tinted disc + icon + headline + body + a primary CTA wired to the
  * kind's first-touch action (Follow for personas, Send a message for
- * locals). Replaces the previous single-line caption.
+ * locals). Replaces the previous single-line caption. When the Local posts
+ * couldn't load ([loadFailed]), the same card says so and offers Try again.
  */
 @Composable
 private fun BeaconPostsEmptyState(
     kind: PublicProfileKind,
     onCta: () -> Unit,
     localName: String? = null,
+    loadFailed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val persona = kind == PublicProfileKind.Persona
     val disc = if (persona) PantopusColors.primary50 else PantopusColors.homeBg
     val accent = if (persona) PantopusColors.primary600 else PantopusColors.home
-    val icon = if (persona) PantopusIcon.RadioTower else PantopusIcon.Home
-    val headline = if (persona) "No broadcasts yet" else "Quiet for now"
-    // A21.2 names the neighbour when we know them ("No posts yet — Priya
-    // just moved in. …"); without a name we fall back to the neutral
-    // sentence rather than printing an empty gap.
-    val firstName = localName?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
-    val body =
-        when {
-            persona -> "Be the first to follow — you'll get a ping the moment they go live."
-            firstName != null ->
-                "No posts yet — $firstName just moved in. Say hi or send a message to break the ice."
-            else -> "No posts yet — say hi or send a message to break the ice."
-        }
-    val ctaLabel = if (persona) "Follow" else "Send a message"
-    val ctaIcon = if (persona) PantopusIcon.Plus else PantopusIcon.MessageSquare
+    val copy = postsCardCopy(persona, loadFailed, localName)
 
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(top = Spacing.s12, bottom = Spacing.s5)
-                .testTag("publicProfilePostsEmpty"),
+                .testTag(if (loadFailed) "publicProfilePostsFailed" else "publicProfilePostsEmpty"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -477,7 +523,7 @@ private fun BeaconPostsEmptyState(
             contentAlignment = Alignment.Center,
         ) {
             PantopusIconImage(
-                icon = icon,
+                icon = copy.icon,
                 contentDescription = null,
                 size = 32.dp,
                 strokeWidth = 1.6f,
@@ -486,7 +532,7 @@ private fun BeaconPostsEmptyState(
         }
         Spacer(Modifier.size(18.dp))
         Text(
-            text = headline,
+            text = copy.headline,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
@@ -494,7 +540,7 @@ private fun BeaconPostsEmptyState(
         )
         Spacer(Modifier.size(Spacing.s2))
         Text(
-            text = body,
+            text = copy.body,
             fontSize = 13.sp,
             lineHeight = 19.sp,
             color = PantopusColors.appTextSecondary,
@@ -510,20 +556,20 @@ private fun BeaconPostsEmptyState(
                     .background(accent)
                     .clickable(onClick = onCta)
                     .padding(horizontal = Spacing.s4)
-                    .testTag("publicProfilePostsEmptyCTA")
-                    .semantics { contentDescription = ctaLabel },
+                    .testTag(if (loadFailed) "publicProfilePostsRetry" else "publicProfilePostsEmptyCTA")
+                    .semantics { contentDescription = copy.ctaLabel },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             PantopusIconImage(
-                icon = ctaIcon,
+                icon = copy.ctaIcon,
                 contentDescription = null,
                 size = 14.dp,
                 strokeWidth = 2.4f,
                 tint = PantopusColors.appTextInverse,
             )
             Text(
-                text = ctaLabel,
+                text = copy.ctaLabel,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,

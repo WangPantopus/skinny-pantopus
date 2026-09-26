@@ -52,6 +52,8 @@ data class PulsePostDetailContent(
     val authorIdentity: IdentityPillar,
     val authorVerified: Boolean,
     val timeAndLocality: String,
+    /** Under an hour old, while the header still reads "Just now" or "Xm ago". */
+    val postedWithinHour: Boolean,
     val intent: PostIntent,
     val media: List<PostMediaItem>,
     val reactions: PostReactionCounts,
@@ -463,6 +465,7 @@ class PulsePostDetailViewModel
                         createdAt = post.createdAt,
                         locality = post.locationName ?: post.creator?.locality ?: post.home?.city,
                     ),
+                postedWithinHour = postedWithinHour(post.createdAt),
                 intent = PostIntent.from(post.purpose, post.postType),
                 media =
                     buildPostMediaItems(
@@ -550,6 +553,13 @@ class PulsePostDetailViewModel
         ): String {
             val ts = relativeTimestamp(createdAt)
             return if (!locality.isNullOrEmpty()) "$ts · $locality" else ts
+        }
+
+        /** An unreadable date is not "just posted" (its header shows no time either). */
+        private fun postedWithinHour(iso: String?): Boolean {
+            if (iso.isNullOrEmpty()) return false
+            val instant = runCatching { Instant.parse(iso) }.getOrNull() ?: return false
+            return Duration.between(instant, Instant.now()).seconds < 3_600
         }
 
         private fun relativeTimestamp(iso: String?): String {

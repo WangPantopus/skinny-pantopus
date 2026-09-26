@@ -313,6 +313,22 @@ class PublicProfileViewModel
         private val _canFollow = MutableStateFlow(false)
         val canFollow: StateFlow<Boolean> = _canFollow.asStateFlow()
 
+        /**
+         * `true` once `GET api/users/:id/relationship` has answered. Follow
+         * and Connect stay hidden until then and after a failed read, so a
+         * failure can't offer "Connect" or "Follow" to someone the viewer is
+         * already connected to or follows.
+         */
+        private val _relationshipLoaded = MutableStateFlow(false)
+        val relationshipLoaded: StateFlow<Boolean> = _relationshipLoaded.asStateFlow()
+
+        /**
+         * `true` when the Local post feed couldn't load. The feed then offers
+         * Try again instead of the "Quiet for now" empty state.
+         */
+        private val _postsLoadFailed = MutableStateFlow(false)
+        val postsLoadFailed: StateFlow<Boolean> = _postsLoadFailed.asStateFlow()
+
         fun load() {
             if (_state.value is PublicProfileUiState.Loaded) return
             refresh()
@@ -455,8 +471,10 @@ class PublicProfileViewModel
          * The control is hidden entirely on your own profile, for a
          * signed-out viewer, and once the edge is `blocked` — RN drops the
          * whole action row in those cases (`src/app/user/[id].tsx:522-523`).
+         * It also waits for the relationship read, so a failed read never
+         * shows "Connect".
          */
-        fun showsConnectAction(): Boolean = _canFollow.value && _connection.value != ProfileConnection.Blocked
+        fun showsConnectAction(): Boolean = _canFollow.value && _relationshipLoaded.value && _connection.value != ProfileConnection.Blocked
 
         /** Tapping is a no-op while a request is outstanding or in flight. */
         fun isConnectEnabled(): Boolean = _connection.value.isActionable && _connectState.value !is PublicProfileActionState.InFlight
@@ -673,10 +691,14 @@ class PublicProfileViewModel
                             ProfileConnection.Blocked,
                             -> PublicProfileActionState.Idle
                         }
+                    _relationshipLoaded.value = true
                 }
-                // A failed relationship probe must not fail the profile —
-                // the buttons just stay in their resting pose.
-                is NetworkResult.Failure -> Unit
+                // A failed relationship probe must not fail the profile, but
+                // Follow and Connect stay hidden rather than guessing the edge.
+                is NetworkResult.Failure -> {
+                    _relationshipLoaded.value = false
+                    _toastMessage.value = "Couldn't load connection status. Try again later."
+                }
             }
         }
 
@@ -707,14 +729,20 @@ class PublicProfileViewModel
 
         /**
          * A21.2 — the Local profile's post feed. Mirrors the RN
-         * `components/profile/PostsTab` fetch. Failures degrade to an empty
-         * feed (which renders the design's "Quiet for now" state) rather
-         * than failing the whole profile.
+         * `components/profile/PostsTab` fetch. A failure doesn't fail the
+         * whole profile: the feed stays empty and [postsLoadFailed] makes it
+         * offer Try again rather than the design's "Quiet for now" state.
          */
         private suspend fun loadUserPosts(id: String): List<PublicProfilePost> =
             when (val result = posts.userPosts(id)) {
-                is NetworkResult.Success -> result.data.posts.map { project(it) }
-                is NetworkResult.Failure -> emptyList()
+                is NetworkResult.Success -> {
+                    _postsLoadFailed.value = false
+                    result.data.posts.map { project(it) }
+                }
+                is NetworkResult.Failure -> {
+                    _postsLoadFailed.value = true
+                    emptyList()
+                }
             }
 
         private fun project(post: MyPostDto): PublicProfilePost =

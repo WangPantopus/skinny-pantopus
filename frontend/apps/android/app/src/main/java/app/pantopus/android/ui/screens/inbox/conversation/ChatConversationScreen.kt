@@ -865,10 +865,9 @@ internal fun ChatHeader(
                 when (counterparty) {
                     is ChatCounterparty.Person -> {
                         Row {
-                            // A15 person header: phone + info. Calling ships
-                            // later — the phone button is a visual no-op until
-                            // voice calls land.
-                            HeaderIcon(PantopusIcon.Phone)
+                            // A15 person header: info. The design's phone icon
+                            // stays out until calling exists, so the header
+                            // shows nothing that looks tappable but does nothing.
                             Box(
                                 modifier =
                                     Modifier

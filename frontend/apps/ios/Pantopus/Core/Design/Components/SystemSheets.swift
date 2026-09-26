@@ -30,14 +30,25 @@ public enum InviteLinks {
 
     /// Use the existing public train page, with this build's web origin.
     public static func supportTrainURLString(trainId: String) -> String {
+        let pathCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let encodedId = trainId.addingPercentEncoding(withAllowedCharacters: pathCharacters) ?? trainId
+        return publicWebOrigin + "/support-trains/" + encodedId
+    }
+
+    /// A public web page such as `/terms`, with this build's web origin.
+    public static func publicPageURLString(path: String) -> String {
+        publicWebOrigin + path
+    }
+
+    /// This build's web origin (`PantopusPublicWebURL`), or production when
+    /// it's missing or not an http(s) URL. No trailing slash.
+    private static var publicWebOrigin: String {
         let configured = Bundle.main.object(forInfoDictionaryKey: "PantopusPublicWebURL") as? String
         let origin = configured.flatMap { URL(string: $0) }
         let base = origin.flatMap { url in
             ["https", "http"].contains(url.scheme ?? "") && url.host != nil ? url.absoluteString : nil
         } ?? "https://pantopus.com"
-        let pathCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let encodedId = trainId.addingPercentEncoding(withAllowedCharacters: pathCharacters) ?? trainId
-        return base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/support-trains/" + encodedId
+        return base.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     public static let inviteMessage =

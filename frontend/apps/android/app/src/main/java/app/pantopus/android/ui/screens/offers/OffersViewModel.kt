@@ -797,10 +797,10 @@ class OffersViewModel
 
             fun isPending(raw: String?): Boolean = (raw ?: "").lowercase(Locale.ROOT) == "pending"
 
-            /** `12` → `"$12"`. Whole dollars to match the headline price geometry. */
+            /** `12` → `"$12"`, `12.5` → `"$12.50"`: an offer shows its exact amount, with cents only when it has them. */
             fun formatPrice(amount: Double?): String {
                 if (amount == null) return "$—"
-                return "$${kotlin.math.round(amount).toInt()}"
+                return if (amount % 1.0 == 0.0) "$${amount.toInt()}" else String.format(Locale.US, "$%.2f", amount)
             }
 
             /** Sub-label used by the price stack: `"asking $240"`. */

@@ -175,6 +175,7 @@ fun BusinessProfileScreen(
                         onBook = onBook,
                         onCall = { telUri(current.content.phoneNumber)?.let(onOpenWebsite) },
                         namedPage = namedPage,
+                        onReport = { showReportSheet = true },
                     )
                 }
         }
@@ -292,6 +293,8 @@ internal fun BusinessProfileLoadedFrame(
     // C4 — the named custom page from `pantopus://b/:username/:slug`.
     // Defaults to `None` so every existing call site is untouched.
     namedPage: BusinessProfileNamedPageState = BusinessProfileNamedPageState.None,
+    // Opens the report sheet from the footer. The owner preview leaves it inert.
+    onReport: () -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize().testTag("businessProfile.loaded")) {
         Column(
@@ -317,7 +320,7 @@ internal fun BusinessProfileLoadedFrame(
                         .padding(top = 14.dp, bottom = 132.dp),
             ) {
                 BusinessProfileNamedPageSection(state = namedPage)
-                Sections(content)
+                Sections(content, onContact = onContact, onShare = onShare, onReport = onReport)
             }
         }
 
@@ -348,8 +351,15 @@ private fun bannerStatus(status: BusinessOpenState?): BizStatusBadge? =
 
 // MARK: - Sections
 
+// "Hire to review" starts the same inquiry as the Contact dock; the footer's
+// Report and Share run the same actions as the overflow menu.
 @Composable
-private fun Sections(content: BusinessProfileContent) {
+private fun Sections(
+    content: BusinessProfileContent,
+    onContact: () -> Unit,
+    onShare: () -> Unit,
+    onReport: () -> Unit,
+) {
     if (content.isNewlyClaimed) {
         JustOpenedNote(isVerified = content.header.isVerified, modifier = Modifier.padding(bottom = Spacing.s1))
     }
@@ -478,7 +488,7 @@ private fun Sections(content: BusinessProfileContent) {
                     "neighbor decide.",
             ctaLabel = "Hire to review",
             ctaIcon = PantopusIcon.Pencil,
-            onCta = {},
+            onCta = onContact,
         )
     }
 
@@ -487,8 +497,8 @@ private fun Sections(content: BusinessProfileContent) {
         modifier = Modifier.fillMaxWidth().padding(top = Spacing.s4),
         horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
     ) {
-        FooterItem(icon = PantopusIcon.Flag, label = "Report")
-        FooterItem(icon = PantopusIcon.Share, label = "Share")
+        FooterItem(icon = PantopusIcon.Flag, label = "Report", onClick = onReport)
+        FooterItem(icon = PantopusIcon.Share, label = "Share", onClick = onShare)
     }
 }
 
@@ -525,11 +535,12 @@ private fun SectionHeader(
 private fun FooterItem(
     icon: PantopusIcon,
     label: String,
+    onClick: () -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        modifier = Modifier.semantics { contentDescription = label },
+        modifier = Modifier.clickable(onClick = onClick).semantics { contentDescription = label },
     ) {
         PantopusIconImage(icon = icon, contentDescription = null, size = 11.dp, tint = PantopusColors.appTextMuted)
         Text(text = label, color = PantopusColors.appTextMuted, fontSize = 11.sp)
