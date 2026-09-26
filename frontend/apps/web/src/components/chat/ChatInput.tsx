@@ -144,6 +144,7 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
           <button
             onClick={handleSend}
             onMouseDown={e => e.preventDefault()}
+            aria-label="Send message"
             disabled={sending || disabled || (!text.trim() && selectedFiles.length === 0)}
             className="w-10 h-10 rounded-full bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           >
