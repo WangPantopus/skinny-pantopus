@@ -26,7 +26,8 @@ type Tab = 'updates' | 'fans' | 'inbox';
 const TABS: ReadonlyArray<{ value: Tab; label: string; ready: boolean }> = [
   { value: 'updates', label: 'Updates', ready: true },
   { value: 'fans',    label: 'Fans',    ready: false },
-  { value: 'inbox',   label: 'Inbox',   ready: false },
+  // Inbox is its own page, /app/audience/inbox; the tab links there.
+  { value: 'inbox',   label: 'Inbox',   ready: true },
 ];
 
 function isTab(value: string | null | undefined): value is Tab {
@@ -66,6 +67,11 @@ export default function AudienceDashboardPage() {
       router.replace('/app/persona');
     }
   }, [flagEnabled, flagState.isFetched, router]);
+
+  // An /app/audience?tab=inbox link opens the inbox page.
+  useEffect(() => {
+    if (tab === 'inbox') router.replace('/app/audience/inbox');
+  }, [tab, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,7 +211,7 @@ export default function AudienceDashboardPage() {
               role="tab"
               type="button"
               aria-selected={tab === t.value}
-              onClick={() => setTab(t.value)}
+              onClick={() => (t.value === 'inbox' ? router.push('/app/audience/inbox') : setTab(t.value))}
               className={`relative -mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
                 tab === t.value
                   ? 'border-teal-600 text-teal-700'
@@ -234,12 +240,7 @@ export default function AudienceDashboardPage() {
               title="Fans"
               body="The fan list lands in the next release alongside paid memberships."
             />
-          ) : (
-            <ComingSoonPanel
-              title="Inbox"
-              body="Tier-gated DM threads land alongside paid memberships."
-            />
-          )}
+          ) : null}
         </div>
       </main>
     </div>
