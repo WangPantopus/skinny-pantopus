@@ -26,6 +26,12 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Befores and afters pass on the installed apps: iOS dylib `f35d6be8…`, Android APK `fb0f8c3e…`. ktlint, detekt, lint, SwiftLint strict and SwiftFormat are clean.
   - Bundle `20260926-stream3-profile-share-truth-r1`, MANIFEST.json SHA-256 `23063f8a04d70032e0262d2ad16921eb7c49247ae201ab2e7149d73998dd0c26`.
   - Broad80 advances, partial: N03, N04 and A05; no row closes.
+- **[PR460](https://github.com/WangPantopus/skinny-pantopus/pull/460): open (web), CI running**, for Stream 1's queue.
+  - Head `051eff7f71f3150ea15dce4a5a81bef9c3327dcd` on `564bf220d`, 3 web files, merge-tree clean.
+  - **S3-42:** failed profile stats show "—" with Try again, and the Earnings card opens `/app/wallet`.
+  - **S3-61:** the rejected field is marked with the sign-up form's treatment; the toast has no raw key; the phone conflict marks the phone field; a profile-saved/skills-failed save says so. Its generic-message part was already stale.
+  - Befores ran on master before any edit; the afters are DOM captures, and save failures were injected with the backend's exact envelopes. ESLint 0 errors; the type-check gate passes.
+  - Bundle `20260926-stream3-web-profile-truth-r1`, MANIFEST.json SHA-256 `f5c25505b52fdd49cc8635d12e082c5b20643646d5db8892cdebf0f56af15915`.
 - **Parked local branch `claude/stream3-s313-beacon-updates-wip`** (`18edeaf58`): S3-13. It needs a Beacon owner with Beacon Updates to reproduce first.
 
 ## Runtime (private, `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`)
@@ -53,6 +59,9 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - One `LocalProfile` row for Solo, created 2026-09-26 00:36:11.802992Z by `GET /api/identity-center` (ensureLocalProfile) when Identity Center was opened on iOS. Exact cleanup awaits the user: `id='7e511c3f-86e8-4dd1-a16f-d27124870e50' AND user_id='1f13068b-86ef-4085-b0a1-cd5883ac816e'`. Remove Solo from the proxy's LocalProfile allowlist first.
 - No scheduling, template, workflow, booking, block, relationship or profile rows. Every block POST was refused before upstream.
 - PR455's befores and afters changed auth bookkeeping only. Its inquiry and read-receipt POSTs were refused before upstream.
+- **One `Wallet` row for Owner**, created 2026-09-26 02:54:11.62272Z when PR460's Earnings link opened `/app/wallet`. `GET /api/wallet` runs `getOrCreateWallet`, which is existing behavior.
+  - Exact cleanup awaits the user: `id='c39b32a7-37d0-42d6-8504-a255fabd8150' AND user_id='81990c03-c41b-4026-ad07-ad82c1ef896d'`.
+  - The proxy now refuses `GET /api/wallet` for any caller but Owner.
 
 ## New findings and candidates
 
@@ -81,11 +90,10 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 2. Needs the user's go-ahead:
    - One scoped zero-cost fixture set in the isolated DB. It now also needs a published business, for S3-66 and S3-65.
    - The two exact-row cleanups: UserPrivacySettings for Owner and LocalProfile for Solo.
-   - The fixtures cover S3-50 real edges, 52, 57, 48, 43, 13, 56, S3-47 and the S3-51 no-show CTA.
+   - The fixtures cover S3-50 real edges, 52, 57, 48, 43, 13, 56, S3-47 (no EventType rows exist; the page's reminders match the static text), S3-68 (needs a Beacon persona), S3-69 (a paid invoice) and the S3-51 no-show CTA.
 3. Next groups:
-   - S3-42 web profile stats and the Earnings link (still open; #454 changed My bids/My tasks, not `/app/profile`).
-   - S3-61 web profile field errors.
-   - S3-47 event-type static rows.
+   - Waiting on Stream 1's list of unfinished S3 IDs, to avoid redoing merged rows.
+   - Fixture-free native: the persona "Share profile" opens Block/Report; the iOS business failure toast is hidden behind the tab bar.
    - Android Preview sheet insets.
    - The remaining chat group (S3-53 New chat, 54, 55, 56) once conversation fixtures exist.
 
