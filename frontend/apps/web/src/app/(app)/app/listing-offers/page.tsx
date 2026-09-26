@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Clock, CheckCircle, XCircle, ArrowLeftRight, Timer, Undo2, Trophy, Loader2, Inbox } from 'lucide-react';
 import { ListArchetype } from '@/components/archetypes';
@@ -8,6 +8,7 @@ import Image from 'next/image';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 
@@ -29,6 +30,10 @@ function ListingOffersContent() {
 
   const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // Offers already on screen: a failed refresh after an action keeps them and
+  // toasts; a failed first load has nothing to keep and shows an error state.
+  const hasOffers = useRef(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [counteringId, setCounteringId] = useState<string | null>(null);
   const [counterAmount, setCounterAmount] = useState('');
@@ -39,11 +44,22 @@ function ListingOffersContent() {
     if (!listingId) return;
     try {
       const res = await api.listings.getListingOffers(listingId);
-      setOffers(res.offers || []);
-    } catch { toast.error('Failed to load offers'); }
+      const next = res.offers || [];
+      setOffers(next);
+      hasOffers.current = next.length > 0;
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      if (hasOffers.current) toast.error('Failed to load offers');
+    }
   }, [listingId]);
 
-  useEffect(() => { setLoading(true); fetchOffers().finally(() => setLoading(false)); }, [fetchOffers]);
+  const loadOffers = useCallback(() => {
+    setLoading(true);
+    fetchOffers().finally(() => setLoading(false));
+  }, [fetchOffers]);
+
+  useEffect(() => { loadOffers(); }, [loadOffers]);
 
   const handleAccept = useCallback(async (offer: any) => {
     const yes = await confirmStore.open({
@@ -188,6 +204,12 @@ function ListingOffersContent() {
           subcopy: "When buyers make offers on this listing, they'll appear here.",
           tone: 'personal',
         }}
+        // A failed load is not "no offers yet": say so and offer a retry.
+        renderEmpty={loadError ? () => (
+          <div role="alert">
+            <ErrorState message="We couldn't load the offers. Please try again." onRetry={loadOffers} />
+          </div>
+        ) : undefined}
       />
     </div>
   );
