@@ -3,12 +3,16 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Patterns
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
@@ -30,10 +34,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +71,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,9 +86,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -126,6 +137,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import kotlin.math.roundToInt
 
 /**
  * Chat conversation screen (T2.2). Three frames: shimmer loading,
@@ -310,11 +322,21 @@ fun ChatConversationScreen(
     val isCreatorThread = conversationMode == ChatConversationMode.CreatorThread
     val isCreatorQuotaLocked = isCreatorThread && resolvedCreatorContext.quota?.isMaxed == true
 
+    // The chat sits on the keyboard: pad the bottom by the keyboard height
+    // minus the space already below the chat (the tab bar).
+    KeyboardResizeEffect()
+    val density = LocalDensity.current
+    val rootView = LocalView.current.rootView
+    val keyboardPx = WindowInsets.ime.getBottom(density)
+    var belowChatPx by remember { mutableIntStateOf(0) }
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(PantopusColors.appSurface)
+                .onGloballyPositioned { coords ->
+                    belowChatPx = (rootView.height - coords.boundsInWindow().bottom.roundToInt()).coerceAtLeast(0)
+                }.background(PantopusColors.appSurface)
+                .padding(bottom = with(density) { (keyboardPx - belowChatPx).coerceAtLeast(0).toDp() })
                 .testTag("chatConversation"),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -5021,3 +5043,26 @@ private fun ErrorFrame(
         }
     }
 }
+
+/**
+ * While the chat is open the window resizes for the keyboard instead of
+ * panning, so the header stays on screen; the previous mode comes back when
+ * the chat closes.
+ */
+@Composable
+private fun KeyboardResizeEffect() {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val window = context.findActivity()?.window
+        val previous = window?.attributes?.softInputMode
+        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        onDispose { if (window != null && previous != null) window.setSoftInputMode(previous) }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
