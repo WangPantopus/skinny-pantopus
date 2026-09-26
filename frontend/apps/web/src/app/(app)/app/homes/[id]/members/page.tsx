@@ -13,7 +13,12 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '@/components/home/share/shareFailure';
 
-const ROLE_ORDER = ['owner', 'admin', 'manager', 'member', 'restricted_member', 'guest'];
+// Roles "Change role" can give, and each role's rank on the server (home_role_rank). Owners change
+// through the ownership flow, and a non-owner can only give roles below their own.
+const ASSIGNABLE_ROLES = ['admin', 'manager', 'member', 'restricted_member', 'guest'];
+const ROLE_RANK: Record<string, number> = {
+  service_provider: 5, guest: 10, restricted_member: 20, member: 30, lease_resident: 35, manager: 40, admin: 50, owner: 60,
+};
 const DISPLAY_ROLE_ORDER = ['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member', 'guest', 'service_provider'];
 const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; label: string }> = {
   owner:             { icon: ShieldCheck, color: '#7c3aed', label: 'Owner' },
@@ -25,6 +30,16 @@ const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; label
   guest:             { icon: Clock,       color: '#6b7280', label: 'Guest' },
   service_provider:  { icon: Key,         color: '#6b7280', label: 'Service provider' },
 };
+
+/** The roles the viewer may give this member, as mutate_home_member (and the iOS/Android role pickers) allow. */
+function assignableRolesFor(access: any, member: any): string[] {
+  const current = member.role_base || member.role;
+  if (!access || member.id === access.occupancy?.id || current === 'owner') return [];
+  const actorIsOwner = access.isOwner === true;
+  const actorRank = actorIsOwner ? ROLE_RANK.owner : ROLE_RANK[access.effective_role_base || access.role_base] || 0;
+  if (!actorIsOwner && (ROLE_RANK[current] || 0) >= actorRank) return [];
+  return ASSIGNABLE_ROLES.filter((r) => r !== current && (actorIsOwner || ROLE_RANK[r] < actorRank));
+}
 
 type MemberTab = 'members' | 'requests' | 'audit';
 
@@ -63,6 +78,8 @@ function MembersContent() {
   const [membersError, setMembersError] = useState('');
   const [requestsError, setRequestsError] = useState('');
   const [auditError, setAuditError] = useState('');
+  const [roleMenuFor, setRoleMenuFor] = useState<string | null>(null);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
@@ -76,7 +93,7 @@ function MembersContent() {
     const dialog = pageConfirmation.current;
     pageConfirmation.current = null;
     if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
-    setMembers([]); setMyAccess(null); setAuditLog([]); setAuditError(''); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
+    setRoleMenuFor(null); setMembers([]); setMyAccess(null); setAuditLog([]); setAuditError(''); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
   }, []);
   const fetchData = useCallback(async () => {
     if (!homeId) return;
@@ -133,13 +150,17 @@ function MembersContent() {
     return acc;
   }, {});
 
-  const handleRoleChange = useCallback(async (member: any) => {
-    if (!canManage) return;
-    const assignable = ROLE_ORDER.filter((r) => r !== 'owner');
-    if (assignable.length === 0) return;
-    // Cycle to the next assignable role
-    const currentIdx = assignable.indexOf(member.role);
-    const nextRole = assignable[(currentIdx + 1) % assignable.length];
+  useEffect(() => {
+    if (!roleMenuFor) return;
+    const pointer = (event: MouseEvent) => { if (!roleMenuRef.current?.contains(event.target as Node)) setRoleMenuFor(null); };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') setRoleMenuFor(null); };
+    document.addEventListener('mousedown', pointer); document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', pointer); document.removeEventListener('keydown', key); };
+  }, [roleMenuFor]);
+
+  const handleRoleChange = useCallback(async (member: any, nextRole: string) => {
+    setRoleMenuFor(null);
+    if (!canManage || !assignableRolesFor(myAccess, member).includes(nextRole)) return;
     const roleLabel = ROLE_META[nextRole]?.label || nextRole;
     const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
@@ -162,7 +183,7 @@ function MembersContent() {
       toast.success(`Role changed to ${roleLabel}`);
       await fetchData();
     } catch (err: any) { if (current()) toast.error(err?.message || 'Failed to update role'); }
-  }, [homeId, canManage, fetchData]);
+  }, [homeId, canManage, myAccess, fetchData]);
 
   const handleRemove = useCallback((member: any) => {
     if (!canManage || typeof member.user_id !== 'string') return;
@@ -296,9 +317,28 @@ function MembersContent() {
                       </div>
                       {canManage && role !== 'owner' && (
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          <button onClick={() => handleRoleChange(member)} title="Change role" className="p-1.5 text-app-text-secondary hover:bg-app-hover rounded-lg transition">
-                            <ArrowLeftRight className="w-4 h-4" />
-                          </button>
+                          {assignableRolesFor(myAccess, member).length > 0 && (
+                            <div className="relative" ref={roleMenuFor === member.user_id ? roleMenuRef : undefined}>
+                              <button onClick={() => setRoleMenuFor(roleMenuFor === member.user_id ? null : member.user_id)} title="Change role"
+                                aria-haspopup="menu" aria-expanded={roleMenuFor === member.user_id} className="p-1.5 text-app-text-secondary hover:bg-app-hover rounded-lg transition">
+                                <ArrowLeftRight className="w-4 h-4" />
+                              </button>
+                              {roleMenuFor === member.user_id && (
+                                <div className="absolute right-0 top-full mt-1 bg-app-surface border border-app-border rounded-lg shadow-lg py-1 z-20 min-w-[180px]" role="menu" aria-label="Change role">
+                                  <p className="px-3 py-1.5 text-xs text-app-text-muted">Current role: {ROLE_META[member.role_base || member.role]?.label || member.role_base || member.role}</p>
+                                  {assignableRolesFor(myAccess, member).map((r) => {
+                                    const ChoiceIcon = ROLE_META[r].icon;
+                                    return (
+                                      <button key={r} onClick={() => handleRoleChange(member, r)} role="menuitem"
+                                        className="w-full text-left px-3 py-2 text-sm text-app-text hover:bg-app-hover transition-colors focus-visible:outline-none focus-visible:bg-app-hover flex items-center gap-2">
+                                        <ChoiceIcon className="w-4 h-4" style={{ color: ROLE_META[r].color }} /> {ROLE_META[r].label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.user?.username || member.username || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
                             <UserMinus className="w-4 h-4" />
                           </button>
