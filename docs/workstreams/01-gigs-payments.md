@@ -1,6 +1,24 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T11:05Z
+## CURRENT STREAM 1 STATE — 2026-09-26T13:14Z
+
+- **Merged:**
+  - batch 26 (#513, 11:37Z): #498, #500, #501, #504, #505 and #506;
+  - batch 27 (#517, 12:16Z): #509, #510, #511 and #514.
+- **In batch 28 ([#525](https://github.com/WangPantopus/skinny-pantopus/pull/525), queued at 13:13Z):**
+
+  | PR | Head | What | Bundle |
+  |---|---|---|---|
+  | [#518](https://github.com/WangPantopus/skinny-pantopus/pull/518) | `e307f722c` | Manage Train: "Couldn't load signups" + no-dates nudge (both apps) | `ad6cc465…` |
+  | [#522](https://github.com/WangPantopus/skinny-pantopus/pull/522) | `4299f5416` | web: accept an instant-accept task from its task page | `b45639bf…` |
+
+- **Open:**
+  - [#524](https://github.com/WangPantopus/skinny-pantopus/pull/524) `e41242e2c`: web Reviewed step completes; the review form names the person (`8786c694…`).
+  - Branch `claude/stream1-tip-unavailable-reason` `643952e26`: tip copy for `CONNECT_REQUIRED` (web verified; native afters pending builds).
+- **Free-task lifecycle audit:** see the resume point. Fixtures T1–T6 (alice tasks, price 0) are cleaned at the end against `baseline.json`.
+- **Proposal for the user:** native accept-a-counter (web has Accept).
+
+## Previous Stream 1 state — 2026-09-26T11:05Z
 
 - **Merged in batch 25 (#499, 09:58:07Z):** #490, #492, #495 and #496.
 - **In batch 26 ([#513](https://github.com/WangPantopus/skinny-pantopus/pull/513), queued; all green):**

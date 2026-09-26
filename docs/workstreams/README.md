@@ -1,6 +1,32 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T12:18Z (batch 27 merged; batch 28 pending CI)
+## CURRENT RESUME POINT — 2026-09-26T13:14Z (batch 28 #525 queued)
+
+- **Integration (Stream 1 queue):**
+  - Master is `2e053fe9c` (batch 27 [#517](https://github.com/WangPantopus/skinny-pantopus/pull/517) merged at 12:16:08Z).
+  - **Batch 28 [#525](https://github.com/WangPantopus/skinny-pantopus/pull/525)**, tip `30a84cdcd`, queued at 13:13:01Z.
+    - Order: #518 (S1 Manage Train) → #515 (S3 chat media) → #519 (S2 guest-pass entry) → #520 (S3 Beacon owner exits) → #521 (S2 guest-pass link) → #522 (S1 web instant accept).
+    - Every head is green and its bundle was re-verified on disk. No two PRs share a file, and every PR file sits in the tip at its head blob. The one exception is #520's two root files, which combine exactly with #510's master changes.
+  - **Batch 29 candidates:**
+    - #523 (S3 mail notification label; reviewed, bundle `023fa8e4…`, CI running).
+    - #524 (S1 web Reviewed step and reviewer names, `8786c694…`, CI running).
+    - S1's tip-copy PR (native afters need builds).
+- **Stream 1 runtime:**
+  - The isolated DB now has master's 92 migrations: `20260924000100` and `000200` (vacation_hold_transition) and `20260926100000` (Mail recoverable delete) were applied at 12:20:48Z.
+  - The backend runs master code (restarted with SIGINT at 12:21Z).
+  - A runtime moved to this master needs `20260926100000`, because the Mail routes read `deleted_at`.
+- **Stream 1 free-task lifecycle** (12:27Z onward; bundle `20260926-stream1-free-task-lifecycle-r1`, in progress). "Bid accept / pay / complete" was BOUNDARY (Stripe Connect, Mapbox); a free instant-accept task, posted through the API, now runs live:
+  - **Web:** accept → start → complete → confirm → both reviews PASS. Instant accept worked only on the unlinked gigs-v2 page; that is fixed in #522.
+  - **Android:** the poster's confirm completion PASS (`POST /complete` 200 → "Send a tip").
+  - **iOS:** the helper's "Accept this task" (200) and "Start task" (200) PASS. Delivery proof needs S3 (upload 503 here, BOUNDARY); the sheet keeps the photo and shows the error.
+  - **Tips:** every tip dialog said "Reopen its details" when the worker has no payout account (`CONNECT_REQUIRED`, usual on free tasks). Fixed on branch `claude/stream1-tip-unavailable-reason`: web verified; the iOS and Android afters need builds.
+  - **Web review step:** "Leave Review" never cleared, and the form said "experience with worker?". Fixed in #524.
+- **User decisions:** 1A–6A are merged. The native accept-a-counter proposal is still awaiting the user.
+- **Slots:**
+  - Heavy order: Stream 2 (Android master build; its build pid has exited, so a release is pending) → Stream 1 (Android) → Stream 3 (chat-keyboard Android) → Stream 1 (iOS).
+  - Stream 1 holds device slot 1 (iOS sim F4DBD47E) and the iOS driver since 12:57:24Z, plus emulator-5558 (slot 3).
+
+## Resume point history — 2026-09-26T12:18Z (batch 27 merged; batch 28 pending CI)
 
 - **Integration (Stream 1 queue):**
   - Master is `2e053fe9c`. Batch 27 [#517](https://github.com/WangPantopus/skinny-pantopus/pull/517) merged at 12:16:08Z. It carried #509 (S1 decision 1A), #510 (S1 decisions 3A/4A), #511 (S1 iOS offer send), #514 (S1 web Discover SSR), #512 (S2 decision 1: recoverable delete, migration `20260926100000`, nightly purge) and #516 (S3 web chat scroll/media).
