@@ -1,6 +1,26 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T05:55Z (batch 20 merged; batch 21 = 7 reviewed PRs gated on CI; Stream 1 Pulse+Offers build under heavy)
+## CURRENT RESUME POINT — 2026-09-26T06:40Z (batch 21 merged; batch 22 = 7 PRs gating on CI)
+
+- **Integration (Stream 1 queue):**
+  - Master is `e1509f346`. Batch 21 [#471](https://github.com/WangPantopus/skinny-pantopus/pull/471) merged at 06:32:20Z. It carried #464 (S2 read state), #465 (S3-08/36/34), #466 (S3-65), #467 (S2 D01), #468 (S3 scheduling hide + iOS hub Back), #462 (S1 wallet) and #469 (S1 web Marketplace).
+  - **Batch 22 candidates:** each is reviewed, and every bundle was verified (manifest hash, recorded head, per-file hashes).
+    - Green: #470 (S3-66 share link), #473 (S2 R04 ownership-transfer security fix, user-approved), #474 (S2 D07 role choice).
+    - CI running: #472 (S1 Pulse/Offers/iOS post link), #475 (S3-47 reminders truth), #476 (S1 My bids/tasks/posts + iOS Hub time), #477 (S1 web Tasks radius banner).
+- **Stream 1 new this round:**
+  - #472, bundle `b923594b…`: the Pulse banner over a failed feed; Offers "Received 0 · Sent 0"; an iOS post link over an open post showed the old post (confirmed on a quiet host, `.id(postId)`).
+  - #476, bundle `5889b7f7…`: My bids/tasks/posts showed 0 counts and false "nothing yet" after a failed load. For example, "Active 0 · You haven't posted yet" for an account with 100 posts. Also the iOS Hub Recent activity raw ISO timestamps.
+  - #477, bundle `c14c1e6f…`: web Tasks showed "No tasks within 100 mi. Expand to 1000 mi?" over the load error.
+- **Proposals awaiting the user (Stream 1):**
+  - Android token refresh (every ~30 min) retires open task, Offers and Mail bid screens with "Your account changed": Android binds to the access token, iOS binds to the session. Options A/B/C.
+  - Web Marketplace Snapshot rows hardcoded to 0 (A/B/C).
+  - Owner Message on their own listing (A/B/C).
+  - Native buyer offer view/withdraw (A/B).
+- **Stream 2 notes:** R04 in #473 has two review notes the user will be told about: (1) the "no account uses that email" message enumerates accounts to verified owners; (2) the silent "approved" quorum residual, a follow-up.
+- **Slots:** heavy free; iOS driver free; no simulator booted. Stream 1 emulator-5558 is in slot 3.
+- **Side effects awaiting the user:** LocalProfile-on-read and Wallet-on-read, both existing backend behaviour.
+
+## Resume point history — 2026-09-26T05:55Z (batch 20 merged; batch 21 = 7 reviewed PRs gated on CI; Stream 1 Pulse+Offers build under heavy)
 
 - **Integration (Stream 1 queue):**
   - Master is `5bf1eb7f8`. Batch 20 [#463](https://github.com/WangPantopus/skinny-pantopus/pull/463) merged #455 (S3-50/53/67), #460 (S3-42/61, web), #458 (Stream 1 native: My listings counts, exact offer amounts, drawer opens your profile, "just posted" by age) and #461 (S2-03) at 04:22:46Z.

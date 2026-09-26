@@ -1,6 +1,16 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T05:55Z
+## CURRENT STREAM 1 STATE — 2026-09-26T06:40Z
+
+- **Merged in batch 21 (#471, 06:32:20Z):** #462 wallet and #469 web Marketplace.
+- **Open for batch 22:**
+  - #472 `0d5b6ea26`: Pulse banner, Offers counts, iOS post link.
+  - #476 `a5bb33c8d`: My bids/tasks/posts and the iOS Hub time.
+  - #477 `6f3fc98c9`: web Tasks radius banner.
+  - Afters pass on both apps and web. Bundles `b923594b…`, `5889b7f7…` and `c14c1e6f…`.
+- **Proposals for the user:** token refresh (Android), Marketplace Snapshot rows, owner Message, buyer offer view/withdraw.
+
+## Previous Stream 1 state — 2026-09-26T05:55Z
 
 - **Merged in batch 20 (#463, 04:22:46Z):** #458.
 - **Open:**
