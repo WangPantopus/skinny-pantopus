@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -151,6 +152,11 @@ class ChatConversationViewModel
         // the rollback isn't silent. Cleared via [dismissActionFailure].
         private val _actionFailure = MutableStateFlow<String?>(null)
         val actionFailure: StateFlow<String?> = _actionFailure.asStateFlow()
+
+        // A downloaded attachment for the screen to hand to another app.
+        // Cleared via [consumeOpenFile].
+        private val _openFile = MutableStateFlow<ChatOpenFile?>(null)
+        val openFile: StateFlow<ChatOpenFile?> = _openFile.asStateFlow()
 
         // Resolved link-preview metadata keyed by URL (A15.2 `.link-bubble`).
         // Held on the VM (not remember{}) so previews survive rotation. A
@@ -269,6 +275,9 @@ class ChatConversationViewModel
         // 30s fallback refresh while the socket is down — started by the
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
+
+        // The attachment download in flight; a second tap waits for it.
+        private var openAttachmentJob: Job? = null
 
         // Decodes full socket payloads (`message:new` broadcasts the
         // serializeChatMessageForViewer spread — the same snake_case shape
@@ -1099,6 +1108,44 @@ class ChatConversationViewModel
 
         fun dismissActionFailure() {
             _actionFailure.value = null
+        }
+
+        /**
+         * Download [attachment] into [directory] and hand it to the screen to
+         * open in another app (a PDF viewer, video player, …).
+         */
+        fun openAttachment(
+            attachment: ChatBubbleBody.Attachment,
+            directory: File,
+        ) {
+            val fileId =
+                attachment.fileUrl
+                    ?.substringAfter("/api/chat/files/", "")
+                    ?.substringBefore('?')
+                    ?.takeIf { it.isNotBlank() }
+            if (fileId == null) {
+                _actionFailure.value = "This file can't be opened."
+                return
+            }
+            if (openAttachmentJob?.isActive == true) return
+            openAttachmentJob =
+                viewModelScope.launch {
+                    val name = File(attachment.filename).name.takeUnless { it.isBlank() || it == "." || it == ".." }
+                    val target = File(directory, name ?: "attachment")
+                    when (val result = repo.downloadFile(fileId, target)) {
+                        is NetworkResult.Success ->
+                            _openFile.value = ChatOpenFile(target, attachment.mimeType ?: "application/octet-stream")
+                        is NetworkResult.Failure -> {
+                            target.delete()
+                            _actionFailure.value = "Couldn't open the file. Try again."
+                            Timber.w("chat file download failed: ${result.error.message}")
+                        }
+                    }
+                }
+        }
+
+        fun consumeOpenFile() {
+            _openFile.value = null
         }
 
         fun dismissSendLimitNotice() {
@@ -2015,18 +2062,33 @@ class ChatConversationViewModel
             _pendingScrollTarget.value = rowId
         }
 
+        /**
+         * Photos and files keep the text sent with them as a caption, and every
+         * photo in the message shows, not just the first attachment.
+         */
+        private fun attachmentBodyOf(message: ChatMessageDto): ChatBubbleBody? {
+            val attachments = message.attachments
+            if (attachments.isEmpty()) return null
+            val caption = message.resolvedText.trim().takeIf { it.isNotEmpty() && !ATTACHMENT_PLACEHOLDER.matches(it) }
+            val photoUrls =
+                attachments
+                    .filter { it.mimeType.orEmpty().startsWith("image/") }
+                    .mapNotNull { ChatMediaUrl.resolve(it.fileUrl) }
+            if (photoUrls.isNotEmpty()) {
+                return ChatBubbleBody.Image(url = photoUrls.first(), caption = caption, moreUrls = photoUrls.drop(1))
+            }
+            val file = attachments.first()
+            return ChatBubbleBody.Attachment(
+                filename = file.originalFilename ?: "Attachment",
+                sizeLabel = file.fileSize?.let(::fileSizeLabel),
+                caption = caption,
+                fileUrl = file.fileUrl,
+                mimeType = file.mimeType,
+            )
+        }
+
         private fun bodyOf(message: ChatMessageDto): ChatBubbleBody =
-            message.attachments.firstOrNull()?.let { attachment ->
-                val mime = attachment.mimeType.orEmpty()
-                if (mime.startsWith("image/")) {
-                    ChatBubbleBody.Image(ChatMediaUrl.resolve(attachment.fileUrl))
-                } else {
-                    ChatBubbleBody.Attachment(
-                        filename = attachment.originalFilename ?: "Attachment",
-                        sizeLabel = attachment.fileSize?.let(::fileSizeLabel),
-                    )
-                }
-            } ?: when (message.resolvedType) {
+            attachmentBodyOf(message) ?: when (message.resolvedType) {
                 "ai_reply" ->
                     ChatBubbleBody.AiReply(
                         text = message.resolvedText,
@@ -2352,6 +2414,12 @@ private fun JSONObject.optStringValue(key: String): String? = optString(key).tak
 private const val PRE_BID_LIMIT_NOTICE =
     "Message limit reached — place a bid or wait for acceptance to keep chatting."
 private const val SEND_REFUSED_NOTICE = "You can't send messages in this conversation."
+
+/**
+ * Text the server fills in for a message that is only attachments ("Photo",
+ * "Document"), or an older client's "[1 attachment]"; not a caption.
+ */
+private val ATTACHMENT_PLACEHOLDER = Regex("""^(\[.+ attachments?]|Photo|Video|Document|Media)$""", RegexOption.IGNORE_CASE)
 
 /**
  * Min gap between `typing:start` emits. The backend rate-limits the event

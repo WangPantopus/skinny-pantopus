@@ -184,6 +184,8 @@ struct ManageDatesSection: View {
 @MainActor
 struct ManageHelpersSection: View {
     let rows: [ManageHelperRow]
+    /// The reservations read failed: no count, and no "No signups yet".
+    var failed = false
     let isBusy: Bool
     let onShareAddress: @MainActor (ManageHelperRow) -> Void
     let onConfirm: @MainActor (ManageHelperRow) -> Void
@@ -191,10 +193,10 @@ struct ManageHelpersSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            ManageSectionHeader(title: "Helpers (\(rows.count))")
+            ManageSectionHeader(title: failed ? "Helpers" : "Helpers (\(rows.count))")
             if rows.isEmpty {
                 OrganizerSectionCard {
-                    Text("No signups yet")
+                    Text(failed ? "Couldn't load signups" : "No signups yet")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
@@ -334,6 +336,8 @@ struct ManageOrganizersSection: View {
 @MainActor
 struct ManageNudgeSection: View {
     let openSlotCount: Int
+    /// False while the train has no dates: none are open, but none are filled either.
+    var hasDates = true
     let draft: String?
     let isBusy: Bool
     let onDraft: @MainActor () -> Void
@@ -346,7 +350,7 @@ struct ManageNudgeSection: View {
             ManageSectionHeader(title: "Remind helpers")
             if openSlotCount == 0 {
                 OrganizerSectionCard {
-                    Text("All slots are filled!")
+                    Text(hasDates ? "All slots are filled!" : "No dates added yet")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }

@@ -312,6 +312,7 @@ public struct ManageTrainView: View {
 
         ManageHelpersSection(
             rows: viewModel.helperRows,
+            failed: viewModel.helpersFailed,
             isBusy: viewModel.isSubmitting,
             onShareAddress: { row in
                 Task { await viewModel.shareExactAddress(reservationId: row.id) }
@@ -352,6 +353,7 @@ public struct ManageTrainView: View {
 
         ManageNudgeSection(
             openSlotCount: content.slotsOpen,
+            hasDates: !viewModel.slotRows.isEmpty,
             draft: viewModel.nudgeDraft,
             isBusy: viewModel.isSubmitting,
             onDraft: { Task { await viewModel.draftNudge() } },

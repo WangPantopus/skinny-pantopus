@@ -127,6 +127,7 @@ class HomeSettingsViewModel
 
         private var frame: HomeSettingsSampleData.Frame = HomeSettingsSampleData.Frame.Populated
         private var subtexts = RowSubtexts()
+        private var showsGuestPasses = true
         private var loadedOnce = false
 
         fun load() {
@@ -278,6 +279,10 @@ class HomeSettingsViewModel
                     propertyDetails = humanizedHomeType(detail.homeType),
                     people = peopleSubtext(occupants),
                 )
+            // "Invite link" opens the guest-pass manager, which only viewers with
+            // members.manage may use (the server answers everyone else 403). Shown
+            // when GET /:id/me didn't load, as before.
+            showsGuestPasses = access?.canManageMembers ?: true
             _rename.update { current ->
                 current.copy(
                     canEdit = canEdit(detail, access),
@@ -396,9 +401,10 @@ class HomeSettingsViewModel
                 id = "members",
                 overline = "Members",
                 rows =
-                    listOf(
+                    listOfNotNull(
                         GroupedListRow("people", "People", subtext = subtexts.people, control = RowControl.Chevron),
-                        GroupedListRow("inviteLink", "Invite link", subtext = subtexts.inviteLink, control = RowControl.Chevron),
+                        GroupedListRow("inviteLink", "Invite link", subtext = subtexts.inviteLink, control = RowControl.Chevron)
+                            .takeIf { showsGuestPasses },
                     ),
             )
 

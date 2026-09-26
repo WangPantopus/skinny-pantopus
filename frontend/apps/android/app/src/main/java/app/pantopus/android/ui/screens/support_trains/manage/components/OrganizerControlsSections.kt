@@ -219,6 +219,8 @@ fun ManageDatesSection(
 @Composable
 fun ManageHelpersSection(
     rows: List<ManageHelperRow>,
+    /** The reservations read failed: no count, and no "No signups yet". */
+    failed: Boolean = false,
     isBusy: Boolean,
     onShareAddress: (ManageHelperRow) -> Unit,
     onConfirm: (ManageHelperRow) -> Unit,
@@ -228,10 +230,14 @@ fun ManageHelpersSection(
         modifier = Modifier.fillMaxWidth().testTag("manageTrainHelpersSection"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        ManageSectionHeader(title = "Helpers (${rows.size})")
+        ManageSectionHeader(title = if (failed) "Helpers" else "Helpers (${rows.size})")
         if (rows.isEmpty()) {
             ManageCard {
-                Text(text = "No signups yet", color = PantopusColors.appTextMuted, fontSize = 13.sp)
+                Text(
+                    text = if (failed) "Couldn't load signups" else "No signups yet",
+                    color = PantopusColors.appTextMuted,
+                    fontSize = 13.sp,
+                )
             }
         }
         rows.forEach { row ->
@@ -381,6 +387,8 @@ fun ManageOrganizersSection(
 @Composable
 fun ManageNudgeSection(
     openSlotCount: Int,
+    /** False while the train has no dates: none are open, but none are filled either. */
+    hasDates: Boolean = true,
     draft: String?,
     isBusy: Boolean,
     onDraft: () -> Unit,
@@ -395,7 +403,11 @@ fun ManageNudgeSection(
         ManageSectionHeader(title = "Remind helpers")
         if (openSlotCount == 0) {
             ManageCard {
-                Text(text = "All slots are filled!", color = PantopusColors.appTextMuted, fontSize = 13.sp)
+                Text(
+                    text = if (hasDates) "All slots are filled!" else "No dates added yet",
+                    color = PantopusColors.appTextMuted,
+                    fontSize = 13.sp,
+                )
             }
         } else {
             ManageCard {

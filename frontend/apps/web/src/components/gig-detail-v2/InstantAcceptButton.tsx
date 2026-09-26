@@ -27,7 +27,8 @@ export default function InstantAcceptButton({ gigId, onAccepted }: InstantAccept
       }
       setTimeout(onAccepted, 800);
     } catch (err: any) {
-      const status = err?.status || err?.response?.status;
+      // The API client reports the HTTP status as `statusCode`.
+      const status = err?.statusCode || err?.status || err?.response?.status;
       if (status === 409) {
         setErrorMsg('This task was just taken by someone else');
         toast.warning('This task was just taken by someone else');

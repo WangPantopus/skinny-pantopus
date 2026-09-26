@@ -23,6 +23,7 @@ import DetailRow from '@/components/gig-detail/DetailRow';
 import QASection from '@/components/gig-detail/QASection';
 import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
 import BidPanel from '@/components/gig-detail/BidPanel';
+import InstantAcceptButton from '@/components/gig-detail-v2/InstantAcceptButton';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
 import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
@@ -835,17 +836,22 @@ export default function GigDetailsPage() {
               />
             </ErrorBoundary>
 
-            {/* Bid panel (non-owner only) */}
+            {/* Bid panel (non-owner only). An open instant-accept task is claimed,
+                not bid on, as on the apps and gigs-v2: the first helper to accept gets it. */}
             <ErrorBoundary>
-              <BidPanel
-                gigId={gigId}
-                gigStatus={gigStatus}
-                gigPrice={budget}
-                isOwner={isMyGig}
-                currentUserId={currentUserId}
-                onBidChange={handleRefresh}
-                onOpenChat={handleOpenGigChat}
-              />
+              {gig?.engagement_mode === 'instant_accept' && gigStatus === 'open' && !isMyGig && currentUserId ? (
+                <InstantAcceptButton gigId={gigId} onAccepted={handleRefresh} />
+              ) : (
+                <BidPanel
+                  gigId={gigId}
+                  gigStatus={gigStatus}
+                  gigPrice={budget}
+                  isOwner={isMyGig}
+                  currentUserId={currentUserId}
+                  onBidChange={handleRefresh}
+                  onOpenChat={handleOpenGigChat}
+                />
+              )}
             </ErrorBoundary>
 
             <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-200">

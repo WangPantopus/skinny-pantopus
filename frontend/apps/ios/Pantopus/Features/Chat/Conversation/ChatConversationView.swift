@@ -11,6 +11,7 @@
 // swiftlint:disable file_length
 
 import PhotosUI
+import QuickLook
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -24,6 +25,14 @@ private final class ChatScrollMetrics {
     /// How far the user has scrolled below the top of the loaded
     /// history, in points. Drives the near-top pagination trigger.
     var distanceFromTop: CGFloat = .greatestFiniteMagnitude
+}
+
+/// A photo message's photos for the full-screen viewer, opened at the
+/// one tapped.
+private struct ChatPhotoViewerItem: Identifiable {
+    let id = UUID()
+    let urls: [URL]
+    let startIndex: Int
 }
 
 /// Chat conversation screen.
@@ -47,6 +56,8 @@ public struct ChatConversationView: View {
     @State private var bulkDeleteConfirmPresented = false
     /// Message awaiting the single-delete confirm.
     @State private var pendingDeleteId: String?
+    /// Photos shown in the full-screen viewer.
+    @State private var viewerPhotos: ChatPhotoViewerItem?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
     /// populated frame first lays out, so the initial layout passes
     /// (which briefly report near-top geometry before the bottom anchor
@@ -312,6 +323,15 @@ public struct ChatConversationView: View {
         } message: { _ in
             Text("Deleted messages are removed for everyone in this conversation.")
         }
+        .fullScreenCover(item: $viewerPhotos) { photos in
+            MediaViewerView(
+                items: photos.urls.enumerated().map { index, url in
+                    PostMediaItem(id: "chat-photo-\(index)", kind: .image, url: url)
+                },
+                startIndex: photos.startIndex
+            )
+        }
+        .quickLookPreview($viewModel.previewFileURL)
         .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
     }
@@ -1145,7 +1165,11 @@ extension ChatConversationView {
             onUseAIDraft: onUseAIDraft,
             onOpenGig: openGigDetail,
             onOpenListing: openListingDetail,
-            onOpenLocation: openLocationInMaps
+            onOpenLocation: openLocationInMaps,
+            onOpenPhotos: { urls, index in viewerPhotos = ChatPhotoViewerItem(urls: urls, startIndex: index) },
+            onOpenAttachment: { fileURL, filename, mimeType in
+                Task { await viewModel.openAttachment(fileURL: fileURL, filename: filename, mimeType: mimeType) }
+            }
         ) {
             if bubble.id.hasPrefix("client_") {
                 Task { await viewModel.retry(clientId: bubble.id) }
@@ -2363,6 +2387,12 @@ private struct ChatBubbleRow: View {
     let onOpenGig: @MainActor (String) -> Void
     let onOpenListing: @MainActor (String) -> Void
     let onOpenLocation: @MainActor (ChatLocationCard) -> Void
+    /// Opens the full-screen viewer over a photo message's photos at an
+    /// index.
+    let onOpenPhotos: @MainActor ([URL], Int) -> Void
+    /// Downloads and previews a file: its stored URL, filename and MIME
+    /// type.
+    let onOpenAttachment: @MainActor (String?, String, String?) -> Void
     let onRetry: @MainActor () -> Void
 
     var body: some View {
@@ -2427,7 +2457,11 @@ private struct ChatBubbleRow: View {
             text.isEmpty ? nil : text
         case let .aiReply(text, _, _):
             text.isEmpty ? nil : text
-        case .attachment, .image, .systemLink, .locationCard, .gigOfferCard, .listingOfferCard:
+        case let .image(_, caption, _):
+            caption
+        case let .attachment(_, _, _, _, caption):
+            caption
+        case .systemLink, .locationCard, .gigOfferCard, .listingOfferCard:
             nil
         }
     }
@@ -2497,10 +2531,17 @@ private struct ChatBubbleRow: View {
             }
         case let .textWithImages(text, imageURLs):
             bubbleContainer { textWithImagesBody(text: text, imageURLs: imageURLs) }
-        case let .image(url):
-            photoBubble(url)
-        case let .attachment(filename, sizeLabel):
-            bubbleContainer { attachmentBody(filename: filename, sizeLabel: sizeLabel) }
+        case let .image(url, caption, moreURLs):
+            photoMessage(url: url, caption: caption, moreURLs: moreURLs)
+        case let .attachment(filename, sizeLabel, fileURL, mimeType, caption):
+            bubbleContainer {
+                attachmentBody(
+                    filename: filename,
+                    sizeLabel: sizeLabel,
+                    caption: caption,
+                    onOpen: attachmentOpenAction(fileURL: fileURL, filename: filename, mimeType: mimeType)
+                )
+            }
         case let .systemLink(label, sub, accent):
             systemLinkPill(label: label, sub: sub, accent: accent)
         case let .locationCard(card):
@@ -2681,11 +2722,52 @@ private struct ChatBubbleRow: View {
         }
     }
 
-    private func photoBubble(_ url: URL?) -> some View {
+    private var isLockedIncoming: Bool {
+        content.lockedTier != nil && content.side == .incoming
+    }
+
+    /// A file's tap action, or nil when it can't be opened: no stored URL,
+    /// or locked behind a fan tier.
+    private func attachmentOpenAction(fileURL: String?, filename: String, mimeType: String?) -> (@MainActor () -> Void)? {
+        guard fileURL != nil, !isLockedIncoming else { return nil }
+        return { onOpenAttachment(fileURL, filename, mimeType) }
+    }
+
+    /// Photo message: the first photo ("+N" when it carries more; a tap
+    /// opens them all full screen) and its caption in a bubble below.
+    private func photoMessage(url: URL?, caption: String?, moreURLs: [URL]) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            if let url, !isLockedIncoming {
+                Button { onOpenPhotos([url] + moreURLs, 0) } label: {
+                    photoBubble(url, moreCount: moreURLs.count)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the photo full screen")
+            } else {
+                photoBubble(url, moreCount: moreURLs.count)
+            }
+            if let caption, !isLockedIncoming {
+                bubbleContainer { captionText(caption) }
+            }
+        }
+    }
+
+    private func photoBubble(_ url: URL?, moreCount: Int) -> some View {
         ZStack(alignment: .bottom) {
             imageBody(url)
                 .frame(width: 200, height: 130)
                 .background(Theme.Color.appSurfaceSunken)
+                .overlay(alignment: .bottomTrailing) {
+                    if moreCount > 0 {
+                        Text("+\(moreCount)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, Spacing.s2)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.55), in: Capsule())
+                            .padding(Spacing.s2)
+                    }
+                }
             if let tier = content.lockedTier, content.side == .incoming {
                 lockedPaywallOverlay(tier: tier)
             }
@@ -2698,8 +2780,17 @@ private struct ChatBubbleRow: View {
             )
         )
         .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
-        .accessibilityLabel("Photo attachment")
+        .accessibilityLabel(moreCount > 0 ? "Photo attachment and \(moreCount) more" : "Photo attachment")
         .accessibilityIdentifier("chatPhotoBubble_\(content.id)")
+    }
+
+    /// A photo's or file's caption: the bubble text style, without the
+    /// reply quote.
+    private func captionText(_ text: String) -> some View {
+        Text(linkStyled(text))
+            .font(.system(size: 13.5))
+            .multilineTextAlignment(.leading)
+            .lineSpacing(4.5)
     }
 
     @ViewBuilder
@@ -2718,7 +2809,32 @@ private struct ChatBubbleRow: View {
         }
     }
 
-    private func attachmentBody(filename: String, sizeLabel: String?) -> some View {
+    /// A file: its row (a tap downloads and previews it when `onOpen` is
+    /// set) and its caption.
+    private func attachmentBody(
+        filename: String,
+        sizeLabel: String?,
+        caption: String?,
+        onOpen: (@MainActor () -> Void)?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            if let onOpen {
+                Button(action: onOpen) {
+                    attachmentFileRow(filename: filename, sizeLabel: sizeLabel)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the file")
+                .accessibilityIdentifier("chatAttachmentOpen_\(content.id)")
+            } else {
+                attachmentFileRow(filename: filename, sizeLabel: sizeLabel)
+            }
+            if let caption {
+                captionText(caption)
+            }
+        }
+    }
+
+    private func attachmentFileRow(filename: String, sizeLabel: String?) -> some View {
         HStack(spacing: Spacing.s2) {
             Icon(.file, size: 18, color: Theme.Color.primary600)
             VStack(alignment: .leading, spacing: 1) {

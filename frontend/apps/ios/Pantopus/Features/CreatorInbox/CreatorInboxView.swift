@@ -27,14 +27,15 @@ public struct CreatorInboxView: View {
     @State private var viewModel: CreatorInboxViewModel
     private let onBack: @MainActor () -> Void
     private let onOpenThread: @MainActor (CreatorInboxRowContent) -> Void
-    private let onOpenBroadcast: @MainActor () -> Void
+    /// Opens the broadcast composer for the given Beacon (persona) id.
+    private let onOpenBroadcast: @MainActor (String) -> Void
     private let onOpenSettings: @MainActor () -> Void
 
     public init(
         viewModel: CreatorInboxViewModel = CreatorInboxViewModel(),
         onBack: @escaping @MainActor () -> Void = {},
         onOpenThread: @escaping @MainActor (CreatorInboxRowContent) -> Void = { _ in },
-        onOpenBroadcast: @escaping @MainActor () -> Void = {},
+        onOpenBroadcast: @escaping @MainActor (String) -> Void = { _ in },
         onOpenSettings: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
@@ -376,9 +377,8 @@ public struct CreatorInboxView: View {
                     title: "Send a broadcast",
                     subtitle: "Fans can reply privately to anything you post",
                     cta: "Compose"
-                ),
-                action: onOpenBroadcast
-            )
+                )
+            ) { onOpenBroadcast(viewModel.personaId) }
             emptyPromptRow(
                 CreatorInboxPromptContent(
                     id: "unlock",

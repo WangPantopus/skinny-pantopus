@@ -491,6 +491,7 @@ private fun OrganizerControls(
 
     ManageHelpersSection(
         rows = ui.helperRows,
+        failed = ui.helpersFailed,
         isBusy = ui.isSubmitting,
         onShareAddress = { viewModel.shareExactAddress(it.id) },
         onConfirm = { viewModel.confirmDelivery(it.id) },
@@ -529,6 +530,7 @@ private fun OrganizerControls(
 
     ManageNudgeSection(
         openSlotCount = content.slotsOpen,
+        hasDates = ui.slotRows.isNotEmpty(),
         draft = ui.nudgeDraft,
         isBusy = ui.isSubmitting,
         onDraft = { viewModel.draftNudge() },
