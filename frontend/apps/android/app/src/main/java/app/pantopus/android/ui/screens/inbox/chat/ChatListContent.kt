@@ -83,7 +83,14 @@ sealed interface ChatListUiState {
 
     data object Empty : ChatListUiState
 
-    data class Loaded(val rows: List<ConversationRowContent>) : ChatListUiState
+    /**
+     * [emptyFilter] is set when a filter other than All has no matches; [rows]
+     * then hold only the Pantopus AI row.
+     */
+    data class Loaded(
+        val rows: List<ConversationRowContent>,
+        val emptyFilter: ChatFilter? = null,
+    ) : ChatListUiState
 
     data class Error(val message: String) : ChatListUiState
 }

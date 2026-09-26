@@ -1,5 +1,9 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,16 +21,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.api.models.place.MailboxCheck
 import app.pantopus.android.data.api.models.place.MailboxCheckVerdict
 import app.pantopus.android.data.api.models.place.MailboxFindingSeverity
@@ -46,6 +55,11 @@ import app.pantopus.android.ui.screens.place.components.PlaceTileTone
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
 
 @Composable
 fun PlaceIdentityDetailContent(
@@ -53,9 +67,13 @@ fun PlaceIdentityDetailContent(
     viewModel: PlaceDetailViewModel,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
+    val roleBase by viewModel.roleBase.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.loadAccess() }
+    // Guests and service providers are verified here but don't live here.
+    val isNonResident = roleBase == "guest" || roleBase == "service_provider"
 
     PlaceDetailSectionLabel("Verification")
-    VerifiedStatusCard(isVerified, placeDetailAddress(intel.place))
+    VerifiedStatusCard(isVerified, roleBase, placeDetailAddress(intel.place))
 
     // Unlisted sits directly under Verification and is NOT gated on
     // T4: someone who has just claimed their address is exactly who
@@ -66,6 +84,38 @@ fun PlaceIdentityDetailContent(
     LaunchedEffect(Unit) { viewModel.loadUnlisted() }
     PlaceUnlistedSection(viewModel)
 
+    if (isVerified && isNonResident) {
+        // No issuing, but letters and passes from when they lived here
+        // stay listed so they can still open or revoke them.
+        PlaceDetailSectionLabel("Residency letter")
+        LaunchedEffect(Unit) {
+            viewModel.loadLetters()
+            viewModel.loadClaims()
+        }
+        ResidencyLetterSection(viewModel, canIssue = false)
+        val claims by viewModel.claims.collectAsStateWithLifecycle()
+        if ((claims as? ResidencyClaimsUiState.Loaded)?.claims?.isNotEmpty() == true) {
+            PlaceDetailSectionLabel("Residency Pass")
+            PlaceResidencyPassSection(viewModel, canIssue = false)
+        }
+    } else {
+        ResidencySections(isVerified, viewModel)
+    }
+
+    PlaceDetailSectionLabel("Mailbox")
+    LaunchedEffect(Unit) { viewModel.loadMailboxCheck() }
+    MailboxCheckSection(viewModel)
+
+    PlaceDetailSectionLabel("Portable ID")
+    PlaceComingSoonRow(PantopusIcon.ShieldCheck, "Portable ID", "Carry your verified status to other apps")
+}
+
+/** The residency letter and Residency Pass sections (residents only). */
+@Composable
+private fun ResidencySections(
+    isVerified: Boolean,
+    viewModel: PlaceDetailViewModel,
+) {
     PlaceDetailSectionLabel("Residency letter")
     if (isVerified) {
         LaunchedEffect(Unit) { viewModel.loadLetters() }
@@ -95,13 +145,6 @@ fun PlaceIdentityDetailContent(
             onTap = null,
         )
     }
-
-    PlaceDetailSectionLabel("Mailbox")
-    LaunchedEffect(Unit) { viewModel.loadMailboxCheck() }
-    MailboxCheckSection(viewModel)
-
-    PlaceDetailSectionLabel("Portable ID")
-    PlaceComingSoonRow(PantopusIcon.ShieldCheck, "Portable ID", "Carry your verified status to other apps")
 }
 
 // ── Mailbox reality check (Wave 1, #3) ───────────────────────
@@ -216,8 +259,16 @@ private fun MailboxFindingRow(
 @Composable
 private fun VerifiedStatusCard(
     isVerified: Boolean,
+    roleBase: String?,
     address: String,
 ) {
+    val title =
+        when {
+            !isVerified -> "Claimed — not yet verified"
+            roleBase == "guest" -> "Verified guest"
+            roleBase == "service_provider" -> "Verified service provider"
+            else -> "Verified resident"
+        }
     PlaceDetailCard {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -238,7 +289,7 @@ private fun VerifiedStatusCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isVerified) "Verified resident" else "Claimed — not yet verified",
+                        title,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.appText,
@@ -262,7 +313,11 @@ private fun VerifiedStatusCard(
 }
 
 @Composable
-private fun ResidencyLetterSection(viewModel: PlaceDetailViewModel) {
+private fun ResidencyLetterSection(
+    viewModel: PlaceDetailViewModel,
+    // Guests and service providers can't issue letters (the server refuses them).
+    canIssue: Boolean = true,
+) {
     var purpose by remember { mutableStateOf("") }
     val isIssuing by viewModel.isIssuing.collectAsStateWithLifecycle()
     val state by viewModel.letters.collectAsStateWithLifecycle()
@@ -273,18 +328,26 @@ private fun ResidencyLetterSection(viewModel: PlaceDetailViewModel) {
         // is still live.
         PlaceActionToastLine(viewModel)
         PlaceDetailCard {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("What is this letter for?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                OutlinedTextField(value = purpose, onValueChange = {
-                    purpose = it
-                }, placeholder = { Text("e.g. New library card application") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                PrimaryButton(
-                    title = if (isIssuing) "Issuing…" else "Generate a residency letter",
-                    isLoading = isIssuing,
-                    isEnabled = !isIssuing && purpose.isNotBlank(),
-                    onClick = {
-                        viewModel.issueLetter(purpose) { purpose = "" }
-                    },
+            if (canIssue) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("What is this letter for?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    OutlinedTextField(value = purpose, onValueChange = {
+                        purpose = it
+                    }, placeholder = { Text("e.g. New library card application") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    PrimaryButton(
+                        title = if (isIssuing) "Issuing…" else "Generate a residency letter",
+                        isLoading = isIssuing,
+                        isEnabled = !isIssuing && purpose.isNotBlank(),
+                        onClick = {
+                            viewModel.issueLetter(purpose) { purpose = "" }
+                        },
+                    )
+                }
+            } else {
+                Text(
+                    "Residency letters and passes are for the people who live here, so guest and service access can't issue them.",
+                    fontSize = 13.5.sp,
+                    color = PantopusColors.appTextMuted,
                 )
             }
         }
@@ -304,6 +367,9 @@ private fun LetterRow(
     letter: ResidencyLetter,
     viewModel: PlaceDetailViewModel,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val openingLetterId by viewModel.openingLetterId.collectAsStateWithLifecycle()
     PlaceDetailCard(padding = 14.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             PlaceIconTile(
@@ -322,6 +388,18 @@ private fun LetterRow(
                 )
                 Text(letter.letterCode, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
             }
+            Text(
+                if (openingLetterId == letter.id) "Opening…" else "PDF",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.home,
+                modifier =
+                    Modifier
+                        .testTag("place.letter.pdf")
+                        .clickable(enabled = openingLetterId == null) {
+                            viewModel.openLetterPdf(letter.id) { bytes -> scope.launch { showLetterPdf(context, letter, bytes) } }
+                        },
+            )
             if (letter.status == ResidencyLetterStatus.ISSUED) {
                 Text(
                     "Revoke",
@@ -344,4 +422,30 @@ private fun LetterRow(
             }
         }
     }
+}
+
+// The file name matches the web download and the server's Content-Disposition.
+private const val LETTER_FILE_ID_LENGTH = 8
+
+/** Writes the letter to a private cache file (cleared on the next launch) and opens it in the phone's viewer. */
+private suspend fun showLetterPdf(
+    context: Context,
+    letter: ResidencyLetter,
+    bytes: ByteArray,
+) {
+    val file =
+        try {
+            withContext(Dispatchers.IO) {
+                val directory = HomeDocumentTemporaryFiles.makeExportDirectory(context.cacheDir)
+                File(directory, "pantopus-residency-letter-${letter.id.take(LETTER_FILE_ID_LENGTH)}.pdf").also { it.writeBytes(bytes) }
+            }
+        } catch (_: IOException) {
+            Toast.makeText(context, "Couldn't prepare the letter. Try again.", Toast.LENGTH_SHORT).show()
+            return
+        }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
+    intent.clipData = ClipData.newRawUri(file.name, uri)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    runCatching { context.startActivity(Intent.createChooser(intent, "Open letter")) }
 }

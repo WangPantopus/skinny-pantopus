@@ -25,8 +25,46 @@ data class CertifiedDetailDto(
     val noticeBody: String?,
     val termsUrl: String?,
     val isAcknowledged: Boolean,
+    /**
+     * False for Pantopus certified mail (`Mail.certified`), which has no
+     * postal carrier, tracking number or postmark.
+     */
+    val isPostal: Boolean = true,
 ) {
+    /** A copy with chain step [id] done at [stamp]; the "acknowledged" step also marks it signed. */
+    fun completing(
+        id: String,
+        stamp: String,
+    ): CertifiedDetailDto =
+        copy(
+            chain = chain.map { if (it.id == id && !it.isComplete) it.copy(occurredAt = stamp, isComplete = true) else it },
+            isAcknowledged = isAcknowledged || id == "acknowledged",
+        )
+
     companion object {
+        /** Pantopus certified mail: Received → Read → Signed, from the letter's own timestamps. */
+        fun pantopus(
+            reference: String,
+            receivedAt: String,
+            readAt: String?,
+            signedAt: String?,
+        ): CertifiedDetailDto =
+            CertifiedDetailDto(
+                referenceNumber = reference,
+                documentType = null,
+                acknowledgeBy = null,
+                chain =
+                    listOf(
+                        CertifiedChainStep(id = "delivered", label = "Received", occurredAt = receivedAt, isComplete = true),
+                        CertifiedChainStep(id = "read", label = "Read", occurredAt = readAt, isComplete = readAt != null),
+                        CertifiedChainStep(id = "acknowledged", label = "Signed", occurredAt = signedAt, isComplete = signedAt != null),
+                    ),
+                noticeBody = null,
+                termsUrl = null,
+                isAcknowledged = signedAt != null,
+                isPostal = false,
+            )
+
         fun decodeFromObjectPayload(payload: JsonValue?): CertifiedDetailDto? {
             if (payload == null) return null
             val reference =

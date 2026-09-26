@@ -400,8 +400,16 @@ export function useFeedData({
     },
   });
 
+  // One toggle per post at a time: a second click while the first is in flight would undo it.
+  const savingIds = useRef<Set<string>>(new Set());
   const handleSave = useCallback((postId: string) => {
-    saveMutation.mutate(postId);
+    if (savingIds.current.has(postId)) return;
+    savingIds.current.add(postId);
+    saveMutation.mutate(postId, {
+      onSettled: () => {
+        savingIds.current.delete(postId);
+      },
+    });
   }, [saveMutation]);
 
   const patchPost = useCallback((postId: string, patch: Partial<Post>) => {

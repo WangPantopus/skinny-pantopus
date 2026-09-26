@@ -73,7 +73,11 @@ private val DURATION_CHOICES = listOf(1, 7, 30, 90)
 private const val DEFAULT_CLAIM_DAYS = 30
 
 @Composable
-fun PlaceResidencyPassSection(viewModel: PlaceDetailViewModel) {
+fun PlaceResidencyPassSection(
+    viewModel: PlaceDetailViewModel,
+    // Guests and service providers can't issue claims (the server refuses them).
+    canIssue: Boolean = true,
+) {
     val state by viewModel.claims.collectAsStateWithLifecycle()
     val linkToCopy by viewModel.claimLinkToCopy.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
@@ -86,7 +90,7 @@ fun PlaceResidencyPassSection(viewModel: PlaceDetailViewModel) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ResidencyPassComposer(viewModel)
+        if (canIssue) ResidencyPassComposer(viewModel)
         PlaceActionToastLine(viewModel)
         when (val current = state) {
             is ResidencyClaimsUiState.Loading -> Unit

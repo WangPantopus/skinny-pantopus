@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
+import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -64,6 +66,15 @@ class BlockedUsersViewModel
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
+
+        private val _toast = MutableStateFlow<ToastMessage?>(null)
+
+        /** Confirms an unblock, or says it failed and the row is back. */
+        val toast: StateFlow<ToastMessage?> = _toast.asStateFlow()
+
+        fun consumeToast() {
+            _toast.value = null
+        }
 
         /** A14.4 MonoFooter — signed-in user's name · short ID, same
          *  pattern as the Settings index / Payments mono footers. */
@@ -221,9 +232,11 @@ class BlockedUsersViewModel
                     is NetworkResult.Success -> {
                         request++ // Reads started before this success cannot restore the row.
                         entries.removeAll { it.id == blockId }
+                        _toast.value = ToastMessage("${removed.name} unblocked", ToastKind.Success)
                     }
                     is NetworkResult.Failure -> {
                         if (openingSnapshot == snapshot) entries.add(index.coerceAtMost(entries.size), removed)
+                        _toast.value = ToastMessage("Couldn't unblock ${removed.name}. Try again.", ToastKind.Error)
                     }
                 }
                 rebuild()

@@ -190,6 +190,7 @@ export default function GigsBrowsePage() {
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
   const [mapViewportGigs, setMapViewportGigs] = useState<GigMapPin[]>([]);
   const [mapViewportLoading, setMapViewportLoading] = useState(false);
+  const [mapViewportFailed, setMapViewportFailed] = useState(false);
   const [mapSelectedGigId, setMapSelectedGigId] = useState<string | null>(null);
   const [mapHoveredGigId, setMapHoveredGigId] = useState<string | null>(null);
   const activeMapGigId = mapHoveredGigId ?? mapSelectedGigId;
@@ -507,6 +508,13 @@ export default function GigsBrowsePage() {
           >
             My Support Trains
           </button>
+          <span className="text-app-text-muted">·</span>
+          <button
+            onClick={() => router.push('/app/gigs/saved')}
+            className="font-semibold text-primary-600 transition hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
+          >
+            Saved tasks
+          </button>
         </div>
       </div>
     </div>
@@ -528,6 +536,7 @@ export default function GigsBrowsePage() {
             onToggleTasksPanel={() => setMapDrawerOpen((open) => !open)}
             onVisibleGigsChange={setMapViewportGigs}
             onLoadingChange={setMapViewportLoading}
+            onErrorChange={setMapViewportFailed}
             activeGigId={activeMapGigId}
             onPinSelect={(id) => {
               setMapSelectedGigId(id);
@@ -537,6 +546,7 @@ export default function GigsBrowsePage() {
           <MapTaskDrawer
             open={mapDrawerOpen}
             loading={mapViewportLoading}
+            error={mapViewportFailed}
             tasks={mapViewportGigs}
             selectedGigId={mapSelectedGigId}
             onClose={() => setMapDrawerOpen(false)}

@@ -258,9 +258,16 @@ export default function PostDetailPanel({
     },
   });
 
+  // One toggle at a time: a second click while the first is in flight would undo it.
+  const saveInFlight = useRef(false);
   const handleSave = () => {
-    if (!post) return;
-    saveMutation.mutate(post.id);
+    if (!post || saveInFlight.current) return;
+    saveInFlight.current = true;
+    saveMutation.mutate(post.id, {
+      onSettled: () => {
+        saveInFlight.current = false;
+      },
+    });
   };
 
   const handleRepost = async () => {

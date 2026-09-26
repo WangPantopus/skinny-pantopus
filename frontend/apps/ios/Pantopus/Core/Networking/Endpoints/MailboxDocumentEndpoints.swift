@@ -32,4 +32,15 @@ public enum MailboxDocumentEndpoints {
     public static func certifiedProof(mailId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/mailbox/v2/p2/certified/\(mailId)/proof")
     }
+
+    /// `POST /api/mailbox/v2/p2/certified/acknowledge` — signs for certified
+    /// mail. Only the named recipient may; it records `acknowledged_at` and
+    /// the audit trail the proof reads, and answers 400 once already signed.
+    public static func certifiedAcknowledge(mailId: String) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/mailbox/v2/p2/certified/acknowledge",
+            body: CertifiedAcknowledgeBody(mailId: mailId)
+        )
+    }
 }

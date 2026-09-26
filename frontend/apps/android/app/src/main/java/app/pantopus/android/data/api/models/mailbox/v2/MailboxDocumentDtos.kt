@@ -26,6 +26,18 @@ data class BookletDownloadResponse(
     @Json(name = "sizeBytes") val sizeBytes: Long?,
 )
 
+/** `POST api/mailbox/v2/p2/certified/acknowledge` body. */
+@JsonClass(generateAdapter = true)
+data class CertifiedAcknowledgeBody(
+    val mailId: String,
+)
+
+/** `POST api/mailbox/v2/p2/certified/acknowledge` response: the signed receipt. */
+@JsonClass(generateAdapter = true)
+data class CertifiedAcknowledgeResponse(
+    val acknowledgedAt: String? = null,
+)
+
 /**
  * `GET api/mailbox/v2/p2/certified/:mailId/proof` — route
  * `backend/routes/mailboxV2Phase2.js:705`.

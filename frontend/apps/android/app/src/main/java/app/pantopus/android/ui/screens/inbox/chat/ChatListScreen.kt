@@ -102,6 +102,8 @@ fun ChatListScreen(
                         onTap = onOpenConversation,
                         onMute = viewModel::toggleMute,
                         onHide = viewModel::hideConversation,
+                        emptyFilter = s.emptyFilter,
+                        onViewAll = { viewModel.selectFilter(ChatFilter.All) },
                     )
                 }
             is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
@@ -410,6 +412,8 @@ internal fun PopulatedFrame(
     onTap: (ConversationRowContent) -> Unit,
     onMute: (String) -> Unit = {},
     onHide: (String) -> Unit = {},
+    emptyFilter: ChatFilter? = null,
+    onViewAll: () -> Unit = {},
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("chatListContent")) {
         items(items = rows, key = { it.id }) { row ->
@@ -424,6 +428,58 @@ internal fun PopulatedFrame(
                 )
             }
         }
+        if (emptyFilter != null) {
+            item(key = "filterEmpty") { FilterEmptyLine(filter = emptyFilter, onViewAll = onViewAll) }
+        }
+    }
+}
+
+/** Per-filter copy for a filter with no matches, under the AI row. */
+@Composable
+private fun FilterEmptyLine(
+    filter: ChatFilter,
+    onViewAll: () -> Unit,
+) {
+    val (headline, subcopy) =
+        when (filter) {
+            ChatFilter.Unread -> "No unread messages" to "You’re all caught up."
+            ChatFilter.Gigs -> "No gig conversations" to "Conversations about gigs show up here."
+            ChatFilter.Market -> "No Market conversations" to "Conversations about Market listings show up here."
+            ChatFilter.All -> "No conversations yet" to "Message a neighbor to get started."
+        }
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5, vertical = Spacing.s6)
+                .testTag("chatListFilterEmpty"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = headline,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = PantopusColors.appText,
+        )
+        Spacer(modifier = Modifier.size(Spacing.s1))
+        Text(
+            text = subcopy,
+            fontSize = 13.5.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+        Spacer(modifier = Modifier.size(Spacing.s3))
+        Text(
+            text = "View all",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = PantopusColors.primary600,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(Radii.pill))
+                    .clickable(onClick = onViewAll)
+                    .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                    .testTag("chatListFilterViewAll"),
+        )
     }
 }
 

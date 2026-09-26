@@ -2,7 +2,7 @@
 //  CertifiedConfirmGate.swift
 //  Pantopus
 //
-//  Delivery-signing sheet for unread certified mail. The sheet appears
+//  Delivery-signing sheet for certified mail not yet signed. The sheet appears
 //  before the first signature action and requires the user to explicitly
 //  confirm recipient intent before Pantopus records the receipt.
 //
@@ -54,7 +54,7 @@ public struct CertifiedConfirmGate: View {
                         .pantopusTextStyle(.h3)
                         .foregroundStyle(Theme.Color.appText)
                         .accessibilityAddTraits(.isHeader)
-                    Text("This certified item is unread. Signing records a delivery receipt in the chain of custody.")
+                    Text("This certified item isn't signed yet. Signing records a delivery receipt in the chain of custody.")
                         .pantopusTextStyle(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)

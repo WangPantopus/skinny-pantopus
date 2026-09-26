@@ -8,9 +8,10 @@
 //  coming-soon row.
 //
 
+import QuickLook
 import SwiftUI
 
-// swiftlint:disable line_length
+// swiftlint:disable file_length
 
 // MARK: - Residency letter VM
 
@@ -28,12 +29,32 @@ final class PlaceResidencyLetterViewModel {
     /// (message, isError) — a failed revoke must never be silent.
     private(set) var toast: (message: String, isError: Bool)?
     var purpose = ""
+    /// The letter PDF on disk while the system viewer (Quick Look) shows it.
+    var pdfURL: URL?
+    private(set) var openingLetterId: String?
     let homeId: String
     private let api: APIClient
 
     init(homeId: String, api: APIClient = .shared) {
         self.homeId = homeId
         self.api = api
+    }
+
+    /// Fetches the exact issued PDF and opens it in the phone's viewer.
+    func openPDF(_ letter: ResidencyLetter) async {
+        openingLetterId = letter.id
+        defer { openingLetterId = nil }
+        do {
+            let data = try await api.requestData(ResidencyLettersEndpoints.pdf(homeId: homeId, letterId: letter.id))
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pantopus-residency-letter-\(letter.id.prefix(8)).pdf")
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            pdfURL = url
+        } catch let error as APIError {
+            toast = (error.errorDescription ?? "Couldn't open the letter PDF.", true)
+        } catch {
+            toast = ("Couldn't open the letter PDF.", true)
+        }
     }
 
     func load() async {
@@ -136,6 +157,34 @@ final class PlaceMailboxCheckViewModel {
     }
 }
 
+// MARK: - Viewer access
+
+/// Who is looking: guests and service providers have verified access to a
+/// home but don't live there, and the server refuses them residency letters
+/// and passes (`NON_RESIDENT_ROLES`).
+@Observable
+@MainActor
+final class PlaceIdentityAccessViewModel {
+    /// The viewer's `role_base` for this home; nil until read, or if it can't be.
+    private(set) var roleBase: String?
+    let homeId: String
+    private let api: APIClient
+
+    init(homeId: String, api: APIClient = .shared) {
+        self.homeId = homeId
+        self.api = api
+    }
+
+    var isNonResident: Bool {
+        roleBase == "guest" || roleBase == "service_provider"
+    }
+
+    func load() async {
+        let access = try? await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
+        roleBase = access?.roleBase
+    }
+}
+
 // MARK: - Identity content
 
 struct PlaceIdentityDetailContent: View {
@@ -145,6 +194,7 @@ struct PlaceIdentityDetailContent: View {
     @State private var mailbox: PlaceMailboxCheckViewModel
     @State private var pass: PlaceResidencyPassViewModel
     @State private var unlisted: PlaceUnlistedViewModel
+    @State private var access: PlaceIdentityAccessViewModel
 
     init(intel: PlaceIntelligence, vm: PlaceDetailViewModel) {
         self.intel = intel
@@ -153,43 +203,70 @@ struct PlaceIdentityDetailContent: View {
         _mailbox = State(initialValue: PlaceMailboxCheckViewModel(homeId: vm.homeId))
         _pass = State(initialValue: PlaceResidencyPassViewModel(homeId: vm.homeId))
         _unlisted = State(initialValue: PlaceUnlistedViewModel(homeId: vm.homeId))
+        _access = State(initialValue: PlaceIdentityAccessViewModel(homeId: vm.homeId))
     }
 
     private var isVerified: Bool {
         intel.tier == .t4
     }
 
+    private var hasIssuedClaims: Bool {
+        if case let .loaded(claims) = pass.state { return !claims.isEmpty }
+        return false
+    }
+
+    /// The residency letter and Residency Pass sections (residents only).
+    @ViewBuilder
+    private var residencySections: some View {
+        PlaceDetailSectionLabel(text: "Residency letter")
+        if isVerified {
+            ResidencyLetterSection(vm: letters)
+                .task { await letters.load() }
+        } else {
+            PlaceLockedCard(
+                icon: .fileText,
+                title: "Verified residency letter",
+                reason: "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
+                cta: "Verify address",
+                onTap: nil
+            )
+        }
+
+        PlaceDetailSectionLabel(text: "Residency Pass")
+        if isVerified {
+            PlaceResidencyPassSection(vm: pass)
+                .task { await pass.load() }
+        } else {
+            PlaceLockedCard(
+                icon: .idCard,
+                title: "Prove residency without sharing your address",
+                reason: "Verify your address to share one fact — your city, school district, or county — behind a live-checked link.",
+                cta: "Verify address",
+                onTap: nil
+            )
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PlaceDetailSectionLabel(text: "Verification")
-            VerifiedStatusCard(isVerified: isVerified, address: placeDetailAddress(intel.place))
+            VerifiedStatusCard(isVerified: isVerified, roleBase: access.roleBase, address: placeDetailAddress(intel.place))
 
-            PlaceDetailSectionLabel(text: "Residency letter")
-            if isVerified {
-                ResidencyLetterSection(vm: letters)
-                    .task { await letters.load() }
+            if isVerified, access.isNonResident {
+                // No issuing, but letters and passes from when they lived
+                // here stay listed so they can still open or revoke them.
+                PlaceDetailSectionLabel(text: "Residency letter")
+                ResidencyLetterSection(vm: letters, canIssue: false)
+                    .task {
+                        await letters.load()
+                        await pass.load()
+                    }
+                if hasIssuedClaims {
+                    PlaceDetailSectionLabel(text: "Residency Pass")
+                    PlaceResidencyPassSection(vm: pass, canIssue: false)
+                }
             } else {
-                PlaceLockedCard(
-                    icon: .fileText,
-                    title: "Verified residency letter",
-                    reason: "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
-                    cta: "Verify address",
-                    onTap: nil
-                )
-            }
-
-            PlaceDetailSectionLabel(text: "Residency Pass")
-            if isVerified {
-                PlaceResidencyPassSection(vm: pass)
-                    .task { await pass.load() }
-            } else {
-                PlaceLockedCard(
-                    icon: .idCard,
-                    title: "Prove residency without sharing your address",
-                    reason: "Verify your address to share one fact — your city, school district, or county — behind a live-checked link.",
-                    cta: "Verify address",
-                    onTap: nil
-                )
+                residencySections
             }
 
             // Unlisted is gated on ACCESS, not verification: someone who
@@ -211,6 +288,7 @@ struct PlaceIdentityDetailContent: View {
                 subtitle: "Carry your verified status to other apps"
             )
         }
+        .task { await access.load() }
     }
 }
 
@@ -310,7 +388,18 @@ private struct MailboxCheckCard: View {
 
 private struct VerifiedStatusCard: View {
     let isVerified: Bool
+    /// The viewer's role here: guests and service providers are verified, but not residents.
+    let roleBase: String?
     let address: String
+
+    private var title: String {
+        guard isVerified else { return "Claimed — not yet verified" }
+        switch roleBase {
+        case "guest": return "Verified guest"
+        case "service_provider": return "Verified service provider"
+        default: return "Verified resident"
+        }
+    }
 
     var body: some View {
         PlaceDetailCard {
@@ -328,7 +417,7 @@ private struct VerifiedStatusCard: View {
                 .frame(width: 48, height: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text(isVerified ? "Verified resident" : "Claimed — not yet verified")
+                        Text(title)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
                         PlaceChip(model: isVerified
@@ -348,6 +437,8 @@ private struct VerifiedStatusCard: View {
 
 private struct ResidencyLetterSection: View {
     @Bindable var vm: PlaceResidencyLetterViewModel
+    /// Guests and service providers can't issue letters (the server refuses them).
+    var canIssue = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -360,27 +451,40 @@ private struct ResidencyLetterSection: View {
                         vm.clearToast()
                     }
             }
-            PlaceDetailCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("What is this letter for?")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                    TextField("e.g. New library card application", text: $vm.purpose)
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    PrimaryButton(
-                        title: vm.isIssuing ? "Issuing…" : "Generate a residency letter",
-                        isLoading: vm.isIssuing,
-                        isEnabled: !vm.purpose.trimmingCharacters(in: .whitespaces).isEmpty
-                    ) {
-                        await vm.issue()
-                    }
+            if canIssue {
+                composer
+            } else {
+                PlaceDetailCard {
+                    Text("Residency letters and passes are for the people who live here, so guest and service access can't issue them.")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
                 }
             }
             history
+        }
+        .quickLookPreview($vm.pdfURL)
+    }
+
+    private var composer: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("What is this letter for?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                TextField("e.g. New library card application", text: $vm.purpose)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Theme.Color.appSurfaceSunken)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                PrimaryButton(
+                    title: vm.isIssuing ? "Issuing…" : "Generate a residency letter",
+                    isLoading: vm.isIssuing,
+                    isEnabled: !vm.purpose.trimmingCharacters(in: .whitespaces).isEmpty
+                ) {
+                    await vm.issue()
+                }
+            }
         }
     }
 
@@ -421,6 +525,11 @@ private struct LetterRow: View {
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
                 Spacer(minLength: 0)
+                Button(vm.openingLetterId == letter.id ? "Opening…" : "PDF") { Task { await vm.openPDF(letter) } }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.home)
+                    .disabled(vm.openingLetterId != nil)
+                    .accessibilityIdentifier("place.letter.pdf")
                 if letter.status == .issued {
                     Button("Revoke") { Task { await vm.revoke(letter.id) } }
                         .font(.system(size: 13, weight: .semibold))

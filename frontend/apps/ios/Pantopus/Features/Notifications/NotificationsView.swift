@@ -34,6 +34,7 @@ public struct NotificationsView: View {
             }
         }
         .accessibilityIdentifier("notifications")
+        .refreshFailureToast($viewModel.actionFailure)
         .confirmationDialog(
             "Delete notification?",
             isPresented: Binding(
@@ -42,9 +43,11 @@ public struct NotificationsView: View {
             ),
             titleVisibility: .visible,
             presenting: viewModel.pendingDelete
-        ) { _ in
+        ) { request in
             Button("Delete", role: .destructive) {
-                Task { @MainActor in await viewModel.confirmDelete() }
+                // Dismissing the dialog clears `pendingDelete` through the
+                // binding before this runs, so delete the row it presented.
+                Task { @MainActor in await viewModel.delete(id: request.id) }
             }
             .accessibilityIdentifier("notifications.deleteConfirm")
             Button("Cancel", role: .cancel) { viewModel.cancelDelete() }

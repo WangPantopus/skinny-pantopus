@@ -27,6 +27,10 @@ public final class ChatListViewModel {
     /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
 
+    /// Set when a filter other than All has no matches. The state then holds
+    /// only the AI row, and the view says what the filter found nothing for.
+    public private(set) var emptyFilter: ChatFilter?
+
     /// Unread counts for the filter-tab badges. The `unread` tab uses
     /// `unread` from this map; other tabs hide their badge.
     public private(set) var unreadByFilter: [ChatFilter: Int] = [:]
@@ -220,9 +224,13 @@ public final class ChatListViewModel {
             if lhs.pinned == rhs.pinned { return false }
             return lhs.pinned && !rhs.pinned
         }
-        if filtered.isEmpty {
+        if filtered.isEmpty, activeFilter == .all {
+            emptyFilter = nil
             state = .empty
         } else {
+            // A filter with no matches keeps the AI row and says what it
+            // filtered for, instead of claiming there are no conversations.
+            emptyFilter = filtered.isEmpty ? activeFilter : nil
             state = .loaded(rows: pinnedFirst)
         }
         updateUnreadByFilter()

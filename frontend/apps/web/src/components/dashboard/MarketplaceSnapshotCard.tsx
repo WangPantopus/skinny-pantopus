@@ -1,15 +1,13 @@
 'use client';
 
+// Only figures the page actually knows: listings in view and those posted in the last day.
+// (Urgent deadlines and pending offers have no data source, so they are not shown.)
 export default function MarketplaceSnapshotCard({
   inView,
-  newToday,
-  urgentDeadlines,
-  myPendingOffers,
+  newIn24h,
 }: {
   inView: number;
-  newToday: number;
-  urgentDeadlines: number;
-  myPendingOffers: number;
+  newIn24h: string;
 }) {
   return (
     <div className="bg-app-surface rounded-xl p-4 border border-app-border shadow-sm">
@@ -21,15 +19,7 @@ export default function MarketplaceSnapshotCard({
         </div>
         <div className="flex items-center justify-between">
           <span className="text-app-text-secondary">New in 24h</span>
-          <span className="font-semibold text-app-text">{newToday}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-app-text-secondary">Urgent deadlines</span>
-          <span className="font-semibold text-app-text">{urgentDeadlines}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-app-text-secondary">Your pending offers</span>
-          <span className="font-semibold text-app-text">{myPendingOffers}</span>
+          <span className="font-semibold text-app-text">{newIn24h}</span>
         </div>
       </div>
     </div>

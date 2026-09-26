@@ -14,13 +14,16 @@ import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
 import javax.inject.Inject
@@ -52,6 +55,7 @@ class PlaceDetailViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
+        private val adminRepo: HomeAdminRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel(),
         AddressCalendarActions {
@@ -154,6 +158,35 @@ class PlaceDetailViewModel
             }
         }
 
+        /** The letter whose PDF is being fetched for the phone's viewer; null when idle. */
+        private val _openingLetterId = MutableStateFlow<String?>(null)
+        val openingLetterId: StateFlow<String?> = _openingLetterId.asStateFlow()
+
+        /** Fetches the exact issued PDF; [onReady] gets its bytes to open in the phone's viewer. */
+        fun openLetterPdf(
+            letterId: String,
+            onReady: (ByteArray) -> Unit,
+        ) {
+            if (_openingLetterId.value != null) return
+            _openingLetterId.value = letterId
+            viewModelScope.launch {
+                when (val r = repo.residencyLetterPdf(homeId, letterId)) {
+                    is NetworkResult.Success -> {
+                        val bytes = runCatching { withContext(Dispatchers.IO) { r.data.use { it.bytes() } } }.getOrNull()
+                        if (bytes != null) {
+                            onReady(bytes)
+                        } else {
+                            _actionToast.value = PlaceActionToast("Couldn't open the letter PDF.", isError = true)
+                        }
+                    }
+                    is NetworkResult.Failure ->
+                        _actionToast.value =
+                            PlaceActionToast(r.error.displayMessage("Couldn't open the letter PDF."), isError = true)
+                }
+                _openingLetterId.value = null
+            }
+        }
+
         fun revokeLetter(letterId: String) {
             viewModelScope.launch {
                 // Revocation is a promise. A silent failure lets the
@@ -168,6 +201,20 @@ class PlaceDetailViewModel
                             PlaceActionToast(r.error.displayMessage("Couldn't revoke the letter."), isError = true)
                 }
                 loadLetters()
+            }
+        }
+
+        // ── Viewer access (Identity detail) ──────────────────────
+        // Guests and service providers have verified access to a home but
+        // don't live there; the server refuses them residency letters and
+        // passes (`NON_RESIDENT_ROLES`). Null until read, or if it can't be.
+
+        private val _roleBase = MutableStateFlow<String?>(null)
+        val roleBase: StateFlow<String?> = _roleBase.asStateFlow()
+
+        fun loadAccess() {
+            viewModelScope.launch {
+                _roleBase.value = (adminRepo.myAccess(homeId) as? NetworkResult.Success)?.data?.roleBase
             }
         }
 
