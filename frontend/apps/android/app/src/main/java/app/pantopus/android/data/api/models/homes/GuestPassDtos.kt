@@ -45,6 +45,8 @@ data class CreateGuestPassRequest(
     @Json(name = "duration_hours") val durationHours: Int? = null,
     @Json(name = "start_at") val startAt: String? = null,
     @Json(name = "end_at") val endAt: String? = null,
+    /** Guest page sections the pass shows; null lets the server use its default for the kind. */
+    @Json(name = "included_sections") val includedSections: List<String>? = null,
 )
 
 /**

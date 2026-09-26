@@ -214,7 +214,7 @@ private struct GuestDateRangeSheet: View {
     viewModel.updateName(AddGuestSampleData.Filled.name)
     viewModel.updateContact(AddGuestSampleData.Filled.contact)
     viewModel.duration = AddGuestSampleData.Filled.durationId
-    viewModel.selectedAreas = AddGuestSampleData.Filled.areaIds
+    viewModel.selectedSections = AddGuestSampleData.Filled.sectionIds
     viewModel.updateWelcome(AddGuestSampleData.Filled.welcome)
     return NavigationStack {
         AddGuestFormView(viewModel: viewModel)
