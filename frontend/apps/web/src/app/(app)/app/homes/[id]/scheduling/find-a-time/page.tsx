@@ -73,7 +73,7 @@ export default function FindATimePage() {
     setMembersError(null);
     try {
       const res = await api.homeIam.getHomeMembers(homeId);
-      setMembers(readMembers(res.members ?? []));
+      setMembers(readMembers(res.occupants ?? []));
     } catch (err) {
       setMembersError(
         decodeError(err).message || "Couldn't load your household.",
