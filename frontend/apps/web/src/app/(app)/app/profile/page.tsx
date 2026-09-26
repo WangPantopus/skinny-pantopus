@@ -15,7 +15,8 @@ import ErrorState from '@/components/ui/ErrorState';
 export default function MyProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<Record<string, number> | null>(null);
+  // A stat whose read failed is null (unknown), shown as "—" rather than 0.
+  const [stats, setStats] = useState<Record<string, number | null> | null>(null);
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<{ id?: string; icon?: string; text?: string; time_ago?: string }[]>([]);
   const [myListings, setMyListings] = useState<Listing[]>([]);
@@ -59,7 +60,7 @@ export default function MyProfilePage() {
         }
         
         // Try to load my bids
-        let activeBidsCount = 0;
+        let activeBidsCount: number | null = 0;
         try {
           const myBids = await api.gigs.getMyBids({ limit: 100 });
           console.log('✅ My bids loaded:', myBids);
@@ -67,11 +68,11 @@ export default function MyProfilePage() {
           activeBidsCount = bidsArray.filter((b: { status?: string }) => b.status === 'pending').length;
         } catch (bidErr) {
           console.warn('⚠️ Could not load my bids:', bidErr);
-          activeBidsCount = 0;
+          activeBidsCount = null;
         }
 
         // Load earnings from payment summary
-        let earningsDollars = 0;
+        let earningsDollars: number | null = 0;
         try {
           const earningsRes = await api.payments.getEarnings() as Record<string, unknown>;
           const earningsObj = earningsRes?.earnings as Record<string, unknown> | undefined;
@@ -83,11 +84,11 @@ export default function MyProfilePage() {
           earningsDollars = Math.round((earningsCents / 100) * 100) / 100;
         } catch (earnErr) {
           console.warn('⚠️ Could not load earnings:', earnErr);
-          earningsDollars = 0;
+          earningsDollars = null;
         }
 
         // Load my listings
-        let activeListingsCount = 0;
+        let activeListingsCount: number | null = 0;
         try {
           const listingsRes = await api.listings.getMyListings({ limit: 5 }) as Record<string, unknown>;
           const listingsArr = (listingsRes?.listings || []) as Listing[];
@@ -97,6 +98,7 @@ export default function MyProfilePage() {
           setListingsCount(activeListingsCount);
         } catch (listErr) {
           console.warn('⚠️ Could not load listings:', listErr);
+          activeListingsCount = null;
         }
 
         setStats({
@@ -108,13 +110,13 @@ export default function MyProfilePage() {
         });
       } catch (err) {
         console.error('❌ Failed to load stats:', err);
-        // Set default stats
+        // The profile's own counts are known; the rest are not.
         setStats({
           gigsPosted: userData.gigs_posted || 0,
-          activeBids: 0,
+          activeBids: null,
           gigsCompleted: userData.gigs_completed || 0,
-          earnings: 0,
-          listings: 0,
+          earnings: null,
+          listings: null,
         });
       }
       // Load recent activity
@@ -293,7 +295,7 @@ export default function MyProfilePage() {
               <StatsCard
                 icon="💼"
                 label="Active Bids"
-                value={stats?.activeBids || 0}
+                value={stats?.activeBids ?? '—'}
                 color="purple"
                 onClick={() => router.push('/app/my-bids')}
               />
@@ -307,18 +309,26 @@ export default function MyProfilePage() {
               <StatsCard
                 icon="🏷️"
                 label="Listings"
-                value={stats?.listings || 0}
+                value={stats?.listings ?? '—'}
                 color="blue"
                 onClick={() => router.push('/app/my-listings')}
               />
               <StatsCard
                 icon="💰"
                 label="Earnings"
-                value={`$${Number(stats?.earnings || 0).toFixed(2)}`}
+                value={stats?.earnings == null ? '—' : `$${Number(stats.earnings).toFixed(2)}`}
                 color="yellow"
-                onClick={() => router.push('/app/my-bids')}
+                onClick={() => router.push('/app/wallet')}
               />
             </div>
+            {stats && (stats.activeBids == null || stats.earnings == null || stats.listings == null) && (
+              <p role="alert" className="text-sm text-app-muted">
+                Some of these numbers couldn&apos;t load.{' '}
+                <button type="button" onClick={loadUserData} className="font-medium text-primary-600 hover:underline">
+                  Try again
+                </button>
+              </p>
+            )}
 
             {/* Quick Actions */}
             <div className="bg-surface rounded-xl border border-app p-6">
