@@ -143,7 +143,9 @@ Re-check each PR before batching.
    - update the hub docs and memory.
 
 **3.2 Stream 2's upcoming work** (it continues in its own session and will send PRs):
-- **2b** (privacy, user-approved): native Add guest "What they can see" sections sent as `included_sections`. This needs heavy and the iOS driver; Stream 2 will ask. Batch it like any peer PR.
+- **2b** (privacy, user-approved): native Add guest "What they can see" sections sent as `included_sections`. This needs heavy and the iOS driver; Stream 2 will ask.
+  - In a message received before 22:17:48Z, Stream 2 said its Android part passes (lint, Paparazzi re-record + verify, assemble) and that its 2b PR will be **stacked on #535**.
+  - Batch it together with #535 or after #535 merges. Its head then contains #535's commits, so check #535's files against #535's own head blobs and the 2b files against the 2b head.
 
 **3.3 Remaining Stream 1 inventory work.** All low; see the rows marked candidate/OPEN in the inventory.
 - **Web:**

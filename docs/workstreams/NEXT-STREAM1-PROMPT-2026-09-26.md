@@ -89,7 +89,7 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
    - Mark #537's inventory row merged.
    - Update PROJECT_HANDOFF, README, `01-gigs-payments.md` and memory; commit and push the coordination branch.
    - Tell the peers the merge time and new master.
-3. **Keep integrating** peer PRs as they come. Stream 2's next is 2b, the native Add guest "What they can see" sections; it needs heavy and the iOS driver and will ask.
+3. **Keep integrating** peer PRs as they come. Stream 2's next is 2b, the native Add guest "What they can see" sections; it needs heavy and the iOS driver and will ask. Its PR will be **stacked on #535**, so batch it with #535 or after #535 merges.
 4. **Remaining Stream 1 inventory** (all low; handoff §3.3): web `/app/offers` swallowed failure (OPEN, orphan page), `/app/discover-hub` orphan, Tasks map remote tasks at 0,0, Discover no-location double notice, gigs-v2 stale change-orders after instant accept, the helper dock saying "Bidding closed", $0-task payment copy in the delivery sheet, Android upload-error copy, iOS Support Trains without location, and iOS Report post (not run).
    - The two Android navigation items (Nearby door restoring the Tasks stack, re-tapping the lit tab) are navigation changes, so propose them to the user first.
    - Rebuild the apps from current master before any native check. The installed iOS app on F4DBD47E is the #537 build, and the Android APK on emulator-5558 predates #532.
