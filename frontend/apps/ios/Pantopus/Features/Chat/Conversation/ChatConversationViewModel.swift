@@ -1325,7 +1325,8 @@ public final class ChatConversationViewModel {
                     )
                 )
             )
-            selectedTopicId = response.topic.id
+            // Tag the card with its topic but keep the current view, as web does. Selecting
+            // the topic here made the next refresh hide the other person's later messages.
             return response.topic.id
         } catch {
             logger.warning("find/create share topic failed: \(error)")

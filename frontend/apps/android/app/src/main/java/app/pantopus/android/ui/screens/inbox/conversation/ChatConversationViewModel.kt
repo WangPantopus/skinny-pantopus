@@ -689,10 +689,9 @@ class ChatConversationViewModel
                         ),
                     )
             ) {
-                is NetworkResult.Success -> {
-                    _selectedTopicId.value = result.data.topic.id
-                    result.data.topic.id
-                }
+                // Tag the card with its topic but keep the current view, as web does. Selecting
+                // the topic here, without a refetch, hid the other person's later messages.
+                is NetworkResult.Success -> result.data.topic.id
                 is NetworkResult.Failure -> {
                     Timber.w("find/create share topic failed: ${result.error.message}")
                     _selectedTopicId.value
