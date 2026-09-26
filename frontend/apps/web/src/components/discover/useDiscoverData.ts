@@ -239,10 +239,11 @@ export function useDiscoverData() {
   const hasMore = businessesQuery.hasNextPage ?? false;
   const loading = enabled && businessesQuery.isPending;
   const loadingMore = businessesQuery.isFetchingNextPage;
+  // A failed search isn't an empty result; "no businesses" is the list's EmptyState.
   const error = businessesQuery.error
     ? (businessesQuery.error instanceof TypeError && businessesQuery.error.message.includes('fetch')
         ? 'Unable to reach the server. Check your connection and try again.'
-        : 'No businesses found yet. Try adjusting your filters or check back later.')
+        : "Couldn't load businesses. Try again.")
     : null;
 
   // Imperative refetch shim (preserves external API)
