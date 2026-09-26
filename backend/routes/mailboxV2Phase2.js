@@ -650,7 +650,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
       { event: 'acknowledged', timestamp: now, actor_id: req.user.id },
     );
 
-    await supabaseAdmin
+    const { error: ackError } = await supabaseAdmin
       .from('Mail')
       .update({
         acknowledged_at: now,
@@ -660,6 +660,12 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
         opened_at: now,
       })
       .eq('id', mailId);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the client was told the acknowledgement was on file when it was not.
+    if (ackError) {
+      logger.error('Certified acknowledge update failed', { mailId, error: ackError.message });
+      return res.status(500).json({ error: "Couldn't record your acknowledgement. Please try again." });
+    }
 
     await logMailEvent(req.user.id, 'certified_mail_acknowledged', mailId, { timestamp: now });
 
@@ -695,10 +701,14 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
     const auditTrail = Array.isArray(mail.audit_trail) ? mail.audit_trail : [];
     auditTrail.push({ event: 'rejected', timestamp: now, actor_id: req.user.id });
 
-    await supabaseAdmin
+    const { error: rejectError } = await supabaseAdmin
       .from('Mail')
       .update({ audit_trail: auditTrail })
       .eq('id', mailId);
+    if (rejectError) {
+      logger.error('Certified reject update failed', { mailId, error: rejectError.message });
+      return res.status(500).json({ error: "Couldn't record the rejection. Please try again." });
+    }
 
     await logMailEvent(req.user.id, 'certified_mail_rejected', mailId);
 
