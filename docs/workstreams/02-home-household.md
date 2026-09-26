@@ -2,6 +2,31 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 09:52Z (decision 4 done as #503; #493 in batch 25)**
+
+- **#493 (R06)** is all green and in batch 25 (#499).
+- **Decision 4 open as PR [503](https://github.com/WangPantopus/skinny-pantopus/pull/503).** Branch `claude/stream2-certified-statuses`, head `6ddb88ec6` on `dbd75332b`. CI started; reported to Stream 1 for batch 26.
+  - **What makes a letter certified:** a live letter with `Mail.certified` now shows certified mail on web, iOS and Android.
+    - Web: a card showing "Read · not signed" / "Signed", with "Sign for delivery".
+    - Apps: the certified layout with a Received → Read → Signed chain from the letter's timestamps.
+  - **Sign sheet:** it keys on signed, not read. Opening marks the letter read, and the sheet still shows until the recipient signs.
+  - **Signing:** the apps sign through the recipient-only certified route (they used V1 `/ack`, which returned 400).
+  - **Backend:** signing keeps the first read time. On master it overwrote `opened_at`.
+  - **False claims removed** for Pantopus mail: the USPS stamp/carrier, the hard-coded sample extracted-task card, and a static "Sender domain checked" pill.
+- **Evidence:** bundle `20260926-stream2-certified-statuses-r1`, MANIFEST `84461224f16b48119b0c7d3a16ae3dd3c5f7d7617254a6327f7c992e3ffaaeb9` (109 files).
+  - Six synthetic certified letters for B are retained.
+  - Master befores on all platforms; afters on all platforms.
+  - Final APK `e31a360e…` and dylib `e15e549a…`. 3 `CertifiedDetailSnapshotTest` goldens are re-recorded.
+- **For the user:**
+  - No production path sends certified mail (only the dev seed), and there is no sender-side view or signing notice.
+  - The legal footnote copy is unchanged.
+  - The apps show Sign to non-recipients, but the server refuses them.
+- **Heavy and devices:**
+  - Heavy windows: 08:44–08:46Z (ktlint failure), 08:46–09:07Z, 09:08–09:15Z, 09:41–09:48Z.
+  - iOS driver 08:47Z → released 09:16Z → back 09:45Z → released 09:50Z. 6F914A30 is shut down.
+- **Runtime:** the branch backend runs on 18145, and the proxy on 18142 points to 18145.
+- **Next:** decision 1 (household letter delete: 30-day restore, notices, "Recently deleted", dismiss parity). It's the largest: a migration plus 115 Mail queries in 15 backend files. Shared files will be coordinated first.
+
 **Stream 2 — 2026-09-26 08:40Z (decision 2 / R06 done as #493)**
 
 - **Decision 2 open as PR [493](https://github.com/WangPantopus/skinny-pantopus/pull/493).** Branch `claude/stream2-r06-native-letters`, head `1302cf89a` on master `e00952e3e`, 2 commits, no backend change. CI started. Reported to Stream 1 for batch 25.
