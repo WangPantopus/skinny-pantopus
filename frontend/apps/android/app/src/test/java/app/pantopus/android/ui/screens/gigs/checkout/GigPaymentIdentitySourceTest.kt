@@ -41,6 +41,8 @@ class GigPaymentIdentitySourceTest {
                 MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
             }
         }
+        // No stored session id in these fixtures, so the session marker is the token one.
+        every { tokens.sessionMarker() } answers { tokens.accessTokenMarker() }
         return GigPaymentIdentitySource(
             tokens,
             mockk { every { state } returns authState },
