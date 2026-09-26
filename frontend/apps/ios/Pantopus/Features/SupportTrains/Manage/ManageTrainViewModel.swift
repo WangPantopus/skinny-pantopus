@@ -229,6 +229,9 @@ public final class ManageTrainViewModel {
     /// Helper roster from `GET /:id/reservations` — drives share-address /
     /// confirm-delivery / remove-from-slot.
     public private(set) var helperRows: [ManageHelperRow] = []
+    /// True when that read failed: the Helpers section says so instead of
+    /// "No signups yet".
+    public private(set) var helpersFailed = false
     /// Slot roster from the detail payload — drives add / edit / remove date.
     public private(set) var slotRows: [ManageSlotRow] = []
     /// Co-organizer roster from `GET /:id/organizers`.
@@ -292,11 +295,13 @@ public final class ManageTrainViewModel {
     /// Test / preview seam for the S1 organizer surfaces.
     func replaceOrganizerSurfaces(
         helpers: [ManageHelperRow]? = nil,
+        helpersFailed: Bool? = nil,
         slots: [ManageSlotRow]? = nil,
         organizers: [ManageOrganizerRow]? = nil,
         fund: SupportTrainFundDTO? = nil
     ) {
         if let helpers { helperRows = helpers }
+        if let helpersFailed { self.helpersFailed = helpersFailed }
         if let slots { slotRows = slots }
         if let organizers { organizerRows = organizers }
         if let fund { self.fund = fund }

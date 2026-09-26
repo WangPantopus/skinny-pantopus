@@ -491,6 +491,7 @@ private fun OrganizerControls(
 
     ManageHelpersSection(
         rows = ui.helperRows,
+        failed = ui.helpersFailed,
         isBusy = ui.isSubmitting,
         onShareAddress = { viewModel.shareExactAddress(it.id) },
         onConfirm = { viewModel.confirmDelivery(it.id) },

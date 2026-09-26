@@ -312,6 +312,7 @@ public struct ManageTrainView: View {
 
         ManageHelpersSection(
             rows: viewModel.helperRows,
+            failed: viewModel.helpersFailed,
             isBusy: viewModel.isSubmitting,
             onShareAddress: { row in
                 Task { await viewModel.shareExactAddress(reservationId: row.id) }
