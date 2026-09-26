@@ -29,6 +29,7 @@
 - **Bug:** a resident whose role is changed to `guest` or `service_provider` keeps residency letters and Residency Passes that still verify.
   - `GET /api/public/residency-letters/:code` returned `valid: true` with the person's name and street address.
   - Write-up, repro steps and captures: bundle `20260926-stream2-r06-native-letters-r1/finding-guest-letter-verifies/`.
+- **Code locations** (on master `f885e0623`): `backend/services/residencyLetterService.js:324` (`verifyByCode`, called from `backend/routes/public.js:733`); `backend/services/residencyClaimService.js:323` (`isStillVerifiedResident`); `backend/utils/homeAccessPolicy.js:16` (`NON_RESIDENT_ROLES` = guest, service_provider).
 - **Fix:**
   - `backend` `residencyLetterService.verifyByCode`: read `role_base` with the issuer's occupancy. If it is in `NON_RESIDENT_ROLES` (the list issuing already refuses), retire the letter exactly like the existing end-of-admission path (`status revoked`, `revoke_reason residency_ended`) and return `{ valid: false, status: 'revoked' }`.
   - `residencyClaimService.isStillVerifiedResident` must also require a resident role, so an active pass reads `no_longer_verified`.
@@ -86,7 +87,7 @@
      - per-page request counting (it found the Who's free loop, fixed by Stream 3 in #530).
 
 ### 4. Runtime, devices, tools
-- **Runtime kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/`. It is git-ignored and its README is the runtime manual: ports, start commands, fault proxy, accounts and fixtures, device recipes, tools, slot protocol. The credentials are there as private files; never print or commit them.
+- **Runtime kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/`. The takeover prompt for the next agent is saved there as `NEXT-STREAM2-AGENT-PROMPT-2026-09-26.md`. It is git-ignored and its README is the runtime manual: ports, start commands, fault proxy, accounts and fixtures, device recipes, tools, slot protocol. The credentials are there as private files; never print or commit them.
 - **Running at handoff** (these may die with the session; restart from the kit):
   - Supabase stack `pantopus-stream2-native-resume-r2` (API 64553, DB 64554), backend 18143 (main worktree; `HOME_DOCUMENTS_BUCKET=s2-home-documents`), proxy 18142 → 18143, Next 18144 (main worktree web).
   - emulator-5556 with APK `a88802fa…` (#535 tree), owner signed in.
