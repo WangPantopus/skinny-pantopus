@@ -2,6 +2,25 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 04:20Z (master `a5fb4864c`, batch 19 merged)
+
+- **[PR455](https://github.com/WangPantopus/skinny-pantopus/pull/455) and [PR460](https://github.com/WangPantopus/skinny-pantopus/pull/460)** are in Stream 1's batch 20 ([PR463](https://github.com/WangPantopus/skinny-pantopus/pull/463): #455 → #460 → #458 → #461), queued.
+- **[PR465](https://github.com/WangPantopus/skinny-pantopus/pull/465): open, CI running, sent to Stream 1 for batch 21.**
+  - Head `b27e3115d12fd4216f67ba2c777cc77c4bde4815`: 3 fix commits plus a clean merge of master `a5fb4864c`; 8 existing files.
+  - **S3-08** (iOS + Android): the owner dashboard's Settings opens the page editor (web's business settings are those profile fields). Insights (top bar and "This week" link) is hidden until a native screen exists; the tiles stay.
+  - **S3-36** (iOS): the You stack gets the Hub's Discover businesses route, so "Claim an existing page" no longer opens Create.
+  - **S3-34** (iOS): the Public profile card opens the fully wired audience profile. From You Settings it's a push; from Hub Settings and the drawer Identity Center sheet it opens the profile cover (as notification links do). Settings' unwired copy is removed.
+  - Befores on master-equal installed builds; afters on iOS dylib `206e1c76…` and Android APK `78d6df0e…` (ktlint, detekt, lint and assemble passed; SwiftLint strict and SwiftFormat clean).
+  - Bundle `20260926-stream3-owner-settings-entries-r1`, MANIFEST.json SHA-256 `5b6228c969c9bd6199ba2e3cdb6428c3de5e8cda3cf43cda6e993271b329c148`.
+  - Side effects: auth bookkeeping only.
+  - Limits: S3-35 unchanged (needs persona Stripe onboarding); Beacon-owner states and Discover results need fixtures.
+  - Broad80: advances A05 and N03, partially; no row closes.
+- **User decisions (2026-09-26, in chat):**
+  - Fixture set: approved in full (published business, Beacon persona with a broadcast, conversations including an AI thread, a connected and following pair, event types, notifications, a DB-only paid invoice, a booking in the no-show window). Isolated DB only, tagged rows, an exact-removal manifest, no provider calls.
+  - The three incidental rows (Owner UserPrivacySettings, Solo LocalProfile, Owner Wallet): the user left the choice to Stream 3, which keeps them as fixture baseline. They are what the app creates on first visit; deleting them would only make the next visit recreate them, and the proxy allowlist relies on Solo's row.
+  - Workflows and templates: **B, hide** on all three platforms until sending exists. iOS booking Nudge's "Use a template" reads saved templates into a nudge that really sends, so that path is kept working.
+- **Handed to Stream 2 (their finding 15):** escrowed mail to a phone-number recipient calls the placeholder `smsService` (it only logs), yet the API answers "Mail sent successfully".
+
 ## Git and integration (master `564bf220d`, 2026-09-26 02:40Z)
 
 - **PR427:** web booking actions, merged through batch PR431. The resolved booking-detail file matches the exercised 417+427 runtime.
