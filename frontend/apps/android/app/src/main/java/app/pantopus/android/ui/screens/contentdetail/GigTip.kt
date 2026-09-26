@@ -167,11 +167,13 @@ class GigTipRecovery(
                             accept(active, active.request)
                         }
                         !next.eligible ->
+                            // Reopening helps only when the task changed; say a lasting reason plainly.
                             message =
-                                if (next.unavailableReason == "TIP_LIMIT") {
-                                    "You've reached the 3-tip limit for this task."
-                                } else {
-                                    "This task is not currently available for a tip. Reopen its details before continuing."
+                                when (next.unavailableReason) {
+                                    "TIP_LIMIT" -> "You've reached the 3-tip limit for this task."
+                                    "CONNECT_REQUIRED" ->
+                                        "Your helper can't receive tips yet because they haven't set up payouts."
+                                    else -> "This task is not currently available for a tip. Reopen its details before continuing."
                                 }
                     }
                 }

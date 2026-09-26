@@ -1165,9 +1165,12 @@ public final class GigDetailViewModel {
                 tipOriginal = result.request
                 try acceptTip(result, original: result.request)
             } else if !next.eligible {
-                tipMessage = next.unavailableReason == "TIP_LIMIT"
-                    ? "You've reached the 3-tip limit for this task."
-                    : "This task is not currently available for a tip. Reopen its details before continuing."
+                // Reopening helps only when the task changed; say a lasting reason plainly.
+                tipMessage = switch next.unavailableReason {
+                case "TIP_LIMIT": "You've reached the 3-tip limit for this task."
+                case "CONNECT_REQUIRED": "Your helper can't receive tips yet because they haven't set up payouts."
+                default: "This task is not currently available for a tip. Reopen its details before continuing."
+                }
             }
         } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
     }
