@@ -270,6 +270,8 @@ public final class GigDetailViewModel {
 
     public private(set) var questions: [GigQuestionDTO] = []
     public private(set) var questionsLoading = false
+    /// The last questions read failed; what's shown (if anything) is older.
+    public private(set) var questionsLoadFailed = false
     public var newQuestionText = ""
     public var answeringQuestionId: String?
     public var answerDraftText = ""
@@ -1590,6 +1592,7 @@ public final class GigDetailViewModel {
     func loadQuestions(whileCurrent: () -> Bool = { true }) async {
         guard whileCurrent() else { return }
         questionsLoading = true
+        questionsLoadFailed = false
         defer { if whileCurrent() { questionsLoading = false } }
         do {
             let response: GigQuestionsResponse = try await api.request(GigsEndpoints.questions(gigId: gigId))
@@ -1597,7 +1600,8 @@ public final class GigDetailViewModel {
             questions = response.questions
         } catch {
             guard whileCurrent() else { return }
-            questions = []
+            // Keep what's shown; a failed read isn't "No questions yet".
+            questionsLoadFailed = true
         }
     }
 
