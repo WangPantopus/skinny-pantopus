@@ -1514,7 +1514,7 @@ class ChatConversationViewModel
                     initialTopic = null
                 }
                 when (val result = repo.conversationTopics(target.otherUserId)) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
                         _topics.value =
                             result.data.topics.mapNotNull { topic ->
                                 val id = topic.id ?: return@mapNotNull null
@@ -1526,6 +1526,10 @@ class ChatConversationViewModel
                                     status = topic.status,
                                 )
                             }
+                        // Topic dividers are labeled from this list; relabel a card
+                        // shared into a new topic (it read "General" until then).
+                        if (messages.isNotEmpty()) rebuild()
+                    }
                     is NetworkResult.Failure -> Timber.w("load topics failed: ${result.error.message}")
                 }
             }
