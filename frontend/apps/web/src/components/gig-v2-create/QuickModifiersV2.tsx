@@ -242,14 +242,16 @@ export default function QuickModifiersV2({
       setSuggestions([]);
       setAddressQuery(s.label || s.primary_text);
       setEditingGpsAddress(false);
+      // /api/geo/autocomplete returns center as GeoJSON [lng, lat].
+      const [lng, lat] = Array.isArray(s.center) ? s.center : [];
 
       try {
         const data = await api.geo.resolve(s.suggestion_id);
         const n = data.normalized;
         onResolvedLocationChange({
           mode: locationOption === 'current' ? 'current' : 'address',
-          latitude: n.latitude ?? s.center?.lat,
-          longitude: n.longitude ?? s.center?.lng,
+          latitude: n.latitude ?? lat,
+          longitude: n.longitude ?? lng,
           address: n.address,
           city: n.city || null,
           state: n.state || null,
@@ -257,11 +259,11 @@ export default function QuickModifiersV2({
           place_id: n.place_id || null,
         });
       } catch {
-        if (s.center) {
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
           onResolvedLocationChange({
             mode: locationOption === 'current' ? 'current' : 'address',
-            latitude: s.center.lat,
-            longitude: s.center.lng,
+            latitude: lat,
+            longitude: lng,
             address: s.label || s.primary_text,
             city: null,
             state: null,

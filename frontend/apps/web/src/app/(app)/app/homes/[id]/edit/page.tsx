@@ -135,9 +135,11 @@ export default function EditHomePage() {
       );
       const data = await r.json().catch(() => ({}));
       const best = (data?.suggestions || [])[0];
-      if (best?.center) {
-        setCoordLng(String(best.center.lng));
-        setCoordLat(String(best.center.lat));
+      // /api/geo/autocomplete returns center as GeoJSON [lng, lat].
+      const [lng, lat] = Array.isArray(best?.center) ? best.center : [];
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setCoordLng(String(lng));
+        setCoordLat(String(lat));
         setHasCoords(true);
       } else {
         toast.warning('Could not find coordinates for this address.');
