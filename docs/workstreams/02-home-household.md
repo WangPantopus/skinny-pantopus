@@ -2,6 +2,43 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 12:34Z (#521 guest-pass link opened; #512 merged in batch 27)**
+
+- **#512 (decision 1)** merged in batch 27 ([#517](https://github.com/WangPantopus/skinny-pantopus/pull/517), master `2e053fe9c`).
+- **#519:** CI is green apart from Android "Lint, test, assemble", which was still running at 12:30Z. It goes into batch 28 with #521 once both are green.
+- **New: PR [521](https://github.com/WangPantopus/skinny-pantopus/pull/521) (M02).** Branch `claude/stream2-guest-pass-link-origin`, head `0c6c3027f` on `9ac4a7cdf`, 2 native files; CI started 12:32:55Z.
+  - `4c76a6d4d` is the verified change; `0c6c3027f` is comment only.
+  - Merge-tree vs master `2e053fe9c` and vs #519 shows 0 conflicts.
+  - **Problem (both apps, owner):** a shared guest pass linked to `https://pantopus.app/guest/<token>`.
+    - That host is `InviteLinks`' download link, which both platforms document as the future store smart-link.
+    - The guest page is the web app's `/guest/:token` on the build's web origin, where every other public-page link in the apps points (release `pantopus.com`, iOS staging `staging.pantopus.com`, debug the local web).
+    - The September 22 Android receipt below recorded this `https://pantopus.app/guest/` prefix.
+  - **Fix:** `GuestPassShare` uses `InviteLinks.publicPageURLString` / `publicPageUrl`.
+  - **Evidence:** bundle `20260926-stream2-guest-pass-link-r1`, MANIFEST `5a22c81702c13ec2e15979484e277507ec975295dd5347ce93632b3e215f98fb` (81 files):
+    - before/after on both apps (Android APK `d4d59594…`, iOS dylib `233502b3…`);
+    - the iOS share opened in Safari renders the guest page;
+    - the web renders both tokens, and a revoked pass shows "Access Revoked" (410);
+    - all 4 synthetic passes are revoked.
+    - The bundle also holds the owner positive case for #519 on iOS.
+  - **Not verified:** whether production `pantopus.app` serves `/guest/:token` today (no production contact). Release links now use `pantopus.com`.
+- **New finding, no code: the Add guest form overstates what the pass does.**
+  - Every Home shows a sample header ("412 Elm St · Apt 3B · Kovács household").
+  - It requires a contact it never uses.
+  - It says "We'll text or email them a one-tap pass link", but nothing is sent: the owner shares the link.
+  - It doesn't send Allowed areas or Note.
+  - Proposal for the user:
+    - **A (in place):** the real Home header, truthful copy, and the Note in the share message.
+    - **B (needs the user):** contact optional or removed; Allowed areas → `included_sections`, or removed.
+- **Heavy and devices:**
+  - iOS driver + device slot 1 12:14:43–12:26:56Z.
+  - Heavy (build from 12:18:07Z) until 12:25:06Z.
+  - Both went to Stream 3.
+- **Still with the user:** the guest-letter verification finding (Proposal A, 08:10Z block) and the Add guest form proposal.
+- **Next:**
+  - Ping Stream 1 when #519/#521 are green.
+  - When heavy is free, re-run the Android letter-after-refresh check on a master build (#509 is in).
+  - Continue the inventory.
+
 **Stream 2 — 2026-09-26 12:05Z (#519 guest-pass entry opened; #512 in batch 27 #517)**
 
 - **#512 (decision 1)** is in batch 27 ([#517](https://github.com/WangPantopus/skinny-pantopus/pull/517)) with #509/#510/#511/#514/#516; Stream 1 reviewed the placement commit and the purge.
@@ -551,7 +588,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
 | M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
-| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
 | M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
 | M04 | **Partial/open.** 2026-09-26: certified Received/Read/Signed and recipient-only signing on all three platforms ([#503](https://github.com/WangPantopus/skinny-pantopus/pull/503), bundle `20260926-stream2-certified-statuses-r1`). | Reachable conversions, translations, physical-mail and neighbor-request behavior; no production path sends certified mail yet. |
 
