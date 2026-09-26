@@ -886,7 +886,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         await vm.send()
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id == "bubble_m_file" }),
-              case let .attachment(filename, sizeLabel) = content.body else {
+              case let .attachment(filename, sizeLabel, _, _, _) = content.body else {
             XCTFail("Expected attachment bubble")
             return
         }

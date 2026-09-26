@@ -275,6 +275,13 @@ public final class ChatConversationViewModel {
     /// silent. The view shows it as a toast and clears it after display.
     public var actionFailure: String?
 
+    /// A downloaded file attachment for the view to preview (QuickLook).
+    /// The view clears it when the preview closes.
+    public var previewFileURL: URL?
+
+    /// True while a tapped file attachment downloads; a second tap waits.
+    private var isOpeningAttachment = false
+
     /// True while the block-user call is in flight.
     public private(set) var isBlocking = false
 
@@ -912,6 +919,24 @@ public final class ChatConversationViewModel {
         } catch {
             actionFailure = "Couldn\u{2019}t add your reaction. Try again."
             logger.warning("chat react failed: \(error)")
+        }
+    }
+
+    /// Download a file attachment (a PDF, video, …) and hand it to the
+    /// view to preview.
+    public func openAttachment(fileURL: String?, filename: String, mimeType: String?) async {
+        guard let fileURL, fileURL.contains("/api/chat/files/") else {
+            actionFailure = "This file can\u{2019}t be opened."
+            return
+        }
+        guard !isOpeningAttachment else { return }
+        isOpeningAttachment = true
+        defer { isOpeningAttachment = false }
+        do {
+            previewFileURL = try await ChatMediaURL.download(raw: fileURL, filename: filename, mimeType: mimeType)
+        } catch {
+            actionFailure = "Couldn\u{2019}t open the file. Try again."
+            logger.warning("chat file download failed: \(error)")
         }
     }
 
@@ -2017,15 +2042,8 @@ public final class ChatConversationViewModel {
             !urls.isEmpty {
             return .textWithImages(text: message.messageText ?? "", imageURLs: urls)
         }
-        if let firstAttachment = message.attachments.first {
-            let mime = firstAttachment.mimeType ?? ""
-            if mime.hasPrefix("image/"), let rawURL = firstAttachment.fileURL {
-                return .image(url: Self.resolvedMediaURL(rawURL))
-            }
-            return .attachment(
-                filename: firstAttachment.originalFilename ?? "Attachment",
-                sizeLabel: fileSizeLabel(firstAttachment.fileSize)
-            )
+        if let attachmentBody = attachmentBody(for: message) {
+            return attachmentBody
         }
         switch message.messageType {
         case "ai_reply":
@@ -2076,6 +2094,35 @@ public final class ChatConversationViewModel {
         default:
             return .text(message.messageText ?? "")
         }
+    }
+
+    /// Photos and files keep the text sent with them as a caption, and
+    /// every photo in the message shows, not just the first attachment.
+    private static func attachmentBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body? {
+        guard let file = message.attachments.first else { return nil }
+        let text = (message.messageText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let caption = text.isEmpty || isAttachmentPlaceholder(text) ? nil : text
+        let photoURLs = message.attachments
+            .filter { ($0.mimeType ?? "").hasPrefix("image/") }
+            .compactMap { resolvedMediaURL($0.fileURL) }
+        if let first = photoURLs.first {
+            return .image(url: first, caption: caption, moreURLs: Array(photoURLs.dropFirst()))
+        }
+        return .attachment(
+            filename: file.originalFilename ?? "Attachment",
+            sizeLabel: fileSizeLabel(file.fileSize),
+            fileURL: file.fileURL,
+            mimeType: file.mimeType,
+            caption: caption
+        )
+    }
+
+    /// Text the server fills in for a message that is only attachments
+    /// ("Photo", "Document"), or an older client's "[1 attachment]"; not
+    /// a caption.
+    private static func isAttachmentPlaceholder(_ text: String) -> Bool {
+        ["photo", "video", "document", "media"].contains(text.lowercased())
+            || text.range(of: #"^\[.+ attachments?\]$"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private static func resolvedMediaURL(_ raw: String?) -> URL? {
