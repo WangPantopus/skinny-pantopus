@@ -26,6 +26,10 @@ export default function GigStopDialog(props: Props) {
   const terms = state.attempt?.terms ?? state.preview?.terms;
   const completed = state.progress?.status === 'completed';
   const financial = state.attempt?.financialAction ?? state.preview?.financialAction;
+  // The stop rules send every started task to review. On a $0 task there is no fee to
+  // review, so say what the person can do instead of talking about charges.
+  const startedFree = !state.attempt && state.preview?.eligible === false
+    && state.preview.unavailableReason === 'STARTED_POLICY_REVIEW' && terms?.amountCents === 0;
   const dialog = useRef<HTMLElement>(null);
   const close = useRef(props.onClose); close.current = props.onClose;
 
@@ -69,7 +73,16 @@ export default function GigStopDialog(props: Props) {
               {terms.policy.charAt(0).toUpperCase() + terms.policy.slice(1)}
             </span>
           </div>
-          <div className={`rounded-lg p-4 ${terms.policyFeeCents > 0 || state.preview?.eligible === false ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+          {startedFree ? <div className="rounded-lg p-4 bg-app-surface-sunken border border-app-border">
+            <p className="text-sm font-medium text-app-text">
+              {props.isOwner ? 'This task has already started' : "You've already started this task"}
+            </p>
+            <p className="text-xs mt-1 text-app-text-secondary">
+              {props.isOwner
+                ? "A started task can't be cancelled here. Message your helper to sort it out; when they mark it delivered, you can confirm it."
+                : "A started task can't be cancelled here. Message the poster to sort it out, and mark it delivered when you're done."}
+            </p>
+          </div> : <div className={`rounded-lg p-4 ${terms.policyFeeCents > 0 || state.preview?.eligible === false ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
             <p className={`text-sm font-medium ${terms.policyFeeCents > 0 || state.preview?.eligible === false ? 'text-red-900' : 'text-green-900'}`}>
               {terms.policyFeeCents > 0 ? `Current policy fee: $${(terms.policyFeeCents / 100).toFixed(2)} USD`
                 : state.preview?.eligible === false ? 'Cancellation details need review' : 'No cancellation fee'}
@@ -81,13 +94,13 @@ export default function GigStopDialog(props: Props) {
                   ? 'This action requires review. No fee has been confirmed as charged.'
                   : 'This policy does not charge a fee at this stage.'}
             </p>
-          </div>
+          </div>}
           <p className="text-sm text-app-text-secondary">Task amount: ${(terms.amountCents / 100).toFixed(2)} USD.</p>
         </>}
         {state.progress ? <p role="status">{stopProgressMessage(state.progress)}</p>
           : state.attempt ? <p role="status">This request is not confirmed yet. Check its status before starting another action.</p>
           : state.preview ? <>
-            {!state.preview.eligible ? <p role="status">This action needs review before it can continue. No completed cancellation or fee charge has been confirmed.</p>
+            {!state.preview.eligible ? !startedFree && <p role="status">This action needs review before it can continue. No completed cancellation or fee charge has been confirmed.</p>
               : <p>{action === 'reopen_bidding' || action === 'worker_release'
                 ? 'This will remove the current assignment and reopen the task for bids once any payment operation is confirmed.'
                 : 'The task will be cancelled once any payment operation is confirmed.'}</p>}
