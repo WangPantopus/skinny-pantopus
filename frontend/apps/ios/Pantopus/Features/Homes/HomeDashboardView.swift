@@ -6,7 +6,7 @@
 //  body + FAB CTA.
 //
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 import SwiftUI
 
@@ -78,6 +78,10 @@ struct HomeDashboardView: View {
     /// T6.3b / P10 - Push onto the host stack when the user taps the
     /// Maintenance quick-action tile. Receives this home's id.
     private let onOpenMaintenance: ((String) -> Void)?
+    /// Push the home's issue tracker when the user taps "Issues" in the
+    /// Overview section. The Home-context drawer that lists Issues is not
+    /// shown in the app, so this is the dashboard's way in.
+    private let onOpenIssues: ((String) -> Void)?
     /// Push onto the host stack when the user taps the Members
     /// quick-action tile or "Add member" CTA (T6.3a / P9). Receives
     /// this home's id so the destination can pre-fetch the roster.
@@ -127,6 +131,7 @@ struct HomeDashboardView: View {
         onOpenAccessCodes: ((String, String?) -> Void)? = nil,
         onOpenTasks: ((String) -> Void)? = nil,
         onOpenMaintenance: ((String) -> Void)? = nil,
+        onOpenIssues: ((String) -> Void)? = nil,
         onOpenMembers: ((String) -> Void)? = nil,
         onOpenPropertyDetails: ((String) -> Void)? = nil,
         onOpenSettings: (@MainActor @Sendable (String) -> Void)? = nil,
@@ -153,6 +158,7 @@ struct HomeDashboardView: View {
         self.onOpenAccessCodes = onOpenAccessCodes
         self.onOpenTasks = onOpenTasks
         self.onOpenMaintenance = onOpenMaintenance
+        self.onOpenIssues = onOpenIssues
         self.onOpenMembers = onOpenMembers
         self.onOpenPropertyDetails = onOpenPropertyDetails
         self.onOpenSettings = onOpenSettings
@@ -306,6 +312,8 @@ struct HomeDashboardView: View {
                                         content: content,
                                         onOpenEmergency: { if viewModel.can("sensitive.view") { onOpenEmergency?(homeId) } },
                                         onOpenPropertyDetails: { if viewModel.can("home.view") { onOpenPropertyDetails?(homeId) } },
+                                        onOpenIssues: viewModel.can("maintenance.view")
+                                            ? onOpenIssues.map { openIssues in { openIssues(homeId) } } : nil,
                                         canViewActivity: viewModel.can("security.manage"),
                                         canViewEmergency: viewModel.can("sensitive.view")
                                     )
