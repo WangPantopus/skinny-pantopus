@@ -2542,7 +2542,13 @@ class GigDetailViewModel
                                     bids = bids.map { projectBid(it) },
                                 ),
                             )
-                        } else if (gig.status?.lowercase() == "open" && (viewerUserId == null || viewerUserId != gig.userId)) {
+                        } else if (
+                            // Only an open task nobody has bid on yet; a non-owner can't list the
+                            // bids, so the count (not the empty list) decides.
+                            bidCount == 0 &&
+                            gig.status?.lowercase() == "open" &&
+                            (viewerUserId == null || viewerUserId != gig.userId)
+                        ) {
                             add(
                                 ContentDetailModule.Callout(
                                     id = "be-first",
