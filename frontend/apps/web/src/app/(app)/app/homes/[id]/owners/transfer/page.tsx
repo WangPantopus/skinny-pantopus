@@ -33,10 +33,12 @@ function TransferContent() {
       const res = await api.homeOwnership.transferOwnership(homeId!, { buyer_email: buyerEmail.trim() });
       if (res.quorum_action_id) {
         toast.info(res.message || 'Transfer requires approval from other owners');
+        router.back();
       } else {
         toast.success('Ownership transfer initiated. The new owner will need to verify their identity.');
+        // The seller is now a member and can no longer open Owners.
+        router.replace(`/app/homes/${homeId}/dashboard`);
       }
-      router.back();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to initiate transfer');
     } finally {
