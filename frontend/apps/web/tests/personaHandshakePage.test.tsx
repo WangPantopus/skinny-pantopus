@@ -120,7 +120,7 @@ describe('FollowHandshakePage', () => {
       .toHaveBeenCalledWith('/@mayabuilds?welcome=1'));
   });
 
-  test('paid tier_rank shows the "Continue to subscribe" label and routes to a placeholder when subscribeUrl is null', async () => {
+  test('paid tier_rank shows the "Continue to subscribe" label and a retryable error when subscribeUrl is null', async () => {
     mockSearchParams = new URLSearchParams('tier_rank=2');
     apiMock.personas.followPersonaWithHandshake.mockResolvedValue({
       requiresPayment: true, subscribeUrl: null,
@@ -139,8 +139,8 @@ describe('FollowHandshakePage', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Continue to subscribe/ }));
     });
-    await waitFor(() => expect(mockPush)
-      .toHaveBeenCalledWith('/@mayabuilds?handshake=pending'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't start checkout/i);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   test('a 409 fan_handle_taken response surfaces an actionable error', async () => {
