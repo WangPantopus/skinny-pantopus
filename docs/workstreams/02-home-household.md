@@ -9,6 +9,13 @@ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial
     - Verified with two synthetic documents uploaded through the real route: DELETE 200, `File.is_deleted` true, storage object removed.
   - **Unavailable, not empty:** Documents, Issues, Access & Codes and Share Access now show "Current … could not be loaded … Retry" on a failed read (member 403), the 45368d5b8 pattern.
   - **Evidence:** bundle `20260926-stream2-home-docs-r1`, MANIFEST `9fc992ffcec64101c4830f256f96476b5a7317127f27cf52a9dc55f15ac69c57`.
+- **Mail/Place/Support sweep (17:53Z):** 32 web pages, owner and member, read-only. No Stream 2 defect found.
+  - `/place` risk and civic sections show "Couldn't load this / Try again", the provider boundary in isolation.
+  - `/mailbox/earn/wallet` → Payments 404 for a user without a Stripe account (wallet area, not Stream 2).
+  - One transient `GET /api/homes/primary` 503 `HOME_LIST_UNAVAILABLE` for member B. It didn't reproduce in 120 concurrent requests, and `homeListService.checked()` doesn't log the underlying error (small observability gap).
+- **Candidate (needs an applicant fixture):** Verification Center → "Message household admin" (`/homes/:id/messages`) may tell every applicant "No household admin yet", even when the Home has an owner.
+  - The home detail includes `owner` only with `ownership.view`, and occupants only with `members.view`.
+  - A fix touches the owner-identity privacy boundary, so I'll reproduce it with a real applicant and propose before changing anything.
 - **Runtime:** my isolated Supabase now has a private bucket `s2-home-documents`, and backend 18143 runs with `HOME_DOCUMENTS_BUCKET` set, so document upload/download/delete work locally. The synthetic documents were deleted (storage objects 0; File rows retained as deleted).
 
 **Stream 2 — 2026-09-26 17:34Z (#519/#521 merged in batch 28; #528 Members Invite opened; #509 Mail re-check done)**
