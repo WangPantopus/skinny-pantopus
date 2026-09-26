@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   CircleCheck,
   EyeOff,
-  Gauge,
   ListChecks,
   UserCheck,
   X,
@@ -33,6 +32,7 @@ import {
   pillarTokens,
 } from "@/components/scheduling/pillarTokens";
 import { decodeError, fieldErrors } from "@/components/scheduling/decodeError";
+import { summarizeReminders } from "@/components/scheduling/automations/reminders";
 import {
   ColorSwatches,
   EditorCard,
@@ -89,6 +89,7 @@ export default function EventTypeForm({ id }: { id: string }) {
   );
   const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [reminderSummary, setReminderSummary] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (isNew) return undefined;
@@ -113,6 +114,25 @@ export default function EventTypeForm({ id }: { id: string }) {
   }, [id, isNew, owner]);
 
   useEffect(() => load(), [load]);
+
+  // Reminders are the booking page's lead-times (what actually sends), edited
+  // on the Reminders page; the row shows them and links there.
+  useEffect(() => {
+    if (isNew) return undefined;
+    let active = true;
+    setReminderSummary(null);
+    api.scheduling
+      .getBookingPage(owner)
+      .then(({ page }) => {
+        if (active) setReminderSummary(summarizeReminders(page.reminder_minutes));
+      })
+      .catch(() => {
+        if (active) setReminderSummary("Reminders unavailable. Open to retry.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isNew, owner]);
 
   const patch = useCallback(
     (p: Partial<EventTypeFormValues>) => setValues((v) => ({ ...v, ...p })),
@@ -561,7 +581,7 @@ export default function EventTypeForm({ id }: { id: string }) {
           />
         </EditorCard>
 
-        {/* More — intake questions + booking limits + reminders (edit mode only) */}
+        {/* More — intake questions + reminders (edit mode only) */}
         {!isNew && (
           <EditorCard pillar={pillar}>
             <LinkRow
@@ -571,16 +591,10 @@ export default function EventTypeForm({ id }: { id: string }) {
               onClick={() => setIntakeOpen(true)}
             />
             <LinkRow
-              icon={Gauge}
-              label="Booking limits"
-              value="Off"
-              disabled
-            />
-            <LinkRow
               icon={Bell}
               label="Reminders"
-              value="1 day, 1 hour before"
-              disabled
+              value={reminderSummary ?? undefined}
+              href="/app/scheduling/reminders"
               last
             />
           </EditorCard>
