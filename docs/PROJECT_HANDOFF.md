@@ -17,9 +17,12 @@
   - `20260926-stream1-accept-counter-r1` (`45e240d9…`; fixtures removed at 18:51Z).
 - **Runtime:** the Stream 1 runtime tree equals master `448ee8b4a` (clean); the isolated DB is at master's 92 migrations.
 - **Slots:** heavy, the iOS driver and slot 1 are free. Stream 1 keeps emulator-5558 (slot 3, alice); Stream 3 keeps emulator-5554 (slot 4); Stream 2 keeps emulator-5556 (slot 2).
+- **Stream 2 handoff (2026-09-26T22:00Z):** the full state is in [docs/workstreams/02-home-household.md](workstreams/02-home-household.md) → CURRENT RESUME, along with the runtime kit and bundles.
+  - Open S2 PR: #535 (native Add guest truth fixes; CI running).
+  - **User-approved next S2 work:** (2a) guest-letter security fix, Proposal A: a guest or service-provider role ends residency in `verifyByCode` and `isStillVerifiedResident`; (2b) native Add guest "What they can see" sections sent as `included_sections`.
 - **Open product notes:**
   - Cancelling a started task is blocked by policy (`STARTED_POLICY_REVIEW`; copy mentions fees on $0 tasks). A user proposal is possible.
-  - S2 recorded that the web Mail Party page is dormant (a product question for its user).
+  - **Web Family Mail Party (S2):** dormant on the web; Android works. **User decision 2026-09-26: deferred.** It's a known gap to be aware of and may be built in the future; no action now.
 
 ## Resume point history — 2026-09-26T17:33Z (batch 28 merged; batch 29 #526 queued)
 
