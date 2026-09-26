@@ -125,6 +125,8 @@ data class ManageTrainUiState(
     // ── S1 organizer surfaces ──
     /** Helper roster from `GET /:id/reservations`. */
     val helperRows: List<ManageHelperRow> = emptyList(),
+    /** True when that read failed: the Helpers section says so instead of "No signups yet". */
+    val helpersFailed: Boolean = false,
     /** Slot roster from the detail payload. */
     val slotRows: List<ManageSlotRow> = emptyList(),
     /** Co-organizer roster from `GET /:id/organizers`. */
@@ -226,9 +228,10 @@ class ManageTrainViewModel
          * sections instead of blowing up the whole screen.
          */
         private suspend fun loadOrganizerSurfaces(slots: List<ManageSlotRow>) {
+            val reservationsResult = repo.reservations(trainId)
             val reservations =
-                when (val result = repo.reservations(trainId)) {
-                    is NetworkResult.Success -> result.data.reservations
+                when (reservationsResult) {
+                    is NetworkResult.Success -> reservationsResult.data.reservations
                     is NetworkResult.Failure -> emptyList()
                 }
             val organizers =
@@ -244,6 +247,7 @@ class ManageTrainViewModel
             _state.update {
                 it.copy(
                     helperRows = ManageOrganizerProjection.helperRows(reservations, slots),
+                    helpersFailed = reservationsResult is NetworkResult.Failure,
                     organizerRows = ManageOrganizerProjection.organizerRows(organizers),
                     fund = fund,
                 )
@@ -263,6 +267,7 @@ class ManageTrainViewModel
                     // carry it across the refresh so it isn't swallowed.
                     toast = current.toast,
                     helperRows = current.helperRows,
+                    helpersFailed = current.helpersFailed,
                     slotRows = current.slotRows,
                     organizerRows = current.organizerRows,
                     fund = current.fund,
