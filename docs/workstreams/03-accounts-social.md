@@ -2,6 +2,20 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 23:06Z)
+
+- **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner confirmed by message: the resumed Stream 1 session ("Stream 1 peer takeover handoff") until it posts a new handoff.
+- **#536:** CI passed (22:34Z); in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), waiting on #540's CI (android lint/test/assemble and iOS device tests still running at 22:59Z). No action from Stream 3 unless a fix is needed.
+- **Runtime restarted 22:59–23:01Z** from the kit, in its order: Docker stack (crash recovery "redo done", ready 23:00:14Z; BookingPage `807dd420` `is_live=false`, IdentityAuditLog 9, ChatMessage 141), API 18134 (`23e518b11`), proxy 18130 (chat-audit mode still on), web 18131 (`75b6f2eab`), file server 18198. Storage shim not started (Android chat audit only). Devices off; no slots or heavy held.
+- **Before-builds:** the installed native builds (`36af1f371`) and the web tree (`75b6f2eab`) differ from master `f885e0623` only in files outside the remaining rows (checked with `git diff --stat`), so they serve as "before" builds.
+- **User decisions, 2026-09-26 ~23:05Z (AskUserQuestion):**
+  - **Approved:** one tagged Member Review fixture of business `2b3c28da` (S3-59), isolated DB only, recorded with its exact removal.
+  - **Not approved:** allowing `GET /api/b/:username` (S3-22/62); a canned AI reply at the proxy (S3-26; web AI chat keeps messages only in the browser, so no DB fixture can show a mail summary); applying master's migration `20260926100000` to the isolated DB. The API stays on `23e518b11`; master's backend differs from it only in Stream 2's mail files.
+  - **S3-35:** wire native "Set up payments" to `POST /api/personas/:id/payments/onboard` and open the returned URL, like web. Verification reaches only the request and the error UI; no Stripe call.
+  - **S3-46:** replace the false "Stripe Checkout is coming… handshake is saved" toast with a retryable error, and link the Audience Inbox tab to `/app/audience/inbox`.
+  - **S3-64:** skip Android; wire the iOS view only.
+- **Plan:** S3-69 (web + iOS), S3-64 iOS, S3-37 iOS, S3-59 iOS, S3-35 native, S3-46 web. S3-22/62 only through a render path that writes nothing; S3-26 stays open (no approved reproduction path).
+
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
 
 The user asked the 2026-09-25/26 Stream 3 session to stop and hand off. Everything a successor needs is here and in two private files:
