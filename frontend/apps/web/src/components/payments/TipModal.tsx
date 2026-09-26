@@ -223,7 +223,14 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
       if (next.legacyPaymentId && value.request.source !== 'legacy') throw new Error('The earlier tip identity could not be verified.');
       original = await slot.current.retain(originalOnly(value.request), valid);
       if (!valid()) return; remember(original); await accept(value, original, valid);
-    } else if (!next.eligible || next.terms.payeeId !== workerId) setError('The current task is not available for this tip. Reopen its details before continuing.');
+    } else if (!next.eligible || next.terms.payeeId !== workerId) {
+      // Reopening helps only when the task's terms changed; a server reason that
+      // reopening can't change is said plainly (the apps word it the same way).
+      const reason = next.terms.payeeId === workerId ? next.unavailableReason : null;
+      setError(reason === 'CONNECT_REQUIRED' ? "The worker can't receive tips yet because they haven't set up payouts."
+        : reason === 'TIP_LIMIT' ? "You've reached the 3-tip limit for this task."
+        : 'The current task is not available for this tip. Reopen its details before continuing.');
+    }
   }
 
   useEffect(() => {
