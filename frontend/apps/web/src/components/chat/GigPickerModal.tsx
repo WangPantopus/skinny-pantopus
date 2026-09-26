@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import type { GigListItem } from '@pantopus/types';
 import { getStatusColor } from '@pantopus/ui-utils';
+import ErrorState from '@/components/ui/ErrorState';
 
 interface GigPickerModalProps {
   open: boolean;
@@ -23,21 +24,29 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
   const [searchResults, setSearchResults] = useState<GigListItem[]>([]);
   const [loadingMyGigs, setLoadingMyGigs] = useState(true);
   const [searching, setSearching] = useState(false);
+  // A failed read is not an empty list; say so and offer a retry.
+  const [myGigsFailed, setMyGigsFailed] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  const loadMyGigs = useCallback(() => {
     setLoadingMyGigs(true);
-    setQuery('');
-    setSearchResults([]);
+    setMyGigsFailed(false);
     api.gigs
       .getMyGigs({ limit: 50 })
       .then((res: Record<string, any>) => setMyGigs((res?.gigs || res?.data || []) as GigListItem[]))
-      .catch(() => setMyGigs([]))
+      .catch(() => { setMyGigs([]); setMyGigsFailed(true); })
       .finally(() => setLoadingMyGigs(false));
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    setSearchResults([]);
+    loadMyGigs();
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
+  }, [open, loadMyGigs]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,23 +55,28 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  const runSearch = useCallback(async (text: string) => {
+    setSearching(true);
+    setSearchFailed(false);
+    try {
+      const res = await api.gigs.searchGigs(text);
+      setSearchResults((res?.gigs || []) as GigListItem[]);
+    } catch { setSearchResults([]); setSearchFailed(true); }
+    setSearching(false);
+  }, []);
+
   const handleSearch = useCallback((text: string) => {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!text.trim() || text.trim().length < 2) {
       setSearchResults([]);
       setSearching(false);
+      setSearchFailed(false);
       return;
     }
     setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await api.gigs.searchGigs(text.trim());
-        setSearchResults((res?.gigs || []) as GigListItem[]);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 400);
-  }, []);
+    debounceRef.current = setTimeout(() => { void runSearch(text.trim()); }, 400);
+  }, [runSearch]);
 
   const handleSelect = (gig: GigListItem) => {
     onSelectGig({
@@ -74,8 +88,10 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
     });
   };
 
-  const displayList = query.trim().length >= 2 ? searchResults : myGigs;
-  const isLoading = query.trim().length >= 2 ? searching : loadingMyGigs;
+  const isSearchMode = query.trim().length >= 2;
+  const displayList = isSearchMode ? searchResults : myGigs;
+  const isLoading = isSearchMode ? searching : loadingMyGigs;
+  const loadFailed = isSearchMode ? searchFailed : myGigsFailed;
 
   if (!open) return null;
 
@@ -132,6 +148,12 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
             <div className="flex items-center justify-center py-16">
               <div className="text-sm text-app-muted">Loading...</div>
             </div>
+          ) : loadFailed ? (
+            <ErrorState
+              title={isSearchMode ? "Couldn't search tasks" : "Couldn't load your tasks"}
+              message="Check your connection and try again."
+              onRetry={isSearchMode ? () => { void runSearch(query.trim()); } : loadMyGigs}
+            />
           ) : displayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-app-muted">
               <span className="text-3xl mb-2">💼</span>
