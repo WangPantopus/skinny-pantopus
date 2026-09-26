@@ -12,8 +12,6 @@ import SwiftUI
 public struct ListingDetailView: View {
     @State private var viewModel: ListingDetailViewModel
     @State private var offerSheetVisible = false
-    @State private var offerAmount: String = ""
-    @State private var offerMessage: String = ""
     @State private var offerSending = false
     @State private var offerError: String?
     /// The buyer's open offer ("Your offer $X"): shown with Withdraw, as on web.
@@ -64,7 +62,14 @@ public struct ListingDetailView: View {
         )
         .task { await viewModel.load() }
         .sheet(isPresented: $offerSheetVisible) {
-            offerSheet
+            MakeOfferSheet(
+                isFree: listingIsFree,
+                askingPrice: viewModel.rawListing?.price,
+                sending: $offerSending,
+                errorText: $offerError
+            ) { amount, message in
+                Task { await sendOffer(amount: amount, message: message) }
+            }
         }
         .sheet(isPresented: $myOfferSheetVisible) {
             if let offer = viewModel.myOffer {
@@ -144,10 +149,6 @@ public struct ListingDetailView: View {
             myOfferSheetVisible = true
         } else {
             offerError = nil
-            if offerAmount.isEmpty, !listingIsFree, let price = viewModel.rawListing?.price, price > 0 {
-                // Starts at the asking price, as on web.
-                offerAmount = price.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(price))" : String(format: "%.2f", price)
-            }
             offerSheetVisible = true
         }
     }
@@ -189,73 +190,18 @@ public struct ListingDetailView: View {
         return "\(title) — \(url)"
     }
 
-    private var offerSheet: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("Make an offer")
-                .font(.system(size: 18, weight: .bold))
-            Text("Send the seller your offer. Pickup details get worked out in chat.")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            if !listingIsFree {
-                TextField("Offer amount", text: $offerAmount)
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Offer amount")
-            }
-            TextField("Message (optional)", text: $offerMessage, axis: .vertical)
-                .lineLimit(2...4)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Offer message")
-            if let offerError {
-                Text(offerError)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.Color.error)
-                    .accessibilityIdentifier("listingDetailOfferError")
-            }
-            Button {
-                Task { await sendOffer() }
-            } label: {
-                Text(offerSending ? "Sending…" : "Send")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Theme.Color.primary600)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSendOffer)
-            .accessibilityIdentifier("listingDetailSendOffer")
-        }
-        .padding(Spacing.s5)
-        .presentationDetents([.medium])
-    }
-
-    private var canSendOffer: Bool {
-        guard !offerSending else { return false }
-        if listingIsFree { return true }
-        return (ListingDetailViewModel.parseOfferAmount(offerAmount) ?? 0) > 0
-    }
-
     /// One request at a time; a refused offer keeps the sheet open with the server's reason.
-    private func sendOffer() async {
-        guard canSendOffer else { return }
+    private func sendOffer(amount: Double?, message: String?) async {
+        guard !offerSending else { return }
         offerSending = true
         offerError = nil
         defer { offerSending = false }
         let free = listingIsFree
-        let message = offerMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        let error = await viewModel.makeOffer(
-            amount: free ? nil : ListingDetailViewModel.parseOfferAmount(offerAmount),
-            message: message.isEmpty ? nil : message
-        )
-        if let error {
+        if let error = await viewModel.makeOffer(amount: free ? nil : amount, message: message) {
             offerError = error
             return
         }
         offerSheetVisible = false
-        offerAmount = ""
-        offerMessage = ""
         toast = ToastMessage(text: free ? "Interest sent." : "Offer sent.", kind: .success)
     }
 
@@ -326,5 +272,89 @@ public struct ListingDetailView: View {
         }
         myOfferSheetVisible = false
         toast = ToastMessage(text: free ? "Interest withdrawn." : "Offer withdrawn.", kind: .success)
+    }
+}
+
+/// "Make an offer", its own view like the seller's counter sheet: it owns the amount it shows,
+/// so Send follows that amount from the first frame. Built in the parent's body, the sheet kept
+/// Send disabled over the asking price it opened with until the amount was edited.
+private struct MakeOfferSheet: View {
+    let isFree: Bool
+    @Binding var sending: Bool
+    @Binding var errorText: String?
+    let onSend: (Double?, String?) -> Void
+
+    @State private var amountText: String
+    @State private var messageText = ""
+
+    init(
+        isFree: Bool,
+        askingPrice: Double?,
+        sending: Binding<Bool>,
+        errorText: Binding<String?>,
+        onSend: @escaping (Double?, String?) -> Void
+    ) {
+        self.isFree = isFree
+        _sending = sending
+        _errorText = errorText
+        self.onSend = onSend
+        // Starts at the asking price, as on web.
+        var start = ""
+        if !isFree, let price = askingPrice, price > 0 {
+            start = price.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(price))" : String(format: "%.2f", price)
+        }
+        _amountText = State(initialValue: start)
+    }
+
+    private var amount: Double? {
+        ListingDetailViewModel.parseOfferAmount(amountText)
+    }
+
+    private var canSend: Bool {
+        !sending && (isFree || (amount ?? 0) > 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("Make an offer")
+                .font(.system(size: 18, weight: .bold))
+            Text("Send the seller your offer. Pickup details get worked out in chat.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if !isFree {
+                TextField("Offer amount", text: $amountText)
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Offer amount")
+            }
+            TextField("Message (optional)", text: $messageText, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Offer message")
+            if let errorText {
+                Text(errorText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.Color.error)
+                    .accessibilityIdentifier("listingDetailOfferError")
+            }
+            Button {
+                guard canSend else { return }
+                let message = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+                onSend(isFree ? nil : amount, message.isEmpty ? nil : message)
+            } label: {
+                Text(sending ? "Sending…" : "Send")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Theme.Color.primary600)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .accessibilityIdentifier("listingDetailSendOffer")
+        }
+        .padding(Spacing.s5)
+        .presentationDetents([.medium])
     }
 }
