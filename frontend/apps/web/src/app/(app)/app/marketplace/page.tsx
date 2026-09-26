@@ -373,9 +373,20 @@ export default function MarketplacePage() {
   );
 
   // ── Snapshot stats ─────────────────────────────────────────
+  // In view is the same total the map chip shows. New in 24h is counted from the loaded
+  // pages, so it is only exact once nothing is left to load, or once newest-first pages
+  // already reach listings older than a day; otherwise it is a floor ("N+").
   const marketplaceSnapshot = useMemo(() => {
-    return { inView: browseListings.length, newToday: 0, urgentDeadlines: 0, myPendingOffers: 0 };
-  }, [browseListings.length]);
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const isNew = (listing: { created_at?: string | null }) => {
+      const created = Date.parse(listing.created_at ?? '');
+      return Number.isFinite(created) && created >= cutoff;
+    };
+    const newCount = browseListings.filter(isNew).length;
+    const oldestLoaded = browseListings[browseListings.length - 1];
+    const complete = !hasMore || (sort === 'newest' && oldestLoaded != null && !isNew(oldestLoaded));
+    return { inView: visibleListingCount, newIn24h: complete ? `${newCount}` : `${newCount}+` };
+  }, [browseListings, hasMore, sort, visibleListingCount]);
 
   // ── New listings banner tap → refetch browse ──────────────
   const handleNewListingsTap = useCallback(() => {
@@ -924,7 +935,7 @@ export default function MarketplacePage() {
             {/* Snapshot card */}
             {listingCountKnown && (
               <div className="mb-6">
-                <MarketplaceSnapshotCard inView={marketplaceSnapshot.inView} newToday={marketplaceSnapshot.newToday} urgentDeadlines={marketplaceSnapshot.urgentDeadlines} myPendingOffers={marketplaceSnapshot.myPendingOffers} />
+                <MarketplaceSnapshotCard inView={marketplaceSnapshot.inView} newIn24h={marketplaceSnapshot.newIn24h} />
               </div>
             )}
 
