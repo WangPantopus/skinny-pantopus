@@ -1571,23 +1571,15 @@ private struct ChatConversationHeader: View {
         } else {
             switch counterparty {
             case .person:
-                // A15 / A15.2 header actions: phone then info. Calling
-                // ships later — the phone button is a no-op affordance
-                // for now, per design.
-                HStack(spacing: 2) {
-                    Button {} label: {
-                        Icon(.phone, size: 20, color: Theme.Color.appTextStrong)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Call")
-                    Button(action: onOpenDetails) {
-                        Icon(.info, size: 20, color: Theme.Color.appTextStrong)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Conversation details")
+                // A15 / A15.2 header action: info. The design's phone button
+                // stays out until calling exists, so the header offers no
+                // control that does nothing.
+                Button(action: onOpenDetails) {
+                    Icon(.info, size: 20, color: Theme.Color.appTextStrong)
+                        .frame(width: 34, height: 34)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
                 // more-horizontal. The VM has no AI-thread reset API yet
