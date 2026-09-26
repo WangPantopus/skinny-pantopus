@@ -95,10 +95,13 @@
      - **A (small, in place):** while SMS isn't wired, refuse phone escrow with a truthful message ("Texting isn't available yet; send to their email"), or return the claim link for the sender to share. Stop logging the SMS body (log a redacted form).
      - **B:** wire a real SMS provider. That's a vendor and money decision.
    - **Reachability (checked 22:14Z):** no client sends `recipientPhone` (web, iOS, Android, `@pantopus/api`); only the backend Joi schema accepts it. It's reachable only by direct API calls, so user impact is low. Keep it as a backend cleanup (proposal A) when convenient.
-1. **"Message household admin" for applicants (candidate).** The Verification Center link (`/app/homes/:id/messages`) probably tells every applicant "No household admin yet" even when the Home has an owner.
+1. **"Message household admin" for applicants (candidate; owner observation added 23:0xZ).** The Verification Center link (`/app/homes/:id/messages`) probably tells every applicant "No household admin yet" even when the Home has an owner.
    - Home detail returns `owner` only with `ownership.view`, and the occupants read needs `members.view`.
    - Reproducing it needs an applicant fixture: a new synthetic user with a pending claim.
    - Any fix touches the owner-identity privacy boundary, so propose it to the user first.
+   - **Observed 23:0xZ:** the page picks `home.owner.id` (or the first owner/admin occupant) without excluding the viewer. A verified owner who opens `/app/homes/:id/messages` is redirected into a chat with their own user id (sweep `sweep-2300`, owner).
+     - Only the Verification Center links there, and it shows only to unverified viewers, so owners reach it only by URL.
+     - A provisional creator who is also the recorded owner could hit it; the applicant fixture would show that.
 2. **Unlinked web page `/app/homes/[id]/members/add-guest`.** It still fakes success ("<name> has been added as a guest", no API). Nothing links to it since #528. Proposal: remove it or redirect it (ask first; it removes a page).
 3. **Native Dismiss confirm.** It says "It moves out of your mailbox…", but for a household letter it's removed for everyone who can see it (restorable). Accurate wording needs a server signal for "others can see it" (`homeMailVisible`), so it's parked.
 4. **Web Documents empty state. DONE → [#541](https://github.com/WangPantopus/skinny-pantopus/pull/541).** It said "Upload documents from the home dashboard", but the web has no document upload (native only). It now reads "Documents added in the Pantopus app on your phone show up here". Verified before and after on the real page; the dashboard check found no upload control.
@@ -109,7 +112,17 @@
    - Right after creating a pass there, the tab still says "No active guests" (bundle `20260926-stream2-add-guest-sections-r1`, `ios-after/04-after-copy-members-guests-tab.png`).
    - Passes appear only in the separate guest-pass manager (Home → invite link → Active/Past passes). The web shows a Guest Passes card on its Members Security tab.
    - **Proposal (flow change, so ask the user first):** the Guests tab's CTA/FAB opens the existing guest-pass manager (whose FAB opens the same form and which refetches on return) instead of the bare form. Alternatively, list active passes in the Guests tab.
-8. **Backlog.** Continue the 40-row inventory (section "September 22 exact Home/residency/records/mail accounting", below): 8 closed / 32 partial-open.
+8. **Health card "View maintenance" on iOS/Android opens the wrong records (D04, candidate; navigation, so ask the user).**
+   - The Home-health maintenance dimension counts open **HomeIssue** rows (`homeHealthService.scoreMaintenance`: "5 open maintenance issues").
+   - Its action on web (`/app/homes/:id/maintenance`) lists those issues.
+   - On iOS and Android, `view_maintenance` opens the **HomeMaintenanceLog** list (`GET /api/homes/:id/maintenance`), which reads "No maintenance logged yet". The issues sit behind a small top-right "Home issues" icon.
+   - Evidence: bundle `20260926-stream2-home-issue-status-r1` (`android-before/00-health-view-maintenance.txt` then `01-maintenance.txt`; `ios-after/00-health-view-maintenance.png`).
+   - **Proposal:** on both apps, the health card's maintenance action opens the Issues list, as the web does, keeping its label.
+9. **Stale sun data labelled "today" (I06, candidate, low).**
+   - The web Today sun card hard-codes `SourceNote asOf="today"`; the other sections show "as of <time>". Android shows "Your location · today".
+   - When the provider is down, the cache serves days-old sun times with that label. The web arc also says "sun has set" against the stale date.
+   - Only during provider outages. Proposal: show the data's own date when it isn't today.
+10. **Backlog.** Continue the 40-row inventory (section "September 22 exact Home/residency/records/mail accounting", below): 8 closed / 32 partial-open.
    - Rows updated on 2026-09-26: R04, R06, D01, D07, D09, M01, M02, M04.
    - Methods that found real bugs quickly:
      - `web-home-sweep.cjs`, a read-only sweep of the Home/Mail/Place web pages as owner and member;
