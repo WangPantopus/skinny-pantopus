@@ -1,15 +1,17 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T07:53Z
+## CURRENT STREAM 1 STATE — 2026-09-26T08:06Z
 
 - **Merged in batch 23 (#484, 07:51:21Z):** #476 and #480.
-- **Open for batch 24:**
+- **In batch 24 ([#489](https://github.com/WangPantopus/skinny-pantopus/pull/489), queued):**
   - [#481](https://github.com/WangPantopus/skinny-pantopus/pull/481) `f1f283752`: task Q&A failure state. Green; bundle `ed36276d…`.
-  - [#487](https://github.com/WangPantopus/skinny-pantopus/pull/487) `567bfaec1`: saved-task state (`viewer_has_saved`). Afters pass on both apps; bundle `9569fcdf…`; CI running.
+  - [#487](https://github.com/WangPantopus/skinny-pantopus/pull/487) `567bfaec1`: saved-task state (`viewer_has_saved`). Afters pass on both apps; bundle `9569fcdf…`; green.
 - **Android sweep (inventory, all PASS):**
   - Marketplace browse failure (seq 5348 → 5350).
   - Listing detail failure (seq 5351 → 5352).
   - Listing save double tap + reopen (seq 5354–5359). Exact cleanup.
+  - Offline Save and Ask (seq 5374–5376), post detail 500 (5383–5385), Hub notifications pill (5389).
+- **Token refresh (proposal A/B/C):** new evidence at 07:55Z. A task opened by link fails on its own first load when that load triggers the refresh (seq 5360 refresh 200 → 5361 read 200 → "Your account changed").
 - **Low candidate:** a re-tap of the current bottom tab on a child screen is ignored on Android. That's a navigation choice, so no change without approval.
 - **Proposals for the user:** token refresh; Marketplace Snapshot rows; owner Message; buyer offer view/withdraw.
 

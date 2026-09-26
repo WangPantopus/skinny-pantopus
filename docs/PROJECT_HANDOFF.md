@@ -1,25 +1,26 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T07:53Z (batch 23 merged; batch 24 forming)
+## CURRENT RESUME POINT — 2026-09-26T08:06Z (batch 23 merged; batch 24 #489 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `e00952e3e`. Batch 23 [#484](https://github.com/WangPantopus/skinny-pantopus/pull/484) merged at 07:51:21Z. It carried #479 (S3 B7 web limits), #480 (S1 web Payouts "—") and #476 (S1 My bids/tasks/posts + iOS Hub time).
-  - **Batch 24 candidates** (each reviewed, bundle verified):
-    - #481 (S1 native task Q&A failure state): green.
-    - #483 (S3-43 web blocked users): green.
-    - #486 (S3-23 web verification upload): green; source reviewed against the backend upload contract and the native uploaders.
-    - #485 (S3 Android notifications race): CI running.
-    - #487 (S1 native saved-task state: `viewer_has_saved`): CI running.
-    - #482 (S2 issue permissions): its flaky "Tests on iPhone 16 Pro" job was re-run at 07:49:17Z at Stream 2's request.
-  - The batch is built once those finish.
+  - **Batch 24 [#489](https://github.com/WangPantopus/skinny-pantopus/pull/489)**, runner watching. Order: #481 (S1 task Q&A failure state) → #487 (S1 saved-task `viewer_has_saved`) → #482 (S2 issue permissions) → #483 (S3-43) → #485 (S3-48/56) → #486 (S3-23) → #488 (S3-39).
+    - Tip `944057373`.
+    - Every head is green on its exact SHA. All seven bundles were re-verified, and the chain is clean.
+  - New peer PRs go into batch 25.
 - **Stream 1 new this round:**
   - #487: both apps decoded `saved_by_user`, which no endpoint sends, so a saved task reopened unsaved. Afters pass on Android and iOS.
   - Android sweep, all PASS, recorded in the inventory:
     - Marketplace browse failure: error + retry, no false empty.
     - Listing detail failure: error + retry.
     - Listing save: a double tap sends one POST, and the saved state persists on reopen; exact cleanup.
+    - Offline (proxy `reset` drops the connection): Save shows "Couldn't save this task." and reverts. Ask shows "Can't reach Pantopus…" and keeps the typed question; online retry creates exactly one question. Exact cleanup.
+    - Post detail 500: retryable error. Hub notifications pill: opens the real list, 2 unread = SQL.
+    - Web account switch clears the query cache (source).
   - Low candidate: Android ignores a re-tap of the current bottom tab on a child screen. This is a navigation choice, so a change would need the user's approval.
-- **Proposals awaiting the user (Stream 1):** unchanged. Android token refresh retires open screens; web Marketplace Snapshot hardcoded rows; owner Message on their own listing; native buyer offer view/withdraw.
+- **Proposals awaiting the user (Stream 1):**
+  - Android token refresh retires open screens. New evidence at 07:55Z: a task opened by link fails on its own first load when that load triggers the ~30-min refresh, which strengthens option A.
+  - Also: web Marketplace Snapshot hardcoded rows; owner Message on their own listing; native buyer offer view/withdraw.
 - **Security item (Stream 3, escalated to the user):** `verify/upload-evidence` accepts any UUID as `file_id` without an ownership check.
 - **Slots:** heavy is Stream 2's (R06 build, since 07:38:53Z). Stream 3 asked for the iOS driver, slot 1 and heavy next, and Stream 1 has no objection. Stream 1 holds only emulator-5558 (slot 3).
 
