@@ -11,6 +11,7 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Patterns
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -245,7 +246,8 @@ fun ChatConversationScreen(
                                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                                     ?: return@mapNotNull null
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
-                            Triple(mimeType, "chat-${UUID.randomUUID()}.$extension", bytes)
+                            val name = context.pickedFileName(uri) ?: "chat-${UUID.randomUUID()}.$extension"
+                            Triple(mimeType, name, bytes)
                         }
                     }
                 attachments.forEach { (mimeType, filename, bytes) ->
@@ -5076,6 +5078,13 @@ private fun KeyboardResizeEffect() {
         onDispose { if (window != null && previous != null) window.setSoftInputMode(previous) }
     }
 }
+
+/** A picked file's own name ("Lease.pdf"), which the file bubble shows, or null. */
+private fun Context.pickedFileName(uri: Uri): String? =
+    contentResolver
+        .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+        ?.takeIf(String::isNotBlank)
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
