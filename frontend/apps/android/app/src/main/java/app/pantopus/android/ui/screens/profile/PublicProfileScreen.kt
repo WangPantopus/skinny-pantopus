@@ -95,6 +95,7 @@ fun PublicProfileScreen(
     val sheetState = rememberModalBottomSheetState()
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
+    var showBlockConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(showHandshake) {
         if (showHandshake) {
@@ -203,7 +204,7 @@ fun PublicProfileScreen(
                 OverflowSheetContent(
                     onBlock = {
                         viewModel.setShowOverflow(false)
-                        viewModel.block()
+                        showBlockConfirm = true
                     },
                     onReport = {
                         viewModel.setShowOverflow(false)
@@ -228,6 +229,35 @@ fun PublicProfileScreen(
                     },
                 )
             }
+        }
+        // Blocking from a chat asks first (`ChatConversationScreen`), so the
+        // profile does too before it sends `POST api/users/:id/block`.
+        if (showBlockConfirm) {
+            val name = (state as? PublicProfileUiState.Loaded)?.content?.header?.displayName?.trim().orEmpty()
+            AlertDialog(
+                onDismissRequest = { showBlockConfirm = false },
+                title = { Text(if (name.isEmpty()) "Block this user?" else "Block $name?") },
+                text = { Text("They won't be able to message you anymore. You can unblock them later.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showBlockConfirm = false
+                            viewModel.block()
+                        },
+                        modifier = Modifier.testTag("publicProfileBlockConfirm"),
+                    ) {
+                        Text("Block", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showBlockConfirm = false },
+                        modifier = Modifier.testTag("publicProfileBlockCancel"),
+                    ) {
+                        Text("Cancel")
+                    }
+                },
+            )
         }
         // Tapping "Connected" removes the edge, and RN gates the same
         // `DELETE api/relationships/:id` behind a "Disconnect · Remove this

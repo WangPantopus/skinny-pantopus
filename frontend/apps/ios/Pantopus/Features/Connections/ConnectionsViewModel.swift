@@ -58,6 +58,15 @@ public enum ConnectionsTab {
     /// S5 — people the viewer has blocked. RN
     /// `src/app/connections.tsx:20`.
     public static let blocked = "blocked"
+
+    /// The tab a `connections?tab=` link opens. A connection request links
+    /// `/app/connections?tab=requests` (backend `notificationService.js`), which
+    /// is the Pending tab here; anything unknown opens All.
+    public static func linked(_ tab: String?) -> String {
+        guard let tab = tab?.lowercased() else { return all }
+        if tab == "requests" { return pending }
+        return [neighbors, pending, sent, blocked].contains(tab) ? tab : all
+    }
 }
 
 /// Pending "remove this connection?" confirmation. Names the person so
@@ -203,6 +212,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
 
     init(
         api: APIClient = .shared,
+        initialTab: String? = nil,
         onMessage: @escaping @MainActor (ConnectionsChatTarget) -> Void = { _ in },
         onFindPeople: @escaping @MainActor () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() },
@@ -210,6 +220,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         timeZone: TimeZone = .current
     ) {
         self.api = api
+        selectedTab = ConnectionsTab.linked(initialTab)
         self.onMessage = onMessage
         self.onFindPeople = onFindPeople
         self.now = now

@@ -72,6 +72,7 @@ class HubViewModel
         val state: StateFlow<HubUiState> = _state.asStateFlow()
 
         private val _discoveryFilter = MutableStateFlow(HubDiscoveryFilter.Gigs)
+        private var discoveryGeneration = 0
 
         /**
          * Active Discover filter tab. Drives the `filter` query param on
@@ -83,6 +84,19 @@ class HubViewModel
 
         /** True while a filter-tab refetch is in flight. */
         val discoveryLoading: StateFlow<Boolean> = _discoveryLoading.asStateFlow()
+
+        private val _discoveryFailed = MutableStateFlow(false)
+
+        /**
+         * True when the last discovery request failed, so the rail says so
+         * instead of "Nothing nearby yet".
+         */
+        val discoveryFailed: StateFlow<Boolean> = _discoveryFailed.asStateFlow()
+
+        /** Re-request the active Discover filter after a failure. */
+        fun retryDiscovery() {
+            viewModelScope.launch { refreshDiscovery() }
+        }
 
         /**
          * Discover filter-tab tap. Refetches only
@@ -96,8 +110,11 @@ class HubViewModel
         }
 
         private suspend fun refreshDiscovery() {
+            val generation = ++discoveryGeneration
             _discoveryLoading.value = true
             val result = repo.discovery(filter = _discoveryFilter.value.queryValue)
+            if (generation != discoveryGeneration) return
+            _discoveryFailed.value = result !is NetworkResult.Success
             val items = (result as? NetworkResult.Success)?.data?.items.orEmpty()
             applyDiscovery(projectDiscovery(items))
             _discoveryLoading.value = false
@@ -122,6 +139,8 @@ class HubViewModel
 
         /** Pull-to-refresh / retry. */
         fun refresh() {
+            discoveryGeneration += 1
+            _discoveryLoading.value = false
             _state.value = HubUiState.Skeleton
             viewModelScope.launch { fetch() }
         }
@@ -198,6 +217,7 @@ class HubViewModel
                         }
                     todayJob.await() to discoveryJob.await()
                 }
+            _discoveryFailed.value = discovery == null
 
             // S5 — per-firewall unread split powers the megaphone shortcut
             // into the Beacon notification zone. Sequenced (not raced)
@@ -379,14 +399,16 @@ class HubViewModel
                     )
                 }
             val serverItems =
-                hub.jumpBackIn.mapIndexed { index, raw ->
+                hub.jumpBackIn.map { raw ->
                     JumpBackItem(
                         id = raw.title,
                         title = raw.title,
                         icon = iconFromRaw(raw.icon),
                         route = raw.route,
                         tint = tintForRoute(raw.route),
-                        kicker = if (index == 0) "In progress" else "Draft",
+                        // The backend carries no status for these tiles, so
+                        // they get no kicker (a label by position was untrue).
+                        kicker = "",
                     )
                 }
             return (rebookItems + serverItems).take(2)

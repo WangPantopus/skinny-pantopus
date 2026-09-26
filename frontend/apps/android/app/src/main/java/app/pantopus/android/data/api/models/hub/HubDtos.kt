@@ -179,6 +179,7 @@ data class HubActivityItem(
     val at: String,
     val read: Boolean,
     val route: String,
+    val notificationType: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

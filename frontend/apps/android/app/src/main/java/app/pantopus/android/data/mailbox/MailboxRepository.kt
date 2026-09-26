@@ -1,6 +1,8 @@
 package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mailbox.AckResponse
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailRequest
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsHistoryResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
@@ -42,6 +44,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MailboxApi
 import app.pantopus.android.data.api.services.MailboxV2Api
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,6 +88,10 @@ class MailboxRepository
         /** `PATCH /api/mailbox/:id/ack` — used by the generic A17.1
          *  detail screen's primary Acknowledge action. */
         suspend fun acknowledge(mailId: String): NetworkResult<AckResponse> = safeApiCall { mailboxApi.acknowledge(mailId) }
+
+        /** `PATCH /api/mailbox/:id/archive` — moves the letter out of Incoming. */
+        suspend fun archive(mailId: String): NetworkResult<ArchiveMailResponse> =
+            safeApiCall { mailboxApi.archive(mailId, ArchiveMailRequest(archived = true)) }
 
         /** `GET /api/mailbox/v2/drawers`. */
         suspend fun drawers(): NetworkResult<DrawerListResponse> = safeApiCall { v2Api.drawers() }
@@ -191,4 +200,20 @@ class MailboxRepository
 
         /** `DELETE /api/mailbox/v2/p3/map/pin/:id` — A11.4 delete a pin. */
         suspend fun deleteMapPin(id: String): NetworkResult<DeleteMapPinResponse> = safeApiCall { v2Api.deleteMapPin(id) }
+
+        companion object {
+            private val mailLeftListFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /**
+             * Ids of letters a confirmed action moved out of their Mailbox tab:
+             * Dismiss shreds one, File and Save to vault file one, Archive
+             * archives one. An open Mailbox list drops the row instead of
+             * showing it until a reload.
+             */
+            val mailLeftList: SharedFlow<String> = mailLeftListFlow.asSharedFlow()
+
+            fun announceMailLeftList(mailId: String) {
+                mailLeftListFlow.tryEmit(mailId)
+            }
+        }
     }

@@ -6,6 +6,7 @@ import type { MailItemV2 } from '@/types/mailbox';
 import type { BundleItem } from '@/types/mailbox';
 import { useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
 import { MailItemCard, BundleCard, OfferCard, EmptyState } from '@/components/mailbox';
+import ErrorState from '@/components/ui/ErrorState';
 
 // ── Types ────────────────────────────────────────────────────
 type DrawerParam = 'personal' | 'home' | 'business' | 'earn';
@@ -98,21 +99,38 @@ export default function DrawerLayout({
     return () => clearTimeout(timer);
   }, [search]);
 
-  // ── Data fetching ───────────────────────────────────────
-  const { data, isLoading } = useDrawerItems(drawer, { page, limit: 20, filter: filter || undefined });
-  const markOpened = useMarkItemOpened();
-
-  // Accumulate items for infinite scroll
-  useEffect(() => {
-    if (!data) return;
-    setAllItems(prev => page === 1 ? data.items : [...prev, ...data.items]);
-  }, [data, page]);
-
-  // Reset when drawer or filter changes
-  useEffect(() => {
+  // Reset paging when the drawer or filter changes. Done while rendering, not
+  // in an effect: no request goes out for the old page under the new drawer
+  // or filter, and a cached first page is never wiped after it arrives.
+  const listKey = `${drawer}|${filter}`;
+  const [pagedListKey, setPagedListKey] = useState(listKey);
+  if (pagedListKey !== listKey) {
+    setPagedListKey(listKey);
     setPage(1);
     setAllItems([]);
-  }, [drawer, filter]);
+  }
+
+  // ── Data fetching ───────────────────────────────────────
+  // The drawer list is the drawer's incoming mail, like the apps' Incoming
+  // tab: dismissed, filed and archived letters leave it.
+  const { data, isPending, isError, isFetching, error, refetch } = useDrawerItems(drawer, {
+    page,
+    limit: 20,
+    tab: 'incoming',
+    filter: filter || undefined,
+  });
+  const markOpened = useMarkItemOpened();
+
+  // Accumulate items for infinite scroll. A refetched later page (after a
+  // retry or an invalidation) must not add its rows twice.
+  useEffect(() => {
+    if (!data) return;
+    setAllItems(prev => {
+      if (page === 1) return data.items;
+      const seen = new Set(prev.map(item => item.id));
+      return [...prev, ...data.items.filter(item => !seen.has(item.id))];
+    });
+  }, [data, page]);
 
   // ── Infinite scroll ─────────────────────────────────────
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -122,7 +140,7 @@ export default function DrawerLayout({
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && data?.has_more && !isLoading) {
+        if (entry.isIntersecting && data?.has_more && !isPending) {
           setPage(p => p + 1);
         }
       },
@@ -130,7 +148,8 @@ export default function DrawerLayout({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [data?.has_more, isLoading]);
+    // allItems.length: the sentinel only mounts once rows render.
+  }, [data?.has_more, isPending, allItems.length]);
 
   // ── Item click ──────────────────────────────────────────
   const selectedItemId = pathname.match(/\/mailbox\/[^/]+\/([^/]+)/)?.[1];
@@ -235,7 +254,7 @@ export default function DrawerLayout({
 
         {/* Item list */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading && page === 1 ? (
+          {isPending && page === 1 ? (
             // Loading skeleton
             <div className="p-3 space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -248,12 +267,29 @@ export default function DrawerLayout({
                 </div>
               ))}
             </div>
+          ) : isError && allItems.length === 0 ? (
+            // A failed first page is not an empty mailbox.
+            <ErrorState
+              title="Couldn't load your mail"
+              message={
+                error?.code === 'NETWORK_ERROR'
+                  ? "Can't reach Pantopus. Check your connection and try again."
+                  : 'Something went wrong on our side. Please try again.'
+              }
+              onRetry={() => { void refetch(); }}
+            />
           ) : filteredItems.length === 0 ? (
             debouncedSearch ? (
               <EmptyState
                 icon="🔍"
                 title="No results found"
                 description={`Nothing matches "${debouncedSearch}" in this drawer.`}
+              />
+            ) : filter ? (
+              <EmptyState
+                icon="🔍"
+                title={`No ${filter} mail`}
+                description="Choose All to see everything in this drawer."
               />
             ) : (
               <EmptyState section={drawer} />
@@ -302,8 +338,23 @@ export default function DrawerLayout({
               {/* Infinite scroll sentinel */}
               <div ref={sentinelRef} className="h-4" />
 
+              {/* A later page failed: keep the rows, retry that same page */}
+              {isError && page > 1 && (
+                <div role="alert" className="mx-3 my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
+                  <p>Couldn&apos;t load more mail.</p>
+                  <button
+                    type="button"
+                    disabled={isFetching}
+                    onClick={() => { if (!isFetching) void refetch(); }}
+                    className="font-semibold text-primary-600 hover:underline disabled:opacity-50"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
               {/* Loading more indicator */}
-              {isLoading && page > 1 && (
+              {isPending && page > 1 && (
                 <div className="py-4 text-center" role="status" aria-label="Loading more items">
                   <div className="inline-block w-5 h-5 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
                 </div>

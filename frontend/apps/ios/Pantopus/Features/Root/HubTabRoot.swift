@@ -245,8 +245,9 @@ public enum HubRoute: Hashable {
     /// Values must be a `NotificationsZone` raw value.
     case notificationsZone(context: String)
     /// Connections center (T5.2.3). Reached from the You / Me action grid
-    /// or via the `pantopus://connections` deep link.
-    case connections
+    /// or via the `pantopus://connections` deep link, whose `tab` query
+    /// picks the opening tab.
+    case connections(initialTab: String?)
     /// Support Trains list (T6.6c / P26.5) — mutual-aid rotations.
     /// Personal pillar. Reached from the You tab action grid or via
     /// the `pantopus://support-trains` deep link.
@@ -686,10 +687,37 @@ public struct HubTabRoot: View {
         .findPeopleSheet(isPresented: $showFindPeople)
         .overlay { navigationDrawerOverlay }
         .sheet(isPresented: $navDrawerIdentityCenter) {
-            // `onBack` is not the trailing parameter of `IdentityCenterView`,
-            // so the argument label must stay explicit here.
-            // swiftlint:disable:next trailing_closure
-            IdentityCenterView(onBack: { navDrawerIdentityCenter = false })
+            IdentityCenterView(
+                onBack: { navDrawerIdentityCenter = false },
+                onOpenIdentity: { card in openFromIdentityCenter(Self.identityCenterRoute(forCard: card.kind)) },
+                onOpenRow: { row in openFromIdentityCenter(Self.identityCenterRoute(forRow: row.id)) }
+            )
+        }
+    }
+
+    /// The drawer's Identity Center is a sheet: close it, then open the
+    /// existing screen in this stack. Rows without a screen here do nothing.
+    private func openFromIdentityCenter(_ route: HubRoute?) {
+        guard let route else { return }
+        navDrawerIdentityCenter = false
+        path.append(route)
+    }
+
+    /// Identity Center cards this stack can open: the Local profile is what
+    /// Edit profile edits.
+    static func identityCenterRoute(forCard kind: IdentityKind) -> HubRoute? {
+        kind == .local ? .editProfile : nil
+    }
+
+    /// Identity Center rows this stack can open. A18.5 — "Privacy Preview"
+    /// opens the "View as" identity preview.
+    static func identityCenterRoute(forRow id: String) -> HubRoute? {
+        switch id {
+        case "privacyPreview": .viewAs
+        case "homes": .myHomes
+        case "businessProfiles": .myBusinesses
+        case "dataExport": .dataExport
+        default: nil
         }
     }
 
@@ -732,7 +760,8 @@ public struct HubTabRoot: View {
         case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
-             .homeNotifications, .privacySettings, .menu, .paymentsSettings, .mailItemDetail,
+             .homeNotifications, .privacySettings, .dataExport, .editProfile, .menu, .paymentsSettings,
+             .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
              .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,
@@ -830,7 +859,7 @@ public struct HubTabRoot: View {
         // Personal
         case .myHomes: return .myHomes
         case .myBusinesses: return .myBusinesses
-        case .connections: return .connections
+        case .connections: return .connections(initialTab: nil)
         case .mailbox: return .mailboxRoot
         case .profileAndPrivacy: return .privacySettings
         case .beaconUpdates: return .beaconsFeed
@@ -953,8 +982,8 @@ public struct HubTabRoot: View {
         case let .beaconProfile(handle):
             path.append(.beaconProfile(handle: handle))
             _ = router.consume()
-        case .connections:
-            path.append(.connections)
+        case let .connections(tab):
+            path.append(.connections(initialTab: tab))
             _ = router.consume()
         case .beacons:
             path.append(.beaconsFeed)
@@ -2459,6 +2488,12 @@ public struct HubTabRoot: View {
                     case let .mailItemDetail(id): push(.mailItemDetail(mailId: id))
                     case let .pulsePost(id): push(.pulsePost(postId: id))
                     case let .homeDashboard(id): push(.homeDashboard(homeId: id))
+                    case let .link(path, label):
+                        if DeepLinkRouter.shared.canResolve(path: path) {
+                            DeepLinkRouter.shared.handle(path: path)
+                        } else {
+                            push(.placeholder(label: label))
+                        }
                     case let .placeholder(label): push(.placeholder(label: label))
                     }
                 }
@@ -2471,9 +2506,10 @@ public struct HubTabRoot: View {
             NotificationsView(
                 viewModel: NotificationsViewModel(initialContext: context)
             ) { Task { @MainActor in pop() } }
-        case .connections:
+        case let .connections(initialTab):
             ConnectionsView(
                 viewModel: ConnectionsViewModel(
+                    initialTab: initialTab,
                     onMessage: { target in
                         Task { @MainActor in
                             push(.chatConversation(InboxConversationDestination(
@@ -2625,7 +2661,7 @@ public struct HubTabRoot: View {
                             case let .post(postId):
                                 push(.pulsePost(postId: postId))
                             case .seeAllPeople:
-                                push(.connections)
+                                push(.connections(initialTab: nil))
                             case .seeAllBusinesses:
                                 push(.discoverBusinesses)
                             case .seeAllGigs:

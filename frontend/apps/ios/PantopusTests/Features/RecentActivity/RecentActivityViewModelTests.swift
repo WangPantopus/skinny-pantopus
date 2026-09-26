@@ -156,7 +156,7 @@ final class RecentActivityViewModelTests: XCTestCase {
         XCTAssertEqual(RecentActivityViewModel.destination(for: item), .homeDashboard(id: "h_3"))
     }
 
-    func testDestinationFallsBackToPlaceholderForUnknownRoute() {
+    func testDestinationHandsOtherRoutesToTheDeepLinkRouter() {
         let item = HubResponse.HubActivityItem(
             id: "a1",
             pillar: "personal",
@@ -167,7 +167,7 @@ final class RecentActivityViewModelTests: XCTestCase {
         )
         XCTAssertEqual(
             RecentActivityViewModel.destination(for: item),
-            .placeholder(label: "Notification")
+            .link(path: "/app/notifications", label: "Notification")
         )
     }
 

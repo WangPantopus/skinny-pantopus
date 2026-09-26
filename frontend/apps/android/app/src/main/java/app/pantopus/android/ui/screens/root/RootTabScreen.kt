@@ -984,6 +984,19 @@ private object ChildRoutes {
      *  or via `pantopus://connections`. */
     const val CONNECTIONS = "connections"
 
+    /**
+     * The same screen with the optional `tab` arg from a `connections?tab=`
+     * link. The NavHost registers this pattern, so a plain [CONNECTIONS]
+     * navigate still matches with `tab == null`.
+     */
+    const val CONNECTIONS_ROUTE = "connections?tab={tab}"
+
+    /** Query-arg key for [CONNECTIONS_ROUTE]. */
+    const val CONNECTIONS_TAB_KEY = "tab"
+
+    /** Builder for Connections opened on a linked tab. */
+    fun connections(tab: String): String = "connections?tab=${Uri.encode(tab)}"
+
     /** Cross-listing Offers (T5.2.4). Reached from the You tab. */
     const val OFFERS = "offers"
 
@@ -1927,6 +1940,8 @@ private fun EmailFallbackDialog(
     )
 }
 
+private fun NavHostController.isOnBackStack(route: String): Boolean = runCatching { getBackStackEntry(route) }.isSuccess
+
 private fun NavHostController.navigateToRootTab(route: PantopusRoute) {
     navigate(route.path) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
@@ -1992,8 +2007,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
+    // Child screens keep the tab they were opened from lit (they used to fall
+    // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = PantopusRoute.fromPath(backStackEntry?.destination?.route) ?: PantopusRoute.Place
+    val currentRoute =
+        remember(backStackEntry) {
+            PantopusRoute.barTabFor(
+                top = PantopusRoute.fromPath(backStackEntry?.destination?.route),
+                rootsOnStack = PantopusRoute.all.filter { navController.isOnBackStack(it.path) },
+            )
+        }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
         if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Mail to resolvedInboxBadgeCount) else emptyMap()
@@ -2034,8 +2057,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Nearby)
                 DeepLinkRouter.consume()
             }
-            DeepLinkRouter.Destination.Connections -> {
-                navController.navigate(ChildRoutes.CONNECTIONS)
+            is DeepLinkRouter.Destination.Connections -> {
+                navController.navigate(pending.tab?.let(ChildRoutes::connections) ?: ChildRoutes.CONNECTIONS)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Beacons -> {
@@ -3513,7 +3536,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
-                composable(SchedulingRoutes.CANCELLATION_REFUND_POLICY) {
+                composable(
+                    SchedulingRoutes.CANCELLATION_REFUND_POLICY,
+                    arguments = schedulingOwnerNavArgs(),
+                ) {
                     CancellationRefundPolicyScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -4964,13 +4990,29 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(ChildRoutes.pulsePost(destination.id))
                                 is RecentActivityDestination.HomeDashboard ->
                                     navController.navigate(ChildRoutes.homeDashboard(destination.id))
+                                is RecentActivityDestination.Link ->
+                                    if (DeepLinkRouter.canRoute(destination.path)) {
+                                        DeepLinkRouter.handle(destination.path)
+                                    } else {
+                                        navController.navigate(ChildRoutes.placeholder(destination.label))
+                                    }
                                 is RecentActivityDestination.Placeholder ->
                                     navController.navigate(ChildRoutes.placeholder(destination.label))
                             }
                         },
                     )
                 }
-                composable(ChildRoutes.CONNECTIONS) {
+                composable(
+                    route = ChildRoutes.CONNECTIONS_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(ChildRoutes.CONNECTIONS_TAB_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
                     ConnectionsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenChat = { target: ConnectionsChatTarget ->
@@ -5363,7 +5405,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onOpenBroadcast = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
-                        onOpenSettings = { navController.navigate(ChildRoutes.placeholder("Inbox settings")) },
+                        // No native DM-policy editor exists; the Beacon (tiers, messaging)
+                        // is set up and managed from the audience profile.
+                        onOpenSettings = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
                     )
                 }
                 composable(
@@ -5401,16 +5445,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             when (card.kind) {
                                 IdentityKind.PublicProfile ->
                                     navController.navigate(ChildRoutes.AUDIENCE_PROFILE)
+                                // The Local profile is edited in Edit profile; the
+                                // account-level Personal identity lives in Settings.
                                 IdentityKind.Local ->
-                                    navController.navigate(ChildRoutes.placeholder("Local profile"))
+                                    navController.navigate(ChildRoutes.EDIT_PROFILE)
                                 IdentityKind.Personal ->
-                                    navController.navigate(ChildRoutes.placeholder("Personal"))
+                                    navController.navigate(ChildRoutes.MENU)
                                 IdentityKind.Professional ->
                                     navController.navigate(ChildRoutes.PROFESSIONAL_PROFILE)
                             }
                         },
-                        onOpenPlaceholder = { label ->
-                            navController.navigate(ChildRoutes.placeholder(label))
+                        onOpenRow = { rowId ->
+                            when (rowId) {
+                                "blockedPersonal" -> navController.navigate(ChildRoutes.SETTINGS_BLOCKED_USERS)
+                                "homes" -> navController.navigate(ChildRoutes.MY_HOMES)
+                                "businessProfiles" -> navController.navigate(ChildRoutes.MY_BUSINESSES)
+                                "dataExport" -> navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT)
+                            }
                         },
                         onOpenViewAs = { navController.navigate(ChildRoutes.VIEW_AS) },
                     )

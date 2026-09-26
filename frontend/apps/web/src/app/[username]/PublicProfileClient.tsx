@@ -10,6 +10,7 @@ import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
 import { toast } from '@/components/ui/toast-store';
 import ReportModal from '@/components/ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { ProfileHeader, TabButton } from '@/components/profile/public';
 import { ReliabilityPanel, AboutCard, SkillsCard } from '@/components/profile/public/cards';
@@ -77,6 +78,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [profile, setProfile] = useState<PublicProfileData | null>(initialProfile);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(!initialProfile);
+  // A failed read that is not a 404 must not claim the profile doesn't exist.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
@@ -155,6 +158,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const loadProfile = useCallback(async () => {
     const current = captureAction();
+    setLoadFailed(false);
     try {
       const profileData = UUID_REGEX.test(profileIdentifier)
         ? await api.users.getProfileById(profileIdentifier)
@@ -186,6 +190,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       }
 
       console.error('Failed to load profile:', err);
+      if ((err as { statusCode?: number } | null)?.statusCode !== 404) setLoadFailed(true);
     } finally {
       if (current()) setLoading(false);
     }
@@ -462,6 +467,19 @@ export default function PublicProfileClient({ username, initialProfile }: Public
           <p className="mt-4 text-app-secondary">Loading profile...</p>
         </div>
       </div>
+    );
+  }
+
+  if (!profile && loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load this profile"
+        message="Check your connection and try again."
+        onRetry={() => {
+          setLoading(true);
+          void loadProfile();
+        }}
+      />
     );
   }
 

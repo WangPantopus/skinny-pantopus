@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.mailbox.mailbox_root
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -155,9 +158,24 @@ class MailboxRootViewModel
          *  current view. */
         private var generation = 0
 
+        /** Why the next page failed while mail is on screen. The rows and
+         *  [offset] stay; only Try again re-requests that page. */
+        private var loadMoreError: String? = null
+
         /** Per-drawer unread counts from `GET /api/mailbox/v2/drawers`,
-         *  keyed by backend drawer key (`personal`/`home`/`business`/`earn`). */
-        private var drawerUnread: Map<String, Int> = emptyMap()
+         *  keyed by backend drawer key (`personal`/`home`/`business`/`earn`).
+         *  Compose state, so the drawer chips redraw when a refresh changes it. */
+        private var drawerUnread: Map<String, Int> by mutableStateOf(emptyMap())
+
+        init {
+            // A letter dismissed, filed or archived from its detail leaves this
+            // tab: drop the row now rather than listing it until the next reload.
+            if (repo != null) {
+                viewModelScope.launch {
+                    MailboxRepository.mailLeftList.collect { mailId -> dropLoadedMail(mailId) }
+                }
+            }
+        }
 
         /** Wire nav callbacks before first load. */
         fun configureNavigation(
@@ -203,9 +221,19 @@ class MailboxRootViewModel
             }
         }
 
-        /** Called when the list nears the bottom — fetches the next page. */
+        /** Called when the list nears the bottom — fetches the next page.
+         *  After a failed page only [retryLoadMore] asks again. */
         fun loadMoreIfNeeded() {
+            if (loadMoreError != null) return
             if (dataProvider != null || !hasMore || loading) return
+            viewModelScope.launch { fetchPage(generation) }
+        }
+
+        /** Try again on a failed page: the same offset, rows kept. */
+        fun retryLoadMore() {
+            if (loadMoreError == null || loading) return
+            loadMoreError = null
+            applyLiveState(_selectedDrawer.value, _selectedTab.value)
             viewModelScope.launch { fetchPage(generation) }
         }
 
@@ -272,6 +300,7 @@ class MailboxRootViewModel
             val gen = ++generation
             offset = 0
             loadedMail = mutableListOf()
+            loadMoreError = null
             fetchPage(gen)
         }
 
@@ -281,9 +310,10 @@ class MailboxRootViewModel
             val drawer = _selectedDrawer.value
             val tab = _selectedTab.value
             val result = repo.drawer(drawer.backendKey, tab.id, pageSize, offset)
-            loading = false
-            // Drop late responses if the user has since switched combo.
+            // Drop late responses if the user has since switched combo. A late
+            // page must not clear the loading guard of the current request.
             if (gen != generation) return
+            loading = false
             when (result) {
                 is NetworkResult.Success -> {
                     loadedMail.addAll(result.data.mail)
@@ -291,7 +321,30 @@ class MailboxRootViewModel
                     hasMore = result.data.mail.size >= pageSize
                     applyLiveState(drawer, tab)
                 }
-                is NetworkResult.Failure -> _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                is NetworkResult.Failure ->
+                    if (loadedMail.isEmpty()) {
+                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                    } else {
+                        // A later page failed: keep the mail on screen and say so.
+                        loadMoreError = "Couldn't load more mail. " + result.error.displayMessage("Please try again.")
+                        applyLiveState(drawer, tab)
+                    }
+            }
+        }
+
+        /** Remove a letter that left this tab; keep paging aligned with the server. */
+        private fun dropLoadedMail(mailId: String) {
+            if (loadedMail.none { it.id == mailId }) return
+            loadedMail.removeAll { it.id == mailId }
+            offset = loadedMail.size
+            if (loadedMail.isEmpty() && hasMore) {
+                // Everything loaded is gone but more exists: load the tab again.
+                _state.value = ListOfRowsUiState.Loading
+                refresh()
+            } else {
+                applyLiveState(_selectedDrawer.value, _selectedTab.value)
+                // The letter no longer counts toward its drawer's unread badge.
+                viewModelScope.launch { fetchDrawerBadges() }
             }
         }
 
@@ -345,6 +398,8 @@ class MailboxRootViewModel
                     ListOfRowsUiState.Loaded(
                         sections = listOf(RowSection(id = "mail", rows = rows)),
                         hasMore = hasMore,
+                        loadMoreError = loadMoreError,
+                        onRetryLoadMore = ::retryLoadMore,
                     )
             }
         }
@@ -410,11 +465,24 @@ class MailboxRootViewModel
                         headline = "No saved earn mail",
                         subcopy = "Earn mail you save shows up here.",
                     )
+                // Copy follows each tab's server filter (mailboxV2 drawer route).
+                tab == MailboxTab.Counter ->
+                    ListOfRowsUiState.Empty(
+                        icon = PantopusIcon.Mailbox,
+                        headline = "Nothing due",
+                        subcopy = "Open mail with a due date shows up here.",
+                    )
+                tab == MailboxTab.Vault ->
+                    ListOfRowsUiState.Empty(
+                        icon = PantopusIcon.Archive,
+                        headline = "Nothing filed yet",
+                        subcopy = "Mail you file or save to your vault shows up here.",
+                    )
                 else ->
                     ListOfRowsUiState.Empty(
-                        icon = if (tab == MailboxTab.Vault) PantopusIcon.Archive else PantopusIcon.Mailbox,
-                        headline = "No mail in ${drawer.label} → ${tab.label} yet",
-                        subcopy = "When something lands here, it shows up in this view.",
+                        icon = PantopusIcon.Mailbox,
+                        headline = "No mail yet",
+                        subcopy = "New mail in this drawer shows up here.",
                     )
             }
     }

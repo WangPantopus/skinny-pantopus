@@ -55,6 +55,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -913,7 +914,27 @@ private fun LoadedList(
                 }
             }
         }
-        if (state.hasMore) {
+        val loadMoreError = state.loadMoreError
+        if (loadMoreError != null) {
+            // Same treatment as Pulse's failed page: the loaded rows stay and
+            // Try again re-requests the page that failed.
+            item(key = "load-more-error") {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(Spacing.s3).testTag("listOfRowsLoadMoreError"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = loadMoreError,
+                        color = PantopusColors.appTextSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                    TextButton(
+                        onClick = { state.onRetryLoadMore?.invoke() },
+                        modifier = Modifier.testTag("listOfRowsLoadMoreRetry"),
+                    ) { Text("Try again") }
+                }
+            }
+        } else if (state.hasMore) {
             item(key = "end-sentinel") {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.s3),

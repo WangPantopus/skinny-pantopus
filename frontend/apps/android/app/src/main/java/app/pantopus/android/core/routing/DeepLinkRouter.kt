@@ -64,7 +64,8 @@ object DeepLinkRouter {
 
         data object Notifications : Destination
 
-        data object Connections : Destination
+        /** `pantopus://connections?tab=` — a connection request links `tab=requests`, which opens Pending. */
+        data class Connections(val tab: String? = null) : Destination
 
         /** `pantopus://beacons` — A03.2 Beacon Updates feed (`surface=personas`). */
         data object Beacons : Destination
@@ -398,6 +399,16 @@ object DeepLinkRouter {
         return (resolveString(normalized) as? Destination.Gig)?.id
     }
 
+    /**
+     * True when [path] resolves to a destination the app can open (not
+     * [Destination.Unknown]). Lets list hosts route a link or fall back to
+     * their own placeholder instead of dropping the tap.
+     */
+    fun canRoute(path: String): Boolean {
+        val normalized = Paths.normalizeIncoming(path)
+        return !Paths.isOAuthCallback(normalized) && resolveString(normalized) !is Destination.Unknown
+    }
+
     fun consume(): Destination? {
         val current = _pending.value
         _pending.value = null
@@ -593,7 +604,7 @@ object DeepLinkRouter {
                         ) ?: Destination.Unknown(raw)
                     else -> Destination.Unknown(raw)
                 }
-            "connections" -> Destination.Connections
+            "connections" -> Destination.Connections(Paths.queryParam(queryPart, "tab"))
             "beacons", "beacon-updates", "beacon_updates" -> Destination.Beacons
             "discover-hub", "discover_hub", "discoverhub" -> Destination.DiscoverHub
             "wallet" -> Destination.Wallet

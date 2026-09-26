@@ -78,10 +78,12 @@ fun MemoryDetailLayout(
     onSaveMemory: () -> Unit,
     onOpenSenderProfile: (String) -> Unit = {},
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
 ) {
     Box(modifier = Modifier.testTag("mailDetail_memory")) {
         MailItemDetailShell(
-            topBar = makeTopBar(memory = memory, onBack = onBack, onSaveToVault = onSaveToVault),
+            topBar = makeTopBar(memory = memory, onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(memory = memory),
             attachments = makeAttachments(content = content),
             hero = { MemoryHeroCard(content = content, memory = memory) },
@@ -93,7 +95,6 @@ fun MemoryDetailLayout(
                     isSaved = memory.isSaved,
                     inFlight = saveInFlight,
                     onSave = onSaveMemory,
-                    onShare = onSaveToVault,
                 )
             },
         )
@@ -104,6 +105,7 @@ private fun makeTopBar(
     memory: MemoryDetailDto,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         eyebrow = "Memory",
@@ -118,10 +120,8 @@ private fun makeTopBar(
             ),
         overflowItems =
             listOf(
-                MailOverflowItem("share", PantopusIcon.Share, "Share with sender") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("muteAnniversary", PantopusIcon.Bell, "Mute anniversary") {},
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -461,34 +461,12 @@ private fun MemoryDetailActions(
     isSaved: Boolean,
     inFlight: Boolean,
     onSave: () -> Unit,
-    onShare: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         if (isSaved) {
             SavedShelf()
         } else {
             SaveButton(inFlight = inFlight, onSave = onSave)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            SecondaryTile(
-                id = "reply",
-                icon = PantopusIcon.MessageSquare,
-                label = "Reply",
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "share",
-                icon = PantopusIcon.Share,
-                label = "Share",
-                onClick = onShare,
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "print",
-                icon = PantopusIcon.Download,
-                label = "Print",
-                modifier = Modifier.weight(1f),
-            )
         }
     }
 }
@@ -554,42 +532,6 @@ private fun SavedShelf() {
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.success,
-        )
-    }
-}
-
-@Composable
-private fun SecondaryTile(
-    id: String,
-    icon: PantopusIcon,
-    label: String,
-    onClick: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                .clickable(onClick = onClick)
-                .padding(vertical = 10.dp)
-                .semantics { contentDescription = label }
-                .testTag("mailDetail_memory_action_$id"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(
-            icon = icon,
-            contentDescription = null,
-            size = 17.dp,
-            tint = PantopusColors.appTextStrong,
-        )
-        Text(
-            text = label,
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appTextStrong,
         )
     }
 }

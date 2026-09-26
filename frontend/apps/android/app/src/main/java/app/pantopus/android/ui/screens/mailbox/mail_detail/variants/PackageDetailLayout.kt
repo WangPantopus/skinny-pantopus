@@ -82,6 +82,8 @@ fun PackageDetailLayout(
     onAcknowledgeDelivery: () -> Unit,
     onOpenSenderProfile: (String) -> Unit = {},
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
     // A17.14 — when set (and the package is delivered), the overflow
     // surfaces "Virtual unboxing", which opens the Unboxing capture flow.
     // Mirrors RN's delivered-only CTA in `src/app/mailbox/package.tsx:180`.
@@ -107,6 +109,7 @@ fun PackageDetailLayout(
                     content = content,
                     onBack = onBack,
                     onSaveToVault = onSaveToVault,
+                    onArchive = onArchive,
                     onOpenUnboxing = onOpenUnboxing,
                     onAskNeighbor = onAskNeighbor,
                     onShareEta = onShareEta,
@@ -145,6 +148,7 @@ private fun makeTopBar(
     content: MailDetailContent,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
     onOpenUnboxing: (() -> Unit)? = null,
     onAskNeighbor: ((Boolean) -> Unit)? = null,
     onShareEta: () -> Unit = {},
@@ -194,10 +198,8 @@ private fun makeTopBar(
                         "Share ETA with household",
                     ) { onShareEta() },
                 )
-                add(MailOverflowItem("openMap", PantopusIcon.Map, "Track map") {})
-                add(MailOverflowItem("handoff", PantopusIcon.UserPlus, "Hand-off") {})
                 add(MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() })
-                add(MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {})
+                add(MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() })
                 add(
                     MailOverflowItem(
                         "report",

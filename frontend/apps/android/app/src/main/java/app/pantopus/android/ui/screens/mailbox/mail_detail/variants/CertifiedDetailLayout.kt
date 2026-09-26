@@ -96,6 +96,8 @@ fun CertifiedDetailLayout(
     // T6.5e (P19.5) — Defaults to a no-op so existing call sites
     // compile unchanged.
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
     // A17.12 — opens the Elf-extracted task Pantopus made from this
     // certified notice. Null hides the affordance (e.g. snapshot
     // fixtures), so existing call sites compile unchanged.
@@ -126,7 +128,7 @@ fun CertifiedDetailLayout(
     }
     Box(modifier = Modifier.testTag("mailDetail_certified")) {
         MailItemDetailShell(
-            topBar = makeTopBar(onBack = onBack, onSaveToVault = onSaveToVault),
+            topBar = makeTopBar(onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(content = content),
             attachments = makeAttachments(content = content),
             hero = { HeroCard(content = content, certified = certified) },
@@ -162,6 +164,7 @@ fun CertifiedDetailLayout(
                     onDownloadProof = onDownloadProof,
                     proofSaved = proofSaved,
                     proofInFlight = proofInFlight,
+                    onArchive = onArchive,
                 )
             },
         )
@@ -192,6 +195,7 @@ fun CertifiedDetailLayout(
 private fun makeTopBar(
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         eyebrow = "Certified mail",
@@ -204,16 +208,8 @@ private fun makeTopBar(
             ) { onSaveToVault() },
         overflowItems =
             listOf(
-                MailOverflowItem("forward", PantopusIcon.Send, "Forward") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
-                MailOverflowItem("report", PantopusIcon.Info, "Report") {},
-                MailOverflowItem(
-                    id = "delete",
-                    icon = PantopusIcon.Trash2,
-                    label = "Delete",
-                    isDestructive = true,
-                ) {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -802,6 +798,7 @@ private fun ActionsRow(
     onDownloadProof: () -> Unit,
     proofSaved: Boolean,
     proofInFlight: Boolean,
+    onArchive: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         AcknowledgeButton(
@@ -812,22 +809,10 @@ private fun ActionsRow(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SecondaryTile(
-                icon = PantopusIcon.DollarSign,
-                label = "Pay",
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                icon = PantopusIcon.Calendar,
-                label = "Calendar",
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            SecondaryTile(icon = PantopusIcon.Flag, label = "Dispute", modifier = Modifier.weight(1f))
-            SecondaryTile(
                 icon = PantopusIcon.Archive,
                 label = "Archive",
                 modifier = Modifier.weight(1f),
+                onClick = onArchive,
             )
         }
         // A17.3 — the legal delivery proof only exists after the
@@ -950,6 +935,7 @@ private fun SecondaryTile(
     icon: PantopusIcon,
     label: String,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier =
@@ -957,7 +943,7 @@ private fun SecondaryTile(
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                .clickable {}
+                .clickable(onClick = onClick)
                 .padding(horizontal = Spacing.s2, vertical = 11.dp)
                 .semantics { contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,

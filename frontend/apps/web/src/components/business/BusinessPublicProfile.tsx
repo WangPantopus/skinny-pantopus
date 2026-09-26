@@ -21,6 +21,7 @@ import { PublicBlock } from './PublicBlockRenderer';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
 
 interface BusinessPublicProfileProps {
   username: string;
@@ -32,6 +33,8 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // A failed read that is not a 404 must not claim the business doesn't exist.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
@@ -53,6 +56,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
   const loadBusinessProfile = useCallback(async () => {
     setLoading(true);
     setError('');
+    setLoadFailed(false);
     try {
       const res = await api.businesses.getPublicBusinessPage(username);
       setBusiness(res.business);
@@ -74,6 +78,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load business');
+      if ((e as { statusCode?: number } | null)?.statusCode !== 404) setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -143,6 +148,16 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
           <p className="mt-4 text-app-text-secondary">Loading business…</p>
         </div>
       </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load this business"
+        message="Check your connection and try again."
+        onRetry={() => void loadBusinessProfile()}
+      />
     );
   }
 

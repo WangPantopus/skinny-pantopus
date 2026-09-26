@@ -192,7 +192,7 @@ final class DeepLinkRouterTests: XCTestCase {
 
     func testConnectionsRoute() throws {
         try DeepLinkRouter.shared.handle(url: XCTUnwrap(URL(string: "pantopus://connections")))
-        XCTAssertEqual(DeepLinkRouter.shared.pending, .connections)
+        XCTAssertEqual(DeepLinkRouter.shared.pending, .connections(tab: nil))
     }
 
     func testNotificationsRoute() throws {

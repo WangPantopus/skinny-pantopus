@@ -105,18 +105,22 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
 /// the Pulse feed envelope.
 public struct MyPostsResponse: Decodable, Sendable {
     public let posts: [MyPostDTO]
+    public let pagination: FeedPagination?
 
     private enum CodingKeys: String, CodingKey {
         case posts
+        case pagination
     }
 
-    public init(posts: [MyPostDTO]) {
+    public init(posts: [MyPostDTO], pagination: FeedPagination? = nil) {
         self.posts = posts
+        self.pagination = pagination
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         posts = try c.decodeIfPresent([MyPostDTO].self, forKey: .posts) ?? []
+        pagination = try? c.decodeIfPresent(FeedPagination.self, forKey: .pagination)
     }
 }
 

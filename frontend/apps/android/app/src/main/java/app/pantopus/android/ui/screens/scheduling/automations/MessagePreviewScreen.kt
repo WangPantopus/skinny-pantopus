@@ -42,7 +42,7 @@ import app.pantopus.android.ui.theme.Spacing
  * Stream A16 — H7 Message Preview (sheet). Shows the rendered message per
  * channel before saving, with all variables resolved to sample data. A channel
  * tab strip (Push / Email / In-app / SMS) swaps a realistic device mock over a
- * soft stage. "Send test to me" is a coming-soon affordance (no endpoint yet).
+ * soft stage. There is no send-test endpoint, so no send action is offered.
  * Reached inline from the workflow / template editors with a draft, or by saved
  * template id (iOS `messagePreview(owner:templateId:)` route parity — the A16
  * route registration wires this entry).
@@ -88,7 +88,6 @@ private fun PreviewSheetScaffold(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeChannel by viewModel.activeChannel.collectAsStateWithLifecycle()
-    val testNote by viewModel.testNote.collectAsStateWithLifecycle()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -118,9 +117,7 @@ private fun PreviewSheetScaffold(
                         channelOrder = viewModel.channelOrder,
                         accent = viewModel.pillar.accent,
                         accentBg = viewModel.pillar.accentBg,
-                        testNote = testNote,
                         onSelectChannel = viewModel::selectChannel,
-                        onSendTest = viewModel::sendTest,
                         onClose = onDismiss,
                     )
             }
@@ -135,9 +132,7 @@ private fun PreviewLoaded(
     channelOrder: List<WorkflowChannel>,
     accent: Color,
     accentBg: Color,
-    testNote: String?,
     onSelectChannel: (Int) -> Unit,
-    onSendTest: () -> Unit,
     onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -155,10 +150,6 @@ private fun PreviewLoaded(
                 modifier = Modifier.fillMaxWidth().clip(stageShape()).background(PantopusColors.appSurfaceSunken).padding(Spacing.s4),
             ) {
                 ChannelMock(channel = activeChannel, loaded = loaded, accent = accent, accentBg = accentBg)
-            }
-            AutoGhostButton(title = "Send test to me", icon = PantopusIcon.Send, onClick = onSendTest)
-            if (testNote != null) {
-                AutoNote(tone = AutoTone.Success, icon = PantopusIcon.CheckCircle, text = testNote)
             }
         }
         AutoSheetFooter {

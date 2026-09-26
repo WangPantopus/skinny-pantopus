@@ -3,6 +3,13 @@
 import Observation
 import SwiftUI
 
+public extension Notification.Name {
+    /// Posted with a letter's id as `object` after a confirmed action moved it
+    /// out of its Mailbox tab: Dismiss shreds it, File and Save to vault file it,
+    /// Archive archives it.
+    static let mailboxMailLeftList = Notification.Name("mailboxMailLeftList")
+}
+
 /// The four mailbox drawers. `business` carries the "Biz" short label
 /// per the design; `earn` (B.1) is new.
 public enum MailboxDrawer: String, CaseIterable, Hashable, Sendable, Identifiable {
@@ -105,9 +112,12 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     public let tabs: [ListOfRowsTab] = []
 
     public private(set) var state: ListOfRowsState = .loading
-    /// Set when a reload or next page fails while mail is on screen: it stays
-    /// and this shows as a toast. The view clears it after display.
+    /// Set when a reload fails while mail is on screen: it stays and this
+    /// shows as a toast. The view clears it after display.
     public var refreshFailureMessage: String?
+    /// Set when a later page fails: the rows stay and the list end offers
+    /// Try again for that same page.
+    public private(set) var loadMoreError: String?
 
     public var topBarAction: TopBarAction? {
         TopBarAction(icon: .search, accessibilityLabel: "Search mail") { [weak self] in
@@ -418,13 +428,38 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
         await fetchDrawerBadges()
         await fetchPendingRouting()
-        await reloadActiveCombo()
+        await reloadActiveCombo(keepingRows: true)
     }
 
     public func loadMoreIfNeeded() async {
         guard sampleProvider == nil else { return } // a sample window is fixed.
-        guard hasMore, !isLoadingPage else { return }
+        // After a failed page only Try again (`retryLoadMore`) asks again.
+        guard hasMore, !isLoadingPage, loadMoreError == nil else { return }
         await fetchPage(generation: loadGeneration)
+    }
+
+    /// Try again on a failed page: the same offset, the rows kept.
+    public func retryLoadMore() async {
+        guard loadMoreError != nil, !isLoadingPage else { return }
+        loadMoreError = nil
+        await fetchPage(generation: loadGeneration)
+    }
+
+    /// A letter dismissed, filed or archived from its detail left this tab:
+    /// drop its row now instead of listing it until the next reload.
+    public func dropLoadedMail(_ mailId: String) {
+        guard sampleProvider == nil, loadedMail.contains(where: { $0.id == mailId }) else { return }
+        loadedMail.removeAll { $0.id == mailId }
+        offset = loadedMail.count
+        if loadedMail.isEmpty, hasMore {
+            // Everything loaded is gone but more exists: load the tab again.
+            state = .loading
+            Task { @MainActor in await refresh() }
+        } else {
+            applyLiveState(drawer: selectedDrawer, tab: currentTab)
+            // The letter no longer counts toward its drawer's unread badge.
+            Task { @MainActor in await fetchDrawerBadges() }
+        }
     }
 
     public func selectDrawer(_ drawer: MailboxDrawer) {
@@ -452,15 +487,20 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     // MARK: - Live fetch
 
-    private func reloadActiveCombo() async {
+    /// Reload the first page. A pull-to-refresh keeps the current rows until
+    /// the new page arrives, so a failed refresh doesn't empty the list.
+    private func reloadActiveCombo(keepingRows: Bool = false) async {
         loadGeneration &+= 1
         let generation = loadGeneration
-        offset = 0
-        loadedMail = []
-        await fetchPage(generation: generation)
+        loadMoreError = nil
+        if !keepingRows {
+            offset = 0
+            loadedMail = []
+        }
+        await fetchPage(generation: generation, replacing: true)
     }
 
-    private func fetchPage(generation: Int) async {
+    private func fetchPage(generation: Int, replacing: Bool = false) async {
         isLoadingPage = true
         let drawer = selectedDrawer
         let tab = currentTab
@@ -470,25 +510,30 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                     drawer.backendKey,
                     tab: tab.rawValue,
                     limit: pageSize,
-                    offset: offset
+                    offset: replacing ? 0 : offset
                 )
             )
-            isLoadingPage = false
-            // Drop late responses if the user has since switched combo.
+            // Drop late responses if the user has since switched combo. A late
+            // page must not clear the loading guard of the current request.
             guard generation == loadGeneration else { return }
+            isLoadingPage = false
+            if replacing { loadedMail = [] }
             loadedMail.append(contentsOf: response.mail)
             offset = loadedMail.count
             hasMore = response.mail.count >= pageSize
             applyLiveState(drawer: drawer, tab: tab)
         } catch {
-            isLoadingPage = false
             guard generation == loadGeneration else { return }
+            isLoadingPage = false
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load mail."
             if loadedMail.isEmpty {
                 state = .error(message: message)
-            } else {
-                // Keep the mail on screen; a failed reload or page only toasts.
+            } else if replacing {
+                // Keep the mail on screen; a failed reload only toasts.
                 refreshFailureMessage = message
+            } else {
+                // A later page failed: keep the rows; Try again asks for it again.
+                loadMoreError = "Couldn't load more mail. \(message)"
             }
         }
     }
@@ -594,11 +639,24 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 headline: "No saved earn mail",
                 subcopy: "Earn mail you save shows up here."
             )
+        // Copy follows each tab's server filter (mailboxV2 drawer route).
+        case (_, .counter):
+            ListOfRowsState.EmptyContent(
+                icon: .mailbox,
+                headline: "Nothing due",
+                subcopy: "Open mail with a due date shows up here."
+            )
+        case (_, .vault):
+            ListOfRowsState.EmptyContent(
+                icon: .archive,
+                headline: "Nothing filed yet",
+                subcopy: "Mail you file or save to your vault shows up here."
+            )
         default:
             ListOfRowsState.EmptyContent(
-                icon: tab == .vault ? .archive : .mailbox,
-                headline: "No mail in \(drawer.label) → \(tab.label) yet",
-                subcopy: "When something lands here, it shows up in this view."
+                icon: .mailbox,
+                headline: "No mail yet",
+                subcopy: "New mail in this drawer shows up here."
             )
         }
     }

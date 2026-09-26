@@ -52,6 +52,10 @@ sealed interface NewMessageUiState {
 
     data class Loaded(val sections: List<NewMessageSection>) : NewMessageUiState
 
+    /** A search is active, nothing on this device matches and the people
+     *  search failed — so "No matches" would be a guess. */
+    data object SearchFailed : NewMessageUiState
+
     data class Error(val message: String) : NewMessageUiState
 }
 

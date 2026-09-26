@@ -213,13 +213,16 @@ router.get('/drawers', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const homeIds = await getAccessibleHomeIds(userId);
 
-    // Count unread + urgent per drawer in parallel
+    // Count unread + urgent per drawer in parallel. Only incoming mail counts
+    // (the Incoming tab's filter): dismissed, filed and archived letters left it.
     const countForDrawer = async (drawer, filter) => {
       let query = supabaseAdmin
         .from('Mail')
         .select('id, priority, created_at', { count: 'exact', head: false })
         .eq('drawer', drawer)
-        .eq('viewed', false);
+        .eq('viewed', false)
+        .in('lifecycle', ['delivered', 'opened'])
+        .eq('archived', false);
 
       if (filter) filter(query);
 
@@ -278,7 +281,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
 router.get('/drawer/:drawer', verifyToken, async (req, res) => {
   try {
     const { drawer } = req.params;
-    const { tab, limit = 50, offset = 0 } = req.query;
+    const { tab, filter, limit = 50, offset = 0 } = req.query;
     const userId = req.user.id;
 
     if (!['personal', 'home', 'business', 'earn'].includes(drawer)) {
@@ -319,7 +322,21 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.eq('lifecycle', 'filed');
     }
 
+    // Web drawer filter: the same fields the web row shows as unread, urgent and starred.
+    if (filter === 'unread') {
+      query = query.is('opened_at', null);
+    } else if (filter === 'urgent') {
+      query = query.in('urgency', ['time_sensitive', 'overdue', 'due_soon']);
+    } else if (filter === 'starred') {
+      query = query.eq('starred', true);
+    }
+
     const { data: mail, error, count } = await query;
+    // A page past the end (letters left the tab since the last page) is an
+    // empty page, not a server error; at most `offset` letters remain.
+    if (error?.code === 'PGRST103') {
+      return res.json({ mail: [], total: parseInt(offset), drawer });
+    }
     if (error) {
       logger.error('Failed to fetch drawer mail', { error: error.message, drawer });
       return res.status(500).json({ error: 'Failed to fetch mail' });
@@ -474,10 +491,16 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     // Update lifecycle based on action
     const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
     if (lifecycleMap[action]) {
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('Mail')
         .update({ lifecycle: lifecycleMap[action] })
         .eq('id', id);
+      // supabase-js reports a failed write instead of throwing: without this
+      // check the apps said "Dismissed"/"Filed" for mail that did not move.
+      if (updateError) {
+        logger.error('Mail action lifecycle update failed', { mailId: id, action, error: updateError.message });
+        return res.status(500).json({ error: "Couldn't update this mail. Please try again." });
+      }
     }
 
     await logMailEvent(`mail_action_clicked`, id, userId, { action_type: action });
@@ -509,7 +532,7 @@ router.post('/route', verifyToken, async (req, res) => {
 
     if (result.drawer) {
       // Auto-route
-      await supabaseAdmin
+      const { error: routeError } = await supabaseAdmin
         .from('Mail')
         .update({
           drawer: result.drawer,
@@ -518,6 +541,11 @@ router.post('/route', verifyToken, async (req, res) => {
           routing_method: result.method,
         })
         .eq('id', mailId);
+      // supabase-js reports a failed write instead of throwing.
+      if (routeError) {
+        logger.error('Route update failed', { mailId, error: routeError.message });
+        return res.status(500).json({ error: "Couldn't route this mail. Please try again." });
+      }
 
       await logMailEvent('mail_delivered', mailId, req.user.id, {
         drawer: result.drawer,
@@ -570,7 +598,7 @@ router.post('/resolve', verifyToken, validate(resolveRoutingSchema), async (req,
     if (!mail || !(await canAccessMail(mail, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const privacyMap = { personal: 'private_to_person', home: 'shared_household', business: 'business_team' };
-    await supabaseAdmin
+    const { error: resolveError } = await supabaseAdmin
       .from('Mail')
       .update({
         drawer,
@@ -580,6 +608,12 @@ router.post('/resolve', verifyToken, validate(resolveRoutingSchema), async (req,
         recipient_user_id: drawer === 'personal' ? userId : mail.recipient_user_id,
       })
       .eq('id', mailId);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the queue entry was marked resolved for mail that never moved.
+    if (resolveError) {
+      logger.error('Resolve update failed', { mailId, drawer, error: resolveError.message });
+      return res.status(500).json({ error: "Couldn't move this mail. Please try again." });
+    }
 
     // Mark routing queue as resolved
     await supabaseAdmin
@@ -696,10 +730,16 @@ router.patch('/package/:mailId/status', verifyToken, validate(updatePackageStatu
       if (deliveryLocationNote) updates.delivery_location_note = deliveryLocationNote;
     }
 
-    await supabaseAdmin
+    const { error: statusError } = await supabaseAdmin
       .from('MailPackage')
       .update(updates)
       .eq('id', pkg.id);
+    // supabase-js reports a failed write instead of throwing: without this
+    // check the apps showed the new status for a package that kept the old one.
+    if (statusError) {
+      logger.error('Package status update failed', { mailId, status, error: statusError.message });
+      return res.status(500).json({ error: "Couldn't update this package. Please try again." });
+    }
 
     // Add timeline event
     await supabaseAdmin

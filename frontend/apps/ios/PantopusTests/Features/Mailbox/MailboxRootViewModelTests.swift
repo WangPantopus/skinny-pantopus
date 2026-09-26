@@ -285,7 +285,7 @@ final class MailboxRootViewModelTests: XCTestCase {
         guard case let .empty(content) = vm.state else {
             return XCTFail("Expected empty, got \(vm.state)")
         }
-        XCTAssertEqual(content.headline, "No mail in Me → Incoming yet")
+        XCTAssertEqual(content.headline, "No mail yet")
     }
 
     func test_live_listFailureTransitionsToError() async {

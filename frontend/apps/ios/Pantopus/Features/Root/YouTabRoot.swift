@@ -41,6 +41,8 @@ public enum YouRoute: Hashable {
     case privacySettings
     /// Privacy → "Download your data": the existing Data export screen.
     case dataExport
+    /// Identity Center → "Blocked accounts": the existing Blocked users screen.
+    case blockedUsers
     case legal
     case legalContent(LegalDocument)
     case addHome
@@ -625,12 +627,12 @@ public struct YouTabRoot: View {
         switch route {
         case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .helpCenter, .publicProfile, .pulsePost,
-             .legalContent, .privacySettings, .legal, .settings, .paymentsSettings,
+             .legalContent, .privacySettings, .dataExport, .legal, .settings, .paymentsSettings,
              .mailItemDetail, .gigDetail, .listingDetail, .businessProfile, .editBusinessPage,
              .gigsFeed, .marketplace, .audienceProfile, .supportTrainDetail, .manageTrain,
              .chatConversation, .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold,
              .stamps, .mailTask, .mailTaskList, .mailTranslation, .packageGig, .earn,
-             .businessOwner, .viewAs, .membershipDetail, .identityCenter,
+             .businessOwner, .viewAs, .membershipDetail, .identityCenter, .blockedUsers,
              .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
              .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
              .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection:
@@ -647,6 +649,19 @@ public struct YouTabRoot: View {
             HubTabRoot.schedulingDrawsOwnHeader(route)
         default:
             false
+        }
+    }
+
+    /// Identity Center rows open the existing screens. A18.5 — "Privacy
+    /// Preview" opens the "View as" identity preview.
+    static func identityCenterRoute(forRow id: String) -> YouRoute? {
+        switch id {
+        case "privacyPreview": .viewAs
+        case "blockedPersonal": .blockedUsers
+        case "homes": .myHomes
+        case "businessProfiles": .myBusinesses
+        case "dataExport": .dataExport
+        default: nil
         }
     }
 
@@ -1191,6 +1206,8 @@ public struct YouTabRoot: View {
             }) { Task { @MainActor in pop() } }
         case .dataExport:
             DataExportView { Task { @MainActor in pop() } }
+        case .blockedUsers:
+            BlockedUsersView { Task { @MainActor in pop() } }
         case .legal:
             LegalIndexView(
                 onBack: { Task { @MainActor in pop() } },
@@ -1746,20 +1763,21 @@ public struct YouTabRoot: View {
                             // A.5 — "Edit professional profile" from the
                             // Professional identity card.
                             path.append(.professionalProfile)
-                        case .local, .personal, .publicProfile:
-                            path.append(.placeholder(label: "Identity"))
+                        case .local:
+                            // The Local profile is what Edit profile edits.
+                            showsEditProfile = true
+                        case .personal:
+                            // The account-level identity lives in Settings.
+                            path.append(.settings)
+                        case .publicProfile:
+                            path.append(.audienceProfile)
                         }
                     }
                 },
                 onOpenRow: { row in
                     Task { @MainActor in
-                        // A18.5 — the "Privacy Preview" row opens the
-                        // "View as" identity preview; other rows are
-                        // pre-staged placeholders.
-                        if row.id == "privacyPreview" {
-                            path.append(.viewAs)
-                        } else {
-                            path.append(.placeholder(label: row.label))
+                        if let route = Self.identityCenterRoute(forRow: row.id) {
+                            path.append(route)
                         }
                     }
                 }
@@ -1925,7 +1943,9 @@ public struct YouTabRoot: View {
                     Task { @MainActor in path.append(.audienceProfile) }
                 },
                 onOpenSettings: {
-                    Task { @MainActor in path.append(.placeholder(label: "Inbox settings")) }
+                    // No native DM-policy editor exists; the Beacon (tiers,
+                    // messaging) is set up and managed from the audience profile.
+                    Task { @MainActor in path.append(.audienceProfile) }
                 }
             )
         case let .creatorInboxConversation(dest):

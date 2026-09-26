@@ -185,7 +185,7 @@ class RecentActivityViewModelTest {
             ),
         )
         assertEquals(
-            RecentActivityDestination.Placeholder("Title a"),
+            RecentActivityDestination.Link("/app/notifications", "Title a"),
             RecentActivityViewModel.destinationFor(
                 activity("a", title = "Title a", route = "/app/notifications"),
             ),
