@@ -51,7 +51,7 @@ The kit is git-ignored and durable. `/private/tmp` is wiped when the Mac restart
   - Left: `/private/tmp/pantopus-stream3-chat-keyboard-r1` (#536), `/private/tmp/pantopus-stream3-chat-realtime-r1` (API source), `/private/tmp/pantopus-stream3-web-chat-names-r1` (web source, and the Playwright used by the login scripts), plus the app-managed session worktree `stream3-peer-takeover-d8df28`.
   - The user's general "no worktree removal" rule still stands.
   - Free disk space went from 12 to 66 GiB.
-- **Other streams' worktrees:** with each owner's written clearance and the user's request, Stream 3 also removed 37 merged Stream 1 worktrees and 18 merged Stream 2 worktrees at 22:46–22:47Z. Same method: plain `git worktree remove`, no force, branches kept, no prune. The Mac went from 102 live worktrees to 14.
+- **Other streams' worktrees:** with each owner's written clearance and the user's request, Stream 3 also removed 37 merged Stream 1 worktrees and 18 merged Stream 2 worktrees. They were done by 2026-09-26T22:45:16Z (Stream 1's `date -u` check); an earlier estimate of 22:46–22:47Z was wrong. Same method: plain `git worktree remove`, no force, branches kept, no prune. The Mac went from 102 live worktrees to 14.
 - **#536** passed CI at 22:34Z and is in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), queued 22:35Z (Stream 1).
 
 ### 2. Remaining Stream 3 inventory rows (checked in master `f885e0623` code, 2026-09-26 22:10Z)
