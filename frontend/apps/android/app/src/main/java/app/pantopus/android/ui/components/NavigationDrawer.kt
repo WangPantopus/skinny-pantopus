@@ -173,6 +173,13 @@ fun NavigationDrawerContext.headerSubtitle(): String =
 
 fun NavigationDrawerContext.showsBackToHub(): Boolean = this !is NavigationDrawerContext.Personal
 
+/**
+ * The Personal pill's name opens the profile its subtitle names ("Your
+ * profile"); its Switch chip, and the whole Home / Business pill, open the
+ * Identity Center.
+ */
+fun NavigationDrawerContext.pillOpensProfile(): Boolean = this is NavigationDrawerContext.Personal
+
 private fun item(
     icon: PantopusIcon,
     label: String,
@@ -349,6 +356,7 @@ fun NavigationDrawer(
     onOpenIdentityCenter: () -> Unit,
     onBackToHub: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenProfile: (() -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -360,7 +368,11 @@ fun NavigationDrawer(
                 .statusBarsPadding()
                 .testTag("navDrawer"),
     ) {
-        ContextPill(context = context, onClick = onOpenIdentityCenter)
+        ContextPill(
+            context = context,
+            onOpenIdentityCenter = onOpenIdentityCenter,
+            onOpenProfile = onOpenProfile?.takeIf { context.pillOpensProfile() },
+        )
         Column(
             modifier =
                 Modifier
@@ -378,10 +390,16 @@ fun NavigationDrawer(
     }
 }
 
+/**
+ * With [onOpenProfile] (the Personal pill) the name opens the profile and the
+ * Switch chip opens the Identity Center; otherwise the whole pill opens the
+ * Identity Center. The layout is the same either way.
+ */
 @Composable
 private fun ContextPill(
     context: NavigationDrawerContext,
-    onClick: () -> Unit,
+    onOpenIdentityCenter: () -> Unit,
+    onOpenProfile: (() -> Unit)?,
 ) {
     val pillar = context.pillar()
     Row(
@@ -393,51 +411,79 @@ private fun ContextPill(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(pillar.tintBackground())
-                .clickable(onClick = onClick)
+                .then(if (onOpenProfile == null) Modifier.clickable(onClick = onOpenIdentityCenter) else Modifier)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
                 .testTag("navDrawer.contextPill"),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(38.dp).clip(CircleShape).background(pillar.tint()),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .then(
+                        if (onOpenProfile != null) {
+                            Modifier
+                                .clickable(onClickLabel = "Open your profile", onClick = onOpenProfile)
+                                .testTag("navDrawer.contextPill.profile")
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
-            PantopusIconImage(
-                icon = pillar.icon(),
-                contentDescription = null,
-                size = 19.dp,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.appTextInverse,
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(38.dp).clip(CircleShape).background(pillar.tint()),
+            ) {
+                PantopusIconImage(
+                    icon = pillar.icon(),
+                    contentDescription = null,
+                    size = 19.dp,
+                    strokeWidth = 2.2f,
+                    tint = PantopusColors.appTextInverse,
+                )
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = Spacing.s3)) {
+                Text(
+                    text = context.headerTitle(),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                )
+                Text(
+                    text = context.headerSubtitle(),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = pillar.tint(),
+                    maxLines = 1,
+                )
+            }
         }
-        Column(modifier = Modifier.weight(1f).padding(start = Spacing.s3)) {
-            Text(
-                text = context.headerTitle(),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-            )
-            Text(
-                text = context.headerSubtitle(),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = pillar.tint(),
-                maxLines = 1,
-            )
-        }
-        SwitchChip(tint = pillar.tint())
+        SwitchChip(tint = pillar.tint(), onClick = if (onOpenProfile != null) onOpenIdentityCenter else null)
     }
 }
 
+/** [onClick] is set when the chip, not the whole pill, opens the Identity Center. */
 @Composable
-private fun SwitchChip(tint: Color) {
+private fun SwitchChip(
+    tint: Color,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         modifier =
             Modifier
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appSurface)
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .clickable(onClickLabel = "Switch context", onClick = onClick)
+                            .testTag("navDrawer.contextPill.switch")
+                    } else {
+                        Modifier
+                    },
+                ).background(PantopusColors.appSurface)
                 .padding(start = Spacing.s3, end = Spacing.s2, top = 4.dp, bottom = 4.dp),
     ) {
         Text(text = "Switch", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tint)

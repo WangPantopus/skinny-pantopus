@@ -18,6 +18,9 @@ struct NavigationDrawerView: View {
     let onSelect: @MainActor (NavigationDrawerDestination) -> Void
     let onOpenIdentityCenter: @MainActor () -> Void
     let onBackToHub: @MainActor () -> Void
+    /// Opens the viewer's profile from the Personal pill's name. Without it
+    /// the whole pill opens the Identity Center.
+    var onOpenProfile: (@MainActor () -> Void)?
 
     var body: some View {
         GeometryReader { geo in
@@ -91,44 +94,92 @@ struct NavigationDrawerView: View {
 
     // MARK: Context pill
 
+    @ViewBuilder
     private var contextPill: some View {
         let pillar = viewModel.pillar
-        return Button {
-            dismiss()
-            onOpenIdentityCenter()
-        } label: {
+        if viewModel.pillOpensProfile, let onOpenProfile {
+            // Same layout as the single-button pill: the name opens the
+            // profile, and the Switch chip opens the Identity Center.
             HStack(spacing: Spacing.s3) {
-                Circle()
-                    .fill(pillar.tint)
-                    .frame(width: 38, height: 38)
-                    .overlay {
-                        Icon(pillar.icon, size: 19, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
+                Button {
+                    dismiss()
+                    onOpenProfile()
+                } label: {
+                    HStack(spacing: Spacing.s3) {
+                        pillIdentity(pillar: pillar)
+                        Spacer(minLength: Spacing.s2)
                     }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(viewModel.headerTitle)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Text(viewModel.headerSubtitle)
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(pillar.tint)
-                        .lineLimit(1)
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: Spacing.s2)
-                switchChip(pillar: pillar)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("navDrawer.contextPill.profile")
+                .accessibilityLabel(viewModel.headerSubtitle)
+                .accessibilityHint("Opens your profile")
+                Button {
+                    dismiss()
+                    onOpenIdentityCenter()
+                } label: {
+                    switchChip(pillar: pillar)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("navDrawer.contextPill.switch")
+                .accessibilityLabel("Switch context")
+                .accessibilityHint("Opens the Identity Center")
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
             .background(pillar.tintBackground)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+            .padding(.horizontal, Spacing.s3)
+            .padding(.top, Spacing.s12)
+            .padding(.bottom, Spacing.s3)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("navDrawer.contextPill")
+        } else {
+            Button {
+                dismiss()
+                onOpenIdentityCenter()
+            } label: {
+                HStack(spacing: Spacing.s3) {
+                    pillIdentity(pillar: pillar)
+                    Spacer(minLength: Spacing.s2)
+                    switchChip(pillar: pillar)
+                }
+                .padding(.horizontal, Spacing.s3)
+                .padding(.vertical, Spacing.s2)
+                .background(pillar.tintBackground)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, Spacing.s3)
+            .padding(.top, Spacing.s12)
+            .padding(.bottom, Spacing.s3)
+            .accessibilityIdentifier("navDrawer.contextPill")
+            .accessibilityLabel("Switch context")
+            .accessibilityHint("Opens the Identity Center")
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s3)
-        .padding(.top, Spacing.s12)
-        .padding(.bottom, Spacing.s3)
-        .accessibilityIdentifier("navDrawer.contextPill")
-        .accessibilityLabel("Switch context")
-        .accessibilityHint("Opens the Identity Center")
+    }
+
+    /// The pill's avatar, context title and subtitle.
+    private func pillIdentity(pillar: NavigationDrawerPillar) -> some View {
+        HStack(spacing: Spacing.s3) {
+            Circle()
+                .fill(pillar.tint)
+                .frame(width: 38, height: 38)
+                .overlay {
+                    Icon(pillar.icon, size: 19, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
+                }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(viewModel.headerTitle)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                Text(viewModel.headerSubtitle)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(pillar.tint)
+                    .lineLimit(1)
+            }
+        }
     }
 
     private func switchChip(pillar: NavigationDrawerPillar) -> some View {

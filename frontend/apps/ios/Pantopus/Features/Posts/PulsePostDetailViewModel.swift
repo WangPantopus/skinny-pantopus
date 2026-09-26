@@ -31,6 +31,8 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
     public let authorIdentity: IdentityPillar
     public let authorVerified: Bool
     public let timeAndLocality: String
+    /// Under an hour old, while the header still reads "Just now" or "Xm ago".
+    public let postedWithinHour: Bool
     public let intent: PostIntent
     public let media: [PostMediaItem]
     public let reactions: PostReactionCounts
@@ -44,6 +46,7 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
         authorIdentity: IdentityPillar,
         authorVerified: Bool,
         timeAndLocality: String,
+        postedWithinHour: Bool,
         intent: PostIntent,
         media: [PostMediaItem],
         reactions: PostReactionCounts,
@@ -56,6 +59,7 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
         self.authorIdentity = authorIdentity
         self.authorVerified = authorVerified
         self.timeAndLocality = timeAndLocality
+        self.postedWithinHour = postedWithinHour
         self.intent = intent
         self.media = media
         self.reactions = reactions
@@ -77,6 +81,7 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
             authorIdentity: authorIdentity,
             authorVerified: authorVerified,
             timeAndLocality: timeAndLocality,
+            postedWithinHour: postedWithinHour,
             intent: intent,
             media: media,
             reactions: reactions ?? self.reactions,
@@ -503,6 +508,7 @@ public final class PulsePostDetailViewModel {
             // feedService.js#CREATOR_SELECT joins `verified`.
             authorVerified: false,
             timeAndLocality: timeAndLocality,
+            postedWithinHour: Date().timeIntervalSince(postDate(post.createdAt)) < 3600,
             intent: intent,
             media: media,
             reactions: reactions,
@@ -573,10 +579,15 @@ public final class PulsePostDetailViewModel {
         return ts
     }
 
-    private func relativeTimestamp(_ iso: String) -> String {
+    /// An unreadable date counts as now, as the "Just now" header shows it.
+    private func postDate(_ iso: String) -> Date {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) ?? Date()
+        return formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) ?? Date()
+    }
+
+    private func relativeTimestamp(_ iso: String) -> String {
+        let date = postDate(iso)
         let elapsed = Date().timeIntervalSince(date)
         switch elapsed {
         case ..<60: return "Just now"

@@ -115,6 +115,8 @@ fun BodyReactionsBody(
     isSending: Boolean,
     onSendTap: () -> Unit,
     comments: List<PostCommentRow>,
+    /** The post is under an hour old, so an empty thread reads "just posted". */
+    postedRecently: Boolean = false,
     hiddenReplyCount: Int = 0,
     onShowMoreReplies: (() -> Unit)? = null,
     onCommentAvatarTap: (String) -> Unit = {},
@@ -160,6 +162,7 @@ fun BodyReactionsBody(
             counts = reactions,
             commentCount = comments.size + hiddenReplyCount,
             commentsAreFresh = comments.isEmpty(),
+            postedRecently = postedRecently,
             onTap = onReactionTap,
             selectedEmoji = selectedReactionEmoji,
             onEmojiSelected = onEmojiSelected,
@@ -275,6 +278,7 @@ private fun ReactionsBar(
     counts: PostReactionCounts,
     commentCount: Int,
     commentsAreFresh: Boolean,
+    postedRecently: Boolean,
     onTap: (app.pantopus.android.data.api.models.posts.PostReactionKind) -> Unit,
     modifier: Modifier = Modifier,
     selectedEmoji: String? = null,
@@ -357,7 +361,7 @@ private fun ReactionsBar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            modifier = Modifier.semantics { contentDescription = commentSummary(commentCount, commentsAreFresh) },
+            modifier = Modifier.semantics { contentDescription = commentSummary(commentCount, commentsAreFresh, postedRecently) },
         ) {
             PantopusIconImage(
                 icon = PantopusIcon.MessageCircle,
@@ -366,7 +370,7 @@ private fun ReactionsBar(
                 tint = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
             )
             Text(
-                text = commentSummary(commentCount, commentsAreFresh),
+                text = commentSummary(commentCount, commentsAreFresh, postedRecently),
                 fontSize = 11.sp,
                 color = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
             )
@@ -437,12 +441,14 @@ private fun ReactionPill(
     }
 }
 
+/** "just posted" follows "0 comments" only while the post is under an hour old. */
 private fun commentSummary(
     commentCount: Int,
     commentsAreFresh: Boolean,
+    postedRecently: Boolean,
 ): String =
     if (commentsAreFresh) {
-        "0 comments · just posted"
+        if (postedRecently) "0 comments · just posted" else "0 comments"
     } else {
         "$commentCount ${if (commentCount == 1) "comment" else "comments"}"
     }

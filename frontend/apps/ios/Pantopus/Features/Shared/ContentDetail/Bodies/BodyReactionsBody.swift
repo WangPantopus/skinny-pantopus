@@ -119,6 +119,8 @@ public struct BodyReactionsBody: View {
     private let isSending: Bool
     private let onSendTap: @MainActor () -> Void
     private let comments: [PostCommentRow]
+    /// The post is under an hour old, so an empty thread reads "just posted".
+    private let postedRecently: Bool
     private let hiddenReplyCount: Int
     private let onShowMoreReplies: (@MainActor () -> Void)?
     private let onCommentAvatarTap: @MainActor (String) -> Void
@@ -154,6 +156,7 @@ public struct BodyReactionsBody: View {
         isSending: Bool,
         onSendTap: @escaping @MainActor () -> Void,
         comments: [PostCommentRow],
+        postedRecently: Bool = false,
         hiddenReplyCount: Int = 0,
         onShowMoreReplies: (@MainActor () -> Void)? = nil,
         replyingToName: String? = nil,
@@ -179,6 +182,7 @@ public struct BodyReactionsBody: View {
         self.isSending = isSending
         self.onSendTap = onSendTap
         self.comments = comments
+        self.postedRecently = postedRecently
         self.hiddenReplyCount = hiddenReplyCount
         self.onShowMoreReplies = onShowMoreReplies
         self.replyingToName = replyingToName
@@ -214,6 +218,7 @@ public struct BodyReactionsBody: View {
                 counts: reactions,
                 commentCount: visibleCommentCount,
                 commentsAreFresh: comments.isEmpty,
+                postedRecently: postedRecently,
                 selectedEmoji: selectedReactionEmoji,
                 onEmojiSelected: onEmojiSelected,
                 onTap: onReactionTap
@@ -326,6 +331,8 @@ private struct ReactionsBar: View {
     let counts: PostReactionCounts
     let commentCount: Int
     let commentsAreFresh: Bool
+    /// "just posted" follows "0 comments" only while the post is under an hour old.
+    let postedRecently: Bool
     var selectedEmoji: String?
     var onEmojiSelected: (@MainActor (String) -> Void)?
     let onTap: @MainActor (PostReactionKind) -> Void
@@ -397,7 +404,7 @@ private struct ReactionsBar: View {
 
     private var commentSummary: String {
         if commentsAreFresh {
-            return "0 comments · just posted"
+            return postedRecently ? "0 comments · just posted" : "0 comments"
         }
         return "\(commentCount) \(commentCount == 1 ? "comment" : "comments")"
     }

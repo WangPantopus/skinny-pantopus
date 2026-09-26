@@ -1048,9 +1048,10 @@ class MyBidsViewModel
                 return cleaned.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
             }
 
+            /** `12` → `"$12"`, `12.5` → `"$12.50"`: a bid shows its exact amount, with cents only when it has them. */
             fun formatPrice(amount: Double?): String {
                 if (amount == null) return "$—"
-                return "$${kotlin.math.round(amount).toInt()}"
+                return if (amount % 1.0 == 0.0) "$${amount.toInt()}" else String.format(Locale.US, "$%.2f", amount)
             }
 
             fun formatBudgetSublabel(price: Double?): String? {
