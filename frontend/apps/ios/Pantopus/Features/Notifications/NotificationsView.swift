@@ -34,6 +34,7 @@ public struct NotificationsView: View {
             }
         }
         .accessibilityIdentifier("notifications")
+        .refreshFailureToast($viewModel.actionFailure)
         .confirmationDialog(
             "Delete notification?",
             isPresented: Binding(

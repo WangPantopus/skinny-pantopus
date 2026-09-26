@@ -280,6 +280,10 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
 
     public private(set) var state: ListOfRowsState = .loading
 
+    /// Says when a delete or Mark all read failed and its rows were put
+    /// back; the view floats it as a toast and clears it.
+    public var actionFailure: String?
+
     public var topBarAction: TopBarAction? {
         TopBarAction(
             label: "Mark all read",
@@ -439,6 +443,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             notifications = previous
             unreadCount = previousCount
             rebuild()
+            actionFailure = "Couldn't mark all as read. Try again."
         }
     }
 
@@ -483,6 +488,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             notifications = previous
             unreadCount = previousUnread
             rebuild()
+            actionFailure = "Couldn't delete the notification. Try again."
         }
     }
 
