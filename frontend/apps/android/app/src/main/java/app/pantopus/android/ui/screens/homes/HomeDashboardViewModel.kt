@@ -296,7 +296,8 @@ class HomeDashboardViewModel
                     "track_bill" to "finance.manage", "track_package" to "packages.edit", "log_package" to "packages.edit",
                     "add_pet" to "home.edit", "create_poll" to "home.edit", "send_mail" to "mailbox.view",
                     "add_member" to "members.view", "view_bills" to "finance.view", "view_polls" to "home.view",
-                    "view_maintenance" to "maintenance.view", "pets" to "home.view", "calendar" to "calendar.view",
+                    "view_maintenance" to "maintenance.view", "view_issues" to "maintenance.view", "pets" to "home.view",
+                    "calendar" to "calendar.view",
                     "view_docs" to "docs.view", "view_emergency" to "sensitive.view", "view_packages" to "packages.view",
                     "view_tasks" to "tasks.view", "view_claims" to "ownership.view",
                 )[action]

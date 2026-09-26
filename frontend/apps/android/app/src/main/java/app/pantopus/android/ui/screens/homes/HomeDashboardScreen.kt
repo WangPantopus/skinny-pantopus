@@ -84,6 +84,7 @@ fun HomeDashboardScreen(
     onOpenAccessCodes: ((homeId: String, homeName: String?) -> Unit)? = null,
     onOpenTasks: ((String) -> Unit)? = null,
     onOpenMaintenance: ((String) -> Unit)? = null,
+    onOpenIssues: ((String) -> Unit)? = null,
     onOpenPropertyDetails: ((String) -> Unit)? = null,
     /** T6.3a / P9 - push to the per-home Members list. When wired, the
      *  "Members" / "Add member" quick-actions navigate to the list
@@ -255,6 +256,10 @@ fun HomeDashboardScreen(
             "view_maintenance" ->
                 viewModel.currentHomeId()?.let { homeId ->
                     onOpenMaintenance?.invoke(homeId) ?: openPlaceholder(actionId)
+                }
+            "view_issues" ->
+                viewModel.currentHomeId()?.let { homeId ->
+                    onOpenIssues?.invoke(homeId) ?: openPlaceholder(actionId)
                 }
             "pets" ->
                 viewModel.currentHomeId()?.let { homeId ->
@@ -549,6 +554,7 @@ private fun DashboardLayout(
                                     OverviewSection(
                                         content = content,
                                         onOpenEmergency = { onQuickAction("view_emergency") },
+                                        onOpenIssues = { onQuickAction("view_issues") },
                                         onOpenPropertyDetails = onOpenPropertyDetails,
                                         can = can,
                                     )
@@ -852,6 +858,7 @@ private fun OnboardingStepRow(
 private fun OverviewSection(
     content: HomeDashboardContent,
     onOpenEmergency: () -> Unit,
+    onOpenIssues: () -> Unit,
     onOpenPropertyDetails: () -> Unit,
     can: (String) -> Boolean,
 ) {
@@ -880,6 +887,7 @@ private fun OverviewSection(
                 }
             }
         }
+        if (can("maintenance.view")) IssuesRow(onClick = onOpenIssues)
         if (can("sensitive.view")) EmergencyInfoRow(info = content.overview.emergency, onOpen = onOpenEmergency)
         PropertyDetailsRow(onClick = onOpenPropertyDetails)
     }
@@ -1073,6 +1081,52 @@ private fun EmergencyInfoRow(
                 tint = PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+/** Opens the Home's issue tracker (the Home-context drawer that lists it is not shown on Android). */
+@Composable
+private fun IssuesRow(onClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.lg))
+                .clickable(onClick = onClick)
+                .padding(Spacing.s4)
+                .semantics(
+                    mergeDescendants = true,
+                ) {
+                    role = Role.Button
+                    contentDescription = "Issues. Report repairs and track the fixes"
+                }
+                .testTag("homeDashboard_issuesRow"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        PantopusIconImage(icon = PantopusIcon.Wrench, contentDescription = null, size = Radii.xl2, tint = PantopusColors.home)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            Text(
+                text = "Issues",
+                style = PantopusTextStyle.body,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
+            Text(
+                text = "Report repairs & track the fixes",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        PantopusIconImage(
+            icon = PantopusIcon.ChevronRight,
+            contentDescription = null,
+            size = 18.dp,
+            tint = PantopusColors.appTextMuted,
+        )
     }
 }
 

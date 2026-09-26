@@ -2950,6 +2950,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMaintenance = { homeId ->
                             navController.navigate(ChildRoutes.homeMaintenance(homeId))
                         },
+                        onOpenIssues = { homeId ->
+                            navController.navigate(ChildRoutes.homeIssues(homeId))
+                        },
                         onOpenMembers = { homeId ->
                             navController.navigate(ChildRoutes.homeMembers(homeId))
                         },
