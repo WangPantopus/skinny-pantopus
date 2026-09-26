@@ -1,6 +1,15 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T06:33Z
+## CURRENT STREAM 1 STATE — 2026-09-26T07:15Z
+
+- **Merged in batch 22 (07:13:40Z):** #472 and #477.
+- **In batch 23 (#484):** #476 and #480.
+- **Open:**
+  - #481: task Q&A failure state. Afters pass on both apps; bundle `ed36276d…`.
+  - `claude/stream1-native-gig-saved-state` `567bfaec1`: saved-state key mapping; build pending.
+- **Proposals for the user:** token refresh; Marketplace Snapshot rows; owner Message; buyer offer view/withdraw.
+
+## Previous Stream 1 state — 2026-09-26T06:33Z
 
 - **Merged in batch 21 (#471, 06:32:20Z):** #462 wallet and #469 web Marketplace.
 - **Open for batch 22:**

@@ -1,6 +1,20 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T06:33Z (batch 21 merged; batch 22 = 7 PRs gating on CI)
+## CURRENT RESUME POINT — 2026-09-26T07:15Z (batch 22 merged; batch 23 #484 queued; batch 24 forming)
+
+- **Integration (Stream 1 queue):**
+  - Master is `a916e6bd9`. Batch 22 [#478](https://github.com/WangPantopus/skinny-pantopus/pull/478) merged at 07:13:40Z. It carried #473 (S2 R04 ownership transfer, user-approved), #474 (S2 D07), #475 (S3-47), #477 (S1 web Tasks banner), #470 (S3-66) and #472 (S1 Pulse/Offers/iOS post link).
+  - **Batch 23 [#484](https://github.com/WangPantopus/skinny-pantopus/pull/484)** = #479 (S3 B7 web limits) → #480 (S1 web Payouts "—") → #476 (S1 My bids/tasks/posts + iOS Hub time). Tip `09a0f2d2e`. The runner is watching it.
+  - **Batch 24 candidates** (reviewed; bundles verified): #481 (S1 native task Q&A failure state), #482 (S2 issue permissions; `can_manage_home` = `home.edit`, so only maintenance.manage is added) and #483 (S3-43 web blocked users), once green. The S1 saved-task fix is being built.
+- **Stream 1 new this round:**
+  - #480: web Payouts showed $0.00 beside "Failed to load earnings".
+  - #481: native task Q&A showed "Questions (0) · No questions yet" on a failed read. The real double-tap Ask journey sent 1 POST; the fixture was removed exactly.
+  - Saved state, branch `claude/stream1-native-gig-saved-state` `567bfaec1`: both apps read `saved_by_user`, but the API sends `viewer_has_saved`, so saved tasks reopen unsaved. Reproduced on Android against the real API.
+- **Inventory:** 82+ items. About 48% verified as-is, 29% fixed and merged, and about 10% fixed and awaiting merge (before this round's merges). The remainder is 4 user decisions, boundaries and low-priority orphans.
+- **Proposals awaiting the user (Stream 1):** Android token refresh retires open screens; web Marketplace Snapshot hardcoded rows; owner Message on their own listing; native buyer offer view/withdraw.
+- **Slots:** heavy is Stream 3's (S3-48) and then Stream 1 (saved-state build). The iOS driver is free. Stream 1 emulator-5558 is in slot 3.
+
+## Resume point history — 2026-09-26T06:33Z (batch 21 merged; batch 22 = 7 PRs gating on CI)
 
 - **Integration (Stream 1 queue):**
   - Master is `e1509f346`. Batch 21 [#471](https://github.com/WangPantopus/skinny-pantopus/pull/471) merged at 06:32:20Z. It carried #464 (S2 read state), #465 (S3-08/36/34), #466 (S3-65), #467 (S2 D01), #468 (S3 scheduling hide + iOS hub Back), #462 (S1 wallet) and #469 (S1 web Marketplace).
