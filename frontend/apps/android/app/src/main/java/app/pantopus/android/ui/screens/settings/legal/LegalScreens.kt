@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
@@ -57,8 +58,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.BackToTopFab
 import app.pantopus.android.ui.components.DocMetaStrip
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.LegalSection
 import app.pantopus.android.ui.components.LegalTOCCard
+import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -118,6 +121,15 @@ enum class LegalDocument {
             }
 
     val rowId: String get() = name.lowercase()
+
+    /** The public web page Share hands out. Only Terms and Privacy have one. */
+    val publicPath: String?
+        get() =
+            when (this) {
+                Terms -> "/terms"
+                Privacy -> "/privacy"
+                AcceptableUse, Cookies, OpenSource -> null
+            }
 }
 
 @HiltViewModel
@@ -233,13 +245,17 @@ fun LegalContentScreen(
     onBack: () -> Unit = {},
 ) {
     when (document) {
-        LegalDocument.Privacy, LegalDocument.Terms ->
+        LegalDocument.Privacy, LegalDocument.Terms -> {
+            val context = LocalContext.current
+            val shareUrl = document.publicPath?.let { InviteLinks.publicPageUrl(it) }
             LegalLongFormScreen(
                 model = LegalDocs.model(document),
                 title = document.title,
                 screenTestTag = "legalContent.${document.rowId}",
                 onBack = onBack,
+                onShare = shareUrl?.let { url -> { context.shareText(url) } },
             )
+        }
         else -> LegacyLegalContentScreen(document = document, onBack = onBack)
     }
 }
@@ -258,6 +274,7 @@ fun LegalLongFormScreen(
     title: String,
     screenTestTag: String,
     onBack: () -> Unit,
+    onShare: (() -> Unit)? = null,
 ) {
     var tocOpen by rememberSaveable(screenTestTag) { mutableStateOf(true) }
     val listState = rememberLazyListState()
@@ -282,6 +299,7 @@ fun LegalLongFormScreen(
         // Item 0 is the TOC card, so section n (1-based) is at item index n.
         onJump = { index -> scope.launch { listState.animateScrollToItem(index + 1) } },
         onBackToTop = { scope.launch { listState.animateScrollToItem(0) } },
+        onShare = onShare,
     )
 }
 
@@ -302,6 +320,8 @@ fun LegalScaffold(
     onToggleTOC: () -> Unit,
     onJump: (Int) -> Unit,
     onBackToTop: () -> Unit,
+    // Shares the document's public page; `null` hides Share.
+    onShare: (() -> Unit)? = {},
 ) {
     Box(
         modifier =
@@ -315,11 +335,13 @@ fun LegalScaffold(
                 title = title,
                 onBack = onBack,
                 action =
-                    ContentDetailTopBarAction(
-                        icon = PantopusIcon.Share,
-                        contentDescription = "Share",
-                        onClick = {},
-                    ),
+                    onShare?.let { share ->
+                        ContentDetailTopBarAction(
+                            icon = PantopusIcon.Share,
+                            contentDescription = "Share",
+                            onClick = share,
+                        )
+                    },
             )
             DocMetaStrip(lastUpdated = model.lastUpdated, version = model.version)
             LazyColumn(

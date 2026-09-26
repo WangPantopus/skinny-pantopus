@@ -92,6 +92,8 @@ fun PublicProfileScreen(
     val isFollowing by viewModel.isFollowing.collectAsStateWithLifecycle()
     val isFollowInFlight by viewModel.isFollowInFlight.collectAsStateWithLifecycle()
     val canFollow by viewModel.canFollow.collectAsStateWithLifecycle()
+    val relationshipLoaded by viewModel.relationshipLoaded.collectAsStateWithLifecycle()
+    val postsLoadFailed by viewModel.postsLoadFailed.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState()
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
@@ -145,11 +147,14 @@ fun PublicProfileScreen(
                                 canFollow = canFollow,
                                 isFollowing = isFollowing,
                                 isInFlight = isFollowInFlight,
+                                relationshipLoaded = relationshipLoaded,
                             ),
                         connection = connection,
                         onFollow = { viewModel.follow() },
                         onOpenGig = onOpenGig,
                         onOpenProfile = onOpenProfile,
+                        postsLoadFailed = postsLoadFailed,
+                        onRetryPosts = { viewModel.refresh() },
                     )
                 } else {
                     PublicProfileLoadedFrame(
@@ -163,6 +168,7 @@ fun PublicProfileScreen(
                                 canFollow = canFollow,
                                 isFollowing = isFollowing,
                                 isInFlight = isFollowInFlight,
+                                relationshipLoaded = relationshipLoaded,
                             ),
                         connection = connection,
                         onFollow = { viewModel.follow() },
@@ -294,12 +300,15 @@ fun PublicProfileScreen(
  * T3 — render state for the plain Follow / Following control. A Beacon
  * (persona with a resolvable handle) still hands the tap to the privacy
  * handshake wizard, which owns its own in-flight pose; everyone else
- * toggles `api/users/:id/follow` and uses [isInFlight].
+ * toggles `api/users/:id/follow` and uses [isInFlight]. Follow and Connect
+ * render only once [relationshipLoaded], so a failed relationship read
+ * can't show them to an existing follower or connection.
  */
 internal data class ProfileFollowState(
     val canFollow: Boolean = false,
     val isFollowing: Boolean = false,
     val isInFlight: Boolean = false,
+    val relationshipLoaded: Boolean = true,
 )
 
 /**
@@ -390,26 +399,28 @@ internal fun PublicProfileLoadedFrame(
                                     actionLabel = "Share profile",
                                     onClick = onOverflow,
                                 )
-                                if (follow.isFollowing) {
-                                    BeaconHeaderGhostButton(
-                                        icon = PantopusIcon.Check,
-                                        actionLabel = "Following. Tap to unfollow",
-                                        onClick = onFollow,
-                                        title = "Following",
-                                    )
-                                } else {
-                                    BeaconHeaderPrimaryButton(
-                                        title = "Follow",
-                                        icon = PantopusIcon.Plus,
-                                        onClick = onFollow,
-                                    )
+                                if (follow.relationshipLoaded) {
+                                    if (follow.isFollowing) {
+                                        BeaconHeaderGhostButton(
+                                            icon = PantopusIcon.Check,
+                                            actionLabel = "Following. Tap to unfollow",
+                                            onClick = onFollow,
+                                            title = "Following",
+                                        )
+                                    } else {
+                                        BeaconHeaderPrimaryButton(
+                                            title = "Follow",
+                                            icon = PantopusIcon.Plus,
+                                            onClick = onFollow,
+                                        )
+                                    }
                                 }
                             }
                         } else {
                             ConnectHeaderButton(
                                 connection = connection,
                                 connectState = connectState,
-                                canFollow = follow.canFollow,
+                                canFollow = follow.canFollow && follow.relationshipLoaded,
                                 onConnect = onConnect,
                             )
                             BeaconHeaderPrimaryButton(
@@ -479,6 +490,8 @@ internal fun LocalProfileLoadedFrame(
     onFollow: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    postsLoadFailed: Boolean = false,
+    onRetryPosts: () -> Unit = {},
 ) {
     ContentDetailShell(
         title = null,
@@ -515,7 +528,7 @@ internal fun LocalProfileLoadedFrame(
                         ConnectHeaderButton(
                             connection = connection,
                             connectState = connectState,
-                            canFollow = follow.canFollow,
+                            canFollow = follow.canFollow && follow.relationshipLoaded,
                             onConnect = onConnect,
                         )
                         BeaconHeaderPrimaryButton(
@@ -554,6 +567,8 @@ internal fun LocalProfileLoadedFrame(
                             onUnlock = {},
                             onEmptyCta = onMessage,
                             localName = content.header.displayName,
+                            loadFailed = postsLoadFailed,
+                            onRetry = onRetryPosts,
                         )
                     LocalProfileTab.About ->
                         Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
@@ -634,7 +649,7 @@ private fun ProfileFollowRow(
     onFollow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (follow.canFollow) {
+    if (follow.canFollow && follow.relationshipLoaded) {
         Box(modifier = modifier.testTag("publicProfileFollowButton")) {
             if (follow.isFollowing) {
                 GhostButton(

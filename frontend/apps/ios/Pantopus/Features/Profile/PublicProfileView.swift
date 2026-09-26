@@ -279,7 +279,9 @@ public struct PublicProfileView: View {
                 posts: payload.posts,
                 onUnlock: { _ in },
                 onEmptyCTA: { onOpenMessages(payload.profile) },
-                localName: payload.header.displayName
+                localName: payload.header.displayName,
+                loadFailed: viewModel.postsLoadFailed,
+                onRetry: retryLoad
             )
         case .about:
             LocalProfileAboutSection(content: neighbor)
@@ -371,11 +373,11 @@ public struct PublicProfileView: View {
     /// Message), so the follow control lives here, directly beneath the
     /// identity block — the same slot RN puts its action row in
     /// (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
-    /// when signed out, matching RN.
+    /// when signed out, matching RN, and until the relationship has loaded.
     @ViewBuilder private var followRow: some View {
         // A blocked profile keeps no Follow control (the server refuses the
         // follow in both directions).
-        if viewModel.canFollow, viewModel.connection != .blocked {
+        if viewModel.canFollow, viewModel.relationshipLoaded, viewModel.connection != .blocked {
             Group {
                 if viewModel.isFollowing {
                     GhostButton(
@@ -426,20 +428,24 @@ public struct PublicProfileView: View {
                 BeaconHeaderGhostButton(icon: .share, accessibilityLabel: "Share profile") {
                     viewModel.showOverflow = true
                 }
-                if viewModel.isFollowing {
-                    BeaconHeaderGhostButton(
-                        title: "Following",
-                        icon: .check,
-                        accessibilityLabel: "Following. Tap to unfollow"
-                    ) {
-                        viewModel.follow()
+                // Follow / Following waits for the relationship read, so a
+                // failed read can't show "Follow" to an existing follower.
+                if viewModel.relationshipLoaded {
+                    if viewModel.isFollowing {
+                        BeaconHeaderGhostButton(
+                            title: "Following",
+                            icon: .check,
+                            accessibilityLabel: "Following. Tap to unfollow"
+                        ) {
+                            viewModel.follow()
+                        }
+                        .accessibilityIdentifier("publicProfileFollowButton")
+                    } else {
+                        BeaconHeaderPrimaryButton(title: "Follow", icon: .plus) {
+                            viewModel.follow()
+                        }
+                        .accessibilityIdentifier("publicProfileFollowButton")
                     }
-                    .accessibilityIdentifier("publicProfileFollowButton")
-                } else {
-                    BeaconHeaderPrimaryButton(title: "Follow", icon: .plus) {
-                        viewModel.follow()
-                    }
-                    .accessibilityIdentifier("publicProfileFollowButton")
                 }
             }
         case .local:
@@ -463,6 +469,12 @@ public struct PublicProfileView: View {
                 onOpenMessages(payload.profile)
             }
         }
+    }
+
+    /// Try again on a feed that couldn't load: reloads the profile, its posts
+    /// and the relationship.
+    private func retryLoad() {
+        Task { await viewModel.refresh() }
     }
 
     /// First-touch action behind the posts-feed empty-state CTA.

@@ -55,6 +55,7 @@ struct LegalLongFormView: View {
 
     @State private var tocOpen = true
     @State private var showBackToTop = false
+    @State private var showsShareSheet = false
 
     var body: some View {
         LegalScaffold(
@@ -63,6 +64,7 @@ struct LegalLongFormView: View {
             accessibilityID: "legalContent.\(document.rawValue)",
             tocOpen: tocOpen,
             showBackToTop: showBackToTop,
+            onShare: openShare,
             onBack: onBack
         ) {
             withAnimation(Motion.screenTransition) { tocOpen.toggle() }
@@ -71,6 +73,22 @@ struct LegalLongFormView: View {
             // Mirror the design threshold: the fab appears past `scrollTop > 220`.
             showBackToTop = offset > 220
         }
+        .sheet(isPresented: $showsShareSheet) {
+            if let shareURL {
+                SystemShareSheet(items: [shareURL])
+            }
+        }
+    }
+
+    /// The document's public web page, which Share hands out.
+    private var shareURL: URL? {
+        document.publicPath.flatMap { URL(string: InviteLinks.publicPageURLString(path: $0)) }
+    }
+
+    /// Opens the share sheet, or `nil` (no Share) without a public page.
+    private var openShare: (@MainActor () -> Void)? {
+        guard shareURL != nil else { return nil }
+        return { showsShareSheet = true }
     }
 }
 
@@ -84,6 +102,8 @@ struct LegalScaffold: View {
     let accessibilityID: String
     let tocOpen: Bool
     let showBackToTop: Bool
+    /// Opens the share sheet for the document's public page; `nil` hides Share.
+    var onShare: (@MainActor () -> Void)?
     let onBack: @MainActor () -> Void
     let onToggleTOC: () -> Void
 
@@ -97,7 +117,7 @@ struct LegalScaffold: View {
             ContentDetailTopBar(
                 title: title,
                 onBack: onBack,
-                action: ContentDetailTopBarAction(icon: .share, accessibilityLabel: "Share") {}
+                action: shareAction
             )
             DocMetaStrip(lastUpdated: model.lastUpdated, version: model.version)
             ScrollViewReader { proxy in
@@ -143,6 +163,14 @@ struct LegalScaffold: View {
         }
         .background(Theme.Color.appSurface)
         .accessibilityIdentifier(accessibilityID)
+    }
+
+    /// Top-bar Share, present only when there's a public page to share.
+    private var shareAction: ContentDetailTopBarAction? {
+        guard onShare != nil else { return nil }
+        return ContentDetailTopBarAction(icon: .share, accessibilityLabel: "Share") {
+            Task { @MainActor in onShare?() }
+        }
     }
 
     /// Reports the distance scrolled below the top of the content (positive =
@@ -427,6 +455,7 @@ private struct LegacyLegalContentView: View {
         accessibilityID: "legalContent.privacy",
         tocOpen: true,
         showBackToTop: false,
+        onShare: {},
         onBack: {},
         onToggleTOC: {}
     )
@@ -439,6 +468,7 @@ private struct LegacyLegalContentView: View {
         accessibilityID: "legalContent.terms",
         tocOpen: false,
         showBackToTop: true,
+        onShare: {},
         onBack: {},
         onToggleTOC: {}
     )
