@@ -754,14 +754,19 @@ function GigDetailV2Content() {
             currentUserId={currentUserId}
           />
 
-          <ChangeOrdersSection
-            gigId={gigId!}
-            isMyGig={isMyGig}
-            iAmWorker={iAmWorker}
-            currentUserId={currentUserId}
-            paymentId={gig?.payment_id}
-            paymentStatus={gig?.payment_status}
-          />
+          {/* Only the poster and the worker can read change requests (the API
+              answers 403 to anyone else). Mounting it once someone becomes the
+              worker also gives them a fresh read, not the earlier refusal. */}
+          {(isMyGig || iAmWorker) && (
+            <ChangeOrdersSection
+              gigId={gigId!}
+              isMyGig={isMyGig}
+              iAmWorker={iAmWorker}
+              currentUserId={currentUserId}
+              paymentId={gig?.payment_id}
+              paymentStatus={gig?.payment_status}
+            />
+          )}
         </div>
 
         {/* ── Right column (1/3) ── */}
