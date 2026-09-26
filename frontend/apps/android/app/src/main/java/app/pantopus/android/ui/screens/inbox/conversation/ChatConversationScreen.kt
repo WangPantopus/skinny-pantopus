@@ -77,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -2452,6 +2453,22 @@ internal fun PopulatedFrame(
         if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
             listState.animateScrollToItem(lastIndex)
         }
+    }
+    // The keyboard shortens the list from the bottom. A reader who was at the
+    // newest message stays there instead of losing it behind the composer, so
+    // the follow check above still sees them at the bottom on the next send.
+    LaunchedEffect(listState) {
+        var lastHeight = 0
+        var wasAtBottom = true
+        snapshotFlow { listState.layoutInfo.viewportSize.height to !listState.canScrollForward }
+            .collect { (height, atBottom) ->
+                if (height < lastHeight && wasAtBottom && initialScrollDone) {
+                    listState.scrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+                } else {
+                    wasAtBottom = atBottom
+                }
+                lastHeight = height
+            }
     }
     // Backwards pagination: fetch an older page only when the FIRST item
     // actually becomes visible after the initial scroll-to-bottom. The old
