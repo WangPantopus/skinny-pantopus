@@ -212,7 +212,10 @@ enum class NotificationCategory {
                     when {
                         lower.isEmpty() -> System
                         "gig" in lower -> Gig
-                        "listing" in lower || "mail" in lower -> Listing
+                        "listing" in lower -> Listing
+                        // Mail notices (mail_new, home_mail_removed, …) have no
+                        // bucket of their own; they are not listings.
+                        "mail" in lower -> System
                         "home" in lower -> Claim
                         "post" in lower || "reply" in lower -> Reply
                         else -> System
