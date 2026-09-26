@@ -530,6 +530,7 @@ private fun OrganizerControls(
 
     ManageNudgeSection(
         openSlotCount = content.slotsOpen,
+        hasDates = ui.slotRows.isNotEmpty(),
         draft = ui.nudgeDraft,
         isBusy = ui.isSubmitting,
         onDraft = { viewModel.draftNudge() },

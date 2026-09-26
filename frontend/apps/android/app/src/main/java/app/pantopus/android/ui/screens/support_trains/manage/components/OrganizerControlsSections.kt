@@ -387,6 +387,8 @@ fun ManageOrganizersSection(
 @Composable
 fun ManageNudgeSection(
     openSlotCount: Int,
+    /** False while the train has no dates: none are open, but none are filled either. */
+    hasDates: Boolean = true,
     draft: String?,
     isBusy: Boolean,
     onDraft: () -> Unit,
@@ -401,7 +403,11 @@ fun ManageNudgeSection(
         ManageSectionHeader(title = "Remind helpers")
         if (openSlotCount == 0) {
             ManageCard {
-                Text(text = "All slots are filled!", color = PantopusColors.appTextMuted, fontSize = 13.sp)
+                Text(
+                    text = if (hasDates) "All slots are filled!" else "No dates added yet",
+                    color = PantopusColors.appTextMuted,
+                    fontSize = 13.sp,
+                )
             }
         } else {
             ManageCard {

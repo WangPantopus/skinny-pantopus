@@ -336,6 +336,8 @@ struct ManageOrganizersSection: View {
 @MainActor
 struct ManageNudgeSection: View {
     let openSlotCount: Int
+    /// False while the train has no dates: none are open, but none are filled either.
+    var hasDates = true
     let draft: String?
     let isBusy: Bool
     let onDraft: @MainActor () -> Void
@@ -348,7 +350,7 @@ struct ManageNudgeSection: View {
             ManageSectionHeader(title: "Remind helpers")
             if openSlotCount == 0 {
                 OrganizerSectionCard {
-                    Text("All slots are filled!")
+                    Text(hasDates ? "All slots are filled!" : "No dates added yet")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }

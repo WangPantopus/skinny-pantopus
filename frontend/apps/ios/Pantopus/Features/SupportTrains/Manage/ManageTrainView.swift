@@ -353,6 +353,7 @@ public struct ManageTrainView: View {
 
         ManageNudgeSection(
             openSlotCount: content.slotsOpen,
+            hasDates: !viewModel.slotRows.isEmpty,
             draft: viewModel.nudgeDraft,
             isBusy: viewModel.isSubmitting,
             onDraft: { Task { await viewModel.draftNudge() } },
