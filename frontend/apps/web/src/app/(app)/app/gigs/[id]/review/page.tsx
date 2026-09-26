@@ -61,10 +61,13 @@ export default function GigReviewPage() {
 
     const revieweeId = isOwner ? String(gig.accepted_by || '') : String(gig.user_id || '');
     const revieweeLabel = isOwner ? 'worker' : 'gig poster';
+    // The task detail names both people as `acceptedBy` and `creator`; an instant-accept
+    // task has no accepted bid to read the helper's name from.
     const revieweeName =
       (isOwner
-        ? gig?.accepted_bid?.bidder?.name || gig?.accepted_bid?.bidder?.username
-        : gig?.owner?.name || gig?.owner?.username || gig?.user?.name || gig?.user?.username) ||
+        ? gig?.accepted_bid?.bidder?.name || gig?.accepted_bid?.bidder?.username || gig?.acceptedBy?.displayName
+        : gig?.owner?.name || gig?.owner?.username || gig?.user?.name || gig?.user?.username
+          || gig?.creator?.displayName) ||
       revieweeLabel;
 
     if (!revieweeId) {

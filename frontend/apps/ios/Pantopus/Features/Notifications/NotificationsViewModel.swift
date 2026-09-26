@@ -162,7 +162,10 @@ public enum NotificationCategory: Sendable, Hashable {
     private static func heuristicCategory(for raw: String) -> NotificationCategory {
         // Heuristic fallbacks for the noisier prefixes the backend emits today.
         if raw.contains("gig") { return .gig }
-        if raw.contains("listing") || raw.contains("mail") { return .listing }
+        if raw.contains("listing") { return .listing }
+        // Mail notices (mail_new, home_mail_removed, …) have no bucket of
+        // their own; they are not listings.
+        if raw.contains("mail") { return .system }
         if raw.contains("home") { return .claim }
         if raw.contains("post") || raw.contains("reply") { return .reply }
         return .system
