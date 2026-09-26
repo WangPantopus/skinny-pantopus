@@ -784,12 +784,12 @@ router.post('/party/create', validate(createPartySchema), async (req, res, next)
       return res.status(400).json({ error: 'Mail Party is disabled for your account' });
     }
 
-    const homeIds = await getAccessibleHomeIds(req.user.id);
-    if (homeIds.length === 0) {
+    // The party belongs to the letter's Home: its members join, and the
+    // letter can only be handed to one of them (POST /party/assign).
+    const homeId = mail.recipient_home_id;
+    if (!homeId || !(await getAccessibleHomeIds(req.user.id)).includes(homeId)) {
       return res.status(400).json({ error: 'No home found' });
     }
-
-    const homeId = homeIds[0]; // Primary home
 
     const { data: home } = await supabaseAdmin
       .from('Home')
@@ -909,10 +909,35 @@ router.post('/party/reaction', validate(partyReactionSchema), async (req, res, n
 router.post('/party/assign', validate(partyAssignSchema), async (req, res, next) => {
   try {
     const { sessionId, mailId, assignToUserId } = req.body;
-    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
+    const mail = await readableMail(mailId, req.user.id);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+
+    // Only a live party for this letter that the caller is part of may hand
+    // it off, and only to a member of the letter's Home: any other session id
+    // or recipient used to move the letter into that account's mailbox.
+    const { data: session } = await supabaseAdmin
+      .from('MailPartySession')
+      .select('id')
+      .eq('id', sessionId)
+      .eq('mail_id', mailId)
+      .in('status', ['pending', 'active'])
+      .maybeSingle();
+    const { data: participants } = session
+      ? await supabaseAdmin
+        .from('MailPartyParticipant')
+        .select('user_id')
+        .eq('session_id', sessionId)
+      : { data: [] };
+    if (!session || !(participants || []).some((p) => p.user_id === req.user.id)) {
+      return res.status(404).json({ error: 'Session not found or expired' });
+    }
+    if (!mail.recipient_home_id
+      || !(await getAccessibleHomeIds(assignToUserId)).includes(mail.recipient_home_id)) {
+      return res.status(400).json({ error: 'Choose someone in this household.' });
+    }
 
     // Move to assigned user's Counter
-    await supabaseAdmin
+    const { error: assignError } = await supabaseAdmin
       .from('Mail')
       .update({
         recipient_user_id: assignToUserId,
@@ -920,12 +945,12 @@ router.post('/party/assign', validate(partyAssignSchema), async (req, res, next)
         drawer: 'personal',
       })
       .eq('id', mailId);
+    if (assignError) {
+      logger.error('Mail party assign failed', { mailId, sessionId, error: assignError.message });
+      return res.status(500).json({ error: "Couldn't assign this mail. Please try again." });
+    }
 
     // Complete session
-    const { data: participants } = await supabaseAdmin
-      .from('MailPartyParticipant')
-      .select('user_id')
-      .eq('session_id', sessionId);
 
     await supabaseAdmin
       .from('MailPartySession')
