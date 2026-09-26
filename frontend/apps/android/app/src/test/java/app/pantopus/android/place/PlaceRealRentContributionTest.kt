@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.place.RentReportResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
@@ -69,6 +70,7 @@ class PlaceRealRentContributionTest {
     private fun makeVm(): PlaceDetailViewModel =
         PlaceDetailViewModel(
             repo = repo,
+            adminRepo = mockk<HomeAdminRepository>(relaxed = true),
             savedStateHandle =
                 SavedStateHandle(
                     mapOf(

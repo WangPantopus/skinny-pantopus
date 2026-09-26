@@ -97,8 +97,8 @@ public enum NotificationsZone: String, Sendable, CaseIterable, Hashable {
 }
 
 /// Pending "delete this notification?" confirmation. The screen binds a
-/// `confirmationDialog` to this; the VM never destroys anything until
-/// `confirmDelete()` runs.
+/// `confirmationDialog` to this; the VM never destroys anything until the
+/// dialog's Delete calls `delete(id:)` with the request it presented.
 public struct NotificationDeleteRequest: Sendable, Identifiable, Hashable {
     public let id: String
     public let title: String
@@ -280,6 +280,10 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
 
     public private(set) var state: ListOfRowsState = .loading
 
+    /// Says when a delete or Mark all read failed and its rows were put
+    /// back; the view floats it as a toast and clears it.
+    public var actionFailure: String?
+
     public var topBarAction: TopBarAction? {
         TopBarAction(
             label: "Mark all read",
@@ -439,6 +443,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             notifications = previous
             unreadCount = previousCount
             rebuild()
+            actionFailure = "Couldn't mark all as read. Try again."
         }
     }
 
@@ -460,14 +465,9 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     }
 
     /// `DELETE /api/notifications/:id`. Optimistic — the row disappears
-    /// immediately and is restored if the call fails.
-    public func confirmDelete() async {
-        guard let request = pendingDelete else { return }
-        pendingDelete = nil
-        await delete(id: request.id)
-    }
-
-    /// Delete without the confirmation hop. Exposed for tests.
+    /// immediately and is restored (with a toast) if the call fails. The
+    /// dialog passes the request it presented: dismissing it has already
+    /// cleared `pendingDelete`.
     public func delete(id: String) async {
         guard let target = notifications.first(where: { $0.id == id }) else { return }
         let previous = notifications
@@ -483,6 +483,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             notifications = previous
             unreadCount = previousUnread
             rebuild()
+            actionFailure = "Couldn't delete the notification. Try again."
         }
     }
 

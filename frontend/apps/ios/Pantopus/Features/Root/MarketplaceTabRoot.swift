@@ -138,6 +138,9 @@ public struct MarketplaceTabRoot: View {
                     Task { @MainActor in path.removeAll { _ in true } }
                 }
             )
+            // A listing link that replaces the open listing (a deep link while a detail is shown) must
+            // build a new detail; without its own identity SwiftUI keeps the previous listing on screen.
+            .id(listingId)
         case .composeListing:
             ListingComposeWizardView { listingId in
                 path.removeAll { route in

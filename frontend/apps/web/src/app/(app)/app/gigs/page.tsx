@@ -190,6 +190,7 @@ export default function GigsBrowsePage() {
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
   const [mapViewportGigs, setMapViewportGigs] = useState<GigMapPin[]>([]);
   const [mapViewportLoading, setMapViewportLoading] = useState(false);
+  const [mapViewportFailed, setMapViewportFailed] = useState(false);
   const [mapSelectedGigId, setMapSelectedGigId] = useState<string | null>(null);
   const [mapHoveredGigId, setMapHoveredGigId] = useState<string | null>(null);
   const activeMapGigId = mapHoveredGigId ?? mapSelectedGigId;
@@ -528,6 +529,7 @@ export default function GigsBrowsePage() {
             onToggleTasksPanel={() => setMapDrawerOpen((open) => !open)}
             onVisibleGigsChange={setMapViewportGigs}
             onLoadingChange={setMapViewportLoading}
+            onErrorChange={setMapViewportFailed}
             activeGigId={activeMapGigId}
             onPinSelect={(id) => {
               setMapSelectedGigId(id);
@@ -537,6 +539,7 @@ export default function GigsBrowsePage() {
           <MapTaskDrawer
             open={mapDrawerOpen}
             loading={mapViewportLoading}
+            error={mapViewportFailed}
             tasks={mapViewportGigs}
             selectedGigId={mapSelectedGigId}
             onClose={() => setMapDrawerOpen(false)}

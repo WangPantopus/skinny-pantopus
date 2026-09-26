@@ -8,12 +8,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.ToastController
+import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -42,6 +45,14 @@ fun NotificationsScreen(
     val zone by viewModel.zone.collectAsStateWithLifecycle()
     val showsZoneStrip by viewModel.showsZoneStrip.collectAsStateWithLifecycle()
     val pendingDelete by viewModel.pendingDelete.collectAsStateWithLifecycle()
+    val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val toastController = remember { ToastController() }
+    LaunchedEffect(toast) {
+        toast?.let {
+            toastController.show(it)
+            viewModel.consumeToast()
+        }
+    }
     LaunchedEffect(Unit) {
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenNotificationsViewed)
@@ -74,6 +85,7 @@ fun NotificationsScreen(
                     null
                 },
         )
+        ToastHost(controller = toastController)
     }
 
     pendingDelete?.let { request ->

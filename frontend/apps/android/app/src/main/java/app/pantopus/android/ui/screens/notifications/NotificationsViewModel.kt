@@ -21,6 +21,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -300,6 +302,15 @@ class NotificationsViewModel
         private val _pendingDelete = MutableStateFlow<NotificationDeleteRequest?>(null)
         val pendingDelete: StateFlow<NotificationDeleteRequest?> = _pendingDelete.asStateFlow()
 
+        private val _toast = MutableStateFlow<ToastMessage?>(null)
+
+        /** Says when a delete or Mark all read failed and its rows were put back. */
+        val toast: StateFlow<ToastMessage?> = _toast.asStateFlow()
+
+        fun consumeToast() {
+            _toast.value = null
+        }
+
         private val _tabs =
             MutableStateFlow(
                 listOf(
@@ -441,6 +452,7 @@ class NotificationsViewModel
                         notifications = previous.toMutableList()
                         _unreadCount.value = previousCount
                         applyState()
+                        _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
                     }
                 }
             }
@@ -493,6 +505,7 @@ class NotificationsViewModel
                         notifications = previous.toMutableList()
                         _unreadCount.value = previousCount
                         applyState()
+                        _toast.value = ToastMessage("Couldn't delete the notification. Try again.", ToastKind.Error)
                     }
                 }
             }

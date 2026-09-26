@@ -189,6 +189,23 @@ router.post('/:businessId/verify/upload-evidence', verifyToken, async (req, res)
       return res.status(400).json({ error: 'file_id must be a valid UUID' });
     }
 
+    // The document must be one this caller uploaded for verification, so a
+    // business can't put someone else's file in front of reviewers.
+    const { data: evidenceFile, error: fileErr } = await supabaseAdmin
+      .from('File')
+      .select('id, user_id, file_context, is_deleted')
+      .eq('id', file_id)
+      .maybeSingle();
+
+    if (fileErr) {
+      logger.error('Error reading verification evidence file', { error: fileErr.message, businessId });
+      return res.status(500).json({ error: 'Failed to submit evidence' });
+    }
+    if (!evidenceFile || evidenceFile.user_id !== userId || evidenceFile.is_deleted
+      || evidenceFile.file_context !== 'business_verification') {
+      return res.status(400).json({ error: 'file_id must be a verification document you uploaded' });
+    }
+
     // Check for duplicate pending evidence of same type
     const { data: pendingEvidence } = await supabaseAdmin
       .from('BusinessVerificationEvidence')

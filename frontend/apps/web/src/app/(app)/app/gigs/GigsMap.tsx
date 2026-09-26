@@ -53,6 +53,7 @@ export default function GigsMap({
   onToggleTasksPanel,
   onVisibleGigsChange,
   onLoadingChange,
+  onErrorChange,
   activeGigId,
   onPinSelect,
 }: GigsMapProps) {
@@ -61,6 +62,8 @@ export default function GigsMap({
   const [mapReady, setMapReady] = useState(false);
   const [pins, setPins] = useState<GigMapPin[]>([]);
   const [loading, setLoading] = useState(false);
+  // The last pins read failed: the area's tasks are unknown, not zero (as in FeedMap).
+  const [error, setError] = useState(false);
   const [selectedPin, setSelectedPin] = useState<GigMapPin | null>(null);
   const [selectedClusterGigs, setSelectedClusterGigs] = useState<GigMapPin[]>([]);
   const [nearestActivity, setNearestActivity] = useState<NearestActivityCenter | null>(null);
@@ -128,6 +131,7 @@ export default function GigsMap({
           .filter((gig) => matchesPriceFilter(gig, priceFilter));
         const sorted = sortGigs(filtered, sortOption) as GigMapPin[];
 
+        setError(false);
         setPins(sorted);
         setNearestActivity(result.nearest_activity_center ?? null);
         onVisibleGigsChange?.(sorted);
@@ -144,6 +148,7 @@ export default function GigsMap({
         });
       } catch (err) {
         console.warn('Failed to fetch gig pins:', err);
+        setError(true);
         setPins([]);
         setNearestActivity(null);
         onVisibleGigsChange?.([]);
@@ -196,6 +201,10 @@ export default function GigsMap({
   useEffect(() => {
     onLoadingChange?.(loading);
   }, [loading, onLoadingChange]);
+
+  useEffect(() => {
+    onErrorChange?.(error);
+  }, [error, onErrorChange]);
 
   // Recenter to user
   const recenter = useCallback(() => {
@@ -307,7 +316,7 @@ export default function GigsMap({
         )}
         <div className="flex items-center gap-2 rounded-full bg-app-surface/95 px-3 py-2 shadow-md text-sm font-semibold text-app-text">
           <span>💼</span>
-          <span>{pins.length} tasks in this area</span>
+          <span>{error && pins.length === 0 ? 'Unavailable' : `${pins.length} tasks in this area`}</span>
         </div>
       </div>
 
@@ -335,8 +344,23 @@ export default function GigsMap({
       {/* Zoom gate overlay */}
       <ZoomGateOverlay visible={belowZoomGate && mapReady} contentLabel="tasks" />
 
+      {error && !loading && (
+        <div
+          role="alert"
+          className="absolute top-16 left-3 z-[1000] flex items-center gap-2 rounded-full border border-app-border bg-app-surface/95 px-4 py-2 text-xs font-medium text-app-text-secondary shadow-md"
+        >
+          <span>Couldn&apos;t load tasks.</span>
+          <button
+            onClick={() => boundsRef.current && fetchPins(boundsRef.current)}
+            className="font-bold text-primary-600"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* Nearest activity prompt (when results are empty and zoom is adequate) */}
-      {!loading && !belowZoomGate && pins.length === 0 && mapReady && (
+      {!error && !loading && !belowZoomGate && pins.length === 0 && mapReady && (
         <NearestActivityPrompt
           viewCenter={viewCenter}
           nearest={nearestActivity}

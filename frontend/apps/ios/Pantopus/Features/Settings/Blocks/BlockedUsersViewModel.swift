@@ -47,6 +47,9 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     public private(set) var state: ListOfRowsState = .loading
 
+    /// Confirms an unblock, or says it failed and the row is back.
+    public var toast: ToastMessage?
+
     /// A14.4 MonoFooter — signed-in user's name · short ID, same
     /// pattern as the Settings index / Payments mono footers.
     public var monoFooter: String? {
@@ -218,6 +221,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             request += 1
             entries.removeAll { $0.id == blockId }
             rebuild()
+            toast = ToastMessage(text: "\(removed.name) unblocked", kind: .success)
         } catch {
             guard current(), action == mutation else { return }
             pending = nil
@@ -225,6 +229,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
                 entries.insert(removed, at: min(index, entries.count))
             }
             rebuild()
+            toast = ToastMessage(text: "Couldn't unblock \(removed.name). Try again.", kind: .error)
         }
     }
 
