@@ -15,6 +15,7 @@ import android.provider.OpenableColumns
 import android.util.Patterns
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -215,8 +216,10 @@ fun ChatConversationScreen(
     // Photos (and the tapped index) shown in the full-screen viewer.
     var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    // Photos and videos, as on iOS. A video rides as a named file, like one
+    // picked with Document; web plays it inline, the apps open it.
     val photoPicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
             scope.launch {
                 uris.take(5).forEach { uri ->
@@ -224,9 +227,11 @@ fun ChatConversationScreen(
                         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
                         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext
                         val extension = mimeType.substringAfter('/', "jpg").substringBefore('+')
+                        val isVideo = mimeType.startsWith("video/")
+                        val name = if (isVideo) context.pickedFileName(uri) else null
                         viewModel.queueAttachment(
-                            kind = ChatQueuedAttachmentKind.Image,
-                            filename = "chat-${UUID.randomUUID()}.$extension",
+                            kind = if (isVideo) ChatQueuedAttachmentKind.Document else ChatQueuedAttachmentKind.Image,
+                            filename = name ?: "chat-${UUID.randomUUID()}.$extension",
                             mimeType = mimeType,
                             bytes = bytes,
                         )
@@ -532,7 +537,7 @@ fun ChatConversationScreen(
                             PackageManager.PERMISSION_GRANTED
                     if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
-                onPhotos = { photoPicker.launch("image/*") },
+                onPhotos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                 onDocument = { attachmentPicker.launch(arrayOf("*/*")) },
                 onLocation = { viewModel.sendCurrentLocation() },
                 onGig = { showGigPicker = true },
