@@ -129,7 +129,7 @@ internal fun ChatGigOfferCardView(
                         Text(it, fontSize = 11.sp, color = secondaryText(isOutgoing))
                     }
                     card.status?.takeIf { it.isNotBlank() }?.let {
-                        Text(it.replace('_', ' '), fontSize = 11.sp, color = secondaryText(isOutgoing))
+                        Text(statusLabel(it), fontSize = 11.sp, color = secondaryText(isOutgoing))
                     }
                 }
             }
@@ -286,6 +286,9 @@ private val LISTING_CATEGORY_LABELS =
         "tickets_events" to "Tickets & Events",
         "other" to "Other",
     )
+
+// "in_progress" → "In Progress", as web (CSS capitalize) and iOS (`capitalized`) show it.
+private fun statusLabel(raw: String): String = raw.split('_', ' ').joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
 
 private fun listingCategoryLabel(raw: String): String =
     LISTING_CATEGORY_LABELS[raw] ?: raw.replace('_', ' ').replaceFirstChar { it.uppercase() }
