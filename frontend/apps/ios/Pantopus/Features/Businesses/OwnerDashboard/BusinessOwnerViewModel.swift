@@ -27,8 +27,9 @@ import Observation
 public final class BusinessOwnerViewModel {
     /// Render state.
     public private(set) var state: BusinessOwnerState = .loading
-    /// Transient confirmation / error copy for the founding-offer claim.
-    /// RN raises an `Alert`; native surfaces the same strings in a toast.
+    /// Transient confirmation / error copy for the founding-offer claim and
+    /// review replies. RN raises an `Alert`; native surfaces the same strings
+    /// in a toast.
     public var toast: String?
 
     private let businessId: String
@@ -87,8 +88,9 @@ public final class BusinessOwnerViewModel {
     }
 
     /// Commit a review reply: optimistic local update, then `POST …/respond`.
-    /// On failure the optimistic change is rolled back. Fire-and-forget so the
-    /// view's non-async closure stays unchanged.
+    /// On failure the optimistic change is rolled back and a toast says the
+    /// reply wasn't posted; the composer keeps the typed text for another try.
+    /// Fire-and-forget so the view's non-async closure stays unchanged.
     public func submitReply(reviewId: String, text: String) {
         guard case let .loaded(content) = state else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,6 +115,8 @@ public final class BusinessOwnerViewModel {
                 if case .loaded = state {
                     state = .loaded(content)
                 }
+                let reason = (error as? APIError)?.errorDescription ?? "Please try again."
+                toast = "Your reply wasn't posted. \(reason)"
             }
         }
     }
