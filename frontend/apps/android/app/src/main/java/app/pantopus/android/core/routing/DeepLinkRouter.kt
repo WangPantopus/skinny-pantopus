@@ -102,6 +102,28 @@ object DeepLinkRouter {
         data class HomeMemberRequests(val id: String) : Destination
 
         /**
+         * `pantopus://homes/:id/members` — the Members list on its default
+         * tab (`challenge_window_opened`, `member_moved_out`, and
+         * `dashboard?tab=members` from `home_invite_accepted`).
+         */
+        data class HomeMembers(val id: String) : Destination
+
+        /** `pantopus://homes/:id/owners` — the Owners list (`claim_window_expiring`). */
+        data class HomeOwners(val id: String) : Destination
+
+        /**
+         * `pantopus://homes/:id/owners/review-claim` — the owner's claim
+         * review on its Residency tab (`residency_claim`).
+         */
+        data class HomeClaimReview(val id: String) : Destination
+
+        /**
+         * `pantopus://homes/:id/claim-owner/evidence?claimId=` — the viewer's
+         * claims, where that claim's row opens its documents.
+         */
+        data class ClaimEvidence(val claimId: String) : Destination
+
+        /**
          * `pantopus://homes/:id/owners/transfer` — A13.4 Transfer
          * Ownership form. Lands on the populated state; the form owns
          * its own biometric bottom sheet.
@@ -672,24 +694,50 @@ object DeepLinkRouter {
                     }
                 }
                 when (trailing.firstOrNull()) {
-                    "dashboard" -> Destination.HomeDashboard(id)
+                    // `?tab=members` names the Members section.
+                    "dashboard" ->
+                        if (tabQuery == "members") {
+                            Destination.HomeMembers(id)
+                        } else {
+                            Destination.HomeDashboard(id)
+                        }
                     "members" ->
                         if (tabQuery == "requests") {
                             Destination.HomeMemberRequests(id)
                         } else {
-                            Destination.HomeDetail(id)
+                            Destination.HomeMembers(id)
                         }
                     "owners" ->
-                        if (trailing.getOrNull(1) == "transfer") {
-                            Destination.HomeOwnersTransfer(id)
+                        when (trailing.getOrNull(1)) {
+                            "transfer" -> Destination.HomeOwnersTransfer(id)
+                            "review-claim" -> Destination.HomeClaimReview(id)
+                            null -> Destination.HomeOwners(id)
+                            else -> Destination.HomeDetail(id)
+                        }
+                    "claim-owner" -> {
+                        val claimId = HomeTaskNotificationRoute.canonicalId(Paths.queryParam(queryPart, "claimId"))
+                        if (trailing.getOrNull(1) == "evidence" && claimId != null) {
+                            Destination.ClaimEvidence(claimId)
                         } else {
                             Destination.HomeDetail(id)
                         }
+                    }
                     "verify-landlord", "verify_landlord" -> Destination.VerifyLandlord(id)
                     "verify-postcard", "verify_postcard" -> Destination.PostcardVerification(id)
                     // B1.6 — A18.4 persistent waiting room.
                     "waiting-room", "waiting_room" -> Destination.WaitingRoom(id)
                     else -> Destination.HomeDetail(id)
+                }
+            }
+            // `/app/landlord/properties/:homeId?tab=requests` (tenant_request).
+            // The apps have no landlord requests screen, so the tap opens the
+            // Home instead of doing nothing.
+            "landlord" -> {
+                val id = segments.getOrNull(2)
+                if (segments.getOrNull(1) == "properties" && !id.isNullOrBlank()) {
+                    Destination.HomeDetail(id)
+                } else {
+                    Destination.Unknown(raw)
                 }
             }
             "businesses" -> {

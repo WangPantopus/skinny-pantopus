@@ -181,7 +181,9 @@ import app.pantopus.android.ui.screens.homes.maintenance.MAINTENANCE_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.maintenance.MaintenanceDetailScreen
 import app.pantopus.android.ui.screens.homes.maintenance.MaintenanceListScreen
 import app.pantopus.android.ui.screens.homes.members.MEMBERS_LIST_HOME_ID_KEY
+import app.pantopus.android.ui.screens.homes.members.MEMBERS_LIST_TAB_KEY
 import app.pantopus.android.ui.screens.homes.members.MembersListScreen
+import app.pantopus.android.ui.screens.homes.members.MembersTab
 import app.pantopus.android.ui.screens.homes.owners.OWNERS_LIST_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.owners.OwnersListScreen
 import app.pantopus.android.ui.screens.homes.owners.transfer.TRANSFER_HOME_ID_KEY
@@ -853,11 +855,14 @@ private object ChildRoutes {
         residency: Boolean = false,
     ): String = "homes/$homeId/owners/review-claims?reviewTab=${if (residency) "residency" else "ownership"}"
 
-    /** Members list per home (T6.3a / P9). */
-    const val HOME_MEMBERS = "homes/{$MEMBERS_LIST_HOME_ID_KEY}/members"
+    /** Members list per home (T6.3a / P9); `tab` opens a notification's section. */
+    const val HOME_MEMBERS = "homes/{$MEMBERS_LIST_HOME_ID_KEY}/members?tab={$MEMBERS_LIST_TAB_KEY}"
 
     /** Build the concrete path for a home members list. */
-    fun homeMembers(homeId: String): String = "homes/$homeId/members"
+    fun homeMembers(
+        homeId: String,
+        tab: String? = null,
+    ): String = if (tab == null) "homes/$homeId/members" else "homes/$homeId/members?tab=$tab"
 
     /** A14.1 (P5.1) — Per-home Settings index. */
     const val HOME_SETTINGS = "homes/{$HOME_SETTINGS_HOME_ID_KEY}/settings"
@@ -2190,7 +2195,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeMemberRequests -> {
+                navController.navigate(ChildRoutes.homeMembers(pending.id, MembersTab.REQUESTS))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.HomeMembers -> {
                 navController.navigate(ChildRoutes.homeMembers(pending.id))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.HomeOwners -> {
+                navController.navigate(ChildRoutes.homeOwners(pending.id))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.HomeClaimReview -> {
+                navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = true))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.ClaimEvidence -> {
+                // My claims lists the claim; its row opens the claim's documents.
+                navController.navigate(ChildRoutes.MY_CLAIMS)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeOwnersTransfer -> {
@@ -4078,7 +4100,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(
                     route = ChildRoutes.HOME_MEMBERS,
-                    arguments = listOf(navArgument(MEMBERS_LIST_HOME_ID_KEY) { type = NavType.StringType }),
+                    arguments =
+                        listOf(
+                            navArgument(MEMBERS_LIST_HOME_ID_KEY) { type = NavType.StringType },
+                            navArgument(MEMBERS_LIST_TAB_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
                 ) { entry ->
                     val homeId = entry.arguments?.getString(MEMBERS_LIST_HOME_ID_KEY).orEmpty()
                     MembersListScreen(

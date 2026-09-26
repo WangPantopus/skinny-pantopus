@@ -323,9 +323,9 @@ class DeepLinkRouterTest {
     }
 
     @Test
-    fun home_members_without_tab_falls_back_to_detail() {
+    fun home_members_without_tab_opens_members() {
         assertEquals(
-            DeepLinkRouter.Destination.HomeDetail("h_1"),
+            DeepLinkRouter.Destination.HomeMembers("h_1"),
             DeepLinkRouter.resolveString("pantopus://homes/h_1/members"),
         )
     }
