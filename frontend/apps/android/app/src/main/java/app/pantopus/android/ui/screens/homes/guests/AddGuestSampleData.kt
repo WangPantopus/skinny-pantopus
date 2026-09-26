@@ -28,15 +28,23 @@ object AddGuestSampleData {
             ChipPickerOption(DURATION_CUSTOM_ID, "Custom…"),
         )
 
-    /** Multi-select "Allowed areas" chips with their leading icons. */
-    val areaOptions: List<ChipPickerOption> =
+    /**
+     * Multi-select "What they can see" chips: the guest page sections the pass
+     * includes (`included_sections`), with the web's keys and labels.
+     */
+    val sectionOptions: List<ChipPickerOption> =
         listOf(
-            ChipPickerOption("front_door", "Front door", PantopusIcon.DoorOpen),
-            ChipPickerOption("garage", "Garage", PantopusIcon.Car),
-            ChipPickerOption("mailroom", "Mailroom", PantopusIcon.Mailbox),
-            ChipPickerOption("backyard", "Backyard", PantopusIcon.Trees),
-            ChipPickerOption("garden_shed", "Garden shed", PantopusIcon.Warehouse),
+            ChipPickerOption("wifi", "WiFi", PantopusIcon.Wifi),
+            ChipPickerOption("entry_instructions", "Entry Instructions", PantopusIcon.DoorOpen),
+            ChipPickerOption("house_rules", "House Rules", PantopusIcon.ClipboardList),
+            ChipPickerOption("parking", "Parking", PantopusIcon.Car),
+            ChipPickerOption("trash_day", "Trash Day", PantopusIcon.Trash),
+            ChipPickerOption("local_tips", "Local Tips", PantopusIcon.MapPin),
+            ChipPickerOption("emergency", "Emergency Info", PantopusIcon.Siren),
         )
+
+    /** Preselected sections, as in the web's Guest Pass template. */
+    val DEFAULT_SECTION_IDS = setOf("wifi", "entry_instructions", "house_rules", "parking")
 
     /** House-context strip ("which home is this pass for"). */
     data class HomeContext(
@@ -44,19 +52,19 @@ object AddGuestSampleData {
         val subtitle: String,
     )
 
-    // Keyed by home id so previews stay deterministic; a real build would
-    // resolve this from the loaded home.
+    // Previews and snapshots only; the form loads the real Home
+    // (AddGuestFormViewModel).
     @Suppress("UnusedParameter")
     fun homeContext(homeId: String): HomeContext = HomeContext(title = "412 Elm St · Apt 3B", subtitle = "Kovács household")
 
-    /** FILLED frame — Sasha, Weekend, Front door + Garage, welcome note. */
+    /** FILLED frame — Sasha, Weekend, WiFi + Entry Instructions + Parking, welcome note. */
     object Filled {
         const val NAME = "Sasha Petrov"
         const val CONTACT = "sasha@petrov.co"
         const val DURATION_ID = "weekend"
-        val AREA_IDS = setOf("front_door", "garage")
+        val SECTION_IDS = setOf("wifi", "entry_instructions", "parking")
         const val WELCOME =
             "Hey Sasha — plants twice this weekend, water bowl is in the kitchen. " +
-                "Pass also opens the garage if you park inside."
+                "Park in the driveway."
     }
 }

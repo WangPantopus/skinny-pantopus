@@ -6,8 +6,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.CreateGuestPassRequest
+import app.pantopus.android.data.api.models.homes.HomeDetail
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeGuestPassesRepository
+import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.ChipPickerOption
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +37,7 @@ data class GuestToast(
  * Aggregate UI state for the Add Guest form. Mirrors iOS
  * `AddGuestFormViewModel`'s exposed state: name / contact / welcome are
  * tracked as [FormFieldState]s, duration is a single-select chip id, and
- * allowed-areas is a set of chip ids.
+ * the "What they can see" sections are a set of chip ids.
  */
 data class AddGuestUiState(
     val homeTitle: String = "",
@@ -44,7 +46,7 @@ data class AddGuestUiState(
     val contactField: FormFieldState = FormFieldState(id = "contact"),
     val welcomeField: FormFieldState = FormFieldState(id = "welcome"),
     val duration: String? = null,
-    val selectedAreas: Set<String> = emptySet(),
+    val selectedSections: Set<String> = AddGuestSampleData.DEFAULT_SECTION_IDS,
     val customStartLabel: String? = null,
     val customEndLabel: String? = null,
     val customStartEpochDay: Long? = null,
@@ -60,19 +62,20 @@ data class AddGuestUiState(
     val createdShare: GuestPassShare? = null,
 ) {
     val durationOptions: List<ChipPickerOption> get() = AddGuestSampleData.durationOptions
-    val areaOptions: List<ChipPickerOption> get() = AddGuestSampleData.areaOptions
+    val sectionOptions: List<ChipPickerOption> get() = AddGuestSampleData.sectionOptions
     val welcomeMaxLength: Int get() = AddGuestSampleData.WELCOME_MAX_LENGTH
 
     /** First word of the entered name, if any. */
     val firstName: String?
         get() = nameField.value.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() }
 
-    /** Required: name non-empty, contact valid (email OR phone), duration chosen. */
+    /** Required: name non-empty, contact valid (email OR phone), duration chosen, at least one section. */
     val isValid: Boolean
         get() =
             nameField.value.trim().isNotEmpty() &&
                 isGuestContactValid(contactField.value) &&
-                duration != null
+                duration != null &&
+                selectedSections.isNotEmpty()
 
     /** Any input touched — drives the dirty-close confirm in `FormShell`. */
     val isDirty: Boolean
@@ -80,7 +83,7 @@ data class AddGuestUiState(
             nameField.value.trim().isNotEmpty() ||
                 contactField.value.isNotEmpty() ||
                 duration != null ||
-                selectedAreas.isNotEmpty() ||
+                selectedSections != AddGuestSampleData.DEFAULT_SECTION_IDS ||
                 welcomeField.value.isNotEmpty()
 
     /** Italic helper under the duration chips. Mirrors the design copy. */
@@ -99,27 +102,28 @@ data class AddGuestUiState(
                 else -> "Pick how long the pass is good for."
             }
 
-    /** Italic helper under the allowed-areas chips. */
-    val areasHint: String
+    /** Italic helper under the "What they can see" chips. */
+    val sectionsHint: String
         get() =
-            if (selectedAreas.isEmpty()) {
-                "Front door only, unless you add more."
+            if (selectedSections.isEmpty()) {
+                "Pick at least one."
             } else {
                 val possessive = firstName?.let { "$it's" } ?: "Their"
-                "$possessive pass unlocks only what you pick."
+                "$possessive pass page shows only what you pick."
             }
 }
 
 /**
  * A13.1 — Add Guest form view-model. [submit] issues the pass via
  * `POST /api/homes/:id/guest-passes` (route `backend/routes/homeIam.js:667`),
- * raises a success toast ("Pass sent to <name>") and publishes
+ * raises a success toast ("Pass created for <name>") and publishes
  * [AddGuestUiState.createdShare] — the one-time share token composed into a
  * viewer link. The screen offers the OS share sheet (RN parity:
  * `src/app/homes/[id]/share.tsx:60-82`) and then calls [acknowledgeShare],
  * which flips [AddGuestUiState.shouldDismiss] so the host pops the form.
- * The contact, welcome note, and allowed-area chips are UI affordances the
- * create endpoint doesn't model, so they stay local.
+ * The chosen sections are sent as `included_sections`, and the welcome note
+ * rides along in the share message. The contact is a UI affordance the
+ * create endpoint doesn't model, so it stays local.
  */
 @HiltViewModel
 class AddGuestFormViewModel
@@ -127,16 +131,27 @@ class AddGuestFormViewModel
     constructor(
         savedStateHandle: SavedStateHandle,
         private val guestPassesRepo: HomeGuestPassesRepository,
+        private val homesRepository: HomesRepository,
     ) : ViewModel() {
         private val homeId: String = savedStateHandle.get<String>(ADD_GUEST_HOME_ID_KEY) ?: ""
 
-        private val _state =
-            MutableStateFlow(
-                AddGuestSampleData.homeContext(homeId).let { ctx ->
-                    AddGuestUiState(homeTitle = ctx.title, homeSubtitle = ctx.subtitle)
-                },
-            )
+        // The strip names the Home this pass is for, from `GET /api/homes/:id`;
+        // it stays hidden until that loads (and if it fails).
+        private val _state = MutableStateFlow(AddGuestUiState())
         val state: StateFlow<AddGuestUiState> = _state.asStateFlow()
+
+        init {
+            if (homeId.isNotEmpty()) {
+                viewModelScope.launch {
+                    val result = homesRepository.detail(homeId)
+                    if (result is NetworkResult.Success) {
+                        homeContext(result.data.home)?.let { ctx ->
+                            _state.update { it.copy(homeTitle = ctx.title, homeSubtitle = ctx.subtitle) }
+                        }
+                    }
+                }
+            }
+        }
 
         fun updateName(value: String) {
             _state.update { it.copy(nameField = it.nameField.copy(value = value, touched = true)) }
@@ -164,8 +179,8 @@ class AddGuestFormViewModel
             _state.update { it.copy(duration = id) }
         }
 
-        fun setAreas(areas: Set<String>) {
-            _state.update { it.copy(selectedAreas = areas) }
+        fun setSections(sections: Set<String>) {
+            _state.update { it.copy(selectedSections = sections) }
         }
 
         fun setCustomRange(
@@ -212,6 +227,7 @@ class AddGuestFormViewModel
                         durationHours = window.durationHours,
                         startAt = window.startAt,
                         endAt = window.endAt,
+                        includedSections = current.sectionOptions.map { it.id }.filter { it in current.selectedSections },
                     )
                 when (val result = guestPassesRepo.create(homeId, request)) {
                     is NetworkResult.Success -> {
@@ -225,11 +241,12 @@ class AddGuestFormViewModel
                                 id = result.data.pass.id,
                                 guestName = firstName.orEmpty(),
                                 url = GuestPassShare.urlForToken(result.data.token),
+                                note = _state.value.welcomeField.value.trim(),
                             )
                         _state.update {
                             it.copy(
                                 isSaving = false,
-                                toast = GuestToast("Pass sent to $name", isError = false),
+                                toast = GuestToast("Pass created for $name", isError = false),
                                 createdShare = share,
                             )
                         }
@@ -338,4 +355,14 @@ private fun matchesGuestPhone(value: String): Boolean {
     if (!guestPhoneAllowed.matches(value)) return false
     val digits = value.count { it.isDigit() }
     return digits in 7..15
+}
+
+/** Street over the Home's name (or its city); null without either. */
+internal fun homeContext(home: HomeDetail): AddGuestSampleData.HomeContext? {
+    val street = home.address?.trim().orEmpty()
+    val name = home.name?.trim().orEmpty()
+    val city = home.city?.trim().orEmpty()
+    val title = street.ifEmpty { name }
+    if (title.isEmpty()) return null
+    return AddGuestSampleData.HomeContext(title = title, subtitle = if (name.isNotEmpty() && name != title) name else city)
 }

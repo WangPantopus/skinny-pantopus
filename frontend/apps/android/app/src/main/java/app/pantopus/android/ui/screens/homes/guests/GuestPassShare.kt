@@ -27,12 +27,15 @@ data class GuestPassShare(
     val id: String,
     val guestName: String,
     val url: String,
+    /** The owner's welcome note, added to the message. */
+    val note: String = "",
 ) {
     /** RN parity — `src/app/homes/[id]/share.tsx:76-82`. */
     val message: String
         get() {
             val opener = if (guestName.isEmpty()) "Here's" else "Hi $guestName, here's"
-            return "$opener your guest access to our home: $url"
+            val base = "$opener your guest access to our home: $url"
+            return if (note.isEmpty()) base else "$base\n\n$note"
         }
 
     companion object {

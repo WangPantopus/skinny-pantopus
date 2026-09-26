@@ -15,8 +15,10 @@ struct AddGuestFormContent: View {
     @Bindable var viewModel: AddGuestFormViewModel
 
     var body: some View {
-        HomeContextStrip(context: viewModel.homeContext)
-            .padding(.horizontal, Spacing.s4)
+        if let context = viewModel.homeContext {
+            HomeContextStrip(context: context)
+                .padding(.horizontal, Spacing.s4)
+        }
 
         FormFieldGroup("Guest") {
             PantopusTextField(
@@ -44,7 +46,7 @@ struct AddGuestFormContent: View {
                     keyboardType: .emailAddress,
                     identifier: "field_guestContact"
                 )
-                Text("We'll text or email them a one-tap pass link.")
+                Text("You'll share the pass link with them next.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -70,18 +72,18 @@ struct AddGuestFormContent: View {
                 .accessibilityIdentifier("durationHint")
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                GuestFieldLabel("Allowed areas", isRequired: false)
+                GuestFieldLabel("What they can see", isRequired: true)
                 ChipPicker(
-                    options: viewModel.areaOptions,
-                    selection: $viewModel.selectedAreas,
+                    options: viewModel.sectionOptions,
+                    selection: $viewModel.selectedSections,
                     style: .tinted,
-                    identifier: "field_areas"
+                    identifier: "field_sections"
                 )
-                Text(viewModel.areasHint)
+                Text(viewModel.sectionsHint)
                     .pantopusTextStyle(.caption)
                     .italic()
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                    .accessibilityIdentifier("areasHint")
+                    .accessibilityIdentifier("sectionsHint")
             }
         }
 

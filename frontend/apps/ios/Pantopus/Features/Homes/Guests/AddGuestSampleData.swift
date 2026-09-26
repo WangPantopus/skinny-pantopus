@@ -26,22 +26,27 @@ public enum AddGuestSampleData {
         .init(id: durationCustomId, label: "Custom…")
     ]
 
-    /// Multi-select "Allowed areas" chips. Each carries the leading icon
-    /// from the design's `data-lucide` reference.
-    public static let areaOptions: [ChipPicker.Option] = [
-        .init(id: "front_door", label: "Front door", icon: .doorOpen),
-        .init(id: "garage", label: "Garage", icon: .car),
-        .init(id: "mailroom", label: "Mailroom", icon: .mailbox),
-        .init(id: "backyard", label: "Backyard", icon: .trees),
-        .init(id: "garden_shed", label: "Garden shed", icon: .warehouse)
+    /// Multi-select "What they can see" chips: the guest page sections the
+    /// pass includes (`included_sections`), with the web's keys and labels.
+    public static let sectionOptions: [ChipPicker.Option] = [
+        .init(id: "wifi", label: "WiFi", icon: .wifi),
+        .init(id: "entry_instructions", label: "Entry Instructions", icon: .doorOpen),
+        .init(id: "house_rules", label: "House Rules", icon: .clipboardList),
+        .init(id: "parking", label: "Parking", icon: .car),
+        .init(id: "trash_day", label: "Trash Day", icon: .trash),
+        .init(id: "local_tips", label: "Local Tips", icon: .mapPin),
+        .init(id: "emergency", label: "Emergency Info", icon: .siren)
     ]
+
+    /// Preselected sections, as in the web's Guest Pass template.
+    public static let defaultSectionIds: Set<String> = ["wifi", "entry_instructions", "house_rules", "parking"]
 
     /// Maximum welcome-message length (characters).
     public static let welcomeMaxLength = 280
 
     /// House-context strip shown above the form ("which home is this pass
-    /// for"). Keyed by home id so previews stay deterministic; a real
-    /// build would resolve this from the loaded home.
+    /// for") in previews and snapshots; the form itself loads the real
+    /// Home (`AddGuestFormViewModel.loadHomeContext`).
     public struct HomeContext: Sendable, Equatable {
         public let title: String
         public let subtitle: String
@@ -58,14 +63,14 @@ public enum AddGuestSampleData {
 
     // MARK: - Frame seeds
 
-    /// FILLED frame — Sasha, Weekend, Front door + Garage, welcome note.
+    /// FILLED frame — Sasha, Weekend, WiFi + Entry Instructions + Parking, welcome note.
     public enum Filled {
         public static let name = "Sasha Petrov"
         public static let contact = "sasha@petrov.co"
         public static let durationId = "weekend"
-        public static let areaIds: Set<String> = ["front_door", "garage"]
+        public static let sectionIds: Set<String> = ["wifi", "entry_instructions", "parking"]
         public static let welcome =
             "Hey Sasha — plants twice this weekend, water bowl is in the kitchen. "
-                + "Pass also opens the garage if you park inside."
+                + "Park in the driveway."
     }
 }

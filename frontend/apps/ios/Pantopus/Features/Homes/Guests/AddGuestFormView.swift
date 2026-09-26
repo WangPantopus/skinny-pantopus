@@ -49,6 +49,7 @@ public struct AddGuestFormView: View {
         .toolbar(.hidden, for: .tabBar)
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("addGuestForm")
+        .task { await viewModel.loadHomeContext() }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -204,16 +205,16 @@ private struct GuestDateRangeSheet: View {
 
 #Preview("Initial") {
     NavigationStack {
-        AddGuestFormView(viewModel: AddGuestFormViewModel(homeId: "preview"))
+        AddGuestFormView(viewModel: AddGuestFormViewModel(homeId: "preview", homeContext: AddGuestSampleData.homeContext(for: "preview")))
     }
 }
 
 #Preview("Filled") {
-    let viewModel = AddGuestFormViewModel(homeId: "preview")
+    let viewModel = AddGuestFormViewModel(homeId: "preview", homeContext: AddGuestSampleData.homeContext(for: "preview"))
     viewModel.updateName(AddGuestSampleData.Filled.name)
     viewModel.updateContact(AddGuestSampleData.Filled.contact)
     viewModel.duration = AddGuestSampleData.Filled.durationId
-    viewModel.selectedAreas = AddGuestSampleData.Filled.areaIds
+    viewModel.selectedSections = AddGuestSampleData.Filled.sectionIds
     viewModel.updateWelcome(AddGuestSampleData.Filled.welcome)
     return NavigationStack {
         AddGuestFormView(viewModel: viewModel)

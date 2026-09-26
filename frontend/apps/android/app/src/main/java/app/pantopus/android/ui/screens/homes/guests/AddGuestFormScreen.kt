@@ -129,7 +129,7 @@ fun AddGuestFormScreen(
                     showsCustomRange = true
                 }
             },
-            onAreasChange = viewModel::setAreas,
+            onSectionsChange = viewModel::setSections,
             onWelcomeChange = viewModel::updateWelcome,
         )
 
@@ -212,7 +212,7 @@ internal fun AddGuestFormLoaded(
     onNameChange: (String) -> Unit,
     onContactChange: (String) -> Unit,
     onDurationChange: (String?) -> Unit,
-    onAreasChange: (Set<String>) -> Unit,
+    onSectionsChange: (Set<String>) -> Unit,
     onWelcomeChange: (String) -> Unit,
 ) {
     FormShell(
@@ -226,7 +226,9 @@ internal fun AddGuestFormLoaded(
         onClose = onClose,
         onCommit = onCommit,
     ) {
-        HomeContextStrip(title = state.homeTitle, subtitle = state.homeSubtitle)
+        if (state.homeTitle.isNotEmpty()) {
+            HomeContextStrip(title = state.homeTitle, subtitle = state.homeSubtitle)
+        }
 
         FormFieldGroup(title = "Guest") {
             PantopusTextField(
@@ -251,7 +253,7 @@ internal fun AddGuestFormLoaded(
                     fieldTestTag = "field_guestContact",
                 )
                 Text(
-                    text = "We'll text or email them a one-tap pass link.",
+                    text = "You'll share the pass link with them next.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -292,20 +294,20 @@ internal fun AddGuestFormLoaded(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                RequiredFieldLabel(label = "Allowed areas", required = false)
+                RequiredFieldLabel(label = "What they can see", required = true)
                 ChipPicker(
-                    options = state.areaOptions,
-                    selectedIds = state.selectedAreas,
-                    onSelectionChange = onAreasChange,
+                    options = state.sectionOptions,
+                    selectedIds = state.selectedSections,
+                    onSelectionChange = onSectionsChange,
                     style = ChipPickerStyle.Tinted,
-                    testTag = "field_areas",
+                    testTag = "field_sections",
                 )
                 Text(
-                    text = state.areasHint,
+                    text = state.sectionsHint,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                     fontStyle = FontStyle.Italic,
-                    modifier = Modifier.testTag("areasHint"),
+                    modifier = Modifier.testTag("sectionsHint"),
                 )
             }
         }
