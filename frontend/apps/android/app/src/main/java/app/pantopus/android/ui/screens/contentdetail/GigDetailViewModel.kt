@@ -584,6 +584,15 @@ class GigDetailViewModel
         /** True when the dock primary is "Accept this task" (instant accept). */
         fun canInstantAccept(): Boolean = canInstantAccept
 
+        /** True when the dock primary is "Start task": the assigned worker, before starting. */
+        fun canStartTask(): Boolean {
+            val gig = rawGig ?: return false
+            return gig.status == "assigned" && gig.acceptedBy != null && gig.acceptedBy == currentUserId()
+        }
+
+        /** True when the task pays its worker; a $0 task has no payment to release. */
+        fun isPaidTask(): Boolean = (rawGig?.price ?: 0.0) > 0.0
+
         /** True when the signed-in viewer owns this gig. */
         fun viewerIsOwner(): Boolean = viewerIsOwner
 

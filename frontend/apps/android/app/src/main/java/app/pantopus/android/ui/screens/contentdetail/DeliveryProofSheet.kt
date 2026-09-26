@@ -85,6 +85,8 @@ data class DeliveryProofTarget(
     val id: String,
     val gigId: String,
     val gigTitle: String,
+    /** False on a $0 task: there is no payment to release. */
+    val paid: Boolean = true,
 )
 
 /**
@@ -146,6 +148,7 @@ fun DeliveryProofSheet(
     DeliveryProofSheetContent(
         photos = photos,
         note = note,
+        paid = target.paid,
         submitting = submitting,
         submitted = submitted,
         errorText = errorText,
@@ -179,6 +182,7 @@ fun DeliveryProofSheet(
 fun DeliveryProofSheetContent(
     photos: List<DeliveryProofPhoto>,
     note: String,
+    paid: Boolean = true,
     submitting: Boolean,
     submitted: Boolean,
     errorText: String?,
@@ -202,6 +206,7 @@ fun DeliveryProofSheetContent(
             EntryBody(
                 photos = photos,
                 note = note,
+                paid = paid,
                 submitting = submitting,
                 errorText = errorText,
                 canAddMore = canAddMore,
@@ -221,6 +226,7 @@ fun DeliveryProofSheetContent(
 private fun EntryBody(
     photos: List<DeliveryProofPhoto>,
     note: String,
+    paid: Boolean,
     submitting: Boolean,
     errorText: String?,
     canAddMore: Boolean,
@@ -250,7 +256,12 @@ private fun EntryBody(
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = "Add a photo so the poster can release your payment.",
+                    text =
+                        if (paid) {
+                            "Add a photo so the poster can release your payment."
+                        } else {
+                            "Add a photo so the poster can see it's done."
+                        },
                     fontSize = 12.5.sp,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -293,7 +304,7 @@ private fun EntryBody(
             HelperText("The poster sees this with your proof.")
         }
 
-        TrustLine()
+        TrustLine(paid)
 
         if (!errorText.isNullOrEmpty()) {
             Text(
@@ -519,7 +530,7 @@ private fun NoteField(
 }
 
 @Composable
-private fun TrustLine() {
+private fun TrustLine(paid: Boolean) {
     Row(
         modifier =
             Modifier
@@ -538,7 +549,12 @@ private fun TrustLine() {
             tint = PantopusColors.primary700,
         )
         Text(
-            text = "Payment is released once the poster confirms — usually within a few hours.",
+            text =
+                if (paid) {
+                    "Payment is released once the poster confirms — usually within a few hours."
+                } else {
+                    "The poster confirms the task once they've seen your proof."
+                },
             style = PantopusTextStyle.small,
             color = PantopusColors.primary700,
         )

@@ -28,11 +28,14 @@ public struct DeliveryProofTarget: Identifiable, Sendable, Hashable {
     public let id: String
     public let gigId: String
     public let gigTitle: String
+    /// False on a $0 task: there is no payment to release.
+    public let paid: Bool
 
-    public init(id: String, gigId: String, gigTitle: String) {
+    public init(id: String, gigId: String, gigTitle: String, paid: Bool = true) {
         self.id = id
         self.gigId = gigId
         self.gigTitle = gigTitle
+        self.paid = paid
     }
 }
 
@@ -147,7 +150,9 @@ public struct DeliveryProofSheetView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
-                Text("Add a photo so the poster can release your payment.")
+                Text(target.paid
+                    ? "Add a photo so the poster can release your payment."
+                    : "Add a photo so the poster can see it's done.")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -299,7 +304,9 @@ public struct DeliveryProofSheetView: View {
     private var trustLine: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.shieldCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.primary700)
-            Text("Payment is released once the poster confirms — usually within a few hours.")
+            Text(target.paid
+                ? "Payment is released once the poster confirms — usually within a few hours."
+                : "The poster confirms the task once they've seen your proof.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.Color.primary700)
                 .fixedSize(horizontal: false, vertical: true)

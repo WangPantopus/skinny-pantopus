@@ -338,15 +338,7 @@ public struct GigDetailView: View {
                     onWorkerAck: {
                         Task { await runToasting(success: "Told the poster you're on it.") { await viewModel.sendWorkerAck() } }
                     },
-                    onStartTask: {
-                        Task {
-                            switch await viewModel.startTask() {
-                            case .confirmed: toast = ToastMessage(text: "Task started.", kind: .success)
-                            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
-                            case .ignored: break
-                            }
-                        }
-                    },
+                    onStartTask: { startTask() },
                     onConfirmCompletion: { completionPrompt = viewModel.completionConfirmation() },
                     onReportNoShow: { showNoShowSheet = true },
                     onRunningLate: { showRunningLateSheet = true },
@@ -756,6 +748,8 @@ public struct GigDetailView: View {
             showTipSheet = true
         } else if viewModel.canMarkDelivered {
             presentDeliveryProof()
+        } else if viewModel.canStartTask {
+            startTask()
         } else if viewModel.canInstantAccept {
             Task { await runToasting(success: "You're on the task — it's yours.") { await viewModel.instantAccept() } }
         } else if viewModel.viewerCanEditBid {
@@ -795,8 +789,20 @@ public struct GigDetailView: View {
         deliveryTarget = DeliveryProofTarget(
             id: "deliver-\(gig.id)",
             gigId: gig.id,
-            gigTitle: gig.title
+            gigTitle: gig.title,
+            paid: (gig.price ?? 0) > 0
         )
+    }
+
+    /// The assigned worker starts the task, from the dock or the Task progress panel.
+    private func startTask() {
+        Task {
+            switch await viewModel.startTask() {
+            case .confirmed: toast = ToastMessage(text: "Task started.", kind: .success)
+            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+            case .ignored: break
+            }
+        }
     }
 
     private func openChat() {

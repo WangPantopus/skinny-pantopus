@@ -53,6 +53,9 @@ private fun currentGigDock(
         when {
             status == "completed" && canTip -> dock.primary
             status == "in_progress" && canDeliver -> ContentDetailDockButton("Mark as delivered", PantopusIcon.CheckCheck)
+            // The assigned worker's next step, as in the Task progress panel.
+            status == "assigned" && viewer != null && viewer == gig.acceptedBy ->
+                ContentDetailDockButton("Start task", PantopusIcon.Play)
             status == "open" && !owner -> dock.primary
             else -> {
                 val label =
