@@ -2,6 +2,13 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 11:40Z (#503 merged; #512 green, in batch 27)**
+
+- **#503 (decision 4)** merged in batch 26 (#513, master `9ac4a7cdf`).
+- **#512 (decision 1):** CI all green on head `8ef35a388` (15 passed, 0 failed). Against `9ac4a7cdf`, merge-tree shows 0 conflicts and the migration policy passes (`20260926100000` still sorts last).
+  - Stream 1 is building batch 27 with #512, #509, #510 and #511. It is reviewing the placement-only diff `fccb659f9..8ef35a388` and the purge; I sent it the purge safety bounds (FK/trigger scope, race guard, 10,000-row cap).
+- **Next:** once #509 merges, re-run the Android letter-after-refresh check and add it to evidence. Then continue the Stream 2 inventory.
+
 **Stream 2 — 2026-09-26 11:05Z (decision 1 open as #512; #503 green in batch 26)**
 
 - **Decision 1 open as PR [512](https://github.com/WangPantopus/skinny-pantopus/pull/512).** Branch `claude/stream2-mail-recoverable-delete`, head `8ef35a388` on master `207eeb510`, 2 commits.
