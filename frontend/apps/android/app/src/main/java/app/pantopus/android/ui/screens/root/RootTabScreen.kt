@@ -5393,7 +5393,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onOpenBroadcast = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
-                        onOpenSettings = { navController.navigate(ChildRoutes.placeholder("Inbox settings")) },
+                        // No native DM-policy editor exists; the Beacon (tiers, messaging)
+                        // is set up and managed from the audience profile.
+                        onOpenSettings = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
                     )
                 }
                 composable(
@@ -5431,16 +5433,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             when (card.kind) {
                                 IdentityKind.PublicProfile ->
                                     navController.navigate(ChildRoutes.AUDIENCE_PROFILE)
+                                // The Local profile is edited in Edit profile; the
+                                // account-level Personal identity lives in Settings.
                                 IdentityKind.Local ->
-                                    navController.navigate(ChildRoutes.placeholder("Local profile"))
+                                    navController.navigate(ChildRoutes.EDIT_PROFILE)
                                 IdentityKind.Personal ->
-                                    navController.navigate(ChildRoutes.placeholder("Personal"))
+                                    navController.navigate(ChildRoutes.MENU)
                                 IdentityKind.Professional ->
                                     navController.navigate(ChildRoutes.PROFESSIONAL_PROFILE)
                             }
                         },
-                        onOpenPlaceholder = { label ->
-                            navController.navigate(ChildRoutes.placeholder(label))
+                        onOpenRow = { rowId ->
+                            when (rowId) {
+                                "blockedPersonal" -> navController.navigate(ChildRoutes.SETTINGS_BLOCKED_USERS)
+                                "homes" -> navController.navigate(ChildRoutes.MY_HOMES)
+                                "businessProfiles" -> navController.navigate(ChildRoutes.MY_BUSINESSES)
+                                "dataExport" -> navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT)
+                            }
                         },
                         onOpenViewAs = { navController.navigate(ChildRoutes.VIEW_AS) },
                     )

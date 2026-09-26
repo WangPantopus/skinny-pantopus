@@ -2528,7 +2528,9 @@ extension GigDetailViewModel {
                 sub: bidRangeSub(bids),
                 bids: bids.map { projectBid($0) }
             )))
-        } else if gig.status?.lowercased() == "open", viewerUserId == nil || viewerUserId != gig.userId {
+        } else if bidCount == 0, gig.status?.lowercased() == "open", viewerUserId == nil || viewerUserId != gig.userId {
+            // Only an open task nobody has bid on yet; a non-owner can't list the
+            // bids, so the count (not the empty list) decides.
             modules.append(.callout(ContentDetailCallout(
                 identifier: "be-first",
                 style: .empty,
