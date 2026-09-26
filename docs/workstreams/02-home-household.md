@@ -2,7 +2,7 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
-**Mail journey — 2026-09-26 ~00:58Z (supersedes the PR states and "Next" in the ~00:10Z block below)**
+**Mail journey — 2026-09-26 00:57Z (supersedes the PR states and "Next" in the ~00:10Z block below)**
 
 - **#443** (Mail write routes truth) was merged at 00:15:41Z as `eaae991b0` and is in master `27eb23ad2` (batch 16, #446).
 - **#445** (native list/Dismiss/Archive/badge/vault): CI is all green at head `352202313`, including `android / Lint, test, assemble`. Stream 1 approved it into native batch 14, PR [449](https://github.com/WangPantopus/skinny-pantopus/pull/449) (#436 → #439 → #444 → #445 → #447, tip `b75f13ffb` on `27eb23ad2`). That PR merges when its batch CI is green.
