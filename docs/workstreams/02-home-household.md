@@ -79,7 +79,7 @@
    - **Proposal to bring to the user:**
      - **A (small, in place):** while SMS isn't wired, refuse phone escrow with a truthful message ("Texting isn't available yet; send to their email"), or return the claim link for the sender to share. Stop logging the SMS body (log a redacted form).
      - **B:** wire a real SMS provider. That's a vendor and money decision.
-   - **Not yet reproduced by Stream 2:** check which clients offer phone recipients.
+   - **Reachability (checked 22:14Z):** no client sends `recipientPhone` (web, iOS, Android, `@pantopus/api`); only the backend Joi schema accepts it. It's reachable only by direct API calls, so user impact is low. Keep it as a backend cleanup (proposal A) when convenient.
 1. **"Message household admin" for applicants (candidate).** The Verification Center link (`/app/homes/:id/messages`) probably tells every applicant "No household admin yet" even when the Home has an owner.
    - Home detail returns `owner` only with `ownership.view`, and the occupants read needs `members.view`.
    - Reproducing it needs an applicant fixture: a new synthetic user with a pending claim.

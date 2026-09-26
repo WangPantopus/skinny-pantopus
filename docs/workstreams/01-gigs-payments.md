@@ -1,6 +1,18 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T18:53Z
+## CURRENT STREAM 1 STATE — 2026-09-26T22:10Z (session handoff)
+
+- **Handoff:** this session stopped at the user's request. The complete takeover note is [stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). **The next Stream 1 session runs batch 32.**
+- **Merged since the last state:** batch 31 [#534](https://github.com/WangPantopus/skinny-pantopus/pull/534) at 20:09:33Z brought master to `f885e0623`. It holds #533, native accept-a-counter (user decision A), and S3 #532.
+- **Open:** [#537](https://github.com/WangPantopus/skinny-pantopus/pull/537) `047b58ba2`, iOS task detail listens for `gig:qa-update`, so questions and answers update live. Stream 3 found the gap.
+  - **Before (master code):** bob's question returned 201 with no refetch, and the screen stayed at "Questions (0)" until reopen.
+  - **After:** the app refetched 77 ms after the POST and showed "Questions (2)" live.
+  - Bundle `20260926-stream1-ios-gig-qa-live-r1` (`0cde42d1…`, 18 files). The fixture was removed at 22:01:12Z.
+- **Batch 32 candidates:** S2 #535, S3 #536, S1 #537, S2 #538. #538 is a backend security fix, so restart the runtime after the merge.
+- **Inventory** (146 rows): 61 PASS and 58 FIXED (57 merged, #537 open), plus 10 low candidates and 1 OPEN (web `/app/offers` orphan). The row list is in the handoff §3.3.
+- **Policy note for a possible user proposal:** a started task, even a $0 one, can't be cancelled (`STARTED_POLICY_REVIEW`).
+
+## Previous Stream 1 state — 2026-09-26T18:53Z
 
 - **Merged today, after batch 27:**
   - batch 28: #518 Manage Train, #522 web instant accept;

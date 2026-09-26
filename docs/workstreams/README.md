@@ -1,6 +1,39 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T18:53Z (batch 30 merged; batch 31 pending CI)
+## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
+
+- **Who runs the queue:** this Stream 1 session stopped at the user's request. **The next Stream 1 session runs batch 32** and all later batches. Its takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and its prompt is [docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).
+- **Integration (Stream 1 queue):**
+  - Master is `f885e0623`.
+  - Batch 31 [#534](https://github.com/WangPantopus/skinny-pantopus/pull/534) merged at 20:09:33Z: S3 #532 chat audit fixes, S1 #533 native accept-a-counter (user decision A).
+  - The queue is empty and the runner is stopped.
+  - **Batch 32 candidates:** only Stream 1's own #537 has been reviewed. CI at 22:12:27Z: #538 **CI OK passed**; #535, #536 and #537 were still pending.
+    - S2 [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535) `89be05af7`: native Add guest truth fixes; `48869ca3…` (76 files).
+    - S3 [#536](https://github.com/WangPantopus/skinny-pantopus/pull/536) `36af1f371`: realtime after a token refresh (Android `SocketManager`/chat, iOS `SocketClient`); `13cf585e…` (25 files).
+    - S1 [#537](https://github.com/WangPantopus/skinny-pantopus/pull/537) `047b58ba2`: iOS task questions update live (`gig:qa-update`); `0cde42d1…` (18 files).
+    - S2 [#538](https://github.com/WangPantopus/skinny-pantopus/pull/538) `09ee447b8`: **security**, user decision 2a. It is backend only, so restart the Stream 1 runtime after the merge. `69a0cf6c…` (14 files).
+- **Stream 1 #537 verified on the iOS simulator:**
+  - On master code, bob's question (POST 201) triggered no refetch; the screen stayed at "Questions (0)" until reopen.
+  - With the fix, the app refetched 77 ms after the POST and showed "Questions (2)" live.
+  - The fixture was removed at 22:01:12Z.
+- **Runtime:** the Stream 1 runtime tree equals master `f885e0623` (clean). The isolated DB has master's 92 migrations. The backend (pid 43392), proxy 18138 and web 18139 stay up for the successor.
+- **Slots (22:12Z):**
+  - Heavy is held by Stream 2 for its 2b builds (since 22:11:50Z, about 20 min, auto-releases); Stream 2 then wants slot 1 / the iOS driver.
+  - Slots 1, 3 and 4 are free. Stream 1 stopped emulator-5558 and released slot 3 at 22:12:14Z.
+  - Stream 2 keeps emulator-5556 (slot 2).
+- **Stream 2** continues in its own session; its user asked it to keep going.
+  - Its fallback handoff is [docs/workstreams/02-home-household.md](02-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
+  - Open: #535, #538 (decision 2a done).
+  - Next: (2b) native Add guest "What they can see" sections sent as `included_sections`. It needs heavy and the iOS driver; Stream 2 will ask.
+- **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](03-accounts-social.md) → CURRENT RESUME.
+  - The takeover prompt is [NEXT-STREAM3-PROMPT-2026-09-26.md](NEXT-STREAM3-PROMPT-2026-09-26.md), and the private runtime kit is `.pantopus-recovery/stream3-runtime-kit/`.
+  - Open S3 PR: #536 (realtime after a token refresh; Android reactions patched in place; seal `13cf585e…`; CI started 21:59Z), for batch 32.
+  - Remaining S3 inventory rows: S3-22, 26, 37, 59, 62, 64 and 69. S3-35 and S3-46 need user money decisions; the questions for the user are listed there.
+- **Open product notes:**
+  - Cancelling a started task is blocked by policy (`STARTED_POLICY_REVIEW`; the copy mentions fees on $0 tasks). A user proposal is possible.
+  - **Web Family Mail Party (S2):** dormant on the web; Android works. **User decision 2026-09-26: deferred.** It's a known gap to be aware of and may be built in the future; no action now.
+
+## Resume point history — 2026-09-26T18:53Z (batch 30 merged; batch 31 pending CI)
 
 - **Integration (Stream 1 queue):**
   - Master is `448ee8b4a`.
