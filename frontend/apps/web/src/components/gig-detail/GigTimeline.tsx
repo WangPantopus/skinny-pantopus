@@ -29,11 +29,14 @@ export default function GigTimeline({
   isMyGig,
   iAmWorker,
   onAction,
+  myReviewAt = null,
 }: {
   gig: Record<string, any>;
   isMyGig: boolean;
   iAmWorker: boolean;
   onAction: (action: string) => void;
+  /** When the viewer left their review of this task; completes the Reviewed step. */
+  myReviewAt?: string | null;
 }) {
   const status = String(gig?.status || '');
   const isCancelled = status === 'cancelled';
@@ -123,8 +126,9 @@ export default function GigTimeline({
     key: 'reviewed',
     label: 'Reviewed',
     icon: <Star className="w-4 h-4" />,
-    status: ownerConfirmed ? 'current' : 'upcoming',
-    action: ownerConfirmed && (isMyGig || iAmWorker)
+    status: ownerConfirmed ? (myReviewAt ? 'done' : 'current') : 'upcoming',
+    timestamp: myReviewAt,
+    action: ownerConfirmed && !myReviewAt && (isMyGig || iAmWorker)
       ? { label: 'Leave Review', actionKey: 'leave_review', variant: 'secondary' }
       : null,
   });
