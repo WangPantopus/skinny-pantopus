@@ -16,7 +16,7 @@
 //  `acknowledgeShare()`, which flips `shouldDismiss` so the modal pops.
 //  The chosen sections are sent as `included_sections`, and the welcome
 //  note rides along in the share message. The contact is a UI affordance
-//  the create endpoint doesn't model, so they stay local.
+//  the create endpoint doesn't model, so it stays local.
 //
 
 import Foundation
