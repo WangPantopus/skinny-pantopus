@@ -5,9 +5,9 @@
 //  A17.6 — Gig mail variant of the mail item detail. Sits on the
 //  shared `MailItemDetailShell` (P19); the body slot composes the
 //  bidder profile, post summary, focal `BidCard`, and (while the bid
-//  is open) the other-bids strip. The actions shelf is the three-way
-//  Accept / Counter / Decline row in the open state, swapping to the
-//  next-steps timeline + Open thread CTA once the recipient accepts.
+//  is open) the other-bids strip. The actions shelf is the Accept
+//  button in the open state, swapping to the next-steps timeline +
+//  Open thread CTA once the recipient accepts.
 //  Mirrors the Android `GigBody.kt` body composition so the two
 //  platforms render the same gig surface.
 //
@@ -25,6 +25,8 @@ struct GigMailDetailLayout: View {
     let onAccept: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
     var paymentPending: Bool = false
     var onCancelPayment: @MainActor () -> Void = {}
 
@@ -74,12 +76,12 @@ struct GigMailDetailLayout: View {
                 accessibilityLabel: "Save to vault"
             ) { @Sendable in Task { @MainActor in onSaveToVault() } },
             overflowItems: [
-                MailOverflowItem(id: "openGig", icon: .briefcase, label: "Open gig thread") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
-                MailOverflowItem(id: "report", icon: .info, label: "Report bidder") {},
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -364,7 +366,7 @@ private struct GigSenderCard: View {
     }
 }
 
-// MARK: - Accept / Decline split dock
+// MARK: - Accept dock
 
 private struct GigSplitDock: View {
     let isAccepted: Bool
@@ -420,18 +422,6 @@ private struct GigSplitDock: View {
                 identifier: "mailDetail_gig_accept",
                 action: onAccept
             )
-            secondaryButton(
-                icon: .arrowsRepeat,
-                label: "Counter",
-                kind: .ghost,
-                identifier: "mailDetail_gig_counter"
-            )
-            secondaryButton(
-                icon: .x,
-                label: "Decline",
-                kind: .destructive,
-                identifier: "mailDetail_gig_decline"
-            )
         }
     }
 
@@ -458,39 +448,6 @@ private struct GigSplitDock: View {
         }
         .buttonStyle(.plain)
         .disabled(inFlight)
-        .accessibilityIdentifier(identifier)
-        .accessibilityLabel(label)
-    }
-
-    private enum SecondaryKind { case ghost, destructive }
-
-    private func secondaryButton(
-        icon: PantopusIcon,
-        label: String,
-        kind: SecondaryKind,
-        identifier: String
-    ) -> some View {
-        let foreground = kind == .ghost ? Theme.Color.appText : Theme.Color.appTextInverse
-        let background = kind == .ghost ? Theme.Color.appSurface : Theme.Color.error
-        return Button(action: {}) {
-            HStack(spacing: 5) {
-                Icon(icon, size: 14, color: foreground)
-                Text(label)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(foreground)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.vertical, Spacing.s2)
-            .background(background)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg)
-                    .stroke(kind == .ghost ? Theme.Color.appBorder : Color.clear, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-        }
-        .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .accessibilityLabel(label)
     }

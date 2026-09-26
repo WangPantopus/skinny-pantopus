@@ -23,6 +23,8 @@ struct MemoryDetailLayout: View {
     let onSaveMemory: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
 
     var body: some View {
         MailItemDetailShell(
@@ -42,8 +44,7 @@ struct MemoryDetailLayout: View {
                 MemoryDetailActions(
                     isSaved: memory.isSaved,
                     inFlight: saveInFlight,
-                    onSave: onSaveMemory,
-                    onShare: onSaveToVault
+                    onSave: onSaveMemory
                 )
             }
         )
@@ -61,12 +62,12 @@ struct MemoryDetailLayout: View {
                 isActive: memory.isSaved
             ) { @Sendable in Task { @MainActor in onSaveToVault() } },
             overflowItems: [
-                MailOverflowItem(id: "share", icon: .share, label: "Share with sender") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
-                MailOverflowItem(id: "muteAnniversary", icon: .bell, label: "Mute anniversary") {},
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -333,7 +334,6 @@ private struct MemoryDetailActions: View {
     let isSaved: Bool
     let inFlight: Bool
     let onSave: @MainActor () -> Void
-    let onShare: @MainActor () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
@@ -341,11 +341,6 @@ private struct MemoryDetailActions: View {
                 savedPill
             } else {
                 saveButton
-            }
-            HStack(spacing: Spacing.s2) {
-                secondary(id: "reply", icon: .messageSquare, label: "Reply")
-                secondary(id: "share", icon: .share, label: "Share", action: onShare)
-                secondary(id: "print", icon: .download, label: "Print")
             }
         }
     }
@@ -385,31 +380,5 @@ private struct MemoryDetailActions: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .accessibilityIdentifier("mailDetail_memory_savedShelf")
-    }
-
-    private func secondary(
-        id: String,
-        icon: PantopusIcon,
-        label: String,
-        action: @escaping @MainActor () -> Void = {}
-    ) -> some View {
-        Button(action: { action() }) {
-            VStack(spacing: Spacing.s1) {
-                Icon(icon, size: 17, color: Theme.Color.appTextStrong)
-                Text(label)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appTextStrong)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Theme.Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("mailDetail_memory_action_\(id)")
     }
 }

@@ -343,6 +343,12 @@ public protocol ListOfRowsDataSource: AnyObject, Observable {
     func refresh() async
     /// Triggered when the list scrolls near the bottom.
     func loadMoreIfNeeded() async
+    /// Why the next page failed while rows are on screen. The list shows it
+    /// with a Try again in place of the page spinner. Requirements (with
+    /// `nil`/no-op defaults below) so generic renderers dispatch to the screen.
+    var loadMoreError: String? { get }
+    /// Re-requests the page that failed.
+    func retryLoadMore() async
 }
 
 /// T5 additive protocol surface — every existing conformer gets `nil`
@@ -384,6 +390,13 @@ public extension ListOfRowsDataSource {
     var monoFooter: String? {
         nil
     }
+
+    /// No page failure to show; screens that page can override it.
+    var loadMoreError: String? {
+        nil
+    }
+
+    func retryLoadMore() async {}
 }
 
 /// Top-bar trailing action payload.

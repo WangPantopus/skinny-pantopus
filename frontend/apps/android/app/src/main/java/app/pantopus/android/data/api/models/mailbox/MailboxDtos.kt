@@ -138,3 +138,15 @@ data class AckResponse(
     val message: String,
     val ackStatus: String,
 )
+
+/** `PATCH /api/mailbox/:id/archive` body — route `backend/routes/mailbox.js:2860`. */
+@JsonClass(generateAdapter = true)
+data class ArchiveMailRequest(
+    val archived: Boolean,
+)
+
+/** `PATCH /api/mailbox/:id/archive` response. */
+@JsonClass(generateAdapter = true)
+data class ArchiveMailResponse(
+    val message: String,
+)

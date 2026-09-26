@@ -1,10 +1,13 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.AckResponse
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailRequest
+import app.pantopus.android.data.api.models.mailbox.ArchiveMailResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsHistoryResponse
 import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.Path
@@ -37,6 +40,13 @@ interface MailboxApi {
     suspend fun acknowledge(
         @Path("id") id: String,
     ): AckResponse
+
+    /** `PATCH /api/mailbox/:id/archive` — route `backend/routes/mailbox.js:2860`. */
+    @PATCH("api/mailbox/{id}/archive")
+    suspend fun archive(
+        @Path("id") id: String,
+        @Body body: ArchiveMailRequest,
+    ): ArchiveMailResponse
 
     /** `GET /api/mailbox/earnings/summary` — route `backend/routes/mailbox.js:2899`. */
     @GET("api/mailbox/earnings/summary")

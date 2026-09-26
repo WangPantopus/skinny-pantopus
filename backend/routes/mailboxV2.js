@@ -213,13 +213,16 @@ router.get('/drawers', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const homeIds = await getAccessibleHomeIds(userId);
 
-    // Count unread + urgent per drawer in parallel
+    // Count unread + urgent per drawer in parallel. Only incoming mail counts
+    // (the Incoming tab's filter): dismissed, filed and archived letters left it.
     const countForDrawer = async (drawer, filter) => {
       let query = supabaseAdmin
         .from('Mail')
         .select('id, priority, created_at', { count: 'exact', head: false })
         .eq('drawer', drawer)
-        .eq('viewed', false);
+        .eq('viewed', false)
+        .in('lifecycle', ['delivered', 'opened'])
+        .eq('archived', false);
 
       if (filter) filter(query);
 

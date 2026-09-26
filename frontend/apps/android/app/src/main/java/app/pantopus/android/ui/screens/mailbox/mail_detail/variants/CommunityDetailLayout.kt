@@ -113,10 +113,7 @@ fun CommunityDetailLayout(
                         )
                     }
                     community.pulseThread?.let {
-                        CommunityPulseThreadCard(
-                            thread = it,
-                            going = community.rsvp == CommunityRsvpStatus.Going,
-                        )
+                        CommunityPulseThreadCard(thread = it)
                     }
                 }
             },
@@ -148,12 +145,7 @@ private fun makeTopBar(
             ),
         overflowItems =
             listOf(
-                MailOverflowItem("share", PantopusIcon.Share, "Share") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("addToCalendar", PantopusIcon.Calendar, "Add to calendar") {},
-                MailOverflowItem("mute", PantopusIcon.Bell, "Mute thread") {},
-                MailOverflowItem("report", PantopusIcon.Info, "Report") {},
-                MailOverflowItem("delete", PantopusIcon.Trash2, "Delete", isDestructive = true) {},
             ),
     )
 
@@ -1137,10 +1129,7 @@ private fun CommunityBodyCard(
 // ─── Pulse thread cross-link ────────────────────────────
 
 @Composable
-private fun CommunityPulseThreadCard(
-    thread: CommunityPulseThread,
-    going: Boolean,
-) {
+private fun CommunityPulseThreadCard(thread: CommunityPulseThread) {
     Column(
         modifier =
             Modifier
@@ -1221,36 +1210,6 @@ private fun CommunityPulseThreadCard(
                     text = "${thread.lastReplyAuthor}: ${thread.lastReplyPreview}",
                     fontSize = 12.sp,
                     color = PantopusColors.appTextStrong,
-                )
-            }
-        }
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(PantopusColors.appSurface)
-                    .border(1.5.dp, PantopusColors.primary200, RoundedCornerShape(10.dp))
-                    .clickable {}
-                    .padding(vertical = 9.dp)
-                    .testTag("mailDetail_community_pulseThread"),
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                Text(
-                    text = if (going) "Open thread · you're in" else "Join the thread",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PantopusColors.primary700,
-                )
-                PantopusIconImage(
-                    icon = PantopusIcon.ArrowRight,
-                    contentDescription = null,
-                    size = 13.dp,
-                    tint = PantopusColors.primary700,
                 )
             }
         }
@@ -1362,7 +1321,6 @@ fun CommunityRsvpActions(
         } else {
             RsvpChipRow(inFlight = inFlight, onSelect = onSelect)
         }
-        SecondaryRow()
     }
 }
 
@@ -1473,60 +1431,5 @@ private fun RsvpChip(
         PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = fg)
         Spacer(Modifier.width(5.dp))
         Text(text = label, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
-    }
-}
-
-@Composable
-private fun SecondaryRow() {
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        SecondaryChip(
-            icon = PantopusIcon.MessageSquarePlus,
-            label = "Ask a question",
-            id = "mailDetail_community_ask",
-            modifier = Modifier.weight(1f),
-        )
-        SecondaryChip(
-            icon = PantopusIcon.Users,
-            label = "Add housemate",
-            id = "mailDetail_community_addHousemate",
-            modifier = Modifier.weight(1f),
-        )
-        SecondaryChip(
-            icon = PantopusIcon.Bell,
-            label = "Mute thread",
-            id = "mailDetail_community_mute",
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun SecondaryChip(
-    icon: PantopusIcon,
-    label: String,
-    id: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                .clickable {}
-                .padding(vertical = 10.dp)
-                .semantics { contentDescription = label }
-                .testTag(id),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = Radii.xl, tint = PantopusColors.appTextStrong)
-        Text(
-            text = label,
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appTextStrong,
-            maxLines = 2,
-        )
     }
 }
