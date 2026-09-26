@@ -15,7 +15,7 @@ import type {
 } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 
-import { Store, ArrowUpDown, Clock, Navigation, TrendingDown, TrendingUp, Check, Maximize2, Minimize2, X } from 'lucide-react';
+import { Store, ArrowUpDown, Bookmark, Clock, Navigation, TrendingDown, TrendingUp, Check, Maximize2, Minimize2, X } from 'lucide-react';
 import ListingCard from './ListingCard';
 import MarketplaceTabs from './MarketplaceTabs';
 import FilterPillBar from './FilterPillBar';
@@ -659,6 +659,17 @@ export default function MarketplacePage() {
   // ── Sort selector ────────────────────────────────────────────
   const activeSortOption = SORT_OPTIONS.find(o => o.key === sort) || SORT_OPTIONS[0];
 
+  // Saved listings have their own page; this is the way to it.
+  const SavedLink = (
+    <button
+      onClick={() => router.push('/app/saved-listings')}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-app-border bg-app-surface text-xs font-medium text-app-text-strong hover:bg-app-hover"
+    >
+      <Bookmark className="w-3.5 h-3.5 text-app-text-muted" />
+      Saved
+    </button>
+  );
+
   const SortSelector = !isDiscovery ? (
     <div className="relative">
       <button
@@ -732,6 +743,7 @@ export default function MarketplacePage() {
                 {ViewToggle}
               </div>
               <div className="flex items-center gap-2">
+                {SavedLink}
                 {SortSelector}
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -834,6 +846,7 @@ export default function MarketplacePage() {
             <p className="text-sm text-app-text-secondary mt-0.5">Buy, sell, give, hire, deliver</p>
           </div>
           <div className="flex items-center gap-3">
+            {SavedLink}
             {SortSelector}
             {ViewToggle}
             <button onClick={() => setShowCreateModal(true)} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium text-sm">+ Post</button>
