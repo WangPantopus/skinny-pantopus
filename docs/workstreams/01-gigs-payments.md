@@ -1,6 +1,16 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T01:29Z
+## CURRENT STREAM 1 STATE — 2026-09-26T02:09Z
+
+- **Merged in batch 17 (#452):** #448, task detail bid count.
+- **Committed, not yet pushed:** `claude/stream1-native-my-listings-counts` `8531c94e9` on `8a9a97757` (two commits, 7 files, iOS and Android).
+  - **My listings:** counts only after a successful load, and a tab switch keeps the error. Reproduced on Android with injected 500s (seq 3318, 3335).
+  - **Listing offers / Offers / My bids:** exact amounts ("$12", "$12.50"), not rounded. Reproduced on Android: a $4.50 counter showed as "$4".
+  - Pending: Android build and afters (heavy after Stream 3), iOS build and before/after (iOS driver after Stream 3), then fixture cleanup.
+- **Verified PASS (Android):** the seller's Listing offers list and Counter flow match SQL, apart from the amount display above.
+- **Reviewed:** Stream 2 #453 approved at `3f2b70b0b`.
+
+## Previous Stream 1 state — 2026-09-26T01:29Z
 
 - **Merged since the 22:58 note:**
   - #439 (native Android tab bar on child screens, C-17 Tasks chip during load, My posts paging past 50);

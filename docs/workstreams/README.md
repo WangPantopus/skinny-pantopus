@@ -1,6 +1,35 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T01:29Z (batches 11–16 merged; next native batch #448/#450/#451)
+## CURRENT RESUME POINT — 2026-09-26T02:09Z (batch 17 merged; next native batch #453 + Stream 3 profile-share + Stream 1 native fixes)
+
+- **Integration (Stream 1 queue):**
+  - Master is `8a9a97757`. Batch 17 [#452](https://github.com/WangPantopus/skinny-pantopus/pull/452) merged #448, #450 and #451 at 02:08:04Z.
+  - Batches 11–17 are all merged. The queue is empty and the runner has stopped. Reviewed heads are in `/private/tmp/pantopus-tools/merge-queue/reviewed-heads.txt`.
+- **Next native batch (one CI run; merge-tree each exact head on `8a9a97757` once green):**
+  - Stream 2 [#453](https://github.com/WangPantopus/skinny-pantopus/pull/453) `3f2b70b0b` (Home notification links, S2-06/10/17): **approved**. Bundle `20260926-stream2-home-links-r1`, MANIFEST `37f730c7…` (138 files verify). Merge-tree is clean against the batch 17 tip. CI was running at 02:07Z.
+  - Stream 3 `claude/stream3-profile-share-truth` `81fe34937` (S3-50/53/67): build in progress under heavy; PR to follow.
+  - Stream 1 `claude/stream1-native-my-listings-counts` `8531c94e9` (not pushed yet; builds and afters pending):
+    - My listings: a failed load showed "Active 0 · Sold 0 · Drafts 0" beside the error, and a tab switch then replaced the error with "Nothing sold yet".
+    - Listing offers, Offers and My bids rounded amounts to whole dollars: a $4.50 counter read "$4" on Android and "$5" on iOS.
+- **Stream 1 inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`.
+  - New Android evidence: `android-my-listings/` (injected 500s at seq 3318 and 3335) and `android-seller-offers/` (list and counter PASS; the counter amount displayed wrong).
+  - Fixtures in use until the afters are done:
+    - alice's listings `17a79ec0…`, `6ec14e64…` (sold) and `336087f8…` (pending pickup);
+    - bob's offer `baabe7d7…`, countered to 4.50;
+    - notifications `5a0f1056…` (alice) and `330ca8c6…` (bob).
+    - Exact cleanup follows the afters.
+  - Web `/app/offers` stays OPEN (low): no screen, email or notification links to it.
+  - Proposals awaiting the user (unchanged):
+    - the iOS drawer pill should open the profile;
+    - "just posted" should depend on post age.
+- **Slots and devices:**
+  - Heavy: Stream 3 since 01:51:30Z (profile-share native build), then Stream 1 by explicit ask.
+  - iOS driver: free since Stream 2's 01:57:47Z release; Stream 3 next (0AE16FA0), then Stream 1.
+  - F4DBD47E was booted twice after Stream 1 shut it down (01:17:05Z and about 01:57:20Z). Each time the Claude app started a simulator panel stream in the same second, and neither peer's calls named it. It has been off again since 01:58:25Z.
+  - The Stream 1 backend restarted on master `8a9a97757` at 02:09Z (SIGINT; PID 38095, nice 0). emulator-5558 is up.
+- **Side effects awaiting the user:** Stream 3 reports that `GET /api/identity-center` creates a LocalProfile row on read. One Solo row is recorded, and its cleanup awaits approval.
+
+## Resume point history — 2026-09-26T01:29Z (batches 11–16 merged; next native batch #448/#450/#451)
 
 - **Integration (Stream 1 queue):**
   - Master is `8f1a59f58`.
