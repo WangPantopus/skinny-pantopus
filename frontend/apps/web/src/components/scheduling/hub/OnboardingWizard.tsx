@@ -461,11 +461,11 @@ function HomeOnboarding({
           api.scheduling.getBookingPage(owner),
           api.homeIam
             .getHomeMembers(homeId)
-            .catch(() => ({ members: [] as unknown[] })),
+            .catch(() => ({ occupants: [] as unknown[] })),
         ]);
         if (cancelled) return;
         setSlug(page.slug);
-        const list = readMembers(mem.members ?? []);
+        const list = readMembers(mem.occupants ?? []);
         setMembers(list);
         setSelected(new Set(list.map((m) => m.userId)));
       } catch (err) {

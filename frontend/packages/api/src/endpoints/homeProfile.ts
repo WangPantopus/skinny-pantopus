@@ -187,6 +187,10 @@ export async function getHomeDocuments(homeId: string) {
   return get<{ documents: any[] }>(`/api/homes/${homeId}/documents`);
 }
 
+export async function deleteHomeDocument(homeId: string, documentId: string) {
+  return del<{ deleted: boolean; cleanup_pending: boolean }>(`/api/homes/${homeId}/documents/${documentId}`);
+}
+
 // ---- HomeVendor ----
 
 export async function getHomeVendors(homeId: string) {

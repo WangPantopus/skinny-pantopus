@@ -26,6 +26,8 @@ function DocsContent() {
 
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -33,8 +35,10 @@ function DocsContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeDocuments(homeId);
+      setLoadError(null);
       setDocs((res as any)?.documents || []);
-    } catch { toast.error('Failed to load documents'); }
+    } catch {
+      setLoadError('Current documents could not be loaded. Retry to check current information.'); toast.error('Failed to load documents'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchDocs().finally(() => setLoading(false)); }, [fetchDocs]);
@@ -42,9 +46,12 @@ function DocsContent() {
   const handleDelete = useCallback(async (docId: string, title: string) => {
     const yes = await confirmStore.open({ title: 'Delete Document', description: `Remove "${title}"?`, confirmLabel: 'Delete', variant: 'destructive' });
     if (!yes) return;
-    setDocs((prev) => prev.filter((d) => d.id !== docId));
-    toast.success('Document removed');
-  }, []);
+    try {
+      await api.homeProfile.deleteHomeDocument(homeId, docId);
+      setDocs((prev) => prev.filter((d) => d.id !== docId));
+      toast.success('Document removed');
+    } catch (err: any) { toast.error(err?.message || 'Could not remove the document. Try again.'); }
+  }, [homeId]);
 
   // Group by folder
   const grouped = docs.reduce<Record<string, any[]>>((acc, doc) => {
@@ -62,7 +69,12 @@ function DocsContent() {
         <h1 className="text-xl font-bold text-app-text">Documents</h1>
       </div>
 
-      {docs.length === 0 ? (
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchDocs().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : docs.length === 0 ? (
         <div className="text-center py-16">
           <FileText className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No documents uploaded</p>

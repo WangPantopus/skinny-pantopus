@@ -84,10 +84,10 @@ export default function WhosFreePage() {
       const [memRes, wf] = await Promise.all([
         api.homeIam
           .getHomeMembers(homeId)
-          .catch(() => ({ members: [] as unknown[] })),
+          .catch(() => ({ occupants: [] as unknown[] })),
         api.scheduling.getWhosFree({ from, to, tz }, owner),
       ]);
-      setMembers(readMembers(memRes.members ?? []));
+      setMembers(readMembers(memRes.occupants ?? []));
       setData(wf);
     } catch (err) {
       setError(decodeError(err).message);

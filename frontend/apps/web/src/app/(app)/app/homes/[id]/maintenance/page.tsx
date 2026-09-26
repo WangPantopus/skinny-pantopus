@@ -26,6 +26,8 @@ function MaintenanceContent() {
   const [items, setItems] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<MaintTab>('open');
   const [showCreate, setShowCreate] = useState(false);
 
@@ -39,8 +41,10 @@ function MaintenanceContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeIssues(homeId);
+      setLoadError(null);
       setItems((res as any)?.issues || []);
-    } catch { toast.error('Failed to load maintenance items'); }
+    } catch {
+      setLoadError('Current issues could not be loaded. Retry to check current information.'); toast.error('Failed to load maintenance items'); }
   }, [homeId]);
 
   const fetchAccess = useCallback(async () => {
@@ -118,6 +122,12 @@ function MaintenanceContent() {
         </div>
       )}
 
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : (<>
       <div className="flex border-b border-app-border mb-4">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2.5 text-sm font-medium transition ${tab === t.key ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
@@ -171,6 +181,7 @@ function MaintenanceContent() {
           })}
         </div>
       )}
+      </>)}
     </div>
   );
 }

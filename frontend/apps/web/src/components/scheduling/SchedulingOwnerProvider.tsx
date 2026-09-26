@@ -42,5 +42,8 @@ export function SchedulingOwnerProvider({
 export function useSchedulingOwner(): SchedulingOwnerRef {
   const ctx = useContext(SchedulingOwnerContext);
   const pathname = usePathname();
-  return ctx ?? detectOwnerFromPath(pathname);
+  // Memoized like the provider's value: a new object on every render made
+  // standalone pages (Home "Who's free") re-run their load effects in a loop.
+  const detected = useMemo(() => detectOwnerFromPath(pathname), [pathname]);
+  return ctx ?? detected;
 }

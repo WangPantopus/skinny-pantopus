@@ -33,6 +33,8 @@ function ShareContent() {
 
   const [passes, setPasses] = useState<GuestPass[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
@@ -49,9 +51,11 @@ function ShareContent() {
       // Revoked passes belong in Past Passes, which already labels them.
       const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
       if (request !== generation.current) return;
+      setLoadError(null);
       setPasses(res?.passes || []);
     } catch (err: unknown) {
       if (request !== generation.current) return;
+      setLoadError('Current guest passes could not be loaded. Retry to check current information.');
       toast.error(failureMessage(err, 'Failed to load guest passes'));
     }
   }, [homeId]);
@@ -149,6 +153,12 @@ function ShareContent() {
         </div>
       )}
 
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchPasses().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : (<>
       {/* Active passes */}
       {activePasses.length > 0 && (
         <div className="mb-6">
@@ -207,6 +217,7 @@ function ShareContent() {
           <p className="text-xs text-app-text-muted mt-1">Tap + to create a quick-share guest pass</p>
         </div>
       )}
+      </>)}
     </div>
   );
 }
