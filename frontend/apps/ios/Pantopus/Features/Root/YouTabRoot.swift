@@ -2692,8 +2692,9 @@ public struct YouTabRoot: View {
                 businessId: businessId,
                 onBack: { Task { @MainActor in pop() } },
                 onEditPage: { Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) } },
-                onOpenInsights: { Task { @MainActor in path.append(.placeholder(label: "Insights")) } },
-                onOpenSettings: { Task { @MainActor in path.append(.placeholder(label: "Business settings")) } },
+                // Business settings are the page's profile fields, which the
+                // page editor edits (web `/app/business/[id]/settings/profile`).
+                onOpenSettings: { Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) } },
                 onOpenTeam: { Task { @MainActor in path.append(.businessTeam(businessId: businessId)) } },
                 onOpenPages: { Task { @MainActor in path.append(.businessPages(businessId: businessId)) } },
                 onOpenPayments: {

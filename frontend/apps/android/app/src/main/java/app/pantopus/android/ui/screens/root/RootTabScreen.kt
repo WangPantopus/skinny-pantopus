@@ -5992,8 +5992,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     BusinessOwnerScreen(
                         onBack = { navController.popBackStack() },
                         onEditPage = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
-                        onOpenInsights = { navController.navigate(ChildRoutes.placeholder("Insights")) },
-                        onOpenSettings = { navController.navigate(ChildRoutes.placeholder("Business settings")) },
+                        // Business settings are the page's profile fields, which the page
+                        // editor edits (web `/app/business/[id]/settings/profile`).
+                        onOpenSettings = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                         onOpenTeam = { navController.navigate(ChildRoutes.businessTeam(businessId)) },
                         onOpenPages = { navController.navigate(ChildRoutes.businessPages(businessId)) },
                         onOpenPayments = {

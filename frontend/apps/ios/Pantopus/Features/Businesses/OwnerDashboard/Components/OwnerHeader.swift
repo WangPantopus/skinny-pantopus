@@ -24,7 +24,8 @@ import SwiftUI
 @MainActor
 struct OwnerTopBar: View {
     let onBack: @MainActor () -> Void
-    let onOpenInsights: @MainActor () -> Void
+    /// Nil hides the Insights action (no native Insights screen yet).
+    var onOpenInsights: (@MainActor () -> Void)?
     let onOpenSettings: @MainActor () -> Void
 
     var body: some View {
@@ -44,7 +45,9 @@ struct OwnerTopBar: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            iconButton(.barChart3, label: "Insights", action: onOpenInsights)
+            if let onOpenInsights {
+                iconButton(.barChart3, label: "Insights", action: onOpenInsights)
+            }
             iconButton(.slidersHorizontal, label: "Settings", action: onOpenSettings)
         }
         .padding(.horizontal, Spacing.s2)

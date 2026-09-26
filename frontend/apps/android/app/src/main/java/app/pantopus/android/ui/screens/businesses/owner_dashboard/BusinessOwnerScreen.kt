@@ -113,7 +113,8 @@ import kotlinx.coroutines.delay
 fun BusinessOwnerScreen(
     onBack: () -> Unit,
     onEditPage: () -> Unit = {},
-    onOpenInsights: () -> Unit = {},
+    /** Null hides the Insights entries: there's no native Insights screen yet. */
+    onOpenInsights: (() -> Unit)? = null,
     onOpenSettings: () -> Unit = {},
     onOpenTeam: () -> Unit = {},
     /** C4 — opens the custom Pages CMS (block builder + revision history). */
@@ -283,7 +284,7 @@ internal fun OwnerEditFrame(
     content: BusinessOwnerContent,
     onBack: () -> Unit,
     onEditPage: () -> Unit,
-    onOpenInsights: () -> Unit,
+    onOpenInsights: (() -> Unit)?,
     onOpenSettings: () -> Unit,
     onOpenTeam: () -> Unit,
     onPreview: () -> Unit,
@@ -377,7 +378,7 @@ private fun OwnerSections(
     content: BusinessOwnerContent,
     profile: BusinessProfileContent,
     onEditPage: () -> Unit,
-    onOpenInsights: () -> Unit,
+    onOpenInsights: (() -> Unit)?,
     onOpenTeam: () -> Unit,
     /** C4 — opens the custom Pages CMS. */
     onOpenPages: () -> Unit,
@@ -1043,7 +1044,7 @@ private fun DockButton(
 @Composable
 internal fun OwnerLoadingLayout(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().testTag("businessOwner.loading")) {
-        OwnerTopBar(onBack = onBack, onOpenInsights = {}, onOpenSettings = {})
+        OwnerTopBar(onBack = onBack, onOpenInsights = null, onOpenSettings = {})
         Box(
             modifier =
                 Modifier
