@@ -295,6 +295,10 @@ export default function MyGigsPage() {
   const loading = !session.retired && gigsQuery.isPending;
   const fetchError = session.retired ? 'Your session changed. Reopen My tasks to continue.'
     : gigsQuery.error ? 'Failed to load your tasks. Please try again.' : null;
+  // Nothing loaded is not "no tasks": its error replaces the empty state, with no
+  // zero counts. Tasks already on screen stay, with the error above them.
+  const loadFailedMessage = gigs.length === 0 ? fetchError : null;
+  const retryTasks = () => { if (session.retired) window.location.reload(); else if (session.isCurrent()) void gigsQuery.refetch(); };
 
   const stats = useMemo(
     () => ({
@@ -347,19 +351,16 @@ export default function MyGigsPage() {
           tabs={DASHBOARD_TABS.map((t) => ({
             key: t.key,
             label: t.label,
-            count: tabCounts[t.key],
+            count: loadFailedMessage ? null : tabCounts[t.key],
           }))}
           activeTabKey={activeTab}
           onTabChange={(k) => setActiveTab(k as DashboardTab)}
           scrollableTabs
-          renderHeader={() => (
+          renderHeader={() => loadFailedMessage ? null : (
             <>
               {fetchError ? (
                 <div className="mb-4">
-                  <ErrorState
-                    message={fetchError}
-                    onRetry={() => { if (session.retired) window.location.reload(); else if (session.isCurrent()) void gigsQuery.refetch(); }}
-                  />
+                  <ErrorState message={fetchError} onRetry={retryTasks} />
                 </div>
               ) : null}
               <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -413,6 +414,11 @@ export default function MyGigsPage() {
               ? () => navigate(emptyState.actionHref)
               : undefined,
           }}
+          renderEmpty={loadFailedMessage ? () => (
+            <div role="alert">
+              <ErrorState message={loadFailedMessage} onRetry={retryTasks} />
+            </div>
+          ) : undefined}
         />
       </main>
     </div>

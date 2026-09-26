@@ -67,9 +67,13 @@ export default function MyBidsPage() {
   const loading = !session.retired && bidsQuery.isPending;
   const fetchError = session.retired ? 'Your session changed. Reopen My bids to continue.'
     : bidsQuery.error ? 'Failed to load your bids. Please try again.' : null;
+  // Nothing loaded is not "no bids": its error replaces the empty state, with no
+  // zero counts. Bids already on screen stay, with the error above them.
+  const loadFailedMessage = bids.length === 0 ? fetchError : null;
 
   // Shim so mutation handlers keep their imperative refetch behavior
   const loadBids = () => { if (session.isCurrent()) void bidsQuery.refetch(); };
+  const retryBids = () => session.retired ? window.location.reload() : loadBids();
 
   const handleViewGig = (gigId: string) => { if (session.isCurrent()) router.push(`/app/gigs/${gigId}`); };
 
@@ -208,7 +212,7 @@ export default function MyBidsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <ListArchetype<GigBidWithUser>
           title={<span className="inline-flex items-center gap-2">My bids{session.active && <ProBadge />}</span>}
-          subtitle={`${stats.pending} pending${stats.countered ? ` · ${stats.countered} countered` : ''} · $${totalEarnings} potential earnings`}
+          subtitle={loadFailedMessage ? undefined : `${stats.pending} pending${stats.countered ? ` · ${stats.countered} countered` : ''} · $${totalEarnings} potential earnings`}
           primaryAction={{ label: 'Browse tasks', onClick: () => router.push('/app/gigs') }}
           headerFilters={
             <SearchInput
@@ -218,9 +222,9 @@ export default function MyBidsPage() {
               className="max-w-sm"
             />
           }
-          renderHeader={() => (
+          renderHeader={() => loadFailedMessage ? null : (
             <>
-              {fetchError && <ErrorState message={fetchError} onRetry={() => session.retired ? window.location.reload() : loadBids()} />}
+              {fetchError && <ErrorState message={fetchError} onRetry={retryBids} />}
 
               {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -266,6 +270,11 @@ export default function MyBidsPage() {
             ctaLabel: 'Browse tasks',
             onCtaClick: () => router.push('/app/gigs'),
           }}
+          renderEmpty={loadFailedMessage ? () => (
+            <div role="alert">
+              <ErrorState message={loadFailedMessage} onRetry={retryBids} />
+            </div>
+          ) : undefined}
         />
       </main>
 
