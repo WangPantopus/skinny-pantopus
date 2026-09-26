@@ -1,6 +1,31 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T08:54Z
+## CURRENT STREAM 1 STATE — 2026-09-26T11:05Z
+
+- **Merged in batch 25 (#499, 09:58:07Z):** #490, #492, #495 and #496.
+- **In batch 26 ([#513](https://github.com/WangPantopus/skinny-pantopus/pull/513), queued; all green):**
+
+  | PR | Head | What | Bundle |
+  |---|---|---|---|
+  | [#498](https://github.com/WangPantopus/skinny-pantopus/pull/498) | `d839ce259` | web Save double click (listings, posts) | `c548d784…` |
+  | [#500](https://github.com/WangPantopus/skinny-pantopus/pull/500) | `297f93738` | web Discover map failed layers | `4114308f…` |
+  | [#501](https://github.com/WangPantopus/skinny-pantopus/pull/501) | `8d8533170` | web feed labels + My Pulse share toast | `a1bdaa42…` |
+  | [#504](https://github.com/WangPantopus/skinny-pantopus/pull/504) | `62c78a70e` | decision 6A: hide trades checkbox | `36eb086f…` |
+  | [#505](https://github.com/WangPantopus/skinny-pantopus/pull/505) | `5b2127eda` | decision 5A: saved links + error states | `3bb0f88d…` |
+  | [#506](https://github.com/WangPantopus/skinny-pantopus/pull/506) | `d3c063846` | decision 2A: Snapshot real counts | `acba4762…` |
+
+- **For batch 27 (CI running):**
+
+  | PR | Head | What | Bundle |
+  |---|---|---|---|
+  | [#509](https://github.com/WangPantopus/skinny-pantopus/pull/509) | `8514c5d88` | decision 1A: Android session marker | `51130b50…` |
+  | [#510](https://github.com/WangPantopus/skinny-pantopus/pull/510) | `5b144606a` | decisions 3A/4A: owner inbox, "Your offer" + Withdraw, both apps | `52125117…` |
+  | [#511](https://github.com/WangPantopus/skinny-pantopus/pull/511) | `e9c3a60e2` | draft, stacked on #510: iOS offer Send disabled with the prefill | iOS after pending |
+
+- **Proposal for the user:** native accept-a-counter (web has Accept).
+- **Resources:** heavy and the iOS driver come to Stream 1 after Stream 3 (about 11:20Z and 11:50Z) for the #511 after. Only emulator-5558 (slot 3) is held.
+
+## Previous Stream 1 state — 2026-09-26T08:54Z
 
 - **Merged in batch 24 (#489, 08:44:25Z):** #481 and #487.
 - **Open for batch 25:**

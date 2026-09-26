@@ -1,6 +1,32 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-26T09:21Z (batch 24 merged; batch 25 #499 queued)
+## CURRENT RESUME POINT — 2026-09-26T11:05Z (batch 25 merged; batch 26 #513 queued; user decisions 1A–6A all in PRs)
+
+- **Integration (Stream 1 queue):**
+  - Master is `207eeb510`. Batch 25 [#499](https://github.com/WangPantopus/skinny-pantopus/pull/499) merged at 09:58:07Z. It carried #490, #492, #495 and #496 (S1), #494 and #491 (S3), #493 (S2 R06) and #497 (S3).
+  - **Batch 26 [#513](https://github.com/WangPantopus/skinny-pantopus/pull/513)**, runner watching. Order: #498 → #500 → #501 → #504 → #505 → #506 (S1 web) → #502 (S3-31/54) → #503 (S2 decision 4, certified) → #507 r2 (S3 chat socket joins) → #508 (S3 web chat names).
+    - Tip `b2d7d41d8`.
+    - Every head is green on its exact SHA. All ten bundles were re-verified, and the chain is clean.
+    - Shared files are merged in separate hunks: `my-pulse/page.tsx` (#498/#501) and `marketplace/page.tsx` (#505/#506).
+  - **Batch 27 candidates (CI running):**
+    - #509 (S1 decision 1A);
+    - #510 (S1 decisions 3A/4A);
+    - #511 (S1 draft, stacked on #510; waiting for its iOS after);
+    - #512 (S2 decision 1, head `8ef35a388`; one forward migration `20260926100000`).
+- **User decisions 09:48Z (1A–6A), all implemented:**
+  - **1A:** #509. Android binds open screens to account + session id + origin. Before/after is an injected 401 → refresh → the task loads. Stream 3's three conditions are met. Stream 2's letter-after-refresh finding is the same bug, covered by #509.
+  - **2A:** #506 (Snapshot real counts).
+  - **3A/4A:** #510. Verified on Android and iOS. The owner's Message opens the inbox, with no card icon for the owner. "Your offer $X" is shown, with Withdraw, a countered state and a failure path.
+  - **5A:** #505 (saved links).
+  - **6A:** #504 (hide trades).
+- **Stream 1 new:** the iOS "Make an offer" Send stayed disabled over the prefilled asking price until it was edited. It's pre-existing, from `834fd7443`, found while verifying #510. The fix is #511 (draft); the sheet is now its own view, like `CounterOfferSheet`.
+- **Proposal for the user (Stream 1):** native buyers can see and withdraw a counter but can't accept it (web has Accept). Accepting commits to the counter price and holds the listing, so it's asked as a decision.
+- **Slots:**
+  - Heavy: Stream 3 (chat media), then Stream 1 at about 11:20Z for the #511 iOS build.
+  - iOS driver: Stream 3 on 0AE16FA0, then Stream 1 at about 11:50Z on F4DBD47E (shut down now).
+  - Stream 1 holds only emulator-5558 (slot 3).
+
+## Resume point history — 2026-09-26T09:21Z (batch 24 merged; batch 25 #499 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `dbd75332b`. Batch 24 [#489](https://github.com/WangPantopus/skinny-pantopus/pull/489) merged at 08:44:25Z. It carried #481 and #487 (S1), #482 (S2), and #483, #485, #486 and #488 (S3).
