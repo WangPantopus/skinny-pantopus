@@ -11,8 +11,9 @@
   | [#492](https://github.com/WangPantopus/skinny-pantopus/pull/492) | `5832003ea` | web Tasks map failure state | `3ca56cd6…` | green |
   | [#495](https://github.com/WangPantopus/skinny-pantopus/pull/495) | `cbb9e9d23` | iOS listing link identity | `dabd2e05…` | CI |
   | [#496](https://github.com/WangPantopus/skinny-pantopus/pull/496) | `efb0baa81` | backend Android views | `73edd0cf…` | CI |
+  | [#498](https://github.com/WangPantopus/skinny-pantopus/pull/498) | `ccbf84160` | web Save double click undid the save (listings, posts); backend toggle raced to 500 | `c595d69d…` | CI (batch 26) |
 
-- **Proposals for the user:** token refresh (stronger evidence); Snapshot rows; owner Message; buyer offer; **saved items unreachable (new)**.
+- **Proposals for the user:** token refresh (stronger evidence); Snapshot rows; owner Message; buyer offer; **saved items unreachable (new)**; **trades are a dead promise (new)**: the web "Open to trades" checkbox does nothing.
 
 ## Previous Stream 1 state — 2026-09-26T08:06Z
 
