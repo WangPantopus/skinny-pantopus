@@ -2,6 +2,16 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 07:40Z: S3-23 open as PR486
+
+- **[PR486](https://github.com/WangPantopus/skinny-pantopus/pull/486): open.** Web S3-23. Head `a1e25c026`, 3 files.
+  - Business Settings → Legal asked for a "file ID" from a file manager web doesn't have, and the nonprofit tab used `window.prompt`. Both are now file pickers.
+  - They make the same two hops as iOS and Android: `POST /api/files/upload` (business_verification, private), then `uploadVerificationEvidence` with the returned id.
+  - Verified with a refused upload and with synthetic success; the evidence call carries the uploaded id. DB unchanged.
+  - Bundle `20260926-stream3-web-verification-upload-r1`, MANIFEST.json SHA-256 `a4c45618908fe10075d415ab9cf31996505b3bf87028b0aabfa6167b66a96a4d`.
+  - The nonprofit tab can't render with the fixture, so it's checked by lint and tsc only. Its letters can unlock the 0% fee after admin review; this change adds no fee logic.
+- **S3-39 still reproduces in code:** the address step's "Request access" and "I'm in a new building" show "coming soon", and a failed verify keeps the spinner. The step needs address autocomplete, and providers are off in this runtime, so it's queued behind synthetic-data work.
+
 ## Update 2026-09-26 07:35Z: PR483 (S3-43) and PR485 (S3-48, S3-56) open; batch 22 merged (master `a916e6bd9`)
 
 - **Merged in batch 22** ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478), 07:13:40Z): #475 (S3-47) and #470 (S3-66). Batch 23 = [PR484](https://github.com/WangPantopus/skinny-pantopus/pull/484), carrying #479.
