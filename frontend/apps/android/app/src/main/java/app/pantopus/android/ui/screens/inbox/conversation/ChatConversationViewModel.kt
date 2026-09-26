@@ -10,6 +10,7 @@ import app.pantopus.android.data.ai.AIConversationSession
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatReactionSummary
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.resolvedText
@@ -1784,23 +1785,40 @@ class ChatConversationViewModel
         }
 
         /**
-         * Reactions don't change the message body — trigger a re-fetch so
-         * the server-canonical, viewer-relative counts (`reacted_by_me`)
-         * land in the projection. The event's `reactions` array carries no
-         * viewer state, so the refetch stays — but debounced (300ms) so a
-         * reaction burst collapses into a single fetch.
+         * The event's `reactions` carry each reaction's full `users` list; its
+         * `reacted_by_me` is the reactor's, so derive it for this viewer and
+         * patch the row in place. A full refetch here flipped the thread to a
+         * spinner and dropped older pages. Payloads without `users` still fall
+         * back to the debounced (300ms) refetch.
          */
         private fun handleReaction(json: JSONObject) {
             val id =
                 json.optString("message_id").takeIf { it.isNotEmpty() }
                     ?: json.optString("messageId").takeIf { it.isNotEmpty() } ?: return
             if (messages.none { it.id == id }) return
+            val summaries = json.optJSONArray("reactions")?.let(::viewerReactions)
+            if (summaries != null) {
+                applyReactions(id, summaries)
+                return
+            }
             reactionRefetchJob?.cancel()
             reactionRefetchJob =
                 viewModelScope.launch {
                     delay(REACTION_REFETCH_DEBOUNCE_MS)
                     fetch(initial = true)
                 }
+        }
+
+        /** This viewer's reaction summaries, or null when a reaction carries no `users` list. */
+        private fun viewerReactions(array: JSONArray): List<ChatReactionSummary>? {
+            val rows = (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+            if (rows.any { !it.has("users") }) return null
+            return rows.mapNotNull { row ->
+                val reaction = row.optString("reaction").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val users = row.optJSONArray("users")
+                val mine = users != null && (0 until users.length()).any { users.optJSONObject(it)?.optString("id") == currentUserId }
+                ChatReactionSummary(reaction = reaction, count = row.optInt("count"), reactedByMe = mine)
+            }
         }
 
         /**
