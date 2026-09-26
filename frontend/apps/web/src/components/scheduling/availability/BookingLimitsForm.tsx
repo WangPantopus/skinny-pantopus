@@ -2,14 +2,26 @@
 
 // B7 — Booking limits & notice rules. Interactive stepper/segmented controls per
 // the design (booking-limits-frames.jsx). The backend has no schedule-level limits
-// endpoint — limits live on the EVENT TYPE. The save action here posts to the event-
-// type layer, but we provide the interactive UI so the form matches the design's
-// StepperRow + SegmentRow idiom. A "Done" CTA is rendered by the parent page when
-// this tab is active.
+// endpoint — limits live on the EVENT TYPE. Like iOS and Android B7, this reads the
+// owner's first active event type and saves only the fields the user moved with
+// PUT /event-types/:id. There is no weekly cap field, so "Max per week" stays a
+// disabled placeholder (as on native).
 
-import { type ReactNode, useState } from "react";
-import { AlertCircle, Minus, Plus } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Minus, Plus, SlidersHorizontal } from "lucide-react";
 import clsx from "clsx";
+import * as api from "@pantopus/api";
+import type {
+  EventType,
+  EventTypeInput,
+  SchedulingOwnerRef,
+} from "@pantopus/types";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
+import { ShimmerBlock } from "@/components/ui/Shimmer";
+import { toast } from "@/components/ui/toast-store";
+import { decodeError } from "@/components/scheduling/decodeError";
 
 // ─── Primitives ─────────────────────────────────────────────────
 
@@ -20,6 +32,7 @@ function Stepper({
   max = 999,
   onChange,
   error,
+  disabled,
 }: {
   value: number;
   unit?: string;
@@ -27,13 +40,14 @@ function Stepper({
   max?: number;
   onChange: (next: number) => void;
   error?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-1">
       <button
         type="button"
         aria-label="Decrease"
-        disabled={value <= min}
+        disabled={disabled || value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
         className="flex h-7 w-7 items-center justify-center rounded-md border border-app-border bg-app-surface text-app-text-secondary hover:bg-app-hover disabled:opacity-40"
       >
@@ -55,7 +69,7 @@ function Stepper({
       <button
         type="button"
         aria-label="Increase"
-        disabled={value >= max}
+        disabled={disabled || value >= max}
         onClick={() => onChange(Math.min(max, value + 1))}
         className="flex h-7 w-7 items-center justify-center rounded-md border border-app-border bg-app-surface text-app-text-secondary hover:bg-app-hover disabled:opacity-40"
       >
@@ -81,6 +95,9 @@ function StepperRow({
   caption,
   error,
   errorMsg,
+  min,
+  max,
+  disabled,
   onChange,
 }: {
   label: string;
@@ -89,6 +106,9 @@ function StepperRow({
   caption?: string;
   error?: boolean;
   errorMsg?: string;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
   onChange: (next: number) => void;
 }) {
   return (
@@ -97,7 +117,15 @@ function StepperRow({
         <span className="flex-1 text-[13.5px] font-semibold tracking-tight text-app-text">
           {label}
         </span>
-        <Stepper value={value} unit={unit} onChange={onChange} error={error} />
+        <Stepper
+          value={value}
+          unit={unit}
+          min={min}
+          max={max}
+          onChange={onChange}
+          error={error}
+          disabled={disabled}
+        />
       </div>
       {error && errorMsg ? (
         <div className="mt-2 flex items-start gap-1.5 text-[10.5px] leading-tight text-app-error">
@@ -177,45 +205,160 @@ interface LimitsState {
   minNoticeHours: number;
   bookUpToDays: number;
   maxPerDay: number;
-  maxPerWeek: number;
   perPersonLimit: number;
   startTimes: StartOption;
 }
 
-const DEFAULTS: LimitsState = {
-  minNoticeHours: 4,
-  bookUpToDays: 60,
-  maxPerDay: 8,
-  maxPerWeek: 20,
-  perPersonLimit: 2,
-  startTimes: ":15",
+/** The design's weekly number; shown disabled until the backend has a weekly cap. */
+const WEEKLY_PLACEHOLDER = 20;
+
+const START_MINUTES: Record<StartOption, number> = {
+  ":00": 60,
+  ":30": 30,
+  ":15": 15,
 };
+
+/** An event type's limits as the controls show them; a null cap shows as 0. */
+function toLimits(et: EventType): LimitsState {
+  return {
+    minNoticeHours: Math.max(0, Math.round(et.min_notice_min / 60)),
+    bookUpToDays: Math.max(1, et.max_horizon_days),
+    maxPerDay: et.daily_cap ?? 0,
+    perPersonLimit: et.per_booker_cap ?? 0,
+    startTimes:
+      et.slot_interval_min === 60
+        ? ":00"
+        : et.slot_interval_min === 30
+          ? ":30"
+          : ":15",
+  };
+}
+
+/**
+ * Only the controls the user moved. The projection is lossy (90 min shows as
+ * 2 hours, a 20-min interval as every 15 min), so an untouched control must not
+ * be written back. 0 on a cap clears it.
+ */
+function changedFields(
+  limits: LimitsState,
+  loaded: LimitsState,
+): Partial<EventTypeInput> {
+  const patch: Partial<EventTypeInput> = {};
+  if (limits.minNoticeHours !== loaded.minNoticeHours)
+    patch.min_notice_min = limits.minNoticeHours * 60;
+  if (limits.bookUpToDays !== loaded.bookUpToDays)
+    patch.max_horizon_days = limits.bookUpToDays;
+  if (limits.maxPerDay !== loaded.maxPerDay)
+    patch.daily_cap = limits.maxPerDay > 0 ? limits.maxPerDay : null;
+  if (limits.perPersonLimit !== loaded.perPersonLimit)
+    patch.per_booker_cap =
+      limits.perPersonLimit > 0 ? limits.perPersonLimit : null;
+  if (limits.startTimes !== loaded.startTimes)
+    patch.slot_interval_min = START_MINUTES[limits.startTimes];
+  return patch;
+}
 
 // ─── Component ──────────────────────────────────────────────────
 
 export default function BookingLimitsForm({
-  onDone,
-  saving,
+  owner,
 }: {
-  onDone?: (limits: LimitsState) => Promise<void> | void;
-  saving?: boolean;
+  owner: SchedulingOwnerRef;
 }) {
-  const [limits, setLimits] = useState<LimitsState>(DEFAULTS);
+  const router = useRouter();
+  const [phase, setPhase] = useState<"loading" | "error" | "empty" | "ready">(
+    "loading",
+  );
+  const [eventType, setEventType] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [loaded, setLoaded] = useState<LimitsState | null>(null);
+  const [limits, setLimits] = useState<LimitsState | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(() => {
+    let alive = true;
+    setPhase("loading");
+    api.scheduling
+      .listEventTypes(owner)
+      .then(({ eventTypes }) => {
+        if (!alive) return;
+        // The list is in sort order; like iOS, edit the first active one.
+        const target = eventTypes.find((e) => e.is_active) ?? eventTypes[0];
+        if (!target) {
+          setPhase("empty");
+          return;
+        }
+        const shown = toLimits(target);
+        setEventType({ id: target.id, name: target.name });
+        setLoaded(shown);
+        setLimits(shown);
+        setPhase("ready");
+      })
+      .catch(() => {
+        if (alive) setPhase("error");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [owner]);
+
+  useEffect(() => load(), [load]);
+
+  if (phase === "loading")
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <ShimmerBlock key={i} className="h-16 rounded-2xl" />
+        ))}
+      </div>
+    );
+  if (phase === "error")
+    return <ErrorState message="Couldn't load these limits." onRetry={load} />;
+  if (phase === "empty" || !eventType || !loaded || !limits)
+    return (
+      <EmptyState
+        icon={SlidersHorizontal}
+        title="No event types yet"
+        description="Create an event type first. Booking limits and notice rules are set per event type."
+        actionLabel="Create event type"
+        onAction={() => router.push("/app/scheduling/event-types/new")}
+      />
+    );
 
   const set = <K extends keyof LimitsState>(k: K, v: LimitsState[K]) =>
-    setLimits((cur) => ({ ...cur, [k]: v }));
+    setLimits((cur) => (cur ? { ...cur, [k]: v } : cur));
 
   // Conflict: booking window shorter than minimum notice → no times will show.
-  const windowConflict =
-    limits.bookUpToDays > 0 &&
-    limits.bookUpToDays * 24 < limits.minNoticeHours;
+  const windowConflict = limits.bookUpToDays * 24 < limits.minNoticeHours;
 
-  const doneDisabled = saving || windowConflict;
+  const patch = changedFields(limits, loaded);
+  const doneDisabled =
+    saving || windowConflict || Object.keys(patch).length === 0;
+
+  const save = async () => {
+    if (doneDisabled) return;
+    setSaving(true);
+    try {
+      const res = await api.scheduling.updateEventType(eventType.id, patch, owner);
+      const shown = toLimits(res.eventType);
+      setLoaded(shown);
+      setLimits(shown);
+      toast.success("Limits updated.");
+    } catch (err) {
+      toast.error(decodeError(err).message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div
       className={clsx("space-y-3", saving && "pointer-events-none opacity-70")}
     >
+      <p className="px-0.5 text-[10px] font-bold uppercase tracking-widest text-app-personal">
+        Personal · {eventType.name}
+      </p>
       <p className="px-0.5 text-[11.5px] leading-relaxed text-app-text-secondary">
         Sensible defaults are set, so you usually don&apos;t need to touch
         these.
@@ -235,26 +378,31 @@ export default function BookingLimitsForm({
         caption="How far ahead people can book."
         error={windowConflict}
         errorMsg="Your booking window is shorter than your minimum notice, so no times will show."
+        min={1}
+        max={730}
         onChange={(v) => set("bookUpToDays", v)}
       />
       <StepperRow
         label="Max per day"
         value={limits.maxPerDay}
-        caption="Most bookings you'll take in a day."
+        caption="Most bookings you'll take in a day. 0 means no limit."
+        max={100}
         onChange={(v) => set("maxPerDay", v)}
       />
       {/* Max per week — present in every design frame (lines 151,173,201) */}
       <StepperRow
         label="Max per week"
-        value={limits.maxPerWeek}
+        value={WEEKLY_PLACEHOLDER}
         caption="Most bookings you'll take in a week."
-        onChange={(v) => set("maxPerWeek", v)}
+        disabled
+        onChange={() => undefined}
       />
       <StepperRow
         label="Per-person limit"
         value={limits.perPersonLimit}
         unit={limits.perPersonLimit === 1 ? "booking" : "bookings"}
-        caption="How many one person can hold at once."
+        caption="How many one person can hold at once. 0 means no limit."
+        max={20}
         onChange={(v) => set("perPersonLimit", v)}
       />
       <SegmentRow
@@ -264,18 +412,14 @@ export default function BookingLimitsForm({
         onChange={(v) => set("startTimes", v)}
       />
 
-      {/* Done / save CTA — shown inline below rows (parent page also surfaces one
-          in the sticky bar for the limits tab, mirroring the sheet Done button) */}
-      {onDone && (
-        <button
-          type="button"
-          disabled={doneDisabled}
-          onClick={() => void onDone(limits)}
-          className="w-full rounded-xl bg-app-personal-solid py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Done"}
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={doneDisabled}
+        onClick={() => void save()}
+        className="w-full rounded-xl bg-app-personal-solid py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+      >
+        {saving ? "Saving…" : "Done"}
+      </button>
     </div>
   );
 }
