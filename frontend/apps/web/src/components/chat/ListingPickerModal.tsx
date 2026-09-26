@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import type { Listing } from '@pantopus/types';
+import ErrorState from '@/components/ui/ErrorState';
 
 interface ListingPickerModalProps {
   open: boolean;
@@ -30,30 +31,45 @@ export default function ListingPickerModal({ open, onClose, onSelectListing, oth
   const [loadingTheirs, setLoadingTheirs] = useState(true);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Listing[]>([]);
+  // A failed read is not an empty list; say so and offer a retry.
+  const [mineFailed, setMineFailed] = useState(false);
+  const [theirsFailed, setTheirsFailed] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const loadMine = useCallback(() => {
+    setLoadingMine(true);
+    setMineFailed(false);
+    api.listings.getMyListings({ limit: 50 })
+      .then((res: Record<string, any>) => setMyListings((res?.listings || []) as Listing[]))
+      .catch(() => { setMyListings([]); setMineFailed(true); })
+      .finally(() => setLoadingMine(false));
+  }, []);
+
+  const loadTheirs = useCallback(() => {
+    if (!otherUserId) return;
+    setLoadingTheirs(true);
+    setTheirsFailed(false);
+    api.listings.getUserListings(otherUserId, { limit: 50 })
+      .then((res: Record<string, any>) => setTheirListings((res?.listings || []) as Listing[]))
+      .catch(() => { setTheirListings([]); setTheirsFailed(true); })
+      .finally(() => setLoadingTheirs(false));
+  }, [otherUserId]);
 
   useEffect(() => {
     if (!open) return;
     setQuery('');
     setSearchResults([]);
     setActiveTab('mine');
-    setLoadingMine(true);
-    api.listings.getMyListings({ limit: 50 })
-      .then((res: Record<string, any>) => setMyListings((res?.listings || []) as Listing[]))
-      .catch(() => setMyListings([]))
-      .finally(() => setLoadingMine(false));
+    loadMine();
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
+  }, [open, loadMine]);
 
   useEffect(() => {
-    if (!open || !otherUserId) { setTheirListings([]); setLoadingTheirs(false); return; }
-    setLoadingTheirs(true);
-    api.listings.getUserListings(otherUserId, { limit: 50 })
-      .then((res: Record<string, any>) => setTheirListings((res?.listings || []) as Listing[]))
-      .catch(() => setTheirListings([]))
-      .finally(() => setLoadingTheirs(false));
-  }, [open, otherUserId]);
+    if (!open || !otherUserId) { setTheirListings([]); setLoadingTheirs(false); setTheirsFailed(false); return; }
+    loadTheirs();
+  }, [open, otherUserId, loadTheirs]);
 
   useEffect(() => {
     if (!open) return;
@@ -62,23 +78,28 @@ export default function ListingPickerModal({ open, onClose, onSelectListing, oth
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  const runSearch = useCallback(async (text: string) => {
+    setSearching(true);
+    setSearchFailed(false);
+    try {
+      const res = await api.listings.searchListings({ q: text, limit: 30 });
+      setSearchResults(res?.listings || []);
+    } catch { setSearchResults([]); setSearchFailed(true); }
+    setSearching(false);
+  }, []);
+
   const handleSearch = useCallback((text: string) => {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!text.trim() || text.trim().length < 2) {
       setSearchResults([]);
       setSearching(false);
+      setSearchFailed(false);
       return;
     }
     setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await api.listings.searchListings({ q: text.trim(), limit: 30 });
-        setSearchResults(res?.listings || []);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 400);
-  }, []);
+    debounceRef.current = setTimeout(() => { void runSearch(text.trim()); }, 400);
+  }, [runSearch]);
 
   const handleSelect = (listing: Listing) => {
     onSelectListing({
@@ -96,6 +117,7 @@ export default function ListingPickerModal({ open, onClose, onSelectListing, oth
   const isSearchMode = query.trim().length >= 2;
   const currentList = isSearchMode ? searchResults : activeTab === 'mine' ? myListings : theirListings;
   const isLoading = isSearchMode ? searching : activeTab === 'mine' ? loadingMine : loadingTheirs;
+  const loadFailed = isSearchMode ? searchFailed : activeTab === 'mine' ? mineFailed : theirsFailed;
 
   if (!open) return null;
 
@@ -170,6 +192,12 @@ export default function ListingPickerModal({ open, onClose, onSelectListing, oth
             <div className="flex items-center justify-center py-16">
               <div className="text-sm text-app-muted">Loading...</div>
             </div>
+          ) : loadFailed ? (
+            <ErrorState
+              title={isSearchMode ? "Couldn't search listings" : activeTab === 'mine' ? "Couldn't load your listings" : "Couldn't load their listings"}
+              message="Check your connection and try again."
+              onRetry={isSearchMode ? () => { void runSearch(query.trim()); } : activeTab === 'mine' ? loadMine : loadTheirs}
+            />
           ) : currentList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-app-muted">
               <span className="text-3xl mb-2">🏷️</span>
