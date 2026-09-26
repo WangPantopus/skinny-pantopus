@@ -81,24 +81,14 @@ struct SchedulingSettingsScreen: View {
     private var automationGroup: some View {
         SettingsGroup(title: "Automation", accent: accent, helper: "Reminders go out automatically before each booking.") {
             // Subtitles describe each row, as web does; this screen loads no
-            // workflow, template or channel data, so it states no counts.
+            // channel data, so it states no counts.
             SettingsRow(
                 label: "Default reminders",
                 sub: model.remindersValue,
                 trailing: model.remindersValue == nil ? .chipChevron(SettingsChip(text: "Off", tone: .warning)) : .chevron
             ) { model.openReminders() }
-            SettingsDivider()
-            SettingsRow(
-                label: "Workflows & follow-ups",
-                sub: "Automate messages around bookings",
-                trailing: .chevron
-            ) { model.openWorkflows() }
-            SettingsDivider()
-            SettingsRow(
-                label: "Message templates",
-                sub: "Reusable booking messages",
-                trailing: .chevron
-            ) { model.openTemplates() }
+            // Workflows and Message templates stay hidden until something sends
+            // them: nothing runs a saved workflow or sends a template yet.
             SettingsDivider()
             SettingsRow(
                 label: "Booking notifications",
