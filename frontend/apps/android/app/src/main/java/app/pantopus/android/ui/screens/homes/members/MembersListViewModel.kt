@@ -57,6 +57,13 @@ import javax.inject.Inject
 /** Nav arg key for the home id consumed via [SavedStateHandle]. */
 const val MEMBERS_LIST_HOME_ID_KEY = "homeId"
 
+/** Optional nav arg: the tab a notification link opens (Requests). */
+const val MEMBERS_LIST_TAB_KEY = "tab"
+
+/** Requests falls back to Members once the load shows the viewer can't review them. */
+private fun initialMembersTab(savedStateHandle: SavedStateHandle): String =
+    savedStateHandle.get<String>(MEMBERS_LIST_TAB_KEY)?.takeIf { it == MembersTab.REQUESTS } ?: MembersTab.MEMBERS
+
 /** Stable tab ids — exposed for the screen + tests. */
 object MembersTab {
     const val MEMBERS = "members"
@@ -153,7 +160,7 @@ class MembersListViewModel
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
 
-        private val _selectedTab = MutableStateFlow(MembersTab.MEMBERS)
+        private val _selectedTab = MutableStateFlow(initialMembersTab(savedStateHandle))
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
 
         private var occupants: List<OccupantDto> = emptyList()
