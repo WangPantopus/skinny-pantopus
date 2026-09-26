@@ -1,6 +1,21 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T11:48Z (batch 26 merged; batch 27 #517 queued)
+## CURRENT RESUME POINT — 2026-09-26T12:18Z (batch 27 merged; batch 28 pending CI)
+
+- **Integration (Stream 1 queue):**
+  - Master is `2e053fe9c`. Batch 27 [#517](https://github.com/WangPantopus/skinny-pantopus/pull/517) merged at 12:16:08Z. It carried #509 (S1 decision 1A), #510 (S1 decisions 3A/4A), #511 (S1 iOS offer send), #514 (S1 web Discover SSR), #512 (S2 decision 1: recoverable delete, migration `20260926100000`, nightly purge) and #516 (S3 web chat scroll/media).
+  - **Batch 28 candidates (all reviewed; bundles verified):**
+    - #515 (S3 native chat media, green, seal `a4aba3a9…`). GitHub shows CONFLICTING (criss-cross history via #502), but `git merge-tree` onto master is clean with exit 0.
+    - #518 (S1 Manage Train, CI running, `ad6cc465…`).
+    - #519 (S2 guest-pass entry gating, CI running, `030e8e4b…`).
+- **User decisions:** 1A–6A are all merged (web 2A/5A/6A in batch 26; native 1A/3A/4A in batch 27). The native accept-a-counter proposal is still awaiting the user.
+- **Stream 1 iOS parity sweep (12:00–12:06Z):**
+  - PASS: Pulse feed failure + retry, post detail 500 + 404, Hub Discover card failure + retry, Tasks feed failure, bid without payout onboarding (400, inline, no writes).
+  - Low candidate: the Support Trains scope with no device location or after a failed load claims "none nearby".
+  - Report post: not run (would need a non-alice post fixture).
+- **Slots:** heavy is free or in peers' queue (Stream 3 after Stream 2). The iOS driver and slot 1 are free. Stream 1 holds only emulator-5558 (slot 3).
+
+## Resume point history — 2026-09-26T11:48Z (batch 26 merged; batch 27 #517 queued)
 
 - **Integration (Stream 1 queue):**
   - Master is `9ac4a7cdf`. Batch 26 [#513](https://github.com/WangPantopus/skinny-pantopus/pull/513) merged at 11:37:01Z. It carried #498, #500, #501, #504, #505 and #506 (S1, decisions 2A/5A/6A), #502, #507 and #508 (S3), and #503 (S2 decision 4).
