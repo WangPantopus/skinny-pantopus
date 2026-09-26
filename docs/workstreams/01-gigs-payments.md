@@ -1,6 +1,15 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — 2026-09-26T02:09Z
+## CURRENT STREAM 1 STATE — 2026-09-26T02:52Z
+
+- **Merged:** #454, web My bids / My tasks failure states (batch 18, #456).
+- **Open:** [#458](https://github.com/WangPantopus/skinny-pantopus/pull/458) `5975b918a`, native. My listings counts; exact offer and bid amounts; drawer name → profile (user-approved); "just posted" by age (user-approved).
+  - Afters pass on both apps: APK `97146705…`, iOS dylib `9528c7c5…`.
+  - Bundle `20260926-stream1-native-listings-offers-drawer-r1`, MANIFEST `a0c352a6…`. Fixtures removed exactly.
+- **Reviewed:** #457 (approved; in batch 19 #459) and #453 (in batch 19). #455: manifest verified, finishing on its green head.
+- **Proposal for the user:** the owner's Message on their own listing (see the resume point).
+
+## Previous Stream 1 state — 2026-09-26T02:09Z
 
 - **Merged in batch 17 (#452):** #448, task detail bid count.
 - **Committed, not yet pushed:** `claude/stream1-native-my-listings-counts` `8531c94e9` on `8a9a97757` (two commits, 7 files, iOS and Android).

@@ -1,6 +1,34 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-26T02:09Z (batch 17 merged; next native batch #453 + Stream 3 profile-share + Stream 1 native fixes)
+## CURRENT RESUME POINT — 2026-09-26T02:52Z (batches 17–18 merged; batch 19 #459 queued; #455 + #458 next)
+
+- **Integration (Stream 1 queue):**
+  - Master is `564bf220d`.
+  - Batch 17 [#452](https://github.com/WangPantopus/skinny-pantopus/pull/452) (#448, #450, #451) merged at 02:08:04Z. Batch 18 [#456](https://github.com/WangPantopus/skinny-pantopus/pull/456) (#454, web) merged at 02:36:50Z.
+  - **Batch 19 [#459](https://github.com/WangPantopus/skinny-pantopus/pull/459)** = #457 (Stream 2 Mail Party + bundle privacy, backend, user-approved security fix) + #453 (Stream 2 Home notification links). Tip `8a795e7c8` on `564bf220d`. It's queued, and the runner started at about 02:50Z.
+- **Next batch (20), once CI is green on each exact head:**
+  - Stream 3 [#455](https://github.com/WangPantopus/skinny-pantopus/pull/455) `d91bd0819` (S3-50/53/67), bundle MANIFEST `23063f8a…`.
+  - Stream 1 [#458](https://github.com/WangPantopus/skinny-pantopus/pull/458) `5975b918a` (see below).
+  - Stream 2's S2-03 PR when it's ready.
+  - The merge-tree chain master + #457 + #453 + #455 + #458 is clean.
+- **Stream 1 [#458](https://github.com/WangPantopus/skinny-pantopus/pull/458)** (native, 4 commits, 20 files; bundle `20260926-stream1-native-listings-offers-drawer-r1`, MANIFEST `a0c352a6…`):
+  - My listings: no counts after a failed load, and a tab switch keeps the error.
+  - Offers/bids: exact amounts. $4.50 had shown as $4 on Android and $5 on iOS.
+  - **User-approved 2026-09-26:** the drawer pill's name opens the profile (You); Switch still opens the Identity Center.
+  - **User-approved 2026-09-26:** "just posted" only under an hour.
+  - Befores and afters pass on both apps, and the fixtures were removed exactly.
+- **Stream 1 inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`.
+  - FIXED and merged: web My bids / My tasks failure states (#454).
+  - New proposal for the user: the owner's own listing detail offers **Message**, which opens a chat with themselves. The documented dock is "Message" + "View offers"; web shows Message Seller only to non-owners.
+  - Candidate, not yet traced: iOS ignores a post deep link while another post's detail is open.
+  - Orphan web pages (no callers): `/app/offers`, `/app/saved-listings`, `/app/gigs/saved`, `/app/my-gigs-v2`, `/app/marketplace/[id]/messages`.
+- **Slots and devices:**
+  - Heavy: Stream 2 since 02:44:40Z (S2-03).
+  - iOS driver: free after Stream 1's 02:47:09Z release; Stream 2 is next (6F914A30).
+  - Stream 1: emulator-5558 (slot 3); F4DBD47E is shut down. The Claude app's simulator panel rebooted F4 three times after shutdowns, and neither peer's calls named it.
+- **Side effects awaiting the user:** Stream 3's LocalProfile-on-read (unchanged).
+
+## Resume point history — 2026-09-26T02:09Z (batch 17 merged; next native batch #453 + Stream 3 profile-share + Stream 1 native fixes)
 
 - **Integration (Stream 1 queue):**
   - Master is `8a9a97757`. Batch 17 [#452](https://github.com/WangPantopus/skinny-pantopus/pull/452) merged #448, #450 and #451 at 02:08:04Z.
