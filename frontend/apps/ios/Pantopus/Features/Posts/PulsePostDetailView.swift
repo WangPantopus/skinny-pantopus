@@ -303,6 +303,7 @@ public struct PulsePostDetailLoadedContent: View {
                     isSending: isSendingComment,
                     onSendTap: onSendTap,
                     comments: detail.comments,
+                    postedRecently: detail.postedWithinHour,
                     hiddenReplyCount: detail.hiddenReplyCount,
                     onShowMoreReplies: onShowMoreReplies,
                     replyingToName: replyingToName,

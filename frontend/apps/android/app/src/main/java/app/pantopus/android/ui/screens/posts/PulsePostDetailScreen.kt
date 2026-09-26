@@ -393,6 +393,7 @@ fun PulsePostDetailLoadedContent(
                 isSending = isSending,
                 onSendTap = onSendTap,
                 comments = content.comments,
+                postedRecently = content.postedWithinHour,
                 hiddenReplyCount = content.hiddenReplyCount,
                 onShowMoreReplies = onShowMoreReplies,
                 onCommentAvatarTap = onOpenProfile,
