@@ -16,7 +16,7 @@
 //  Tabs mirror RN's buckets exactly:
 //    Open      → status `suggested` | `open`
 //    Scheduled → status `scheduled` | `in_progress`
-//    History   → status `completed` | `dismissed`
+//    History   → status `resolved` | `canceled` (the server's `HomeIssue.status`)
 //
 
 // swiftlint:disable type_body_length
@@ -203,15 +203,15 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Dismiss — RN `maintenance.tsx:75` sends `status: 'dismissed'` after
-    /// a destructive confirm.
+    /// Dismiss after a destructive confirm. The server stores a dismissed
+    /// issue as `canceled`; it refuses RN's `dismissed`.
     func dismissIssue(issueId: String) async {
         do {
             _ = try await api.request(
                 HomeIssuesEndpoints.update(
                     homeId: homeId,
                     issueId: issueId,
-                    request: .status("dismissed")
+                    request: .status("canceled")
                 )
             ) as HomeIssueResponse
             await fetch()
@@ -318,7 +318,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
                     variant: .primary,
                     identifier: "homeIssues.row_\(issueId).complete"
                 ) { [weak self] in
-                    Task { @MainActor in await self?.updateStatus(issueId: issueId, status: "completed") }
+                    Task { @MainActor in await self?.updateStatus(issueId: issueId, status: "resolved") }
                 }
             )
         case .completed, .dismissed, .unknown:
@@ -417,7 +417,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
         case "scheduled": .scheduled
         case "in_progress": .inProgress
         case "completed", "resolved": .completed
-        case "dismissed": .dismissed
+        case "dismissed", "canceled": .dismissed
         default: .unknown
         }
     }
