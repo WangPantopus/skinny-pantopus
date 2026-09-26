@@ -1,6 +1,6 @@
 # Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
-## CURRENT RESUME — Stream 2 handoff, updated 2026-09-26T22:35Z (read this first)
+## CURRENT RESUME — Stream 2 handoff, updated 2026-09-26T22:48Z (read this first)
 
 **Who owns what.**
 - **Stream 2 (independent peer):** Home, residency, Place, Home intelligence, records, bills, Mail/guests and the related Support-train UX, on the real web app, iOS simulator and Android emulator.
@@ -13,6 +13,7 @@
 - **Open Stream 2 PRs:** [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535) (below) and [#538](https://github.com/WangPantopus/skinny-pantopus/pull/538) (decision 2a security fix, §2a) and [#539](https://github.com/WangPantopus/skinny-pantopus/pull/539) (decision 2b privacy fix, stacked on #535, §2b). The session continued after the handoff at the user's request.
   - #535 and #538 are in Stream 1's batch 32, [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), queued at 22:35:20Z (tip `543315762`, order #538, #535, #536, #537). All four heads showed CI OK at 22:34:37Z.
   - #539 goes in batch 33 once its CI is green. Stream 1 reviewed it and verified its bundle at ~22:35Z. A simulated chain of master + batch 32 + #539 merges clean.
+  - [#541](https://github.com/WangPantopus/skinny-pantopus/pull/541) (web-only copy, §3 item 4) is for batch 33 too: head `c78e5087e` on `f885e0623`, bundle `20260926-stream2-docs-empty-copy-r1`.
   - Native Add guest truth fixes; branch `claude/stream2-add-guest-truth`, head `89be05af7`, worktree `/private/tmp/pantopus-stream2-add-guest`.
   - CI was running at 21:55Z (4 pass / 5 skipped / 3 pending).
   - Stream 1 already has the details and puts it in the next batch once green. If CI fails, fix it on the same branch and re-verify.
@@ -95,7 +96,7 @@
    - Any fix touches the owner-identity privacy boundary, so propose it to the user first.
 2. **Unlinked web page `/app/homes/[id]/members/add-guest`.** It still fakes success ("<name> has been added as a guest", no API). Nothing links to it since #528. Proposal: remove it or redirect it (ask first; it removes a page).
 3. **Native Dismiss confirm.** It says "It moves out of your mailbox…", but for a household letter it's removed for everyone who can see it (restorable). Accurate wording needs a server signal for "others can see it" (`homeMailVisible`), so it's parked.
-4. **Web Documents empty state.** It says "Upload documents from the home dashboard", but the web has no document upload (native only). Copy follow-up.
+4. **Web Documents empty state. DONE → [#541](https://github.com/WangPantopus/skinny-pantopus/pull/541).** It said "Upload documents from the home dashboard", but the web has no document upload (native only). It now reads "Documents added in the Pantopus app on your phone show up here". Verified before and after on the real page; the dashboard check found no upload control.
 5. **`homeListService.checked()`** swallows the underlying error. One transient `GET /api/homes/primary` 503 `HOME_LIST_UNAVAILABLE` for member B; 120 concurrent requests didn't reproduce it. Logging gap only.
 6. **Member web pages without permission.** They now say "could not be loaded" (#529). Gating their sidebar/Settings entries by permission would be optional polish.
 7. **Members → Guests tab vs guest passes (candidate, UX; reproduced on iOS 22:24Z; Android code is the same).**
@@ -119,8 +120,10 @@
   - Backend 18143 runs the code it loaded at its 22:04Z start: the `09ee447b8` tree (master `f885e0623` + #538). Next 18144 hot-reloads, so it serves the main worktree's current tree.
 - **Main worktree:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss`.
   - It's a local build branch, never a PR. To serve or build a PR's tree: `git restore --source=<commit> --staged --worktree -- . ':!.claude/launch.json'`, then `git diff --cached --quiet <commit>`, then commit "build: tree = …".
-  - It currently equals #539's `140d67668` tree (build commit `f0d60dda0`, base `448ee8b4a`; batch 31 changed no backend and no Home/guest web files). Leave its `.claude/launch.json` local change alone.
-- **PR worktrees:** `/private/tmp/pantopus-stream2-*` has one worktree per PR. Open: `add-guest` (#535), `residency-guest` (#538), `add-guest-sections` (#539); the rest are merged. Never remove worktrees; create new ones from `origin/master`.
+  - It currently equals #541's `c78e5087e` tree (build commit `a64834f97`, on master `f885e0623`). The #539 native builds on the devices came from `140d67668`. Leave its `.claude/launch.json` local change alone.
+- **PR worktrees:** `/private/tmp/pantopus-stream2-*`. Open: `add-guest` (#535), `residency-guest` (#538), `add-guest-sections` (#539). #541 has no worktree: it was built with git plumbing to save disk.
+  - At the user's request, Stream 3 removed the 18 merged Stream 2 worktrees at ~22:46Z (plain `git worktree remove`; branches kept). Stream 2 cleared this after checking each was clean and merged and that nothing used it.
+  - Two old kit probe tools that required those worktrees are marked historical. Never remove worktrees; create new ones from `origin/master`.
 - **Slots:** Stream 2 keeps device slot 2 (emulator-5556). It holds no heavy slot and no iOS driver.
   - Heavy is `/private/tmp/pantopus-tools/heavy-slot.sh`; devices are `/private/tmp/pantopus-tools/device-slot.sh` (release by exact owner prefix, e.g. `release "stream2: iOS sim 6F914A30"`).
   - Get an explicit handoff from peers before taking heavy or the iOS driver, and release right after use. The kit's newest `heavy-window-addguest.sh` releases heavy itself via a trap; copy that.
@@ -134,6 +137,7 @@
 | `20260926-stream2-base-correction-r1` | `8eac3d5fc1ef71a3…` | 2 |
 | `20260926-stream2-certified-statuses-r1` | `84461224f16b4811…` | 109 |
 | `20260926-stream2-d1-refresh-recheck-r1` | `20b9ee94cf4fd4b3…` | 39 |
+| `20260926-stream2-docs-empty-copy-r1` | `d88f840d751a646b…` | 11 |
 | `20260926-stream2-guest-pass-entry-r1` | `030e8e4bac17dc27…` | 46 |
 | `20260926-stream2-guest-pass-link-r1` | `5a22c81702c13ec2…` | 81 |
 | `20260926-stream2-home-docs-r1` | `9fc992ffcec64101…` | 41 |
@@ -179,6 +183,14 @@
 ## Status log (newest first; each block is the state at its time)
 
 _Previous header (2026-09-25):_ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
+
+**Stream 2 — 2026-09-26 22:48Z (#541 web Documents empty-state copy; worktree cleanup)**
+
+- **#541:** the web Documents empty state no longer points to a dashboard upload the web doesn't have.
+  - Head `c78e5087e` on `f885e0623`. Bundle `20260926-stream2-docs-empty-copy-r1`.
+  - Reported to Stream 1 for batch 33.
+- **Worktrees:** Stream 3 removed the 18 merged Stream 2 worktrees at the user's request (~22:46Z), after Stream 2 confirmed that none was needed. Runtime 18142/18143/18144 was unaffected (health 200).
+- **F01 note:** every Place `money_signals` section is `unavailable` on the isolated runtime. The bill benchmark needs ≥10 opted-in households per geohash and bill months, so F01 needs a synthetic cohort (a fixture decision) before it can be verified locally.
 
 **Stream 2 — 2026-09-26 22:35Z (user decisions 2a and 2b done: #538 security, #539 privacy; base-label correction)**
 
