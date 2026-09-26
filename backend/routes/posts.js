@@ -166,7 +166,8 @@ const SAFETY_KIND_TO_DB = {
   other: 'public_safety',
 };
 
-const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegram|preview|fetch|http|curl|wget|python|java\/|go-http|axios|node-fetch|postman/i;
+// `(?<!ok)http`: the Android app's client is OkHttp ("okhttp/4.x"), a person, not a bot.
+const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegram|preview|fetch|(?<!ok)http|curl|wget|python|java\/|go-http|axios|node-fetch|postman/i;
 
 function toDbSafetyKind(kind) {
   return kind ? (SAFETY_KIND_TO_DB[kind] || kind) : null;

@@ -1366,7 +1366,8 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
 
 
 // Common bot user-agent patterns
-const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegram|preview|fetch|http|curl|wget|python|java\/|go-http|axios|node-fetch|postman/i;
+// `(?<!ok)http`: the Android app's client is OkHttp ("okhttp/4.x"), a person, not a bot.
+const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegram|preview|fetch|(?<!ok)http|curl|wget|python|java\/|go-http|axios|node-fetch|postman/i;
 
 /**
  * GET /api/listings/:id
