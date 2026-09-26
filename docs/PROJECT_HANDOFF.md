@@ -1,6 +1,37 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-25T23:48Z (batches 11–13 and 15 merged; native batch 14 forming)
+## CURRENT RESUME POINT — 2026-09-26T01:29Z (batches 11–16 merged; next native batch #448/#450/#451)
+
+- **Integration (Stream 1 queue):**
+  - Master is `8f1a59f58`.
+  - Merged today:
+    - batch 11 [#431](https://github.com/WangPantopus/skinny-pantopus/pull/431) (#427);
+    - batch 12 [#434](https://github.com/WangPantopus/skinny-pantopus/pull/434) (#425, #432, #433);
+    - batch 13 [#438](https://github.com/WangPantopus/skinny-pantopus/pull/438) (#435, #437);
+    - batch 15 [#442](https://github.com/WangPantopus/skinny-pantopus/pull/442) (#440, #441);
+    - batch 16 [#446](https://github.com/WangPantopus/skinny-pantopus/pull/446) (#443);
+    - batch 14 [#449](https://github.com/WangPantopus/skinny-pantopus/pull/449) (#436, #439, #444, #445, #447), at 01:29:12Z.
+  - The queue is empty and the runner has stopped. Reviewed heads are in `/private/tmp/pantopus-tools/merge-queue/reviewed-heads.txt`.
+- **Next native batch (review each head on `8f1a59f58` once green):**
+  - Stream 1 [#448](https://github.com/WangPantopus/skinny-pantopus/pull/448) `5ace21ffc`: the task detail showed "No bids yet / Be the first to bid" to non-owners on tasks with bids. The backend detail now returns `bid_count`, and the native callout needs a count of 0. Afters PASS on both apps.
+  - Stream 3 [#450](https://github.com/WangPantopus/skinny-pantopus/pull/450) `bfd5e2648` (placeholder exits).
+  - Stream 2 [#451](https://github.com/WangPantopus/skinny-pantopus/pull/451) `4f4c3b396` (S2-16).
+  - After that: Stream 2's Home-links branch (S2-06/10/17), rebased on `8f1a59f58`.
+- **Stream 1 inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`.
+  - Web: Hub, wallet, bid-without-onboarding and buyer offer create/withdraw PASS.
+  - FIXED: #432, #433, #437, #441, #447, #439 (native tab bar, C-17 Tasks, My posts paging) and #448.
+  - REUSE (PR426, files unchanged): S1-09 native and S1-25.
+  - Proposals awaiting the user:
+    - iOS homeowners cannot reach You: the drawer pill should open the profile.
+    - "just posted" should depend on post age.
+  - BOUNDARY: posting a task (Mapbox), and the accept/pay lifecycle (only credential-less owners have open tasks).
+- **Slots and devices:**
+  - Heavy slot: Stream 2 (Home-links pre-check build).
+  - iOS driver: free after Stream 2's 01:18Z release.
+  - Stream 1: emulator-5558 at nice 0 (zsh `BG_NICE` had niced a `&` launch; relaunch with `setopt NO_BG_NICE`), and simulator F4DBD47E shut down.
+- **Side effects awaiting the user:** Stream 3 reports that `GET /api/identity-center` creates a LocalProfile row on read (ensureLocalProfile). One Solo row is recorded, and its cleanup awaits approval.
+
+## Resume point history — 2026-09-25T23:48Z (batches 11–13 and 15 merged; native batch 14 forming)
 
 - **Integration (Stream 1 queue):**
   - Master is `243279b76`.

@@ -1,6 +1,19 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT STREAM 1 STATE — September 25, 2026, 22:58 UTC
+## CURRENT STREAM 1 STATE — 2026-09-26T01:29Z
+
+- **Merged since the 22:58 note:**
+  - #439 (native Android tab bar on child screens, C-17 Tasks chip during load, My posts paging past 50);
+  - #441 (web My listings counts and failure state);
+  - #447 (web Listing offers failure state).
+- **Open:** #448, task detail bid count (backend + both apps; afters PASS; bundle `20260926-stream1-gig-detail-bid-count-r1`).
+- **Verified PASS:**
+  - web wallet failure states;
+  - web bid refused without payout onboarding (no writes);
+  - web buyer offer create/withdraw, with exact cleanup.
+- **REUSE (PR426 files unchanged):** S1-09 native and S1-25. S1-22 passes by source.
+
+## Previous Stream 1 state — September 25, 2026, 22:58 UTC
 
 Peer session; the hub [README](README.md) has the queue and batch state.
 
