@@ -350,6 +350,8 @@ export default function MarketplacePage() {
   const loadingMore = browseQuery.isFetchingNextPage;
   const discoverData = discoverQuery.data ?? null;
   const visibleListingCount = Math.max(totalInBounds, browseListings.length);
+  // A pending or failed first read has no count: it isn't "0 listings".
+  const listingCountKnown = browseQuery.isSuccess || browseListings.length > 0;
   const radiusSuggestionEnabled =
     isGridView &&
     !isDiscovery &&
@@ -776,7 +778,7 @@ export default function MarketplacePage() {
               userLocation={userLocation}
               onOpenCategoryModal={() => setShowCategoryModal(true)}
               onOpenCreateModal={() => setShowCreateModal(true)}
-              totalCount={visibleListingCount}
+              totalCount={listingCountKnown ? visibleListingCount : null}
               onSave={handleSave}
               nearestActivityCenter={nearestActivityCenter}
             />
@@ -920,9 +922,11 @@ export default function MarketplacePage() {
         {!isDiscovery && (
           <>
             {/* Snapshot card */}
-            <div className="mb-6">
-              <MarketplaceSnapshotCard inView={marketplaceSnapshot.inView} newToday={marketplaceSnapshot.newToday} urgentDeadlines={marketplaceSnapshot.urgentDeadlines} myPendingOffers={marketplaceSnapshot.myPendingOffers} />
-            </div>
+            {listingCountKnown && (
+              <div className="mb-6">
+                <MarketplaceSnapshotCard inView={marketplaceSnapshot.inView} newToday={marketplaceSnapshot.newToday} urgentDeadlines={marketplaceSnapshot.urgentDeadlines} myPendingOffers={marketplaceSnapshot.myPendingOffers} />
+              </div>
+            )}
 
             {loading && gridListings.length === 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
