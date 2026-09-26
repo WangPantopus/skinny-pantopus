@@ -37,9 +37,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 
 function homeLatLng(home) {
+  // Number(null) is 0, so missing coordinates would otherwise read as 0,0.
+  if (home.map_center_lat == null || home.map_center_lng == null
+    || String(home.map_center_lat).trim() === '' || String(home.map_center_lng).trim() === '') return null;
   const lat = Number(home.map_center_lat);
   const lng = Number(home.map_center_lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
   return null;
 }
 
