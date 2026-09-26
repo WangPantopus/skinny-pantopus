@@ -10,7 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 /**
- * N04 — this page lists two separate existing block contracts:
+ * N04 — this page lists three separate existing block contracts:
  *  - `UserBlock` via `GET /api/users/blocked` (`backend/routes/blocks.js:138`),
  *    written by the profile Block action and read by
  *    `backend/services/blockService.js` to deny direct messages. Lifted by
@@ -18,8 +18,12 @@ import { confirmStore } from '@/components/ui/confirm-store';
  *  - `Relationship.status = 'blocked'` via `GET /api/relationships/blocked`,
  *    the trust-graph block this page has always shown. Lifted by
  *    `DELETE /api/relationships/:id`.
+ *  - `UserProfileBlock` via `GET /api/privacy/blocks` (`backend/routes/privacy.js:154`),
+ *    the Identity Firewall's scoped blocks (full / search / business context).
+ *    Lifted by `DELETE /api/privacy/blocks/:blockId`. iOS lists these with
+ *    `UserBlock` on one screen too; Advanced Privacy links here.
  * They stay separate tables with separate scopes; this page is the only
- * surface that lifts either, so each row carries its own origin.
+ * surface that lifts any of them, so each row carries its own origin.
  */
 type BlockedEntry = {
   /** Row key, and the id the relationship unblock takes. */
@@ -29,6 +33,16 @@ type BlockedEntry = {
   avatarUrl?: string;
   /** Set for a `UserBlock` row — the id `DELETE /api/users/:id/block` takes. */
   personalUserId?: string;
+  /** Set for a `UserProfileBlock` row — the id `DELETE /api/privacy/blocks/:id` takes. */
+  privacyBlockId?: string;
+  /** What a scoped block covers ("Search block"), shown next to the handle. */
+  scopeLabel?: string;
+};
+
+const BLOCK_SCOPE_LABELS: Record<string, string> = {
+  full: 'Full block',
+  search_only: 'Search block',
+  business_context: 'Business context',
 };
 
 function BlockedContent() {
@@ -54,15 +68,17 @@ function BlockedContent() {
     const revision = ++request.current;
     if (!getAuthToken()) { setLoading(false); return; }
     // Preserve usable rows while distinguishing partial results from emptiness.
-    const [personalRes, relRes] = await Promise.allSettled([
+    const [personalRes, relRes, scopedRes] = await Promise.allSettled([
       api.blocks.getBlockedUsers(),
       api.relationships.getBlockedUsers(),
+      api.privacy.getBlocks(),
     ]);
 
     if (!current() || revision !== request.current) return;
     const personalLoaded = personalRes.status === 'fulfilled' && Array.isArray(personalRes.value?.blocked);
     const relationshipsLoaded = relRes.status === 'fulfilled' && Array.isArray(relRes.value?.blocked);
-    setLoadError(!personalLoaded || !relationshipsLoaded);
+    const scopedLoaded = scopedRes.status === 'fulfilled' && Array.isArray(scopedRes.value?.blocks);
+    setLoadError(!personalLoaded || !relationshipsLoaded || !scopedLoaded);
     setLoading(false);
 
     const personal: BlockedEntry[] =
@@ -96,8 +112,21 @@ function BlockedContent() {
           )
         : [];
 
+    const scoped: BlockedEntry[] =
+      scopedRes.status === 'fulfilled' && scopedLoaded
+        ? scopedRes.value.blocks.map((b) => ({
+            // Prefixed: this key must not be mistaken for a relationship id.
+            id: `privacy-${b.id}`,
+            name: b.blocked?.name || b.blocked?.username || 'Unknown',
+            username: b.blocked?.username || undefined,
+            avatarUrl: b.blocked?.profile_picture_url || undefined,
+            privacyBlockId: b.id,
+            scopeLabel: BLOCK_SCOPE_LABELS[b.block_scope] || b.block_scope,
+          }))
+        : [];
+
     // Personal blocks lead — they are the ones that gate direct messages.
-    setBlocked([...personal, ...relationships]);
+    setBlocked([...personal, ...relationships, ...scoped]);
   }, [captureScope]);
 
   useEffect(() => {
@@ -137,6 +166,8 @@ function BlockedContent() {
       // Each row is lifted through its own contract.
       if (entry.personalUserId) {
         await api.blocks.unblockUser(entry.personalUserId);
+      } else if (entry.privacyBlockId) {
+        await api.privacy.removeBlock(entry.privacyBlockId);
       } else {
         await api.relationships.unblock(entry.id);
       }
@@ -198,7 +229,11 @@ function BlockedContent() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-app-text truncate">{name}</p>
-                  {username && <p className="text-xs text-app-text-secondary">@{username}</p>}
+                  {(username || entry.scopeLabel) && (
+                    <p className="text-xs text-app-text-secondary">
+                      {[username && `@${username}`, entry.scopeLabel].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                 </div>
                 <button onClick={() => handleUnblock(entry)} disabled={!!unblocking}
                   className="px-4 py-2 border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 disabled:opacity-50 transition min-w-[80px] flex items-center justify-center">

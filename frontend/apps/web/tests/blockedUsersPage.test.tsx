@@ -10,6 +10,7 @@ jest.mock('@pantopus/api', () => ({
   AUTH_SESSION_CHANGE_KEY: 'auth-change',
   blocks: { getBlockedUsers: jest.fn(), unblockUser: jest.fn() },
   relationships: { getBlockedUsers: jest.fn(), unblock: jest.fn() },
+  privacy: { getBlocks: jest.fn(), removeBlock: jest.fn() },
 }));
 jest.mock('next/navigation', () => { const router = { push: jest.fn(), back: jest.fn() }; return { useRouter: () => router }; });
 jest.mock('next/image', () => ({ __esModule: true, default: () => null }));
@@ -27,6 +28,7 @@ beforeEach(() => {
   (mocked.getAuthToken as jest.Mock).mockReturnValue('session-a');
   (api.blocks.getBlockedUsers as jest.Mock).mockResolvedValue({ blocked: [] });
   (api.relationships.getBlockedUsers as jest.Mock).mockResolvedValue({ blocked: [] });
+  (api.privacy.getBlocks as jest.Mock).mockResolvedValue({ blocks: [] });
   (confirmStore.open as jest.Mock).mockResolvedValue(true);
   (api.blocks.unblockUser as jest.Mock).mockResolvedValue({ success: true });
 });
