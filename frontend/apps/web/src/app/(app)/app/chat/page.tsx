@@ -518,7 +518,11 @@ export default function ChatListPage() {
             <div className="p-4">
               <SearchInput
                 value={newChatQuery}
-                onChange={setNewChatQuery}
+                onChange={(value) => {
+                  setNewChatQuery(value);
+                  // "Searching…" from the first keystroke, so "No users found." only follows an answer.
+                  setNewChatSearching(value.trim().length > 0);
+                }}
                 placeholder="Type a person's name…"
               />
 
@@ -540,7 +544,7 @@ export default function ChatListPage() {
                     const uid = String(u?.id || '');
                     const name = u.name || u.firstName || u.username || 'User';
                     const username = u?.username ? `@${u.username}` : '';
-                    const avatar = u?.profile_picture_url;
+                    const avatar = u?.profilePicture || u?.profile_picture_url;
                     const initials = name
                       .split(' ')
                       .map((w: string) => w[0])

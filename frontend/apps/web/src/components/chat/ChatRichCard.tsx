@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { CATEGORY_LABELS } from '@pantopus/ui-utils';
 
 interface ChatRichCardProps {
   msgType: string;
@@ -136,7 +137,9 @@ export default function ChatRichCard({ msgType, metadata, msgText, isMine }: Cha
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {category && (
-                  <span className={`text-xs ${isMine ? 'text-blue-200' : 'text-app-text-secondary'}`}>{category}</span>
+                  <span className={`text-xs ${isMine ? 'text-blue-200' : 'text-app-text-secondary'}`}>
+                    {(CATEGORY_LABELS as Record<string, string>)[category as string] || category}
+                  </span>
                 )}
                 {condition && (
                   <span className={`text-xs ${isMine ? 'text-blue-200' : 'text-app-text-secondary'}`}>
