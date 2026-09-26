@@ -2,6 +2,24 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — user decisions recorded 2026-09-26 (supersede the pending list in the 05:15Z block below)**
+
+1. **Household letter delete:** proposal approved as sent.
+   - 30-day recoverable delete: two Mail columns (deleted_at, deleted_by) plus an index, and a nightly purge. The letter hides for everyone at once.
+   - A notice goes to the members who could see it, respecting their Home-updates setting.
+   - Restore: web "Recently deleted" with Undo; the apps restore from the notice.
+   - Dismiss parity: a dismissed shared Home letter sends the same notice and can be restored; the web stops listing dismissed letters.
+2. **R06:** native entry to letters and passes on the existing Identity section, and the PDF opens in the device viewer. A guest's card no longer reads "Verified resident". Managers keep issuing letters.
+3. **Home issues:** holders of maintenance.manage can update issues, and the buttons are hidden for everyone else. Android gets an Issues entry on the Home screen.
+4. **Certified mail:** statuses Received (not yet opened), Read (opened, not signed) and Signed (the confirmation is sent on signing). The signing confirmation keys on signed, not read. Build the closest workable version.
+5. **Web Members:** "Change role" sets the chosen role directly.
+6. **R04 ownership transfer:** proposal A.
+   - Resolve the buyer before any write, and run approved transfers for the proposer.
+   - Create the buyer's claim first, and stop cleanly on any failed save.
+   - B (keep the seller until approval) is deferred.
+
+Plan: one PR each, in this order: 6, 5, 3, 2, 4, 1. Shared-file edits (notificationService, root navigation, migrations) are coordinated with the peers first.
+
 **Stream 2 — 2026-09-26 05:15Z (adds to the 04:59Z block below)**
 
 - **SECURITY, escalated to the user (R04; reproduced and restored; no code change):** a single owner's `POST /api/homes/:id/owners/transfer` to an email with no account returns 200 "Transfer initiated" with `transfer_claim_id: null`.
