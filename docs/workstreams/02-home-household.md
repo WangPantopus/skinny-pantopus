@@ -13,6 +13,11 @@ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial
   - `/place` risk and civic sections show "Couldn't load this / Try again", the provider boundary in isolation.
   - `/mailbox/earn/wallet` → Payments 404 for a user without a Stripe account (wallet area, not Stream 2).
   - One transient `GET /api/homes/primary` 503 `HOME_LIST_UNAVAILABLE` for member B. It didn't reproduce in 120 concurrent requests, and `homeListService.checked()` doesn't log the underlying error (small observability gap).
+- **Web Family Mail Party is dormant (18:10Z; from Stream 3's #530 note):**
+  - The letter-page banner reads `session.participants` from `/party/active`, but `MailPartySession` has no such column, so it never appears.
+  - The standalone `/app/mailbox/party` page is unlinked and reads `.members` from `/occupants`, which answers `occupants`.
+  - Android has a working party flow (discover/join/decline/assign to active occupants).
+  - Web parity would be a feature build, so it's recorded as a product question for the user; no repair was made.
 - **Candidate (needs an applicant fixture):** Verification Center → "Message household admin" (`/homes/:id/messages`) may tell every applicant "No household admin yet", even when the Home has an owner.
   - The home detail includes `owner` only with `ownership.view`, and occupants only with `members.view`.
   - A fix touches the owner-identity privacy boundary, so I'll reproduce it with a real applicant and propose before changing anything.
