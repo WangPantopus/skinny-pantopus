@@ -120,7 +120,7 @@ When `ballot_p0` is on for the user, `composeCivicElection` keeps `name`, `date`
 
 - `coverage` is `supported` (verified dates and links), `links_only` (election date and official links only), or absent (flag off: today's behavior). A provider failure never turns into "no election".
 - `phase` is `far` (61–120 days out), `in_season` (60 days out to the day before), `election_day`, `after` (through certification where the dates are checked, else days 1–7 after; `after_stage` is `counting` or `certified`), or `hidden`. It is computed in the state's timezone from the local date. The phase decides layout only.
-- `governments` appears for supported states only. It holds typed ids from the exact-point geocoder: United States, the state, the county, an incorporated place, and a school district (unified, or elementary plus secondary). Items are deduplicated by `level:geoid`. `count_is_minimum` is always true in P0, because special districts are not integrated. `on_ballot` is `true` only for the United States (every U.S. House seat is up in 2026) and `null` for the rest.
+- `governments` appears for supported states only. It holds typed ids from the exact-point geocoder: United States, the state, the county, an incorporated place, and a school district (unified, or elementary plus secondary). Items are deduplicated by `level:geoid`. What counts follows the Census of Governments (decided September 25, section 11 item 8): a consolidated city-county is one government under one name, and a school system run by the state, county or city is not counted on its own. `count_is_minimum` is always true in P0, because special districts are not integrated. `on_ballot` is `true` only for the United States (every U.S. House seat is up in 2026) and `null` for the rest.
 - Old clients ignore the new fields, and the existing "Next election" row keeps working.
 
 ### 5.3 `/api/public/place` → `ballot_teaser`
@@ -319,9 +319,9 @@ These use the existing funnel, with no political data: useful visits (official l
 | Reference data validation, date math, phases, governments parsing, composer on/off, teaser | Backend Jest | Run here |
 | Card, timeline, stack, teaser, Today rendering and states | Web Jest + `/dev/ballot` Playwright screenshots beside the rendered canvas boards | Run here. Cards differ from their boards on 0.00–0.02% of pixels; the governments finished frame on 0.09%. Story frames were checked against the Peel board at 0.6 s and 1.8 s |
 | iOS and Android card, governments view and Today | Written to the existing patterns, with unit tests for decoding, timeline geometry, placement and story timing | **Compiled and tested in PR CI**, not in this container (it has no Xcode, and the proxy refuses Google Maven). CI run 1518 on `c7cba932` passed `ios-ci` (SwiftLint, SwiftFormat, the build, then unit and snapshot tests on iPhone 16, 16 Pro and SE) and `android-ci` (lint, unit tests, snapshots, assemble, then instrumented tests on an emulator). Here, iOS changes pass SwiftFormat and strict SwiftLint and Android changes pass ktlint and detekt. Still needed: a device pass |
-| Real addresses, real links | Release check 1: a person opens every source and link; release check 2: three Clark County addresses and one address outside Washington through the real API | **Not done.** Egress is blocked here |
-| End-to-end on the web | A local stack: Postgres 16 with PostGIS, PostgREST 12.2.12, Supabase Auth 2.196.0, a gateway in place of Kong, the real backend and the Next.js app, driven in Chromium through the real UI | **Done September 24** (section 10.1) |
-| End-to-end on simulator and emulator | Existing acceptance catalog | **Not done.** No Xcode or Android SDK here |
+| Real addresses, real links | Release check 1: a person opens every source and link; release check 2: three Clark County addresses and one address outside Washington through the real API | **Partly done September 25** (section 10.2): all 61 URLs fetched and titled, one broken county link fixed; the live Census geocoder answered for ten real city points. Address validation and Mapbox still unchecked (no keys) |
+| End-to-end on the web | A local stack: Postgres 16 with PostGIS, PostgREST 12.2.12, Supabase Auth 2.196.0, a gateway in place of Kong, the real backend and the Next.js app, driven in Chromium through the real UI | **Done September 24** (section 10.1); repeated September 25 (section 10.2) |
+| End-to-end on simulator and emulator | Existing acceptance catalog | **Done September 25** (section 10.2): iPhone 17 simulator (iOS 27) and an API 35 emulator |
 
 ### 10.1 Web end-to-end run (September 24)
 
@@ -369,7 +369,30 @@ For the local run, three Postgres 17 details were patched out of a copy of the b
 
 **Found and left for a separate task:** `/start?address=` deep links never preview. The autocomplete API returns `center: [lng, lat]`, but the funnel reads `center.lat`. This predates Ballot.
 
+### 10.2 Web, iOS and Android end-to-end run (September 25)
+
+On a Mac: Supabase CLI 2.118 (Postgres 17, all 93 migrations), the real backend, the Next.js app, the iOS app on an iPhone 17 simulator (iOS 27, Xcode 27) and the Android app on an API 35 arm64 emulator. Accounts were created through the web sign-up and its confirmation email (local Mailpit), and the flag was switched through `POST /api/admin/feature-flags/ballot_p0`.
+
+**Covered on all three clients:** flag off (the old layout), a beta user, the in-season card, the governments story (Skip, Close, Done, back and swipe), the Civic row and its NOV 3 tile, Today on September 25 and October 17 with "Open your ballot", Election Day, "Counting" on November 5, the Civic page after the election and December 5 with no card. On the web also: the internal-team and global switches, the `/start` teaser (supported, links only, a territory, Census down and hanging), ten homes across the eight supported states, Texas and Puerto Rico, the 120-day and 8 p.m. edges, phone width, dark mode and keyboard use.
+
+**Controlled:** homes were seeded in SQL (address validation needs provider keys). Mapbox answered from a fixture. The Census geocoder was live except when a run made it fail, hang or respond slowly. The backend clock was moved for the dated states; native sign-in used the real clock because DPoP proofs are time-checked.
+
+**Found and fixed:**
+- Clark County's "Find a drop box" link was a 404. It now opens the county's ballot deposit locations page, which its elections site links to.
+- On iOS and Android, "Open your ballot" on the Today tab only switched tabs. When the Place tab was on its hub (after Back), it landed there with no card. It now opens that home's dashboard, without stacking a second copy.
+- With the Census geocoder slow or down and no fresh cache, every Place load waited 8 seconds for the whole page. The saved-home lookup now has the preview's 3.5-second budget and keeps filling the cache afterward. The stale limit is counted from `fetched_at`, so it was shorter than the 30-day TTL and a stale row was never served. It now allows 7 days past expiry. A cold load also called the geocoder twice for one home and now calls it once.
+- The web read the Ballot fields unchecked. One malformed field took down the whole Place page, and a malformed governments block printed "undefined". The web now checks each field as the native decoders do.
+- The web governments view: on a laptop window under about 876 px tall, Done was cut off. Tab also left the dialog, and focus wasn't returned on close.
+- On Android the governments view's progress bar ran under the status bar.
+- The web timeline's text alternative said "8 p.m." in the 7 p.m. states and "online or by mail" where that isn't true. It now reads each deadline's own label, as native does.
+- On `/start` the teaser sat above a "Next election: not configured" row, which is now dropped. The Civic tile said "0 days away" on Election Day and "1 days away" the day before on all three clients. It now says "Today" and "1 day away".
+- The governments sentence read "…Honolulu County and Hawaii Department of Education." Every school district now takes "the".
+
+**Not verified:** real address entry (Google or Smarty keys), Mapbox, push delivery, physical devices, and whether each official page is the right one for its label (all 61 URLs load).
+
 ## 11. Founder approvals needed before release
+
+**Items 1–6 approved by the founder on September 25, 2026.** Item 7 was approved on September 24. Item 8 records the government-counting decision made the same day.
 
 1. **Pilot.** Washington dates statewide, with Clark County links, plus the seven states that mail every voter a ballot (section 5.1.1), which the founder asked for on September 24. Every other state gets the election date and a vote.gov link. The Washington copy about mailing changed for the USPS postmark rule (section 5.1.1).
 2. **P0 copy that replaces unbuildable canvas copy.** Drawn on the canvas's "Proposed, September 24" boards:
@@ -399,3 +422,8 @@ For the local run, three Postgres 17 details were patched out of a copy of the b
    - **Between elections.** From the day after `hide_after` the card leaves Place until the next election with checked dates. Washington's November 2, 2027 general is in the data (ballots mailed by Oct 15, register by Oct 25, counties certify Nov 23, the state by Dec 2; Secretary of State calendar), so the card returns July 5, 2027. It isn't a federal election, so nothing is marked on the ballot then. Special elections and primaries wait for P1 contest data.
    - **Governments all year.** The Civic page (Place → Civic, also in the desktop Place rail) has a "Your governments" row under Your districts on web, iOS and Android, test id `place.civic.governments`. It opens the governments view with its story. `civic_districts` carries the governments block behind `ballot_p0` for a home in a supported state, outside the election window too. It uses the same exact-point lookup and cache as the card, and nothing is marked on the ballot there.
    - **Results in the app.** None in P0. Washington counts late ballots for three weeks, and P0 doesn't know which contests are on an address's ballot. With P1 contest data, show only certified outcomes per contest; the build plan leaves live results out through 2028.
+8. **What counts as a government.** Decided September 25. The count follows the Census of Governments: each independent government once, under the name people use. The rules are applied when the card is composed, so cached lookups follow them (`countedGovernments` in `services/ballot/governments.js`).
+   - **Consolidated city-counties are one government.** The founder chose "City of Denver" everywhere for Denver. The same rule gives the City of San Francisco, the City of Broomfield and Carson City. Carson City's Census place has no type, so the old rule would have read "City of Carson".
+   - **Honolulu.** Hawaii has no incorporated places, so the county record carries the one local government, under its legal name, the City and County of Honolulu.
+   - **School systems run by another government aren't counted on their own.** Hawaii's public schools are run by the state's Department of Education; there are no independent school districts, and the state is already counted. Honolulu therefore reads "at least 3": the United States, the state and the City and County of Honolulu. Alaska, D.C., Maryland, North Carolina and Virginia follow the same rule when they are covered.
+   - The "Your districts" card on the Civic page is unchanged: it lists district boundaries, and Denver's county boundary is still one of them.
