@@ -73,13 +73,7 @@ struct PartyDetailLayout: View {
             trailingAction: MailTopBarTrailingAction(
                 icon: .bookmark,
                 accessibilityLabel: "Save invite"
-            ) { @Sendable in Task { @MainActor in onSaveToVault() } },
-            overflowItems: [
-                MailOverflowItem(id: "share", icon: .share, label: "Share invite") {},
-                MailOverflowItem(id: "addToCalendar", icon: .calendarPlus, label: "Add to calendar") {},
-                MailOverflowItem(id: "mute", icon: .bellOff, label: "Mute invite") {},
-                MailOverflowItem(id: "report", icon: .alertTriangle, label: "Report") {}
-            ]
+            ) { @Sendable in Task { @MainActor in onSaveToVault() } }
         )
     }
 

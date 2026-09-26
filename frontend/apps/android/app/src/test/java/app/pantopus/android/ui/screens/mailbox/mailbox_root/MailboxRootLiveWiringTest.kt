@@ -134,7 +134,7 @@ class MailboxRootLiveWiringTest {
             vm.load()
 
             val empty = vm.state.value as ListOfRowsUiState.Empty
-            assertEquals("No mail in Me → Incoming yet", empty.headline)
+            assertEquals("No mail yet", empty.headline)
         }
 
     @Test

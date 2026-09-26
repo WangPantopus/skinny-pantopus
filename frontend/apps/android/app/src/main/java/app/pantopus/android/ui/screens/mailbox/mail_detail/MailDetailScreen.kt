@@ -101,6 +101,7 @@ fun MailDetailScreen(
     val categoryActionInFlight by viewModel.categoryActionInFlight.collectAsStateWithLifecycle()
     val pendingDestructiveAction by viewModel.pendingDestructiveAction.collectAsStateWithLifecycle()
     val ceremonialRedirectMailId by viewModel.ceremonialRedirectMailId.collectAsStateWithLifecycle()
+    val didLeaveMailbox by viewModel.didLeaveMailbox.collectAsStateWithLifecycle()
     GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -111,6 +112,8 @@ fun MailDetailScreen(
             onOpenCeremonialMail(redirect)
         }
     }
+    // A dismissed or archived letter has left the mailbox; the list has dropped it.
+    LaunchedEffect(didLeaveMailbox) { if (didLeaveMailbox) onBack() }
     LaunchedEffect(toast) {
         if (toast != null) {
             kotlinx.coroutines.delay(1_800)
@@ -144,6 +147,7 @@ fun MailDetailScreen(
                     onFileRecord = viewModel::fileRecordToVault,
                     onOpenSenderProfile = onOpenSenderProfile,
                     onSaveToVault = viewModel::openSaveToVaultPicker,
+                    onArchive = viewModel::archive,
                     categoryActionInFlight = categoryActionInFlight,
                     onCategoryAction = viewModel::tapCategoryAction,
                     onTranslate = onTranslate,
@@ -288,6 +292,7 @@ private fun LoadedLayout(
     onFileRecord: () -> Unit,
     onOpenSenderProfile: (String) -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
     categoryActionInFlight: MailCategoryAction? = null,
     onCategoryAction: ((MailCategoryAction) -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
@@ -324,6 +329,7 @@ private fun LoadedLayout(
                 onBack = onBack,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
                 onDownloadPdf = onDownloadBookletPdf,
                 downloadInFlight = bookletDownloadInFlight,
             )
@@ -336,6 +342,7 @@ private fun LoadedLayout(
                 onAcknowledge = onAcknowledge,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
                 onOpenExtractedTask = onOpenExtractedTask,
                 onDownloadProof = onDownloadCertifiedProof,
                 proofSaved = certifiedProofSaved,
@@ -360,6 +367,7 @@ private fun LoadedLayout(
                 onRedeem = onRedeemCoupon,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
             )
         content.category == MailItemCategory.Gig && gig != null ->
             GigDetailLayout(
@@ -370,6 +378,7 @@ private fun LoadedLayout(
                 onAccept = onAcceptGigBid,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
             )
         content.category == MailItemCategory.Memory && memory != null ->
             MemoryDetailLayout(
@@ -380,6 +389,7 @@ private fun LoadedLayout(
                 onSaveMemory = onSaveMemory,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
             )
         content.category == MailItemCategory.Package && pkg != null ->
             PackageDetailLayout(
@@ -390,6 +400,7 @@ private fun LoadedLayout(
                 onAcknowledgeDelivery = onAcknowledge,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
                 onOpenUnboxing = onOpenUnboxing,
                 onAskNeighbor = onAskNeighbor,
                 onShareEta = onShareEta,
@@ -416,6 +427,7 @@ private fun LoadedLayout(
                 onBack = onBack,
                 onFileInVault = onFileRecord,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
             )
         else ->
             GenericMailDetailLayout(
@@ -425,6 +437,7 @@ private fun LoadedLayout(
                 onAcknowledge = onAcknowledge,
                 onOpenSenderProfile = onOpenSenderProfile,
                 onSaveToVault = onSaveToVault,
+                onArchive = onArchive,
                 onTranslate = onTranslate,
                 onCreateTask = onCreateTask,
                 categoryActions =

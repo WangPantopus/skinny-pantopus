@@ -245,8 +245,9 @@ public enum HubRoute: Hashable {
     /// Values must be a `NotificationsZone` raw value.
     case notificationsZone(context: String)
     /// Connections center (T5.2.3). Reached from the You / Me action grid
-    /// or via the `pantopus://connections` deep link.
-    case connections
+    /// or via the `pantopus://connections` deep link, whose `tab` query
+    /// picks the opening tab.
+    case connections(initialTab: String?)
     /// Support Trains list (T6.6c / P26.5) — mutual-aid rotations.
     /// Personal pillar. Reached from the You tab action grid or via
     /// the `pantopus://support-trains` deep link.
@@ -830,7 +831,7 @@ public struct HubTabRoot: View {
         // Personal
         case .myHomes: return .myHomes
         case .myBusinesses: return .myBusinesses
-        case .connections: return .connections
+        case .connections: return .connections(initialTab: nil)
         case .mailbox: return .mailboxRoot
         case .profileAndPrivacy: return .privacySettings
         case .beaconUpdates: return .beaconsFeed
@@ -953,8 +954,8 @@ public struct HubTabRoot: View {
         case let .beaconProfile(handle):
             path.append(.beaconProfile(handle: handle))
             _ = router.consume()
-        case .connections:
-            path.append(.connections)
+        case let .connections(tab):
+            path.append(.connections(initialTab: tab))
             _ = router.consume()
         case .beacons:
             path.append(.beaconsFeed)
@@ -2477,9 +2478,10 @@ public struct HubTabRoot: View {
             NotificationsView(
                 viewModel: NotificationsViewModel(initialContext: context)
             ) { Task { @MainActor in pop() } }
-        case .connections:
+        case let .connections(initialTab):
             ConnectionsView(
                 viewModel: ConnectionsViewModel(
+                    initialTab: initialTab,
                     onMessage: { target in
                         Task { @MainActor in
                             push(.chatConversation(InboxConversationDestination(
@@ -2631,7 +2633,7 @@ public struct HubTabRoot: View {
                             case let .post(postId):
                                 push(.pulsePost(postId: postId))
                             case .seeAllPeople:
-                                push(.connections)
+                                push(.connections(initialTab: nil))
                             case .seeAllBusinesses:
                                 push(.discoverBusinesses)
                             case .seeAllGigs:

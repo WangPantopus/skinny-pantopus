@@ -14,6 +14,14 @@ sealed interface ListOfRowsUiState {
     data class Loaded(
         val sections: List<RowSection>,
         val hasMore: Boolean,
+        /**
+         * Why the next page failed. The rows stay and the end of the list
+         * shows this with a Try again in place of the page spinner. `null`
+         * (the default) keeps every existing call site unchanged.
+         */
+        val loadMoreError: String? = null,
+        /** Re-requests the failed page; paired with [loadMoreError]. */
+        val onRetryLoadMore: (() -> Unit)? = null,
     ) : ListOfRowsUiState
 
     /** No items — render the shared EmptyState. */

@@ -115,7 +115,8 @@ private fun SettingsBody(
             SettingsGroup(title = "Team", accent = PantopusColors.business) {
                 SettingsRow(
                     label = "Team & seats",
-                    sublabel = "4 members · 2 booking seats",
+                    // No team data is loaded here, so no member/seat counts (web parity).
+                    sublabel = "Manage who can take bookings",
                     showDivider = true,
                     onClick = { onNavigate(vm.teamRoute()) },
                 )
@@ -125,37 +126,29 @@ private fun SettingsBody(
         val accent = data.pillar.accent
         val accentBg = data.pillar.accentBg
         SettingsGroup(title = "Automation", accent = accent, helper = "Reminders go out automatically before each booking.") {
+            // Subtitles describe each row, as web does; this screen loads no
+            // workflow, template or channel data, so it states no counts.
             SettingsRow(
                 label = "Default reminders",
-                sublabel = if (data.isFresh) null else (data.remindersValue ?: "1 day · 1 hr"),
+                sublabel = data.remindersValue,
                 onClick = { onNavigate(vm.remindersRoute()) },
                 trailing = {
-                    if (data.isFresh) SettingsChipChevron("Off", SettingsChipTone.Warning) else SettingsChevron()
+                    if (data.remindersValue == null) SettingsChipChevron("Off", SettingsChipTone.Warning) else SettingsChevron()
                 },
             )
             SettingsRow(
                 label = "Workflows & follow-ups",
-                sublabel = if (data.isFresh) "No workflows yet" else null,
+                sublabel = "Automate messages around bookings",
                 onClick = { onNavigate(vm.workflowsRoute()) },
-                trailing = {
-                    if (data.isFresh) {
-                        SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus)
-                    } else {
-                        SettingsChipChevron("3 active", SettingsChipTone.Success)
-                    }
-                },
             )
             SettingsRow(
                 label = "Message templates",
-                sublabel = if (data.isFresh) "No templates yet" else "5 templates",
+                sublabel = "Reusable booking messages",
                 onClick = { onNavigate(vm.templatesRoute()) },
-                trailing = {
-                    if (data.isFresh) SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus) else SettingsChevron()
-                },
             )
             SettingsRow(
                 label = "Booking notifications",
-                sublabel = if (data.isFresh) "Using defaults" else "Push · Email",
+                sublabel = "Choose your channels",
                 showDivider = false,
                 onClick = { onNavigate(vm.notificationsRoute()) },
             )
@@ -174,35 +167,39 @@ private fun SettingsBody(
                     }
                 },
             )
-            SettingsRow(label = "Default availability", sublabel = "Mon–Fri, 9–5", onClick = { onNavigate(vm.availabilityRoute()) })
-            val cancelSaving = data.savingRow == "cancellation"
-            val cancelSaved = data.justSavedRow == "cancellation"
             SettingsRow(
-                label = "Cancellation policy",
-                sublabel =
-                    when {
-                        cancelSaving -> null
-                        data.isFresh -> null
-                        else -> "24-hour notice"
-                    },
-                showDivider = false,
-                onClick = { onNavigate(vm.cancellationPolicyRoute()) },
-                trailing = {
-                    when {
-                        cancelSaving -> SettingsRowShimmer(width = 84.dp)
-                        cancelSaved ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                            ) {
-                                SettingsSavedChip()
-                                SettingsChevron()
-                            }
-                        data.isFresh -> SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus)
-                        else -> SettingsChevron()
-                    }
-                },
+                label = "Default availability",
+                sublabel = "Your weekly hours",
+                showDivider = data.paidEnabled,
+                onClick = { onNavigate(vm.availabilityRoute()) },
             )
+            // The policy editor is a paid surface; with paid scheduling off it only
+            // says "coming soon", so the row is gated like the Payments group.
+            if (data.paidEnabled) {
+                val cancelSaving = data.savingRow == "cancellation"
+                val cancelSaved = data.justSavedRow == "cancellation"
+                SettingsRow(
+                    label = "Cancellation policy",
+                    sublabel = null,
+                    showDivider = false,
+                    onClick = { onNavigate(vm.cancellationPolicyRoute()) },
+                    trailing = {
+                        when {
+                            cancelSaving -> SettingsRowShimmer(width = 84.dp)
+                            cancelSaved ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                ) {
+                                    SettingsSavedChip()
+                                    SettingsChevron()
+                                }
+                            !data.hasCancellationPolicy -> SettingsChipChevron("Set up", SettingsChipTone.Warning, PantopusIcon.Plus)
+                            else -> SettingsChevron()
+                        }
+                    },
+                )
+            }
         }
         if (data.paidEnabled) {
             SettingsGroup(title = "Payments", accent = accent, helper = "Required only for paid event types.") {

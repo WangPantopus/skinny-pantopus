@@ -59,7 +59,6 @@ import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailItemDetailShell
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailOverflowItem
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarConfig
-import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarTrailingAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -82,10 +81,12 @@ fun RecordsDetailLayout(
     onBack: () -> Unit,
     onFileInVault: () -> Unit,
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
 ) {
     Box(modifier = Modifier.testTag("mailDetail_records")) {
         MailItemDetailShell(
-            topBar = makeTopBar(onBack = onBack, onSaveToVault = onSaveToVault),
+            topBar = makeTopBar(onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(records = records),
             hero = { RecordsHeroCard(content = content, records = records) },
             keyFacts = { RecordsKeyFactsCard(rows = records.factsForState(records.isFiled)) },
@@ -106,26 +107,18 @@ fun RecordsDetailLayout(
 private fun makeTopBar(
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         // Slate dot eyebrow — neutral is the archival/institutional tone.
         eyebrow = "Records",
         trust = MailDetailTrust.Neutral,
         onBack = onBack,
-        trailingAction =
-            MailTopBarTrailingAction(
-                icon = PantopusIcon.Download,
-                contentDescription = "Download PDF",
-                onClick = {},
-            ),
+        trailingAction = null,
         overflowItems =
             listOf(
-                MailOverflowItem("openPDF", PantopusIcon.FileText, "Open PDF") {},
-                MailOverflowItem("downloadJSON", PantopusIcon.Download, "Download JSON") {},
-                MailOverflowItem("share", PantopusIcon.Share, "Share copy") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("dispute", PantopusIcon.Flag, "Dispute") {},
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -562,15 +555,9 @@ private fun RecordsActions(
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         if (isFiled) {
             RetentionBanner()
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                SecondaryTile("openPDF", PantopusIcon.FileText, "Open PDF", modifier = Modifier.weight(1f))
-                SecondaryTile("share", PantopusIcon.Share, "Share", modifier = Modifier.weight(1f))
-                SecondaryTile("downloadJSON", PantopusIcon.Download, "JSON", modifier = Modifier.weight(1f))
-            }
         } else {
             FileInVaultButton(inFlight = inFlight, onClick = onFileInVault)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                SecondaryTile("downloadPDF", PantopusIcon.Download, "Download PDF", modifier = Modifier.weight(1f))
                 SecondaryTile(
                     "chooseFolder",
                     PantopusIcon.Archive,

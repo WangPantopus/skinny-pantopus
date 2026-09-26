@@ -28,6 +28,7 @@ import SwiftUI
 public struct PublicProfileView: View {
     @State private var viewModel: PublicProfileViewModel
     @State private var showReportSheet = false
+    @State private var showBlockConfirm = false
     private let onBack: @MainActor () -> Void
     private let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
@@ -88,10 +89,20 @@ public struct PublicProfileView: View {
             titleVisibility: .hidden
         ) {
             Button("Block this user", role: .destructive) {
-                Task { await viewModel.block() }
+                showBlockConfirm = true
             }
             Button("Report") { showReportSheet = true }
             Button("Cancel", role: .cancel) {}
+        }
+        // Blocking from a chat asks first (`ChatConversationDetailsSheet`), so
+        // the profile does too before it sends `POST /api/users/:id/block`.
+        .alert(blockTitle, isPresented: $showBlockConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Block", role: .destructive) {
+                Task { await viewModel.block() }
+            }
+        } message: {
+            Text("\(blockName ?? "They") won't be able to message you, and new conversations with them are prevented.")
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet
@@ -140,6 +151,18 @@ public struct PublicProfileView: View {
         )
         .accessibilityIdentifier("publicProfile")
         .task { await viewModel.load() }
+    }
+
+    /// Names the person being blocked, like the chat block confirm. `nil`
+    /// before the profile resolves or when it has no display name.
+    private var blockName: String? {
+        guard case let .loaded(payload) = viewModel.state else { return nil }
+        let name = payload.header.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    private var blockTitle: String {
+        blockName.map { "Block \($0)?" } ?? "Block this user?"
     }
 
     /// Names the neighbor being disconnected, per the destructive-confirm

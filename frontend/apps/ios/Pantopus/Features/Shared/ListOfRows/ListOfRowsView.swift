@@ -135,7 +135,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                 banner: dataSource.banner,
                 listingContext: dataSource.listingContext,
                 monoFooter: dataSource.monoFooter,
+                loadMoreError: dataSource.loadMoreError,
                 onEndReached: { Task { await dataSource.loadMoreIfNeeded() } },
+                onRetryLoadMore: { Task { await dataSource.retryLoadMore() } },
                 onRefresh: { await dataSource.refresh() }
             )
         case let .empty(content):
@@ -363,7 +365,9 @@ private struct LoadedList: View {
     let banner: BannerConfig?
     let listingContext: ListingContextConfig?
     let monoFooter: String?
+    let loadMoreError: String?
     let onEndReached: () -> Void
+    let onRetryLoadMore: () -> Void
     let onRefresh: () async -> Void
 
     var body: some View {
@@ -391,7 +395,26 @@ private struct LoadedList: View {
                     sectionHeader(section)
                 }
             }
-            if hasMore {
+            if let loadMoreError {
+                // Same treatment as Pulse's failed page: the loaded rows stay
+                // and Try again re-requests the page that failed.
+                VStack(spacing: Spacing.s2) {
+                    Text(loadMoreError)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try again", action: onRetryLoadMore)
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("listOfRowsLoadMoreRetry")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.s3)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("listOfRowsLoadMoreError")
+            } else if hasMore {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .listRowSeparator(.hidden)

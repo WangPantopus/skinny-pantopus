@@ -73,6 +73,8 @@ fun BookletDetailLayout(
     // T6.5e (P19.5) — Defaults to a no-op so existing call sites
     // compile unchanged.
     onSaveToVault: () -> Unit = {},
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
     // A17.2 — fetches the rendered booklet PDF
     // (`POST …/p2/booklet/:mailId/download`). RN reports the file size in
     // the confirmation (`src/app/mailbox/booklet.tsx:43`).
@@ -88,6 +90,7 @@ fun BookletDetailLayout(
                     content = content,
                     onBack = onBack,
                     onSaveToVault = onSaveToVault,
+                    onArchive = onArchive,
                     onDownloadPdf = onDownloadPdf,
                 ),
             aiElf = makeAIElf(content = content, booklet = booklet),
@@ -105,6 +108,7 @@ fun BookletDetailLayout(
             actions = {
                 ActionsRow(
                     onSaveToVault = onSaveToVault,
+                    onArchive = onArchive,
                     onDownloadPdf = onDownloadPdf,
                     downloadInFlight = downloadInFlight,
                 )
@@ -117,6 +121,7 @@ private fun makeTopBar(
     content: MailDetailContent,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
     onDownloadPdf: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
@@ -126,16 +131,9 @@ private fun makeTopBar(
         trailingAction = null,
         overflowItems =
             listOf(
-                MailOverflowItem("share", PantopusIcon.Share, "Share") {},
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
                 MailOverflowItem("download", PantopusIcon.Download, "Save PDF") { onDownloadPdf() },
-                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {},
-                MailOverflowItem(
-                    id = "delete",
-                    icon = PantopusIcon.Trash2,
-                    label = "Delete",
-                    isDestructive = true,
-                ) {},
+                MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
 
@@ -415,6 +413,7 @@ private fun SenderCard(
 @Composable
 private fun ActionsRow(
     onSaveToVault: () -> Unit,
+    onArchive: () -> Unit,
     onDownloadPdf: () -> Unit,
     downloadInFlight: Boolean,
 ) {
@@ -447,7 +446,6 @@ private fun ActionsRow(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            SecondaryTile(icon = PantopusIcon.Share, label = "Share", modifier = Modifier.weight(1f))
             SecondaryTile(
                 icon = PantopusIcon.Download,
                 label = "PDF",
@@ -459,6 +457,7 @@ private fun ActionsRow(
                 icon = PantopusIcon.Archive,
                 label = "Archive",
                 modifier = Modifier.weight(1f),
+                onClick = onArchive,
             )
         }
     }

@@ -88,6 +88,8 @@ fun GenericMailDetailLayout(
     onAcknowledge: () -> Unit,
     onOpenSenderProfile: (String) -> Unit,
     onSaveToVault: () -> Unit,
+    // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    onArchive: () -> Unit = {},
     onTranslate: (() -> Unit)? = null,
     // A17.12 — when set, the overflow surfaces "Create task", which opens
     // the Mail-tasks screen in its create frame for this mail.
@@ -126,10 +128,8 @@ fun GenericMailDetailLayout(
                                     ) { onCreateTask() },
                                 )
                             }
-                            add(MailOverflowItem("archive", PantopusIcon.Archive, "Archive") {})
+                            add(MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() })
                             add(MailOverflowItem("move", PantopusIcon.FolderPlus, "Move") { onSaveToVault() })
-                            add(MailOverflowItem("share", PantopusIcon.Share, "Share") {})
-                            add(MailOverflowItem("unread", PantopusIcon.MailOpen, "Mark unread") {})
                         },
                 ),
             aiElf =
@@ -178,6 +178,7 @@ fun GenericMailDetailLayout(
                     onCategoryAction = onCategoryAction,
                     onAck = onAcknowledge,
                     onMove = onSaveToVault,
+                    onArchive = onArchive,
                 )
             },
         )
@@ -695,6 +696,7 @@ private fun ActionsRow(
     onCategoryAction: ((MailCategoryAction) -> Unit)?,
     onAck: () -> Unit,
     onMove: () -> Unit,
+    onArchive: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         if (content.ackRequired || content.isAcknowledged) {
@@ -713,6 +715,7 @@ private fun ActionsRow(
                 id = "archive",
                 icon = PantopusIcon.Archive,
                 label = "Archive",
+                onClick = onArchive,
                 modifier = Modifier.weight(1f),
             )
             SecondaryTile(
@@ -720,18 +723,6 @@ private fun ActionsRow(
                 icon = PantopusIcon.FolderPlus,
                 label = "Move",
                 onClick = onMove,
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "share",
-                icon = PantopusIcon.Share,
-                label = "Share",
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryTile(
-                id = "markUnread",
-                icon = PantopusIcon.MailOpen,
-                label = "Mark unread",
                 modifier = Modifier.weight(1f),
             )
         }

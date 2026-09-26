@@ -41,6 +41,12 @@ public enum MailboxEndpoints {
         Endpoint(method: .patch, path: "/api/mailbox/\(mailId)/ack")
     }
 
+    /// `PATCH /api/mailbox/:id/archive` — route `backend/routes/mailbox.js:2860`
+    /// (the web Mailbox's Archive). Moves the letter out of Incoming.
+    public static func archive(mailId: String) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/mailbox/\(mailId)/archive", body: ArchiveMailBody(archived: true))
+    }
+
     /// `GET /api/mailbox/earnings/summary` — route
     /// `backend/routes/mailbox.js:2899`. `{ pendingEarnings, totalEarned,
     /// currency }`. Backs the Earn dashboard's balance hero.

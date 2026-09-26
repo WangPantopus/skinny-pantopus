@@ -118,8 +118,8 @@ class NoShowReportViewModel
             )
         }
 
-        /** The cancellation-policy editor (A14) — no relay (its own owner resolution). */
-        fun policyRoute(): String = SchedulingRoutes.CANCELLATION_REFUND_POLICY
+        /** The cancellation-policy editor (A14) for this report's owner. */
+        fun policyRoute(): String = SchedulingRoutes.cancellationRefundPolicy(owner.routeKind, owner.ownerRouteId)
 
         private fun SchedulingError.display(): String =
             when (this) {

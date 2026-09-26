@@ -26,6 +26,8 @@ struct RecordsDetailLayout: View {
     let onFileInVault: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
 
     var body: some View {
         MailItemDetailShell(
@@ -45,9 +47,9 @@ struct RecordsDetailLayout: View {
                         trail: records.vaultTrail,
                         retentionLine: records.retentionLine,
                         isFiled: records.isFiled
-                    ) {}
+                    )
                     if records.isFiled, !records.related.isEmpty {
-                        RelatedRecords(records: records.related, total: 8)
+                        RelatedRecords(records: records.related)
                     }
                 }
             },
@@ -69,19 +71,13 @@ struct RecordsDetailLayout: View {
             eyebrow: "Records",
             trust: .neutral,
             onBack: { @Sendable in Task { @MainActor in onBack() } },
-            trailingAction: MailTopBarTrailingAction(
-                icon: .download,
-                accessibilityLabel: "Download PDF"
-            ) { @Sendable in },
             overflowItems: [
-                MailOverflowItem(id: "openPDF", icon: .fileText, label: "Open PDF") {},
-                MailOverflowItem(id: "downloadJSON", icon: .download, label: "Download JSON") {},
-                MailOverflowItem(id: "share", icon: .share, label: "Share copy") {},
                 MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                     Task { @MainActor in onSaveToVault() }
                 },
-                MailOverflowItem(id: "dispute", icon: .flag, label: "Dispute") {},
-                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {}
+                MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                    Task { @MainActor in onArchive() }
+                }
             ]
         )
     }
@@ -441,7 +437,6 @@ private struct RecordsBody: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            readFullButton
         }
         .padding(Spacing.s3)
         .background(Theme.Color.appSurface)
@@ -452,35 +447,12 @@ private struct RecordsBody: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
         .accessibilityIdentifier("mailDetail_records_body")
     }
-
-    private var readFullButton: some View {
-        Button(action: {}) {
-            HStack(spacing: Spacing.s1) {
-                Icon(.fileText, size: 13, color: Theme.Color.appText)
-                Text("Read full document · \(pageCount) pages")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.appText)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.s2)
-            .background(Theme.Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-        }
-        .buttonStyle(.plain)
-        .padding(.top, Spacing.s1)
-        .accessibilityIdentifier("mailDetail_records_readFull")
-    }
 }
 
 // MARK: - Actions
 
-/// Records shelf — open shows "File in vault" primary + Download PDF /
-/// Choose folder secondary tiles; filed shows retention banner + Open
-/// PDF / Share / JSON triplet.
+/// Records shelf — open shows "File in vault" primary + a Choose folder
+/// secondary tile; filed shows the retention banner.
 private struct RecordsActions: View {
     let isFiled: Bool
     let inFlight: Bool
@@ -499,7 +471,6 @@ private struct RecordsActions: View {
         VStack(spacing: Spacing.s2) {
             fileInVaultButton
             HStack(spacing: Spacing.s2) {
-                secondary(id: "downloadPDF", icon: .download, label: "Download PDF")
                 secondary(id: "chooseFolder", icon: .archive, label: "Choose folder", action: onSaveToVault)
             }
         }
@@ -508,11 +479,6 @@ private struct RecordsActions: View {
     private var filedActions: some View {
         VStack(spacing: Spacing.s2) {
             retentionBanner
-            HStack(spacing: Spacing.s2) {
-                secondary(id: "openPDF", icon: .fileText, label: "Open PDF")
-                secondary(id: "share", icon: .share, label: "Share")
-                secondary(id: "downloadJSON", icon: .download, label: "JSON")
-            }
         }
     }
 

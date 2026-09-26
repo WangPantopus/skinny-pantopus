@@ -8,7 +8,7 @@
 //  /message-templates` since there is no GET-single route). Variables are filled
 //  by `POST /message-templates/preview` (sample values), with a local
 //  interpolation fallback so the mock always renders. There is no send-test
-//  endpoint yet, so "Send test" surfaces a coming-soon note honestly.
+//  endpoint, so the preview offers no send action.
 //
 
 import Foundation
@@ -39,9 +39,6 @@ final class MessagePreviewViewModel {
     private(set) var rawBody = ""
     private(set) var rawSubject: String?
     var activeChannel: WorkflowChannel = .email
-    /// Transient note shown under the device mock (e.g. send-test status).
-    var testNote: String?
-    var testNoteIsError = false
 
     var theme: SchedulingIdentityTheme {
         owner.theme
@@ -122,15 +119,5 @@ final class MessagePreviewViewModel {
 
     func selectChannel(_ index: Int) {
         activeChannel = WorkflowChannel.allCases[index]
-    }
-
-    /// No send-test endpoint exists yet — surface a calm coming-soon note.
-    func sendTest() {
-        testNoteIsError = false
-        testNote = "Test sends are coming soon. Save your message to use it."
-        Task {
-            try? await Task.sleep(nanoseconds: 2_600_000_000)
-            testNote = nil
-        }
     }
 }

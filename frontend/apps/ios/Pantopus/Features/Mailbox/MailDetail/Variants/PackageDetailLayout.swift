@@ -22,6 +22,8 @@ struct PackageDetailLayout: View {
     let onAcknowledgeDelivery: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    /// S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
+    var onArchive: @MainActor () -> Void = {}
     /// A17.14 — when set, the overflow surfaces "Virtual unboxing", which
     /// opens the Unboxing capture flow for this package. Mirrors RN's
     /// delivered-only CTA in `src/app/mailbox/package.tsx:180-187`.
@@ -107,12 +109,12 @@ struct PackageDetailLayout: View {
             MailOverflowItem(id: "shareEta", icon: .send, label: "Share ETA with household") { @Sendable in
                 Task { @MainActor in onShareEta() }
             },
-            MailOverflowItem(id: "openMap", icon: .map, label: "Track map") {},
-            MailOverflowItem(id: "handoff", icon: .userPlus, label: "Hand-off") {},
             MailOverflowItem(id: "saveToVault", icon: .bookmark, label: "Save to vault") { @Sendable in
                 Task { @MainActor in onSaveToVault() }
             },
-            MailOverflowItem(id: "archive", icon: .archive, label: "Archive") {},
+            MailOverflowItem(id: "archive", icon: .archive, label: "Archive") { @Sendable in
+                Task { @MainActor in onArchive() }
+            },
             MailOverflowItem(id: "report", icon: .alertTriangle, label: "Report issue") { @Sendable in
                 Task { @MainActor in onReportIssue() }
             }

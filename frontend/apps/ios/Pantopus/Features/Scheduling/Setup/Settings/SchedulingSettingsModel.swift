@@ -105,9 +105,20 @@ final class SchedulingSettingsModel {
         return "pantopus.com/book/\(slug.isEmpty ? "…" : slug) · \(ownerTag)"
     }
 
+    /// The page's stored zone; "auto" only when none is stored and the device zone stands in.
     var timezoneValue: String {
-        let tz = page?.timezone ?? SchedulingTime.deviceTimeZoneIdentifier
-        return "\(tz) · auto"
+        if let tz = page?.timezone, !tz.isEmpty { return tz }
+        return "\(SchedulingTime.deviceTimeZoneIdentifier) · auto"
+    }
+
+    /// Whether the page stores any cancellation policy (structured or free text).
+    var hasCancellationPolicy: Bool {
+        switch page?.cancellationPolicy {
+        case .none, .null: false
+        case let .string(text): !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case let .object(fields): !fields.isEmpty
+        default: true
+        }
     }
 
     var remindersValue: String? {

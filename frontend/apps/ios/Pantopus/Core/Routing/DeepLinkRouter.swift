@@ -57,7 +57,9 @@ final class DeepLinkRouter {
         case beaconProfile(handle: String)
         /// `pantopus://join/:code` — signup invite code (RN `/join/[code]` alias).
         case joinInvite(code: String)
-        case connections
+        /// `pantopus://connections?tab=` — a connection request links
+        /// `tab=requests`, which opens the Pending tab.
+        case connections(tab: String?)
         /// `pantopus://beacons` — A03.2 Beacon Updates feed (`surface=personas`).
         case beacons
         case discoverHub
@@ -597,7 +599,7 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         case "connections":
-            return .connections
+            return .connections(tab: tabQuery)
         case "beacons", "beacon-updates", "beacon_updates":
             return .beacons
         case "discover-hub", "discover_hub", "discoverhub":

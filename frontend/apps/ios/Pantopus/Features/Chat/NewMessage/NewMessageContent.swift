@@ -83,6 +83,9 @@ public enum NewMessageState: Sendable {
     case empty
     /// Sections + rows ready to render.
     case loaded(sections: [NewMessageSection])
+    /// A search is active, nothing on this device matches and the people
+    /// search failed — so "No matches" would be a guess.
+    case searchFailed
     case error(message: String)
 }
 

@@ -101,7 +101,9 @@ class PostsRepository
         suspend fun userPosts(
             userId: String,
             limit: Int = 50,
-        ): NetworkResult<MyPostsResponse> = safeApiCall { api.userPosts(userId, limit) }
+            cursorCreatedAt: String? = null,
+            cursorId: String? = null,
+        ): NetworkResult<MyPostsResponse> = safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId) }
 
         /** `DELETE /api/posts/:id`. */
         suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }
