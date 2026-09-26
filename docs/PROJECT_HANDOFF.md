@@ -20,7 +20,7 @@
 - **Slots:** heavy free; iOS driver free; no simulator booted. Stream 1 emulator-5558 is in slot 3.
 - **Side effects awaiting the user:** LocalProfile-on-read and Wallet-on-read, both existing backend behaviour.
 
-## Resume point history — 2026-09-26T05:55Z (batch 20 merged; batch 21 = 7 reviewed PRs gated on CI; Stream 1 Pulse+Offers build under heavy)
+## Resume point history — 2026-09-26T05:48Z (batch 20 merged; batch 21 = 7 reviewed PRs gated on CI; Stream 1 Pulse+Offers build under heavy)
 
 - **Integration (Stream 1 queue):**
   - Master is `5bf1eb7f8`. Batch 20 [#463](https://github.com/WangPantopus/skinny-pantopus/pull/463) merged #455 (S3-50/53/67), #460 (S3-42/61, web), #458 (Stream 1 native: My listings counts, exact offer amounts, drawer opens your profile, "just posted" by age) and #461 (S2-03) at 04:22:46Z.

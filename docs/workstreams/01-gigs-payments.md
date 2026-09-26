@@ -10,7 +10,7 @@
   - Afters pass on both apps and web. Bundles `b923594b…`, `5889b7f7…` and `c14c1e6f…`.
 - **Proposals for the user:** token refresh (Android), Marketplace Snapshot rows, owner Message, buyer offer view/withdraw.
 
-## Previous Stream 1 state — 2026-09-26T05:55Z
+## Previous Stream 1 state — 2026-09-26T05:48Z
 
 - **Merged in batch 20 (#463, 04:22:46Z):** #458.
 - **Open:**
