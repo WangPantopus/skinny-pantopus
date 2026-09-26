@@ -5373,7 +5373,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.broadcastDetail(card.id))
                         },
                         onOpenSetup = {
-                            navController.navigate(ChildRoutes.privacyHandshake(currentHandle))
+                            // This CTA only shows without a Beacon, and payments need
+                            // one: open Beacon creation, as web's setup starts there.
+                            navController.navigate(ChildRoutes.editPersona(EDIT_PERSONA_CREATE_ARG))
                         },
                         onOpenCreatorInbox = {
                             navController.navigate(ChildRoutes.CREATOR_INBOX)
