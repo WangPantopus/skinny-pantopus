@@ -70,6 +70,16 @@
 - **Status:** a known product gap. It may be built in the future as a feature, with a design pass.
 
 ### 3. Other open items (not approved work; reproduce and propose before changing)
+0. **Escrowed mail to a phone number (Stream 3's finding 15, handed to Stream 2; security + product; needs the user).**
+   - **Path:** `POST /api/mailbox` to a non-user phone recipient creates escrowed mail and "texts" the claim link through `backend/services/smsService.js`.
+     - That service is a placeholder: it only logs "Would send SMS". The caller is `backend/routes/mailbox.js` ~line 2021.
+     - The API still answers 201 "Mail sent successfully (escrowed for non-user recipient)".
+   - **Effect:** the recipient never gets the link.
+   - **Token in logs:** the logged SMS body contains the full claim link with its `escrow_claim_token`, so anyone with server-log access could claim the letter.
+   - **Proposal to bring to the user:**
+     - **A (small, in place):** while SMS isn't wired, refuse phone escrow with a truthful message ("Texting isn't available yet; send to their email"), or return the claim link for the sender to share. Stop logging the SMS body (log a redacted form).
+     - **B:** wire a real SMS provider. That's a vendor and money decision.
+   - **Not yet reproduced by Stream 2:** check which clients offer phone recipients.
 1. **"Message household admin" for applicants (candidate).** The Verification Center link (`/app/homes/:id/messages`) probably tells every applicant "No household admin yet" even when the Home has an owner.
    - Home detail returns `owner` only with `ownership.view`, and the occupants read needs `members.view`.
    - Reproducing it needs an applicant fixture: a new synthetic user with a pending claim.
