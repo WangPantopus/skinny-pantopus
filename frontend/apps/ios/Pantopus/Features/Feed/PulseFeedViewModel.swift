@@ -124,6 +124,9 @@ public final class PulseFeedViewModel {
     /// Session-scoped dismissal, re-armed whenever the radius changes —
     /// RN `useRadiusSuggestion.ts:117-122`.
     private var radiusSuggestionDismissed = false
+    /// True once the current query's posts have loaded. The banner counts real
+    /// posts, never the empty list of a load that is still running or failed.
+    private var postsLoaded = false
 
     /// Locality name surfaced on the empty state. Set from the loaded
     /// first post or a backend hint.
@@ -251,6 +254,8 @@ public final class PulseFeedViewModel {
         // (RN `useFeedFiltering.ts:24-27`).
         if next != .pulse { activeTopic = nil }
         loadedItems = []
+        postsLoaded = false
+        radiusSuggestion = nil
         overrides = [:]
         removedPostIds = []
         state = .loading
@@ -313,7 +318,7 @@ public final class PulseFeedViewModel {
     /// Recompute the banner from the last page size. Called after every
     /// fetch and whenever the viewing radius changes.
     private func recomputeRadiusSuggestion() {
-        guard surface == .pulse, !radiusSuggestionDismissed else {
+        guard surface == .pulse, !radiusSuggestionDismissed, postsLoaded else {
             radiusSuggestion = nil
             return
         }
@@ -600,6 +605,8 @@ public final class PulseFeedViewModel {
                 // A changed filter or area cannot retain the old query's
                 // rows or cursor if its first page fails.
                 loadedItems = []
+                postsLoaded = false
+                radiusSuggestion = nil
                 applyPagination(nil)
                 lastArea = nil
                 lastQuery = nil
@@ -623,6 +630,7 @@ public final class PulseFeedViewModel {
             lastArea = area
             lastQuery = query
             loadedItems = response.posts
+            postsLoaded = true
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
@@ -635,6 +643,7 @@ public final class PulseFeedViewModel {
                 toastMessage = message
             } else {
                 loadedItems = []
+                postsLoaded = false
                 applyPagination(nil)
                 lastArea = nil
                 lastQuery = nil
