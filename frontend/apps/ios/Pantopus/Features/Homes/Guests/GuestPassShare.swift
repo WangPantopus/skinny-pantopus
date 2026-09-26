@@ -38,8 +38,8 @@ public struct GuestPassShare: Identifiable, Hashable, Sendable {
 
     /// Public guest-viewer link for a raw create-response token (64 hex
     /// characters): the web app's `/guest/:token` page on this build's public
-    /// web origin, like the other public-page links. The download link's
-    /// host doesn't serve the web app.
+    /// web origin, like the other public-page links. `downloadURLString` is
+    /// the app-download link, meant to become a store smart-link.
     public static func url(forToken token: String) -> String {
         InviteLinks.publicPageURLString(path: "/guest/\(token)")
     }

@@ -39,8 +39,8 @@ data class GuestPassShare(
         /**
          * Public guest-viewer link for a raw create-response token (64 hex
          * characters): the web app's `/guest/:token` page on this build's web
-         * origin, like the other public-page links. The download link's host
-         * doesn't serve the web app.
+         * origin, like the other public-page links. [InviteLinks.DOWNLOAD_URL]
+         * is the app-download link, meant to become a store smart-link.
          */
         fun urlForToken(token: String): String = InviteLinks.publicPageUrl("/guest/$token")
     }
