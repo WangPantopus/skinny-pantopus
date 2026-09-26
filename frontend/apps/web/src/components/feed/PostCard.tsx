@@ -420,6 +420,7 @@ function PostCard({
         <button
           onClick={() => onLike(post.id)}
           disabled={isLiking}
+          aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
             post.userHasLiked
               ? 'text-red-500 bg-red-50 hover:bg-red-100'
@@ -433,6 +434,7 @@ function PostCard({
         {/* Comment */}
         <button
           onClick={() => onComment(post.id)}
+          aria-label="Comments"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -444,6 +446,7 @@ function PostCard({
         {/* Bookmark */}
         <button
           onClick={() => onSave?.(post.id)}
+          aria-label={post.userHasSaved ? 'Remove from saved' : 'Save post'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
             post.userHasSaved ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300' : 'text-app-muted hover-bg-app'
           }`}
@@ -459,10 +462,21 @@ function PostCard({
                 .then(() => api.posts.sharePost(post.id))
                 .catch(() => {});
             } else {
-              navigator.clipboard?.writeText(buildCanonicalShareUrlForPost(post));
-              void api.posts.sharePost(post.id).catch(() => {});
+              // Copying is invisible, so say whether it worked (as the post detail does).
+              const copied = navigator.clipboard?.writeText(buildCanonicalShareUrlForPost(post));
+              if (!copied) {
+                showToast?.('Failed to share post');
+                return;
+              }
+              copied
+                .then(() => {
+                  showToast?.('Post link shared');
+                  void api.posts.sharePost(post.id).catch(() => {});
+                })
+                .catch(() => showToast?.('Failed to share post'));
             }
           }}
+          aria-label="Share post"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
         >
           <Share className="w-4 h-4" />
