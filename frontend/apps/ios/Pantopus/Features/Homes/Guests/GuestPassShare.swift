@@ -24,16 +24,19 @@
 import Foundation
 
 /// One shareable guest pass — the pass id, the guest's first name (used
-/// in the message opener), and the composed viewer URL.
+/// in the message opener), the composed viewer URL, and the owner's welcome
+/// note (added to the message).
 public struct GuestPassShare: Identifiable, Hashable, Sendable {
     public let id: String
     public let guestName: String
     public let urlString: String
+    public let note: String
 
-    public init(id: String, guestName: String, urlString: String) {
+    public init(id: String, guestName: String, urlString: String, note: String = "") {
         self.id = id
         self.guestName = guestName
         self.urlString = urlString
+        self.note = note
     }
 
     /// Public guest-viewer link for a raw create-response token (64 hex
@@ -51,7 +54,8 @@ public struct GuestPassShare: Identifiable, Hashable, Sendable {
     /// RN parity — `src/app/homes/[id]/share.tsx:76-82`.
     public var message: String {
         let opener = guestName.isEmpty ? "Here's" : "Hi \(guestName), here's"
-        return "\(opener) your guest access to our home: \(urlString)"
+        let base = "\(opener) your guest access to our home: \(urlString)"
+        return note.isEmpty ? base : "\(base)\n\n\(note)"
     }
 
     /// Items handed to `UIActivityViewController`.

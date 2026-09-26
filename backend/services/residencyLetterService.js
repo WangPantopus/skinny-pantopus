@@ -28,7 +28,7 @@ const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { currentOccupancy } = require('../utils/homeAccessPolicy');
+const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES } = require('../utils/homeAccessPolicy');
 
 const PURPOSE_MAX_LEN = 140;
 const DEFAULT_PURPOSE = 'General verification of residency';
@@ -356,17 +356,19 @@ async function verifyByCode(code) {
 
   // The letter attests CURRENT residency, so it stops verifying when the
   // issuer's admission to this home ends — including endings that write no
-  // revocation, such as an invited member's access window lapsing. Retiring
-  // it mirrors the removal/move-out transactions (revoke_reason
+  // revocation, such as an invited member's access window lapsing or a role
+  // change to guest or service provider (not residents; issuing refuses them
+  // too). Retiring it mirrors the removal/move-out transactions (revoke_reason
   // residency_ended), so a later re-admission does not revive it.
   const { data: occupancy, error: occupancyErr } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select('is_active, verification_status, start_at, end_at, access_start_at, access_end_at')
+    .select('is_active, verification_status, role, role_base, start_at, end_at, access_start_at, access_end_at')
     .eq('home_id', data.home_id)
     .eq('user_id', data.user_id)
     .maybeSingle();
   if (occupancyErr) throw new Error('Could not confirm current residency');
-  if (!occupancy || occupancy.verification_status !== 'verified' || !currentOccupancy(occupancy)) {
+  if (!occupancy || occupancy.verification_status !== 'verified' || !currentOccupancy(occupancy)
+    || NON_RESIDENT_ROLES.has(resolveHomeRole(occupancy))) {
     await supabaseAdmin
       .from('ResidencyLetter')
       .update({ status: 'revoked', revoked_at: new Date().toISOString(), revoke_reason: 'residency_ended' })

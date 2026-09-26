@@ -226,7 +226,9 @@ internal fun AddGuestFormLoaded(
         onClose = onClose,
         onCommit = onCommit,
     ) {
-        HomeContextStrip(title = state.homeTitle, subtitle = state.homeSubtitle)
+        if (state.homeTitle.isNotEmpty()) {
+            HomeContextStrip(title = state.homeTitle, subtitle = state.homeSubtitle)
+        }
 
         FormFieldGroup(title = "Guest") {
             PantopusTextField(
@@ -251,7 +253,7 @@ internal fun AddGuestFormLoaded(
                     fieldTestTag = "field_guestContact",
                 )
                 Text(
-                    text = "We'll text or email them a one-tap pass link.",
+                    text = "You'll share the pass link with them next.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )

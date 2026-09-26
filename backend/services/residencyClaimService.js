@@ -32,6 +32,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { generateLetterCode, normalizeLetterCode, addressLine1FromHome, webBaseUrl, residentNameFromUser } = require('./residencyLetterService');
 const { getActiveOccupancy } = require('../utils/homePermissions');
+const { resolveHomeRole, NON_RESIDENT_ROLES } = require('../utils/homeAccessPolicy');
 const { composeCivicDistricts } = require('./placeSectionAdapters');
 
 const CLAIM_SCOPES = ['address', 'city', 'county', 'state', 'school_district', 'congressional_district'];
@@ -316,13 +317,14 @@ async function revokeClaim({ homeId, userId, claimId }) {
 
 /**
  * The LIVE occupancy re-check: is the issuer still an active, verified
- * occupant of the home the claim points at? Liveness (is_active + time
+ * resident of the home the claim points at? Liveness (is_active + time
  * windows) is homePermissions' getActiveOccupancy — the one copy of
- * that rule — with the verification check on top.
+ * that rule — with the verification check on top. Guests and service
+ * providers are not residents (issuing refuses them too).
  */
 async function isStillVerifiedResident(homeId, userId) {
   const occ = await getActiveOccupancy(homeId, userId);
-  return Boolean(occ && occ.verification_status === 'verified');
+  return Boolean(occ && occ.verification_status === 'verified' && !NON_RESIDENT_ROLES.has(resolveHomeRole(occ)));
 }
 
 /**
