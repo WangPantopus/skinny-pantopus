@@ -2,6 +2,33 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 07:35Z: PR483 (S3-43) and PR485 (S3-48, S3-56) open; batch 22 merged (master `a916e6bd9`)
+
+- **Merged in batch 22** ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478), 07:13:40Z): #475 (S3-47) and #470 (S3-66). Batch 23 = [PR484](https://github.com/WangPantopus/skinny-pantopus/pull/484), carrying #479.
+- **Addenda and a correction for #475 and #479** (Stream 1 verified the hashes):
+  - I had said a synthetic 200 from the proxy couldn't reach the web page. That was wrong: the app's `/api` calls are same-origin through Next.
+  - With that, the empty reminders ("No reminders"), B7's "No event types yet" and B7's save-success states are now verified. The DB was unchanged.
+  - Addendum MANIFESTs: `daa00946…` and `29e3dc4d…`.
+- **[PR483](https://github.com/WangPantopus/skinny-pantopus/pull/483): open.** Web S3-43. Head `072264f1b`, 3 files.
+  - Advanced Privacy listed only `UserProfileBlock` rows and said "No blocked users" for people blocked from a profile (`UserBlock`), with no link to Blocked users. The Blocked users page never listed the scoped blocks.
+  - Now Blocked users lists all three contracts; scoped rows show "· Search block" and lift via `DELETE /api/privacy/blocks/:id`. Advanced Privacy links there.
+  - Verified with synthetic block lists and a synthetic or refused unblock; DB unchanged.
+  - Bundle `20260926-stream3-web-blocked-users-complete-r1`, MANIFEST.json SHA-256 `9b2970ba2f653e654f63cb8865645262d8ecde24e1fd77bf3bcdef563c13e866`.
+- **[PR485](https://github.com/WangPantopus/skinny-pantopus/pull/485): open.** Android S3-48 and S3-56. Head `95886f149`, 3 files. Built under heavy (07:06–07:24Z) on APK `cca77428…`.
+  - S3-48: a tab switch mid-load refetches and drops the late page. Before, Unread showed read rows; after, only unread.
+  - S3-48: a failed next page shows Try again instead of an endless spinner.
+  - S3-56: Messages pulls to refresh.
+  - Unit tests in the affected packages pass (26/10/7/4).
+  - Bundle `20260926-stream3-android-notifications-chat-refresh-r1`, MANIFEST.json SHA-256 `dde4f7201c3111534ee7ed807622ef595a406caacef7c2026c4469a975ab505b`.
+- **Harness:** the no-send proxy now also refuses `GET /api/privacy/settings` for non-Owner callers, because it inserts a default row.
+- **Not doable here:**
+  - S3-55: the reaction reload is realtime-driven, and realtime is blocked.
+  - S3-62: Endorse only renders on the public `/b/` page, whose read inserts a view row.
+- **Progress, as reported to the user:** 69 Stream 3 rows.
+  - 40 merged fully and 5 partly; now also S3-47 and S3-66 merged.
+  - Open: S3-43, S3-48, S3-56, plus the B7 finding.
+  - About 18 rows remain, and 2 need money decisions: S3-35 and S3-46.
+
 ## Update 2026-09-26 06:50Z: web B7 limits open as PR479 (master `e1509f346`, batch 21 merged)
 
 - **Batch 21 merged:** #465, #466 and #468. #470 and #475 are in batch 22 ([PR478](https://github.com/WangPantopus/skinny-pantopus/pull/478)).
