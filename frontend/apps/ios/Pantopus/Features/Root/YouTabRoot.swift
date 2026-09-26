@@ -166,6 +166,9 @@ public enum YouRoute: Hashable {
     /// §1A① — "Following": the Beacons the signed-in user follows, reached
     /// from the Audience Profile "Following" entry row.
     case following
+    /// Universal search on its Beacons tab: "Discover beacons" from Beacon
+    /// Updates and Following, as in the Hub stack.
+    case beaconSearch
     /// BLOCK 2E — "Saved places": the places the user has bookmarked from
     /// Explore. Reached from the Me profile "Saved places" Activity row.
     case savedPlaces
@@ -665,6 +668,18 @@ public struct YouTabRoot: View {
         case "businessProfiles": .myBusinesses
         case "dataExport": .dataExport
         default: nil
+        }
+    }
+
+    /// Where a universal-search result opens in this stack; the same
+    /// destinations as `HubTabRoot.route(forUniversalSearch:)`.
+    static func route(forUniversalSearch destination: UniversalSearchDestination) -> YouRoute {
+        switch destination {
+        case let .task(gigId): .gigDetail(gigId: gigId)
+        case let .person(userId): .publicProfile(userId: userId)
+        case let .beacon(handle): .beaconProfile(handle: handle)
+        case let .business(businessId): .businessProfile(businessId: businessId)
+        case let .home(homeId): .homeDashboard(homeId: homeId)
         }
     }
 
@@ -1838,22 +1853,31 @@ public struct YouTabRoot: View {
                 onCompose: { intent in
                     Task { @MainActor in path.append(.composePost(intent: intent.rawValue)) }
                 },
-                onDiscover: {
-                    Task { @MainActor in path.append(.placeholder(label: "Discover beacons")) }
-                },
+                onDiscover: { Task { @MainActor in path.append(.beaconSearch) } },
+                onFollowing: { Task { @MainActor in path.append(.following) } },
                 onBack: { Task { @MainActor in pop() } }
             )
         case .following:
             FollowingView(
                 viewModel: FollowingViewModel(
                     onBack: { Task { @MainActor in pop() } },
-                    onDiscover: {
-                        Task { @MainActor in path.append(.placeholder(label: "Discover beacons")) }
-                    },
+                    onDiscover: { Task { @MainActor in path.append(.beaconSearch) } },
                     onOpenPersona: { handle in
                         Task { @MainActor in path.append(.beaconProfile(handle: handle)) }
+                    },
+                    onOpenPost: { postId in
+                        Task { @MainActor in path.append(.pulsePost(postId: postId)) }
                     }
                 )
+            )
+        case .beaconSearch:
+            UniversalSearchView(
+                viewModel: UniversalSearchViewModel(initialTab: .beacons),
+                onOpen: { destination in
+                    Task { @MainActor in path.append(Self.route(forUniversalSearch: destination)) }
+                },
+                onBrowseNearbyBusinesses: { Task { @MainActor in path.append(.discoverBusinesses) } },
+                onBack: { Task { @MainActor in pop() } }
             )
         case let .beaconProfile(handle):
             BeaconProfileView(
