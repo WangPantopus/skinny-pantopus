@@ -2,6 +2,15 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 17:45Z (#529 Home documents delete + unavailable states)**
+
+- **New: PR [529](https://github.com/WangPantopus/skinny-pantopus/pull/529) (D09, records).** Branch `claude/stream2-home-docs-truthful`, head `7ba35d907` on `be33552e8`; 4 web pages plus `deleteHomeDocument` in `@pantopus/api`. Reported to Stream 1 for batch 30 with #528; no shared files.
+  - **Documents delete:** the web Delete only dropped the row ("Document removed", no request, the document came back). It now uses the apps' `DELETE /api/homes/:homeId/documents/:documentId`.
+    - Verified with two synthetic documents uploaded through the real route: DELETE 200, `File.is_deleted` true, storage object removed.
+  - **Unavailable, not empty:** Documents, Issues, Access & Codes and Share Access now show "Current … could not be loaded … Retry" on a failed read (member 403), the 45368d5b8 pattern.
+  - **Evidence:** bundle `20260926-stream2-home-docs-r1`, MANIFEST `9fc992ffcec64101c4830f256f96476b5a7317127f27cf52a9dc55f15ac69c57`.
+- **Runtime:** my isolated Supabase now has a private bucket `s2-home-documents`, and backend 18143 runs with `HOME_DOCUMENTS_BUCKET` set, so document upload/download/delete work locally. The synthetic documents were deleted (storage objects 0; File rows retained as deleted).
+
 **Stream 2 — 2026-09-26 17:34Z (#519/#521 merged in batch 28; #528 Members Invite opened; #509 Mail re-check done)**
 
 - **Merged:** #519 and #521 in batch 28 ([#525](https://github.com/WangPantopus/skinny-pantopus/pull/525), master `be33552e8`). All Stream 2 PRs to date are merged.
@@ -604,7 +613,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | D06 | **Partial/open.** Home privacy read-failure repair and actual consumer recovery are recorded. | Every exposed privacy control and all native/other consumers. |
 | D07 | **Partial/open.** Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. 2026-09-26: web explicit role choice ([#474](https://github.com/WangPantopus/skinny-pantopus/pull/474), bundle `20260926-stream2-web-role-choice-r1`). Members "Invite" opens the real Invite Member panel instead of a stub that faked success ([#528](https://github.com/WangPantopus/skinny-pantopus/pull/528), bundle `20260926-stream2-members-invite-r1`). | ShareCenter, Members/Security and provider-panel empty/error states. |
 | D08 | **Partial/open.** Browser M02 share lifecycle and Android guest-pass issue/revoke/share evidence are accepted within limits. | Native/hosted external-share expiry, exact-resource scope, account changes and storage lifecycle. |
-| D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. | Remaining malformed-success readers and complete cross-client verification. |
+| D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. 2026-09-26: web Documents delete really deletes, and Documents/Issues/Access/Share show unavailable instead of empty ([#529](https://github.com/WangPantopus/skinny-pantopus/pull/529), bundle `20260926-stream2-home-docs-r1`). | Remaining malformed-success readers and complete cross-client verification. |
 | D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
 | F01 | **Partial/open.** Home bill cards are covered by D03 evidence only. | Place overview/detail across web/iOS/Android, fractions, currencies, periods and totals. |
 | F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
