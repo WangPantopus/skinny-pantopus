@@ -2,6 +2,31 @@
 
 Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
+**Stream 2 — 2026-09-26 10:45Z (decision 1 in progress: backend + web verified; native building)**
+
+- **#503 (decision 4)** is fully green (CI OK) and in Stream 1's batch 26.
+- **Decision 1 (30-day recoverable delete of household letters).** Worktree `/private/tmp/pantopus-stream2-mail-delete`, branch `claude/stream2-mail-recoverable-delete`, local head `b7aeaebe2` on master `207eeb510` (3 WIP commits, unpushed).
+  - **Migration** `20260926100000_mail_recoverable_delete.sql`: nullable `Mail.deleted_at`/`deleted_by` plus a partial index. The policy check passes on `207eeb510`; it's applied only to the isolated DB 64554.
+  - **Backend:**
+    - Delete hides a letter for everyone and keeps it restorable for 30 days.
+    - `POST /api/mailbox/:id/restore` and `GET /api/mailbox/deleted` are added.
+    - A `home_mail_removed` notice (push follows Home updates) goes out for a delete, a mailbox Dismiss or a Mail Day Junk of a Home letter.
+    - Every Mail list, count, job and per-item route skips deleted letters, and the web list stops listing dismissed ones.
+    - A nightly purge runs at 04:40 UTC.
+  - **Web:** Undo in the delete toast, a "Recently deleted" page (mailbox nav, Counter/Vault style), and a Restore banner on the letter the notice opens. The confirm no longer says "permanently".
+  - **Native:** the letter opened from the notice shows the existing PauseBanner with Restore (iOS view model state, Android Column above the letter).
+- **Verified:**
+  - **API befores on master:** hard delete, no notice, the V1 list still shows dismissed letters.
+  - **API afters:** delete/restore/dismiss/Mail Day junk, notices, per-item 404s, a 410 after the window.
+  - **Purge on synthetic letters only:** exact FK scope; `MailEvent` set null, the routing row cascades.
+  - **Web befores/afters** in Chrome.
+  - **Old Android app on the new backend:** no crash; the letter shows without Restore.
+  - Evidence is in the scratchpad `evidence/d1/*`, to be sealed.
+- **Shared files:** Stream 1 and Stream 3 confirmed no pending edits to `notificationService.js`, `jobs/index.js` or migrations. The migration order will be re-checked before the PR.
+- **Finding (covered):** the Android letter screen said "Your account changed" right after a token refresh. Stream 1 says this is the user's 1A, fixed in #509 (batch 26). I'll re-run the letter-after-refresh check after it merges.
+- **Heavy and devices:** heavy held from 10:41:57Z (Android + iOS build). The iOS driver comes to me after Stream 1's 3A/4A afters (~11:05Z); Stream 3 goes after me.
+- **Still with the user:** the guest-letter verification finding (Proposal A, 08:10Z block).
+
 **Stream 2 — 2026-09-26 09:52Z (decision 4 done as #503; #493 in batch 25)**
 
 - **#493 (R06)** is all green and in batch 25 (#499).
