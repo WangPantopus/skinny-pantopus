@@ -82,7 +82,6 @@ fun EarnScreen(
     onOfferService: () -> Unit = {},
     onManagePayout: () -> Unit = {},
     onAddBank: () -> Unit = {},
-    onSeeAllEarnings: () -> Unit = {},
     onOpenTaxDocs: () -> Unit = {},
     viewModel: EarnViewModel = hiltViewModel(),
 ) {
@@ -109,7 +108,6 @@ fun EarnScreen(
         onOfferService = onOfferService,
         onManagePayout = onManagePayout,
         onAddBank = onAddBank,
-        onSeeAllEarnings = onSeeAllEarnings,
         onOpenTaxDocs = onOpenTaxDocs,
         onRetry = { viewModel.refresh() },
     )
@@ -134,7 +132,6 @@ internal fun EarnScreenContent(
     onOfferService: () -> Unit = {},
     onManagePayout: () -> Unit = {},
     onAddBank: () -> Unit = {},
-    onSeeAllEarnings: () -> Unit = {},
     onOpenTaxDocs: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
@@ -168,7 +165,6 @@ internal fun EarnScreenContent(
                         onSelectWay = onSelectWay,
                         onCashOut = onCashOut,
                         onBrowseTasks = onBrowseTasks,
-                        onSeeAllEarnings = onSeeAllEarnings,
                         onManagePayout = onManagePayout,
                         onOpenTaxDocs = onOpenTaxDocs,
                     )
@@ -273,7 +269,6 @@ private fun PopulatedBody(
     onSelectWay: (EarnWayKind) -> Unit,
     onCashOut: () -> Unit,
     onBrowseTasks: () -> Unit,
-    onSeeAllEarnings: () -> Unit,
     onManagePayout: () -> Unit,
     onOpenTaxDocs: () -> Unit,
 ) {
@@ -301,11 +296,7 @@ private fun PopulatedBody(
                 onAction = onBrowseTasks,
             )
             EarnWaysToEarnCard(items = content.waysToEarn, onSelect = onSelectWay)
-            SectionOverline(
-                title = "Recent earnings",
-                actionLabel = "See all",
-                onAction = onSeeAllEarnings,
-            )
+            SectionOverline(title = "Recent earnings")
             if (content.earnings.isEmpty()) {
                 EarnLockedRow(
                     title = "No mail offer earnings",
