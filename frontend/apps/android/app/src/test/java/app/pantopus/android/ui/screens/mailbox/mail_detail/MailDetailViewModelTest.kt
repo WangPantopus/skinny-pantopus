@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.mailbox.AckResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
+import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
@@ -48,6 +49,9 @@ class MailDetailViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // Loading an unread letter marks it read (PATCH /api/mailbox/:id/view).
+        coEvery { repo.markViewed(any()) } returns
+            NetworkResult.Success(MarkMailViewedResponse(message = "Mail marked as viewed", alreadyViewed = false))
     }
 
     @After

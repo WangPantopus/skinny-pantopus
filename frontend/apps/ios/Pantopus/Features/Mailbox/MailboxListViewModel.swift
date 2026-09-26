@@ -164,6 +164,7 @@ final class MailboxListViewModel: ListOfRowsDataSource {
     static func makeRow(
         for mail: MailItem,
         trust trustOverride: MailTrust? = nil,
+        viewed viewedOverride: Bool = false,
         onOpenMail: @escaping @Sendable (String) -> Void
     ) -> RowModel {
         let category = MailItemCategory.fromRaw(mail.mailType ?? mail.type)
@@ -199,7 +200,7 @@ final class MailboxListViewModel: ListOfRowsDataSource {
             body: mail.previewText,
             chips: chips,
             timeMeta: formatRelativeTime(mail.createdAt),
-            highlight: mail.viewed ? nil : .unread
+            highlight: mail.viewed || viewedOverride ? nil : .unread
         )
     }
 

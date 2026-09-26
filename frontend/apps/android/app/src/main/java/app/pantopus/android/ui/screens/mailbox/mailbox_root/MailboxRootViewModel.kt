@@ -174,6 +174,9 @@ class MailboxRootViewModel
                 viewModelScope.launch {
                     MailboxRepository.mailLeftList.collect { mailId -> dropLoadedMail(mailId) }
                 }
+                viewModelScope.launch {
+                    MailboxRepository.mailViewed.collect { mailId -> markLoadedMailViewed(mailId) }
+                }
             }
         }
 
@@ -330,6 +333,16 @@ class MailboxRootViewModel
                         applyLiveState(drawer, tab)
                     }
             }
+        }
+
+        /** Opening a letter marked it read: clear its row's unread state and refresh the badges. */
+        private fun markLoadedMailViewed(mailId: String) {
+            val index = loadedMail.indexOfFirst { it.id == mailId }
+            if (index >= 0) {
+                loadedMail[index] = loadedMail[index].copy(viewed = true)
+                applyLiveState(_selectedDrawer.value, _selectedTab.value)
+            }
+            viewModelScope.launch { fetchDrawerBadges() }
         }
 
         /** Remove a letter that left this tab; keep paging aligned with the server. */
