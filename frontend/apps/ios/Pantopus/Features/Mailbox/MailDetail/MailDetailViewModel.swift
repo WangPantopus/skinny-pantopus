@@ -131,6 +131,7 @@ public final class MailDetailViewModel {
             let response: MailDetailResponse = try await api.request(
                 MailboxEndpoints.detail(mailId: mailId)
             )
+            removed = response.mail.removed
             // Ceremonial mail never lands on the generic detail — hand it
             // straight to the open experience and hold the loading frame
             // so the plain layout never flashes (RN does the same by
@@ -141,7 +142,6 @@ public final class MailDetailViewModel {
             }
             let content = Self.project(detail: response.mail, now: now())
             state = .loaded(content)
-            removed = response.mail.removed
             // Certified mail stays unread until it is signed: its Sign for
             // delivery confirmation keys on unread.
             let signable = content.certifiedDetail != nil && !content.isAcknowledged

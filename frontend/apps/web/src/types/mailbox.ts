@@ -13,8 +13,6 @@
 //   - Everything exported
 // ============================================================
 
-import type { MailRemovedInfo } from '@pantopus/api';
-
 // ── Re-exports from @pantopus/types ──────────────────────────
 
 export type {
@@ -255,7 +253,7 @@ export interface MailWrapper {
   privacy: Privacy;
   lifecycle: Lifecycle;
   /** Deleted (restorable for 30 days) or dismissed for the household. */
-  removed?: MailRemovedInfo;
+  removed?: import('@pantopus/api').MailRemovedInfo;
   category?: MailCategory;
   starred: boolean;
   created_at: string;
