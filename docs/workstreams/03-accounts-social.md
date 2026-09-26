@@ -2,6 +2,21 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## Update 2026-09-26 05:10Z (master `5bf1eb7f8`, batch 20 merged)
+
+- **Merged in batch 20** ([PR463](https://github.com/WangPantopus/skinny-pantopus/pull/463), 04:22:41Z): [PR455](https://github.com/WangPantopus/skinny-pantopus/pull/455) (S3-50, S3-53 Call, S3-67) and [PR460](https://github.com/WangPantopus/skinny-pantopus/pull/460) (web S3-42, S3-61).
+- **Open for Stream 1's queue:**
+  - [PR465](https://github.com/WangPantopus/skinny-pantopus/pull/465): S3-08, S3-36, S3-34; for batch 21.
+  - [PR466](https://github.com/WangPantopus/skinny-pantopus/pull/466): web S3-65 Unpublish confirm. Head `d8d7a2993`, 1 file. Bundle `20260926-stream3-business-unpublish-confirm-r1`, MANIFEST SHA-256 `296a7637ab1b356061b554a1598d8a7ca1b2c2e2aad5ba3691c8b807f43c4b72`.
+  - [PR468](https://github.com/WangPantopus/skinny-pantopus/pull/468): head `e98e8cb64`, 7 files. Bundle `20260926-stream3-hide-automation-hub-back-r1`, MANIFEST SHA-256 `e16220404e0f0187f60082110be37d8d33437b404b073e34ba978a32bedb5bad`.
+    - The user's decision B: Workflows and Message templates are hidden on web, iOS and Android.
+    - A new iOS dead end is fixed: the Scheduling hub pushed from You had no Back, and the swipe was disabled.
+    - It also makes the S3-51 Templates → Preview → "Send test" path unreachable.
+- **Fixtures** (user-approved set; isolated DB only; private plan and manifest with exact reverts in the runtime `fixtures-20260926/`):
+  - F1 done at 04:40:35Z: the real API published `s3sched_biz_da533f`. It wrote BusinessProfile publish fields, BusinessAuditLog `3b723c4d…` and NeighborhoodSignalCache `d518cacc…`.
+  - F2–F7 are next: a Beacon persona with a broadcast, conversations including an AI thread, a connection and follow, event types plus a booking in the no-show window, notifications, and a DB-only paid invoice.
+- **Next rows this unblocks:** S3-66 (native business share link, now with a published business), then S3-47 (event types).
+
 ## Update 2026-09-26 04:20Z (master `a5fb4864c`, batch 19 merged)
 
 - **[PR455](https://github.com/WangPantopus/skinny-pantopus/pull/455) and [PR460](https://github.com/WangPantopus/skinny-pantopus/pull/460)** are in Stream 1's batch 20 ([PR463](https://github.com/WangPantopus/skinny-pantopus/pull/463): #455 → #460 → #458 → #461), queued.
