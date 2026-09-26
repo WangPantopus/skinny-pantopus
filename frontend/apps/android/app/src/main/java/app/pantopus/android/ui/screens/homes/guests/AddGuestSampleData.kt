@@ -44,8 +44,8 @@ object AddGuestSampleData {
         val subtitle: String,
     )
 
-    // Keyed by home id so previews stay deterministic; a real build would
-    // resolve this from the loaded home.
+    // Previews and snapshots only; the form loads the real Home
+    // (AddGuestFormViewModel).
     @Suppress("UnusedParameter")
     fun homeContext(homeId: String): HomeContext = HomeContext(title = "412 Elm St · Apt 3B", subtitle = "Kovács household")
 

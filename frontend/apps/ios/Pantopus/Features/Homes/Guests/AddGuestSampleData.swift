@@ -40,8 +40,8 @@ public enum AddGuestSampleData {
     public static let welcomeMaxLength = 280
 
     /// House-context strip shown above the form ("which home is this pass
-    /// for"). Keyed by home id so previews stay deterministic; a real
-    /// build would resolve this from the loaded home.
+    /// for") in previews and snapshots; the form itself loads the real
+    /// Home (`AddGuestFormViewModel.loadHomeContext`).
     public struct HomeContext: Sendable, Equatable {
         public let title: String
         public let subtitle: String
