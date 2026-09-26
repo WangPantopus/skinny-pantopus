@@ -1527,6 +1527,9 @@ public struct HubTabRoot: View {
                 onOpenMaintenance: { id in
                     Task { @MainActor in push(.homeMaintenance(homeId: id)) }
                 },
+                onOpenIssues: { id in
+                    Task { @MainActor in push(.homeIssues(homeId: id)) }
+                },
                 onOpenMembers: { id in
                     Task { @MainActor in push(.homeMembers(homeId: id)) }
                 },

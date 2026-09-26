@@ -279,6 +279,8 @@ struct HomeOverviewSection: View {
     let content: HomeDashboardContent
     let onOpenEmergency: () -> Void
     let onOpenPropertyDetails: () -> Void
+    /// Shown only when set: the viewer can see this home's issues.
+    var onOpenIssues: (() -> Void)?
     var canViewActivity = true
     var canViewEmergency = true
 
@@ -322,6 +324,22 @@ struct HomeOverviewSection: View {
 
             if canViewEmergency {
                 EmergencyInfoRow(info: content.overview.emergency, onOpen: onOpenEmergency)
+            }
+
+            if let onOpenIssues {
+                Button(action: onOpenIssues) {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.wrench, size: 16, color: Theme.Color.home)
+                        Text("Issues")
+                            .pantopusTextStyle(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.Color.home)
+                    }
+                    .frame(minHeight: 44)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("homeDashboard_issuesRow")
             }
 
             Button(action: onOpenPropertyDetails) {

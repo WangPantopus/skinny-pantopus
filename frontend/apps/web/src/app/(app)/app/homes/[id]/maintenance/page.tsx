@@ -24,6 +24,7 @@ function MaintenanceContent() {
   const { id: homeId } = useParams<{ id: string }>();
 
   const [items, setItems] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MaintTab>('open');
   const [showCreate, setShowCreate] = useState(false);
@@ -42,7 +43,19 @@ function MaintenanceContent() {
     } catch { toast.error('Failed to load maintenance items'); }
   }, [homeId]);
 
-  useEffect(() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }, [fetchItems]);
+  const fetchAccess = useCallback(async () => {
+    if (!homeId) return;
+    try {
+      const access = await api.homeIam.getMyHomeAccess(homeId);
+      setPermissions(access?.hasAccess === true && Array.isArray(access.permissions) ? access.permissions : []);
+    } catch { setPermissions([]); }
+  }, [homeId]);
+
+  useEffect(() => { setLoading(true); Promise.all([fetchItems(), fetchAccess()]).finally(() => setLoading(false)); }, [fetchItems, fetchAccess]);
+
+  // As the server allows: maintenance editors report issues; maintenance managers and home editors update them.
+  const canReport = permissions.includes('maintenance.edit') || permissions.includes('maintenance.manage');
+  const canUpdate = permissions.includes('home.edit') || permissions.includes('maintenance.manage');
 
   const openItems = items.filter((i) => i.status === 'suggested' || i.status === 'open');
   const scheduledItems = items.filter((i) => i.status === 'scheduled' || i.status === 'in_progress');
@@ -88,12 +101,14 @@ function MaintenanceContent() {
           <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Maintenance</h1>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
-          <Plus className="w-4 h-4" /> Report Issue
-        </button>
+        {canReport && (
+          <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
+            <Plus className="w-4 h-4" /> Report Issue
+          </button>
+        )}
       </div>
 
-      {showCreate && (
+      {showCreate && canReport && (
         <div className="bg-app-surface border border-app-border rounded-xl p-4 mb-4 space-y-3">
           <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Issue title" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" rows={2} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
@@ -134,7 +149,7 @@ function MaintenanceContent() {
                     {item.updated_at && <span className="text-xs text-app-text-muted">{new Date(item.updated_at).toLocaleDateString()}</span>}
                   </div>
                 </div>
-                <div className="flex flex-col gap-1 flex-shrink-0">
+                {canUpdate && <div className="flex flex-col gap-1 flex-shrink-0">
                   {(item.status === 'suggested' || item.status === 'open') && (
                     <button onClick={() => updateStatus(item.id, 'scheduled')} title="Schedule" className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition">
                       <CalendarDays className="w-4 h-4" />
@@ -150,7 +165,7 @@ function MaintenanceContent() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
-                </div>
+                </div>}
               </div>
             );
           })}

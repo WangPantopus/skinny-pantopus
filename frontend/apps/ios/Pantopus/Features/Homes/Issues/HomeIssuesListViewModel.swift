@@ -19,7 +19,7 @@
 //    History   → status `resolved` | `canceled` (the server's `HomeIssue.status`)
 //
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 import Foundation
 import Observation
@@ -82,7 +82,8 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     }
 
     var fab: FABAction? {
-        FABAction(
+        guard canReport else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Report issue",
             variant: .canonicalCreate,
@@ -118,6 +119,20 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     /// Last-fetched payload so tab swaps don't refetch.
     private var issues: [HomeIssueDTO]?
 
+    /// The viewer's effective Home permissions (`GET /api/homes/:id/me`).
+    /// Unreadable access leaves the list read-only; the server still decides.
+    private var access: HomeAccessDTO?
+
+    /// As the server allows: maintenance editors report issues; maintenance
+    /// managers and home editors update them.
+    private var canReport: Bool {
+        access?.can("maintenance.edit") == true || access?.can("maintenance.manage") == true
+    }
+
+    private var canUpdate: Bool {
+        access?.can("home.edit") == true || access?.can("maintenance.manage") == true
+    }
+
     private let homeId: String
     private let api: APIClient
 
@@ -144,6 +159,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
             let response: HomeIssuesResponse = try await api.request(
                 HomeIssuesEndpoints.list(homeId: homeId)
             )
+            access = try? await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
             issues = response.issues
             rebuildState()
         } catch {
@@ -237,35 +253,40 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     }
 
     private func emptyContent(for tab: HomeIssuesTab) -> ListOfRowsState.EmptyContent {
-        switch tab {
+        // Only viewers who can report an issue get the Report issue button.
+        var report: (@Sendable () -> Void)?
+        if canReport {
+            report = { [weak self] in
+                Task { @MainActor in self?.pendingEvent = .openReport }
+            }
+        }
+        let reportTitle = report == nil ? nil : "Report issue"
+        return switch tab {
         case .open:
             ListOfRowsState.EmptyContent(
                 icon: .wrench,
                 headline: "No open issues",
                 subcopy: "Report a leak, a broken appliance, or anything else that needs " +
                     "fixing. Everyone in the household sees it and can track the fix.",
-                ctaTitle: "Report issue"
-            ) { [weak self] in
-                Task { @MainActor in self?.pendingEvent = .openReport }
-            }
+                ctaTitle: reportTitle,
+                onCTA: report
+            )
         case .scheduled:
             ListOfRowsState.EmptyContent(
                 icon: .calendar,
                 headline: "Nothing scheduled",
                 subcopy: "Issues you schedule for a fix show up here until they're completed.",
-                ctaTitle: "Report issue"
-            ) { [weak self] in
-                Task { @MainActor in self?.pendingEvent = .openReport }
-            }
+                ctaTitle: reportTitle,
+                onCTA: report
+            )
         case .history:
             ListOfRowsState.EmptyContent(
                 icon: .checkCircle,
                 headline: "No history",
                 subcopy: "Completed and dismissed issues are archived here.",
-                ctaTitle: "Report issue"
-            ) { [weak self] in
-                Task { @MainActor in self?.pendingEvent = .openReport }
-            }
+                ctaTitle: reportTitle,
+                onCTA: report
+            )
         }
     }
 
@@ -297,6 +318,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
         title: String,
         issueId: String
     ) -> RowFooter? {
+        guard canUpdate else { return nil }
         var actions: [RowFooterAction] = []
         switch status {
         case .open:
