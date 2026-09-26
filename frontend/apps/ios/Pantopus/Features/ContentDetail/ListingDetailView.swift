@@ -16,10 +16,17 @@ public struct ListingDetailView: View {
     @State private var offerMessage: String = ""
     @State private var offerSending = false
     @State private var offerError: String?
+    /// The buyer's open offer ("Your offer $X"): shown with Withdraw, as on web.
+    @State private var myOfferSheetVisible = false
+    @State private var withdrawing = false
+    @State private var withdrawError: String?
     @State private var toast: ToastMessage?
     @State private var shareSheetVisible = false
     private let onBack: @MainActor () -> Void
     private let onMessage: (@MainActor (ListingDTO) -> Void)?
+    /// The seller's own "Message": their Messages inbox (a chat with
+    /// themselves isn't one).
+    private let onOpenInbox: (@MainActor () -> Void)?
     private let onViewOffers: (@MainActor (ListingDTO) -> Void)?
     private let onEditListing: (@MainActor (ListingDTO) -> Void)?
     /// A sold listing's "Find similar": the host opens the marketplace.
@@ -29,6 +36,7 @@ public struct ListingDetailView: View {
         viewModel: ListingDetailViewModel,
         onBack: @escaping @MainActor () -> Void = {},
         onMessage: (@MainActor (ListingDTO) -> Void)? = nil,
+        onOpenInbox: (@MainActor () -> Void)? = nil,
         onViewOffers: (@MainActor (ListingDTO) -> Void)? = nil,
         onEditListing: (@MainActor (ListingDTO) -> Void)? = nil,
         onFindSimilar: (@MainActor () -> Void)? = nil
@@ -36,6 +44,7 @@ public struct ListingDetailView: View {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onMessage = onMessage
+        self.onOpenInbox = onOpenInbox
         self.onViewOffers = onViewOffers
         self.onEditListing = onEditListing
         self.onFindSimilar = onFindSimilar
@@ -49,13 +58,18 @@ public struct ListingDetailView: View {
             activeGlassActions: viewModel.isSaved ? [.bookmark] : [],
             onBack: onBack,
             onPrimaryAction: { handlePrimaryAction() },
-            onSecondaryAction: { if let listing = viewModel.rawListing { onMessage?(listing) } },
+            onSecondaryAction: { handleMessage() },
             onRetry: { Task { await viewModel.load() } },
-            onMessageCounterparty: { if let listing = viewModel.rawListing { onMessage?(listing) } }
+            onMessageCounterparty: { handleMessage() }
         )
         .task { await viewModel.load() }
         .sheet(isPresented: $offerSheetVisible) {
             offerSheet
+        }
+        .sheet(isPresented: $myOfferSheetVisible) {
+            if let offer = viewModel.myOffer {
+                myOfferSheet(offer)
+            }
         }
         .sheet(isPresented: $shareSheetVisible) {
             SystemShareSheet(items: [shareText])
@@ -125,6 +139,9 @@ public struct ListingDetailView: View {
            viewModel.isOwnedByMe,
            let onViewOffers {
             onViewOffers(listing)
+        } else if viewModel.myOffer != nil {
+            withdrawError = nil
+            myOfferSheetVisible = true
         } else {
             offerError = nil
             if offerAmount.isEmpty, !listingIsFree, let price = viewModel.rawListing?.price, price > 0 {
@@ -132,6 +149,15 @@ public struct ListingDetailView: View {
                 offerAmount = price.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(price))" : String(format: "%.2f", price)
             }
             offerSheetVisible = true
+        }
+    }
+
+    /// "Message": the chat with the seller; the seller's own opens their inbox.
+    private func handleMessage() {
+        if viewModel.isOwnedByMe {
+            onOpenInbox?()
+        } else if let listing = viewModel.rawListing {
+            onMessage?(listing)
         }
     }
 
@@ -231,5 +257,74 @@ public struct ListingDetailView: View {
         offerAmount = ""
         offerMessage = ""
         toast = ToastMessage(text: free ? "Interest sent." : "Offer sent.", kind: .success)
+    }
+
+    /// The buyer's open offer, as web shows it: waiting for the seller (their
+    /// amount and note) or the seller's counter, and Withdraw.
+    private func myOfferSheet(_ offer: ListingOfferDTO) -> some View {
+        let countered = offer.status == "countered"
+        let amount = (countered ? offer.counterAmount : offer.amount).flatMap { $0 > 0 ? $0 : nil }
+        let note = (countered ? offer.counterMessage : offer.message)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let status = !countered ? "Waiting for the seller"
+            : amount != nil ? "The seller countered with" : "The seller countered"
+        return VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("Your offer")
+                .font(.system(size: 18, weight: .bold))
+            Text(status)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if let amount {
+                Text(ListingDetailViewModel.usd(amount))
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+            }
+            if let note, !note.isEmpty {
+                Text("“\(note)”")
+                    .font(.system(size: 13))
+                    .italic()
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            if let withdrawError {
+                Text(withdrawError)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.Color.error)
+                    .accessibilityIdentifier("listingDetailWithdrawError")
+            }
+            Button {
+                Task { await withdraw() }
+            } label: {
+                Text(withdrawing ? "Withdrawing…" : listingIsFree ? "Withdraw interest" : "Withdraw offer")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Theme.Color.appSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(withdrawing)
+            .accessibilityIdentifier("listingDetailWithdrawOffer")
+        }
+        .padding(Spacing.s5)
+        .presentationDetents([.medium])
+    }
+
+    /// One request at a time; a refused withdrawal keeps the sheet open with the server's reason.
+    private func withdraw() async {
+        guard !withdrawing, viewModel.myOffer != nil else { return }
+        withdrawing = true
+        withdrawError = nil
+        defer { withdrawing = false }
+        let free = listingIsFree
+        if let error = await viewModel.withdrawOffer() {
+            withdrawError = error
+            return
+        }
+        myOfferSheetVisible = false
+        toast = ToastMessage(text: free ? "Interest withdrawn." : "Offer withdrawn.", kind: .success)
     }
 }

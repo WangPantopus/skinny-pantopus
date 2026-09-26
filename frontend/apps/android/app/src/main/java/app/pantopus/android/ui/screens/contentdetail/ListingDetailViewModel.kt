@@ -49,6 +49,9 @@ class ListingDetailViewModel
 
         private var rawListing: ListingDto? = null
         private var acceptedOffer: ListingOfferDto? = null
+
+        /** The viewer's own open (pending or countered) offer; the dock then shows it in place of "Make offer". */
+        private var myOffer: ListingOfferDto? = null
         private var checkoutReadFailed = false
         private var isCheckingOut = false
         private var checkoutUserId: String? = null
@@ -63,6 +66,9 @@ class ListingDetailViewModel
 
         /** Current listing snapshot — null until the first fetch resolves. */
         fun listingSnapshot(): ListingDto? = rawListing
+
+        /** The viewer's open offer on this listing, shown with Withdraw when they tap "Your offer". */
+        fun myOfferSnapshot(): ListingOfferDto? = myOffer
 
         /**
          * True when the loaded listing is owned by the currently signed-in
@@ -124,6 +130,7 @@ class ListingDetailViewModel
 
         private suspend fun refreshCheckout() {
             acceptedOffer = null
+            myOffer = null
             checkoutReadFailed = false
             val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return
             if (isOwnedByMe() || isSold()) return
@@ -132,6 +139,11 @@ class ListingDetailViewModel
                     acceptedOffer =
                         offers.data.offers.firstOrNull {
                             it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                        }
+                    // The server allows one open offer per buyer; a new one is refused while it stands.
+                    myOffer =
+                        offers.data.offers.firstOrNull {
+                            it.status in setOf("pending", "countered") && (it.buyerId ?: it.buyer?.id) == viewerId
                         }
                     acceptedOffer?.let { paymentsRepo.reconcileListingConfirmation(viewerId, listingId, it) }
                 }
@@ -191,7 +203,7 @@ class ListingDetailViewModel
 
         private fun rebuild() {
             val listing = rawListing ?: return
-            _state.value = ContentDetailUiState.Loaded(Projection.project(listing, isOwnedByMe(), checkoutButton()))
+            _state.value = ContentDetailUiState.Loaded(Projection.project(listing, isOwnedByMe(), checkoutButton(), myOffer))
         }
 
         fun continueCheckout(
@@ -277,9 +289,38 @@ class ListingDetailViewModel
         ) {
             viewModelScope.launch {
                 when (val result = offersRepo.create(listingId, amount, message)) {
-                    is NetworkResult.Success -> onResult(true)
+                    is NetworkResult.Success -> {
+                        // The dock shows the sent offer at once ("Your offer $X").
+                        myOffer = result.data.offer
+                        rebuild()
+                        onResult(true)
+                    }
                     is NetworkResult.Failure -> {
                         onFailure(result.error.displayMessage("Couldn't send your offer. Please try again."))
+                        onResult(false)
+                    }
+                }
+            }
+        }
+
+        /**
+         * The buyer withdraws their open offer → `POST /api/listings/:id/offers/:offerId/withdraw`, as on web; the dock
+         * returns to "Make offer". [onFailure] gets the server's reason.
+         */
+        fun withdrawOffer(
+            onFailure: (String) -> Unit = {},
+            onResult: (Boolean) -> Unit = {},
+        ) {
+            val offer = myOffer ?: return onResult(false)
+            viewModelScope.launch {
+                when (val result = offersRepo.withdraw(listingId, offer.id)) {
+                    is NetworkResult.Success -> {
+                        myOffer = null
+                        rebuild()
+                        onResult(true)
+                    }
+                    is NetworkResult.Failure -> {
+                        onFailure(result.error.displayMessage("Couldn't withdraw your offer. Please try again."))
                         onResult(false)
                     }
                 }
@@ -291,6 +332,7 @@ class ListingDetailViewModel
                 listing: ListingDto,
                 isViewerOwner: Boolean = false,
                 checkoutButton: ContentDetailDockButton? = null,
+                myOffer: ListingOfferDto? = null,
             ): ContentDetailContent {
                 val isFree = listing.isFree ?: false
                 val sold = isSold(listing)
@@ -320,6 +362,8 @@ class ListingDetailViewModel
                         verified = seller?.resolvedVerified() == true,
                         rating = null,
                         trailing = listing.locationName,
+                        // The seller viewing their own listing has no one to message here.
+                        showsMessageButton = !isViewerOwner,
                     )
                 val modules =
                     buildList {
@@ -346,7 +390,7 @@ class ListingDetailViewModel
                             )
                         }
                     }
-                val dock = dock(sold, onHold, isViewerOwner, checkoutButton)
+                val dock = dock(sold, onHold, isViewerOwner, checkoutButton, myOffer)
                 return ContentDetailContent(
                     kind = ContentDetailKind.Listing,
                     cover = cover,
@@ -371,6 +415,7 @@ class ListingDetailViewModel
                 onHold: Boolean,
                 isViewerOwner: Boolean,
                 checkoutButton: ContentDetailDockButton?,
+                myOffer: ListingOfferDto?,
             ): ContentDetailDock =
                 if (sold) {
                     ContentDetailDock(
@@ -389,11 +434,24 @@ class ListingDetailViewModel
                         primary = ContentDetailDockButton(label = "Pickup pending", icon = PantopusIcon.Clock, enabled = false),
                     )
                 } else {
+                    // The buyer's open offer replaces "Make offer": "Your offer $20" (free-listing interest has no amount).
+                    val myOfferAmount = myOffer?.amount?.takeIf { it > 0 }
+                    val primaryLabel =
+                        when {
+                            isViewerOwner -> "View offers"
+                            myOffer == null -> "Make offer"
+                            myOfferAmount != null -> "Your offer ${usd(myOfferAmount)}"
+                            else -> "Your offer"
+                        }
                     ContentDetailDock(
                         secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
-                        primary = ContentDetailDockButton(label = if (isViewerOwner) "View offers" else "Make offer"),
+                        primary = ContentDetailDockButton(label = primaryLabel),
                     )
                 }
+
+            /** "$20" or "$20.50", as the price line shows amounts. */
+            fun usd(amount: Double): String =
+                if (amount % 1.0 == 0.0) "$${amount.toInt()}" else String.format(java.util.Locale.US, "$%.2f", amount)
 
             fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
 

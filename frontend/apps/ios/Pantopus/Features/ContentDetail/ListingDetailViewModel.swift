@@ -25,6 +25,9 @@ public final class ListingDetailViewModel {
     private let currentUserId: @MainActor () -> String?
     private let checkout: CheckoutCoordinator
     private var acceptedOffer: ListingOfferDTO?
+    /// The viewer's own open (pending or countered) offer; the dock then
+    /// shows it in place of "Make offer".
+    public private(set) var myOffer: ListingOfferDTO?
     private var checkoutReadFailed = false
     private var isCheckingOut = false
 
@@ -65,12 +68,17 @@ public final class ListingDetailViewModel {
             rawListing = detail.listing
             isSaved = detail.listing.userHasSaved ?? false
             acceptedOffer = nil
+            myOffer = nil
             checkoutReadFailed = false
             if !isOwnedByMe, !isSold, let viewerId = currentUserId() {
                 do {
                     let response: ListingOffersResponse = try await api.request(ListingOffersEndpoints.list(listingId: listingId))
                     acceptedOffer = response.offers.first {
                         $0.status == "accepted" && ($0.buyerId ?? $0.buyer?.id) == viewerId
+                    }
+                    // The server allows one open offer per buyer; a new one is refused while it stands.
+                    myOffer = response.offers.first {
+                        ["pending", "countered"].contains($0.status ?? "") && ($0.buyerId ?? $0.buyer?.id) == viewerId
                     }
                     if let acceptedOffer {
                         checkout.reconcileListingConfirmation(userId: viewerId, listingId: listingId, offer: acceptedOffer)
@@ -91,12 +99,15 @@ public final class ListingDetailViewModel {
     /// is already pending) for the sheet to show.
     public func makeOffer(amount: Double?, message: String?) async -> String? {
         do {
-            let _: ListingOfferResponse = try await api.request(
+            let response: ListingOfferResponse = try await api.request(
                 ListingOffersEndpoints.create(
                     listingId: listingId,
                     body: CreateListingOfferBody(amount: amount, message: message)
                 )
             )
+            // The dock shows the sent offer at once ("Your offer $X").
+            myOffer = response.offer
+            rebuild()
             return nil
         } catch {
             return (error as? LocalizedError)?.errorDescription ?? "Couldn't send your offer. Please try again."
@@ -152,7 +163,8 @@ public final class ListingDetailViewModel {
     static func project(
         _ listing: ListingDTO,
         viewerUserId: String? = nil,
-        checkoutButton: ContentDetailDockButton? = nil
+        checkoutButton: ContentDetailDockButton? = nil,
+        myOffer: ListingOfferDTO? = nil
     ) -> ContentDetailContent {
         let isViewerOwner: Bool = {
             guard let owner = listing.userId, !owner.isEmpty,
@@ -179,10 +191,10 @@ public final class ListingDetailViewModel {
                 inlinePills: inlinePills(for: listing)
             ),
             statStrip: [],
-            counterparty: counterparty(for: listing),
+            counterparty: counterparty(for: listing, isViewerOwner: isViewerOwner),
             modules: modules(for: listing),
             trustCapsules: [],
-            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold, checkoutButton: checkoutButton)
+            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold, checkoutButton: checkoutButton, myOffer: myOffer)
         )
     }
 
@@ -213,9 +225,14 @@ public final class ListingDetailViewModel {
     private static func priceLine(for listing: ListingDTO) -> String {
         if listing.isFree ?? false { return "Free" }
         guard let price = listing.price else { return "—" }
-        return price.truncatingRemainder(dividingBy: 1) == 0
-            ? "$\(Int(price))"
-            : String(format: "$%.2f", price)
+        return usd(price)
+    }
+
+    /// "$20" or "$20.50", as the price line shows amounts.
+    static func usd(_ amount: Double) -> String {
+        amount.truncatingRemainder(dividingBy: 1) == 0
+            ? "$\(Int(amount))"
+            : String(format: "$%.2f", amount)
     }
 
     private static func cover(for listing: ListingDTO, sold: Bool) -> ContentDetailCover {
@@ -230,8 +247,9 @@ public final class ListingDetailViewModel {
         )
     }
 
-    /// The real seller (name, photo, verification) from the listing's creator identity.
-    private static func counterparty(for listing: ListingDTO) -> ContentDetailCounterparty {
+    /// The real seller (name, photo, verification) from the listing's creator
+    /// identity. The seller viewing their own listing has no one to message here.
+    private static func counterparty(for listing: ListingDTO, isViewerOwner: Bool) -> ContentDetailCounterparty {
         let seller = listing.creator
         let name = seller?.resolvedDisplayName ?? "Seller"
         return ContentDetailCounterparty(
@@ -242,7 +260,7 @@ public final class ListingDetailViewModel {
             verified: seller?.resolvedVerified ?? false,
             rating: nil,
             trailing: listing.locationName,
-            showsMessageButton: true
+            showsMessageButton: !isViewerOwner
         )
     }
 
@@ -268,7 +286,13 @@ public final class ListingDetailViewModel {
         return modules
     }
 
-    private static func dock(isViewerOwner: Bool, sold: Bool, onHold: Bool, checkoutButton: ContentDetailDockButton?) -> ContentDetailDock {
+    private static func dock(
+        isViewerOwner: Bool,
+        sold: Bool,
+        onHold: Bool,
+        checkoutButton: ContentDetailDockButton?,
+        myOffer: ListingOfferDTO?
+    ) -> ContentDetailDock {
         if sold {
             return ContentDetailDock(
                 secondary: ContentDetailDockButton(label: "Seller", icon: .shoppingBag),
@@ -288,9 +312,19 @@ public final class ListingDetailViewModel {
                 primary: ContentDetailDockButton(label: "Pickup pending", icon: .clock, enabled: false)
             )
         }
+        // The buyer's open offer replaces "Make offer": "Your offer $20" (free-listing interest has no amount).
+        let primaryLabel: String = if isViewerOwner {
+            "View offers"
+        } else if let amount = myOffer?.amount, amount > 0 {
+            "Your offer \(usd(amount))"
+        } else if myOffer != nil {
+            "Your offer"
+        } else {
+            "Make offer"
+        }
         return ContentDetailDock(
             secondary: ContentDetailDockButton(label: "Message", icon: .send),
-            primary: ContentDetailDockButton(label: isViewerOwner ? "View offers" : "Make offer", icon: nil)
+            primary: ContentDetailDockButton(label: primaryLabel, icon: nil)
         )
     }
 
@@ -364,7 +398,7 @@ extension ListingDetailViewModel {
 
     private func rebuild() {
         guard let listing = rawListing else { return }
-        state = .loaded(Self.project(listing, viewerUserId: currentUserId(), checkoutButton: checkoutButton))
+        state = .loaded(Self.project(listing, viewerUserId: currentUserId(), checkoutButton: checkoutButton, myOffer: myOffer))
     }
 
     public enum CheckoutFeedback {
@@ -402,6 +436,27 @@ extension ListingDetailViewModel {
             return isAwaitingConfirmation ? .awaitingConfirmation : nil
         case .canceled: return nil
         case let .declined(message), let .failed(message): return .error(message)
+        }
+    }
+}
+
+// MARK: - The buyer's open offer
+
+public extension ListingDetailViewModel {
+    /// The buyer withdraws their open offer → `POST /api/listings/:id/offers/:offerId/withdraw`,
+    /// as on web; the dock returns to "Make offer". Returns `nil` on success, or the reason for
+    /// the sheet to show.
+    func withdrawOffer() async -> String? {
+        guard let offer = myOffer else { return nil }
+        do {
+            let _: ListingOfferResponse = try await api.request(
+                ListingOffersEndpoints.withdraw(listingId: listingId, offerId: offer.id)
+            )
+            myOffer = nil
+            rebuild()
+            return nil
+        } catch {
+            return (error as? LocalizedError)?.errorDescription ?? "Couldn't withdraw your offer. Please try again."
         }
     }
 }
