@@ -136,10 +136,46 @@ public struct ChatListView: View {
                         )
                     }
                 }
+                if let filter = viewModel.emptyFilter {
+                    filterEmptyLine(filter)
+                }
             }
         }
         .refreshable { await viewModel.refresh() }
         .accessibilityIdentifier("chatListContent")
+    }
+
+    /// Per-filter copy for a filter with no matches, under the AI row.
+    private func filterEmptyLine(_ filter: ChatFilter) -> some View {
+        let copy: (headline: String, subcopy: String) =
+            switch filter {
+            case .unread: ("No unread messages", "You\u{2019}re all caught up.")
+            case .gigs: ("No gig conversations", "Conversations about gigs show up here.")
+            case .market: ("No Market conversations", "Conversations about Market listings show up here.")
+            case .all: ("No conversations yet", "Message a neighbor to get started.")
+            }
+        return VStack(spacing: Spacing.s1) {
+            Text(copy.headline)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Theme.Color.appText)
+            Text(copy.subcopy)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .multilineTextAlignment(.center)
+            Button { viewModel.selectFilter(.all) } label: {
+                Text("View all")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.Color.primary600)
+                    .padding(.horizontal, Spacing.s3)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("chatListFilterViewAll")
+        }
+        .padding(.horizontal, Spacing.s5)
+        .padding(.vertical, Spacing.s6)
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("chatListFilterEmpty")
     }
 
     private func errorFrame(_ message: String) -> some View {
