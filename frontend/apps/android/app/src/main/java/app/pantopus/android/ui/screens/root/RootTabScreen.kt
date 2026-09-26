@@ -3501,7 +3501,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
-                composable(SchedulingRoutes.CANCELLATION_REFUND_POLICY) {
+                composable(
+                    SchedulingRoutes.CANCELLATION_REFUND_POLICY,
+                    arguments = schedulingOwnerNavArgs(),
+                ) {
                     CancellationRefundPolicyScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },

@@ -49,6 +49,8 @@ data class SettingsData(
     val paidEnabled: Boolean,
     val remindersValue: String?,
     val timezoneValue: String,
+    /** Whether the page stores any cancellation policy (structured or free text). */
+    val hasCancellationPolicy: Boolean = false,
     val paymentsConnected: Boolean,
     val monoFooter: String,
     val pillar: SchedulingPillar = SchedulingPillar.Personal,
@@ -122,14 +124,16 @@ class SchedulingSettingsRootViewModel
             eventTypeCount: Int,
         ): SettingsData {
             val isFresh = page.reminderMinutes.isEmpty() && eventTypeCount == 0
-            val zone = page.timezone ?: ZoneId.systemDefault().id
+            // The page's stored zone; "auto" only when none is stored and the device zone stands in.
+            val storedZone = page.timezone?.takeIf { it.isNotBlank() }
             return SettingsData(
                 slug = page.slug,
                 isFresh = isFresh,
                 isBusiness = owner is SchedulingOwner.Business,
                 paidEnabled = featureFlags.paidSchedulingEnabled,
                 remindersValue = page.reminderMinutes.sortedDescending().joinToString(" · ") { reminderLabel(it) }.ifBlank { null },
-                timezoneValue = "$zone · auto",
+                timezoneValue = storedZone ?: "${ZoneId.systemDefault().id} · auto",
+                hasCancellationPolicy = !page.cancellationPolicy.isNullOrBlank(),
                 paymentsConnected = paymentsConnected,
                 monoFooter = "pantopus.com/book/${page.slug ?: "…"} · owner · you",
                 pillar = owner.pillar(),
@@ -206,7 +210,7 @@ class SchedulingSettingsRootViewModel
 
         fun availabilityRoute() = SchedulingRoutes.AVAILABILITY_LIST
 
-        fun cancellationPolicyRoute() = SchedulingRoutes.CANCELLATION_REFUND_POLICY
+        fun cancellationPolicyRoute() = SchedulingRoutes.cancellationRefundPolicy(owner.routeKind, owner.ownerRouteId)
 
         fun paymentsRoute() = SchedulingRoutes.PAYMENTS_SETUP
 

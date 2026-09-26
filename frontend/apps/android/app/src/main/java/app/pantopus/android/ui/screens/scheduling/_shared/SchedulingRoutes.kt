@@ -269,7 +269,13 @@ object SchedulingRoutes {
     // ── A14 Payments & payouts ────────────────────────────────────────────────
     const val PAYMENTS_SETUP = "scheduling/payments"
     const val PAYOUTS = "scheduling/payments/payouts"
-    const val CANCELLATION_REFUND_POLICY = "scheduling/payments/policy"
+    const val CANCELLATION_REFUND_POLICY = "scheduling/payments/policy?$OWNER_ARGS"
+
+    /** Page-level cancellation & refund policy for the owner being managed (iOS parity). */
+    fun cancellationRefundPolicy(
+        ownerKind: String?,
+        ownerId: String?,
+    ) = "scheduling/payments/policy" + ownerQuery(ownerKind, ownerId)
 
     // ── A15 Packages & invoices ───────────────────────────────────────────────
     const val PACKAGES_LIST = "scheduling/packages"

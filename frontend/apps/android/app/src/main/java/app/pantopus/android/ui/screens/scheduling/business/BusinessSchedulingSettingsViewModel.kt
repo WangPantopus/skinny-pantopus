@@ -218,8 +218,11 @@ class BusinessSchedulingSettingsViewModel
                 .eventTypeList(owner?.routeKind, owner?.ownerRouteId)
         }
 
-        fun cancellationPolicyRoute(): String =
-            app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes.CANCELLATION_REFUND_POLICY
+        fun cancellationPolicyRoute(): String {
+            val owner = businessOwner()
+            return app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
+                .cancellationRefundPolicy(owner?.routeKind, owner?.ownerRouteId)
+        }
 
         fun paymentsRoute(): String = app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes.PAYMENTS_SETUP
 

@@ -5,7 +5,7 @@
 //  Stream I16 — H7 Message Preview (sheet). Shows the rendered message per
 //  channel before saving, with all variables resolved to sample data. A channel
 //  tab strip (Push / Email / In-app / SMS) swaps a realistic device mock over a
-//  soft stage. "Send test to me" is a coming-soon affordance (no endpoint yet).
+//  soft stage. There is no send-test endpoint, so no send action is offered.
 //  Reachable inline from an editor (draft) or by route from a saved template id.
 //
 
@@ -78,14 +78,6 @@ struct MessagePreviewView: View {
             ScrollView {
                 VStack(spacing: Spacing.s4) {
                     stage
-                    AutoGhostButton(title: "Send test to me", icon: .send) { model.sendTest() }
-                    if let note = model.testNote {
-                        AutoNote(
-                            tone: model.testNoteIsError ? .error : .success,
-                            icon: model.testNoteIsError ? .alertTriangle : .checkCircle,
-                            text: note
-                        )
-                    }
                     Color.clear.frame(height: Spacing.s2)
                 }
                 .padding(.horizontal, Spacing.s4)

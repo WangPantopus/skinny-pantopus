@@ -24,15 +24,6 @@ struct MyBookingsView: View {
             .background(Theme.Color.appBg)
             .navigationTitle("My bookings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {} label: {
-                        Icon(.search, size: 18, color: Theme.Color.appTextSecondary)
-                    }
-                    .accessibilityLabel("Search bookings")
-                    .accessibilityIdentifier("scheduling.myBookings.search")
-                }
-            }
             .task { await viewModel.load() }
             .refreshable { await viewModel.refresh() }
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
@@ -327,14 +318,11 @@ struct MyBookingsView: View {
     }
 
     private var emptyState: some View {
+        // No discovery destination exists in SchedulingRoute, so no CTA (web parity).
         EmptyState(
             icon: .calendar,
             headline: "You haven't booked anything yet",
-            subcopy: "Bookings you make show up here — everything in one place.",
-            cta: .init(title: "Find something to book") {
-                // Destination (discovery) is not yet wired into SchedulingRoute;
-                // the design renders this primary CTA, so it ships view-only.
-            }
+            subcopy: "Bookings you make show up here — everything in one place."
         )
     }
 

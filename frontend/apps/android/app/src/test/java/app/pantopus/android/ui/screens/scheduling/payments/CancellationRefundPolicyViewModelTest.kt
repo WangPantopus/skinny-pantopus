@@ -10,16 +10,13 @@ import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
 import app.pantopus.android.data.scheduling.SchedulingRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -35,12 +32,10 @@ import org.junit.Test
 class CancellationRefundPolicyViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val repo: SchedulingRepository = mockk(relaxed = true)
-    private val auth: AuthRepository = mockk()
 
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
-        every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
     }
 
     @After
@@ -54,7 +49,6 @@ class CancellationRefundPolicyViewModelTest {
     ) = CancellationRefundPolicyViewModel(
         repo,
         flags(enabled),
-        auth,
         SavedStateHandle(if (eventTypeId != null) mapOf("eventTypeId" to eventTypeId) else emptyMap()),
     )
 
