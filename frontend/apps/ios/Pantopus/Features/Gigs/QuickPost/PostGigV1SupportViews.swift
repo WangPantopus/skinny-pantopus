@@ -11,6 +11,7 @@ import SwiftUI
 
 struct PostGigV1ErrorBanner: View {
     let errors: [PostGigV1ValidationError]
+    var isEditMode = false
 
     private var heading: String {
         "\(errors.count) problem\(errors.count == 1 ? "" : "s") — please fix"
@@ -28,9 +29,13 @@ struct PostGigV1ErrorBanner: View {
                     .pantopusTextStyle(.small)
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.Color.error)
-                Text("We couldn't post your gig. See the highlighted fields below.")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.error)
+                Text(
+                    isEditMode
+                        ? "We couldn't save your changes. See the highlighted fields below."
+                        : "We couldn't post your gig. See the highlighted fields below."
+                )
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.error)
             }
             Spacer(minLength: Spacing.s0)
         }
