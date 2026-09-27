@@ -2,24 +2,27 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:52Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T01:51Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held (heavy released 00:29:39Z; slot 3 / emulator-5554 released 00:28:34Z, emulator stopped; slot 1 released 00:33:59Z).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
-- **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`, CI running at 00:35Z. Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted). Send to Stream 1 when green.
+- **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`, CI green after a rerun of a flaky Home test (Stream 1, 01:36Z); in batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556), queued 01:48:03Z. Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted). Send to Stream 1 when green.
   - Verified on the iOS simulator (builds `498811062`, final `520ed06cf`) and the Android emulator (APK `2b9f468f…`); befores on `36af1f371` builds, identical to master for these files.
-  - Stream 1 plans it for batch 35.
   - Two defects found in verification and fixed in the branch: Booking notifications Back (Swift 5 backward trailing-closure matching bound `{ dismiss() }` to `onTrailing`), and an uploaded 16:9 banner resizing the 16:7 editor banner.
 
-### New finding (from Stream 1's #553 work): new-post notifications are never created
-- `postCreationHooksService.js:148` passes `contextType: 'post'` to `createBulkNotifications`. `Notification.context_type` is the enum `notification_context_type` ('personal', 'business'; baseline migration from prod), so the single bulk insert fails and every "<name> shared a new post" is dropped (only a server log line). Reached by any post whose targets include connections or persona followers.
-- Evidence: `SELECT 'post'::notification_context_type` → "invalid input value for enum" on the isolated DB; code path `POST /api/posts` → `runPostCreatedHooks` (`posts.js:1479`).
-- Fix prepared (same pattern as #553): local branch `claude/stream3-post-fanout-context` (worktree `/private/tmp/pantopus-stream3-post-fanout-r1`, commit `097e3e087` on master `73b98f6b6`, not pushed). Backend Jest 341 suites / 6,286 tests and privacy gates pass locally.
-- **Waiting on the user:** an end-to-end check needs a write scope (the Member posts to connections; the Owner should get the notification). Asked 2026-09-27 ~00:52Z.
-- Handed to Stream 1 (gigs): `savedSearchAlertService.js:96` passes `contextType: 'gig'` the same way.
+### PR #557: new-post notifications to connections and followers (found via Stream 1's #553 work)
+- **[#557](https://github.com/WangPantopus/skinny-pantopus/pull/557)** head `097e3e087` on master `73b98f6b6`, CI started 01:49Z. Bundle `20260927-stream3-post-fanout-context-r1`, seal `e307f44afdc21624659ed674787b07411056e106ebb3ca4acd634cc2a1ba7347` (25 files; seal comment posted). **Send to the next Stream 1 queue owner** (the current one hands off after batch 35) with "green at <head>".
+- Defect: `postCreationHooksService.js:148` passed `contextType: 'post'`; `Notification.context_type` is the enum ('personal', 'business'), so the one bulk insert failed and nobody got "<name> shared a new post" for connections/follower posts.
+- Verified end-to-end (user approval 2026-09-27): before, on API `23e518b11`, the Member's post to Connections logged "invalid input value for enum notification_context_type" and the Owner got nothing; after, on a local verification build `e527ab988` (= `23e518b11` + the fix; master's mail migration still not applied), the Owner's web notifications show "Sched Member shared a new post". Backend privacy gates and full Jest (341 suites) pass.
+- Fixture PF1 (2 posts, 1 notification, 1 LocalProfile) removed at 01:46:45Z; fingerprint clean apart from sign-in bookkeeping. API back on `23e518b11`.
+- Proxy: a `post-check.json` allowance (`POST /api/posts` by the Member only) exists and is **off**.
+- Stream 1 fixed the gig saved-search case as #555.
+
+### Owner fixture password rotated (user-approved, 2026-09-27 01:49Z)
+- The old one appeared in a screenshot in this session. The new one is only in the private credentials file (`…/private-restart-inputs/sched-fixtures-private.json`, 0600), which every helper reads; web and `fx` logins verified at 01:50Z. Old password → 401. Existing device/web sessions were not revoked. Manifest entry CRED1 (no values).
 
 ### Rows
 - **Done in PRs:** S3-46 and S3-69 web (#545); S3-64 iOS, S3-37 iOS, S3-35 iOS + Android, S3-59 iOS (#552).
