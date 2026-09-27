@@ -33,6 +33,8 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **Correction/decision taken without asking (2026-09-27T13:58:11Z):** original634RESULT's blanket “No provider call” was too broad. Automatic Place reads may invoke keyless weather adapters; untraced/unaccepted. Private proxy now refuses Home intelligence/Hub today during account/chat verification. The Android entry attempt stopped at that refusal is excluded; accepted run used Hub Menu. No product change and no delivery/payment provider operation.
 - **Next:** clean Edit profile false “All changes saved · just now” reproduced on Android and iOS14:06:52Z without Save. Evidence started `20260927-stream3-native-profile-clean-copy-r1`. Minimal two existing strings to “No unsaved changes”, preserve visuals/actions, then actual clean→dirty→Discard checks. Existing /b/ and AI restrictions, physical/provider/push/live-money limits remain.
 
+- **Decision taken without asking (2026-09-27T14:19:18Z):** reproduced native clean-profile footer now says “No unsaved changes” in the existing iOS/Android strings; same icon/style/layout/Save controls. Candidate `f593b752a2aebb5736182560ed7c7b03d535b94d` on fresh masterf6c1b025e; before files byte-identical to observed apps. Real loaded→dirty→Discard afters pending app-only builds, heavy afterS2; iOS driver S1→S2→S3. No Save/Send/provider scope, no unit/lint campaign.
+
 ## CURRENT RESUME — Stream 3 handoff and prompt revision, 2026-09-27 (2026-09-27T12:41:37Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
