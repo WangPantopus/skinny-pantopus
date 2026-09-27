@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:21:15Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:56:30Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Last holds: heavy 03:08:46Z–03:16:57Z and slot 3 03:08:46Z–03:19:04Z (for #567; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
+- **Slots:** none held. Last holds: heavy 03:36:48Z–03:48:55Z and slot 4 03:48:44Z–03:54:23Z (for #573; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -22,7 +22,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Stream 1 fixed the gig saved-search case as #555.
 
 ### PR #566: open chats keep getting live messages after a tab switch or a pushed screen (iOS and Android)
-- **[#566](https://github.com/WangPantopus/skinny-pantopus/pull/566)** head `7b801e993` on `73b98f6b6` (merges cleanly into `89f3c6bac`; no chat/realtime file changed on master in between). Bundle `20260927-stream3-chat-resubscribe-r1`, seal `fbbae81d9be68eebc3548153d035c5b1d4cb5d3c594f5bf54cef9e6c528c40bb` (74 files; seal comment posted). CI at 03:02:15Z: 1 success, 5 in progress, 5 skipped. Stream 1 ("Stream 1 agent handoff") reviewed it OK and plans batch 37 = #560 #563 #564 #565 #566 once each head shows CI OK.
+- **[#566](https://github.com/WangPantopus/skinny-pantopus/pull/566)** head `7b801e993` on `73b98f6b6` (merges cleanly into `89f3c6bac`; no chat/realtime file changed on master in between). Bundle `20260927-stream3-chat-resubscribe-r1`, seal `fbbae81d9be68eebc3548153d035c5b1d4cb5d3c594f5bf54cef9e6c528c40bb` (74 files; seal comment posted). CI green (Stream 1: "CI OK" at 03:42:12Z). In batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572), queued 03:44:00Z (#560, #563, #564, #565, #570, #566).
 - Defect: both apps' chat screens call `teardown()` when they leave the screen (iOS `.onDisappear`, Android `DisposableEffect`), which cancels the socket listeners; when the thread came back, `load()` returned early because it was already loaded, so nothing listened again until the thread was reopened. Found while acknowledging Stream 2's #560 report (leftover chat view models).
 - Befores with master chat code: iOS (build `520ed06cf`) message 20 still missing 63.4 s after it was stored; Android (master APK `27a5e60e…`) message 24 still missing 61.2 s later; no request from the app; reopening showed them.
 - Fix (2 existing files): iOS `fc56edc1f` re-subscribes and refreshes (merge) on return and makes the socket loops hold the view model weakly (the #560 leak); Android `f009f6be7` re-subscribes and marks the thread viewed on return (the room re-join ack backfills); Android `7b801e993` makes `optStringValue()` treat a JSON null as absent. That last bug was found in the Android after: the backfill gave topic-less messages the topic id "null", which drew a stray "General" divider.
@@ -31,11 +31,22 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Unverified: push suppression; edits/deletes/reactions/typing/presence separately; real devices.
 
 ### PR #567: the Android Messages list stays live after you open a conversation (S3-30 parity)
-- **[#567](https://github.com/WangPantopus/skinny-pantopus/pull/567)** head `0294b046b` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-chat-list-live-r1`, seal `c143cb6cb9bb3dbeb78a48cd53bdb6e8c7202f18e16612f2686bf9942ac87fb0` (32 files; seal comment posted). Sent to Stream 1 ("Stream 1 agent handoff") for batch 37 or 38.
+- **[#567](https://github.com/WangPantopus/skinny-pantopus/pull/567)** head `0294b046b` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-chat-list-live-r1`, seal `c143cb6cb9bb3dbeb78a48cd53bdb6e8c7202f18e16612f2686bf9942ac87fb0` (32 files; seal comment posted). Reviewed OK by Stream 1; batch 38 (with S2 #568/#569 and S1 #571).
 - Defect: the list's `DisposableEffect` → `teardown()` cancels its socket listeners when a conversation covers it, and `load()` returned early on the way back. The conversation just read kept its unread count, and new messages didn't show until pull-to-refresh. iOS fixed this as S3-30 (#331, `5e254e7d3`); the inventory listed iOS only. Found in #566's evidence.
 - Before (master APK `27a5e60e…`): unread 2 stayed after reading; message 41 still not shown 61.3 s later, with no HTTP request, until pull-to-refresh. After (APK `9daa84ca…`): read state clears on return and new messages arrive live, over two round trips. ktlint, detekt and lintDebug pass.
 - Change: one file (`ChatListViewModel.kt`, +12/−2). A return re-subscribes and merges a fresh read; a failed background read keeps the loaded list.
 - Fixture CA13: messages 39–44 kept. Chat-audit mode was on 03:11:00Z–03:19:04Z and is off now.
+
+### PR #573: the Android business page editor's banner and logo controls upload a photo (S3-37 parity)
+- **[#573](https://github.com/WangPantopus/skinny-pantopus/pull/573)** head `f7e7bd4ce` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-page-editor-media-r1`, seal `9deab38e2c0cb584f41387deeacb4bc6df122e270945e1696921a63565c1db39` (32 files; seal comment posted). Sent to Stream 1.
+- Defect: Android's "Change banner", "Change logo", "Add banner" and the "Logo" tile had no click handler, and a stored banner was drawn as the stock café palette. iOS fixed this in #552; the inventory listed iOS only.
+- Fix: 5 editor files, plus one test line (a relaxed `UploadRepository` mock for the new constructor parameter). The targets open the photo picker and upload via the existing `UploadRepository.uploadBusinessMedia`; the editor shows real cover/profile images and keeps the palette without one.
+- Before (master APK `27a5e60e…`): targets not clickable (uiautomator); taps open nothing. After (APK `bbbacb05…`): banner and logo upload with spinner, image and toast; a 500 keeps the old image and shows the reason. The proxy answered all three uploads before upstream; no DB or storage write. ktlint, detekt, lintDebug; `EditBusinessPageViewModelTest` 6/6; `verifyPaparazziDebug` `EditBusinessPageSnapshotTest` 2/2 (goldens unchanged).
+- The gallery "Add" tiles are still inert (no backend); see the pending questions below.
+
+### Pending user questions (asked 2026-09-27 ~03:31Z in chat; no change until answered)
+1. Android page editor gallery: hide it like iOS (#552), or leave it?
+2. The persona/public profile header's "Share profile" button opens Block/Report on both apps (still true on master `89f3c6bac`: iOS `PublicProfileView.swift:428`, Android `PublicProfileScreen.kt:399`). Making it share would remove the only route to Block/Report. Options: a separate "…" button for Block/Report and a real Share; relabel as "More"; or leave it.
 
 ### Owner fixture password rotated (user-approved, 2026-09-27 01:49Z)
 - The old one appeared in a screenshot in this session. The new one is only in the private credentials file (`…/private-restart-inputs/sched-fixtures-private.json`, 0600), which every helper reads; web and `fx` logins verified at 01:50Z. Old password → 401. Existing device/web sessions were not revoked. Manifest entry CRED1 (no values).
@@ -61,8 +72,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
-- Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
-- Previously noted: persona header "Share profile" (check master first), B7 "Max per week 20" placeholder.
+- Previously noted: B7 "Max per week 20" placeholder. The persona "Share profile" item is now a pending user question (above).
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 - Harness: `GET /api/listings/:id` upserts a `ListingView` row for a signed-in non-owner (`backend/routes/listings.js:1433`) and is not on the proxy's implicit-write list. Opening a shared listing from chat wrote two rows during #566 (reverted). Add a refusal rule or a scoped allowance before the next listing check.
 
