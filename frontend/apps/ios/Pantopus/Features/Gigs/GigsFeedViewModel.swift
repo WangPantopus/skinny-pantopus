@@ -673,7 +673,7 @@ extension GigsFeedViewModel {
     /// `components/gig-browse/SupportTrainRow.tsx`.
     static func projectSupportTrain(_ dto: GigsFeedNearbyTrainDTO) -> SupportTrainRowContent {
         let distance = dto.distanceMeters.flatMap(supportTrainDistanceLabel)
-        let age = ageLabel(timestamp: dto.publishedAt).map { "\($0) ago" }
+        let age = ageLabel(timestamp: dto.publishedAt).map { $0 == "now" ? "just now" : "\($0) ago" }
         let area: String? = switch (dto.city, dto.state) {
         case let (city?, state?): "\(city), \(state)"
         case let (city?, nil): city
@@ -705,7 +705,7 @@ extension GigsFeedViewModel {
         let category = GigsCategory.from(backendKey: gig.category)
         let metaPieces: [String] = [
             Self.distanceLabel(miles: gig.distanceMiles),
-            Self.ageLabel(timestamp: gig.createdAt).map { "\($0) ago" }
+            Self.ageLabel(timestamp: gig.createdAt).map { $0 == "now" ? "just now" : "\($0) ago" }
         ].compactMap { $0 }
         let meta = metaPieces.joined(separator: " · ")
         let price = Self.priceLabel(price: gig.price, payType: gig.payType)
@@ -742,7 +742,7 @@ extension GigsFeedViewModel {
         let distance = distanceLabel(miles: gig.distanceMeters.map { $0 / metersPerMile })
         let metaPieces: [String] = [
             distance,
-            ageLabel(timestamp: gig.createdAt).map { "\($0) ago" }
+            ageLabel(timestamp: gig.createdAt).map { $0 == "now" ? "just now" : "\($0) ago" }
         ].compactMap { $0 }
         return GigCardContent(
             id: gig.id,

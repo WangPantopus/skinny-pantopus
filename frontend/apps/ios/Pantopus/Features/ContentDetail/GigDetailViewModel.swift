@@ -2696,7 +2696,7 @@ extension GigDetailViewModel {
         var modules: [ContentDetailModule] = []
         if awarded {
             let awardTitle = awardWinnerName(gig: gig, bids: bids).map { "Awarded to \($0)" } ?? "Awarded"
-            let awardSubtitle = [relativeAge(gig.acceptedAt).map { "\($0) ago" }, "bidding now closed"]
+            let awardSubtitle = [relativeAge(gig.acceptedAt).map { $0 == "now" ? "just now" : "\($0) ago" }, "bidding now closed"]
                 .compactMap { $0 }
                 .joined(separator: " · ")
             modules.append(.callout(ContentDetailCallout(
