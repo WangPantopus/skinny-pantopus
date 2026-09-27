@@ -88,9 +88,11 @@ export default function CommentThread({
     };
   }, [previewUrls]);
 
+  const draftRevision = useRef(0);
   const pendingComment = useRef<{ signature: string; id: string } | null>(null);
 
   const resetComposer = () => {
+    draftRevision.current += 1;
     pendingComment.current = null;
     setNewComment('');
     setReplyTo(null);
@@ -106,6 +108,7 @@ export default function CommentThread({
     if (!newComment.trim() && selectedFiles.length === 0) return;
     if (isPosting || submittingRef.current) return;
     submittingRef.current = true;
+    const submittedRevision = draftRevision.current;
     // Images are uploaded after the comment exists. Changing/removing an image
     // during recovery must keep the command for that same text and reply target.
     const signature = JSON.stringify([currentUserId, newComment.trim(), replyTo?.id]);
@@ -119,7 +122,11 @@ export default function CommentThread({
         files: selectedFiles,
         clientRequestId: pendingComment.current.id,
       });
-      if (saved !== false) resetComposer();
+      if (saved !== false) {
+        pendingComment.current = null;
+        // A reply selection or attachment edit made during Send is a new draft.
+        if (submittedRevision === draftRevision.current) resetComposer();
+      }
     } catch {
       // The caller reports the error. Keep the unsent draft available to retry.
     } finally {
@@ -141,6 +148,7 @@ export default function CommentThread({
     const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
     if (files.length === 0) return;
 
+    draftRevision.current += 1;
     setSelectedFiles((prev) => {
       const next = [...prev, ...files];
       return next.slice(0, 4);
@@ -148,6 +156,7 @@ export default function CommentThread({
   };
 
   const handleRemoveFile = (index: number) => {
+    draftRevision.current += 1;
     setSelectedFiles((prev) => prev.filter((_, idx) => idx !== index));
     if (fileInputRef.current && selectedFiles.length <= 1) {
       fileInputRef.current.value = '';
@@ -155,6 +164,7 @@ export default function CommentThread({
   };
 
   const handleEmojiSelect = (emoji: string) => {
+    draftRevision.current += 1;
     setNewComment((prev) => `${prev}${emoji}`);
     setEmojiOpen(false);
     inputRef.current?.focus();
@@ -281,7 +291,7 @@ export default function CommentThread({
                 {(comment.like_count || 0) > 0 && <span>{comment.like_count}</span>}
               </button>
               <button
-                onClick={() => setReplyTo({ id: comment.id, name: authorName })}
+                onClick={() => { draftRevision.current += 1; setReplyTo({ id: comment.id, name: authorName }); }}
                 className="text-[10px] font-semibold text-app-muted hover:text-primary-600 transition"
               >
                 Reply
@@ -371,7 +381,7 @@ export default function CommentThread({
             {replyTo && (
               <div className="mb-2 flex items-center gap-2 rounded-lg border border-app bg-surface-muted px-2.5 py-1.5 text-[10px] text-app-muted">
                 <span>Replying to <strong>{replyTo.name}</strong></span>
-                <button onClick={() => setReplyTo(null)} className="ml-auto text-app-muted hover:text-app">
+                <button onClick={() => { draftRevision.current += 1; setReplyTo(null); }} className="ml-auto text-app-muted hover:text-app">
                   <X className="h-3 w-3" />
                 </button>
               </div>
@@ -413,7 +423,7 @@ export default function CommentThread({
               <textarea
                 ref={inputRef}
                 value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
+                onChange={(e) => { draftRevision.current += 1; setNewComment(e.target.value); }}
                 onKeyDown={handleKeyDown}
                 placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Add a comment, emoji, or photo…'}
                 className="min-h-[72px] w-full resize-none bg-transparent px-2 py-1 text-sm text-app outline-none placeholder:text-app-muted"
