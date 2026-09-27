@@ -35,6 +35,12 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 The successor Stream 1 session (queue owner 2026-09-27T02:50Z → 2026-09-27T11:16Z) wrote this section. Every value was checked live (UTC from `date -u`, SHAs from git, PR state from `gh`). **Re-verify master, open PRs and CI before acting.** The next session's prompt is `NEXT-STREAM1-PROMPT-2026-09-27.md`.
 
+> **UPDATE 2026-09-27T13:05:33Z — Stream 1 successor / batch 43 merged.**
+> - [#627](https://github.com/WangPantopus/skinny-pantopus/pull/627) merged at 2026-09-27T13:03:22Z → master `3125bb150a33fa217092c002d5ac1eee119da6ac`; includes Stream 2 [#626](https://github.com/WangPantopus/skinny-pantopus/pull/626), exact head `5e1a616d47ff4efaa5896e8cac448feed6f3b29a`. Exact-head review, 41-file sealed UI/API/SQL bundle, ancestry/file union/blob proof passed; no shared Swift files. CI was informational, not a gate. Bundle `20260927-stream2-home-edit-coordinates-r1`, seal `66ab3a82089463be33a2759f16a31cf4ff4e91ac54060d8c87ad6c7862e5612e`; provider autocomplete EMULATED, native unchanged, owned Home cleanup 0→1→0.
+> - Queue empty. Unrelated #46/#429/#430/#625 untouched. One current-master CI snapshot was taken at takeover: `35c5434df` run 36316539221 passed; required checks absent, admin/no-force/no-delete protections remain.
+> - Stream 1 first item remains native Start/address-preview retry, then iOS Report post and Android parity. Current baseline runtime tree `d5df4e81c` equals takeover master; real iOS baseline installed, Android app-only build running. Owned runtime 18132/18138/18139 was restored using guarded helpers after inherited processes exited. No application fix or new journey accepted yet. No database reset, no unit/lint campaign.
+> - S1 holds heavy plus device slots 1 (F4DBD47E/iOS driver) and 2 (5558); S3 is next for heavy. S2 owns Home editor/F02 and its own status; S3 owns DM/profile work. Current launch cuts and safety limits unchanged.
+
 ### 0.0 ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to everything below)
 - **What's cut:** 8 features are hidden behind flags for the first launch. The code is kept, and the user handles the flagging.
 - **Rule:** they are **not verified, end-to-end tested or fixed**. The shared table is at the top of PROJECT_HANDOFF/README (coordination `d2bf06e36`).
