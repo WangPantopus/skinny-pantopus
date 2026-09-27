@@ -2,83 +2,61 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## RESUMED 2026-09-27 after the handoff (live notes, updated 2026-09-27T11:14Z) — read this before the CURRENT RESUME below
-- **User request:** keep working until every PR Stream 3 opened is merged to master, then update the handoff again.
-- **Plan (Stream 3’s recommendation, agreed with Stream 1 at 10:25Z):** keep Stream 1’s batches. Stream 3 fixes any failure in its PRs, and takes over merging only if Stream 1 stops first (announced to both peers).
-- **Merged:** batch 40 #608 at 10:26:20Z (master `a93c76d7f`): #593, #594, #595, #596, #600.
-- **Merged:** batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622) at 11:11:36Z (master `73e0baade`): #597, #604, #605, #612.
-- **Batch 42** (built by Stream 1 on `73e0baade`, queued about 11:15Z): #618 and #623, both CI-green, plus other streams’ #615, #616, #619, #620, #621. Both of mine merge cleanly with `73e0baade`.
-- **New PR [#623](https://github.com/WangPantopus/skinny-pantopus/pull/623), web only:** the companion to #618. Head `e04e1a933` on `a93c76d7f`; bundle `20260927-stream3-web-policy-mobile-shapes-r1`, seal `8225da0538e8f8725719603d31b0aacf575be3b04e74cd0f7b77083be293c619`.
-  - `resolvePolicyValue` reads the apps’ custom policies. Invitees no longer see raw JSON, or “You can cancel anytime for a full refund” for an iOS 12h/25% policy, and the host row no longer says “Set up”.
-  - Before/after on the real web app, as owner and as an anonymous invitee. ESLint, typecheck gate and web Jest (1893) pass.
-- **Runtime changes in this phase:**
-  - Web 18131 now runs from `/private/tmp/pantopus-stream3-web-chat-names-r1` on branch `claude/stream3-web-policy-mobile-shapes` (#623), with paid client flags on (`S3_WEB_PAID=1`); it was relaunched at 10:27:04Z.
-  - Fixture BP1 was re-applied (Member page `a1060a2b` live, five policy values) and reverted exactly at 10:40:34.368Z, `is_live` included.
-  - `handoff-tools-20260926/web-anon-step.mjs` (signed-out web visitor) was added.
-- **New finding (10:45Z, by code on master `a93c76d7f`; not yet reproduced through a setup wizard): new hosts on web and iOS keep a New York schedule.**
-  - `ensureDefaultSchedule` (`backend/routes/scheduling.js:52`) seeds the default schedule Mon–Fri 09–17 in `America/New_York`.
-  - Android’s first-run wizard corrects it: `FirstRunWizardViewModel.kt` ~line 290, `updateSchedule(timezone = device zone)` plus rules.
-  - Web’s `hub/SetupWizard.tsx` sets the page timezone and `updateRules`, but never the schedule’s timezone.
-  - iOS `SchedulingOnboardingModel.swift` sets only the page timezone.
-  - The consequence, seen on the real web app at 10:29:45Z: the Member fixture’s schedule is 09–17 New York, and its public page offered slots from 6:00 AM PDT. A Pacific host who sets 9–5 in the web or iOS wizard would likely offer 6 AM–2 PM Pacific.
-  - Suggested next item: reproduce with a fresh host through each wizard, then add the schedule-timezone update the Android wizard already does.
-- **User direction (received about 11:15Z): don’t wait for CI to merge.** Merge once the change is verified end-to-end in the real apps; the user doesn’t care about CI unit tests or lints.
-  - **Correction (2026-09-27T11:16:00Z):** master *did* require the “CI OK” check (strict, admins enforced).
-    - At the user’s direction, Stream 1 removed only that rule at 11:13:55Z. The prior config is saved in the coordination repo’s repo-settings folder, for restore.
-    - Stream 3’s read at about 11:14Z came just after the removal, so “nothing to turn off” was wrong.
-    - Force-push and deletion protection are unchanged.
-  - Relayed to Stream 1 and Stream 2 before 11:15:08Z. The proposal: Stream 1 merges batch 42 now if each PR in it was E2E-verified; otherwise Stream 3 merges #618 and #623 directly.
-- **Decisions (standing direction):**
-  - 10:25Z: do not merge PRs individually, since Stream 1’s batches already hold them.
-  - 10:28Z: the web companion was done while batches run, verified with a live-page fixture (recorded and reverted).
+## CURRENT RESUME — Stream 3 final handoff, 2026-09-27 (2026-09-27T11:18:27Z), read this first
 
-## CURRENT RESUME — Stream 3 handoff, 2026-09-27 (2026-09-27T10:21:47Z), read this first
+The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
+- No fixture is applied.
+- No device or heavy slot is held.
+- The web test server runs master with default flags.
 
-The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T10:21:47Z) stopped at the user's request, at a clean point:
-- every change is in a sealed PR;
-- no fixture is left applied;
-- no device or heavy slot is held.
+**Takeover prompt:** [`NEXT-STREAM3-PROMPT-2026-09-27.md`](NEXT-STREAM3-PROMPT-2026-09-27.md), updated at 2026-09-27T11:18:27Z. It covers rules (including the new merge rule), step-0 checks, the merged-PR table, next steps, runtime state and gotchas.
 
-**Takeover prompt:** [`NEXT-STREAM3-PROMPT-2026-09-27.md`](NEXT-STREAM3-PROMPT-2026-09-27.md). It covers rules, step-0 checks, the PR table, next steps, runtime state and gotchas.
+**Runtime manual:** the kit README (`.pantopus-recovery/stream3-runtime-kit/README.md`, top section "Update 2026-09-27 (handoff)").
 
-**Runtime manual:** the kit README (`.pantopus-recovery/stream3-runtime-kit/README.md`, section "Update 2026-09-27 (handoff)").
-
-**Detailed record:** the "LIVE — Stream 3 successor session" block below: every PR's evidence, the decisions taken under the standing direction, and the candidates.
+**Detailed record:** the log below, then the "LIVE — Stream 3 successor session" block (every PR’s evidence, decisions and candidates).
 
 ### State at handoff
-- **Master:** `621e26616`. Batches 37–39 merged today (`563cddb47`, `f6c66d678`, `9f3ba7c35`).
-- **Open Stream 3 PRs, all sealed with seal comments:**
-  - Batch 40 ([#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), tip `01f75025f`): #593, #594, #595, #596, #600.
-  - Batch 41: #597, #604, #605, #612.
-  - Batch 42 (reviewed by Stream 1; it goes in once CI is green): #618. Its CI was still running at handoff.
-  - Heads, bundles and seals are in the prompt's §4 table.
-- **Blocked rows (explicit user decisions; the standing direction doesn't reopen them):**
+- **Master `35c5434df`.** Stream 3 PRs from this session, all merged:
+  - batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), 10:26Z: #593, #594, #595, #596, #600;
+  - batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622), 11:11Z: #597, #604, #605, #612;
+  - batch 42 [#624](https://github.com/WangPantopus/skinny-pantopus/pull/624), 11:14Z: #618, #623.
+  - Nothing is open.
+- **Merge rule now (user direction):** merge once a change is verified end-to-end in the real apps; don’t wait for CI. At the user's direction, Stream 1 removed master’s required “CI OK” check at 11:13:55Z; the prior config is saved in the coordination repo-settings folder, for restore.
+- **Blocked rows (explicit user decisions; not reopened):**
   - S3-22 and S3-62: `/b/` reads insert `BusinessProfileView`.
   - S3-26: web AI chat is client-only.
-- **User direction (recorded 2026-09-27T07:22:48Z):** don't stop to ask. Take the recommended option and record it here, in the RESULT and in the PR body. The hard limits still apply.
 
 ### Next (ordered; details in the prompt §6)
-1. Watch the open PRs. Stream 1 stays queue owner until batches 40, 41 and 42 merge; answer its questions. If #618’s CI fails, fix it on its branch (prompt §6).
-2. **Web:** make `resolvePolicyValue` read the mobile policy shapes (the companion to #618). Details are in the #618 section below and in prompt §6.
-3. **Android:** check profile → Message after a DM header tap (#612 left it unchecked).
-4. Verify the candidates on master before touching them: the iOS business-profile toast; the Edit profile “All changes saved” copy; the New York default schedule; the iOS “Not you?” question.
-5. Keep this file, the kit README and memory current. Commit and push only your own file.
+1. **New hosts on web and iOS keep a New York schedule.** Web `SetupWizard.tsx` and iOS onboarding never update the default schedule’s timezone (the backend seeds America/New_York); only Android’s wizard does. Reproduce with a fresh host, then add the same update.
+2. **Android:** check profile → Message after a DM header tap. #612 didn’t check it; iOS stacks a second DM, which loads twice.
+3. **Verify the candidates on master before touching them:** the iOS business-profile toast; the Edit profile “All changes saved” copy; the iOS “Not you?” question.
+4. **Keep this file, the kit README and memory current.** Commit and push only your own files.
 
+### Resumed-session log (10:25Z to 2026-09-27T11:18:27Z)
+- **10:25Z:** the user asked Stream 3 to stay until every PR it opened is merged, then update the handoff.
+  - Stream 3 recommended keeping Stream 1’s batches rather than merging individually, which would have forced batch rebuilds and duplicate CI.
+  - Stream 1 agreed, and stayed until batches 41 and 42 merged.
+- **Batch 40** #608 merged at 10:26:20Z (master `a93c76d7f`). **Batch 41** #622 merged at 11:11:36Z (master `73e0baade`). **Batch 42** #624 merged at 11:14:24Z (master `35c5434df`), without waiting for its combined CI, per the user.
+- **New PR [#623](https://github.com/WangPantopus/skinny-pantopus/pull/623)** (web; companion to #618; head `e04e1a933`; bundle `20260927-stream3-web-policy-mobile-shapes-r1`, seal `8225da0538e8f8725719603d31b0aacf575be3b04e74cd0f7b77083be293c619`):
+  - `resolvePolicyValue` reads the apps’ custom policies. Invitees had seen raw JSON, or “You can cancel anytime for a full refund” for an iOS 12h/25% policy, and the host row had said “Set up”.
+  - Verified before/after on the real web app, as owner and as an anonymous invitee. ESLint, typecheck gate and web Jest (1893) pass. Merged in batch 42.
+- **Runtime in this phase:**
+  - Web 18131 ran the #623 tree with paid client flags (`S3_WEB_PAID=1`) from 10:27:04Z. It was relaunched at 11:16:26Z on master `35c5434df` (detached) with default flags.
+  - Fixture BP1 (the Member page `a1060a2b`, made live, five policy values) was reverted exactly at 10:40:34.368Z, `is_live` included.
+  - Added `handoff-tools-20260926/web-anon-step.mjs`, a signed-out web visitor.
+- **Finding (about 10:45Z, by code):** the New York schedule issue in Next item 1. The Member fixture’s public page showed its consequence at 10:29:45Z: slots from 6:00 AM PDT for 09–17 New York.
+- **User direction (received shortly before Stream 1 acted on it at 11:13:55Z): don’t wait for CI to merge.** Merge once the change is verified end-to-end in the real apps.
+  - Stream 3 first read master’s protection just after Stream 1 had removed the “CI OK” rule, and wrongly told Stream 2 there had been nothing to turn off.
+  - Corrected at 11:16:00Z to Stream 2, and in memory.
+- **Decisions (standing direction):**
+  - 10:25Z: don’t merge PRs individually while Stream 1’s batches hold them.
+  - About 10:28Z: do the web companion while batches run, verified with a live-page fixture (recorded and reverted).
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z, handed off 2026-09-27 (last update 2026-09-27T10:20:59Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z, handed off 2026-09-27 (last update 2026-09-27T11:18:41Z; final state in the CURRENT RESUME above)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots (2026-09-27T10:20:59Z):** Stream 3 holds **no heavy and no device slots**. Today’s last holds:
-  - heavy 09:59:01Z–10:12:32Z (the #618 Android build and unit tests);
-  - slot 3 09:31:00Z–10:15:21Z, then 10:16:25Z–10:18:46Z (the #618 before and afters);
-  - every device was shut down before its slot was released.
-- **Batches:**
-  - Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`); master is now `621e26616` (docs #614).
-  - Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), rebuilt at 09:46Z (tip `01f75025f`), holds #593, #594, #595, #596 and #600.
-  - Batch 41 (Stream 1) will take #597, #604, #605 and #612.
-  - #618 goes to batch 42.
-  - Stream 1 stays queue owner until those merge.
-- **CI (REST, 10:20:06Z):** #593, #594, #595, #596, #597, #600, #604, #605 and #612 green. #618 running; it is bound in the app, which tracks its CI.
+- **Slots (2026-09-27T11:18:41Z):** Stream 3 holds no heavy and no device slots. Every device was shut down before its slot was released.
+- **Batches (all merged):** 40 #608 at 10:26:20Z (#593, #594, #595, #596, #600); 41 #622 at 11:11:36Z (#597, #604, #605, #612); 42 #624 at 11:14:24Z (#618, #623). Master is `35c5434df`.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -133,7 +111,7 @@ The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T10:21:47Z) stopp
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
 
-### PR #618 (sent to Stream 1 before 10:20:06Z; reviewed by Stream 1 for batch 42 once CI is green): Android reads every stored booking-page cancellation policy
+### PR #618 (merged in batch 42 #624 at 11:14:24Z): Android reads every stored booking-page cancellation policy
 - **[#618](https://github.com/WangPantopus/skinny-pantopus/pull/618):** head `88488d264`, first committed as `b991fd3f7` and amended for detekt’s complexity limit before any push. On master `621e26616`, it merges cleanly with batch 40’s tip and #597/#604/#605/#612.
 - **Bundle:** `20260927-stream3-android-booking-page-policy-object-r1`, seal `c9b9183d3a468892bab206473247f80a31562eb4ea320c00edeb531b5b83acf9` (19 files; seal comment posted).
 - **Defects, both reproduced on the master APK `27a5e60e…`:**
@@ -291,7 +269,7 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 - **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Sweep done: S3-10, S3-13, S3-32, S3-36, S3-51 have no gap either; S3-34 is iOS per-stack wiring (Android has one NavHost); S3-48 (iOS) and S3-59 (Android) are committed above, verification pending. Web read for the same defect classes, no gap: the web notifications page keys its query cache by filter and zone and discards retired responses (the tab race), and a failed "Load more" shows "Could not load all notifications." with Retry while the button comes back; the web broadcast composer has no sample counts; a failed web review reply shows an error.
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 
-## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
+## (History) Stream 3 handoff, 2026-09-26T22:15Z — superseded by the 2026-09-27 final handoff at the top
 
 The user asked the 2026-09-25/26 Stream 3 session to stop and hand off. Everything a successor needs is here and in two private files:
 - **Runtime manual:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream3-runtime-kit/README.md`. It covers ports, start commands, the proxy and fault rules, fixture users and data, devices, builds and end-of-audit reverts.
