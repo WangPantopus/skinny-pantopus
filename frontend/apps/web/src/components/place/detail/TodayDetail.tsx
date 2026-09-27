@@ -48,7 +48,7 @@ import {
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import AddressCalendarCard from './AddressCalendarCard';
-import { fmtTime, statusToState } from './format';
+import { fmtSunDay, fmtTime, statusToState } from './format';
 
 // ── Weather glyphs — condition → lucide icon + token tint ────
 // sun amber == app-warning; rain/snow == sky primary; rest == muted.
@@ -591,7 +591,7 @@ export default function TodayDetail({ intelligence, homeId = null }: { intellige
         ) : (
           <SectionCard icon={Sunrise} title="Sunrise & sunset" state={sun ? statusToState(sun.status) : 'unavailable'} caption={sun?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
         )}
-        {sun?.source ? <SourceNote name={sun.source} asOf="today" /> : null}
+        {sun?.source ? <SourceNote name={sun.source} asOf={sunReady ? fmtSunDay((sun!.data as PlaceSunriseSunsetData).sunrise) : undefined} /> : null}
 
         {/* The address calendar (Wedge Phase 2, D6): what recurs at THIS address. */}
         <DetailSectionLabel>At this address</DetailSectionLabel>
