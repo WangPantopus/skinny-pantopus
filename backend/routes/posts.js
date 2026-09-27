@@ -1,4 +1,5 @@
 const express = require('express');
+const { createHash } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -3256,7 +3257,21 @@ router.post('/:id/report', verifyToken, validate(reportPostSchema), async (req, 
     const userId = req.user.id;
     const post = await requireVisiblePost({ postId, userId, res });
     if (!post) return;
-    const { error } = await supabaseAdmin.from('PostReport').insert({ post_id: postId, reported_by: userId, reason, details: details || null });
+    // Preserve reports written with the old random IDs, including their review state.
+    const { data: existing, error: readError } = await supabaseAdmin.from('PostReport')
+      .select('id').eq('post_id', post.id).eq('reported_by', userId).limit(1);
+    if (readError) throw readError;
+    if (existing?.length) {
+      return res.status(200).json({ message: 'Post reported successfully. We will review it shortly.' });
+    }
+    // The existing UUID primary key makes simultaneous/restarted retries atomic.
+    // PostgreSQL accepts the 32-hex UUID form; never overwrite the first report.
+    const reportId = createHash('sha256')
+      .update(`pantopus:post-report:v1:${post.id.toLowerCase()}:${userId.toLowerCase()}`)
+      .digest('hex').slice(0, 32);
+    const { error } = await supabaseAdmin.from('PostReport').upsert({
+      id: reportId, post_id: post.id, reported_by: userId, reason, details: details || null,
+    }, { onConflict: 'id', ignoreDuplicates: true });
     if (error) { logger.error('Error reporting post', { error: error.message, postId, userId }); return res.status(500).json({ error: 'Failed to report post' }); }
     res.status(200).json({ message: 'Post reported successfully. We will review it shortly.' });
   } catch (err) {
