@@ -5982,9 +5982,11 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
         userId: gig.accepted_by,
         type: 'gig_rescheduled',
         title: 'Task rescheduled',
+        // No recipient timezone is stored, so name the zone (as the start
+        // reminder does) rather than print the server's clock as local time.
         body: `"${gig.title}" was moved to ${newStart.toLocaleString('en-US', {
-          weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-        })}${note ? ` — ${note}` : ''}`,
+          weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+        })} UTC${note ? ` — ${note}` : ''}`,
         link: `/gigs/${gigId}`,
         metadata: { gig_id: gigId, scheduled_start: newStart.toISOString() },
       }).catch(() => {});
