@@ -1,8 +1,13 @@
-# Stream 1 handoff (final): 2026-09-27
+# Stream 1 handoff: 2026-09-27 (successor handoff)
+
+> **Read §0 first.** It is the successor session's handoff state, with batch 40 in CI and batch 41 reviewed and ready. The newer handoff prompt is `NEXT-STREAM1-PROMPT-2026-09-27.md`.
+>
+> The "Final" and "Live" quote blocks between this note and §0 are earlier notes from the same day, kept as history. §0 replaces them, and so does "## 0-prior".
+
 
 > **Final:** batches 32–36 merged; master **`89f3c6bac`** (2026-09-27T02:31:01Z). Every Stream 1 fix is on master, the queue is empty, and the runtime equals master.
 >
-> **§0 below is the final state (02:31:47Z): queue empty, runtime = master `89f3c6bac`.** Always re-verify live.
+> *(Historical: at 02:31:47Z the queue was empty and the runtime equalled master `89f3c6bac`; that state is now "## 0-prior". The current state is §0.)*
 
 > **Live — successor session (queue owner since 2026-09-27T02:50Z), 03:44Z:** batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) queued 03:44:00Z (#560 #563 #564 #565 #570 #566; tip `a3c1b106d`); batch 38 candidates #567 #568 #569 #571 (CI running). S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571) implements §3.2 (bundle `20260927-stream1-quickpost-address-search-r1`, `bba44d1b…`). New user decision (answer before 03:33:40Z): the V2 composer gets the same address search (Stream 1 next). The hub docs' 03:44Z UPDATE blocks hold the detail.
 >
@@ -24,7 +29,192 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 ---
 
-## 0. Final state (2026-09-27T02:31:47Z; this section wins over the rest of the file)
+## 0. HANDOFF STATE — successor session, 2026-09-27 (this section wins over everything below it)
+
+The successor Stream 1 session (queue owner 2026-09-27T02:50Z → handoff) wrote this section. Every value was checked live when written (UTC from `date -u`, SHAs from git, PR state from `gh`).
+
+**Before acting, re-verify live:** master, the runner log, PR heads and CI, and the slots.
+
+The next session's prompt is `NEXT-STREAM1-PROMPT-2026-09-27.md`.
+
+### 0.1 Master, merged batches, the queue
+
+- **Master:** `621e26616` (after the user's docs PR #614 "Street Organizer design", merged ~09:35Z). Before that, `9f3ba7c35` (batch 39).
+- **Merged this session:**
+  - **Batch 37 [#572]:** merged 05:19:24Z → `563cddb47`. S2/S3 PRs #560 #563 #564 #565 #570 #566.
+  - **Batch 38 [#585]:** merged 08:01:42Z → `f6c66d678`. 14 PRs, including S1 **#580** (V2 "Post a task" wizard posts at real places) and **#581** (a failed listing create releases its slot).
+  - **Batch 39 [#599]:** merged 08:59:13Z → `9f3ba7c35`.
+    - S1 **#571** (native quick-post address search; the API refuses 0,0).
+    - S1 **#586** (security: a listing can name only a Home its lister can access; user decision).
+    - S1 **#588** (reschedule notice says "UTC").
+    - S1 **#589** (listing slot held only while active).
+    - S1 **#592** (web Discover no-location copy).
+    - S2 #587 (first health score), S2 #590 (Pulse season label), S2 #591 (web Home settings toast).
+- **Batch 40 [#608]** is **in CI and not yet merged** (at 09:57Z: 4 macOS/Android jobs pending).
+  - Heads: #593 #594 #595 #596 (S3), #600 (S3 briefing failed-delivery, backend), #601 (S1 web offers failure), #602 (S2 web Place retry), #606 (S1 web geo center).
+  - **Tip:** `01f75025fafa7ffa4a8883f79d01ee777d4828af`. It was rebuilt at 09:46:34Z on master `621e26616` after #614's MASTER_CHANGED. Proof: `git diff 70a4e2bd1 01f75025f` is byte-identical to `git diff 9f3ba7c35 621e26616` (PR comment posted).
+  - `reviewed-heads.txt` line 30: `608 01f75025fafa7ffa4a8883f79d01ee777d4828af`.
+  - `queue.txt`: `608`.
+  - Runner **pid 18424** (`zsh /private/tmp/pantopus-tools/merge-queue/run.sh`, started 09:01:36Z). Its last log lines are "MASTER_CHANGED" (09:35:54) and "REVIEW_REQUIRED at 70a4e2bd1" (09:46:35, logged before GitHub showed the new head; it polls every 45 s and needs nothing more).
+  - **When the log says `PR608 MERGED … -> <sha>`:**
+    1. `git -C <runtime worktree> fetch -q origin master && git -C <runtime worktree> merge --no-edit origin/master`.
+    2. Batch 40 touches only web, native and one backend service file (#600 `briefing`). SIGINT-restart the backend (§5), check `/api/hub` 200, and note the new pid.
+    3. Message both peers the merge time and new master.
+    4. Build batch 41 (0.2).
+  - **If CI fails:**
+    - A known flake gets one `gh run rerun <run> --failed`. Flakes seen today: `HomeTaskMediaViewModelTests` (fixed by S2 #610) and `TokenAcceptViewModelTests`.
+    - Otherwise follow §4.7: drop the failing head, rebuild, and tell its owner.
+    - **If master moves again** (the user merges docs PRs directly): rebuild with `build-batch.sh` on the new master, prove the tip delta equals master's delta, replace the reviewed-heads line **in place**, force-push with a lease on the old tip, and comment. This happened 3 times today (#562, #577, #614).
+
+### 0.2 Batch 41: reviewed and bundle-verified; build right after batch 40 merges
+Every head below was reviewed by Stream 1 and its bundle verified with `tools/verify-bundle.py` (manifest OK, head matches, integrity OK). **Re-check each head is unchanged and CI is green before building.** Batch only green heads; don't hold a green batch for a slow one.
+
+| PR | Stream | Head | Bundle (seal) | What | CI at 09:55Z |
+|---|---|---|---|---|---|
+| #598 | S1 | `32fdd8daa` | `20260927-stream1-native-copy-parity-r1` (`c2d76d6c…`) | native started-$0 stop sheet says what to do (web #549 parity); edit-mode banner copy; "1 problem" | green |
+| #603 | S1 | `1ba5cacbf` | `20260927-stream1-native-trains-notice-r1` (`d811d404…`) | Support Trains scope: "Location needed" / "Couldn't load … Try again" (both apps) | green |
+| #607 | S1 | `023938ea9` | `20260927-stream1-web-start-funnel-retry-r1` (`fea6e81d…`) | web /start preview "Try again" re-reads. **Stacked on S2 #602** (in batch 40), so build it only after #602 is on master | green |
+| #615 | S1 | `d924979ae` | `20260927-stream1-native-edit-category-r1` (`08caf144…`, 70 files) | native task edits keep the stored category; feed chips read web labels | running (opened 09:53Z) |
+| #616 | S1 | `534a72017` | `20260927-stream1-native-feed-just-now-r1` (`6951989a…`, 25 files) | "just now" instead of "now ago" | running |
+| #617 | S1 | `2f20c139c` | `20260927-stream1-gig-category-canonical-r1` (`acc4bfb5…`, 15 files) | backend: a native key and its label are one category | running |
+| #597 | S3 | `4cd2e5d45` | `20260927-stream3-native-profile-share-r1` (`10193489…`) | profile "Share profile" sheet | green |
+| #604 | S3 | `38a3ca314` | `20260927-stream3-native-dashboard-photos-hidden-r1` (`c985b4fb…`) | owner dashboard hides the inert Photos rail | green |
+| #605 | S3 | `324460396` | `20260927-stream3-native-connections-open-profile-r1` (`c32a0f67…`) | tapping a connection opens the profile | green |
+| #612 | S3 | `2583774f3` | `20260927-stream3-native-chat-header-profile-r1` (`61c64832…`) | DM header opens the other person's profile | running |
+| #609 | S2 | `195283317` | `20260927-stream2-checklist-hire-native-r1` (`c42cef4c…`) | native checklist "Hire" links the posted task (PR-B) | running |
+| #610 | S2 | `e05f40983` | `20260927-stream2-home-task-media-wait-r1` (`af6ef8f8…`) | test-only deadline for the flaky `HomeTaskMediaViewModelTests` (helps every batch's iOS CI) | green |
+| #611 | S2 | `84bd33ce3` | `20260927-stream2-health-release-closed-hires-r1` (`ef546a03…`) | health score releases closed hires | green |
+| #613 | S2 | `fc3a2004d` | `20260927-stream2-money-period-note-r1` (`9521dddb…`) | web Money note shows the real period | green |
+
+**Shared files (prove hunks in the tip as in §4 step 3):**
+- `RootTabScreen.kt`: #609, #612, #605.
+- `HubTabRoot.swift` and `YouTabRoot.swift`: #609, #612, #605.
+- `GigsCategory` / `PostGigV1*`: #615 only.
+- `GigsFeedViewModel.*`: #616 and #603. #603 changes the Support Trains notice, and #616 changes the `agoLabel` call sites; **check they merge cleanly** (merge-tree).
+- `gigs.js`: #617 only.
+- Merge-tree #609 + #612 was clean at 09:27Z.
+
+**More peer PRs are coming.**
+- **Stream 2** asked that every Stream 2 PR be merged before it hands off; it is staying on and will not merge anything itself. It is opening three native PRs:
+  - (a) native Place "Try again" (dashboard + detail);
+  - (b) the carryover "remaining" count;
+  - (c) removing the false "Splits with household members can be configured after the bill is added" line from the native Add Bill review.
+  - If they are green when batch 41 is built, include them. Otherwise **build batch 42 right after 41 is queued**. This was promised to Stream 2 at 09:48Z.
+- **Stream 3** will send an Android fix: `BookingPageDto`/`PublicPageView` type `cancellation_policy` as `String?`, but web saves an object, so the Scheduling hub fails to load.
+
+**Do not touch** #46, #429, #430, or non-stream docs PRs such as the user's own design PRs (#562, #577, #614 were merged by the user).
+
+### 0.3 Stream 1's open PRs (details)
+- **#615: native edits keep the stored category.** Decided 2026-09-27 under the standing instruction.
+  - An edit keeps the stored category unless the owner picks a chip, and shows its name. Rejected: adding web's 24 categories to the native chips (a design change); recategorizing (data loss).
+  - Before, on the real apps:
+    - Android saved an untouched "Other"/"Pet Care" task as `handyman`.
+    - iOS opened both as "Choose a category". It blocked Save for "Other", and a forced re-pick rewrote "Pet Care" to `petcare`.
+  - After: stored values are kept. The feed also shows PET CARE / CHILD CARE / TECH for web labels instead of HANDYMAN.
+  - iOS `PostGigV1View.swift` reached 501 lines, so it now carries the sibling's `// swiftlint:disable file_length`.
+- **#616: "just now".**
+  - Android helpers `agoLabel`/`relativeAgo`. An inline `if` tripped detekt CyclomaticComplexity in `projectGigV1`; commit `084023db7` was amended before any push.
+  - iOS: a ternary at 4 call sites.
+  - #615 and #616 were verified together from one local verify tree, `verify/stream1-category-justnow-20260927-r2` `4f954d721`. It was never pushed, and each PR's files are byte-identical in it.
+- **#617: backend canonical category.**
+  - `canonicalGigCategory` lives in `services/magicTaskService.js` next to `VALID_CATEGORIES`.
+  - Applied to: create, magic-post and PATCH; the list, search, map-cluster and price-benchmark filters; hide and unhide; saved-search create and dedupe; alert matching. Unknown values pass through.
+  - **Limit, recorded:** tasks already stored with a key keep it. Only the native quick-post form wrote keys, so these are few. The founder can count them read-only with the query in the PR/bundle. A guarded per-row relabel is the follow-up if any exist. No data migration: `Gig` has 9 BEFORE UPDATE guard triggers.
+  - Two existing `gigLocationFiltering` assertions now expect `'Cleaning'`.
+- **#598, #603, #607:** see the table. The inventory has their rows.
+
+### 0.4 Runtime, devices, slots (at 09:57Z)
+
+**Runtime** (`/private/tmp/pantopus-stream1-runtime-20260925`):
+- Backend **pid 39731**, started 09:50:47Z (log `logs/backend-095047.log`), on master code.
+- Runtime worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25` at `e5b48b6ce` (master `9f3ba7c35` merged). Clean.
+  - Master `621e26616` (#614) is docs-only, so it is not merged there yet. Merge it with batch 40.
+- Fault proxy 18138: pid 86966. Next dev 18139: pid 48094 (parent 48085).
+- DB: fixtures from both of today's bundles were removed at 09:51:26Z (checked transaction). The snapshot diff shows only sign-in bookkeeping, and bob's `magic_task_post_count` is back to 0.
+- **How backend PRs were served for an "after":**
+  - `git -C <runtime worktree> checkout <branch-head> -- <changed backend files>`, SIGINT-restart, run the API checks.
+  - Then `git checkout HEAD -- <files>` and SIGINT-restart again.
+  - Leave the worktree clean and the backend on master.
+
+**Devices:** all shut down, and **Stream 1 holds no slots**. Slots 1 and 4 were released at 09:49:59Z; heavy was released at 09:48:03Z.
+- Sim F4DBD47E has verify build `4f954d721` (dylib `2e324b94…`), alice signed in; location set to Vancouver 45.628,-122.6739.
+- Emulator-5558 (AVD `Pantopus_Stream1_Start_R2`) has APK `installed-5558-4f954d721.apk` (`50fd8dc7…`), alice signed in. `emu geo fix` does not persist across boots.
+- Saved apps for reinstall:
+  - iOS master `9f3ba7c35` and verify `4f954d721`: `/private/tmp/pantopus-stream1-ios-apps/<sha>/Pantopus.app`.
+  - Android APKs `installed-5558-b4b518313.apk` (master-equivalent for the gig/quick-post files) and `installed-5558-4f954d721.apk`: in the runtime dir.
+
+**Peers at 09:57Z:**
+- Stream 2: heavy (since 09:48:33Z), slot 1 (sim 6F914A30, since 09:50:32Z, ~25 min), slot 2 (emulator-5556).
+- Stream 3: slot 3 (emulator-5554), and next for heavy after Stream 2.
+
+### 0.5 Decisions taken today under the user's standing instruction (each is also in its PR and the inventory)
+The user's instruction (~07:22Z): "do not stop anymore, just go with what you recommended … make sure you record all these every time."
+1. **Web Discover without a location:** keep the empty block and button, and change the copy (#592).
+2. **Native $0 "Flat" edit:** keep the web rule (budget > 0); only the edit-mode copy changed (#598).
+3. **Support Trains empty states:** honest "Location needed" / "Couldn't load … Try again" in the same frame (#603).
+4. **Native edit of an unlisted category:** keep the stored value and show its name (#615).
+5. **`/app/discover-hub`** (orphan page): WON'T FIX.
+6. **Reschedule notice:** explicit "UTC" (#588).
+7. **Listing slot:** held only while `active`; returning claims one, with 409 at the cap (#589).
+8. **Taxonomy split:** canonicalize at the API boundary, with no migration and no client change (#617).
+9. **"now ago":** "just now" (#616).
+10. **Magic-post** is canonicalized too (in #617).
+- The user decided these directly: listing Home access = "Require Home access" (#586); V1 = "Address search in the app" (#571); V2 = "Same address search" (#580).
+
+### 0.6 Remaining Stream 1 work, in order
+1. **Queue:** batch 40 → batch 41 (0.2) → batch 42 (Stream 2's (a)/(b)/(c) and anything else green), plus post-merge runtime updates. After #615/#616/#617 merge, mark their inventory rows merged.
+2. **Legacy key rows** (after #617 merges). Nothing to do unless the founder reports a non-zero count. Don't query hosted databases yourself.
+3. **iOS Report post:** not run. It needs a post by a non-alice author, e.g. bob via `api.py`, with a real location. Verify the report flow on iOS (and Android parity) through the real API, then clean up.
+4. **New candidates** (seen today; not verified as defects; check before changing anything):
+   - **iOS drawer "Offers & Bids" → "Offers"** (listing offers) empty state: "No offers yet · When a neighbor offers a price on one of your listings…", with the CTA **"Post a task"**. The CTA doesn't match a listings context; compare web and Android before proposing copy or a CTA.
+   - **Native feed rows for tasks with no category** show a HANDYMAN chip (the mapper's fallback). Seen for the 3 null-category runtime tasks. Check what web shows before changing anything, since this may need a design decision.
+   - **Web edit form:** for a task stored with a legacy key it shows the raw key ("petcare"). It becomes moot for new rows once #617 merges.
+5. **Inventory notes** already dispositioned as "no change" stay as they are (the rows marked note).
+
+### 0.7 Evidence bundles made this session
+All are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`:
+
+| Bundle | Seal |
+|---|---|
+| `20260927-stream1-quickpost-address-search-r1` | `bba44d1b…` |
+| `20260927-stream1-v2-compose-address-r1` | `a4c865b1…` |
+| `20260927-stream1-listing-home-access-r1` | `861841b4…` |
+| `20260927-stream1-reschedule-notice-utc-r1` | `9e41f879…` |
+| `20260927-stream1-web-discover-no-location-r1` | `9b11e251…` |
+| `20260927-stream1-native-copy-parity-r1` | `c2d76d6c…` |
+| `20260927-stream1-web-offers-load-failure-r1` | `bb648858…` |
+| `20260927-stream1-native-trains-notice-r1` | `d811d404…` |
+| `20260927-stream1-web-geo-center-r1` | `105070cb…` |
+| `20260927-stream1-web-start-funnel-retry-r1` | `fea6e81d…` |
+| `20260927-stream1-native-edit-category-r1` | `08caf144…` |
+| `20260927-stream1-native-feed-just-now-r1` | `6951989a…` |
+| `20260927-stream1-gig-category-canonical-r1` | `acc4bfb5…` |
+
+The living inventory `20260925-stream1-domain-inventory-r1/INVENTORY.md` has a "Successor findings 2026-09-27" table, and its merge-state header was updated at 09:15Z.
+
+### 0.8 Worktrees created this session (keep them; never remove or prune)
+- `/private/tmp/pantopus-stream1-`:
+  - `quickpost-address` (#571), `v2-address` (#580), `listing-slot` (#581), `listing-home-access` (#586), `reschedule-utc` (#588), `listing-slot-lifecycle` (#589);
+  - `discover-copy` (#592), `started-free-stop` (#598), `web-offers-r2` (#601), `trains-empty` (#603), `geo-center` (#606), `start-retry` (#607);
+  - `edit-category` (#615), `feed-just-now` (#616), `category-canonical` (#617);
+  - `quickpost-edit-copy` (folded into #598);
+  - `verify-0927a` (superseded local verify tree), `verify-0927b` (local verify tree `4f954d721`).
+- `/private/tmp/pantopus-stream1-offers` is a stale entry for an older branch; a new path was used instead of pruning it.
+
+### 0.9 Lessons from this session (in addition to §11)
+- **Timestamps:** never hand-type a time in a peer message. A "09:14Z" was corrected to ~09:10Z.
+- **Pushes:** `git push -q` failed silently twice at 09:52Z. Retry without `-q`, and confirm with `git ls-remote`.
+- **API helper output:** `api.py` truncates JSON at 3000 chars. Set `LIM=500000` to parse lists.
+- **Express 5:** `req.query` is a getter that re-parses, so mutating it in middleware does nothing. Canonicalize per handler.
+- **SwiftLint in CI** runs `--strict`, so the file_length *warning* (500) fails.
+- **detekt:** MaxLineLength is 140, and an extra branch can trip CyclomaticComplexity on big projection functions. Use a helper.
+- **Combined verify tree:** to verify several PRs in one heavy window, merge their heads into a local `verify/*` branch, prove each PR's files are byte-identical in it, build once per platform, and keep one bundle per PR. The seal records a single head.
+- **Before builds:** an older APK can serve as a master "before" when its relevant files are byte-identical to master. Record the blob-id proof in the bundle.
+- **Coordination checkout:** it is shared with peers' uncommitted edits (at 09:57Z Stream 3 had `03-accounts-social.md` modified). Commit only your paths. If a rebase is refused because of their dirty file, don't stash; wait, or commit from a separate worktree of the coordination branch.
+
+---
+
+## 0-prior. Earlier final state (2026-09-27T02:31:47Z; historical, superseded by §0 above)
 
 **The queue is empty, the runtime equals master, and every Stream 1 fix is merged.**
 

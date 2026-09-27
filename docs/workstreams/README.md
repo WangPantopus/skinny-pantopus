@@ -2,6 +2,27 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T10:00Z — Stream 1 (queue owner) — HANDOFF at the user's request.** Full state: `docs/workstreams/stream1-handoff-2026-09-26.md` **§0**. Next session's prompt: `docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-27.md`.
+> - **Master `621e26616`**, after the user's docs PR #614. Batch 39 [#599](https://github.com/WangPantopus/skinny-pantopus/pull/599) merged 08:59:13Z → `9f3ba7c35` (S1 #571 #586 #588 #589 #592; S2 #587 #590 #591).
+> - **Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608) is in CI; the runner (pid 18424) merges it.**
+>   - It was rebuilt at 09:46:34Z for #614's MASTER_CHANGED: tip `01f75025f`, with the same 8 heads (#593–#596, #600, #601, #602, #606).
+>   - Proof: the old→new tip diff equals #614's docs diff byte-for-byte.
+> - **Batch 41 is reviewed and every bundle verified.** Build it right after #608 merges:
+>   - S1 #598 #603 #607 [#615](https://github.com/WangPantopus/skinny-pantopus/pull/615) [#616](https://github.com/WangPantopus/skinny-pantopus/pull/616) [#617](https://github.com/WangPantopus/skinny-pantopus/pull/617);
+>   - S2 #609 #610 #611 #613;
+>   - S3 #597 #604 #605 #612.
+>   - Heads, seals and shared-file notes are in handoff §0.2. Batch 42 is promised to Stream 2 for its last three native PRs.
+> - **New S1 PRs** (sealed; device before/after on both apps; runtime clean):
+>   - **#615:** native task edits keep the stored category ("Other"/"Pet Care" were rewritten to `handyman` on Android; iOS forced a re-pick), and feed chips read web labels. Bundle `08caf144…`.
+>   - **#616:** "just now" instead of "now ago". Bundle `6951989a…`.
+>   - **#617 (backend):** a native category key and its label are one category across filters, hide/unhide, saved searches (+alerts), create/edit/magic-post and price benchmark. Native "Pet care" filters found no web/V2 task before. Bundle `acc4bfb5…`.
+> - **Decisions (standing instruction; each in its PR and the inventory):**
+>   - 8. Taxonomy split: canonicalize at the API boundary to the backend labels. No migration: `Gig`'s guard triggers make a blind relabel risky; legacy key rows are a founder-run count plus a guarded follow-up.
+>   - 9. "now ago" → "just now".
+>   - 10. Magic-post canonicalized too.
+>   - (1–7 are in the 08:20Z block and handoff §0.5.)
+> - **Slots:** Stream 1 holds none (heavy released 09:48:03Z; slots 1 and 4 released 09:49:59Z). Runtime on master code (backend pid 39731).
+
 > **UPDATE 2026-09-27T08:20Z — Stream 1 (queue owner).**
 > - **Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) merged 08:01:42Z → master `f6c66d678`** (14 PRs, including #580, the V2 "Post a task" wizard's real places, and #574). Stream 2 was pinged for PR-B. The runtime is on it (`3d19a4ea1`; backend pid 93123).
 > - **Batch 39 [#599](https://github.com/WangPantopus/skinny-pantopus/pull/599) queued 08:10:48Z**, tip `82be88a58`.

@@ -1,3 +1,5 @@
+> **Superseded** by `NEXT-STREAM1-PROMPT-2026-09-27.md` (successor handoff, 2026-09-27). Keep this file as history.
+
 # Message to send to the next Stream 1 agent (final version, 2026-09-27)
 
 You are **Stream 1** for the Pantopus monorepo (WangPantopus/skinny-pantopus: Express/Supabase backend, Next.js web, SwiftUI iOS, Compose Android). Pantopus is a neighborhood app: people post and take local tasks, buy and sell, tip helpers, run Support Trains, and share posts with verified neighbors.
