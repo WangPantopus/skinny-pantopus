@@ -111,13 +111,16 @@ class LoginViewModel
          */
         private var hostLeftForeground: Boolean = false
         private var cancelJob: Job? = null
+        private var rememberedHintDismissed = false
 
         init {
             // Persistent login — mirror the repository's remembered-account
             // hint + session-end banner into the screen state.
             viewModelScope.launch {
                 authRepository.rememberedAccounts.collect { accounts ->
-                    _uiState.update { it.copy(rememberedAccount = accounts.firstOrNull()) }
+                    _uiState.update {
+                        it.copy(rememberedAccount = if (rememberedHintDismissed) null else accounts.firstOrNull())
+                    }
                 }
             }
             viewModelScope.launch {
@@ -134,9 +137,17 @@ class LoginViewModel
          * "Not you?" on the remembered-account header — forget that account
          * on this device (Block Store hint + resume grant).
          */
-        fun forgetRememberedAccount() {
-            val userId = _uiState.value.rememberedAccount?.userId ?: return
-            viewModelScope.launch { authRepository.removeRememberedAccount(userId) }
+        fun forgetRememberedAccount(userId: String) {
+            if (_uiState.value.isLoading || _uiState.value.rememberedAccount?.userId != userId) return
+            rememberedHintDismissed = true
+            _uiState.update { it.copy(rememberedAccount = null, isLoading = true) }
+            viewModelScope.launch {
+                try {
+                    authRepository.removeRememberedAccount(userId)
+                } finally {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
         }
 
         fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, errorMessage = null, infoMessage = null) }
