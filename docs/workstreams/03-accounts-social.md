@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T07:22:48Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:01:47Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
@@ -94,7 +94,8 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - From now on Stream 3 takes its own recommended option and records it below with the time; safety limits (no providers or live money, no secrets, founder environment untouched, no destructive cleanup, peers notified before shared resources) still hold.
 
 ### Decisions taken without asking (per the standing direction)
-- (none yet)
+- 2026-09-27T08:01:47Z: **One combined verification build per platform** (`verify/stream3-native-batch-20260927`, head `72d6e0bd3`, local only) for S3-59 Android, S3-48 iOS, S3-52 native, the gallery hide and the Share action, instead of one build per head. Why: shorter heavy hold while both peers wait. Each PR's files are byte-identical in that tree (checked with `git diff --quiet <head> <verify> -- <files>`). Rejected: 5+ separate builds (~60 min of heavy).
+- 2026-09-27T08:01:47Z: **Also hide the owner dashboard's "Photos" section on iOS and Android.** Both apps map the gallery to an empty list, so the rail only shows "Add photo", which opens the page editor, and the editor's gallery is hidden (iOS #552; Android in the gallery branch). Extends the user's "hide the gallery like iOS" decision. Rejected: leaving a tile that leads nowhere.
 
 ### Earlier questions (answered above)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
