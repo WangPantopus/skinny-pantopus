@@ -4,7 +4,6 @@ package app.pantopus.android.ui.screens.settings.payments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.models.connect.ConnectAccountDto
 import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -141,7 +140,7 @@ class PaymentsViewModel
                         PaymentsMapper.liveFrame(
                             methods = result.data.paymentMethods.map(PaymentsMapper::toUiMethod),
                             activity = fetchActivity(),
-                            connectAccount = fetchConnectAccount(),
+                            payoutStatus = fetchPayouts(),
                             earnings = fetchEarnings(),
                         )
                     if (readScopeMatches(accountId, generation)) {
@@ -177,13 +176,13 @@ class PaymentsViewModel
                     )
             }
 
-        /**
-         * `GET api/payments/connect/account` → the Payouts card. A 404 (the
-         * seller has never connected) or any transport error degrades to null,
-         * which renders the honest not-connected scaffold.
-         */
-        private suspend fun fetchConnectAccount(): ConnectAccountDto? =
-            (connectRepository.accountStatus() as? NetworkResult.Success)?.data?.account
+        /** A missing account permits setup; a failed status read must not claim that. */
+        private suspend fun fetchPayouts(): PaymentsPayouts =
+            when (val result = connectRepository.accountStatus()) {
+                is NetworkResult.Success -> PaymentsMapper.payouts(result.data.account)
+                is NetworkResult.Failure ->
+                    if (result.error.code == 404) PaymentsMapper.payouts(null) else PaymentsMapper.unavailablePayouts
+            }
 
         /**
          * `GET api/payments/earnings` + `GET api/payments/spending` → the

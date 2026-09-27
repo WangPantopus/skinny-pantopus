@@ -37,11 +37,12 @@ object PaymentsMapper {
         activity: PaymentsActivity = emptyActivity,
         connectAccount: ConnectAccountDto? = null,
         earnings: PaymentsEarnings? = null,
+        payoutStatus: PaymentsPayouts? = null,
     ): PaymentsLoaded =
         PaymentsLoaded(
             balance = null,
             methods = methods,
-            payouts = payouts(connectAccount),
+            payouts = payoutStatus ?: payouts(connectAccount),
             activity = activity,
             canCloseAccount = false,
             footerCaption = "Payments are processed securely by Stripe.",
@@ -288,6 +289,19 @@ object PaymentsMapper {
             null, "" -> "Card"
             else -> brand.replaceFirstChar(Char::uppercase)
         }
+
+    val unavailablePayouts: PaymentsPayouts
+        get() =
+            notConnectedPayouts.copy(
+                stripe =
+                    notConnectedPayouts.stripe.copy(
+                        subtext = "Couldn't load payout status",
+                        trailing = PaymentsRowTrailing.GatedDash,
+                    ),
+                payoutMethod = notConnectedPayouts.payoutMethod.copy(subtext = "Unavailable"),
+                taxInfo = notConnectedPayouts.taxInfo.copy(subtext = "Unavailable"),
+                helper = "Pull down to refresh and try again.",
+            )
 
     private val notConnectedPayouts =
         PaymentsPayouts(
