@@ -19,7 +19,7 @@ import org.junit.Test
  * A13.1 Paparazzi baselines for the Add Guest form.
  *
  * Locks the two design frames:
- *  - filled: Sasha, Weekend, Front door + Garage, validated contact,
+ *  - filled: Sasha, Weekend, WiFi + Entry Instructions + Parking, validated contact,
  *    sticky Send pass CTA enabled.
  *  - initial: pristine fields, no duration, sticky Send pass CTA disabled.
  */
@@ -45,7 +45,7 @@ class AddGuestFormSnapshotTest {
                     onNameChange = {},
                     onContactChange = {},
                     onDurationChange = {},
-                    onAreasChange = {},
+                    onSectionsChange = {},
                     onWelcomeChange = {},
                 )
             }
@@ -63,7 +63,7 @@ class AddGuestFormSnapshotTest {
                     onNameChange = {},
                     onContactChange = {},
                     onDurationChange = {},
-                    onAreasChange = {},
+                    onSectionsChange = {},
                     onWelcomeChange = {},
                 )
             }
@@ -111,7 +111,7 @@ class AddGuestFormSnapshotTest {
                         touched = true,
                     ),
                 duration = AddGuestSampleData.Filled.DURATION_ID,
-                selectedAreas = AddGuestSampleData.Filled.AREA_IDS,
+                selectedSections = AddGuestSampleData.Filled.SECTION_IDS,
             )
         }
 }

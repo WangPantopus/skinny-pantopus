@@ -62,9 +62,12 @@ const HOME_SELECT = 'id, owner_id, address, city, state, zipcode, map_center_lat
 
 /** geohash-6 for a home from its map center, or null when unmappable. */
 function homeGeohash(home) {
-  const lat = Number(home?.map_center_lat);
-  const lng = Number(home?.map_center_lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  // Number(null) is 0: a home without coordinates has no block, not 0,0's.
+  if (home?.map_center_lat == null || home?.map_center_lng == null
+    || String(home.map_center_lat).trim() === '' || String(home.map_center_lng).trim() === '') return null;
+  const lat = Number(home.map_center_lat);
+  const lng = Number(home.map_center_lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   return encodeGeohash(lat, lng, 6);
 }
 

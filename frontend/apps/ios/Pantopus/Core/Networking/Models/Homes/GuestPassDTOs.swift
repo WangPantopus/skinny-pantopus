@@ -65,19 +65,24 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
     public var durationHours: Int?
     public var startAt: String?
     public var endAt: String?
+    /// Guest page sections the pass shows; nil lets the server use its
+    /// default for the kind.
+    public var includedSections: [String]?
 
     public init(
         label: String,
         kind: String = "guest",
         durationHours: Int? = nil,
         startAt: String? = nil,
-        endAt: String? = nil
+        endAt: String? = nil,
+        includedSections: [String]? = nil
     ) {
         self.label = label
         self.kind = kind
         self.durationHours = durationHours
         self.startAt = startAt
         self.endAt = endAt
+        self.includedSections = includedSections
     }
 
     /// Omit nil optionals from the wire body.
@@ -88,6 +93,7 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         try c.encodeIfPresent(durationHours, forKey: .durationHours)
         try c.encodeIfPresent(startAt, forKey: .startAt)
         try c.encodeIfPresent(endAt, forKey: .endAt)
+        try c.encodeIfPresent(includedSections, forKey: .includedSections)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -96,6 +102,7 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         case durationHours = "duration_hours"
         case startAt = "start_at"
         case endAt = "end_at"
+        case includedSections = "included_sections"
     }
 }
 
