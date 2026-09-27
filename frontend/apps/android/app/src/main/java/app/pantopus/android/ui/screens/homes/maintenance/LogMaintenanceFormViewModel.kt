@@ -177,12 +177,15 @@ class LogMaintenanceFormViewModel
         ) {
             val stored = draftStore.draft(taskId)
             val inferredCategory = MaintenanceCategory.from(task.task)
+            val storedVendor =
+                if (stored?.performedBy == MaintenancePerformedBy.Self) "" else stored?.performerName?.trim()
             val performedBy =
-                stored?.performedBy ?: if (task.vendor.isNullOrBlank()) {
-                    MaintenancePerformedBy.Self
-                } else {
-                    MaintenancePerformedBy.Contractor
-                }
+                stored?.performedBy?.takeIf { storedVendor == task.vendor?.trim().orEmpty() }
+                    ?: if (task.vendor.isNullOrBlank()) {
+                        MaintenancePerformedBy.Self
+                    } else {
+                        MaintenancePerformedBy.Contractor
+                    }
             val parsedDue =
                 task.dueDate?.let { parseDate(it) } ?: _form.value.nextDueDate
             val merged =
@@ -191,7 +194,7 @@ class LogMaintenanceFormViewModel
                     title = task.task,
                     dateCompleted = parseInstant(task.performedAt ?: task.updatedAt ?: task.createdAt) ?: Instant.now(),
                     performedBy = performedBy,
-                    performerName = stored?.performerName ?: (task.vendor.orEmpty()),
+                    performerName = task.vendor.orEmpty(),
                     performerContact = stored?.performerContact.orEmpty(),
                     costText = task.cost?.let { formatCost(it) }.orEmpty(),
                     notes = stored?.notes.orEmpty(),
@@ -283,9 +286,9 @@ class LogMaintenanceFormViewModel
                                 homeId,
                                 m.taskId,
                                 UpdateMaintenanceRequest(
-                                    task = req.task,
-                                    vendor = req.vendor,
-                                    cost = req.cost,
+                                    task = req.task.takeIf { it != initial.title.trim() },
+                                    vendor = req.vendor.takeIf { it != encodeVendor(initial) },
+                                    cost = req.cost.takeIf { current.costText != initial.costText },
                                     recurrence = req.recurrence,
                                     dueDate = req.dueDate,
                                     status = null,
