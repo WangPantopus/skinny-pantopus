@@ -44,7 +44,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Before (master APK `27a5e60e…`): targets not clickable (uiautomator); taps open nothing. After (APK `bbbacb05…`): banner and logo upload with spinner, image and toast; a 500 keeps the old image and shows the reason. The proxy answered all three uploads before upstream; no DB or storage write. ktlint, detekt, lintDebug; `EditBusinessPageViewModelTest` 6/6; `verifyPaparazziDebug` `EditBusinessPageSnapshotTest` 2/2 (goldens unchanged).
 - The gallery "Add" tiles are still inert (no backend); see the pending questions below.
 
-### Pending user questions (asked 2026-09-27 ~03:31Z in chat; no change until answered)
+### Pending user questions (asked in chat at 2026-09-27T03:30:38Z; no change until answered)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
 2. The persona/public profile header's "Share profile" button opens Block/Report on both apps (still true on master `89f3c6bac`: iOS `PublicProfileView.swift:428`, Android `PublicProfileScreen.kt:399`). Making it share would remove the only route to Block/Report. Options: a separate "…" button for Block/Report and a real Share; relabel as "More"; or leave it.
 
