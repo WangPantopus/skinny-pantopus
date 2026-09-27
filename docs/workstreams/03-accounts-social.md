@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:35:41Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:52:47Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots (2026-09-27T08:35:41Z):** heavy held since 08:33:58Z (after the Stream 1 release at 08:33:51Z) for Android + iOS builds of the local verification tree `997d129c2` (dashboard Photos rail hidden `38a3ca314` + Connections rows open profile `324460396`). Slot 3 held since 08:20:35Z (the Android befores are done). Slot 1 queue: Stream 1, then Stream 3. After heavy, Stream 2 is next. Earlier holds: heavy 07:26:43Z–07:45:06Z, slot 3 07:27:03Z–08:05:34Z, slot 1 07:37:07Z–08:05:17Z. Batch 38 #585 merged 08:01:42Z (`f6c66d678`).
+- **Slots (2026-09-27T08:52:47Z):** none held. Heavy 08:33:58Z–08:49:34Z (to Stream 2), slot 3 08:20:35Z–08:46:55Z, slot 1 08:37:28Z–08:51:15Z (to Stream 2). Sim `0AE16FA0` has build `997d129c2` with the Owner signed in (shut down); the emulator is shut down. Batch 38 #585 merged 08:01:42Z (`f6c66d678`).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -59,6 +59,12 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### PR #583: Android broadcast composer shows no sample audience counts
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
+
+### PRs #604 and #605 (sent to Stream 1 at 2026-09-27T08:52:47Z)
+Afters on local verification tree `997d129c2` (master `f6c66d678` + both heads, byte-identical). Android APK `735d5744…`, iOS dylib `95506dfc…`. No table changed (08:21:58Z–08:51:30Z).
+- **[#604](https://github.com/WangPantopus/skinny-pantopus/pull/604)** iOS + Android: the owner dashboard hides its Photos rail (gallery has no backend; the Add tile led to the hidden editor gallery). Head `38a3ca314`, bundle `20260927-stream3-native-dashboard-photos-hidden-r1`, seal `c985b4fb6fb51af62d8f9cd423d6c193ed6cf1d6b3db36201b57452acb30d79b`.
+- **[#605](https://github.com/WangPantopus/skinny-pantopus/pull/605)** iOS + Android: tapping a connection opens their profile (web parity). Head `324460396`, bundle `20260927-stream3-native-connections-open-profile-r1`, seal `c32a0f6778a0349ca375eced3a2f94f3f730a37994d5f8f2f70937fa597358b5`.
+- Checked in the build log: the `BusinessOwnerView.swift:101` backward trailing-closure warning binds to `onPosted` (correct), so there is no defect.
 
 ### PRs #593–#597 (sent to Stream 1 at 2026-09-27T08:10:04Z; CI running)
 All sealed, with seal comments. Befores used master builds; afters used one local verification tree `72d6e0bd3` (master `563cddb47` + these five heads, disjoint files, each byte-identical). Android APK `84089eba…`, iOS dylib `30f255ba…`.
