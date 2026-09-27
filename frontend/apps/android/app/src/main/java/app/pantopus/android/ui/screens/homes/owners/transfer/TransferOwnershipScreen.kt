@@ -416,8 +416,8 @@ private fun RecipientCard(
             )
             Text(
                 text =
-                    "We'll notify this address. If they don't have a Pantopus account yet, " +
-                        "the claim waits for them to sign up.",
+                    "The buyer must already have a Pantopus account with this email. " +
+                        "Ask them to sign up before initiating the transfer.",
                 fontSize = 12.sp,
                 color = PantopusColors.appTextSecondary,
             )
