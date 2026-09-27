@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T02:34Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T03:22Z)
 - **Merged since the handoff:** batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) (00:08:50Z → `f7f51eae4`: #543, #539, #541 + S1 #542) and batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → `73b98f6b6`: #544, #547 + S3 #545, S1 #549). **No Stream 2 PR is open.**
 - **User decisions on all five §3A items (AskUserQuestion, answered by 01:36Z; each is the recommended option):**
   1. **Phone escrow:** refuse it truthfully. The API answers 400 "Texting isn't available yet; send to their email", creates no escrow, and stops logging the SMS body (backend only).
@@ -23,6 +23,18 @@
     - One synthetic pass, `S2D3YouProbe`, was created and then revoked in the UI.
   - **TokenAccept flake (Stream 1's request) = [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (test only). The extra requests came from chat view models that earlier tests left running, not a 503 retry. Stream 3 is fixing the chat loops.
   - **Queue:** #560, #563 and #564 are recorded in Stream 1's handoff as the suggested first batch for its successor; re-send them to the new Stream 1 session.
+- **More user decisions (AskUserQuestion, 2026-09-27 ~02:45Z):**
+  - (a) Server-side bill "overdue" is **never early**: a Home has no time zone, so a bill is overdue once its due day has ended everywhere (from 12:00 UTC the next day).
+  - (b) The Sun source note shows the data's own date when it isn't today.
+- **New PRs (03:22Z):**
+  - [#565](https://github.com/WangPantopus/skinny-pantopus/pull/565): health score, never early (`b365f2a33`; bundle `…-health-bills-never-early-r1`, `19e3e963…`).
+  - [#568](https://github.com/WangPantopus/skinny-pantopus/pull/568): Bills lists on web/iOS/Android; a bill is overdue only after its due day (`e4b0b2c71`; `…-bills-due-day-r1`, `c15ae334…`). Android showed "Overdue · was due <tomorrow>" from 5 PM.
+  - [#569](https://github.com/WangPantopus/skinny-pantopus/pull/569): Sun "as of <date>" on 3 apps (`3b5bae8b2`; `…-sun-day-label-r1`, `d3c29137…`); stale data was emulated through the proxy.
+  - [#570](https://github.com/WangPantopus/skinny-pantopus/pull/570): Hub (Stream 1's file, with its OK), in two commits: the never-early rule `011d7ea01`, then the canceled-bill status filter `c884b7f39` (`…-hub-bills-overdue-r1`, `38bc9175…`).
+  - Stream 1 reviewed #560/#563/#564/#565 as OK for batch 37.
+- **Fixtures:** 3 `S2-DueDay-Probe-*` bills on 70f66a6d, canceled at 03:18:00Z through the product route.
+- **Runtime:** tree = master `89f3c6bac` + #560 #563 #564 #565 #568 #569 #570 (backend pid 24372). APK `4365dbf8…` on emulator-5556; sim dylib `c3bed1eb…`.
+- **Watch:** `HomeClaimDecisionTests.testAdminRejectsMismatchedReceiptAndLateAccountSuccess` timed out once on #563's CI (a 0.5 s stub wait). Stream 1 reran it; if it recurs, look for a leftover poller as in #560.
 - **Candidates found (not changed):**
   - The health score cache (5 min) isn't invalidated when an issue is created or updated.
   - Web `/share` says "could not be loaded" for a 403 (the §3B item 10 class).
@@ -239,6 +251,14 @@
   - **Private token files differ in shape:** the evidence `.control-token` is JSON `{token, pass_id}`, and `.guest-token` is the raw token. The web tools only redact an exact token match.
 
 ## Status log (newest first; each block is the state at its time)
+
+**Stream 2 — 2026-09-27T03:22Z (bill overdue semantics across server and apps; Sun label; 4 PRs)**
+
+- **User decisions:** server "never early" overdue; Sun "as of <date>".
+- **PRs:** #565 (health score), #568 (Bills lists ×3 apps), #569 (Sun label ×3 apps), #570 (Hub, 2 commits). All are verified; web and Android also on devices, iOS on sim 6F914A30.
+- **Slots used:**
+  - heavy 02:54:24–03:02:47Z and 03:03:18–03:07:28Z;
+  - slot 1 03:10:44–03:17:07Z.
 
 **Stream 2 — 2026-09-27T02:34Z (all five §3A decisions done: 1 no code; #558 and #559 merged; #563 and #564 native opened; #560 test flake)**
 
