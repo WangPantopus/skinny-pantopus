@@ -5977,8 +5977,6 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
           weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
         })}${note ? ` — ${note}` : ''}`,
         link: `/gigs/${gigId}`,
-        contextType: 'gig',
-        contextId: gigId,
         metadata: { gig_id: gigId, scheduled_start: newStart.toISOString() },
       }).catch(() => {});
     }
