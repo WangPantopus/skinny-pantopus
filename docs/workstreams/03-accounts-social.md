@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:01:19Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:12:10Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Last holds: heavy 04:27:16Z–04:44:55Z and slot 3 04:27:42Z–04:56:42Z (for #582/#583; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
+- **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -59,6 +59,10 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### PR #583: Android broadcast composer shows no sample audience counts
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1.
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
+
+### Committed, verification pending (need heavy + devices)
+- **S3-59 on Android: a failed review reply now says so.** Branch `claude/stream3-android-review-reply-failure`, head `bbca31072` on `c890f2588`; 1 file (`BusinessOwnerViewModel.kt`) adds "Your reply wasn't posted. <reason>" (iOS got the same in #552). Before captured on the master APK (bundle `20260927-stream3-android-review-reply-failure-r1/before`): the reply shows, the injected 500 lands at 05:11:22Z, and the reply vanishes with no message. The after needs a build.
+- **S3-48 on iOS: notifications tab switch mid-load, and load-more retry.** Branch `claude/stream3-ios-notifications-generation`, head `4c7fe3f9a` on `c890f2588`; 1 file (`NotificationsViewModel.swift`) mirrors Android's d8cce256d and iOS Mailbox: a generation guard, local offsets applied only while current, and `loadMoreError` plus `retryLoadMore` (the shared list's Try again). SwiftLint `--strict` and SwiftFormat are clean. The build on sim `0AE16FA0` (`f009f6be7`) has master's notifications code, so it can serve as the before. Owner has 33 notifications (15 read / 18 unread; 2 pages). Rules `fault-s348-notif-delay.json` (12 s delay) and `fault-s348-notif-page-fail.json` are ready.
 
 ### Committed locally, not pushed: daily briefing failed-delivery (`backend/routes/internalBriefing.js:320`)
 - Branch `claude/stream3-briefing-failed-delivery`, head `2ff8ae956` on `7bdef3e8c`. Stream 2 found supabase-js builders have `then` but no `catch` (confirmed on 2.103.3). A scan of master's backend found 4 direct `.catch` sites: Stream 2's `homeIam.js:629` and `seasonalChecklistService.js:272`, Stream 1's `listings.js:562`, and this one (Stream 2 asked me to take it).
