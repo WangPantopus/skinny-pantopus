@@ -2,19 +2,26 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 23:06Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:05Z)
 
-- **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner confirmed by message: the resumed Stream 1 session ("Stream 1 peer takeover handoff") until it posts a new handoff.
-- **#536:** CI passed (22:34Z); in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540), waiting on #540's CI (android lint/test/assemble and iOS device tests still running at 22:59Z). No action from Stream 3 unless a fix is needed.
-- **Runtime restarted 22:59–23:01Z** from the kit, in its order: Docker stack (crash recovery "redo done", ready 23:00:14Z; BookingPage `807dd420` `is_live=false`, IdentityAuditLog 9, ChatMessage 141), API 18134 (`23e518b11`), proxy 18130 (chat-audit mode still on), web 18131 (`75b6f2eab`), file server 18198. Storage shim not started (Android chat audit only). Devices off; no slots or heavy held.
-- **Before-builds:** the installed native builds (`36af1f371`) and the web tree (`75b6f2eab`) differ from master `f885e0623` only in files outside the remaining rows (checked with `git diff --stat`), so they serve as "before" builds.
-- **User decisions, 2026-09-26 ~23:05Z (AskUserQuestion):**
-  - **Approved:** one tagged Member Review fixture of business `2b3c28da` (S3-59), isolated DB only, recorded with its exact removal.
-  - **Not approved:** allowing `GET /api/b/:username` (S3-22/62); a canned AI reply at the proxy (S3-26; web AI chat keeps messages only in the browser, so no DB fixture can show a mail summary); applying master's migration `20260926100000` to the isolated DB. The API stays on `23e518b11`; master's backend differs from it only in Stream 2's mail files.
-  - **S3-35:** wire native "Set up payments" to `POST /api/personas/:id/payments/onboard` and open the returned URL, like web. Verification reaches only the request and the error UI; no Stripe call.
-  - **S3-46:** replace the false "Stripe Checkout is coming… handshake is saved" toast with a retryable error, and link the Audience Inbox tab to `/app/audience/inbox`.
-  - **S3-64:** skip Android; wire the iOS view only.
-- **Plan:** S3-69 (web + iOS), S3-64 iOS, S3-37 iOS, S3-59 iOS, S3-35 native, S3-46 web. S3-22/62 only through a render path that writes nothing; S3-26 stays open (no approved reproduction path).
+- **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
+- **Merged:** #536 in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540) at 23:12:01Z (master `d358dbc83`). Chat-audit mode turned off at 23:25:54Z (`chat-audit.json` enabled false; the file is read per request, no proxy restart). Storage shim not running.
+- **Open PR [#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web, S3-69 web part + S3-46): head `70e5447ad`, green (6/6 required checks). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`, 35 files) + addendum1 (seal `8e0243cc…`: two stale Jest assertions updated; app source unchanged). Stream 1 plans it for batch 34.
+- **Native branch `claude/stream3-native-dead-controls`** (worktree `/private/tmp/pantopus-stream3-chat-keyboard-r1`, local head `498811062`, base `d358dbc83`), builds under heavy since 00:03:40Z:
+  - S3-64 iOS: Scheduling Settings → Notification channels opens the H15 manager (the frozen H15 route now shows it).
+  - S3-37 iOS: banner/logo targets open the photo picker and upload with the existing business-media endpoint; real images render; the backend-less Gallery section is hidden.
+  - S3-35 iOS + Android: Set up payments opens Create your Beacon (user decision revised 2026-09-26 ~23:15Z: the button only shows without a Beacon, so there is no persona id to onboard with).
+  - S3-59 iOS: a failed review reply shows the screen's toast. The composer already kept the draft on this build, so the inventory's "draft is lost" part was stale.
+  - Found while verifying S3-64 (not an inventory row): Scheduling → Settings → Booking notifications could not be left (Back bound to `onTrailing` by Swift 5 backward trailing-closure matching; compiler warning at `SchedulingNotificationPrefsScreen.swift:38`). One-line fix in the same branch.
+- **iOS befores done** (installed build `36af1f371`, identical to master for these files) on sim `0AE16FA0`, slot 1 (Stream 1 OK 23:49Z). Notes: bundle `20260926-stream3-native-dead-controls-r1/ios/before/`.
+- **Rows closed without a change:**
+  - S3-69 iOS: `SchedulingInvoiceDetailView` is unreachable (only pushed from `InvoicesListView`, and nothing pushes `.invoicesList`); the owner's Invoices row opens `BusinessInvoicesView`, and invoice links open the recipient view. The commit was dropped before push.
+- **Blocked by user decision (no write-free or provider-free path):**
+  - S3-22 / S3-62: every `GET /api/b/:username` inserts a `BusinessProfileView` row unconditionally (`businessPublicPage.js:177`, `:365`), and the endorse button only renders on that page.
+  - S3-26: web AI chat keeps messages only in the browser (`useAIChat.ts`); a mail summary appears only from a live provider stream.
+- **Fixture S59** (approved): Review `e9fdca7a` (Member → business `2b3c28da`, on Member task `c6730f88`); the rating trigger also stamped the business `User` row. Both reverts are in the manifest (DELETE, then restore `User.updated_at`).
+- **Harness changes to undo at the end:** sim `0AE16FA0` UserDefaults `scheduling.paidEnabled` (set for the S3-69 check) and one test photo added to its library; web launcher gained an opt-in `S3_WEB_PAID=1` (web now runs with paid flags off again). F10 stays until the Android S3-35 check.
+- **Candidates (not changed):** Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
 
