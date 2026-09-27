@@ -396,7 +396,12 @@ class PulseComposeViewModel
         val flowPurpose: PulseComposePurpose? get() = composePurpose
 
         val flowTargetLabel: String?
-            get() = if (isEditing) savedAudienceLabel else postingTarget?.displayLabel
+            get() =
+                if (isEditing) {
+                    if (_visibility.value != baselineVisibility) _visibility.value.label else savedAudienceLabel
+                } else {
+                    postingTarget?.displayLabel
+                }
 
         /**
          * C2 — route the create submit through the business-post endpoint.
@@ -1110,8 +1115,9 @@ class PulseComposeViewModel
             val bodyValue = trimmedValue(PulseComposeField.Body)
             val titleValue = trimmedValue(PulseComposeField.Title)
             val intent = _activeIntent.value
-            // The flow editor has no audience control; omitting it preserves the saved scope.
-            val editedVisibility = if (isFlowMode) null else _visibility.value.key
+            // Preserve the saved scope unless the visible audience selector was changed.
+            val editedVisibility =
+                if (isFlowMode && _visibility.value == baselineVisibility) null else _visibility.value.key
             return when (intent) {
                 PulseComposeIntent.Ask ->
                     PostUpdateRequest(
@@ -1151,7 +1157,7 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue,
-                        visibility = if (isFlowMode) null else _announceAudience.value.backendVisibility,
+                        visibility = if (isFlowMode) editedVisibility else _announceAudience.value.backendVisibility,
                     )
             }
         }
