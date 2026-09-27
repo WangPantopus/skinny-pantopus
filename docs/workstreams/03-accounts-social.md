@@ -35,6 +35,8 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 
 - **Decision taken without asking (2026-09-27T14:19:18Z):** reproduced native clean-profile footer now says “No unsaved changes” in the existing iOS/Android strings; same icon/style/layout/Save controls. Candidate `f593b752a2aebb5736182560ed7c7b03d535b94d` on fresh masterf6c1b025e; before files byte-identical to observed apps. Real loaded→dirty→Discard afters pending app-only builds, heavy afterS2; iOS driver S1→S2→S3. No Save/Send/provider scope, no unit/lint campaign.
 
+- **Merged/next (2026-09-27T14:27:21Z):** PR634 final8a7b9fd45 merged14:23:15Z through batch48/#637, master `d7a9f704bd16cb14521c83ecf884eb680a35fc0e` (REST verified). S1 exact4-file proof/seals pass; CI informational failures recorded, not a gate. Footer candidatef593b752a app-only Android/iOS builds pass; Android69683edc6f0d8acd2a472d898c2b2f248eed8c9daa7e2ef4a8bcc8886d7cab42 installed/hash matched14:24:21Z; actual loaded→middle-name local edit→Discard restored honest clean label and disabled Save. No profile/skill/identity DB delta; only ordinary auth refresh bookkeeping. iOS after pending S2driverhandoff. Heavy released14:26:31Z; Android app stopped/slot4 held.
+
 ## CURRENT RESUME — Stream 3 handoff and prompt revision, 2026-09-27 (2026-09-27T12:41:37Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
