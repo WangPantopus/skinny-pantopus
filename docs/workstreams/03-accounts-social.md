@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:10:04Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:14:48Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held (heavy 07:26:43Z–07:45:06Z, slot 3 07:27:03Z–08:05:34Z, slot 1 07:37:07Z–08:05:17Z; both devices shut down). Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) merged at 08:01:42Z (master `f6c66d678`) with #567, #573, #576, #582, #583, #584.
@@ -91,7 +91,9 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 
 - **S3-52 on iOS and Android (follow-up to #584).** Branch `claude/stream3-native-my-bookings-book-again`, head `77d56b4a3` on `563cddb47`, not pushed; 7 existing files. iOS: `BookingDTO.pageSlug`, "Book again" pushes `.inviteeLanding(slug:)` and shows only with a slug, a row tap shows Android's message (toast overlay as in the page editor). Android: `BookingDto.pageSlug`, `BookingRowFooter.BookAgain(slug)` only with a slug, "Book again" → `SchedulingRoutes.publicBooking(slug)` (as `ManageBookingScreen` does). SwiftLint `--strict` and SwiftFormat clean; Android checks need the build. The before (iOS dead "Book again", Android "Book again" = row action) and after need the API verification build `a62037b1d` or #584 merged, proxy-served past rows, and both devices.
 
-### Committed locally, not pushed: daily briefing failed-delivery (`backend/routes/internalBriefing.js:320`)
+### Daily briefing failed-delivery — now [#600](https://github.com/WangPantopus/skinny-pantopus/pull/600) (sent to Stream 1 at 2026-09-27T08:14:48Z; bundle `20260927-stream3-briefing-failed-delivery-r1`, seal `48a7778bf1843c6b355a761b77d1b6a876e257b081e098f2060e222e2c102cae`). Checked end to end on local verification trees (`ac6e73fb7` before, `a1d1bbb34` after, injected compose failure): before, row stuck `composing` and the next call skipped; after, row `failed` and the next call retries. Test rows BR1/BR2 recorded and deleted; fingerprint unchanged; API back on `23e518b11` at 08:13:16Z. Original notes follow.
+
+### (history) Committed locally, not pushed: daily briefing failed-delivery (`backend/routes/internalBriefing.js:320`)
 - Branch `claude/stream3-briefing-failed-delivery`, head `2ff8ae956` on `7bdef3e8c`. Stream 2 found supabase-js builders have `then` but no `catch` (confirmed on 2.103.3). A scan of master's backend found 4 direct `.catch` sites: Stream 2's `homeIam.js:629` and `seasonalChecklistService.js:272`, Stream 1's `listings.js:562`, and this one (Stream 2 asked me to take it).
 - In `/api/internal/briefing/send`'s error handler, the update to mark the `DailyBriefingDelivery` row failed throws before it is sent. The row stays `composing`, which later runs skip as already processed (no retry that day), and the handler's own 500 JSON is never sent. Fix: `Promise.resolve(builder).catch(...)`.
 - Waiting for the user: an end-to-end check needs an injected failure in the isolated API and writes 1–2 `DailyBriefingDelivery` test rows (asked in chat at 04:27Z).
