@@ -395,7 +395,13 @@ function LegacyFreeTiles({ preview, onWall }: { preview: PlacePreview; onWall: (
 
 // Exported for the /dev/start-preview fixture page (design QA + the aha
 // audit without a live backend).
-export function PreviewBody({ preview, onWall }: { preview: PlacePreview; onWall: () => void }) {
+export function PreviewBody({ preview, onWall, onRetry, retrying }: {
+  preview: PlacePreview;
+  onWall: () => void;
+  /** Re-reads the preview when a section failed to load ("Try again"). */
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   const sections: PlaceSection[] = preview.sections ?? [];
   const locked = preview.locked ?? [];
   const aha = preview.aha;
@@ -438,7 +444,7 @@ export function PreviewBody({ preview, onWall }: { preview: PlacePreview; onWall
                 />
               );
             }
-            return <Fragment key={env.id}>{renderSection(env)}</Fragment>;
+            return <Fragment key={env.id}>{renderSection(env, { onRetry, retrying })}</Fragment>;
           })}
         </Group>
       ))}
@@ -784,7 +790,12 @@ export default function StartFunnel() {
                   ? <MoneyLeadCard lead={preview.money_lead} />
                   : <PreviewHeroCard />}
               </div>
-              <PreviewBody preview={preview} onWall={goWall} />
+              <PreviewBody
+                preview={preview}
+                onWall={goWall}
+                onRetry={() => { void previewQuery.refetch(); }}
+                retrying={previewQuery.isFetching}
+              />
               <div className="h-4" />
             </div>
             <WallBar onWall={goWall} shareAddress={selected?.label ?? submitted ?? ''} />

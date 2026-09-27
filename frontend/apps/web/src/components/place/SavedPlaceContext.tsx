@@ -84,7 +84,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
       </section>
       {preview.isPending ? <p role="status" className="mt-4">Loading address information…</p> : null}
       {preview.isError ? <ErrorState message="Your address is saved. We could not refresh its public information." onRetry={() => preview.refetch()} /> : null}
-      {preview.data && (preview.data.status === 'ready' || preview.data.status === 'partial') ? <PreviewBody preview={preview.data} onWall={setup} /> : null}
+      {preview.data && (preview.data.status === 'ready' || preview.data.status === 'partial') ? <PreviewBody preview={preview.data} onWall={setup} onRetry={() => { void preview.refetch(); }} retrying={preview.isFetching} /> : null}
       {preview.data && (preview.data.status === 'unsupported_region' || preview.data.status === 'could_not_place') ? <p className="mt-4 text-app-text-secondary">Your address is saved. Public information is not available for this address yet.</p> : null}
     </div>
   );
