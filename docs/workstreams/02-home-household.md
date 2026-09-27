@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T09:38Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T10:27Z)
 - **I03 checklist "Hire" (user decision ~03:30Z: "Link the task"). Open PRs on master `7bdef3e8c`, reported to Stream 1 at ~04:07Z:**
   - [#574](https://github.com/WangPantopus/skinny-pantopus/pull/574) (`ef32ac4be`), PR-A for web + API. Bundle `20260927-stream2-checklist-hire-link-r1` (`f688cbfe…`, 60 files).
     - `POST /api/homes/:id/seasonal-checklist/:itemId/hire {gig_id}`, a rewrite of the uncalled `linkGigToChecklist`. It needs home.edit and the `home_record_context` fence. The task must be the caller's own and open, and the item still pending and unlinked. The link writes an audit row and refreshes the health cache.
@@ -118,6 +118,18 @@
     - **Decision (standing instruction):** remove the false line on both apps (truth-only; no replacement copy).
   - **I02 remainder:** `GET …/seasonal-checklist/history` has no caller on any app (the web API helper is unused), so there's no journey to verify.
   - **F02 joint Home/Place privacy:** needs a cohort-cell member without `finance.view`. The kit's member only belongs to 70f66a6d, so it's deferred (it needs membership writes).
+- **2026-09-27T10:27Z (handoff in progress, at the user's request: "merge all the PRs first, then update the handoff"):**
+  - **New PRs, all passed Stream 1's review:**
+    - [#619](https://github.com/WangPantopus/skinny-pantopus/pull/619) (`895725987`, native Place "Try again"; bundle `…-native-place-try-again-r1`, `1e0f1a7c`);
+    - [#620](https://github.com/WangPantopus/skinny-pantopus/pull/620) (`a5febbb1d`, carryover count; `…-native-carryover-count-r1`, `5afe18fd`);
+    - [#621](https://github.com/WangPantopus/skinny-pantopus/pull/621) (`853f170f3`, Add Bill split line; `…-native-bill-split-note-r1`, `05b4866f`).
+    - They go in batch 42.
+  - Verified on the iOS sim + Android emulator (APK `93632548`, dylib `3bd97273`): befores on master code, afters on the branch builds.
+  - **Queue:** #602 in batch 40 (#608, rebuilt on master `621e26616` after docs #614); #609 #610 #611 #613 in batch 41; #619 #620 #621 in batch 42. Stream 1 stays as queue owner through batch 42.
+  - **Handed to Stream 1** (recorded in its handoff): the native Place previews' dead "Try again" (`PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`, `PlaceLaunchScreen.kt:737`).
+  - **Main worktree:** clean "build:" commit `6518cce81` = master `621e26616` + all 8 open Stream 2 PRs.
+  - **Slots:** Stream 2 holds only slot 2; heavy and iOS released. Stream 3 handed off at 10:21:47Z.
+  - **Decision (standing instruction):** merge only through Stream 1's batches, not directly; a direct merge moves master under the in-flight batch and restarts CI.
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
