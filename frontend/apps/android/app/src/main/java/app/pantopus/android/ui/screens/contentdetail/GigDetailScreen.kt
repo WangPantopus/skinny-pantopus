@@ -296,7 +296,10 @@ fun GigDetailScreen(
                             id = "deliver",
                             gigId = viewModel.currentGigId(),
                             gigTitle = gig?.title ?: "this task",
+                            paid = viewModel.isPaidTask(),
                         )
+                // Assigned worker → start the task (the Task progress panel's action).
+                viewModel.canStartTask() -> viewModel.startTask()
                 // Phase 5 work item 3 — instant accept claims the task directly.
                 viewModel.canInstantAccept() -> viewModel.instantAccept()
                 // The viewer already bid → the same sheet in edit mode,
