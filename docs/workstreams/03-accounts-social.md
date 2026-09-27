@@ -14,6 +14,13 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Web 18131 now runs from `/private/tmp/pantopus-stream3-web-chat-names-r1` on branch `claude/stream3-web-policy-mobile-shapes` (#623), with paid client flags on (`S3_WEB_PAID=1`); it was relaunched at 10:27:04Z.
   - Fixture BP1 was re-applied (Member page `a1060a2b` live, five policy values) and reverted exactly at 10:40:34.368Z, `is_live` included.
   - `handoff-tools-20260926/web-anon-step.mjs` (signed-out web visitor) was added.
+- **New finding (10:45Z, by code on master `a93c76d7f`; not yet reproduced through a setup wizard): new hosts on web and iOS keep a New York schedule.**
+  - `ensureDefaultSchedule` (`backend/routes/scheduling.js:52`) seeds the default schedule Mon–Fri 09–17 in `America/New_York`.
+  - Android’s first-run wizard corrects it: `FirstRunWizardViewModel.kt` ~line 290, `updateSchedule(timezone = device zone)` plus rules.
+  - Web’s `hub/SetupWizard.tsx` sets the page timezone and `updateRules`, but never the schedule’s timezone.
+  - iOS `SchedulingOnboardingModel.swift` sets only the page timezone.
+  - The consequence, seen on the real web app at 10:29:45Z: the Member fixture’s schedule is 09–17 New York, and its public page offered slots from 6:00 AM PDT. A Pacific host who sets 9–5 in the web or iOS wizard would likely offer 6 AM–2 PM Pacific.
+  - Suggested next item: reproduce with a fresh host through each wizard, then add the schedule-timezone update the Android wizard already does.
 - **Decisions (standing direction):**
   - 10:25Z: do not merge PRs individually, since Stream 1’s batches already hold them.
   - 10:28Z: the web companion was done while batches run, verified with a live-page fixture (recorded and reverted).
