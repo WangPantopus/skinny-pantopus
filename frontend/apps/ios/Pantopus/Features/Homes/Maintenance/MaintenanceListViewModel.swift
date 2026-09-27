@@ -412,7 +412,8 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     }
 
     static func summarize(tasks: [MaintenanceTaskDTO], now: Date) -> MaintenanceBannerSummary {
-        let calendar = Calendar(identifier: .gregorian)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         let yearStart = calendar.date(
             from: calendar.dateComponents([.year], from: now)
         ) ?? now
