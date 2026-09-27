@@ -10,6 +10,7 @@ import type {
   CancellationPolicyValue,
   RefundPolicy,
 } from "@pantopus/types";
+import { resolvePolicyValue } from "@/components/scheduling/policyValue";
 
 export type PresetKey = "flexible" | "moderate" | "strict" | "custom";
 
@@ -148,22 +149,10 @@ function matchesPreset(
 export function fromCancellationPolicy(
   value: CancellationPolicyValue | null | undefined,
 ): { selected: PresetKey; custom: CustomPolicy } {
-  if (!value) return { selected: "flexible", custom: DEFAULT_CUSTOM };
-
-  let policy: CancellationPolicy;
-  if (typeof value === "string") {
-    const key = value.trim().toLowerCase();
-    if (key === "flexible" || key === "moderate" || key === "strict") {
-      policy = { ...PRESET_POLICY[key], preset: key };
-    } else if (key) {
-      // Free text → surface as custom so nothing is silently dropped.
-      policy = { preset: "custom", notes: value };
-    } else {
-      return { selected: "flexible", custom: DEFAULT_CUSTOM };
-    }
-  } else {
-    policy = value;
-  }
+  // Preset names, free text (surfaced as custom so nothing is silently dropped)
+  // and the apps' custom policies all resolve to one object.
+  const policy = resolvePolicyValue(value);
+  if (!policy) return { selected: "flexible", custom: DEFAULT_CUSTOM };
 
   // Explicit marker wins (set by toCancellationPolicy).
   const marker = policy.preset;
