@@ -1,12 +1,12 @@
 # Porchlight: Product Design Document
 
-September 26, 2026 · Status: proposal for founder review (no application code in this change)
+September 26, 2026 · Status: proposal for founder review (no application code in this change). Revised the same day after an outside review: direct competitors added, overclaims corrected, first version cut to 7 features, pricing and pilot reworked.
 
 > Live, editable version: [Porchlight: Product Design Document](https://claude.ai/artifact/CoSziB34rw8p5EFeV5Vv9H). This file is a snapshot; diagrams are rendered as Mermaid here.
 >
 > Integration notes are based on the README feature list and the handoff, not a code audit. Before any build, apply the [verification-first rules](../VERIFICATION_FIRST_2026-09-13.md): locate existing screens, endpoints and tables, and reuse them.
 
-Porchlight lets people watch over the homes of those they love. It combines a daily check-in, official alerts for the address, and verified neighbors who agree to knock. It is built mostly from pieces Pantopus already has: verified addresses, gigs, the mailbox, chat and civic data.
+Porchlight gives a person who lives alone, and the people who love them, an agreed way to stay connected. It also gives them a clear plan for who follows up when they don't hear back. Its possible edge over existing check-in services is dependable nearby follow-up. One named person owns each request, and everyone sees when it's resolved. That edge is a hypothesis for a small pilot to test, not a proven advantage.
 
 ## Why this, why now
 
@@ -24,17 +24,36 @@ Millions of people worry about a home they don't live in, and no one close to th
 
 **Why now**
 
-- **Demand is proven.** Life360 has 102.4 million monthly users and announced a Morning Check-In for aging parents in its [Q2 2026 letter](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm). It connects only family, with no one near the door.
+- **The category already exists.** Life360 has 102.4 million monthly users and announced a Morning Check-In for aging parents in its [Q2 2026 letter](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm). Snug and Iamfine already sell daily check-ins that alert family, so check-ins alone won't set Porchlight apart.
 - **Information alone doesn't hold people.** Nextdoor rebuilt its app around news and alerts in July 2025. Weekly users slipped to 21.0 million before recovering to [22.9 million](https://about.nextdoor.com/press-releases/nextdoor-reports-second-quarter-2026-results).
 - **Gadgets and paid strangers faded.** Amazon [ended Alexa Together](https://www.aboutamazon.com/news/devices/alexa-together-launches-to-help-customers-remotely-care-for-loved-ones) in June 2024. Papa, which sent paid visitors to seniors, [lost about three dozen insurer and employer clients](https://finance.yahoo.com/news/eldercare-startup-papa-slated-lose-130004466.html) for 2024.
 - **The model exists abroad.** Japan made "watching over" older people a normal service. [Yakult delivery staff have checked on seniors since 1972](https://www.yakulteurope.com/our-mission/yakult-ladies-social-pioneers/), and [Tokyo Gas alerts family if no gas is used for 24 hours](https://home.tokyo-gas.co.jp/service/watch_over/my24/index.html).
 - **Neighbors are what saves lives.** In Chicago's 1995 heat wave, North Lawndale lost 40 people per 100,000 and nearby Little Village lost 4. The difference was social ties ([Klinenberg, via Healy](https://kieranhealy.org/blog/archives/2005/03/22/hot-in-the-city/)). After the 1995 Kobe earthquake, [about 80% of people rescued alive were saved by family or neighbors](https://www.bousai.go.jp/kaigirep/hakusho/h26/honbun/0b_2s_01_00.html).
 
-Pantopus already verifies who lives where. That makes it the natural place to turn a worried family and willing neighbors into a working safety net.
+Pantopus already verifies who lives where, which makes it a natural home for this. But knowing where someone lives says nothing about whether they will show up. That has to be proven in practice.
 
 ## Why not use what people already have?
 
-People already have phone numbers, group chats, cameras and smart speakers. None of them notices when nothing happens, finds the right person nearby and gets them to the door safely. That gap is Porchlight.
+The closest alternatives are check-in services such as Snug and Iamfine, which already notice a missed check-in and alert family. General tools such as group chats, cameras and smart speakers don't. Porchlight has to earn its place by making nearby follow-up dependable.
+
+### Direct competitors: check-in services
+
+These services prove the category exists. They also mean check-ins, phone calls and family circles won't set Porchlight apart on their own.
+
+| Service | What it does |
+| --- | --- |
+| [Snug](https://www.snugsafe.com/all-posts/how-much-does-snug-cost-the-free-and-dispatch-plans) | A daily check-in app with a free plan. Its Dispatch plan ($19.99 a month or $149.99 a year) has a dispatcher call after a missed check-in, then calls contacts in order, and can coordinate a wellness check |
+| [Iamfine](https://dailycall.iamfine.com/care-circle/) | Automated daily phone calls where the person presses 1. After retries, it alerts a care circle of up to 7 people, which can include neighbors |
+| [Life360](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm) | Family location sharing with 102.4 million monthly users. It announced a Morning Check-In for aging parents in 2026 |
+| [Naborforce](https://www.prnewswire.com/news-releases/naborforce-closes-9m-series-a-financing-round-led-by-translink-capital-to-support-independent-living-for-older-adults-301605801.html) | Paid, vetted local helpers for older adults, in about six metro areas as of 2022 |
+
+**Where Porchlight could differ (to be proven in drills)**
+
+- Each follow-up has one named owner who confirms and closes it. Iamfine, by contrast, alerts the whole circle at once.
+- The plan includes a nearby contact the person at home chose, with a small, agreed role.
+- Later, Porchlight could help a family find a local contact it doesn't have. That is experiment 2 in the launch plan.
+
+Verified addresses show where people live. They don't show whether anyone will be available or willing to help.
 
 ### Phone numbers and group chats
 
@@ -42,22 +61,22 @@ A group chat stays silent when something is wrong. That silence is exactly what 
 
 | When this happens | Swapped numbers or a group chat | Porchlight |
 | --- | --- | --- |
-| Mom doesn't check in | Nothing happens, and nobody notices | The missed check-in starts the steps |
-| You need Mom's neighbor | You don't have the number; only [26% of Americans know most of their neighbors](https://www.pewresearch.org/short-reads/2025/05/08/how-connected-do-americans-feel-to-their-neighbors/) | Porchlight makes the introduction and the specific request |
-| Someone needs to check | "Can someone check?" and everyone waits for someone else | Named people are asked, the first yes goes, and everyone sees who's going |
-| A helper comes over | The helper keeps Mom's number forever | Hidden numbers, a door code and access that expires |
+| Mom doesn't check in | Nothing happens, and nobody notices | The missed check-in starts the agreed steps |
+| You need Mom's neighbor | You don't have the number; only [26% of Americans know most of their neighbors](https://www.pewresearch.org/short-reads/2025/05/08/how-connected-do-americans-feel-to-their-neighbors/) | Linda invites a neighbor Linda knows, with a small, specific request |
+| Someone needs to check | "Can someone check?" and everyone waits for someone else | A named person accepts, and everyone sees who owns it until it's closed |
+| A helper comes over | The helper keeps Mom's number forever | Hidden numbers, a door code and access that expires (later) |
 | Mom goes away | The whole group knows the house is empty, with screenshots | Only chosen neighbors know, and the dates are deleted afterward |
 | People use different apps | Mom texts, Dave uses WhatsApp, and Mom's other line is a landline | One system reaches texts, calls, landlines and apps |
-| The only nearby neighbor moves | The group quietly loses its only local member | The address change is noticed and a replacement is found |
-| A fire evacuation order covers Mom's street | The chat doesn't know | Mom gets a call and the circle is alerted at once |
-| "Grandma, it's Jake. I'm in jail." | There's no way to check | "Is this really Jake?" checks Jake's own check-in |
+| The only nearby neighbor moves | The group quietly loses its only local member | The address change is noticed and the family is asked to find a replacement |
+| A fire evacuation order covers Mom's street | The chat doesn't know | Mom gets a call and the circle is alerted at once (later) |
+| "Grandma, it's Jake. I'm in jail." | There's no way to check | Linda is told to hang up and call Jake on a known number, and Amy is asked to call too |
 
 **How Porchlight avoids feeling redundant**
 
 - **It isn't a chat app.** Messages exist only around a check-in, a knock, a job or an alert. Everyday chatting stays in WhatsApp.
 - **It reaches people on the apps they already use:** text today, other messaging apps later. Nobody has to install anything.
 - **People can swap numbers whenever they want.** Porchlight just doesn't require it, and it keeps vulnerable details private until someone chooses to share them.
-- **Close ties still benefit.** If Mom's best friend lives next door, that friend becomes the porch neighbor. Porchlight still adds what a chat can't: noticing silence, hazard alerts and scam checks.
+- **Close ties still benefit.** If Mom's best friend lives next door, that friend becomes the porch neighbor. Porchlight still adds what a chat can't: noticing silence and a clear follow-up plan with a named owner.
 
 WhatsApp connects people who already know each other. Porchlight connects a need to the right person at the right moment, including people you haven't met yet.
 
@@ -94,7 +113,7 @@ Porchlight succeeds when the family trusts it enough to worry less, and the pers
 **Goals**
 
 1. Any adult can start watching over a loved one's home in about a minute. The person at home installs nothing.
-2. When something seems wrong, a trusted person reaches the door within 30 minutes.
+2. When a check-in is missed, the agreed follow-up plan runs every time, and a named person takes it on and closes it. Response times are measured in the pilot, never promised.
 3. The person at home stays in control: consent, visibility and an off switch.
 4. Porchlight brings new verified neighbors into Pantopus on streets it doesn't reach yet.
 5. It earns money from subscriptions and local help, never from ads or data.
@@ -112,17 +131,19 @@ Porchlight succeeds when the family trusts it enough to worry less, and the pers
 
 | Measure | Definition | Target |
 | --- | --- | --- |
-| Porch lights on (north star) | Homes with an active check-in, at least one family member and at least one porch neighbor | Grows every week |
+| Porch lights on (north star) | Homes with an active check-in, at least one family member and at least one nearby contact | Grows every week |
 | Consent rate | People at home who say yes within 7 days of the invite | 60% or more |
-| Neighbor yes-rate | Porch-neighbor requests accepted | 30% or more; below that, rethink |
-| Time to "On my way" | Median minutes from knock request to a neighbor accepting | 10 minutes or less |
-| Solved by neighbors | Knocks closed by a neighbor without 911 or police | 85% or more |
+| Staying power | People at home still checking in by choice at day 60, after the novelty fades | 70% or more |
+| Follow-through | Announced drills acknowledged and closed by the named nearby contact, still true at day 60 | 90% or more |
+| Recorded outcome | Missed check-ins that end with a recorded outcome and a named owner | All of them; every escalation reviewed, and none that was needed delayed |
+| Time to acknowledge and close | Median minutes from a request to "On my way", and to closure | Measured and reported, never promised |
 | False alarms | Missed check-ins per home per month | 1 or fewer |
-| Morning summary | Watchers who open it at least weekly | 70% or more |
-| Day-90 retention | Homes still active after 90 days | 60% or more |
+| Less coordination work | Families reporting less coordination work and less uncertainty | Most pilot families |
 | Dignity | People at home who would recommend it to a friend | 70% or more |
-| Neighbor conversion | Porch neighbors who later open a full Pantopus account | 25% or more |
-| Paid conversion | Families on a paid plan at day 60 | 8% or more |
+| Paid after trial | Families who pay real money when the trial ends | Set before the pilot |
+| Cost per family | Messages, calls, operator time and support per active family per month | Below what families pay |
+| Unprompted referrals | People who recommend it in their own words, without being asked | Tracked from day one |
+| Contact yes-rate | Nearby contacts who agree when first asked | 30% or more; an early signal only |
 
 ## Design principles
 
@@ -153,7 +174,7 @@ Porchlight can do a lot because the system carries the complexity and each perso
 | People keep doing things that give something back | Checking in brings today's photo or voice note from family | Design choice |
 | Small yeses lead to bigger ones | "Try it for a week." "Maybe twice a year." | Design choice |
 | Frequent alerts get ignored | One summary a day; urgent messages only when action is needed | Design choice |
-| Scams depend on urgency, shame and secrecy | "Is this real?" makes checking normal and instant | Design choice |
+| Scams depend on urgency, shame and secrecy | "Is this real?" makes asking family normal and quick | Design choice |
 | One sibling usually ends up doing everything | Rotating on-call turns that everyone can see | Design choice |
 
 ## Who's involved
@@ -183,7 +204,7 @@ The person at home owns their circle, even when someone else set it up. Everyone
 | Pause Porchlight | Yes | Only if Linda can't be reached; Linda is told | No | No | No | No |
 | Book and pay for help | Requests; payer approves | Yes | Yes | No | No | No |
 | Open the emergency card | Yes | During an escalation | During an escalation | On scene, during an escalation | On scene, during an escalation | No |
-| See scam alerts | Yes | If Linda allows | If Linda allows | No | No | No |
+| See items Linda asks about | Yes | If Linda allows | If Linda allows | No | No | No |
 
 Pantopus support staff see no circle content without the user's permission. That permission expires, and every access is logged.
 
@@ -217,39 +238,39 @@ Following the project's reuse rule, each "New" item is checked against existing 
 
 ## Features
 
-Porchlight has 30 features in five groups. Seventeen ship at launch; the rest follow once the core habits are proven.
+Porchlight has 30 features in five groups. The first version ships 7 of them. They cover the four things that must work: the person at home stays in control, one check-in channel, one agreed follow-up plan, and accurate status. Everything else waits for its own evidence.
 
 | Group | Feature | What it does | When |
 | --- | --- | --- | --- |
-| Know | Home card | Turns an address into a live page: risks, alert sources, local contacts, and how many verified neighbors live nearby | Launch |
-| Know | Morning summary | One summary a day covering every home you watch | Launch |
-| Know | Hazard alerts | Official weather, fire, flood, outage, boil-water and air-quality alerts for the exact address; severe ones arrive as a phone call | Launch |
+| Know | Morning summary | One daily status for every watched home, in exact words: who checked in and when, what is open, and who owns it | Launch |
+| Know | Home card | Turns an address into a live page: risks, alert sources, local contacts, and how many verified neighbors live nearby | Next |
+| Know | Hazard alerts | Official weather, fire, flood, outage, boil-water and air-quality alerts for the exact address; severe ones arrive as a phone call | Next |
 | Know | Trend notes | Gentle notes on slow changes, such as check-ins getting later over weeks (opt-in) | Later |
-| Know | Empty-home watch | Watches a home nobody lives in right now: a second home, or a parent's house awaiting sale | Next |
-| Reach | Check-in | "I'm good" by tap, text reply or phone call, inside a window the person picks | Launch |
+| Know | Empty-home watch | Watches a home nobody lives in right now: a second home, or a parent's house awaiting sale | Later |
+| Reach | Check-in | "I'm good" through one channel chosen for the first group's habits, inside a window the person picks | Launch |
+| Reach | Circle | Family and the nearby contacts the person at home approved, with roles and rotating on-call turns | Launch |
+| Reach | Knock | After family, asks the approved nearby contacts in the agreed order. One named person accepts, and everyone sees the status until it's closed | Launch |
 | Reach | AI check-in call | A short, friendly phone call in the person's language that counts as the check-in | Next |
 | Reach | Evening check | An optional second check-in each day | Next |
-| Reach | Circle | Family and porch neighbors with roles, a shared conversation and rotating on-call turns | Launch |
-| Reach | Knock | Asks 2–3 neighbors at once; the first to say yes goes, and everyone sees the status | Launch |
-| Reach | Nearby helpers | Verified neighbors who opted in, asked only when porch neighbors can't go | Next |
-| Reach | Safe status | During a disaster, everyone in the circle marks "safe" or "need help" | Launch |
 | Reach | Translation | Messages between the person at home and neighbors are translated automatically | Next |
-| Help | I need something | The person asks in plain words; AI turns it into a favor or a paid job | Launch |
-| Help | Favors | Small unpaid help from a porch neighbor: bins, faucets, packages | Launch |
-| Help | Paid helpers | Verified local pros from Pantopus gigs; family pays from anywhere; photo proof when done | Launch |
-| Help | Home fund | A shared family wallet for one home, so siblings split costs openly | Next |
+| Reach | Nearby helpers | Verified neighbors who opted in, asked when a household has no nearby contact (experiment 2) | Later |
+| Reach | Safe status | During a disaster, everyone in the circle marks "safe" or "need help" | Later |
+| Help | Favors | Small unpaid help from a nearby contact: bins, faucets, packages | Next |
+| Help | Away mode | Chosen nearby contacts quietly watch an empty house and collect packages | Next |
+| Help | I need something | The person asks in plain words; AI turns it into a favor or a paid job | Later |
+| Help | Paid helpers | Verified local pros from Pantopus gigs; family pays from anywhere; photo proof when done | Later |
+| Help | Home fund | A shared family wallet for one home, so siblings split costs openly | Later |
 | Help | Rally | Meals, rides and updates around a surgery, birth or death | Later |
-| Help | Away mode | Chosen porch neighbors quietly watch an empty house and collect packages | Next |
-| Protect | Is this real? | Photograph a letter, forward a text or describe a call; a plain answer in minutes | Launch |
-| Protect | Is this really family? | Confirms a "grandchild in trouble" call against that grandchild's own check-in | Next |
-| Protect | Door code | A paid helper must say the code shown on the person's phone | Launch |
-| Protect | Emergency card | Medications, doctor, spare-key holder, pets and door notes, locked until an emergency | Launch |
 | Protect | Porch word | A word the person picks, included in every real Porchlight message | Launch |
-| Protect | Mail screening | The Pantopus mailbox flags likely scam mail | Next |
+| Protect | Is this real? | Sends a letter, text or call description to the family member the person chose. Shows general warning signs, never a verdict | Next |
+| Protect | Is this really family? | For a "grandchild in trouble" call, tells the person to hang up and call back on a known number; supports a family code word | Next |
+| Protect | Door code | A paid helper must say the code shown on the person's phone | Later |
+| Protect | Emergency card | Medications, doctor, spare-key holder, pets and door notes, locked until an emergency | Later |
+| Protect | Mail screening | The Pantopus mailbox flags likely scam mail | Later |
 | Protect | Everyday signals | Opt-in smart plug, kettle, phone or smart speaker activity, shared only as "active today" | Later |
 | Control | Circle view | Shows the person at home, in plain words, who sees what; one-tap changes | Launch |
 | Control | Pause | Stops check-ins for a trip or a hospital stay; the circle sees only "paused" | Launch |
-| Control | Access log | Shows who viewed sensitive information and when | Launch |
+| Control | Access log | Shows who viewed sensitive information and when | Next |
 | Control | Wishes | Advance choices about how watching should change, and who decides if the person can't | Later |
 
 ## Main flows, step by step
@@ -263,8 +284,8 @@ Every flow starts with one tap or one sentence. The examples follow Amy (organiz
 3. Amy names it ("Mom's house") and adds who lives there: a first name and a mobile or landline number.
 4. Amy picks how Linda checks in: a morning text (default), the app or a phone call. The suggested window is 7–10 a.m.
 5. Amy invites family, such as Sam (optional).
-6. The home card appears at once: risks, alert sources, local contacts and a rough count of verified neighbors nearby, with no names.
-7. Until Linda agrees, Amy gets only public hazard alerts for the address. Nothing about Linda starts.
+6. From the next version, a home card appears at once, with risks, alert sources and local contacts.
+7. Until Linda agrees, nothing about Linda starts.
 
 ### 2. Linda says yes
 
@@ -281,20 +302,20 @@ If Linda says no, Amy is told kindly and only public hazard alerts continue. Amy
 
 1. Pantopus asks Linda first: "Is there a neighbor you'd trust to knock if we can't reach you?"
 2. Linda names one or two people. Pantopus sends the request in Linda's name: "If Linda misses a check-in and nobody can get through, would you knock? Maybe twice a year."
-3. If Linda names no one, Amy can ask verified Pantopus neighbors nearby, print a door card with a QR code, or add the building contact.
+3. If Linda names no one, Amy can later ask verified Pantopus neighbors nearby (experiment 2), print a door card with a QR code, or add the building contact.
 4. A neighbor says yes by text or in the app, and can set limits: daytime only, no stairs, can't drive.
 5. Pantopus aims for two porch neighbors per home and reminds the family until there are two.
 6. A porch neighbor learns only Linda's first name and house number until a knock.
 
 ### 4. Every morning
 
-1. Inside the window, Linda taps "I'm good", replies "1" or answers the AI call.
-2. Linda then sees today's photo or voice note from family.
+1. Inside the window, Linda checks in through the chosen channel: a tap, a reply of "1" or an answered call.
+2. If family sent a photo or voice note that day, Linda sees it next. Sending one is never required.
 3. Family members can tap "good morning" too, and Linda sees theirs.
-4. Amy's morning summary fills in as homes check in, such as "All 3 homes okay", with the day's alerts underneath.
+4. Amy's summary states facts, not conclusions: "Mom checked in at 8:12." It never says a person or a home is okay.
 5. If the window closes with no check-in, the escalation in the next section starts.
 
-### 5. I need something, and sending help
+### 5. I need something, and sending help (later)
 
 1. Linda says what's needed in plain words, by app, text or phone: "The thing on the ceiling keeps beeping." Help can also start from an alert, such as "Freeze tonight. Book someone to wrap the pipes?"
 2. AI turns it into a clear task with a price range: "Replace smoke alarm battery, living room."
@@ -306,17 +327,16 @@ If Linda says no, Amy is told kindly and only public hazard alerts continue. Amy
 
 Linda never pays, signs anything or agrees to extra work at the door. Extra work goes to the payer, and helpers can't contact Linda outside the app.
 
-### 6. Is this real?
+### 6. Is this real? (next)
 
-1. Linda photographs a letter, forwards a text or email, or calls and describes a phone call.
-2. AI checks it against known scam patterns and the mailbox's sender history.
-3. Linda gets a plain answer within minutes: "This is a scam. The IRS never asks for gift cards. Don't call."
-4. If the answer is unclear, it goes to a family member Linda chose, with Linda's permission.
-5. If Linda allows it, family sees only "A scam was stopped", not the letter itself.
+1. Linda photographs a letter, forwards a text or email, or describes a phone call.
+2. It goes to the family member Linda chose, with Linda's permission each time.
+3. Until that person replies, Linda sees general warning signs: "Government agencies don't ask for gift cards. Don't pay or call back until you hear from Amy."
+4. The family member answers Linda directly. Porchlight never declares something a scam, or safe.
 
-**Is this really family?** A caller says: "Grandma, it's Jake. I'm in jail and need bail money." Linda taps "Is this really Jake?" Pantopus checks Jake's own check-in and alerts Jake and Amy. Linda hears back: "Jake checked in at 9:03 and is fine. This is a scam."
+**Is this really family?** A caller says: "Grandma, it's Jake. I'm in jail and need bail money." Linda taps "Is this really Jake?" Porchlight tells Linda to hang up and call Jake on a number Linda already has, and asks Amy to call Jake too. Families can agree on a code word in advance. An earlier check-in proves nothing about who is calling now.
 
-### 7. Away mode and empty-home watch
+### 7. Away mode and empty-home watch (next)
 
 1. "Away October 3–10" goes only to the porch neighbors the owner chooses.
 2. Neighbors get small requests, such as "Grab Tuesday's package" or "Check the basement after the storm."
@@ -325,7 +345,7 @@ Linda never pays, signs anything or agrees to extra work at the door. Extra work
 
 Empty-home watch covers a home with no one living in it, such as a second home or a parent's house awaiting sale. It has no check-ins, only alerts, neighbor checks after storms and paid jobs.
 
-### 8. Rally
+### 8. Rally (later)
 
 1. Anyone in the circle starts a Rally: "Linda's hip surgery, November 3."
 2. AI drafts meal slots, rides and a simple updates page.
@@ -349,14 +369,14 @@ When a check-in is missed, Porchlight escalates in timed steps. It asks 2–3 ne
 ```mermaid
 flowchart TD
   A[10:00 · Window closes, no check-in] --> B[Reminder text and call to Linda]
-  B -->|Linda answers| B2[All good, closed]
+  B -->|Linda answers| B2[Checked in, closed]
   B -->|no answer| C[10:15 · On-call family is alerted]
   C -->|family reaches Linda or holds| C2[Closed or paused]
-  C -->|not reached| D[10:30 · Ask 2–3 neighbors at once]
-  D -->|no neighbor free| X
-  D -->|a neighbor says yes| E[A neighbor knocks and checks]
-  E -->|Linda is fine| F[Closed, thanks sent to the neighbor]
-  E -->|no answer or trouble| X[Family: wellness check or 911<br/>Emergency card opens on scene]
+  C -->|not reached| D[10:30 · Ask the approved nearby contacts]
+  D -->|no one available| X
+  D -->|a named contact accepts| E[The contact knocks and checks]
+  E -->|saw or spoke with Linda| F[Closed: who confirmed it, and when]
+  E -->|no answer or trouble| X[Family: wellness check or 911]
   EM[Linda presses Emergency at any time] -->|911 first, then family| X
 ```
 
@@ -376,22 +396,23 @@ Each step stops the moment Linda is reached. An Emergency press skips every step
 
 ### Asking neighbors
 
-- **Several at once by default:** 2 for a routine check, 3 for severe alerts. Each request names the person: "Dave, could you check on Linda?"
-- **First choice first (optional):** Linda's closest friend gets a two-minute head start before the others are asked.
-- **Widening:** if nobody says yes in 5 minutes, the ask goes to the backup porch neighbor, then opted-in nearby helpers, then the building contact.
-- **Nobody free:** the family is told at once and offered a wellness check or 911.
+- **First version:** after family, Porchlight asks the nearby contacts Linda approved, in the order Linda and the family agreed. No strangers or opted-in helpers are asked.
+- **One named owner:** each request names a person. The first to accept owns it until it's closed.
+- **Tested in drills:** announced drills compare asking one named person at a time with alerting several at once. They measure time to acknowledgment and to closure.
+- **Later, in experiment 2:** for a household with no nearby contact, the ask could widen to opted-in nearby helpers and the building contact.
+- **Nobody available:** the family is told at once and offered a wellness check or 911.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Asking: 2–3 neighbors asked
-  Asking --> OnTheWay: first yes claims it (others told it's covered)
+  [*] --> Asking: approved contacts asked
+  Asking --> OnTheWay: first yes owns it (others told it's covered)
   OnTheWay --> Asking: no arrival in 10 min (reopened)
   OnTheWay --> AtTheDoor
-  AtTheDoor --> AllGood
+  AtTheDoor --> AllGood: saw or spoke with Linda, time recorded
   AtTheDoor --> NeedAHand
-  NeedAHand --> Asking: asks one more neighbor
+  NeedAHand --> Asking: asks one more person
   AtTheDoor --> Escalated: no answer or trouble
-  Asking --> Escalated: no one free in time
+  Asking --> Escalated: no one available in time
   Asking --> AllGood: Linda answers (from any state)
   AllGood --> [*]
   Escalated --> [*]: family or 911
@@ -401,11 +422,11 @@ Everyone asked sees the same status, in the app and by text.
 
 | Status | What it means | What the others asked see |
 | --- | --- | --- |
-| Asking | The request went to 2–3 neighbors | "Dave, Priya and Tom were asked" |
-| On the way | Someone tapped "On my way" and claimed it | "Dave's going. You're off the hook. Thank you." |
-| At the door | The neighbor arrived | They stay released |
-| All good | Linda is fine | Closed for everyone; the family is told |
-| Need a hand | The neighbor wants one more person | Asked again: "Can someone join Dave?" |
+| Asking | The request went to the approved contacts | "Dave and Priya were asked" |
+| On the way | Someone tapped "On my way" and owns it | "Dave's going. You're off the hook. Thank you." |
+| At the door | The person arrived | They stay released |
+| All good | The person who went saw or spoke with Linda, at a stated time | Closed for everyone; the family is told who confirmed it and when |
+| Need a hand | The person there wants one more person | Asked again: "Can someone join Dave?" |
 | Escalated | No answer, or trouble at the door | "It's being handled. Please don't go in." |
 | Reopened | Accepted, but no arrival within 10 minutes | "Dave hasn't arrived. Can someone else go?" |
 
@@ -424,6 +445,8 @@ Everyone asked sees the same status, in the app and by text.
 - **Three or more** only in disasters. A cap stops a whole street being called out for one missed call.
 
 ### Who is asked first
+
+**First version:** the order is fixed, as Linda and the family agreed. Porchlight only skips someone who marked themselves away or busy. The factors below apply later, once nearby helpers exist.
 
 - **Available:** people set their own away dates and quiet hours. There is no location tracking.
 - **Close:** walking distance first. In buildings: same floor, then same building.
@@ -453,6 +476,8 @@ Everyone asked sees the same status, in the app and by text.
 ## Alerts, disasters and evacuation
 
 Porchlight turns official alerts for the exact address into one clear action. In a disaster, it makes sure someone who can act reaches the person at home.
+
+**Scope:** none of this is in the first version. Hazard alerts come next, and disaster coordination such as ride requests comes later, each after its own evidence.
 
 Recent disasters show why. LA County's review of the January 2025 fires found that [older residents who weren't watching alerts faced higher risk](https://lacounty.gov/aar/). In the July 2025 Texas floods, Kerr County's alerts were opt-in, and [some residents got their first alert after 10 a.m.](https://www.tpr.org/news/2025-07-08/kerr-county-residents-emergency-alert-messages-sporadic-inconsistent-in-wake-of-floods)
 
@@ -506,59 +531,61 @@ AI does the coordinating a human operator would otherwise do. People and 911 mak
 
 | Moment | What AI does | Example |
 | --- | --- | --- |
-| Setup | Builds the home card from the address and drafts the invitation in the organizer's own words | "Mom, I set up a good-morning check-in for us." |
-| Morning check-in | A short, friendly phone call in Linda's language that counts as the check-in | "Morning, Linda. Sleep okay? Rain later, so bring the cushions in." |
-| I need something | Turns plain words into a task with a price range and suggests favor or paid help | "The thing on the ceiling keeps beeping" becomes a smoke-alarm job |
-| Is this real? | Reads letters, texts and screenshots and explains them simply | "This is a scam. The IRS never asks for gift cards." |
-| Mail | Pulls deadlines and actions out of the mailbox | "Medicare letter: needs a reply by October 15." |
-| Alerts | Merges sources, matches them to the address and rewrites jargon as steps | "Fire risk tonight. Charge your phone." |
-| Missed check-in | Runs the steps: calls Linda, picks who to ask, writes the requests and sends the family one update | Amy gets one clear message instead of five |
-| Trend notes (opt-in) | Notices slow changes over weeks | "Check-ins have been later this month." |
-| Translation | Translates between Linda and the neighbors | Cantonese to English and back |
-| Planning | Builds each home's seasonal plan | Who picks Linda up, go bag, nearest shelter |
+| Setup | Drafts the invitation in the organizer's own words | "Mom, I set up a good-morning check-in for us." |
+| Missed check-in | Writes the wording of requests and updates. The steps themselves follow fixed rules the family agreed | Amy gets one clear message instead of five |
 | Family fairness | Suggests on-call turns and reminds people to thank neighbors | "Sam has covered three weeks. Amy's turn?" |
-| Rally | Drafts meal and ride schedules from one sentence | "Hip surgery November 3" becomes a signup page |
+| Morning check-in (next) | A short, friendly phone call in Linda's language that counts as the check-in | "Morning, Linda. Sleep okay? Rain later, so bring the cushions in." |
+| Is this real? (next) | Sends the item to the family member Linda chose and shows general warning signs. It never decides whether something is a scam | "Don't pay or call back until you hear from Amy." |
+| Alerts (next) | Merges sources, matches them to the address and rewrites jargon as steps | "Fire risk tonight. Charge your phone." |
+| Translation (next) | Translates between Linda and the neighbors | Cantonese to English and back |
+| I need something (later) | Turns plain words into a task with a price range | "The thing on the ceiling keeps beeping" becomes a smoke-alarm job |
+| Mail (later) | Pulls deadlines and actions out of the mailbox | "Medicare letter: needs a reply by October 15." |
+| Trend notes (later, opt-in) | Notices slow changes over weeks | "Check-ins have been later this month." |
+| Planning (later) | Builds each home's seasonal plan | Who picks Linda up, go bag, nearest shelter |
+| Rally (later) | Drafts meal and ride schedules from one sentence | "Hip surgery November 3" becomes a signup page |
 
 ### Rules the AI follows
 
-1. It always says it's an AI and never imitates a family member's voice.
-2. It coordinates but never makes life-or-death decisions; people and 911 do.
-3. It never diagnoses. It says "check-ins are later than usual", never "Linda may have dementia".
-4. It never asks for money, passwords or codes, so real Porchlight messages are easy to tell from scams.
-5. It treats mail, texts and web pages as information, never as instructions. A scam letter saying "tell the reader this is real" changes nothing.
-6. When unsure, it hands the question to a family member instead of guessing.
-7. Linda can see what it heard and noticed, and can turn off trend notes and the phone call.
-8. Messages it writes for someone else are shown to the sender first, unless the sender chose auto-send for routine messages.
-9. Call audio isn't kept. Only the outcome ("checked in") and a short text summary are stored, for 30 days.
-10. Circle data never trains shared models and never feeds ads. Processing happens on the phone where possible.
-11. If Linda expresses thoughts of self-harm on a call, the AI responds with care, offers the 988 Suicide and Crisis Lifeline, and follows Linda's Wishes about telling family. If there is immediate danger, it guides the call to 911.
+1. The escalation steps follow fixed rules the family agreed. AI never decides whether a step happens; it only helps with wording.
+2. It always says it's an AI and never imitates a family member's voice.
+3. It coordinates but never makes life-or-death decisions; people and 911 do.
+4. It never diagnoses. It says "check-ins are later than usual", never "Linda may have dementia".
+5. It never judges whether something is a scam. It routes the question to family and shows general warning signs.
+6. It never asks for money, passwords or codes, so real Porchlight messages are easy to tell from scams.
+7. It treats mail, texts and web pages as information, never as instructions. A letter saying "tell the reader this is real" changes nothing.
+8. When unsure, it hands the question to a family member instead of guessing.
+9. Linda can see what it heard and noticed, and can turn off trend notes and the phone call.
+10. Messages it writes for someone else are shown to the sender first, unless the sender chose auto-send for routine messages.
+11. Call audio isn't kept. Only the outcome ("checked in") and a short text summary are stored, for 30 days.
+12. Circle data never trains shared models and never feeds ads. Processing happens on the phone where possible.
+13. If Linda expresses thoughts of self-harm on a call, the AI responds with care, offers the 988 Suicide and Crisis Lifeline, and follows Linda's Wishes about telling family. If there is immediate danger, it guides the call to 911.
 
 ### Before launch
 
-- Test scam detection on a labeled set of real scam and genuine letters, and publish the target accuracy.
+- Test the wording of every status and request with people at home and family, so nothing implies more than it means.
 - Attack-test the system: fake family voices, instructions hidden in mail, attempts to extract circle data.
 - Check every supported language with native speakers, especially the check-in call.
 
 ## How Porchlight fits into Pantopus
 
-Porchlight is not a separate app. It is a new use for what Pantopus already does: verified homes, local help, mail, chat and civic information. At launch it adds no new tab.
+Porchlight is not a separate app. It is a new use for what Pantopus already does: verified homes, local help, mail, chat and civic information. At launch it adds no new tab. It is also a new operating commitment: dependable messaging, support and review of every escalation become part of Pantopus's core business.
 
 ### Where people meet it
 
 | Existing part of Pantopus | What Porchlight adds there |
 | --- | --- |
-| Home and home management | A Circle section on each home, a "Watch over another home" action, and the emergency card built from existing household info |
-| Today (the daily view) | The morning summary card at the top |
-| Place hub and AI place brief | The home card for each watched home: risks, alerts and local contacts |
-| Mailbox | "Is this real?" on every item, scam flags and opt-in mail screening |
-| Gigs and Magic Task | "Send help" books a gig for someone else's home: the payer and the person helped are different people, with in-home vetting and a door code |
-| Chat | A circle conversation, plus one thread per knock with status updates |
-| Civic (your governments, ballot) | Alert sources for the address, the police non-emergency line, cooling centers, shelters and Linda's ballot deadlines |
-| Trust graph and business profiles | "Recommended by Linda's neighbors" on helpers; verified local pros become helpers |
-| Wallet | The home fund for shared family costs, and helper payouts |
-| Neighborhood feed | Never shows Porchlight data. Offers "Become a nearby helper" and, if neighbors opt in, totals such as "12 porch neighbors on your street" |
-| Profile | An optional porch neighbor badge, off by default |
+| Home and home management | A Circle section on each home and a "Watch over another home" action. Later, the emergency card, built from existing household info |
+| Today (the daily view) | The daily status card at the top |
+| Chat | A circle conversation, plus one thread per knock with its status |
 | Notification settings | Porchlight urgency levels and quiet hours |
+| Place hub and AI place brief | Next: the home card for each watched home |
+| Mailbox | Next: "Is this real?" to ask family about any item. Later: mail screening |
+| Civic (your governments, ballot) | Next: alert sources for the address. Also the police non-emergency line for wellness checks, and ballot deadlines |
+| Gigs and Magic Task | Later: paid help booked for someone else's home, with in-home vetting and a door code |
+| Trust graph and business profiles | Later: "recommended by Linda's neighbors" on helpers |
+| Wallet | Later: the home fund and helper payouts |
+| Neighborhood feed | Never shows Porchlight data. Later: "Become a nearby helper" and opt-in totals |
+| Profile | Later: an optional porch neighbor badge, off by default |
 
 ### Three ways to take part
 
@@ -568,10 +595,10 @@ Porchlight is not a separate app. It is a new use for what Pantopus already does
 
 ### Journeys that cross features
 
-1. **Freeze night:** a civic alert appears in Today's summary, Amy books a helper through gigs, Maria uses the door code and posts a photo in chat, and the wallet pays Maria.
-2. **Scam letter:** a letter arrives in the mailbox, Linda taps "Is this real?", and the circle chat shows "A scam was stopped."
-3. **Missed check-in:** a knock thread opens in chat, a verified neighbor goes, and the family's thank-you adds to the trust graph.
-4. **New neighbor:** Dave joins by text as a porch neighbor, later adds the home of Dave's own parents, opens a full account, and discovers gigs and the mailbox.
+1. **Missed check-in (first version):** a knock thread opens in chat, the nearby contact Linda chose goes, and the family sees who confirmed it and when.
+2. **Scam letter (next):** a letter arrives in the mailbox, Linda taps "Is this real?", and Amy sees the shared letter and replies: don't pay.
+3. **Freeze night (later):** a civic alert appears in the daily status, Amy books a helper through gigs, Maria uses the door code and posts a photo in chat, and the wallet pays Maria.
+4. **New neighbor (later):** Dave joins by text as a porch neighbor, later adds the home of Dave's own parents, opens a full account, and discovers gigs and the mailbox.
 
 ### Growth loops
 
@@ -580,11 +607,11 @@ flowchart LR
   A[A family adds a home] --> B[Neighbors are asked]
   B --> C[A new street joins]
   C --> D[They add family homes in other cities]
-  D --> E[Help arrives faster]
+  D --> E[Help can get faster, only where a street grows]
   E --> A
 ```
 
-The loop works because watching reaches across cities while help is always local. Each porch-neighbor request introduces Pantopus to a new street, with a reason to stay.
+Invites spread Pantopus across cities, but that is distribution, not local strength. Ten circles in ten cities add no responder to any one street. Help gets faster only where several households on the same street take part, which experiment 2 has to show.
 
 - **Family loop:** an organizer invites siblings, and each adds more homes.
 - **Neighbor loop:** porch neighbors add their own families' homes elsewhere.
@@ -624,7 +651,7 @@ Porchlight knows sensitive things, such as who is old, alone or away. So it keep
 | Check-in history | Yes | Last 30 days | No | No | No |
 | Hazard alerts | Yes | Yes | Severe ones | No | No |
 | Away dates | Yes | Yes | Chosen neighbors only | No | No |
-| Scam alerts | Yes | If Linda allows | No | No | No |
+| Items Linda asks about | Yes | Only the family member Linda asks | No | No | No |
 | Emergency card | Yes | During an escalation | On scene, during an escalation | On scene, during an escalation | No |
 | First name and house number | Yes | Yes | Yes | After accepting a knock | During a job |
 | Door notes | Yes | Yes | After accepting a knock | After accepting a knock | During a job, if Linda allows |
@@ -640,7 +667,7 @@ Porchlight knows sensitive things, such as who is old, alone or away. So it keep
 | Check-in call summary | 30 days |
 | Knock requests and statuses | 1 year, for safety reviews |
 | Access log | 2 years |
-| Scam checks | 30 days, unless Linda saves one |
+| Items shared through "Is this real?" | 30 days, unless Linda saves one |
 | Hazard alerts | 90 days |
 | Away dates | Until the trip ends |
 | Emergency card | Until Linda changes it or the circle closes |
@@ -735,7 +762,7 @@ Four urgency levels decide how loud a message is. Only the top level overrides e
 | Level | Examples | How it arrives | Quiet hours |
 | --- | --- | --- | --- |
 | Summary | All good, routine alerts, thank-yous | Inside the morning summary only | Respected |
-| Heads-up | Freeze tonight, a scam stopped, a helper booked | App notification, or a text for text-only participants | Respected; held until morning |
+| Heads-up | Freeze tonight, a family reply about a shared letter, a helper booked | App notification, or a text for text-only participants | Respected; held until morning |
 | Action needed | Missed check-in, knock request, a ride request | App notification and text; a phone call if there's no response in 5 minutes | Overridden only for the on-call family member and neighbors who opted in |
 | Urgent | Evacuation order, an escalated knock, Emergency pressed | Phone call, text and app notification to everyone involved at once | Always overridden |
 
@@ -762,7 +789,7 @@ Porchlight is built for people who aren't comfortable with apps. Every core acti
 - **Devices:** landlines through keypad answers on calls, basic phones by text, tablets, and smart speakers later.
 - **Beyond older adults:** people with disabilities or chronic illness who live alone, young adults in first apartments, and anyone recovering from surgery.
 - **Any kind of family:** circles aren't limited to relatives. Friends, chosen family and multigenerational households fit the same model.
-- **Cost:** the core safety net is free.
+- **Cost:** a free trial for everyone, and sponsored access for people who can't pay.
 - **Standard:** WCAG 2.2 AA for the apps and web, tested with older adults and people with disabilities during the pilot.
 
 ## Complex scenarios
@@ -819,7 +846,7 @@ These are 67 hard cases and what Porchlight does in each. Most come back to thre
 | Linda can no longer decide | A legal representative acts within Linda's Wishes, and the role is visible to the whole circle. |
 | Linda refuses Porchlight entirely | Only public alerts for the address continue. The family may ask once more after 90 days, and Linda can block that. |
 | A couple lives together and one cares for the other | Check-ins cover each person. If the caregiver misses one, escalation is faster, because someone depends on them. |
-| A paid caregiver visits daily | The caregiver can check in for Linda if Linda allows. Mail, scam alerts and money never go to the caregiver. |
+| A paid caregiver visits daily | The caregiver can check in for Linda if Linda allows. Mail, items Linda asks about and money never go to the caregiver. |
 | Linda is 35, with epilepsy, living alone | Same product and controls. Nothing assumes old age. |
 | Linda mentions self-harm on the AI call | The AI responds with care, offers the 988 Lifeline and follows Linda's Wishes about telling family. Immediate danger leads to 911. |
 | Linda asks for help many times a day | Porchlight notices the pattern and tells the family if Linda's Wishes allow. Paid bookings always need the payer's approval. |
@@ -832,7 +859,7 @@ These are 67 hard cases and what Porchlight does in each. Most come back to thre
 | Someone tries to watch a partner | Adults must agree from their own phone. There is no location tracking and no hidden mode. |
 | A helper befriends Linda and asks for a loan | Helpers can't contact Linda outside the app. Direct requests and unusual patterns are reviewed. |
 | A scam text: "Your mother missed her check-in. Pay $49 to restore service." | Porchlight never asks for money, uses one number and includes the porch word. Family onboarding teaches this. |
-| A "grandchild in jail" call | "Is this really Jake?" checks Jake's own check-in and alerts Jake and Amy. |
+| A "grandchild in jail" call | Linda is told to hang up and call the grandchild on a known number, and Amy is asked to call too. A family code word helps. An earlier check-in proves nothing about the caller. |
 | Someone fakes an emergency to get a neighbor inside | Knock requests come only from Porchlight's own steps, and neighbors never go inside. |
 | A porch neighbor's account is hacked to learn away dates | A second check before sensitive views, new-device alerts, and away dates deleted when the trip ends. |
 | A different person arrives instead of the booked helper | The photo and door code don't match, so Linda doesn't open. Account sharing gets the helper removed. |
@@ -888,16 +915,38 @@ These are 67 hard cases and what Porchlight does in each. Most come back to thre
 
 ## Business model and pricing
 
-The safety net is free. Families pay for more homes and more convenience, helpers' jobs earn a fee, and partners pay later. Porchlight never earns from ads or data.
+A free trial leads to a paid family plan, with sponsored access for people who can't pay. The subscription has to stand on its own; paid help and partners are extra upside, not the plan. Porchlight never earns from ads or data.
 
-| Plan | Price (proposed) | What's included |
+| Plan | Price (to test) | What's included |
 | --- | --- | --- |
-| Free | $0 | Your home plus one watched home, daily check-in by text or app, porch neighbors and knocks, the full escalation steps including reminder calls, hazard alerts, Is this real?, door codes, the emergency card, pause and the access log |
-| Porchlight Family | About $9.99 a month or $99 a year, per family | Unlimited homes, daily AI check-in calls, evening checks, mail screening, trend notes, translation, the home fund and priority helper booking |
-| Paid help | The existing gig marketplace fee | Every paid job booked through Porchlight |
-| Partners (later) | Contracts | Sponsored plans for customers or members |
+| Trial | Free for 60 days | Everything in the first version |
+| Porchlight Family | $9.99 and $19.99 a month per family, both tested with real payment in the pilot | Check-ins, the follow-up plan, accurate status, and more homes as they're added |
+| Sponsored | Paid by an aging agency, insurer or employer | The same as Family, for people who can't pay |
+| Basic, after the trial | $0 | App-only check-ins shared with family. No calls, texts or follow-up plan, and everyone in the circle is told so |
+| Paid help (later) | The existing gig marketplace fee | Paid jobs booked through Porchlight |
 
-**Price anchors:** Life360's Silver plan costs [$9.99 a month](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm). Amazon's Alexa Together cost [$19.99 a month](https://techcrunch.com/2021/12/07/amazon-launches-its-19-99-per-month-alexa-together-elder-care-subscription-for-families/) before it closed. Watch Duty had [135,223 paying members](https://www.watchduty.org/blog/2025-annual-report) among 16.8 million yearly users in 2025, with no family plan.
+**Price anchors:** Snug's Dispatch plan, the closest comparison, costs [$19.99 a month or $149.99 a year](https://www.snugsafe.com/all-posts/how-much-does-snug-cost-the-free-and-dispatch-plans). Life360's Silver plan costs [$9.99 a month](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm). Amazon's Alexa Together cost [$19.99 a month](https://techcrunch.com/2021/12/07/amazon-launches-its-19-99-per-month-alexa-together-elder-care-subscription-for-families/) before it closed.
+
+**The math:** if 8% of families paid $9.99, revenue would be about $0.80 per participating family per month, before costs. A generous free plan makes that worse. One million paying families at $9.99 would bring about $120 million a year. That is arithmetic, not a forecast.
+
+### Three stages, each needing new evidence
+
+| Stage | What it is | Evidence needed before the next |
+| --- | --- | --- |
+| 1. Check-in subscription | Families pay for dependable coordination around someone who lives alone | People at home stay on, contacts keep following through, families pay, and costs fit the price |
+| 2. Local assistance | Those relationships support recurring, non-emergency help that families arrange remotely | Families book help again, and helpers and contacts stay willing |
+| 3. A network of homes | More participating households make trusted local help easier to find | Experiment 2 finds willing contacts for people who had none |
+
+### What it costs to run
+
+- Texts and phone calls for every check-in, reminder and knock.
+- Operator time: a person runs the pilot, and someone owns support afterward.
+- A review of every escalation and every drill.
+- Monitoring that messages actually arrive, with alerts when they don't.
+- Handling reports and disputes.
+- Legal work on health data, automated calls and consent.
+
+The pilot measures cost per active family per month and compares it with what families pay.
 
 ### Partners who could pay later
 
@@ -913,56 +962,68 @@ The safety net is free. Families pay for more homes and more convenience, helper
 - Sell or share circle data.
 - Use circle data for ads, including the mailbox's ad rewards.
 - Let helpers pay to be picked first in an emergency.
-- Charge for the core safety net.
+- Stop a running follow-up plan without clear notice to everyone in the circle.
 
 ## Launch plan and metrics
 
-First, prove the riskiest assumption by hand in 30 days: that neighbors say yes. Then build the launch set behind a feature flag in one or two pilot areas.
+Start small with circles families already have, and prove the follow-up works before building more. Two separate experiments answer two different questions.
 
 ```mermaid
 flowchart LR
-  P0[Phase 0<br/>Pilot by hand<br/>50 families, 30 days] -->|Gate 1: neighbor yes-rate 30%+, consent 60%+| P1[Phase 1<br/>Launch set<br/>pilot areas only]
-  P1 -->|Gate 2: day-90 retention 60%+, no serious safety incident| P2[Phase 2<br/>Next features<br/>wider rollout]
-  P2 -->|Gate 3: paid conversion 8%+, false alarms ≤1/month| P3[Phase 3<br/>Later features<br/>with partners]
+  P0[Phase 0<br/>Pilot by hand<br/>10–15 families, then 50] -->|Gate 1: residents stay at day 60; contacts follow through| P1[Phase 1<br/>First version<br/>7 features, one area]
+  P1 -->|Gate 2: families keep paying; every miss is closed| P2[Phase 2<br/>Next features<br/>plus experiment 2]
+  P2 -->|Gate 3: new local contacts found; false alarms ≤1/month| P3[Phase 3<br/>Later features<br/>with partners]
 ```
 
 Each gate must pass before the next phase starts. The full list of targets is under [Goals, non-goals and how success is measured](#mf7v68pq532.2369).
 
-### Phase 0: pilot by hand (30 days)
+### Two experiments
 
-- 50 families with a parent who lives alone, in one or two areas where Pantopus already has many verified users.
-- A person runs the whole service over text and phone. Nothing new is built yet.
-- Measure the consent rate, neighbor yes-rate, time to "On my way", morning summary opens, invites per family, and how many prepay $9.99.
-- In parallel, show an "Add Mom's house" ad to 40–60-year-olds whose parents live 100+ miles away, and count sign-ups.
-- **Gate 1:** neighbor yes-rate of 30% or more, and consent of 60% or more.
+1. **Organize a circle that already exists.** A family brings the person at home, an organizer and a trusted nearby contact. This works anywhere, with no other Pantopus users nearby.
+2. **Create a local contact.** Help someone with no trusted nearby person find one. This is harder and could be much bigger. Run it in one area, after counting how many verified Pantopus users actually live there.
 
-### Phase 1: launch set (about three months)
+Success in the first justifies a useful product. Success in the second could justify a much larger one.
 
-- The 17 launch features, behind a feature flag, in the pilot areas only.
+### Phase 0: pilot by hand
+
+- Start with 10–15 families who already have a trusted nearby contact (experiment 1), then expand toward 50.
+- A person runs everything by text and phone, with one check-in channel chosen for the group's habits.
+- Run announced drills. Everyone knows a drill is coming, and it tests whether the named contact acknowledges and closes the request.
+- Compare asking one named person with alerting everyone at once.
+- After a trial, charge real money at $9.99 or $19.99.
+- Track operator time and messaging costs per family.
+- **Gate 1:** people at home still take part by choice at day 60, contacts keep following through in drills, some families pay, and costs leave room for a business.
+
+### Phase 1: the first version (about three months)
+
+- The 7 first-version features, behind a feature flag, in the pilot areas only.
 - Verify real journeys end to end on web, iOS and Android, with real text and phone delivery.
-- **Gate 2:** day-90 retention of 60% or more, a median of 10 minutes or less to "On my way", 85% or more of knocks solved by neighbors, and no serious safety incident.
+- **Gate 2:** families keep paying after the trial, every missed check-in ends with a recorded outcome and a named owner, and cost per family stays below the price.
 
 ### Phase 2: next features and a wider rollout
 
-- AI check-in calls, nearby helpers, away mode, empty-home watch, evening checks, translation, mail screening, the home fund and "Is this really family?"
+- The home card, hazard alerts, "Is this real?" for asking family, "Is this really family?", favors, away mode, AI check-in calls, evening checks, the access log and translation.
+- Experiment 2, in one area, after counting its verified users.
 - Turn on region by region.
-- **Gate 3:** paid conversion of 8% or more, and no more than one false alarm per home per month.
+- **Gate 3:** experiment 2 finds willing local contacts for people who had none, and false alarms stay at one per home per month or fewer.
 
 ### Phase 3: later features and partners
 
-- Rally, trend notes, everyday signals and Wishes.
+- Paid helpers and door codes, the emergency card, "I need something", disaster coordination, nearby helpers, mail screening, Rally, trend notes, everyday signals and Wishes. Each is a new promise that needs its own evidence.
 - A partner pilot with one insurer and one aging agency.
 
 ### When to stop and rethink
 
-- The neighbor yes-rate stays under 30% after two changes to how people are asked.
-- Fewer than half of the people at home keep Porchlight on after the first week.
+- People at home drop out once the novelty fades: fewer than half still take part by choice at day 60.
+- Nearby contacts stop following through in drills, or say they feel pressured.
+- Families don't pay real money after the trial.
+- Messaging and operator costs per family exceed what families pay.
 - False alarms stay above two per home per month after tuning.
 - Any serious safety incident caused by Porchlight's design pauses that feature until it's reviewed and fixed.
 
 ## Beyond Porchlight: the home network
 
-Porchlight is the first use of a bigger model: Pantopus as a network of homes rather than of phones. Each home belongs to the person who lives there. It connects to family far away and neighbors nearby, and nothing tracks where anyone is.
+Porchlight is the first use of a bigger model: Pantopus as a network of homes rather than of phones. Each home belongs to the person who lives there. It connects to family far away and neighbors nearby, and nothing tracks where anyone is. This stays an ambition until the check-in business earns it.
 
 ```mermaid
 flowchart LR
@@ -991,7 +1052,7 @@ Every future feature is a new kind of connection or permission. Porchlight's cir
 | Capability | What it does | Built on | When |
 | --- | --- | --- | --- |
 | Connect from far away | Family connects to a parent's home, or a friend connects to a home while house-sitting. The link ends when the resident says so | Porchlight circles | Launch |
-| Keys that expire | Door and garage codes and guest Wi-Fi go to a helper or dog walker for a set time, and every use is logged | Door codes and home management's guest Wi-Fi | Door codes at launch; the rest later |
+| Keys that expire | Door and garage codes and guest Wi-Fi go to a helper or dog walker for a set time, and every use is logged | Door codes and home management's guest Wi-Fi | Later |
 | Message a home | "Your garage door is open" reaches #16 without a name or number. #16 sees "a verified neighbor on your street" and can reply, mute or block | Chat and verified addresses | Next |
 | Neighbor mail | Welcome notes, lost-pet notices and block-party invitations reach only verified homes on the street | The Pantopus mailbox | Next |
 | Home or away, without GPS | Whether someone is home is shared only with neighbors the resident chooses | Away mode | Later |
@@ -1024,40 +1085,42 @@ Every future feature is a new kind of connection or permission. Porchlight's cir
 
 ## Risks and mitigations
 
-The biggest risk is that neighbors don't say yes. Phase 0 tests exactly that before anything is built.
+The biggest risks are false reassurance and nearby contacts who don't keep following through. The pilot tests both before anything is built.
 
 | Risk | Why it matters | Mitigation |
 | --- | --- | --- |
-| Neighbors don't say yes | Without them, Porchlight is just another alert app | Linda asks people Linda knows first, the request is small and specific, door cards help, and Gate 1 tests it |
+| False reassurance | Families judge Porchlight by what they believed it would do | Exact status wording, limits stated at setup, no promised response times, and never "okay" |
+| Contacts stop following through | Agreeing once is weaker evidence than staying willing | Small, agreed roles, request caps, drills and regular thanks, with follow-through measured over time |
+| The people most in need have no nearby contact | The hardest problem stays unsolved | Experiment 2, run separately and measured honestly |
+| Existing check-in services | Snug, Iamfine and Life360 already sell check-ins and family alerts | Prove named ownership and closure in drills, and move fast |
+| Weak subscription economics | Free use and messaging costs outrun revenue | A trial, then paid plans; real payment in the pilot; cost per family tracked |
 | Too many false alarms | Families and neighbors lose patience and quit | Adaptive windows, calls before knocks, thanks instead of blame, and a tracked false-alarm rate |
 | Blame when something goes wrong | Legal and reputational harm | Clear "not an emergency service" wording, volunteer terms, legal and insurance review, and an incident process |
 | A data breach | It would reveal who is vulnerable, and where | The security baseline, minimal data, short retention and outside audits |
 | Used to control someone | Real harm to the person at home | Consent, visibility, discreet pause and review by advocates |
-| Scammers imitate Porchlight | Fraud against the people it protects | The porch word, one known number, no money requests and door codes |
-| Neighbor burnout | The yes-rate falls over time | Request caps, rotation, limits and regular thanks |
+| Scammers imitate Porchlight | Fraud against the people it protects | The porch word, one known number and no money requests |
 | Text or call delivery fails | A missed alert in a real emergency | Several carriers, loud failure messages and monthly drills |
-| Phone and AI costs | Thin margins at scale | Texts by default on the free plan; AI calls on the paid plan |
-| Life360, Ring or Nextdoor copy it | Less room to grow | Move fast; the verified neighbor network, local helpers and payments are hard to copy |
 | Laws on health data, automated calls and background checks | Fines and lawsuits | Legal review, proper consent flows and a state-by-state check |
 | Conflict with the ad-supported mailbox | People stop trusting Porchlight | A public promise that Porchlight data never reaches ads |
-| Too many features at once | A slow launch and a confusing product | A fixed launch set of 17 features, and gates between phases |
+| Too many features at once | A slow launch and a confusing product | A first version of 7 features, and gates between phases |
 
 ## Open decisions
 
-Twelve decisions need a yes or no before Phase 1. Each has a recommendation.
+Thirteen decisions need a yes or no before Phase 1. Each has a recommendation.
 
 | Decision | Recommendation |
 | --- | --- |
+| Which check-in channel does the pilot use? | The one the first group already uses most, likely text or a phone call |
+| Who is asked, and in what order? | In the first version, family first, then the contacts Linda approved, in a fixed order. Drills compare named ownership with alerting everyone |
 | Does a knock go out automatically, or wait for a family member to tap? | Automatically, with a "Hold" button |
+| What happens after the trial? | A 60-day trial, then paid, with sponsored access and a clearly labeled app-only basic plan. Test $9.99 and $19.99 with real payment |
+| Where does each experiment run? | Experiment 1 anywhere. Experiment 2 in one area, after counting its verified users |
 | Do we promise publicly that Porchlight data never feeds mailbox ads? | Yes, from day one |
 | Do everyday signals (kettle, smart plug, phone activity) ship at launch? | No. Add them later as an opt-in |
 | Do police get data only with legal process, plus a public report on requests? | Yes |
 | Who owns a circle? | The person at home, once they agree |
-| Who can be a nearby helper? | Verified address, account in good standing for 90 days or more, and a completed safety guide |
+| Who can be a nearby helper (experiment 2)? | Verified address, account in good standing for 90 days or more, and a completed safety guide |
 | Do we insure volunteer neighbors? | Get quotes and decide before Phase 1 |
-| What does the free plan include? | Your own home plus one watched home, with the full safety net; test the price in Phase 0 |
-| Where do we launch? | One or two areas with the most verified Pantopus users |
-| How many neighbors are asked at once? | 2 for routine checks, 3 for severe alerts; confirm in the pilot |
 | How long is data kept? | The proposed schedule under Privacy, confirmed with counsel |
 | Is the name "Porchlight" clear to use? | Run trademark and app-store searches before public use |
 
@@ -1067,22 +1130,25 @@ These are the exact words people receive. Every message to Linda ends with Linda
 
 | Moment | To | Message |
 | --- | --- | --- |
-| Invitation | Linda, from Amy | "Hi Mom, it's Amy. I set up a good-morning check-in for us on Pantopus. Each morning you reply 1, and we know you're okay. Want to try it for a week? Reply YES or call me." |
-| Confirmation | Linda | "You're set, Linda. Each morning between 7 and 10 we'll text you; reply 1 if you're good. Amy and Sam see only that you checked in. Reply PAUSE any time. Your porch word is tulips." |
-| Daily check-in | Linda | "Good morning, Linda. Reply 1 if you're good. — tulips" |
-| After checking in | Linda | "Thanks, Linda. Here's today's photo from Mia." |
-| Reminder | Linda, by text and call | "Hi Linda, it's Porchlight for Amy. Just checking you're okay. Reply 1, or press 1. — tulips" |
-| On-call alert | Sam | "Linda hasn't checked in yet. We texted and called at 10:00. Neighbors will be asked at 10:30." Buttons: Call Linda, Hold. |
-| Porch neighbor invitation | A neighbor, in Linda's name | "Hi, it's Linda from #14, writing through Pantopus. Would you be my porch neighbor? If I miss my morning check-in and my family can't reach me, you'd get a text asking you to knock. Maybe twice a year. Reply YES or NO." |
-| Knock request | Dave, Priya, Tom | "Hi Dave, it's Porchlight. Linda at #14 hasn't checked in and isn't answering. Could you knock in the next 30 minutes? Reply 1 for on my way, 2 for can't right now." |
-| Released | Priya, Tom | "Thanks. Dave's going, so you're off the hook." |
-| All good | Everyone asked, and the family | "All good. Linda was in the garden. Thank you for looking out." |
-| Need a hand | Priya, Tom | "Dave is at Linda's and could use one more person. Can you go? Reply 1 or 2." |
+| Invitation | Linda, from Amy | "Hi Mom, it's Amy. I set up a good-morning check-in for us on Pantopus. Each morning you reply 1, so we hear from you. Want to try it for a week? Reply YES or call me." |
+| Confirmation | Linda | "You're set, Linda. Each morning between 7 and 10 we'll text you; reply 1 to check in. Amy and Sam see only that you checked in, and when. Reply PAUSE any time. Your porch word is tulips." |
+| Daily check-in | Linda | "Good morning, Linda. Reply 1 to check in. — tulips" |
+| After checking in | Linda, only when family sent something | "Thanks, Linda. Here's today's photo from Mia." |
+| Reminder | Linda, by text and call | "Hi Linda, it's Porchlight for Amy. We haven't heard from you yet today. Reply 1, or press 1. — tulips" |
+| On-call alert | Sam | "Linda hasn't checked in yet. We texted and called at 10:00. Dave and Priya will be asked at 10:30." Buttons: Call Linda, Hold. |
+| Nearby contact invitation | A neighbor Linda knows, in Linda's name | "Hi, it's Linda from #14, writing through Pantopus. Would you be my porch neighbor? If I miss my morning check-in and my family can't reach me, you'd get a text asking you to knock. Maybe twice a year. Reply YES or NO." |
+| Knock request | Dave | "Hi Dave, it's Porchlight. Linda at #14 hasn't checked in and isn't answering. Could you knock in the next 30 minutes? Reply 1 for on my way, 2 for can't right now." |
+| Released | Priya | "Thanks. Dave's going, so you're off the hook." |
+| All good | Everyone asked, and the family | "Dave saw Linda at 10:42. All good. Thank you for looking out." |
+| Need a hand | Priya | "Dave is at Linda's and could use one more person. Can you go? Reply 1 or 2." |
 | Escalated | Neighbors | "It's being handled. Please don't go inside. Thank you." |
-| Escalated | Family | "Dave knocked and Linda didn't answer. Call the police non-emergency line for a wellness check, or call 911." |
-| Evacuation | Linda, by phone call | "Linda, there's an evacuation order for your street. Do you have a ride? Press 1 for yes, 2 if you need a ride, 3 if you're staying." |
-| Helper visit | Linda | "Maria is coming at 2 p.m. to fix your smoke alarm and will tell you the code 4-7-1-9. Don't pay anything at the door. — tulips" |
-| Is this real? | Linda | "This is a scam. The IRS never asks for gift cards. Don't call that number. We've told Amy a scam was stopped. — tulips" |
+| Escalated | Family | "Dave knocked at 10:42 and Linda didn't answer. Call the police non-emergency line for a wellness check, or call 911." |
+| Practice knock | Dave, announced in advance | "This is the practice knock Linda agreed to. Please knock at #14 in the next 30 minutes and reply 3 when you're done. Reply 1 for on my way." |
+| Trial ending | Everyone in the circle | "Linda's follow-up plan ends on November 30 unless someone continues it. After that, only app check-ins continue, with no texts, calls or knocks." |
+| Is this real? (next) | Linda | "We've sent this to Amy. Until you hear back, don't pay or call that number. Government agencies never ask for gift cards. — tulips" |
+| Is this really Jake? (next) | Linda | "Hang up and call Jake on the number you already have. We've asked Amy to call Jake too. — tulips" |
+| Evacuation (later) | Linda, by phone call | "Linda, there's an evacuation order for your street. Do you have a ride? Press 1 for yes, 2 if you need a ride, 3 if you're staying." |
+| Helper visit (later) | Linda | "Maria is coming at 2 p.m. to fix your smoke alarm and will tell you the code 4-7-1-9. Don't pay anything at the door. — tulips" |
 | Thank-you | Dave, from Amy | "Thank you for checking on Mom today. It means a lot. — Amy" |
 | Circle check-up | Linda, every three months | "Hi Linda, a quick check: Amy, Sam and Dave are in your circle. Still happy with that? Reply YES, or CHANGE and we'll call you. — tulips" |
 | Porchlight trouble | Family | "Porchlight is having trouble sending messages. Please check on Linda directly. We'll tell you when it's fixed." |
@@ -1103,6 +1169,9 @@ Pages were read on September 25–26, 2026. PubMed blocked automated reading, so
 
 **Companies and products**
 
+- [Snug, Free and Dispatch plans](https://www.snugsafe.com/all-posts/how-much-does-snug-cost-the-free-and-dispatch-plans)
+- [Iamfine, care circle](https://dailycall.iamfine.com/care-circle/)
+- [Naborforce, Series A announcement (2022)](https://www.prnewswire.com/news-releases/naborforce-closes-9m-series-a-financing-round-led-by-translink-capital-to-support-independent-living-for-older-adults-301605801.html)
 - [Life360, Q2 2026 shareholder letter](https://www.sec.gov/Archives/edgar/data/1581760/000158176026000142/q226life360_shareholderl.htm)
 - [Nextdoor, second-quarter 2026 results](https://about.nextdoor.com/press-releases/nextdoor-reports-second-quarter-2026-results)
 - [Amazon, Alexa Together](https://www.aboutamazon.com/news/devices/alexa-together-launches-to-help-customers-remotely-care-for-loved-ones) and [TechCrunch on its $19.99 price](https://techcrunch.com/2021/12/07/amazon-launches-its-19-99-per-month-alexa-together-elder-care-subscription-for-families/)
