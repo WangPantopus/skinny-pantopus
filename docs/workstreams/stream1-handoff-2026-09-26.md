@@ -247,16 +247,16 @@ Rebuild both from master before native checks.
 
 **3.3 Remaining Stream 1 inventory** (all low unless noted; each row in the inventory has details).
 - **Web:**
-  - `/app/offers` swallows a rejected request (OPEN, source; orphan page).
-  - `/app/discover-hub` orphan page links.
-  - Discover with no location stacks two notices.
+  - `/app/offers` swallows a rejected request (OPEN, source; orphan page). **FIXED [#601](https://github.com/WangPantopus/skinny-pantopus/pull/601)** (bundle `bb648858…`).
+  - `/app/discover-hub` orphan page links. **WON'T FIX** (2026-09-27 decision: orphan page, no entry points).
+  - Discover with no location stacks two notices. **FIXED [#592](https://github.com/WangPantopus/skinny-pantopus/pull/592)** (bundle `9b11e251…`).
 - **Native:**
-  - iOS Support Trains scope reads "none nearby" without device location.
+  - iOS Support Trains scope reads "none nearby" without device location. **In progress** (both apps; branch `claude/stream1-native-trains-empty-honest`).
   - Android Tasks feed Support Trains read (best-effort).
   - iOS Report post: not run (needs a non-alice post fixture).
 - **New this session** (source-verified or seen on device):
   - Native edits clear `exact_city/state/zip`. Proposal: the PATCH keeps them when the location object omits them.
-  - Native edit forms know 8 categories only ("Other" → Handyman on Android / none on iOS): a taxonomy decision.
+  - Native edit forms know 8 categories only ("Other" → Handyman on Android / none on iOS): a taxonomy decision. **Decided 2026-09-27 (standing instruction):** preserve the stored category unless the owner picks one; implementation after #571 merges.
   - The Android edit form won't save a $0 "Flat" task, and says "We couldn't post your gig." in edit mode. **2026-09-27: the $0 rule is kept** (web also requires a budget above 0 on create and edit; decision recorded). The edit-mode copy is fixed on both apps (branch `claude/stream1-quickpost-edit-copy` `e81043a39`; device check pending).
   - The reschedule notice prints server-timezone time. **FIXED [#588](https://github.com/WangPantopus/skinny-pantopus/pull/588)** ("… UTC"; bundle `9e41f879…`).
   - The saved-search alert context type is fixed in #555. The same `'post'` bug in `services/postCreationHooksService.js:148` is Stream 3's; they have a local fix (`097e3e087`) awaiting their user's approval of an end-to-end write, likely for batch 36.
@@ -274,7 +274,7 @@ Rebuild both from master before native checks.
     - **Raw rows, other streams:**
       - Stream 2: `PATCH /api/homes/:id` (`home.js:1853`) replies with the raw Home row (`location` is EWKB hex). **Refuted on device by Stream 2 (04:50–04:57Z):** renaming Home 9d885f71 saved with no error on Android and iOS. Neither app's `HomeDto`/`HomeDTO` declares `location`; my source read had quoted the my-homes wrapper's decoder. No change. The homeIam lockdown replies have the same shape and no native caller.
       - Stream 3: business locations parse `location`; `display_location` is not declared natively.
-- **Preserved, not open:** native stop sheets on a started $0 task still show "Task amount $0.00 · Cancellation fee $0.00 · Review…". The user's "honest wording only" decision was applied to web (#549); native wording parity is a small follow-up.
+- **Preserved → FIXED [#598](https://github.com/WangPantopus/skinny-pantopus/pull/598):** native stop sheets on a started $0 task still show "Task amount $0.00 · Cancellation fee $0.00 · Review…". The user's "honest wording only" decision was applied to web (#549); native wording parity is a small follow-up.
 
 **3.4 Keep integrating peer PRs.**
 - Stream 2 ("Stream 2 handoff takeover") and Stream 3 ("fix(native): live chat keeps working after a token refresh; Android reactions update in place") send "PR #N ready" with head, bundle/seal, scope and verification.

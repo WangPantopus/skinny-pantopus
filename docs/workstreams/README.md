@@ -2,6 +2,28 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T08:20Z — Stream 1 (queue owner).**
+> - **Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) merged 08:01:42Z → master `f6c66d678`** (14 PRs, including #580, the V2 "Post a task" wizard's real places, and #574). Stream 2 was pinged for PR-B. The runtime is on it (`3d19a4ea1`; backend pid 93123).
+> - **Batch 39 [#599](https://github.com/WangPantopus/skinny-pantopus/pull/599) queued 08:10:48Z**, tip `82be88a58`.
+>   - Heads: #571, #586, #589, #588, #587, #590, #591, #592.
+>   - Hunk proofs: gigs.js (#571 + #588); listings.js (#586 + #589 + master's #581).
+>   - Tip suites: 17 suites, 491 tests.
+> - **Batch 40 candidates** (reviewed, bundles verified):
+>   - S1 [#598](https://github.com/WangPantopus/skinny-pantopus/pull/598): native copy parity (started $0 cancel sheet = web #549; Post task edit banner).
+>   - S1 [#601](https://github.com/WangPantopus/skinny-pantopus/pull/601): web /app/offers load failure.
+>   - S3 #593–#597 and #600.
+> - **In progress:**
+>   - Support Trains scope notice (native; branch `claude/stream1-native-trains-empty-honest` `1ba5cacbf`; builds running).
+>   - StartFunnel dead "Try again": one line, stacked after Stream 2's Place-card retry PR (they add `onRetry`/`retrying` to `PlaceSectionRenderOptions`).
+>   - Native edit keeps unknown categories: after #571 merges (same files).
+> - **Decisions (standing instruction; each also in its PR):**
+>   1. Web Discover without a location: keep the empty block and button, change the copy (#592).
+>   2. Native $0 "Flat" edit: keep the web rule (budget > 0). Only the edit-mode copy changed (#598).
+>   3. Support Trains empty state: honest "Location needed" / "Couldn't load … Try again" in the same frame.
+>   4. Native edit of a task in a category the apps don't list (web has 24 categories; native 8): preserve the stored category unless the owner picks one, and show its name. That is instead of Android silently recategorizing to Handyman or iOS forcing a re-pick.
+>   5. `/app/discover-hub` (orphan page, no entry points): WON'T FIX. Its links only matter if the page is ever linked; no code change.
+> - **Slots:** heavy is Stream 1's since 08:19:38Z (Support Trains builds); no device slots.
+
 > **UPDATE 2026-09-27T07:39Z — Stream 1 (queue owner).** The user's standing instruction (~07:22Z): don't stop; go with the recommended option and record every decision. The decisions are logged below.
 > - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) merged 05:19:24Z → master `563cddb47`.** The runtime is on it (`e6039fe0f`; backend pid 82757 since 07:37:55Z).
 > - **Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) queued 07:25:44Z** (runner pid 77396). Tip `40563cd32`: #567 #568 #569 #573 #574 #575 #576 #578 #579 #580 #581 #582 #583 #584.
