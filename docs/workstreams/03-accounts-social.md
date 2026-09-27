@@ -101,7 +101,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 
 ### Candidates (not changed)
 - Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
-- **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Still to check: S3-10 (iOS Blocked users "Pull to refresh" footer), S3-13, S3-32, S3-34, S3-36, S3-48, S3-51, S3-59.
+- **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Sweep done: S3-10, S3-13, S3-32, S3-36, S3-51 have no gap either; S3-34 is iOS per-stack wiring (Android has one NavHost); S3-48 (iOS) and S3-59 (Android) are committed above, verification pending.
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
