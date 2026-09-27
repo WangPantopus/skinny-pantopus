@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T01:51Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T02:22:58Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held (heavy released 00:29:39Z; slot 3 / emulator-5554 released 00:28:34Z, emulator stopped; slot 1 released 00:33:59Z).
+- **Slots:** none held (slot 1 released 02:12:30Z; slot 3 released 02:19:55Z, emulator stopped). Heavy is promised to Stream 3 after Stream 2's iOS build, for three builds (Android master before; Android and iOS fix).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -20,6 +20,14 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Fixture PF1 (2 posts, 1 notification, 1 LocalProfile) removed at 01:46:45Z; fingerprint clean apart from sign-in bookkeeping. API back on `23e518b11`.
 - Proxy: a `post-check.json` allowance (`POST /api/posts` by the Member only) exists and is **off**.
 - Stream 1 fixed the gig saved-search case as #555.
+
+### In progress: open chats stop getting live messages after a tab switch or a pushed screen (iOS and Android)
+- Found while acknowledging Stream 2's #560 report (leftover chat view models). Both apps' chat screens call `teardown()` when they leave the screen (iOS `.onDisappear`, Android `DisposableEffect`), which cancels the socket listeners. When the same thread comes back, `load()` returns early because the thread is already loaded, so nothing listens again until the thread is reopened.
+- **iOS before** (sim `0AE16FA0`, build `520ed06cf`, whose Chat/Inbox/Realtime code equals master `73b98f6b6`): the Owner has the Member DM open; the Member's message 19 appears live. After a tab round trip (Mail → Place → Mail), the Member's message 20 (stored 02:10:26.670Z) was still missing at 02:11:30Z (63 s), with no chat request in the proxy log, while the Mail tab badge showed 1. Going back to the list and reopening showed it.
+- **Fix** (branch `claude/stream3-native-chat-resubscribe`, not pushed; head `f009f6be7` on `73b98f6b6`): iOS `fc56edc1f` re-subscribes and refreshes (merge, no shimmer) when a loaded thread returns, and makes the socket loops hold the view model weakly between events (the #560 leak). Android `f009f6be7` re-subscribes and marks the thread viewed again; the room re-join ack backfills what arrived meanwhile.
+- **Next:** under heavy, build Android `73b98f6b6` (before) and the fix for both apps; Android before and after on emulator-5554, iOS after on sim `0AE16FA0`; record CA12 (messages 19, 20 and the after messages); chat-audit off; seal; PR to the Stream 1 queue owner.
+- Chat-audit mode is **on** since 02:09:03Z for these checks.
+- Emulator-5554 boots from its quickboot snapshot `default_boot`, and `-no-snapshot-save` discards changes, so each boot restores an old APK (`70f275b4…`); reinstall the APK after every boot.
 
 ### Owner fixture password rotated (user-approved, 2026-09-27 01:49Z)
 - The old one appeared in a screenshot in this session. The new one is only in the private credentials file (`…/private-restart-inputs/sched-fixtures-private.json`, 0600), which every helper reads; web and `fx` logins verified at 01:50Z. Old password → 401. Existing device/web sessions were not revoked. Manifest entry CRED1 (no values).
@@ -38,10 +46,10 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - ~23:15Z: S3-35 revised to "Open Create your Beacon" (the button only shows without a Beacon, so there is no persona id for Stripe onboarding).
 
 ### Runtime state (isolated only)
-- Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit off since 23:25:54Z; upload query/size logging since 00:14:15Z), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
+- Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit **on** since 02:09:03Z for the re-subscribe checks; upload query/size logging since 00:14:15Z; `post-check.json` off), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
 - Fixture S59 (Review `e9fdca7a` + the business `User` rating fields) kept; exact reverts in the manifest.
 - **End-of-audit reverts done:** chat-audit mode off (23:25:54Z); F10 (`audience_profile` for the Member) reverted with its recorded SQL at 2026-09-27T00:36:21Z (manifest `revertedAt`); storage shim off; emulator reverse is `tcp:64531 tcp:64531`. API and web stay off master (migration not approved). CA0–CA11 and F13 kept.
-- Simulator 0AE16FA0: final build `520ed06cf` installed, Owner signed in, one test photo in its library; the paid flag was removed. Emulator-5554: APK `2b9f468f…`, Owner signed in.
+- Simulator 0AE16FA0: final build `520ed06cf` installed, Owner signed in, one test photo in its library; the paid flag was removed. Emulator-5554: restores its quickboot snapshot at every boot (APK `70f275b4…`), so installs don't survive shutdown.
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
