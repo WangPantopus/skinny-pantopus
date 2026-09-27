@@ -90,7 +90,10 @@ The successor Stream 1 session (queue owner 2026-09-27T02:50Z → 2026-09-27T11:
   - DB: all of today's fixtures cleaned (checked transaction; snapshot diff = sign-in bookkeeping only).
 - **Devices:** all shut down; Stream 1 holds **no** heavy or device slots.
   - Sim F4DBD47E has the verify build `4f954d721` installed, and emulator-5558 has APK `installed-5558-4f954d721.apk`. alice is signed in on both.
-  - Saved apps: `/private/tmp/pantopus-stream1-ios-apps/<sha>/Pantopus.app` (`9f3ba7c35`, `4f954d721`), and the runtime-dir APKs.
+  - **Cleanup (2026-09-27, at the user's request):**
+    - Deleted: the saved iOS app copies, the iOS DerivedData `/private/tmp/pantopus-stream1-ios-dd` (8.3 GB) and the runtime-dir APK copies.
+    - For the next native check, rebuild from master with `build-ios-held.sh` / `build-android-static.sh`. The first iOS build is a cold build.
+    - The runtime itself (backend, proxy, Next, Supabase containers), the evidence bundles, the simulator and the emulator were kept.
 - **How backend PRs were served for an "after":** check out the branch's files into the runtime worktree, SIGINT-restart, test, check them back out, SIGINT-restart again. Leave the worktree clean.
 
 ### 0.4 Peers at handoff
@@ -147,14 +150,11 @@ All are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stre
 
 The living inventory `20260925-stream1-domain-inventory-r1/INVENTORY.md` has a "Successor findings 2026-09-27" table, and its merge-state header was updated at 09:15Z.
 
-### 0.8 Worktrees created this session (keep them; never remove or prune)
-- `/private/tmp/pantopus-stream1-`:
-  - `quickpost-address` (#571), `v2-address` (#580), `listing-slot` (#581), `listing-home-access` (#586), `reschedule-utc` (#588), `listing-slot-lifecycle` (#589);
-  - `discover-copy` (#592), `started-free-stop` (#598), `web-offers-r2` (#601), `trains-empty` (#603), `geo-center` (#606), `start-retry` (#607);
-  - `edit-category` (#615), `feed-just-now` (#616), `category-canonical` (#617);
-  - `quickpost-edit-copy` (folded into #598);
-  - `verify-0927a` (superseded local verify tree), `verify-0927b` (local verify tree `4f954d721`).
-- `/private/tmp/pantopus-stream1-offers` is a stale entry for an older branch; a new path was used instead of pruning it.
+### 0.8 Worktrees created this session: REMOVED (2026-09-27, at the user's request)
+- **Removed:** all 19 of this session's worktrees under `/private/tmp/pantopus-stream1-*`, with `git worktree remove` and no prune or gc. That's the 17 PR checkouts plus the two local `verify/*` trees. `batch39-check` was also removed.
+- **Checks before removal:** each was clean, and each HEAD was merged into master or superseded (edit-copy is on master via #598; the verify trees held merged or amended-away commits).
+- **Local branches** were deleted. The remote PR branches stay on GitHub.
+- **Kept:** older entries (`/private/tmp/pantopus-stream1-web-trade` with its uncommitted change, and the stale entries) and the runtime worktree `stream1-peer-takeover-d2cb25`.
 
 ### 0.9 Lessons from this session (in addition to §11)
 - **Timestamps:** never hand-type a time in a peer message. A "09:14Z" was corrected to ~09:10Z.
