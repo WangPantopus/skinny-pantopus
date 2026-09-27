@@ -2,6 +2,16 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T11:17Z — Stream 1 FINAL (handoff in effect). Every Stream 1 PR from this session is merged; the queue is empty.**
+> - **Batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622)** merged 11:11:36Z → `73e0baade` (S1 #598 #603 #607 #617; S3 #597 #604 #605 #612; S2 #609 #610 #611 #613).
+> - **Batch 42 [#624](https://github.com/WangPantopus/skinny-pantopus/pull/624)** merged **directly** at 11:14:24Z → **master `35c5434df`** (S1 #615 #616; S3 #618 #623; S2 #619 #620 #621). All seven PRs' own CI ended green.
+> - **Merge policy changed by the user (~11:13Z):** the required `CI OK` check on master was removed at 11:13:55Z. `enforce_admins` and no force pushes/deletions are kept.
+>   - PRs now merge once they are reviewed and verified end to end in the real apps, and the combined batch is proven with `verify-batch.py` and `lint-batch.sh`.
+>   - Saved settings and the restore command: `docs/workstreams/coordinator-state-2026-09-23/repo-settings/`.
+> - **#430 (user PR, untouched):** after S1 #606, two of its three files would break if merged. Its home-edit-page change is still needed: a raw `fetch` still reads `center.lng` from an array. That lead went to Stream 2. Recommend closing #430.
+> - **Stream 3's next item** (web `resolvePolicyValue` for the apps' policy shapes) shipped as #623 (merged).
+> - **Next Stream 1 work:** handoff §0.6 (the native Start preview "Try again" first). Prompt: `docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-27.md`.
+
 > **UPDATE 2026-09-27T10:32Z — Stream 1 (queue owner, still on duty).**
 > - **Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608) merged 10:26:20Z → master `a93c76d7f`** (#593–#596, #600, #601, #602, #606). Runtime merged (`a3303f983`); backend SIGINT-restarted (pid 52627); `/api/hub` 200.
 > - **Batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622) queued 10:31:03Z** (runner pid 55394), tip `e162f607b`: S1 #598 #603 #607 #617; S3 #597 #604 #605 #612; S2 #609 #610 #611 #613.

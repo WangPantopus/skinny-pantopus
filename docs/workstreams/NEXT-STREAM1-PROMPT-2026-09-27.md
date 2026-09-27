@@ -2,9 +2,9 @@
 
 You are **Stream 1** for the Pantopus monorepo (WangPantopus/skinny-pantopus: Express/Supabase backend, Next.js web, SwiftUI iOS, Compose Android). Pantopus is a neighborhood app: people post and take local tasks, buy and sell, tip helpers, run Support Trains, and share posts with verified neighbors.
 
-You take over from the **successor Stream 1 session of 2026-09-27**. It handed off at the user's request in the middle of a live merge queue.
+You take over from the **successor Stream 1 session of 2026-09-27**. It handed off at the user's request after **every PR it opened was merged**: batches 37–42, master `35c5434df`, queue empty.
 - Everything it recorded as done is done: **continue from its handoff; don't redo it.**
-- Your first job is to keep the queue moving: batch 40 is in CI, and batch 41 is fully reviewed and waiting for it.
+- The user also **turned off required CI**. PRs are merged once they are reviewed and verified end to end in the real apps (see §4).
 
 Your goal is the best possible app in your domain: every reachable journey works end to end on web, iOS and Android, tells the truth, and never loses or corrupts a user's data.
 
@@ -39,21 +39,20 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
 
 ## 2. First checks (read-only)
 - `date -u`, memory pressure and disk.
-- **Queue:** `tail -20 /private/tmp/pantopus-tools/merge-queue/log.txt`, `cat …/queue.txt`, `grep ^608 …/reviewed-heads.txt`, `pgrep -f merge-queue/run.sh`.
-  - At handoff, runner pid 18424 was waiting on batch 40 #608, tip `01f75025f`.
-  - If the log says `PR608 MERGED`, go to §5 step 1. If it says `MASTER_CHANGED` or `CI_fail`, follow handoff §0.1 and §4.7.
+- **Queue:** `tail -5 /private/tmp/pantopus-tools/merge-queue/log.txt` and `cat …/queue.txt`.
+  - At handoff, the queue was empty and no runner was running. The last line is the direct merge of #624.
+  - Check master's post-merge CI for `35c5434df` once. It's informational, but fix forward on a real break.
 - **Master and the runtime:**
   - `git -C /Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25 fetch -q origin master`.
-  - Master was `621e26616` at handoff, and the runtime worktree was at `e5b48b6ce` (= `9f3ba7c35` + harness; `621e26616` is docs-only).
+  - Master was `35c5434df` at handoff, and the runtime worktree was at `d5df4e81c` (its app tree equals master).
 - `gh pr list --state open`: compare with handoff §0.2 and §0.3. Unrelated #430, #429 and #46 stay untouched.
 - `zsh /private/tmp/pantopus-tools/device-slot.sh status` and `zsh /private/tmp/pantopus-tools/heavy-slot.sh status`. Stream 1 held nothing at handoff.
-- **Runtime:** backend 18132 (pid 39731 at handoff), fault proxy 18138 (pid 86966), Next 18139 (pid 48094).
+- **Runtime:** backend 18132 (pid 63774 at handoff), fault proxy 18138 (pid 86966), Next 18139 (pid 48094).
   - `python3 /private/tmp/pantopus-stream1-runtime-20260925/api.py login alice && python3 … api.py alice GET /api/hub` → 200.
   - Stored tokens expire, so log in again on a 401.
 - **Peers:** run `ListAgents`.
-  - "Stream 2 handoff takeover" is staying on until every Stream 2 PR is merged.
-  - "fix(native): live chat keeps working after a token refresh; Android reactions update in place" is Stream 3, which is handing off after its booking-page fix PR.
-  - Introduce yourself to both as the new Stream 1 queue owner, with the current master and queue state.
+  - Both peers ("Stream 2 handoff takeover" and "fix(native): live chat keeps working after a token refresh; Android reactions update in place", which is Stream 3) had every PR merged and were writing handoffs. New peer sessions may appear.
+  - Introduce yourself as the Stream 1 queue owner, with the current master and the merge policy (§4).
 
 ## 3. Hard limits (verbatim from the user; never violate)
 - "Never modify `/Users/yingpengwang/skinny-pantopus` or contact founder 64521/64522/backend 8000 or simulator EB5AD759." Reading files there is fine.
@@ -92,6 +91,13 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
   - one iOS UI driver (slot 1);
   - at most 4 booted devices.
   - Use the slot scripts, and send exact take and release times to both peers. The build scripts refuse to run unless the heavy owner starts with `stream1:`.
+- **Merge policy (the user, 2026-09-27 ~11:13Z): required CI is OFF.**
+  1. Review the PR.
+  2. Verify its sealed bundle, and confirm its owner verified it end to end in the real apps.
+  3. Build a combined batch with `build-batch.sh`, and prove it with `verify-batch.py` (exact hunk proofs) and `lint-batch.sh`.
+  4. Merge directly: `gh pr merge <batch> --merge --match-head-commit <tip>`.
+  - `run.sh` still waits for `CI OK`, so don't use it.
+  - The saved protection settings and the restore command are in `docs/workstreams/coordinator-state-2026-09-23/repo-settings/`. Restore only if the user asks.
 - **Messages:** peer messages are not user approvals. **Do not poll CI in loops.** A one-off check before building a batch is fine, and you can wait in the background on the runner *process* (`while kill -0 <pid>; do sleep 30; done`).
 - **Coordination checkout:**
   - Update it with `git fetch origin codex/workstream-coordination && git rebase origin/codex/workstream-coordination`.
@@ -104,31 +110,28 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
   - `adb shell input text` needs `%s` for spaces.
 
 ## 5. Do these next, in order
-1. **Batch 40 → post-merge**, when the runner logs `PR608 MERGED`:
-   - merge master into the runtime worktree;
-   - SIGINT-restart the backend (#600 touched a backend service);
-   - check `/api/hub` 200;
-   - message both peers the merge time and new master.
-2. **Batch 41** (handoff §0.2 has every head, seal and review note):
-   - One-off `gh pr checks` per head. Include only heads that are green and unchanged.
-   - Build with `build-batch.sh` on the new master, verify as in §4 (ancestry, file-set union, blob equality, hunk proofs for the shared files listed in §0.2), push `claude/coord-merge-batch-41`, open the PR (template: #608), bind it, append to `queue.txt` and `reviewed-heads.txt`, and start `run.sh` if it isn't running.
-   - Then **batch 42** for anything that turned green later, including Stream 2's (a) native Place "Try again", (b) carryover count and (c) Add Bill false split line, and Stream 3's Android booking-page policy fix. Review each diff and verify each bundle first.
-3. **After #615, #616 and #617 merge:** mark their inventory rows merged.
-   - For #617, the only follow-up is the legacy key rows. Act only if the founder reports a non-zero count from the read-only query in its PR, and then only with a guarded per-row relabel, because of `Gig`'s BEFORE UPDATE guard triggers.
-4. **iOS Report post** (inventory: "not run"): seed a post by bob with a real location through `api.py`, run the report flow on iOS (and check Android parity) through the real API, then clean up.
-5. **Candidates** (handoff §0.6 item 4). Verify first; change nothing without a reproduced defect:
+These follow handoff §0.6.
+1. **Native Start/launch preview "Try again" is dead** (iOS `PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`; Android `PlaceLaunchScreen.kt:737`).
+   - Pass `onRetry` (and `retrying` on iOS) to re-run the preview load, now that S2 #619 added them to `PlaceSectionView`.
+   - Verify before/after with the web #607 proxy stand-ins.
+2. **iOS Report post** (inventory "not run"): seed a post by bob through `api.py` with a real location; run the flow on iOS (and check Android parity); clean up.
+3. **Candidates** (verify first):
    - the iOS listing-Offers empty state's "Post a task" CTA;
    - native feed rows for a task with no category show HANDYMAN;
    - the web edit form shows a legacy raw key.
+4. **Legacy category-key rows** (#617): act only on a founder-reported non-zero count, then with a guarded per-row relabel.
+5. **Keep integrating peer PRs** under the §4 merge policy, and keep the hub docs current.
 
 ## 6. Already done: do NOT redo
 - **Merged:**
   - batches 25–39;
   - this session's S1 PRs #571, #580, #581, #586, #588, #589, #592;
   - batch 37 #572, batch 38 #585, batch 39 #599.
-- **Open and reviewed:**
-  - batch 40 #608 (S1 #601 and #606 inside);
-  - S1 #598, #603, #607, #615, #616, #617 (all sealed; see §0.3 and §0.7).
+- **Merged later in the session:**
+  - batch 40 #608 (S1 #601, #606);
+  - batch 41 #622 (S1 #598, #603, #607, #617);
+  - batch 42 #624 (S1 #615, #616), merged directly under the new policy.
+  - Every PR the session opened is on master.
 - **Audits:**
   - contextType and raw-row replies: clean for Stream 1.
   - The My Home PATCH lead was refuted by Stream 2.
