@@ -127,36 +127,42 @@ export default function MembersSecurityTab({
   const [lockdownEnabled, setLockdownEnabled] = useState(false);
   const [showLockdown, setShowLockdown] = useState(false);
   const [secretsCount, setSecretsCount] = useState(0);
+  const [securityLoading, setSecurityLoading] = useState(true);
+  const [securityError, setSecurityError] = useState('');
+  const securityGeneration = useRef(0);
 
   // Load supplementary data
-  useEffect(() => {
-    (async () => {
-      try {
-        const [passesRes, settingsRes, secretsRes] = await Promise.allSettled([
-          api.homeIam.getGuestPasses(homeId),
-          api.homeProfile.getHomeSettings(homeId),
-          api.homeProfile.getHomeAccessSecrets(homeId),
-        ]);
-        if (passesRes.status === 'fulfilled') {
-          const passes = (passesRes.value as Record<string, any>).passes || [];
-          const active = passes.filter(
-            (p: GuestPass) => !p.revoked_at && p.status !== 'revoked' && p.status !== 'expired' &&
-              (!p.end_at || new Date(p.end_at) > new Date())
-          );
-          setActivePasses(active.length);
-        }
-        if (settingsRes.status === 'fulfilled') {
-          const s = settingsRes.value as Record<string, any>;
-          setLockdownEnabled(s?.home?.lockdown_enabled || false);
-        }
-        if (secretsRes.status === 'fulfilled') {
-          setSecretsCount(((secretsRes.value as Record<string, any>).secrets || []).length);
-        }
-      } catch {
-        // Non-critical
-      }
-    })();
+  const loadSecurity = useCallback(async () => {
+    const generation = ++securityGeneration.current;
+    setSecurityLoading(true);
+    setSecurityError('');
+    try {
+      const [passesRes, settingsRes, secretsRes] = await Promise.all([
+        api.homeIam.getGuestPasses(homeId),
+        api.homeProfile.getHomeSettings(homeId),
+        api.homeProfile.getHomeAccessSecrets(homeId),
+      ]);
+      if (generation !== securityGeneration.current) return;
+      const passes = (passesRes as Record<string, any>).passes || [];
+      const active = passes.filter(
+        (p: GuestPass) => !p.revoked_at && p.status !== 'revoked' && p.status !== 'expired' &&
+          (!p.end_at || new Date(p.end_at) > new Date())
+      );
+      setActivePasses(active.length);
+      setLockdownEnabled((settingsRes as Record<string, any>)?.home?.lockdown_enabled || false);
+      setSecretsCount(((secretsRes as Record<string, any>).secrets || []).length);
+    } catch (error) {
+      if (generation !== securityGeneration.current) return;
+      setSecurityError(failureMessage(error, 'Security details could not be loaded. Please try again.'));
+    } finally {
+      if (generation === securityGeneration.current) setSecurityLoading(false);
+    }
   }, [homeId]);
+
+  useEffect(() => {
+    loadSecurity();
+    return () => { securityGeneration.current++; };
+  }, [loadSecurity]);
 
   // Load audit log
   const loadAudit = useCallback(async (offset: number, append: boolean) => {
@@ -328,6 +334,11 @@ export default function MembersSecurityTab({
       {/* ===== Section 2: Security Center ===== */}
       <div>
         <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-3">Security Center</h3>
+        {securityLoading ? (
+          <div className="py-8 text-center text-sm text-app-text-muted">Loading security details…</div>
+        ) : securityError ? (
+          <ErrorState message={securityError} onRetry={loadSecurity} />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Guest Passes Card */}
           <div className="bg-app-surface rounded-xl border border-app-border p-4">
@@ -391,6 +402,7 @@ export default function MembersSecurityTab({
             </span>
           </div>
         </div>
+        )}
       </div>
 
       {/* ===== Section 3: Audit Log ===== */}
