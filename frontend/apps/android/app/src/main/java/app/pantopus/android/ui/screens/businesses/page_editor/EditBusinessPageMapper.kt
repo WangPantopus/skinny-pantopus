@@ -51,13 +51,17 @@ internal object EditBusinessPageMapper {
                 mode = seedMode(isPublished, profile?.publishedAt),
                 banner =
                     if (hasBanner) {
-                        EditBusinessPageBannerState.Filled(dirty = false)
+                        // The upload mirrors the banner onto the business user's cover photo.
+                        EditBusinessPageBannerState.Filled(dirty = false, imageUrl = business.coverPhotoUrl)
                     } else {
                         EditBusinessPageBannerState.Empty
                     },
                 logo =
                     if (!profile?.logoFileId.isNullOrBlank()) {
-                        EditBusinessPageLogoState.Filled(initial = name.take(1).uppercase(Locale.US))
+                        EditBusinessPageLogoState.Filled(
+                            initial = name.take(1).uppercase(Locale.US),
+                            imageUrl = business.profilePictureUrl,
+                        )
                     } else {
                         EditBusinessPageLogoState.Empty
                     },

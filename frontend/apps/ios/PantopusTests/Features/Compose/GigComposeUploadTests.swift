@@ -50,7 +50,8 @@ final class GigComposeUploadTests: XCTestCase {
             step: GigComposeStep.fillGaps.rawValue,
             category: .handyman,
             title: "Hang 3 shelves in the living room",
-            description: "Need three IKEA Lack shelves mounted on drywall."
+            description: "Need three IKEA Lack shelves mounted on drywall.",
+            locationMode: .virtual
         )
     }
 
@@ -88,6 +89,15 @@ final class GigComposeUploadTests: XCTestCase {
         state.budgetMin = "60"
         state.scheduleType = .flexible
         state.locationMode = .yourAddress
+        state.homeAddress = GigComposePlaceAddress(
+            line1: "1200 Main St",
+            city: "Vancouver",
+            state: "WA",
+            zip: "98660",
+            latitude: 45.628,
+            longitude: -122.6739,
+            homeId: "5f0c1e6a-0000-4000-8000-000000000001"
+        )
         let vm = makeVM(initialState: state)
         // Sequential awaits keep the FIFO stub → tile mapping
         // deterministic; the grid-order guarantee itself is what the

@@ -102,6 +102,12 @@ data class MyHomesResponse(
     val sharedHomes: List<MyHome> get() = homes.filter { it.hasValidListContext && it.hasSharedAccess }
 }
 
+/** `GET /api/homes/primary` envelope — the actor's primary Home card, or null. */
+@JsonClass(generateAdapter = true)
+data class PrimaryHomeResponse(
+    val home: MyHome? = null,
+)
+
 /** `GET /api/homes/:id` envelope — route `backend/routes/home.js:2891`. */
 @JsonClass(generateAdapter = true)
 data class HomeDetailResponse(

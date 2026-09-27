@@ -47,6 +47,7 @@ import app.pantopus.android.data.api.models.homes.MoveOutResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.OwnersResponse
+import app.pantopus.android.data.api.models.homes.PrimaryHomeResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
@@ -83,6 +84,10 @@ interface HomesApi {
     /** `GET /api/homes/my-homes` — route `backend/routes/home.js:1464`. */
     @GET("api/homes/my-homes")
     suspend fun myHomes(): MyHomesResponse
+
+    /** `GET /api/homes/primary` — the actor's primary Home card (`homeListService.read` with `primary`). */
+    @GET("api/homes/primary")
+    suspend fun primaryHome(): PrimaryHomeResponse
 
     /** `GET /api/homes/:id` — route `backend/routes/home.js:2891`. */
     @GET("api/homes/{id}")

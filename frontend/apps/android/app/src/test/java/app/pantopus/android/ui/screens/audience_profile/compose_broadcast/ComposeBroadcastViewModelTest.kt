@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.audience.BroadcastChannelDto
 import app.pantopus.android.data.api.models.audience.BroadcastHistoryResponse
 import app.pantopus.android.data.api.models.audience.BroadcastMessageDto
+import app.pantopus.android.data.api.models.audience.MembershipStatsCountsDto
 import app.pantopus.android.data.api.models.audience.MembershipStatsResponse
 import app.pantopus.android.data.api.models.audience.PersonaMeResponse
 import app.pantopus.android.data.api.models.audience.PersonaSummaryDto
@@ -249,13 +250,29 @@ class ComposeBroadcastViewModelTest {
     }
 
     @Test
-    fun `set audience updates draft and reach`() {
-        val vm = buildVm()
-        assertEquals(BroadcastAudience.AllBeacons, vm.state.value.draft.audience)
-        vm.setAudience(BroadcastAudience.BronzePlus)
-        assertEquals(BroadcastAudience.BronzePlus, vm.state.value.draft.audience)
-        assertEquals(518, vm.state.value.reach(BroadcastAudience.BronzePlus))
-    }
+    fun `set audience updates draft and reach`() =
+        runTest(dispatcher) {
+            coEvery { repository.me() } returns
+                NetworkResult.Success(
+                    PersonaMeResponse(
+                        persona = PersonaSummaryDto(id = "p1", handle = "chef"),
+                        channel = BroadcastChannelDto(id = "ch1"),
+                    ),
+                )
+            coEvery { repository.membershipStats("p1") } returns
+                NetworkResult.Success(MembershipStatsResponse(MembershipStatsCountsDto(followers = 1247, members = 518)))
+            coEvery { repository.broadcastHistory("ch1") } returns
+                NetworkResult.Success(BroadcastHistoryResponse())
+            val vm = buildVm()
+            // No sample counts before the real stats answer.
+            assertNull(vm.state.value.reach(BroadcastAudience.BronzePlus))
+            vm.load()
+            advanceUntilIdle()
+            assertEquals(BroadcastAudience.AllBeacons, vm.state.value.draft.audience)
+            vm.setAudience(BroadcastAudience.BronzePlus)
+            assertEquals(BroadcastAudience.BronzePlus, vm.state.value.draft.audience)
+            assertEquals(518, vm.state.value.reach(BroadcastAudience.BronzePlus))
+        }
 
     @Test
     fun `schedule and send now toggle state`() {

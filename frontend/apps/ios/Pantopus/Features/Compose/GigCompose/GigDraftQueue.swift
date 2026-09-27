@@ -114,7 +114,6 @@ enum GigMagicPostBuilder {
     /// per-step validation gates).
     static func body(
         from form: GigComposeFormState,
-        coordinate: UserCoordinate?,
         fallbackScheduleType: String? = nil,
         privacyLevel: String = "exact_after_accept",
         aiConfidence: Double? = nil,
@@ -142,8 +141,12 @@ enum GigMagicPostBuilder {
         if group == .proService, form.proServiceDetails?.isDepositAmountMissing == true { return nil }
 
         let wireSchedule = form.scheduleType?.wireValue ?? "flexible"
-        let location = form.locationMode.flatMap { composedLocation(for: $0, form: form, coordinate: coordinate) }
-        let isVirtual = form.locationMode == .virtual
+        // Every task needs a Where, as on Android and web: an in-person
+        // place needs its picked point; a virtual task posts none.
+        guard let mode = form.locationMode else { return nil }
+        let location = composedLocation(for: mode, form: form)
+        if mode != .virtual, location == nil { return nil }
+        let isVirtual = mode == .virtual
         let items = form.items.filter { !($0.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         // Flat module columns only ride when their module is the active
         // one — mirrors RN's `showDelivery` / `showProServices` gates
@@ -258,49 +261,27 @@ enum GigMagicPostBuilder {
         }
     }
 
+    /// The picked point: the primary Home's for `yourAddress`, the
+    /// resolved suggestion's for `aPlace`. A virtual task posts no place.
     private static func composedLocation(
         for mode: GigComposeLocationMode,
-        form: GigComposeFormState,
-        coordinate: UserCoordinate?
+        form: GigComposeFormState
     ) -> CreateGigLocation? {
-        let lat = coordinate?.latitude ?? 0
-        let lon = coordinate?.longitude ?? 0
-        switch mode {
-        case .yourAddress:
-            return CreateGigLocation(
-                mode: mode.wireMode,
-                latitude: lat,
-                longitude: lon,
-                address: "Your saved address",
-                city: nil,
-                state: nil,
-                zip: nil,
-                homeId: nil
-            )
-        case .aPlace:
-            let addr = form.placeAddress
-            guard addr.isComplete else { return nil }
-            return CreateGigLocation(
-                mode: mode.wireMode,
-                latitude: lat,
-                longitude: lon,
-                address: addr.line1.trimmingCharacters(in: .whitespacesAndNewlines),
-                city: addr.city.trimmingCharacters(in: .whitespacesAndNewlines),
-                state: addr.state.trimmingCharacters(in: .whitespacesAndNewlines),
-                zip: addr.zip.trimmingCharacters(in: .whitespacesAndNewlines),
-                homeId: nil
-            )
-        case .virtual:
-            return CreateGigLocation(
-                mode: mode.wireMode,
-                latitude: lat,
-                longitude: lon,
-                address: "Remote / Online",
-                city: nil,
-                state: nil,
-                zip: nil,
-                homeId: nil
-            )
+        let place: GigComposePlaceAddress? = switch mode {
+        case .yourAddress: form.homeAddress
+        case .aPlace: form.placeAddress.isComplete ? form.placeAddress : nil
+        case .virtual: nil
         }
+        guard let place, let latitude = place.latitude, let longitude = place.longitude else { return nil }
+        return CreateGigLocation(
+            mode: mode.wireMode,
+            latitude: latitude,
+            longitude: longitude,
+            address: place.line1.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: trimmedOrNil(place.city),
+            state: trimmedOrNil(place.state),
+            zip: trimmedOrNil(place.zip),
+            homeId: place.homeId
+        )
     }
 }

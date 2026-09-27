@@ -10,6 +10,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { getSeasonalContext } = require('./ai/seasonalEngine');
+const { invalidateHealthScoreCache } = require('./homeHealthService');
 
 // ── Checklist definitions per season ─────────────────────────────────────────
 // Each item may have an optional `condition(home)` function. If present, the
@@ -234,6 +235,8 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
     }
   }
 
+  items = await releaseClosedHires(homeId, items);
+
   // 3. Optionally fetch incomplete items from the previous season
   if (!options.includePrevious) return items;
 
@@ -267,9 +270,10 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
  * @returns {Promise<object|null>}  Confirmed current item; throws on unavailable or denied changes
  */
 async function updateChecklistItem(homeId, itemId, status, userId) {
-  const { data, error } = await supabaseAdmin.rpc('update_home_seasonal_item', {
+  // Query builders are thenables without .catch: wrap one so a failed request maps to 503.
+  const { data, error } = await Promise.resolve(supabaseAdmin.rpc('update_home_seasonal_item', {
     p_home_id: homeId, p_actor_id: userId, p_item_id: itemId, p_status: status,
-  }).catch(() => ({ data: null, error: true }));
+  })).catch(() => ({ data: null, error: true }));
   if (error || !data || typeof data.ok !== 'boolean') {
     throw Object.assign(new Error('The checklist change could not be confirmed. Reload before retrying.'), {
       code: 'HOME_CHECKLIST_UNAVAILABLE', statusCode: 503,
@@ -297,27 +301,104 @@ async function updateChecklistItem(homeId, itemId, status, userId) {
   return data.item;
 }
 
+const LINKABLE_TASK_STATUSES = ['open', 'assigned', 'in_progress'];
+
 /**
- * Link a gig to a checklist item and mark it as 'hired'.
+ * Link the task a member just posted for a pending checklist item and mark
+ * the item hired. The task must be the member's own and still open. Linking
+ * the same task again is an acknowledgement, not a new change.
  *
+ * @param {string} homeId  Exact requested Home
  * @param {string} itemId  UUID of the HomeSeasonalChecklistItem
- * @param {string} gigId   UUID of the created Gig
- * @returns {Promise<object|null>}  Confirmed current item; throws on unavailable or denied changes
+ * @param {string} gigId   UUID of the posted Gig
+ * @param {string} userId  UUID of the member who posted it
+ * @returns {Promise<{ item: object, changed: boolean }>}  Confirmed current item; throws on unavailable or denied links
  */
-async function linkGigToChecklist(itemId, gigId) {
-  const { data, error } = await supabaseAdmin
+async function linkGigToChecklist(homeId, itemId, gigId, userId) {
+  const fail = (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code });
+  const unavailable = () => fail(503, 'HOME_CHECKLIST_UNAVAILABLE', 'The checklist link could not be confirmed. Reload before retrying.');
+  const [contextRes, itemRes, gigRes] = await Promise.all([
+    supabaseAdmin.rpc('home_record_context', { p_home_id: homeId, p_user_id: userId }),
+    supabaseAdmin.from('HomeSeasonalChecklistItem').select('*').eq('id', itemId).eq('home_id', homeId).maybeSingle(),
+    supabaseAdmin.from('Gig').select('id, user_id, status').eq('id', gigId).maybeSingle(),
+  ].map(query => Promise.resolve(query).catch(() => ({ data: null, error: true }))));
+  const context = contextRes.data;
+  if (contextRes.error || itemRes.error || gigRes.error || !context || typeof context.allowed !== 'boolean') throw unavailable();
+  // The same current Home fence as a completion: frozen, archived and private setup contexts cannot edit.
+  if (!context.allowed || context.private || !Array.isArray(context.permissions) || !context.permissions.includes('home.edit')) {
+    throw fail(403, 'HOME_CHECKLIST_DENIED', 'Current permission to edit this checklist is unavailable.');
+  }
+  const item = itemRes.data;
+  if (!item) throw fail(404, 'HOME_CHECKLIST_NOT_FOUND', 'Checklist item not found in this home.');
+  const gig = gigRes.data;
+  if (!gig || gig.user_id !== userId) throw fail(404, 'HOME_CHECKLIST_TASK_NOT_FOUND', 'That task was not found among your tasks.');
+  if (!LINKABLE_TASK_STATUSES.includes(gig.status)) throw fail(409, 'HOME_CHECKLIST_TASK_CLOSED', 'That task is no longer open.');
+  if (item.status === 'hired' && item.gig_id === gigId) return { item, changed: false };
+  if (item.status === 'hired' || item.gig_id) {
+    throw fail(409, 'HOME_CHECKLIST_LINKED', 'This checklist item is linked to hired help. Open the current gig before changing it.');
+  }
+  if (item.status !== 'pending') throw fail(409, 'HOME_CHECKLIST_CHANGED', 'This checklist item changed. Reload its current state before continuing.');
+
+  const { data: linked, error } = await supabaseAdmin
     .from('HomeSeasonalChecklistItem')
     .update({ gig_id: gigId, status: 'hired' })
     .eq('id', itemId)
-    .select('*')
-    .single();
+    .eq('home_id', homeId)
+    .eq('status', 'pending')
+    .is('gig_id', null)
+    .select('*');
 
-  if (error) {
-    logger.error('Failed to link gig to checklist item', { itemId, gigId, error: error.message });
-    return null;
+  if (error || !Array.isArray(linked)) {
+    logger.error('Failed to link gig to checklist item', { homeId, itemId, gigId, error: error?.message || 'Missing linked row' });
+    throw unavailable();
+  }
+  if (linked.length !== 1) throw fail(409, 'HOME_CHECKLIST_CHANGED', 'This checklist item changed. Reload its current state before continuing.');
+  return { item: linked[0], changed: true };
+}
+
+/**
+ * Return hired items to pending when their task was cancelled or no longer
+ * exists, so the item can be done, skipped or hired again. Anything that
+ * cannot be confirmed is left as it is.
+ *
+ * @param {string} homeId  UUID of the Home
+ * @param {Array} items    Current checklist rows
+ * @returns {Promise<Array>}  The rows, with released items replaced by their current state
+ */
+async function releaseClosedHires(homeId, items) {
+  const linked = items.filter(item => item.status === 'hired' && item.gig_id);
+  if (linked.length === 0) return items;
+
+  const { data: gigs, error } = await supabaseAdmin
+    .from('Gig')
+    .select('id, status')
+    .in('id', [...new Set(linked.map(item => item.gig_id))]);
+  if (error || !Array.isArray(gigs)) {
+    logger.warn('Hired checklist tasks could not be checked', { homeId, error: error?.message || 'Missing task rows' });
+    return items;
   }
 
-  return data;
+  const live = new Set(gigs.filter(gig => gig.status !== 'cancelled').map(gig => gig.id));
+  const released = new Map();
+  for (const item of linked.filter(row => !live.has(row.gig_id))) {
+    const { data, error: releaseError } = await supabaseAdmin
+      .from('HomeSeasonalChecklistItem')
+      .update({ status: 'pending', gig_id: null })
+      .eq('id', item.id)
+      .eq('home_id', homeId)
+      .eq('status', 'hired')
+      .eq('gig_id', item.gig_id)
+      .select('*');
+    if (releaseError || !Array.isArray(data)) {
+      logger.warn('Hired checklist item could not be released', { homeId, itemId: item.id, error: releaseError?.message || 'Missing released row' });
+    } else if (data.length === 1) {
+      logger.info('Released hired checklist item after its task closed', { homeId, itemId: item.id, gigId: item.gig_id });
+      released.set(item.id, data[0]);
+    }
+  }
+  if (released.size === 0) return items;
+  invalidateHealthScoreCache(homeId);
+  return items.map(item => released.get(item.id) || item);
 }
 
 /**

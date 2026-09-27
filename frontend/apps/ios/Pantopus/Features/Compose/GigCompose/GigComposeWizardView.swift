@@ -270,6 +270,9 @@ private struct WhereFields: View {
                     viewModel.selectLocationMode(mode)
                 }
             }
+            if viewModel.form.locationMode == .yourAddress {
+                YourAddressStatus(viewModel: viewModel)
+            }
             if viewModel.form.locationMode == .aPlace {
                 FormFieldsBlock {
                     PantopusTextField(
@@ -279,6 +282,7 @@ private struct WhereFields: View {
                         contentType: .streetAddressLine1,
                         identifier: "composeGig_place_line1"
                     )
+                    PlaceSuggestions(viewModel: viewModel)
                     PantopusTextField(
                         "City",
                         text: cityBinding,
@@ -331,6 +335,72 @@ private struct WhereFields: View {
             get: { viewModel.form.placeAddress.zip },
             set: { viewModel.updatePlaceAddress(zip: $0) }
         )
+    }
+}
+
+/// `yourAddress` — which Home address the task posts at, or why it can't.
+struct YourAddressStatus: View {
+    let viewModel: GigComposeViewModel
+
+    var body: some View {
+        Group {
+            if viewModel.isLoadingHome {
+                ProgressView("Finding your home address…")
+            } else if let home = viewModel.form.homeAddress {
+                Text("Posts at " + [home.line1, home.city].filter { !$0.isEmpty }.joined(separator: ", "))
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("composeGig_home_address")
+            } else if let error = viewModel.homeAddressError {
+                Text(error)
+                    .pantopusTextStyle(.small)
+                    .accessibilityIdentifier("composeGig_home_error")
+                Button("Try again", action: viewModel.loadHomeAddress)
+            }
+        }
+        .task {
+            if viewModel.form.homeAddress == nil, !viewModel.isLoadingHome, viewModel.homeAddressError == nil {
+                viewModel.loadHomeAddress()
+            }
+        }
+    }
+}
+
+/// Address suggestions under Street, listed as Add Home lists them.
+struct PlaceSuggestions: View {
+    let viewModel: GigComposeViewModel
+
+    var body: some View {
+        if viewModel.isFindingPlace {
+            ProgressView("Finding addresses…")
+        }
+        if let error = viewModel.placeSearchError {
+            Text(error).pantopusTextStyle(.small)
+            Button("Try search again", action: viewModel.retryPlaceSearch)
+        }
+        ForEach(viewModel.placeSuggestions) { suggestion in
+            Button { viewModel.selectPlaceSuggestion(suggestion) } label: {
+                VStack(alignment: .leading, spacing: Spacing.s1) {
+                    Text(suggestion.primaryText).font(Theme.Font.body)
+                    Text(suggestion.secondaryText ?? suggestion.label).pantopusTextStyle(.small)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            }
+            .disabled(viewModel.isFindingPlace)
+            .accessibilityIdentifier("composeGig_place_suggestion_\(suggestion.suggestionId)")
+        }
+        if waitingForPick {
+            Text("Pick an address from the suggestions.")
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityIdentifier("composeGig_place_pick_hint")
+        }
+    }
+
+    private var waitingForPick: Bool {
+        let place = viewModel.form.placeAddress
+        return !place.line1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !place.hasPoint
+            && !viewModel.isFindingPlace && viewModel.placeSearchError == nil && viewModel.placeSuggestions.isEmpty
     }
 }
 
@@ -1488,7 +1558,9 @@ private struct ReviewStep: View {
     private var locationSummary: String {
         guard let mode = viewModel.form.locationMode else { return "—" }
         switch mode {
-        case .yourAddress: return "Your saved address"
+        case .yourAddress:
+            guard let home = viewModel.form.homeAddress, home.isComplete else { return "Your saved address" }
+            return "\(home.line1), \(home.city), \(home.state) \(home.zip)"
         case .virtual: return "Virtual"
         case .aPlace:
             let addr = viewModel.form.placeAddress

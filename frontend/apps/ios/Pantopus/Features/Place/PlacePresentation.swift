@@ -111,6 +111,22 @@ enum PlacePresentation {
         return f
     }()
 
+    /// "today", or "as of Sep 24" when cached sun times belong to an earlier
+    /// day (their own local wall-clock date, e.g. "2026-09-24T06:59").
+    static func fmtSunDay(_ iso: String) -> String? {
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = .current
+        parse.dateFormat = "yyyy-MM-dd"
+        guard let day = parse.date(from: String(iso.prefix(10))) else { return nil }
+        if Calendar.current.isDateInToday(day) { return "today" }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "en_US_POSIX")
+        out.timeZone = .current
+        out.dateFormat = "MMM d"
+        return "as of \(out.string(from: day))"
+    }
+
     /// "6:42a" — the compact sun clock. Sunrise/sunset are local
     /// wall-clock times with no zone (unlike the `as_of` instants), so
     /// parse them directly; fall back to the ISO instant parser.

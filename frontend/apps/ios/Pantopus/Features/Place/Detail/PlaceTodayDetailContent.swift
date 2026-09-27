@@ -80,7 +80,7 @@ struct PlaceTodayDetailContent: View {
                 PlaceDetailSectionLabel(text: "Sun")
                 if let data = sun.sunriseSunset {
                     SunCard(data: data)
-                    PlaceSourceNote(name: "Your location", asOf: "today")
+                    PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
                 } else {
                     vm.fallbackCard(sun)
                 }

@@ -71,6 +71,8 @@ class GigComposeMagicTest {
             transcriptionRepo,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
         )
 
     @Test

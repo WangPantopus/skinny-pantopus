@@ -57,9 +57,11 @@ function BillsContent() {
 
   // Filters
   const now = new Date();
+  // A bill is due through its due day, so it's overdue only once that day has passed.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const isOverdue = (b: any) => {
     const due = parseHomeBillDate(b.due_date);
-    return b.status !== 'paid' && b.status !== 'canceled' && !!due && due < now;
+    return b.status !== 'paid' && b.status !== 'canceled' && !!due && due < startOfToday;
   };
   const upcomingBills = bills.filter((b) => b.status !== 'paid' && b.status !== 'canceled');
   const paidBills = bills.filter((b) => b.status === 'paid');

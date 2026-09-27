@@ -6,15 +6,19 @@
 // the host's pillar. Design spec:
 //   - Row avatar: 42px gradient-disc with white initials + 13px pillar dot (right:-1,bottom:-1).
 //   - Primary line: event-type name (DEFERRED — backend /my-bookings payload omits it; falls back to date).
-//   - Past rows: Book again footer (rotate-ccw + 'Book again', info blue).
+//   - Past rows: Book again footer (rotate-ccw + 'Book again', info blue), linking the
+//     booking page while it is live (`page_slug`).
 //   - Needs-attention group: balance-due PayFooter + Approve-pending pill.
 //   - Pending pill: INFO blue (handled by shared BookingStatusPill primitive).
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Calendar, AlertCircle, RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import type { Booking } from "@pantopus/types";
 import { scheduling } from "@pantopus/api";
+import { buildBookingPagePath } from "@pantopus/utils";
+import { toast } from "@/components/ui/toast-store";
 import {
   BookingStatusPill,
   decodeError,
@@ -105,19 +109,24 @@ function AttentionOverline({ children }: { children: React.ReactNode }) {
 
 // ─── Book-again footer (Past tab) ─────────────────────────────────────────────
 
-function BookAgainFooter({ onBookAgain }: { onBookAgain?: () => void }) {
+function BookAgainFooter({ slug }: { slug: string }) {
   return (
     <div className="flex justify-end border-t border-app-border pt-2.5">
-      <button
-        type="button"
-        onClick={onBookAgain}
+      <Link
+        href={buildBookingPagePath(slug)}
         className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-app-info hover:underline"
       >
         <RotateCcw className="h-3 w-3" aria-hidden />
         Book again
-      </button>
+      </Link>
     </div>
   );
+}
+
+// The list has no manage token (only the confirmation email carries it), so a
+// row says where to manage the booking, as Android does.
+function showManageHint() {
+  toast.info("Manage this booking from your confirmation email link.");
 }
 
 // ─── Pay footer (balance-due attention rows) ───────────────────────────────────
@@ -165,8 +174,9 @@ function Row({ booking, tz }: { booking: Booking; tz: string }) {
     (booking as { balance_due_cents?: number }).balance_due_cents ?? 0;
   const currency =
     (booking as { currency?: string }).currency ?? "USD";
+  const bookAgainSlug = past && !hasBalance ? booking.page_slug : null;
 
-  const hasFooter = past || hasBalance;
+  const hasFooter = Boolean(bookAgainSlug) || hasBalance;
 
   return (
     <div
@@ -176,7 +186,18 @@ function Row({ booking, tz }: { booking: Booking; tz: string }) {
         hasFooter && "gap-2.5",
       )}
     >
-      <div className="flex items-center gap-3">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={showManageHint}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            showManageHint();
+          }
+        }}
+        className="flex cursor-pointer items-center gap-3"
+      >
         <HostAvatar pillar={pillar} initials={initials} dim={past && !hasBalance} />
         <div className="min-w-0 flex-1">
           {/* Primary line: date (fallback — event-type name not in payload) */}
@@ -206,9 +227,9 @@ function Row({ booking, tz }: { booking: Booking; tz: string }) {
         <PayFooter balance={balanceCents} currency={currency} />
       )}
 
-      {/* Book again for past rows */}
-      {past && !hasBalance && (
-        <BookAgainFooter />
+      {/* Book again for past rows whose booking page is live */}
+      {bookAgainSlug && (
+        <BookAgainFooter slug={bookAgainSlug} />
       )}
     </div>
   );

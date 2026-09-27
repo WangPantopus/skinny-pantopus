@@ -67,7 +67,7 @@ import app.pantopus.android.ui.theme.Spacing
 fun CreatorInboxScreen(
     onBack: () -> Unit = {},
     onOpenThread: (CreatorInboxRowContent) -> Unit = {},
-    onOpenBroadcast: () -> Unit = {},
+    onOpenBroadcast: (personaId: String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     viewModel: CreatorInboxViewModel = hiltViewModel(),
 ) {
@@ -102,7 +102,7 @@ fun CreatorInboxScreen(
                 )
             is CreatorInboxUiState.Empty ->
                 EmptyFrame(
-                    onBroadcast = onOpenBroadcast,
+                    onBroadcast = { onOpenBroadcast(viewModel.personaId) },
                     onSettings = onOpenSettings,
                 )
             is CreatorInboxUiState.Error ->

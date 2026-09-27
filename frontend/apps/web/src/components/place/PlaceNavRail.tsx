@@ -10,6 +10,7 @@
 
 'use client';
 
+import { useContext } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -24,6 +25,7 @@ import {
   Activity,
   Compass,
 } from 'lucide-react';
+import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 
 export interface PlaceNavRailProps {
   /** 'overview' | a detail slug ('today', 'risk', …) | 'pulse'. */
@@ -42,6 +44,7 @@ const NAV_ITEMS: Array<{ key: string; href: string; label: string; icon: LucideI
 ];
 
 export default function PlaceNavRail({ active }: PlaceNavRailProps) {
+  const homeQuery = placeHomeQuery(useContext(PlaceHomeContext));
   return (
     <nav aria-label="Place sections" className="sticky top-[72px] self-start">
       <div className="text-[11px] font-bold tracking-[0.08em] uppercase text-app-text-muted px-3 mb-2">
@@ -53,7 +56,7 @@ export default function PlaceNavRail({ active }: PlaceNavRailProps) {
           return (
             <li key={key}>
               <Link
-                href={href}
+                href={`${href}${homeQuery}`}
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-semibold -tracking-[0.005em] transition-colors ${
                   isActive
@@ -82,7 +85,7 @@ export default function PlaceNavRail({ active }: PlaceNavRailProps) {
           Before you sign
         </Link>
         <Link
-          href="/app/place/pulse"
+          href={`/app/place/pulse${homeQuery}`}
           aria-current={active === 'pulse' ? 'page' : undefined}
           className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-semibold -tracking-[0.005em] transition-colors ${
             active === 'pulse'

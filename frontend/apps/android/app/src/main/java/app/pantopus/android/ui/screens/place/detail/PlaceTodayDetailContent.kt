@@ -103,7 +103,7 @@ fun PlaceTodayDetailContent(
         val data = env.sunriseSunset
         if (data != null) {
             SunCard(data)
-            PlaceSourceNote("Your location", "today")
+            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data.sunrise))
         } else {
             PlaceDetailFallbackCard(env)
         }

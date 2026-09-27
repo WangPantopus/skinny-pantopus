@@ -267,10 +267,7 @@ public final class GigsFeedViewModel {
     /// so the new task shows); failure keeps it queued.
     public func postPendingDraft() async {
         guard !isPostingDraft, let draft = draftQueue.drafts.first else { return }
-        guard let body = GigMagicPostBuilder.body(
-            from: draft.form,
-            coordinate: resolvedCoordinate()
-        ) else {
+        guard let body = GigMagicPostBuilder.body(from: draft.form) else {
             // A "Save draft" stash can be mid-wizard incomplete — it
             // can't ride magic-post until the composer finishes it.
             toast = ToastMessage(

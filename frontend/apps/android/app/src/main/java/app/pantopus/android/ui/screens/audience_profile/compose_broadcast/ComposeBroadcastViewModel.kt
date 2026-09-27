@@ -82,7 +82,9 @@ class ComposeBroadcastViewModel
                     scheduledLabel = null,
                     phase = ComposePhase.Idle,
                     isDirty = false,
-                    audienceReach = ComposeBroadcastSampleData.audienceReach,
+                    // No counts until membership-stats answers; the chip then shows
+                    // just the audience name rather than sample numbers.
+                    audienceReach = emptyMap(),
                 ),
             )
         val state: StateFlow<ComposeBroadcastUiState> = _state.asStateFlow()

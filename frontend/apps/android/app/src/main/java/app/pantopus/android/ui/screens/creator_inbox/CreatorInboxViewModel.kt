@@ -47,9 +47,11 @@ class CreatorInboxViewModel
 
         /**
          * Persona whose inbox this is — the `:id` path segment every
-         * `/api/personas/:id/dms/…` call from a row needs.
+         * `/api/personas/:id/dms/…` call from a row needs, and the Beacon
+         * the "Send a broadcast" prompt composes for. Empty without a Beacon.
          */
-        private var personaId: String = ""
+        var personaId: String = ""
+            private set
         private var header: CreatorInboxHeader =
             CreatorInboxHeader(title = "Creator inbox", handle = null, isCrossPersona = false)
 

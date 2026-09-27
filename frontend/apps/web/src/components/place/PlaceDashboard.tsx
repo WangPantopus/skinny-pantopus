@@ -10,13 +10,14 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import type { PlaceSwitcherHome } from '@/components/archetypes/place';
+import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import ErrorState from '@/components/ui/ErrorState';
 import SavedPlaceContext from './SavedPlaceContext';
 import PlaceDashboardView from './PlaceDashboardView';
@@ -40,8 +41,13 @@ export default function PlaceDashboard() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   // The place the dashboard is showing — null until the resident picks
-  // one in the switcher, then it overrides the primary home.
-  const [selectedHomeId, setSelectedHomeId] = useState<string | null>(null);
+  // one in the switcher, then it overrides the primary home. The pick is
+  // kept in the URL as ?home= so the section pages, Pulse and the rail
+  // follow it; the URL is the source of truth once it catches up.
+  const switchedHome = useContext(PlaceHomeContext);
+  const [pickedHomeId, setPickedHomeId] = useState<string | null>(null);
+  useEffect(() => { setPickedHomeId(null); }, [switchedHome]);
+  const selectedHomeId = pickedHomeId ?? switchedHome;
 
   useEffect(() => {
     setMounted(true);
@@ -88,6 +94,8 @@ export default function PlaceDashboard() {
 
   // The active home: an explicit switch wins, else the primary home.
   const homeId = selectedHomeId ?? homeQuery.data?.home?.id ?? null;
+  // Links carry the place only when it isn't the primary home.
+  const linkHomeId = homeId !== homeQuery.data?.home?.id ? homeId : null;
 
   // Places for the switcher. Verified mirrors the dashboard tier (T4):
   // a verified occupancy or a verified owner; everything else is claimed.
@@ -161,12 +169,15 @@ export default function PlaceDashboard() {
       <PlaceDashboardView
         intelligence={intelQuery.data}
         homeId={homeId as string}
-        onOpenSection={(slug) => router.push(`/app/place/${slug}`)}
-        onOpenPulse={() => router.push('/app/place/pulse')}
+        onOpenSection={(slug) => router.push(`/app/place/${slug}${placeHomeQuery(linkHomeId)}`)}
+        onOpenPulse={() => router.push(`/app/place/pulse${placeHomeQuery(linkHomeId)}`)}
         switchHomes={switchHomes}
         activeHomeId={homeId}
         moveInDate={homeQuery.data?.home?.id === homeId ? homeQuery.data?.home?.move_in_date ?? null : null}
-        onSwitchHome={setSelectedHomeId}
+        onSwitchHome={(id) => {
+          setPickedHomeId(id);
+          router.replace(`/app/place${placeHomeQuery(id === homeQuery.data?.home?.id ? null : id)}`);
+        }}
         onAddPlace={() => router.push('/app/homes/new')}
         onClaim={() => router.push('/app/homes')}
       />

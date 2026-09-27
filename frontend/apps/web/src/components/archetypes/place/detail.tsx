@@ -14,6 +14,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { createContext, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Info } from 'lucide-react';
 import Chip from '../primitives/Chip';
@@ -29,9 +30,31 @@ export interface DetailHeaderProps {
   backHref?: string;
 }
 
+/**
+ * The resident's place the Place pages show when it is not the primary
+ * home: the switcher's choice, carried in the URL as `?home=` (the native
+ * apps pass the home id the same way). The Place routes provide it; the
+ * rail, dashboard, details, Pulse and this back header follow it.
+ */
+export const PlaceHomeContext = createContext<string | null>(null);
+
+const HOME_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A `?home=` value when it is a home id, else null. */
+export function placeHomeParam(value: string | null | undefined): string | null {
+  return value && HOME_ID_RE.test(value) ? value : null;
+}
+
+/** Query suffix that keeps a switched place across the Place pages. */
+export function placeHomeQuery(homeId: string | null): string {
+  return homeId ? `?home=${encodeURIComponent(homeId)}` : '';
+}
+
 export function DetailHeader({ title, address, onBack, backHref = '/app/place' }: DetailHeaderProps) {
   const router = useRouter();
-  const handleBack = onBack ?? (() => router.push(backHref));
+  const switchedHome = useContext(PlaceHomeContext);
+  const target = backHref === '/app/place' ? `/app/place${placeHomeQuery(switchedHome)}` : backHref;
+  const handleBack = onBack ?? (() => router.push(target));
   // At lg+ the PlaceShell nav rail handles section navigation, so the back
   // chevron only renders below lg — EXCEPT for in-page leaves (onBack),
   // which still need a way back to their parent screen on any viewport.

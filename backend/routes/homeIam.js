@@ -623,10 +623,11 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
       homeUpdates.default_guest_pass_hours = hours;
     }
 
-    const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+    // Query builders are thenables without .catch: wrap one so a failed request maps to 503.
+    const { data, error } = await Promise.resolve(supabaseAdmin.rpc('update_home_settings', {
       p_home_id: homeId, p_actor_id: actorId, p_fields: homeUpdates,
       p_preferences: preferences === undefined ? {} : preferences,
-    }).catch(() => ({ data: null, error: true }));
+    })).catch(() => ({ data: null, error: true }));
     if (error || !data || typeof data.ok !== 'boolean') {
       return res.status(503).json({ error: 'The settings change could not be confirmed. Reload current settings before trying again.' });
     }

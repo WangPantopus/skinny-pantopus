@@ -7,13 +7,22 @@ import app.pantopus.android.data.ai.AiTranscriptionRepository
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.businesses.BusinessUserDto
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
+import app.pantopus.android.data.api.models.geo.GeoResolveResponse
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.gigs.MagicPostBody
 import app.pantopus.android.data.api.models.gigs.MagicPostGigDto
 import app.pantopus.android.data.api.models.gigs.MagicPostResponse
 import app.pantopus.android.data.api.models.gigs.MagicUndoResponse
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
+import app.pantopus.android.data.api.models.homes.HomeLocation
+import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.homes.PrimaryHomeResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.services.GeoApi
+import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigDraftQueue
@@ -72,6 +81,35 @@ class GigComposeViewModelTest {
     private val transcriptionRepo: AiTranscriptionRepository = mockk(relaxed = true)
     private val draftQueue = FakeGigDraftQueue()
     private val businessesRepo: BusinessesRepository = mockk(relaxed = true)
+    private val geoApi: GeoApi = mockk(relaxed = true)
+
+    /** "Your address" posts at the primary Home's saved point. */
+    private val homesApi: HomesApi =
+        mockk<HomesApi>().also {
+            coEvery { it.primaryHome() } returns
+                PrimaryHomeResponse(
+                    home =
+                        MyHome(
+                            id = "5f0c1e6a-0000-4000-8000-000000000001",
+                            name = "Home",
+                            address = "1200 Main St",
+                            city = "Vancouver",
+                            state = "WA",
+                            zipcode = "98660",
+                            homeType = null,
+                            visibility = null,
+                            description = null,
+                            createdAt = null,
+                            updatedAt = null,
+                            occupancy = null,
+                            ownershipStatus = null,
+                            verificationTier = null,
+                            isPrimaryOwner = null,
+                            pendingClaimId = null,
+                            location = HomeLocation(longitude = -122.6739, latitude = 45.628),
+                        ),
+                )
+        }
     private val networkMonitor: NetworkMonitor =
         mockk<NetworkMonitor>(relaxed = true).also {
             every { it.isOnline } returns MutableStateFlow(true)
@@ -88,7 +126,17 @@ class GigComposeViewModelTest {
     }
 
     private fun makeVm(savedStateHandle: SavedStateHandle = SavedStateHandle()) =
-        GigComposeViewModel(repo, savedStateHandle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo)
+        GigComposeViewModel(
+            repo,
+            savedStateHandle,
+            networkMonitor,
+            filesRepo,
+            transcriptionRepo,
+            draftQueue,
+            businessesRepo,
+            geoApi,
+            homesApi,
+        )
 
     private fun pickedPhoto(name: String = "photo.jpg") =
         GigComposePickedPhoto(filename = name, mimeType = "image/jpeg", bytes = byteArrayOf(1, 2, 3))
@@ -133,9 +181,16 @@ class GigComposeViewModelTest {
                     "composeGig2.scheduleType" to "OneTime",
                     "composeGig2.scheduledStart" to isoFuture,
                     "composeGig2.locationMode" to "YourAddress",
+                    "composeGig2.homeId" to "5f0c1e6a-0000-4000-8000-000000000001",
+                    "composeGig2.homeLine1" to "1200 Main St",
+                    "composeGig2.homeCity" to "Vancouver",
+                    "composeGig2.homeState" to "WA",
+                    "composeGig2.homeZip" to "98660",
+                    "composeGig2.homeLatitude" to 45.628,
+                    "composeGig2.homeLongitude" to -122.6739,
                 ),
             )
-        return GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo)
+        return GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo, geoApi, homesApi)
     }
 
     // MARK: - Initial chrome
@@ -382,14 +437,33 @@ class GigComposeViewModelTest {
     }
 
     @Test
-    fun location_a_place_requires_complete_address() {
-        val vm = makeVm()
-        seedReviewReady(vm)
-        vm.selectLocationMode(GigComposeLocationMode.APlace)
-        assertNull(vm.buildMagicPostBody())
-        vm.updatePlaceAddress(line1 = "123 Main St", city = "Portland", state = "OR", zip = "97214")
-        assertNotNull(vm.buildMagicPostBody())
-    }
+    fun location_a_place_requires_complete_address() =
+        runTest {
+            val suggestion =
+                GeoSuggestion(suggestionId = "s1", primaryText = "123 Main St", label = "123 Main St, Portland, OR 97214", kind = "address")
+            coEvery { geoApi.autocomplete(any()) } returns GeoAutocompleteResponse(listOf(suggestion))
+            coEvery { geoApi.resolve(any()) } returns
+                GeoResolveResponse(
+                    NormalizedAddress(
+                        address = "123 Main St",
+                        city = "Portland",
+                        state = "OR",
+                        zipcode = "97214",
+                        latitude = 45.52,
+                        longitude = -122.65,
+                    ),
+                )
+            val vm = makeVm()
+            seedReviewReady(vm)
+            vm.selectLocationMode(GigComposeLocationMode.APlace)
+            assertNull(vm.buildMagicPostBody())
+            // A typed address is not enough: the task needs the picked suggestion's point.
+            vm.updatePlaceAddress(line1 = "123 Main St", city = "Portland", state = "OR", zip = "97214")
+            assertNull(vm.buildMagicPostBody())
+            advanceTimeBy(301)
+            vm.selectPlaceSuggestion(suggestion)
+            assertEquals(45.52, vm.buildMagicPostBody()?.location?.latitude)
+        }
 
     @Test
     fun virtual_maps_to_remote_task_format() {
@@ -398,7 +472,8 @@ class GigComposeViewModelTest {
         vm.selectLocationMode(GigComposeLocationMode.Virtual)
         val body = vm.buildMagicPostBody()
         assertEquals("remote", body?.taskFormat)
-        assertEquals("custom", body?.location?.mode)
+        // A remote task has no place (as on web): no (0, 0) placeholder.
+        assertNull(body?.location)
         assertEquals("home", body?.draft?.locationMode)
     }
 
@@ -629,7 +704,18 @@ class GigComposeViewModelTest {
                     "composeGig2.engagementMode" to "Quotes",
                 ),
             )
-        val vm = GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo)
+        val vm =
+            GigComposeViewModel(
+                repo,
+                handle,
+                networkMonitor,
+                filesRepo,
+                transcriptionRepo,
+                draftQueue,
+                businessesRepo,
+                geoApi,
+                homesApi,
+            )
         assertEquals(GigComposeStep.BudgetMode, vm.state.value.form.currentStep)
         assertEquals(GigComposeCategory.Cleaning, vm.state.value.form.category)
         assertEquals("Deep clean", vm.state.value.form.title)
@@ -648,7 +734,18 @@ class GigComposeViewModelTest {
                     "composeGig.title" to "Old wizard title",
                 ),
             )
-        val vm = GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo)
+        val vm =
+            GigComposeViewModel(
+                repo,
+                handle,
+                networkMonitor,
+                filesRepo,
+                transcriptionRepo,
+                draftQueue,
+                businessesRepo,
+                geoApi,
+                homesApi,
+            )
         assertEquals(GigComposeStep.Describe, vm.state.value.form.currentStep)
         assertTrue(vm.state.value.form.title.isEmpty())
     }
@@ -911,7 +1008,18 @@ class GigComposeViewModelTest {
         val vm = makeVm(handle)
         seedReviewReady(vm)
         vm.selectIdentity(GigComposeIdentityOption(id = "biz9", name = "Brick & Mortar"))
-        val restored = GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo)
+        val restored =
+            GigComposeViewModel(
+                repo,
+                handle,
+                networkMonitor,
+                filesRepo,
+                transcriptionRepo,
+                draftQueue,
+                businessesRepo,
+                geoApi,
+                homesApi,
+            )
         assertEquals("biz9", restored.state.value.form.beneficiaryUserId)
         assertEquals("Brick & Mortar", restored.state.value.form.beneficiaryLabel)
     }
@@ -931,6 +1039,16 @@ class GigComposeViewModelTest {
             scheduleType = GigComposeScheduleType.OneTime,
             scheduledStartISO = Instant.now().plusSeconds(86_400).toString(),
             locationMode = GigComposeLocationMode.YourAddress,
+            homeAddress =
+                GigComposePlaceAddress(
+                    line1 = "1200 Main St",
+                    city = "Vancouver",
+                    state = "WA",
+                    zip = "98660",
+                    latitude = 45.628,
+                    longitude = -122.6739,
+                    homeId = "5f0c1e6a-0000-4000-8000-000000000001",
+                ),
         )
 
     @Test

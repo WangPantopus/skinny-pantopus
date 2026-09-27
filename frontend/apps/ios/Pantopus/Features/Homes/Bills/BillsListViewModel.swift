@@ -392,14 +392,15 @@ final class BillsListViewModel: ListOfRowsDataSource {
     ///                   the historical "cancelled" spelling
     ///   - `paid`        when status is "paid"
     ///   - `scheduled`   when status is "scheduled"
-    ///   - `overdue`     when due_date is in the past
+    ///   - `overdue`     when due_date has passed (a bare date is due through
+    ///                   the end of that day)
     ///   - `dueSoon`     when due_date is within the next 7 days
     ///   - `due`         otherwise
     static func chipStatus(for bill: BillDTO, now: Date) -> BillChipStatus {
         if bill.status == "canceled" || bill.status == "cancelled" { return .cancelled }
         if bill.status == "paid" { return .paid }
         if bill.status == "scheduled" { return .scheduled }
-        if let iso = bill.dueDate, let due = parseDate(iso) {
+        if let iso = bill.dueDate, let due = dueDeadline(iso) {
             if due < now { return .overdue }
             let sevenDaysOut = now.addingTimeInterval(7 * 24 * 60 * 60)
             if due <= sevenDaysOut { return .dueSoon }
@@ -467,7 +468,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
             if chip == .cancelled || chip == .paid { continue }
             totalCount += 1
             // Sum due in next 30 days (overdue counts too — the user owes it).
-            if let iso = bill.dueDate, let due = parseDate(iso) {
+            if let iso = bill.dueDate, let due = dueDeadline(iso) {
                 if due <= thirtyDaysOut {
                     totalDue += bill.displayAmount
                 }
@@ -551,6 +552,15 @@ final class BillsListViewModel: ListOfRowsDataSource {
         day.timeZone = TimeZone.current
         day.dateFormat = "yyyy-MM-dd"
         return day.date(from: iso)
+    }
+
+    /// When a bill stops being on time. A bare yyyy-MM-dd due date is a calendar
+    /// day, so it is due until that day ends on the device; a full timestamp is
+    /// that moment.
+    static func dueDeadline(_ iso: String) -> Date? {
+        guard let due = parseDate(iso) else { return nil }
+        guard iso.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return due }
+        return Calendar.current.date(byAdding: .day, value: 1, to: due)
     }
 }
 
