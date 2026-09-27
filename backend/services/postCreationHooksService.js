@@ -137,6 +137,9 @@ async function runPostCreatedHooksNow({
   const capped = recipients.slice(0, 200);
   const { link: fanoutLink, meta: fanoutMeta } = newPostFanoutLinkAndMeta(post);
 
+  // Personal context (the default). Notification.context_type only accepts
+  // 'personal' or 'business', and one invalid value fails the whole bulk
+  // insert; the post id travels in metadata.
   const notifications = capped.map(recipientId => ({
     userId: recipientId,
     type: 'new_post',
@@ -145,8 +148,6 @@ async function runPostCreatedHooksNow({
     icon: '📝',
     link: fanoutLink,
     metadata: fanoutMeta,
-    contextType: 'post',
-    contextId: post.id,
   }));
 
   await notificationService.createBulkNotifications(notifications);
