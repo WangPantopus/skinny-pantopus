@@ -69,10 +69,11 @@ data class LogMaintenanceFormState(
     val recurrence: MaintenanceRecurrence = MaintenanceRecurrence.None,
     val isSubmitting: Boolean = false,
     val isLoadingExisting: Boolean = false,
+    val hasLoadedExisting: Boolean = true,
     val submitError: String? = null,
 ) {
     val canSubmit: Boolean
-        get() = title.isNotBlank() && !isSubmitting
+        get() = title.isNotBlank() && !isSubmitting && !isLoadingExisting && hasLoadedExisting
 
     /** Slot grid for the 2x2 photos card — pads up to four slots. */
     fun photoSlots(): List<PhotoSlot> =
@@ -129,7 +130,7 @@ class LogMaintenanceFormViewModel
         private val mode: LogMaintenanceFormMode =
             taskIdArg?.let { LogMaintenanceFormMode.Edit(it) } ?: LogMaintenanceFormMode.Create
 
-        private val _form = MutableStateFlow(LogMaintenanceFormState())
+        private val _form = MutableStateFlow(LogMaintenanceFormState(hasLoadedExisting = taskIdArg == null))
         val form: StateFlow<LogMaintenanceFormState> = _form.asStateFlow()
 
         private val _event = MutableStateFlow<LogMaintenanceFormEvent?>(null)
@@ -156,17 +157,26 @@ class LogMaintenanceFormViewModel
 
         fun loadIfNeeded() {
             val editTaskId = (mode as? LogMaintenanceFormMode.Edit)?.taskId ?: return
-            if (_form.value.title.isNotBlank() && initial.title == _form.value.title) return
-            _form.value = _form.value.copy(isLoadingExisting = true)
+            if (_form.value.hasLoadedExisting || _form.value.isLoadingExisting) return
+            _form.value = _form.value.copy(isLoadingExisting = true, submitError = null)
             viewModelScope.launch {
                 when (val result = repo.getHomeMaintenance(homeId)) {
                     is NetworkResult.Success -> {
                         val task = result.data.tasks.firstOrNull { it.id == editTaskId }
-                        if (task != null) applyExisting(task, editTaskId)
-                        _form.value = _form.value.copy(isLoadingExisting = false)
+                        if (task != null) {
+                            applyExisting(task, editTaskId)
+                        } else {
+                            _form.value = _form.value.copy(
+                                isLoadingExisting = false,
+                                submitError = "This maintenance entry is no longer available. Close this form and refresh the list.",
+                            )
+                        }
                     }
                     is NetworkResult.Failure ->
-                        _form.value = _form.value.copy(isLoadingExisting = false)
+                        _form.value = _form.value.copy(
+                            isLoadingExisting = false,
+                            submitError = "Couldn't load this maintenance entry. Close and reopen it to try again.",
+                        )
                 }
             }
         }

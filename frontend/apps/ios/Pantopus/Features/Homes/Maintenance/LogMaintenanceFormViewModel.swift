@@ -70,6 +70,7 @@ final class LogMaintenanceFormViewModel {
     /// `true` while the form is fetching the existing task in edit
     /// mode. Drives a shimmer overlay on the form body.
     private(set) var isLoadingExisting: Bool = false
+    private var hasLoadedExisting = false
 
     // MARK: - Dependencies
 
@@ -100,7 +101,7 @@ final class LogMaintenanceFormViewModel {
     /// button activates when the title has at least one non-whitespace
     /// character — mirrors the backend's `task` validation.
     var canSubmit: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty && !isSubmitting
+        !title.trimmingCharacters(in: .whitespaces).isEmpty && !isSubmitting && !isLoadingExisting && hasLoadedExisting
     }
 
     /// Headline for the form shell — switches between Log and Edit.
@@ -172,6 +173,10 @@ final class LogMaintenanceFormViewModel {
         nextDueDate = snapshot.nextDueDate
         recurrence = snapshot.recurrence
         initial = snapshot
+        switch mode {
+        case .create: hasLoadedExisting = true
+        case let .edit(taskId): hasLoadedExisting = existing?.id == taskId
+        }
     }
 
     private static func makeInitialSnapshot(
@@ -230,19 +235,21 @@ final class LogMaintenanceFormViewModel {
     /// `.task { … }` and `.refreshable { … }`.
     func loadIfNeeded() async {
         guard case let .edit(taskId) = mode else { return }
-        // Only refresh when we don't already have content for this id.
-        if !title.isEmpty && initial.title == title { return }
+        guard !hasLoadedExisting, !isLoadingExisting else { return }
         isLoadingExisting = true
+        submitError = nil
         defer { isLoadingExisting = false }
         do {
             let response: GetHomeMaintenanceResponse = try await api.request(
                 HomesEndpoints.maintenance(homeId: homeId)
             )
-            guard let dto = response.tasks.first(where: { $0.id == taskId }) else { return }
+            guard let dto = response.tasks.first(where: { $0.id == taskId }) else {
+                submitError = "This maintenance entry is no longer available. Close this form and refresh the list."
+                return
+            }
             apply(existing: dto, taskId: taskId)
         } catch {
-            // Edit mode falls back to blank fields if the load fails;
-            // the user can still re-enter and save (or close).
+            submitError = "Couldn't load this maintenance entry. Close and reopen it to try again."
         }
     }
 
@@ -268,6 +275,8 @@ final class LogMaintenanceFormViewModel {
         }
         initial = currentSnapshot()
         isDirty = false
+        hasLoadedExisting = true
+        submitError = nil
     }
 
     // MARK: - Mutations
