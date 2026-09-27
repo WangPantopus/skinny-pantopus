@@ -2,7 +2,21 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T03:22Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T04:08Z)
+- **I03 checklist "Hire" (user decision ~03:30Z: "Link the task"). Open PRs on master `7bdef3e8c`, reported to Stream 1 at ~04:07Z:**
+  - [#574](https://github.com/WangPantopus/skinny-pantopus/pull/574) (`ef32ac4be`), PR-A for web + API. Bundle `20260927-stream2-checklist-hire-link-r1` (`f688cbfe…`, 60 files).
+    - `POST /api/homes/:id/seasonal-checklist/:itemId/hire {gig_id}`, a rewrite of the uncalled `linkGigToChecklist`. It needs home.edit and the `home_record_context` fence. The task must be the caller's own and open, and the item still pending and unlinked. The link writes an audit row and refreshes the health cache.
+    - Reading the checklist returns an item to pending once its task is cancelled or deleted.
+    - Web Hire sends `prefill` {title, category} (the ignored `initialText` is gone) plus `homeChecklist`. The composer links once after the 201; if that fails, the task stays posted with a note.
+    - Verified end to end on web, including closing the task (item back to pending), an injected link 503, and the API refusals. Only the reverse geocode was emulated. 4 synthetic tasks were posted and then closed with no fee.
+  - [#575](https://github.com/WangPantopus/skinny-pantopus/pull/575) (`ab44aec23`): the web checklist Hire pill and "Refresh checklist" button were invisible. `bg-primary` has no DEFAULT in the theme, so they rendered white on white. Now `bg-primary-600`/`-700`. Bundle `20260927-stream2-checklist-button-color-r1` (`8a865808…`, 10 files).
+  - Neither PR shares files with the 17 open PRs, and both merge-tree clean against batch 37's tip `18389b9b5`.
+  - **PR-B (native)** is agreed with Stream 1. iOS Hub `.composeGig`, iOS You `.composeTask` and Android `composeGig` all open the **V2 wizard** (GigCompose*), which Stream 1 is changing next (address search). PR-B starts on master after Stream 1 pings that its V2 PR merged. Planned edits: an optional checklist context into the wizard, a link call once after the 201, and a quiet note on failure.
+- **Batches:** 37 = [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) (tip `18389b9b5` on `7bdef3e8c`: #560, #563, #564, #565, #570 + S3 #566). 38 (planned) = #568, #569 + S3 #567 + S1 #571.
+- **Runtime (04:08Z):** tree = master `89f3c6bac` + #560 #563 #564 #565 #568 #569 #570 + #574 #575 (build commit `b7b65c60f`). Backend pid 38072 since 03:55:12Z. Proxy rules are cleared.
+  - **Gotcha:** CSRF_SECRET is unset here, so every backend restart invalidates saved `web-state-*.json` sessions (POST 403 "CSRF token missing or invalid"). Delete them and re-login after a restart.
+  - New kit tools: `web-checklist-hire.cjs` (writes: POST /api/gigs and …/hire only), `web-checklist-state.cjs` (read-only) and `web-gig-close.cjs` (owner "Close Gig"; submits only on "No cancellation fee").
+- **Candidates (not changed):** `text-primary` is also undefined on the checklist/bill-trend/property-card icons and the checkbox hover. They fall back to the default text color, which is visible.
 - **Merged since the handoff:** batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) (00:08:50Z → `f7f51eae4`: #543, #539, #541 + S1 #542) and batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → `73b98f6b6`: #544, #547 + S3 #545, S1 #549). **No Stream 2 PR is open.**
 - **User decisions on all five §3A items (AskUserQuestion, answered by 01:36Z; each is the recommended option):**
   1. **Phone escrow:** refuse it truthfully. The API answers 400 "Texting isn't available yet; send to their email", creates no escrow, and stops logging the SMS body (backend only).
