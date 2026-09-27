@@ -96,6 +96,11 @@ class PlaceLaunchViewModel
                 }
         }
 
+        fun retryPreview() {
+            if (_loadingPreview.value) return
+            selected?.let { loadPreview(it.label) }
+        }
+
         fun prepareForAuth(): Boolean {
             val suggestion = selected
             if (suggestion == null || suggestion.label != _query.value || !PlacePendingStore.stash(suggestion)) {

@@ -76,6 +76,7 @@ fun PlaceLaunchScreen(
     viewModel: PlaceLaunchViewModel = hiltViewModel(),
 ) {
     val step by viewModel.step.collectAsStateWithLifecycle()
+    val retrying by viewModel.loadingPreview.collectAsStateWithLifecycle()
     val browse = {
         PlacePendingStore.clear()
         app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
@@ -91,6 +92,8 @@ fun PlaceLaunchScreen(
                     { if (viewModel.prepareForAuth()) onSignIn() },
                     { if (viewModel.prepareForAuth()) onCreateAccount() },
                     onBack = viewModel::backToHero,
+                    onRetry = viewModel::retryPreview,
+                    retrying = retrying,
                 )
             is LaunchStep.Region -> RegionBody(current.message, browse, onBack = viewModel::backToHero)
         }
@@ -350,6 +353,8 @@ private fun PreviewBody(
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
+    retrying: Boolean,
 ) {
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -422,7 +427,7 @@ private fun PreviewBody(
                 // Every Band-A section through the dashboard's own cards;
                 // older backends send only `free` and keep the three tiles.
                 val sections = preview.sections.orEmpty()
-                if (sections.isNotEmpty()) PreviewSections(sections, onCreateAccount)
+                if (sections.isNotEmpty()) PreviewSections(sections, onCreateAccount, onRetry, retrying)
                 preview.free?.takeIf { sections.isEmpty() }?.let { free ->
                     PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
                     PlaceSectionCard(
@@ -727,6 +732,8 @@ private fun AhaCard(
 private fun PreviewSections(
     sections: List<PlaceSectionEnvelope>,
     onCreateAccount: () -> Unit,
+    onRetry: () -> Unit,
+    retrying: Boolean,
 ) {
     PREVIEW_GROUP_ORDER.forEach { (group, label) ->
         val items = sections.filter { it.groupId == group }
@@ -734,7 +741,10 @@ private fun PreviewSections(
             PlaceGroupLabel(text = label, modifier = Modifier.padding(top = 18.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { env ->
-                    PlaceSectionView(env = env, onOpen = null, onVerify = onCreateAccount, onClaim = onCreateAccount)
+                    PlaceSectionView(
+                        env = env, onOpen = null, onVerify = onCreateAccount, onClaim = onCreateAccount,
+                        onRetry = onRetry, retrying = retrying,
+                    )
                 }
             }
         }

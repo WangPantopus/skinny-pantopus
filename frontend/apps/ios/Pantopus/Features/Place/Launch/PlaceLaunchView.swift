@@ -75,7 +75,9 @@ struct PlaceLaunchView: View {
                     preview: preview,
                     onSignIn: { if viewModel.prepareForAuth() { onSignIn() } },
                     onCreateAccount: { if viewModel.prepareForAuth() { onCreateAccount() } },
-                    onBack: viewModel.backToHero
+                    onBack: viewModel.backToHero,
+                    onRetry: viewModel.retryPreview,
+                    retrying: viewModel.isLoadingPreview
                 )
             case let .region(message):
                 PlaceComingRegionBody(message: message, onBrowse: browseBeacons) { viewModel.backToHero() }
