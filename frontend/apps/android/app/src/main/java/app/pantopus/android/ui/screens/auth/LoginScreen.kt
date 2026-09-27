@@ -23,9 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -128,6 +130,7 @@ fun LoginScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showPassword by remember { mutableStateOf(false) }
+    var accountToForget by remember { mutableStateOf<AccountHint?>(null) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -203,7 +206,7 @@ fun LoginScreen(
         state.rememberedAccount?.let { hint ->
             RememberedAccountHeader(
                 hint = hint,
-                onForget = viewModel::forgetRememberedAccount,
+                onForget = { accountToForget = hint },
             )
             Box(modifier = Modifier.height(Spacing.s3))
         }
@@ -397,6 +400,31 @@ fun LoginScreen(
                 fontSize = 1.sp,
             )
         }
+    }
+
+    accountToForget?.let { hint ->
+        AlertDialog(
+            onDismissRequest = { accountToForget = null },
+            title = { Text("Remove this account from this device?") },
+            text = {
+                Text("You'll need to sign in again on this device. Your account itself is not deleted.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        accountToForget = null
+                        viewModel.forgetRememberedAccount(hint.userId)
+                    },
+                    modifier = Modifier.testTag("loginRemoveAccountConfirm"),
+                ) { Text("Remove account") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { accountToForget = null },
+                    modifier = Modifier.testTag("loginRemoveAccountCancel"),
+                ) { Text("Cancel") }
+            },
+        )
     }
 }
 
