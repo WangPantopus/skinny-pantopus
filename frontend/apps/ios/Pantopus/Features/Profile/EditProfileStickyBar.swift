@@ -73,7 +73,7 @@ struct EditProfileStickyBar: View {
     private var cleanStrip: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.clock, size: 13, color: Theme.Color.appTextMuted)
-            Text("All changes saved · just now")
+            Text("No unsaved changes")
                 .font(Theme.Font.role(.caption))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .lineLimit(1)
