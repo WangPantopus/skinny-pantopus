@@ -73,7 +73,15 @@ class ChatListViewModel
         private var messageJob: Job? = null
 
         fun load() {
-            if (_state.value is ChatListUiState.Loaded) return
+            if (_state.value is ChatListUiState.Loaded) {
+                // Back from a conversation, which covers the list and whose
+                // teardown() stopped the socket listeners: listen again and
+                // merge a fresh read, so the conversation just read and the
+                // messages that arrived meanwhile show (as on iOS).
+                subscribeToSockets()
+                fetch(keepRowsOnFailure = true)
+                return
+            }
             fetch()
             subscribeToSockets()
         }
@@ -125,7 +133,8 @@ class ChatListViewModel
 
         // MARK: - Fetch
 
-        private fun fetch() {
+        /** [keepRowsOnFailure]: a failed background re-read leaves a loaded list on screen. */
+        private fun fetch(keepRowsOnFailure: Boolean = false) {
             viewModelScope.launch {
                 val conversationsDeferred = async { repo.unifiedConversations() }
                 val statsDeferred = async { repo.stats() }
@@ -136,6 +145,7 @@ class ChatListViewModel
                 val response =
                     (conversationsResult as? NetworkResult.Success)?.data
                         ?: run {
+                            if (keepRowsOnFailure && _state.value is ChatListUiState.Loaded) return@launch
                             val message =
                                 (conversationsResult as? NetworkResult.Failure)
                                     ?.error?.message
