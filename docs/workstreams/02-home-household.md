@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T09:26Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T09:38Z)
 - **I03 checklist "Hire" (user decision ~03:30Z: "Link the task"). Open PRs on master `7bdef3e8c`, reported to Stream 1 at ~04:07Z:**
   - [#574](https://github.com/WangPantopus/skinny-pantopus/pull/574) (`ef32ac4be`), PR-A for web + API. Bundle `20260927-stream2-checklist-hire-link-r1` (`f688cbfe…`, 60 files).
     - `POST /api/homes/:id/seasonal-checklist/:itemId/hire {gig_id}`, a rewrite of the uncalled `linkGigToChecklist`. It needs home.edit and the `home_record_context` fence. The task must be the caller's own and open, and the item still pending and unlinked. The link writes an audit row and refreshes the health cache.
@@ -112,6 +112,12 @@
     - The carryover fixture row aec53a27 was reset skipped → pending twice (reviewed single-row UPDATEs on my synthetic fixture; no triggers on the table) for the before/after.
     - Slot 1 was released at 09:06:42Z, straight after the final iOS runs.
   - **Kit:** `android-checklist-hire.sh` scripts the Android Hire journey (one synthetic open-to-bids task).
+- **2026-09-27T09:38Z:**
+  - **[#613](https://github.com/WangPantopus/skinny-pantopus/pull/613)** (`fc3a2004d`, web, 1 line; bundle `…-money-period-note-r1`, `9521dddb…`): the Money detail note said a hard-coded "12-month average". It now shows the API's own period, "3 matching months · 2026-07 to 2026-09 · USD". Passed review; batch 41. CI: #611 and #613 green; #609 and #610 running.
+  - **F03 finding (native, fix built with the next window):** the Add Bill review step on iOS and Android says "Splits with household members can be configured after the bill is added." Nothing can write a split (no API, no screen; only `GET …/splits` exists), and the Android bill detail offers only Edit/Remove/Already paid. Android before captured (stage `stage-bill-split-note`); no bill was submitted.
+    - **Decision (standing instruction):** remove the false line on both apps (truth-only; no replacement copy).
+  - **I02 remainder:** `GET …/seasonal-checklist/history` has no caller on any app (the web API helper is unused), so there's no journey to verify.
+  - **F02 joint Home/Place privacy:** needs a cohort-cell member without `finance.view`. The kit's member only belongs to 70f66a6d, so it's deferred (it needs membership writes).
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
