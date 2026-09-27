@@ -8,8 +8,6 @@ import { getAuthToken } from '@pantopus/api';
 import type { Home } from '@pantopus/types';
 import { toast } from '@/components/ui/toast-store';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 const HOME_TYPES = [
   { value: 'house', label: 'House' },
   { value: 'apartment', label: 'Apartment' },
@@ -128,16 +126,12 @@ export default function EditHomePage() {
 
     setGeocoding(true);
     try {
-      const token = getAuthToken();
-      const r = await fetch(
-        `${API_BASE}/api/geo/autocomplete?q=${encodeURIComponent(addr)}`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-      );
-      const data = await r.json().catch(() => ({}));
-      const best = (data?.suggestions || [])[0];
-      if (best?.center) {
-        setCoordLng(String(best.center.lng));
-        setCoordLat(String(best.center.lat));
+      const data = await api.geo.autocomplete(addr);
+      const center = data.suggestions[0]?.center;
+      if (Number.isFinite(center?.lat) && Number.isFinite(center?.lng)
+        && Math.abs(center.lat) <= 90 && Math.abs(center.lng) <= 180) {
+        setCoordLng(String(center.lng));
+        setCoordLat(String(center.lat));
         setHasCoords(true);
       } else {
         toast.warning('Could not find coordinates for this address.');
