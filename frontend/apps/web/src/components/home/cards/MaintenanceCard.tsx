@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Wrench, ChevronLeft, CheckCircle, XCircle, Calendar, ClipboardList, Building, Snowflake, CloudRain, Sprout, Thermometer, Palette, Home, Flame, DoorOpen, Paintbrush, ThermometerSnowflake, HousePlus, Flashlight } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { HomeVendor } from '@pantopus/types';
+import ErrorState from '@/components/ui/ErrorState';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { failureMessage } from '../share/shareFailure';
 
 type SubTab = 'active' | 'suggested' | 'scheduled' | 'history' | 'providers';
 
@@ -98,18 +100,24 @@ export default function MaintenanceCard({
   const [subTab, setSubTab] = useState<SubTab>('active');
   const [vendors, setVendors] = useState<HomeVendor[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(false);
+  const [vendorsError, setVendorsError] = useState<string | null>(null);
+  const [vendorsRetry, setVendorsRetry] = useState(0);
 
   const suggestions = getSeasonalSuggestions();
 
   useEffect(() => {
-    if (subTab === 'providers') {
-      setLoadingVendors(true);
-      api.homeProfile.getHomeVendors(homeId)
-        .then((res) => setVendors(res.vendors || []))
-        .catch(() => setVendors([]))
-        .finally(() => setLoadingVendors(false));
-    }
-  }, [subTab, homeId]);
+    if (subTab !== 'providers') return;
+    let active = true;
+    setLoadingVendors(true);
+    setVendorsError(null);
+    api.homeProfile.getHomeVendors(homeId)
+      .then((res) => { if (active) setVendors(res.vendors || []); })
+      .catch((error) => {
+        if (active) setVendorsError(failureMessage(error, 'Vendors could not be loaded. Please try again.'));
+      })
+      .finally(() => { if (active) setLoadingVendors(false); });
+    return () => { active = false; };
+  }, [subTab, homeId, vendorsRetry]);
 
   const scheduled = issues.filter((i) => i.status === 'scheduled');
   const active = issues.filter((i) => ['open', 'in_progress', 'scheduled'].includes(i.status));
@@ -242,6 +250,8 @@ export default function MaintenanceCard({
         <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
           {loadingVendors ? (
             <div className="px-5 py-8 text-center text-sm text-app-text-muted">Loading vendors…</div>
+          ) : vendorsError ? (
+            <ErrorState message={vendorsError} onRetry={() => setVendorsRetry((value) => value + 1)} />
           ) : vendors.length === 0 ? (
             <div className="px-5 py-8 text-center">
               <div className="mb-2"><Building className="w-8 h-8 mx-auto text-app-text-muted" /></div>

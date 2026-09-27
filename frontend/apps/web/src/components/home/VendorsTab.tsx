@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
 import type { HomeBusinessLink } from '@pantopus/api';
@@ -8,12 +8,16 @@ import type { HomeVendor, BusinessUser } from '@pantopus/types';
 import { Building2, Star } from 'lucide-react';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import ErrorState from '@/components/ui/ErrorState';
+import { failureMessage } from './share/shareFailure';
 
 export default function VendorsTab({ homeId }: { homeId: string }) {
   type BusinessLinkKind = HomeBusinessLink['kind'];
   const [linkedBusinesses, setLinkedBusinesses] = useState<HomeBusinessLink[]>([]);
   const [legacyVendors, setLegacyVendors] = useState<HomeVendor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [vendorsError, setVendorsError] = useState<string | null>(null);
+  const loadGeneration = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<BusinessUser[]>([]);
@@ -28,21 +32,29 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
   const [manualNotes, setManualNotes] = useState('');
 
   const loadAll = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
+    setVendorsError(null);
     try {
       const [bizRes, vendorRes] = await Promise.allSettled([
         api.homeProfile.getHomeBusinessLinks(homeId),
         api.homeProfile.getHomeVendors(homeId),
       ]);
+      if (generation !== loadGeneration.current) return;
       if (bizRes.status === 'fulfilled') setLinkedBusinesses(bizRes.value.links || []);
       if (vendorRes.status === 'fulfilled') setLegacyVendors(vendorRes.value.vendors || []);
-    } catch {
-      // ignore
+      else throw vendorRes.reason;
+    } catch (error) {
+      if (generation !== loadGeneration.current) return;
+      setVendorsError(failureMessage(error, 'Vendors could not be loaded. Please try again.'));
     }
     setLoading(false);
   }, [homeId]);
 
-  useEffect(() => { loadAll(); }, [homeId, loadAll]);
+  useEffect(() => {
+    loadAll();
+    return () => { loadGeneration.current++; };
+  }, [loadAll]);
 
   useEffect(() => {
     if (searchQuery.length < 2) { setSearchResults([]); return; }
@@ -115,6 +127,10 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
 
   if (loading) {
     return <div className="text-center py-12 text-app-muted text-sm">Loading vendors…</div>;
+  }
+
+  if (vendorsError) {
+    return <ErrorState message={vendorsError} onRetry={loadAll} />;
   }
 
   return (
