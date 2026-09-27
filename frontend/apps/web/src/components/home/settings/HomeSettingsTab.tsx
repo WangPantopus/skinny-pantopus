@@ -75,6 +75,7 @@ export default function HomeSettingsTab({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const loadGeneration = useRef(0);
+  const loadedSettings = useRef<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -111,6 +112,7 @@ export default function HomeSettingsTab({
   // Load settings
   const loadSettings = useCallback(async () => {
     const revision = ++loadGeneration.current;
+    loadedSettings.current = null;
     setLoading(true);
     setLoadError('');
     try {
@@ -132,14 +134,33 @@ export default function HomeSettingsTab({
       setTrashDay(h.trash_day || '');
       setLocalTips(h.local_tips || '');
 
-      // Notification prefs
-      if (prefs.notifications) {
-        setNotifBills(prefs.notifications.bills !== false);
-        setNotifTasks(prefs.notifications.tasks !== false);
-        setNotifMail(prefs.notifications.mail !== false);
-        setNotifDelivery(prefs.notifications.delivery !== false);
-        setNotifGuestPass(prefs.notifications.guest_pass !== false);
-      }
+      const notifications = {
+        bills: prefs.notifications?.bills !== false,
+        tasks: prefs.notifications?.tasks !== false,
+        mail: prefs.notifications?.mail !== false,
+        delivery: prefs.notifications?.delivery !== false,
+        guest_pass: prefs.notifications?.guest_pass !== false,
+      };
+      setNotifBills(notifications.bills);
+      setNotifTasks(notifications.tasks);
+      setNotifMail(notifications.mail);
+      setNotifDelivery(notifications.delivery);
+      setNotifGuestPass(notifications.guest_pass);
+
+      // Compare the submitted values with this read, including empty fields.
+      loadedSettings.current = {
+        name: (h.name || home?.name || '').trim() || null,
+        home_type: h.home_type || home?.home_type || 'house',
+        house_rules: (h.house_rules || '').trim(),
+        parking_instructions: (h.parking_instructions || '').trim(),
+        entry_instructions: (h.entry_instructions || '').trim(),
+        trash_day: h.trash_day || '',
+        local_tips: (h.local_tips || '').trim(),
+        guest_welcome_message: (h.guest_welcome_message || '').trim(),
+        default_visibility: prefs.default_visibility || h.default_visibility || 'members',
+        default_guest_pass_hours: Number(prefs.default_guest_pass_hours || h.default_guest_pass_hours || 48),
+        preferences: { notifications },
+      };
     } catch (error: unknown) {
       if (revision !== loadGeneration.current) return;
       setLoadError(failureMessage(error, 'Home settings could not be loaded. Please try again.'));
@@ -155,12 +176,11 @@ export default function HomeSettingsTab({
 
   // Save all settings
   const handleSave = async () => {
-    if (loading || loadError || saving || !canEdit) return;
+    if (loading || loadError || saving || !canEdit || !loadedSettings.current) return;
     setSaving(true);
     setSaveMsg('');
     try {
-      // Save the complete draft in the existing settings transaction.
-      await api.homeProfile.updateHomeSettings(homeId, {
+      const draft = {
         name: homeName.trim() || null,
         home_type: homeType,
         house_rules: houseRules.trim(),
@@ -180,7 +200,14 @@ export default function HomeSettingsTab({
             guest_pass: notifGuestPass,
           },
         },
-      } as Record<string, any>);
+      };
+      // Omit untouched values so another editor's unrelated changes survive.
+      const changes = Object.fromEntries(Object.entries(draft).filter(
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(loadedSettings.current?.[key]),
+      ));
+      if (Object.keys(changes).length > 0) {
+        await api.homeProfile.updateHomeSettings(homeId, changes);
+      }
 
       // The Home reload below remounts this tab, so confirm with a toast.
       toast.success('Settings saved');
