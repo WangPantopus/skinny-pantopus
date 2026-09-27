@@ -50,8 +50,12 @@ function EmergencyContent() {
     try {
       const res = await api.homeProfile.getHomeEmergencies(homeId);
       if (request !== generation.current) return;
+      if (!Array.isArray(res?.emergencies)
+        || res.emergencies.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
+        throw new Error('Invalid emergency information response');
+      }
       setLoadError(null);
-      setItems((res?.emergencies || []) as HomeEmergency[]);
+      setItems(res.emergencies as HomeEmergency[]);
     } catch (err: unknown) {
       if (request !== generation.current) return;
       setLoadError('Current emergency info could not be loaded. Retry to check current information.');

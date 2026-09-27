@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.homes
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * DTOs for the Home Emergency info endpoints under
@@ -41,7 +42,15 @@ data class HomeEmergencyDto(
 @JsonClass(generateAdapter = true)
 data class GetHomeEmergenciesResponse(
     val emergencies: List<HomeEmergencyDto>,
-)
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<HomeEmergencyDto?> = emergencies
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid emergency information response")
+        }
+    }
+}
 
 /** `POST`/`PUT` emergency body. */
 @JsonClass(generateAdapter = true)
