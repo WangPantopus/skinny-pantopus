@@ -488,7 +488,9 @@ Web fixes are served the same way with HMR (no restart).
     - Native #3 (Guests tab → guest-pass manager) and #4 (health "View maintenance" → Issues), in one build window after batch 35. **#3 touches `RootTabScreen.kt`**, which batch 35 also changes, so it needs rebasing or proof against the new master.
     - Then Stream 2 makes the flaky `TokenAcceptViewModelTests` test deterministic, changing only the existing test.
 - **Stream 3** (chat, social, scheduling, Beacons, creator/business): session **"fix(native): live chat keeps working after a token refresh; Android reactions update in place"** (successor). Its state is `docs/workstreams/03-accounts-social.md` → CURRENT RESUME.
-  - **Open:** #552, which goes in batch 35.
+  - **Open:** #552 (batch 35); #557 (new-post notices; batch 36 candidate, reviewed OK, green).
+  - **Coming** (message received before 02:12:44Z): a small iOS PR in `ChatConversationViewModel`. An open chat thread stops getting live messages after switching tabs away and back: the teardown runs on disappear, and `load()` early-returns on reappear. It was reproduced on master-equivalent iOS code.
+  - **Slots:** Stream 3 used slot 1 until 02:12:30Z. Stream 2 holds heavy (from about 02:08Z, about 45 min of builds) and then takes slot 1.
   - **Blocked by user decisions:** S3-22/62/26.
 - **Older idle sessions** also appear in ListAgents. Don't message them: "Stream 2 Mail journey completion", "fix(web): connect booking follow-up and rebooking actions", `stream1-peer-takeover-d2cb25-ab`, `stream2-mail-journey-18b50a-e0`, `stream3-peer-takeover-d8df28-9f`.
 - **Message conventions:**
