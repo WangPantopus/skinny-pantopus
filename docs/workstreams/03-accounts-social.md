@@ -28,7 +28,8 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 
 ### Runtime state (isolated only)
 - Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit off since 23:25:54Z; upload query/size logging since 00:14:15Z), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
-- Fixture S59 (Review `e9fdca7a` + the business `User` rating fields) kept; exact reverts in the manifest. F10 (`audience_profile` for the Member) kept.
+- Fixture S59 (Review `e9fdca7a` + the business `User` rating fields) kept; exact reverts in the manifest.
+- **End-of-audit reverts done:** chat-audit mode off (23:25:54Z); F10 (`audience_profile` for the Member) reverted with its recorded SQL at 2026-09-27T00:36:21Z (manifest `revertedAt`); storage shim off; emulator reverse is `tcp:64531 tcp:64531`. API and web stay off master (migration not approved). CA0–CA11 and F13 kept.
 - Simulator 0AE16FA0: final build `520ed06cf` installed, Owner signed in, one test photo in its library; the paid flag was removed. Emulator-5554: APK `2b9f468f…`, Owner signed in.
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
