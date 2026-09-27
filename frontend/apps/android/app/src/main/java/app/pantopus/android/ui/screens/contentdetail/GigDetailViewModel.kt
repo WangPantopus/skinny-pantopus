@@ -2767,7 +2767,7 @@ class GigDetailViewModel
                                     iconTone = ContentDetailModule.Callout.IconTone.Success,
                                     title = awardWinnerName(gig, bids)?.let { "Awarded to $it" } ?: "Awarded",
                                     subtitle =
-                                        listOfNotNull(relativeAge(gig.acceptedAt)?.let { "$it ago" }, "bidding now closed")
+                                        listOfNotNull(relativeAgo(gig.acceptedAt), "bidding now closed")
                                             .joinToString(" · "),
                                 ),
                             )
@@ -2907,6 +2907,9 @@ class GigDetailViewModel
                     else -> "${miles.toInt()} mi"
                 }
             }
+
+            /** "3m ago", or "just now" under a minute (never "now ago"). */
+            private fun relativeAgo(iso: String?): String? = relativeAge(iso)?.let { if (it == "now") "just now" else "$it ago" }
 
             private fun relativeAge(iso: String?): String? {
                 if (iso.isNullOrEmpty()) return null
