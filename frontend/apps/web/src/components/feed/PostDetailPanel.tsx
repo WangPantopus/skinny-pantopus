@@ -183,12 +183,15 @@ export default function PostDetailPanel({
         }
       }
 
-      const nextCommentCount = comments.length + 1;
-      setComments((prev) => [...prev, nextComment]);
+      const alreadyAdded = comments.some((comment) => comment.id === nextComment.id);
+      const nextCommentCount = comments.length + (alreadyAdded ? 0 : 1);
+      setComments((prev) => prev.some((comment) => comment.id === nextComment.id)
+        ? prev.map((comment) => comment.id === nextComment.id ? nextComment : comment)
+        : [...prev, nextComment]);
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
-      showToast(uploadFailed ? 'Comment posted, but image upload failed' : 'Comment posted');
-      return true;
+      showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
+      return !uploadFailed;
     } catch (err) {
       console.warn('Failed to add comment', err);
       showToast('Failed to add comment');
