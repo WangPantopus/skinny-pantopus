@@ -107,9 +107,9 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  // Returning users visiting the root land on their Place (the default
-  // landing for the authed app).
-  if (pathname === '/' && isAuthenticated) {
+  // Resolve both app entry points before rendering the app router. The /app
+  // server-component redirect can otherwise change its hook order mid-render.
+  if ((pathname === '/' || pathname === '/app') && isAuthenticated) {
     return NextResponse.redirect(new URL('/app/place', req.url));
   }
 
