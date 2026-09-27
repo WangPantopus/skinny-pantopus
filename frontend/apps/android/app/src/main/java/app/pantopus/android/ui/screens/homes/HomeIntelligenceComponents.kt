@@ -313,11 +313,12 @@ private fun healthTint(score: Int): Color =
  * Map the backend's `topAction.route`
  * (`backend/services/homeHealthService.js:129`) onto a dashboard action
  * id. `/dashboard` targets the checklist card directly below, so it
- * renders no chip.
+ * renders no chip. The maintenance score counts open Home issues, so its
+ * chip opens the Issues list.
  */
 fun healthActionId(route: String): String? =
     when (route.substringAfterLast('/')) {
-        "maintenance" -> "view_maintenance"
+        "maintenance" -> "view_issues"
         "bills" -> "view_bills"
         "emergency" -> "view_emergency"
         "members" -> "add_member"

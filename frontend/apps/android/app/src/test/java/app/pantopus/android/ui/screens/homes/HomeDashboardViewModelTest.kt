@@ -476,7 +476,7 @@ class HomeDashboardViewModelTest {
 
     @Test
     fun top_action_route_maps_to_a_dashboard_action_id() {
-        assertEquals("view_maintenance", healthActionId("/homes/h1/maintenance"))
+        assertEquals("view_issues", healthActionId("/homes/h1/maintenance"))
         assertEquals("view_bills", healthActionId("/homes/h1/bills"))
         assertEquals("view_emergency", healthActionId("/homes/h1/emergency"))
         assertEquals("add_member", healthActionId("/homes/h1/members"))

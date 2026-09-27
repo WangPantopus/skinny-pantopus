@@ -465,6 +465,7 @@ struct HomeDashboardView: View {
             "view_bills": { onOpenBills?() },
             "view_polls": { onOpenPolls?() },
             "view_maintenance": { onOpenMaintenance?(homeId) },
+            "view_issues": { onOpenIssues?(homeId) },
             "pets": { onOpenPets?(homeId) },
             "calendar": { onOpenCalendar?(homeId) },
             "view_docs": { onOpenDocs?(homeId) },

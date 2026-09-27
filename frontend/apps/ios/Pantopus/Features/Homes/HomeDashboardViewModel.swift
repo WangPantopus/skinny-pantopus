@@ -244,7 +244,8 @@ final class HomeDashboardViewModel {
             "track_bill": "finance.manage", "track_package": "packages.edit", "log_package": "packages.edit",
             "add_pet": "home.edit", "create_poll": "home.edit", "send_mail": "mailbox.view",
             "add_member": "members.view", "view_bills": "finance.view", "view_polls": "home.view",
-            "view_maintenance": "maintenance.view", "pets": "home.view", "calendar": "calendar.view",
+            "view_maintenance": "maintenance.view", "view_issues": "maintenance.view", "pets": "home.view",
+            "calendar": "calendar.view",
             "view_docs": "docs.view", "view_emergency": "sensitive.view", "view_packages": "packages.view",
             "view_tasks": "tasks.view", "view_claims": "ownership.view"
         ]

@@ -398,7 +398,7 @@ final class HomeDashboardViewModelTests: XCTestCase {
     }
 
     func testTopActionRouteMapsToADashboardActionId() {
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/maintenance"), "view_maintenance")
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/maintenance"), "view_issues")
         XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/bills"), "view_bills")
         XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/emergency"), "view_emergency")
         XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/members"), "add_member")
