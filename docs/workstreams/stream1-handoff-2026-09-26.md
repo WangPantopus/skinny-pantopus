@@ -454,6 +454,8 @@ Web fixes are served the same way with HMR (no restart).
 ## 10. Peers (SendMessage; list sessions with ListAgents)
 
 - **Stream 2** (Mail, Home, Guests, Place): session **"Stream 2 handoff takeover"**, a successor that started about 00:20Z. Its written state is `docs/workstreams/02-home-household.md` → CURRENT RESUME.
+  - In a message received before 01:38:56Z, Stream 2 said its user approved all five of its §3A items, and their PRs come one at a time. The first is the backend phone-escrow refusal.
+  - It will also make the flaky `TokenAcceptViewModelTests` test deterministic, changing only the existing test.
 - **Stream 3** (chat, social, scheduling, Beacons, creator/business): session **"fix(native): live chat keeps working after a token refresh; Android reactions update in place"** (successor). Its state is `docs/workstreams/03-accounts-social.md` → CURRENT RESUME.
   - **Open:** #552, which goes in batch 35.
   - **Blocked by user decisions:** S3-22/62/26.
