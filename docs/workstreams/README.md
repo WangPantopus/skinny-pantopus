@@ -2,23 +2,25 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
-> **UPDATE 2026-09-27T00:12Z: the Stream 1 session is still active and owns the queue.** It hands off after batch 35 merges.
+> **UPDATE 2026-09-27T01:00Z: Stream 1 is handing off.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). Its §0 gets the post-batch-35 state.
 > - **Merged:**
->   - batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540) at 2026-09-26T23:12:01Z → master `d358dbc83` (#538, #535, #536, #537);
->   - batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) at 2026-09-27T00:08:50Z → master `f7f51eae4` (#543, #539, #541, #542).
-> - **Runtime:** the Stream 1 runtime tree equals master `f7f51eae4`. The backend was SIGINT-restarted at 00:09:22Z (pid 72063) for #543, and `/api/hub` returns 200. There are no new migrations (ledger 92).
-> - **Batch 34 = [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551)**, queued at 00:11:08Z, tip `fadf08c62e089049319b5e1e744aa92b20023e7e`. Merge order: S2 #544, S3 #545, S2 #547, S1 #549. It is web and Android only, with no backend change.
-> - **Batch 35 (next), once each head's own CI is green:**
->   - S1 [#548](https://github.com/WangPantopus/skinny-pantopus/pull/548) `e46391aa6`: native helper dock + `/start` reply. It is **backend**, so restart the runtime after it merges.
->   - S1 [#550](https://github.com/WangPantopus/skinny-pantopus/pull/550) `a2a3f381f`: Android tab re-tap + Gigs door.
-> - **User decisions (2026-09-26, Stream 1):**
->   - Android Gigs door: "Always open the list" (#550).
->   - Tab re-tap: "Go back to the tab's start" (#550).
->   - Started-task cancel: "Honest wording only", with no policy change (#549).
-> - **Slots (00:12:24Z):**
->   - Stream 3 holds heavy (since 00:03:40Z), slot 1 (sim 0AE16FA0) and slot 3 (emulator-5554).
->   - Stream 2 holds slot 2 (emulator-5556).
->   - Slot 4 is free, and Stream 1 holds nothing.
+>   - batch 32 #540 (23:12:01Z → `d358dbc83`);
+>   - batch 33 #546 (2026-09-27T00:08:50Z → `f7f51eae4`);
+>   - batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → **`73b98f6b6`**: S2 #544, S3 #545, S2 #547, S1 #549).
+> - **Batch 35 (being built once all heads are green):**
+>   - S1 #548 + #553 (stacked; backend);
+>   - S1 #550, #554 (Android);
+>   - S1 #555 (backend);
+>   - S3 #552 (native).
+>
+>   It shares `RootTabScreen.kt` (#550/#552), which is proven clean. Restart the runtime after it merges.
+> - **New Stream 1 fixes:**
+>   - #553: native task edit/reschedule and iOS confirm showed false errors (raw PostGIS strings in replies), and reschedule notices were never delivered (invalid `notification_context_type`).
+>   - #554: Android edit moved tasks to 0,0.
+>   - #555: saved-search task alerts were never delivered (same enum cause, found with Stream 3).
+> - **Needs a user decision (HIGH):** the native Hub "Post task" (quick-post V1) creates new tasks at 0,0 on both apps. It was reproduced on Android; the handoff §3.2 has the options.
+> - **Runtime:** tree = master `73b98f6b6`, backend pid 83519 (00:52:25Z), `/api/hub` 200.
+> - **Slots:** Stream 1 holds nothing.
 
 - **Who runs the queue:** this Stream 1 session stopped at the user's request. **The next Stream 1 session runs batch 32** and all later batches. Its takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and its prompt is [docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).
 - **Integration (Stream 1 queue):**

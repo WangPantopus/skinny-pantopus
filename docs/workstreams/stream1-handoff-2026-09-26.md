@@ -1,24 +1,12 @@
-# Stream 1 handoff — 2026-09-26 (state as of 22:08Z)
+# Stream 1 handoff (final): 2026-09-27
 
-> **UPDATE 2026-09-27T00:12Z: the Stream 1 session is still active and owns the queue.** It hands off after batch 35 merges.
-> - **Merged:**
->   - batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540) at 2026-09-26T23:12:01Z → master `d358dbc83` (#538, #535, #536, #537);
->   - batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) at 2026-09-27T00:08:50Z → master `f7f51eae4` (#543, #539, #541, #542).
-> - **Runtime:** the Stream 1 runtime tree equals master `f7f51eae4`. The backend was SIGINT-restarted at 00:09:22Z (pid 72063) for #543, and `/api/hub` returns 200. There are no new migrations (ledger 92).
-> - **Batch 34 = [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551)**, queued at 00:11:08Z, tip `fadf08c62e089049319b5e1e744aa92b20023e7e`. Merge order: S2 #544, S3 #545, S2 #547, S1 #549. It is web and Android only, with no backend change.
-> - **Batch 35 (next), once each head's own CI is green:**
->   - S1 [#548](https://github.com/WangPantopus/skinny-pantopus/pull/548) `e46391aa6`: native helper dock + `/start` reply. It is **backend**, so restart the runtime after it merges.
->   - S1 [#550](https://github.com/WangPantopus/skinny-pantopus/pull/550) `a2a3f381f`: Android tab re-tap + Gigs door.
-> - **User decisions (2026-09-26, Stream 1):**
->   - Android Gigs door: "Always open the list" (#550).
->   - Tab re-tap: "Go back to the tab's start" (#550).
->   - Started-task cancel: "Honest wording only", with no policy change (#549).
-> - **Slots (00:12:24Z):**
->   - Stream 3 holds heavy (since 00:03:40Z), slot 1 (sim 0AE16FA0) and slot 3 (emulator-5554).
->   - Stream 2 holds slot 2 (emulator-5556).
->   - Slot 4 is free, and Stream 1 holds nothing.
+> **State at 2026-09-27T01:00Z.**
+> - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
+> - **Batch 35** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) is being built once its heads are green; a dry run at 00:55Z was clean. §2 has the exact state.
+>
+> A final update block is added after batch 35 merges (§0). Always re-verify live.
 
-This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3).
+This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
 
 **Read order:**
 1. `AGENTS.md`
@@ -31,6 +19,10 @@ This is the complete takeover note for the **Stream 1** session (Claude, peer of
 Every value here was checked live when written. Re-verify Git, PR, CI, slot and process state before acting on it.
 
 ---
+
+## 0. Final update (filled in after batch 35 merges)
+
+_Not yet written. If this section is still empty, the previous session stopped before batch 35 merged: follow §3.1._
 
 ## 1. Role and standing rules (from the user; still in force)
 
@@ -56,23 +48,26 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 **Verbatim user constraints.**
 - "You, yourself will be doing all the work … do not let any subagents do your work" (subagents only for web research).
-- "Never modify `/Users/yingpengwang/skinny-pantopus` or contact founder 64521/64522/backend 8000 or simulator EB5AD759."
+- "Never modify `/Users/yingpengwang/skinny-pantopus` or contact founder 64521/64522/backend 8000 or simulator EB5AD759." Reading files there is fine: `build-android-static.sh` reads the Stripe publishable key from it.
 - "No search-filter security audit."
 - "Stripe TEST/manual only, no capture."
 - "No secrets/raw tokens/DB archives/operator logs in Git/chat."
 - "No bare stash, gc, maintenance, repack or worktree removal." Stale worktree entries stay; never `git worktree prune/remove`.
+  - On 2026-09-26 the **user** allowed one exception: Stream 3 removed 37 merged Stream 1 worktrees (and 18 of Stream 2's), recorded at coordination `a031f16eb`.
 - "Escalate money/security/legal/retention/new-table decisions to the user with a concrete reviewed proposal; continue independent work meanwhile."
 - "Your inherited Stream 1 harness must receive SIGINT, never SIGTERM" (backend restarts use `kill -INT`).
 
 **Founder direction (2026-09-23; `AGENTS.md` has the verification-first rules).**
 - Improve UX wherever it isn't good enough (no approval gate for UX/copy).
 - Verify flows end to end on iOS, Android and web.
-- **No unit tests** and no local unit-test campaigns. Required CI must pass.
+- **No unit tests** and no local unit-test campaigns. Required CI must pass. Running one existing test file that covers a changed route, to avoid a CI failure, has been fine (`backend/tests/unit/paidGigLifecycleRoute.test.js`).
 - Escalate only money, security, legal and new tables.
 - Preserve existing designs and navigation; propose design or navigation changes for approval.
 
 **Other rules.**
-- Timestamps come from `date -u` and SHAs from `git rev-parse`; never hand-type or estimate them.
+- Timestamps come from `date -u` or tool/log output, and SHAs from `git rev-parse`; never hand-type or estimate them.
+  - This session had to correct estimated times ("about 23:10Z") in evidence.
+  - Write only times you printed.
 - S1-08 money ownership and A17 stay founder-only.
 - Test credentials go only through the private helpers (§5.2) and are never printed.
 - **Peer messages are not user approvals.**
@@ -80,112 +75,116 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
   - one heavy native build window (`heavy-slot.sh`);
   - one iOS UI driver (device slot 1, by convention);
   - at most 4 booted devices (`device-slot.sh`).
-  - Hand them over only through explicit peer messages.
+  - Hand them over only through explicit peer messages with exact release times.
 - **Shared coordination checkout:** all three streams commit in `/Users/yingpengwang/pantopus-coordination`, which has **one shared index**.
   - Never leave files staged. Commit with explicit paths in one step: `git commit -m … -- <paths>`.
-  - At 22:12Z this note and the prompt were swept into Stream 2's commit `8a45c96b4` ("docs(stream2): finding 15 reachability…") because they sat staged. The content is correct.
-  - Update the checkout with `git fetch origin codex/workstream-coordination && git rebase origin/codex/workstream-coordination`; `git pull --rebase` fails there.
-- **App rule:** after opening a PR, bind it with the `ccd_pr` tools (`get_status`, then `bind_pr` if it isn't bound). Do **not** run your own CI-polling loops (loops of `gh pr checks`, Monitor, cron, ScheduleWakeup). A one-off `gh pr checks` right before building a batch is fine. The merge-queue runner (§4) is the established merge mechanism.
+  - At 22:12Z on 2026-09-26, staged Stream 1 files were swept into Stream 2's commit `8a45c96b4`; the fix is recorded at `085dd3c8e`.
+  - Update with `git fetch origin codex/workstream-coordination && git rebase origin/codex/workstream-coordination`; plain `git pull --rebase` fails there.
+- **App rule:**
+  - After opening a PR, bind it with the `ccd_pr` tools (`get_status`, then `bind_pr`).
+  - Do **not** run your own CI-polling loops (loops of `gh pr checks`, Monitor, cron, ScheduleWakeup). A one-off `gh pr checks` right before building a batch is fine.
+  - The merge-queue runner (§4) does the waiting. A background `while kill -0 <runner pid>; do sleep 30; done` wait on the runner process (not on CI) is how this session learned a batch had merged.
 
-## 2. State at handoff (22:08Z)
+## 2. State (2026-09-27T01:00Z)
 
-**Master.** `f885e0623628909381f8babd471ade8706082c77` (batch 31 [#534](https://github.com/WangPantopus/skinny-pantopus/pull/534) merged at 20:09:33Z).
+**Master.** `73b98f6b6102e44cf3dd7424c9bd0f613a91feeb`: batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) merged at 2026-09-27T00:46:55Z. It holds S2 #544 (Android Today pull-to-refresh), S3 #545 (web invoice PDF / paid checkout error / Audience inbox tab), S2 #547 (web Home calendar bill dates) and S1 #549 (web started $0 cancel copy). No backend change.
 
-**Merge queue.** Empty and stopped. `/private/tmp/pantopus-tools/merge-queue/log.txt` ends with "20:09:33 QUEUE STOP", and no `run.sh` process is running.
+**Batch 35: to build once these heads are green.**
+- At 00:54:55Z #548 and #550 were green; #552, #553, #554 and #555 were running CI.
+- A dry-run chain on `73b98f6b6` (00:55Z, tip `a58163421`, not pushed) was clean. All §4 checks passed, including the three special files below.
 
-**Open PRs for batch 32.** CI at 22:12:27Z (one-off `gh pr checks`):
-- #538: **"CI OK" pass** (6 pass, 5 skipped).
-- #535: 2 checks pending.
-- #536: 3 checks pending.
-- #537: 1 check pending.
-
-Re-check each PR before batching.
-
-| PR | Stream | Head | Scope | Evidence | Stream 1 review |
+| PR | Stream | Head | Scope | Bundle seal (files) | Review |
 |---|---|---|---|---|---|
-| [#535](https://github.com/WangPantopus/skinny-pantopus/pull/535) fix(home): the Add guest form names the real Home and says what happens | 2 | `89be05af7` | native M02 Add guest truth fixes | bundle `20260926-stream2-add-guest-truth-r1`, MANIFEST `48869ca3e62a276085ee002fab27301253f77863c456f67aa6c94d905dcf7178` (76 files) | **not yet reviewed** |
-| [#536](https://github.com/WangPantopus/skinny-pantopus/pull/536) realtime after a token refresh | 3 | `36af1f3715c03610b234c3d3e6a65af1a18a09d9` | 3 existing files: Android `SocketManager.kt` and `ChatConversationViewModel.kt`, iOS `SocketClient.swift`. Merge-base `916627c18` (#532). | bundle `20260926-stream3-realtime-after-refresh-r1`, seal `13cf585ecf535ff4bb2dbb7910c61fa199c421b0fbec8a78d2679a40b0e98fc7` (25 files) | **not yet reviewed** |
-| [#537](https://github.com/WangPantopus/skinny-pantopus/pull/537) fix(ios): task questions update live on the task screen | 1 | `047b58ba22895807090f9fe34ca6cd05322eeb14` | 1 file: iOS `GigDetailViewModel.swift` (+3 lines). Base `448ee8b4a`; master hasn't touched the file since. | bundle `20260926-stream1-ios-gig-qa-live-r1`, MANIFEST `0cde42d18e962b21a1a120e4466b25a8092faec88ce3f7816f465413e057ed74` (18 files) | own PR (bound in this session) |
-| [#538](https://github.com/WangPantopus/skinny-pantopus/pull/538) fix(residency): a guest or service provider's letters and passes stop verifying | 2 | `09ee447b875f45f8de2d8d48d0ecd08967659b42` | **backend**, 2 files: `backend/services/residencyClaimService.js`, `residencyLetterService.js`. **Security**, user-approved decision 2a. On master `f885e0623`. | bundle `20260926-stream2-residency-guest-role-r1`, MANIFEST `69a0cf6c0594a04232036fdb74e8526ab6da19134f9b8d32e24852194c0e4125` (14 files) | **not yet reviewed** |
+| [#548](https://github.com/WangPantopus/skinny-pantopus/pull/548) | 1 | `e46391aa6927fba633c1da4ed1ba0652d3b18e0e` | iOS+Android: the helper starts from the dock; `/start` reply fix (**backend**); $0 delivery copy. Base `f885e0623`. Its iOS `GigDetailViewModel.swift` also got #537 on master: prove the tip's diff for that file equals master's delta. | `20260926-stream1-native-helper-dock-r1` `25ad4e68…` (48) | own |
+| [#553](https://github.com/WangPantopus/skinny-pantopus/pull/553) | 1 | `bfd879dae6f97a6222c9b04ba37a8272589aecde` | **stacked on #548** (its head contains #548's 2 commits); `backend/routes/gigs.js` only. Edit/reschedule/mark-completed/confirm replies through `savedGigReply`, plus the reschedule notice's context type (**backend**). | `20260927-stream1-gig-write-replies-r1` `1d082ae3…` (93) | own |
+| [#550](https://github.com/WangPantopus/skinny-pantopus/pull/550) | 1 | `a2a3f381f69e70815ed68113afa0a9bfc0ae1db7` | Android `RootTabScreen.kt`: tab re-tap + Gigs door (user decisions) | `20260926-stream1-android-tab-nav-r1` `9de2523c…` (23) | own |
+| [#554](https://github.com/WangPantopus/skinny-pantopus/pull/554) | 1 | `1e3ed71f847cb3cd2299cf25d7cfcefa0881b586` | Android edit keeps the task's location (`PostGigV1ViewModel.kt`, `GigDtos.kt`) | `20260927-stream1-android-edit-location-r1` `d482bdbc…` (27) | own |
+| [#555](https://github.com/WangPantopus/skinny-pantopus/pull/555) | 1 | `9e62e9aefd4e99f3f13ca882f369eeed4091e23e` | **backend**, 1 file: saved-search task alerts use a valid notification context (they were all dropped). Stream 3 found it. | `20260927-stream1-saved-search-alerts-r1` `2b29d13f…` (11) | own |
+| [#552](https://github.com/WangPantopus/skinny-pantopus/pull/552) | 3 | `520ed06cfc319927d2ee5aaa77d5d3ad160c37d6` | native, 12 files: S3-64 / S3-37 / S3-35 (user decision) / S3-59 + iOS Booking notifications Back | `20260926-stream3-native-dead-controls-r1` `33d6a0c9…` (68) | **reviewed OK**: bundle verified; merge-tree clean against master and against #550 |
 
-- **Shared files:** #536 touches the shared socket layer that the task detail uses. None of the four PRs shares a file with another by their descriptions; confirm it with the pairwise check.
-- **#538 is a backend change.** After batch 32 merges, restart the Stream 1 backend (§5.3).
-- **#536 verification:**
-  - Android APK `51d5ffc1` on emulator-5554: after a forced refresh, chat works, a reaction patches in place, and a task question arrives live.
-  - iOS dylib `d2644903` on sim 0AE16FA0: after an in-thread refresh, the next message arrives live. The old build showed nothing until reopen.
-  - Caveat from Stream 3: a 401 during the thread's *first* load doesn't reproduce the bug.
-- **Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
+- **Shared file:** #552 and #550 both change `RootTabScreen.kt` in different regions (the Beacon setup CTA near line 5373, and the bottom bar / Gigs door). Neither tip blob will equal a head blob, so check that each PR's hunks appear unchanged in `git diff origin/master <tip> -- …/RootTabScreen.kt`.
+- **Also proven:**
+  - `backend/routes/gigs.js` in the tip equals #553's head, because #553 contains #548.
+  - #548's iOS `GigDetailViewModel.swift` differs from #553's head only by master's #537 line.
+- **After batch 35 merges:** restart the Stream 1 backend (#548, #553 and #555 change the backend; no migrations), then mark the inventory rows merged.
 
-**Stream 1 work in flight.** Only #537. Its iOS before/after is done, the bundle is sealed and verified, the fixture is removed and the PR is bound. It just needs CI and batching.
+**Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
 
-**Runtime worktree.** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25`, branch `stream1/runtime-integration-20260925`, HEAD `1d3a5cfbf`. Its **tree equals master `f885e0623`**, and it's clean.
+**Runtime.**
+- The runtime worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25` (branch `stream1/runtime-integration-20260925`) has a **tree equal to master `73b98f6b6`** and is clean.
+- Backend pid **83519** (started 00:52:25Z, log `logs/backend-005225.log`), proxy 18138 pid 86966, Next 18139 pid 48094.
+- DB ledger: 92 migrations (= master).
+- `/api/hub` returned 200 as alice at 00:52:34Z.
 
-**Isolated DB.**
-- The ledger has master's 92 migrations. The last three (`20260924000100`, `20260924000200`, `20260926100000`) were applied by hand at 12:20:48Z, each with its ledger row; the inventory header has the details.
-- Batch 31 changed no backend or migration files, so no restart was needed.
-
-**Slots (checked 22:12:14Z).**
-- **Heavy:** held by **Stream 2** since 22:11:50Z for its 2b Android and iOS builds (about 20 min; its script auto-releases). Stream 2 then wants slot 1 / the iOS driver for about 20 min.
-- **Slot 1:** free. Stream 1 released it by 22:01:25Z after the #537 check; F4DBD47E is shut down.
-- **Slot 2:** Stream 2 (emulator-5556).
-- **Slot 3:** free. Stream 1 stopped emulator-5558 with `adb emu kill` (stopped by 22:12:12Z) and released the slot at 22:12:14Z.
-- **Slot 4:** free. Stream 3 released it for its handoff.
+**Slots (00:46:58Z).**
+- Stream 1 holds **nothing**.
+- Slot 2 is Stream 2 (emulator-5556). Slots 1, 3 and 4 are free, and heavy is free.
 
 **Devices.**
 - **iOS sim F4DBD47E** ("Pantopus Coord Tip Refresh"):
   - Shut down; the keychain holds **alice**.
-  - Its installed app is the **#537 build** (dylib `97af881c…`, source `047b58ba2` on master `448ee8b4a`). It **lacks #532's chat fixes and #533's accept-counter**, so rebuild from master before any other iOS check.
+  - Installed app: **#548 build**, dylib `739c3184…` from `e46391aa6`. It lacks #537's qa-update line.
+  - Rebuild from master before new iOS checks.
 - **Android emulator-5558** (AVD `Pantopus_Stream1_Start_R2`):
-  - The **89f97a01b** APK (`5ca23ce8…`) is installed, and alice is signed in.
-  - It lacks #532's Android chat changes, so rebuild from master before new checks.
+  - Stopped at 00:46:58Z; **alice** is signed in.
+  - Installed APK: **#554 build** `8fedfceda…` from `1e3ed71f8` (master `f7f51eae4` + #554).
+  - Rebuild from master after batch 35 for new checks.
 
 ## 3. Next actions, in order
 
-**3.1 Batch 32 = #535 + #536 + #537 + #538** (whichever are green; don't hold a green batch for a slow one).
-1. **One-off checks:** run `gh pr checks <n>` for each PR.
-   - A failed job that is a known flake (registry rate limit) gets rerun: `gh run rerun <runId> --failed`.
-   - A real failure goes back to its stream.
-2. **Review each PR:**
-   - Read the diff against its merge-base.
-   - Check the file scope matches the PR body.
-   - Check the bundle: `python3 /private/tmp/pantopus-stream1-runtime-20260925/tools/verify-bundle.py <bundleDir> <head> <manifestPrefix>`. Bundles live under the audits root (§7).
-   - For #538 (security), also check that the role check covers both call sites and leaks nothing new.
-3. **Build, verify and queue** the batch (§4). The batch number is **32**; the PR titles/bodies follow #534's format.
-4. **Tell the peers:**
-   - the batch PR number and tip;
-   - after merge, the merge time and new master.
-5. **After the merge:**
-   - mark #537's inventory row merged;
-   - merge master into the runtime worktree;
-   - **restart the backend for #538** (§5.3);
-   - update the hub docs and memory.
+**3.1 Finish the queue.**
+1. **Batch 34** merged at 00:46:55Z (`PR551 MERGED` in the runner log).
+2. **Batch 35 = #548, #553, #550, #554, #555, #552**, in that order, backend first. #553 goes after #548 because its head contains #548.
+   - One-off `gh pr checks` on each head (all must show "CI OK" pass).
+   - Build on the **new** master and verify exactly as §4. Exceptions:
+     - #553's files = `backend/routes/gigs.js` plus #548's files. Its tip blob for `gigs.js` must equal #553's head blob.
+     - `RootTabScreen.kt` is shared by #550 and #552 (see §2).
+     - #548's iOS `GigDetailViewModel.swift` also changed on master (#537): prove the tip's diff equals master's delta.
+   - Push `claude/coord-merge-batch-35`, open it (template #551/#546), bind, queue, start `run.sh`, and message both peers.
+   - Batch only green heads; don't hold a green batch for a slow one.
+3. **After batch 35 merges:**
+   - `git merge origin/master` in the runtime worktree.
+   - `kill -INT <backend pid>`, then `nohup bash start-backend.sh > logs/backend-$(date -u +%H%M%S).log 2>&1 &`.
+   - Check `/api/hub` returns 200 (re-login with `api.py login alice` if you get a 401).
+   - Mark #548/#550/#553/#554/#555 merged in the inventory, update the hub docs and memory, and message the peers.
 
-**3.2 Stream 2's upcoming work** (it continues in its own session and will send PRs):
-- **2b** (privacy, user-approved): native Add guest "What they can see" sections sent as `included_sections`. This needs heavy and the iOS driver; Stream 2 will ask.
-  - In a message received before 22:17:48Z, Stream 2 said its Android part passes (lint, Paparazzi re-record + verify, assemble) and that its 2b PR will be **stacked on #535**.
-  - Batch it together with #535 or after #535 merges. Its head then contains #535's commits, so check #535's files against #535's own head blobs and the 2b files against the 2b head.
+**3.2 Ask the user (product decision, HIGH): native "Post task" creates tasks at 0,0.**
+- **The defect:**
+  - The Hub's "Post task" on both apps opens the quick-post V1 form (Android `ChildRoutes.quickPostGig`, iOS `PostGigV1View` from `HubTabRoot`).
+  - It has only a free-text location, and it sends `latitude/longitude 0`. iOS does this by design: "the same fallback the V2 composer uses when it has no geocode".
+  - `POST /api/gigs` stores the coordinates as given, so such tasks are created at POINT(0 0) with no city: invisible in every neighbor's feed and map.
+- **Reproduced on the real Android app:** "1200 Main St, Vancouver, WA 98660" → POINT(0 0), POST 201 at 2026-09-27T00:38:25.430Z. Bundle `20260927-stream1-android-edit-location-r1/android/create-candidate/`. The inventory row is OPEN (high).
+- **Options to propose** (money/UX: geocoding uses Mapbox):
+  - **(A)** Geocode the typed address in the app before posting (CoreLocation `CLGeocoder` / Android `Geocoder`), and refuse to post without a result.
+  - **(B)** Open the existing geocoding composer (V2 / web-style picker) from "Post task". This is a navigation change.
+  - **(C)** Default to the poster's Home or current location, with the typed text as the label.
+  - **(D)** Also make the backend refuse a (0, 0) location on create and edit, so no client can do this again.
+- **Recommendation to give the user:** A + D. That is the smallest in-place repair, and it keeps the form's design.
 
-**3.3 Remaining Stream 1 inventory work.** All low; see the rows marked candidate/OPEN in the inventory.
+**3.3 Remaining Stream 1 inventory** (all low unless noted; each row in the inventory has details).
 - **Web:**
-  - `/app/offers` swallows a rejected request (`Promise.allSettled` + `catch {}`): OPEN (source), orphan page.
+  - `/app/offers` swallows a rejected request (OPEN, source; orphan page).
   - `/app/discover-hub` orphan page links.
-  - The Tasks map pins remote tasks at 0,0 (world zoom only).
   - Discover with no location stacks two notices.
-  - gigs-v2 keeps a stale change-orders 403 after an instant accept, and says "The owner selected you".
 - **Native:**
   - iOS Support Trains scope reads "none nearby" without device location.
-  - Android Nearby "Gigs" door restores the old task-detail stack (navigation decision → user approval).
-  - Android re-tapping the lit tab does nothing (navigation decision → user approval).
-  - The assigned helper's dock says "Bidding closed" while Start sits in the panel (iOS/Android).
-  - The delivery sheet talks about payment on $0 tasks.
-  - The Android proof-upload error blames the connection for a server 503.
   - Android Tasks feed Support Trains read (best-effort).
-- **Not run:** iOS Report post (needs a non-alice post fixture).
+  - iOS Report post: not run (needs a non-alice post fixture).
+- **New this session** (source-verified or seen on device):
+  - Native edits clear `exact_city/state/zip`. Proposal: the PATCH keeps them when the location object omits them.
+  - Native edit forms know 8 categories only ("Other" → Handyman on Android / none on iOS): a taxonomy decision.
+  - The Android edit form won't save a $0 "Flat" task, and says "We couldn't post your gig." in edit mode.
+  - The reschedule notice prints server-timezone time.
+  - The saved-search alert context type is fixed in #555. The same `'post'` bug in `services/postCreationHooksService.js:148` is Stream 3's; they have a local fix (`097e3e087`) awaiting their user's approval of an end-to-end write, likely for batch 36.
+- **Recommended audit** (the pattern behind #548 and #553):
+  - Any backend write that replies with a raw `select('*')` row can break native decoding. PostGIS `geography` columns become EWKB hex strings, and `to_jsonb(geography)` too.
+  - Scan other Stream 1 routes (listings, posts, offers) for `res.json({ …: <raw row> })` whose reply native decodes with a full DTO. Check the DTO's location type, and verify on device before changing anything.
+  - Also grep `createNotification({ … contextType:` for values other than `personal`/`business`.
+- **Preserved, not open:** native stop sheets on a started $0 task still show "Task amount $0.00 · Cancellation fee $0.00 · Review…". The user's "honest wording only" decision was applied to web (#549); native wording parity is a small follow-up.
 
-**3.4 Proposal the user may want** (money/policy, so **ask; don't change on your own**).
-- A poster cannot cancel a *started* task, even a free one: `STARTED_POLICY_REVIEW` in the `gig_stop_*` SQL (migrations `20260922020900`, `20260923000100`; gateway restriction covered by unit tests).
-- The dialog talks about fees on a $0 task, and the only way out is the later no-show report.
-- A possible proposal: a no-fee cancel for $0 started tasks, or at least $0-aware copy.
+**3.4 Keep integrating peer PRs.**
+- Stream 2 ("Stream 2 handoff takeover") and Stream 3 ("fix(native): live chat keeps working after a token refresh; Android reactions update in place") send "PR #N ready" with head, bundle/seal, scope and verification.
+- Reply with the review result, the bundle and merge-tree result, then the batch number, and later the merge time and new master.
 
 ## 4. Merge-queue / batch procedure (exact)
 
@@ -193,16 +192,19 @@ Re-check each PR before batching.
    ```
    git fetch -q origin master "+refs/pull/<n>/head:refs/remotes/pr/<n>" …
    ```
-2. **Checks:** CI is green on each exact head, and each bundle verifies (`verify-bundle.py`: seal prefix, recorded head == PR head, every file hash).
+2. **Checks:**
+   - CI is green on each exact head.
+   - Each bundle verifies: `python3 /private/tmp/pantopus-stream1-runtime-20260925/tools/verify-bundle.py <bundleDir> <head> <sealPrefix>`. That checks the seal prefix, recorded head == PR head, and every file hash. Bundles live under the audits root (§7).
+   - Read each diff against its merge-base and check the file scope matches the PR body.
 3. **Build the chain** on current master (object store only, no checkout):
    ```
    bash /Users/yingpengwang/pantopus-coordination/docs/workstreams/coordinator-state-2026-09-23/scratchpad/build-batch.sh origin/master <outFile> <n1> <n2> …
    ```
-   Then verify:
+   It prints `OK <pr> <head> <mergeCommit>` per PR and `TIP <sha>`. Then verify:
    - every head is an ancestor of the tip;
-   - `git diff --name-only origin/master <tip>` ⊆ the union of the PR file lists;
-   - each PR file's blob in the tip equals the PR head's blob. The exception is files master also changed since the PR's base: prove those equal master's own delta (`diff <(git diff pr/<n> <tip> -- f) <(git diff <prBase> origin/master -- f)`);
-   - list pairwise shared files, if any.
+   - `git diff --name-only origin/master <tip>` equals the union of each PR's `git diff --name-only $(git merge-base origin/master pr/<n>) pr/<n>`;
+   - each PR file's blob in the tip equals the PR head's blob. The exception is files master also changed since the PR's base, or files two PRs share: prove those hunks separately;
+   - list pairwise shared files.
 4. **Push:**
    ```
    git push origin "<TIP>:refs/heads/claude/coord-merge-batch-<N>"
@@ -215,20 +217,21 @@ Re-check each PR before batching.
    - the checks;
    - the Claude Code footer.
 
-   #534 and #531 are templates. Bind the batch PR with `ccd_pr`.
+   #551 and #546 are templates. Bind it with `ccd_pr`.
 6. **Queue it:**
    ```
    echo "<PR> <TIP>" >> /private/tmp/pantopus-tools/merge-queue/reviewed-heads.txt
    echo "<PR>" >> /private/tmp/pantopus-tools/merge-queue/queue.txt
    nohup bash /private/tmp/pantopus-tools/merge-queue/run.sh >/dev/null 2>&1 &
    ```
+   Start the runner only if `pgrep -f merge-queue/run.sh` is empty.
 7. **Runner behavior** (`run.sh`, runs from the coordination checkout):
    - It merges only when the PR head equals the reviewed head, the required check **"CI OK"** passes and mergeStateStatus is CLEAN/UNSTABLE/HAS_HOOKS. It uses `gh pr merge --merge --match-head-commit`.
    - **BEHIND:** it logs `MASTER_CHANGED` and waits. If master moves, rebuild the batch on the new master.
    - A changed head logs `REVIEW_REQUIRED`.
    - A failed or cancelled CI OK logs `CI_fail` once and waits: rerun the flake, or remove the PR from `queue.txt` by hand.
    - Each PR has a 4-hour timeout.
-   - Batch CI takes about 35–40 min; batch 31 took 19:32:03 → 20:09:33.
+   - Batch CI takes about 35–60 min: batch 33 took 23:33:45 → 00:08:50; batch 32 took 22:35:20 → 23:12:01.
 8. **After the merge:** `git diff --stat <old> <new> -- backend supabase` tells whether the runtime needs migrations and a restart.
 
 ## 5. Runtime (private, not in Git)
@@ -237,34 +240,34 @@ Re-check each PR before batching.
 
 | Piece | Where / what |
 |---|---|
-| Backend | real `backend/app.js` from the runtime worktree on **127.0.0.1:18132**. pid **43392**, started 12:21:05Z; log `logs/backend-122105.log`. `start-backend.sh` applies an `env -i` allowlist, an egress guard (loopback, api.stripe.com and the NOAA/Open-Meteo weather APIs only) and a Stripe guard (TEST key; capture, non-manual intents, transfers, payouts and refunds refused). Jobs and cron are off, and email is in log mode. |
-| Fault proxy | **127.0.0.1:18138** (`fault-proxy.cjs`, pid 86966): `/__fault/rules` (POST/GET/DELETE) and `/__fault/log?since=`. Helper `tools/fp.sh seq | add <id> <METHOD> <path-regex> [count] [status] | clear | log <sinceSeq> [filter]`; `log N` prints entries after N. |
+| Backend | real `backend/app.js` from the runtime worktree on **127.0.0.1:18132**. pid **83519**, started 2026-09-27T00:52:25Z; log `logs/backend-005225.log`. `start-backend.sh` applies an `env -i` allowlist, an egress guard (loopback, api.stripe.com and the NOAA/Open-Meteo weather APIs only) and a Stripe guard (TEST key; capture, non-manual intents, transfers, payouts and refunds refused). Jobs and cron are off, and email is in log mode. |
+| Fault proxy | **127.0.0.1:18138** (`fault-proxy.cjs`, pid 86966). Helper `tools/fp.sh seq \| add <id> <METHOD> <path-regex> [count] [status] \| clear \| log <sinceSeq> [filter]`. Record `fp.sh seq` before an action, then `fp.sh log <seq> <filter>`. |
 | Web | Next dev on **127.0.0.1:18139** (pid 48094), serving the runtime worktree with HMR. `/api` and `/socket.io` are rewritten to 18138. |
-| DB | Supabase stack `pantopus-stream1-resume-20260923` (Kong 64561, Postgres 64562). Read-only SQL: `./q.sh "select …"`. Fixture writes and cleanup: `docker exec -i supabase_db_pantopus-stream1-resume-20260923 psql -U postgres -d postgres -v ON_ERROR_STOP=1 -1 < file.sql`, preferably with a DO block that checks ROW_COUNT. |
-| Accounts | synthetic `sux_resume_alice` / `sux_resume_bob` / `sux_resume_dana` (ids `f9230c01-…-000000000001/2/3`), plus older Stream 1 fixtures `s1_sheet_r1_0/1/2`. No Homes exist. The only `StripeAccount` row belongs to `s1_sheet_r1_1`, so tips to alice, bob and dana return `CONNECT_REQUIRED`. The paid path is a boundary. |
+| DB | Supabase stack `pantopus-stream1-resume-20260923` (Kong 64561, Postgres 64562). Read-only SQL: `./q.sh "select …"` (in zsh, quote `"Gig"` inside double quotes). Fixture writes and cleanup: `docker exec -i supabase_db_pantopus-stream1-resume-20260923 psql -U postgres -d postgres -v ON_ERROR_STOP=1 -1 < file.sql`, with a DO block that checks ROW_COUNT. |
+| Accounts | synthetic `sux_resume_alice` / `sux_resume_bob` / `sux_resume_dana` (ids `f9230c01-0000-4000-8000-00000000000{1,2,3}`), plus older Stream 1 fixtures `s1_sheet_r1_0/1/2`. No Homes exist. The only `StripeAccount` row belongs to `s1_sheet_r1_1`, so the paid path is a boundary. |
 
 **5.2 Helpers.** Credentials come from a private fixture file and are never printed.
 - `python3 api.py login <actor>` stores `.tokens-<actor>.json` (0600).
-  - `python3 api.py <actor> <METHOD> <path> ['<json>']` makes a call. Set `LIM=200000` for full output.
-  - A `401 Invalid or expired token` means you should log in again.
+  - `python3 api.py <actor> <METHOD> <path> ['<json>']` makes a call. Set `LIM=200000` for the full body; the first line is the HTTP status.
+  - A `401 Invalid or expired token` means you should log in again. Tokens expire in about an hour, and a backend restart doesn't invalidate them.
+- **Task fixtures via API:**
+  - `POST /api/gigs` with `{"title","description","price":0,"category","engagement_mode":"instant_accept","location":{"mode":"custom","latitude":45.628,"longitude":-122.6739,"address":"1200 Main St, Vancouver, WA 98660","city":"Vancouver","state":"WA","zip":"98660"}}`.
+  - Then `POST /api/gigs/<id>/instant-accept '{}'` (bob), `POST /api/gigs/<id>/start '{}'` (bob), `POST /api/gigs/<id>/mark-completed '{"note":"…"}'` (bob).
+  - Confirm with `POST /api/gigs/<id>/complete '{"expectedReview":"<GET detail completion_review>"}'` (alice).
+  - Side effects to clean: `Notification` rows (task_accepted, gig_started, gig_completed, gig_confirmed, gig_rescheduled) and one `user_task_affinity` row per worker/category from mark-completed.
 - `node webcap.mjs <actor> <steps.json> <outDir>` drives headless Chrome through the real login.
-  - It reuses `.webstate-<actor>.json` (0600). The web login limiter is 10 per 15 min per IP.
-  - Step keys: `goto`, `click` (selector), `clickText` (exact), `clickRole {role,name,exact}`, `clickIn {within,text}`, `fill {selector,value}`, `fillPh {placeholder,value}`, `press`, `wait`, `waitText`, `waitUrl`, `eval`, `shot` (+ `scrollTo`, `full`), `timeout`.
+  - It reuses `.webstate-<actor>.json`. The login limiter is 10 per 15 min per IP.
   - Many `steps-*.json` examples sit in the folder.
 - `python3 tools/android-login.py <actor>` fills the Android login form on emulator-5558 without printing the password.
 - `bash tools/ios-pb.sh email <actor> | password | clear` puts a credential on sim F4DBD47E's pasteboard.
-  - Long-press the field → Paste, then **clear**.
-  - Tap "Not Now" on the system "Save Password?" prompt.
-- `WT=<worktree> EXPECTED=<sha> bash build-android-static.sh` runs ktlint, detekt and assembleDebug, and writes a receipt.
-  - It needs Stream 1 to **already hold** heavy; it never takes or releases it.
-  - The worktree must be clean with HEAD == EXPECTED. It refuses an APK containing `:8000`.
-  - APK: `<WT>/frontend/apps/android/app/build/outputs/apk/debug/app-debug.apk`.
+  - Tap the field twice → Paste, then **clear**.
+- `WT=<worktree> EXPECTED=<sha> bash build-android-static.sh` runs ktlint, detekt and assembleDebug, and writes a receipt (about 5 min).
+  - It needs Stream 1 to **already hold** heavy.
+  - It creates `local.properties` if missing and refuses a worktree `.env`.
 - `WT=<worktree> IOS_SOURCE=<sha> bash build-ios-held.sh` builds the arm64 simulator app.
-  - It needs a heavy owner that starts with `stream1:`, and the iOS subtree must equal IOS_SOURCE.
-  - Output goes to DD `/private/tmp/pantopus-stream1-ios-dd`, with a receipt at `evidence/ios-build-<sha9>.json`.
-  - ⚠ The DD is shared by all Stream 1 iOS builds; check the dylib hash before installing.
-- `bash snapshot.sh <out.json>` records row counts for every public table (`{"at":…,"counts":{…}}`) for baseline and cleanup diffs.
-- `python3 seal.py <dir> <branch> <commit> "<boundary>"` writes the MANIFEST.
+  - It needs a heavy owner that starts with `stream1:`, and outputs to DD `/private/tmp/pantopus-stream1-ios-dd` (shared by all Stream 1 iOS builds; check the dylib hash before installing).
+- `bash snapshot.sh <out.json>` records row counts for every public table, for baseline and cleanup diffs.
+- `python3 seal.py <dir> <branch> <commit> "<boundary>"` writes the MANIFEST and prints its sha256.
 
 **5.3 Bringing the runtime to a new master.**
 1. In the runtime worktree, `git merge origin/master` (restore any served PR copies first with `git checkout -- <files>`).
@@ -276,148 +279,188 @@ Re-check each PR before batching.
    ```
    Check `/api/hub` returns 200 as alice.
 
+**5.4 Serving a PR's backend fix for verification.**
+1. Copy the file into the runtime worktree.
+2. Check `git hash-object` equals the PR head's blob.
+3. SIGINT-restart the backend, and record the start time and log name in `SOURCE.txt`.
+4. Afterwards, `git checkout -- <file>` and SIGINT-restart again.
+
+Web fixes are served the same way with HMR (no restart).
+
 ## 6. Devices and simulator gotchas
 
 **Slots.**
 - `zsh /private/tmp/pantopus-tools/device-slot.sh acquire '<stream>: <device …>' | release '<label prefix>' | status`.
-  - ⚠ `release` removes **every** slot whose owner starts with the given prefix. Release with a precise prefix like `'stream1: iOS sim F4DBD47E'`, never bare `'stream1'`.
+  - The lowest free slot is assigned.
+  - ⚠ `release` removes **every** slot whose owner starts with the prefix. Use a precise prefix like `'stream1: iOS sim F4DBD47E'`.
 - `zsh /private/tmp/pantopus-tools/heavy-slot.sh acquire "<stream>: <purpose>" | release | status`.
-  - Heavy covers xcodebuild, gradle assemble/install, and simulator installs of a fresh build.
-  - The pid in the owner file is only the acquiring shell.
+  - Heavy covers xcodebuild, gradle assemble/install, and installing a fresh build.
 
 **Android emulator-5558** (AVD `Pantopus_Stream1_Start_R2`).
 - **Boot:** acquire a device slot first, then:
   ```
   /Users/yingpengwang/Library/Android/sdk/emulator/emulator -avd Pantopus_Stream1_Start_R2 -port 5558 -no-snapshot-load -no-boot-anim -gpu host -no-metrics -no-audio &
   ```
+  Wait for `getprop sys.boot_completed` = 1.
 - **Stop:** `adb -s emulator-5558 emu kill` (never pkill).
-- **UI:** `ANDROID_SERIAL=emulator-5558 python3 /private/tmp/pantopus-tools/aui.py dump | tap '<text>'` (substring match; tap by coordinates when a title also matches).
-- **Deep links:**
-  ```
-  adb -s emulator-5558 shell am start -a android.intent.action.VIEW -d "pantopus://gigs/<id>"
-  ```
-  Also `pantopus://listing/<id>` and `pantopus://post/<id>`.
+- **UI:** `ANDROID_SERIAL=emulator-5558 python3 /private/tmp/pantopus-tools/aui.py dump` shows boxes in real pixels (1080×2340). Tap with `adb shell input tap x y` at a box center.
+  - The bottom bar is at y≈2230 (Place x≈135, Today x≈405, Nearby x≈675, Mail x≈945).
+  - `adb shell input text` needs `%s` for spaces and no parentheses.
+- **Deep links:** `adb -s emulator-5558 shell am start -a android.intent.action.VIEW -d "pantopus://gigs/<id>"`.
+- **Journeys:**
+  - The Hub "Menu" (top-right ≡) opens the drawer: My Tasks, Settings → Log out.
+  - Task edit is My Tasks → "Edit details" (not the task menu).
+  - Reschedule is the task's ⋮ → Cancel task → "Reschedule instead" (no cancel happens until "Confirm cancel task").
+  - Log in with `tools/android-login.py`.
+- **Evidence:** `adb exec-out screencap -p > f.png` captures toasts. `adb logcat -c` before an action, then `adb logcat -d | grep JsonDataException` for decode errors.
 
 **iOS sim F4DBD47E.**
-- **Commands:** `xcrun simctl boot|shutdown F4DBD47E-ED21-4B85-941B-6B0C61DD5A31`; `xcrun simctl openurl … "pantopus://gigs/<id>"`. The router accepts `gig`/`gigs` and `listing`/`listings`; a bare `pantopus://settings` falls through to unknown, and only `settings/payments` routes.
-- **MCP control tool:** screenshots and taps with `device` always set. Taps are in points, 402×874 (screenshot px × 402/920 on the displayed image).
-- **Reopening the same task:** a deep link to a task that is already open does nothing. Go back first.
-- **Timing:** take a fresh screenshot after any scroll before tapping.
+- **Commands:** `xcrun simctl boot|shutdown F4DBD47E-ED21-4B85-941B-6B0C61DD5A31`; `xcrun simctl openurl … "pantopus://gigs/<id>"`.
+- **MCP control tool:** screenshots and taps with `device` set. Taps are in points: displayed px × 402/920.
+  - After a scroll, take a fresh screenshot before tapping; the content settles.
+  - The MCP screenshot shows toasts; `simctl io screenshot` frames miss them.
+- **Journeys:**
+  - The task ⋯ menu has "Reschedule task" for the owner of an assigned task.
+  - Owner confirm is in the Task progress panel ("Confirm completion" → alert Confirm).
+  - Task edit is Gigs → "My Tasks" link → "Edit details" → Save.
+- **Sign-out path:** avatar → scroll → Log out → Sign out. For sign-in, use "Not you?" and paste credentials via `ios-pb.sh`.
 - **iOS 26.5:**
-  - a sheet whose `@State` is set in the presenting action renders stale;
-  - a tap just above the keyboard can land on UIRemoteKeyboardWindow;
-  - sheet detents shift buttons, so confirm each tap through the proxy log;
-  - a hung `simctl boot` needs shutdown → boot.
-- **Panel reboots:** the app's simulator panel has rebooted a just-shut-down sim before. Re-check `simctl list devices` after shutdown.
-
-**Old builds.** Android APKs from before #509 show "Your account changed. Reopen this task" after a token refresh. It's fixed on master.
+  - a deep link to the already-open task does nothing (go back first);
+  - a hung `simctl boot` needs shutdown → boot;
+  - sheet detents shift buttons, so confirm each tap through the proxy log.
 
 ## 7. Evidence and inventory
 
-**Bundle root:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/` (private, never committed). All streams' bundles live here.
-- Each fix has a `RESULT.md` with before (master code) / after evidence, a source binding (`SOURCE.txt`) or build receipts, cleanup SQL, output and baseline diff, and a sealed `MANIFEST.json`.
+**Bundle root:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/` (private, never committed).
+- Each fix has:
+  - `RESULT.md` (before on master code / after);
+  - `SOURCE.txt` (git-generated binding of builds and served files);
+  - build receipts;
+  - `cleanup.sql` + `cleanup-output.txt` + `cleanup-diff.txt` against a `snapshot.sh` baseline;
+  - a sealed `MANIFEST.json`.
 - The PR body cites the seal.
 
-**Living inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`, 146 rows, unsealed by design.
-- Status legend: PASS / FIXED / REUSE / OPEN / BOUNDARY / ABSENT.
-- At handoff it has 61 PASS and 58 FIXED:
-  - 57 are merged — 44 say so in-row, and 13 plain-FIXED rows cite #425/#432/#433/#437/#438/#439/#447/#448/#454/#456, all merged (header note, 22:05:29Z);
-  - 1 is #537, open.
-- It also has 10 candidates, 1 OPEN, 5 notes, 2 routed, 2 BOUNDARY, 1 BY POLICY, 1 not run, 1 ABSENT (native listing Q&A) and 2 REUSE.
+**Living inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`, unsealed by design.
+- **Count:** 157 table rows (2026-09-27T00:50Z) with 61 PASS and 69 FIXED.
+  - The header's merge-state note says which FIXED rows are on master: #537 and #542 are merged, #549 is in batch 34, and #548/#550/#553/#554 go in batch 35.
+- **Open rows:**
+  - 2 OPEN: web `/app/offers`, and the native quick-post create at 0,0 (high);
+  - 9 candidates;
+  - 5 notes;
+  - 1 WON'T FIX (the Tasks map remote pins; Android upload-error copy WON'T FIX sits inside a mixed row).
+- **Also:** 1 POLICY KEPT, 2 routed, 2 BOUNDARY, 1 not run, 1 ABSENT (native listing Q&A), 1 REUSE.
 
 **Boundaries** (not verifiable here):
 - the Stripe paid path (Connect onboarding and capture);
-- posting a task through the UI (Mapbox geocoding);
+- posting a task through the web UI (Mapbox geocoding);
 - native delivery-proof photos (S3 upload → 503);
-- real devices and push.
+- real devices and push;
+- scheduled jobs (off in the runtime).
 
 **Unsealed bundle folders:**
 
 | Folder | Status |
 |---|---|
 | `…-domain-inventory-r1` | living, unsealed by design |
-| `…-web-map-remote-tasks-r1` | before-only notes for the 0,0 candidate |
-| `…-native-offers-failed-counts-r1`, `…-native-pulse-radius-banner-r1` | early drafts, superseded by sealed bundles. Check before reusing. |
+| `…-web-map-remote-tasks-r1` | before-only notes for the 0,0 WON'T FIX |
+| `…-native-offers-failed-counts-r1`, `…-native-pulse-radius-banner-r1` | early drafts, superseded by sealed bundles |
 
-## 8. What was done today (2026-09-26, UTC)
+## 8. What was done (2026-09-26 → 2026-09-27, UTC)
 
 **Batches merged:**
 
 | Batch (queue PR) | Master | PRs, in merge order | Merged at |
 |---|---|---|---|
-| 25 ([#499](https://github.com/WangPantopus/skinny-pantopus/pull/499)) | `dbd75332b` → `207eeb510` | 490 492 495 496 494 491 493 497 | 09:58:07Z |
+| 25 ([#499](https://github.com/WangPantopus/skinny-pantopus/pull/499)) | `dbd75332b` → `207eeb510` | 490 492 495 496 494 491 493 497 | 09-26 09:58:07Z |
 | 26 ([#513](https://github.com/WangPantopus/skinny-pantopus/pull/513)) | → `9ac4a7cdf` | 498 500 501 504 505 506 502 503 507 508 | 11:37:08Z |
 | 27 ([#517](https://github.com/WangPantopus/skinny-pantopus/pull/517)) | → `2e053fe9c` | 509 510 511 514 512 516 | 12:16:08Z |
 | 28 ([#525](https://github.com/WangPantopus/skinny-pantopus/pull/525)) | → `be33552e8` | 518 515 519 520 521 522 | 13:49:47Z |
 | 29 ([#526](https://github.com/WangPantopus/skinny-pantopus/pull/526)) | → `49b47e910` | 523 524 | 18:00:53Z |
 | 30 ([#531](https://github.com/WangPantopus/skinny-pantopus/pull/531)) | → `448ee8b4a` | 527 528 529 530 | 18:49:34Z |
 | 31 ([#534](https://github.com/WangPantopus/skinny-pantopus/pull/534)) | → `f885e0623` | 532 533 | 20:09:33Z |
+| 32 ([#540](https://github.com/WangPantopus/skinny-pantopus/pull/540)) | → `d358dbc83` | 538 535 536 537 | 23:12:01Z |
+| 33 ([#546](https://github.com/WangPantopus/skinny-pantopus/pull/546)) | → `f7f51eae4` | 543 539 541 542 | 09-27 00:08:50Z |
+| 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551)) | → `73b98f6b6` | 544 545 547 549 | 00:46:55Z |
 
-**User decisions.**
-- 1A–6A (09:48Z) are all merged:
-  - 2A #506, 5A #505, 6A #504 in batch 26;
-  - 1A #509 and 3A/4A #510 in batch 27.
-- **Decision A** (native buyers accept a seller's counter): the reply was first seen by 17:49:40Z. It shipped as #533 in batch 31.
+**User decisions** (AskUserQuestion, 2026-09-26):
+- 1A–6A (09:48Z) and decision A (17:49Z) are merged (see the earlier history in `01-gigs-payments.md`).
+- **Worktrees:** "Yes, clear all 37", done by Stream 3.
+- **Android Gigs door:** "Always open the list" (#550).
+- **Android tab re-tap:** "Go back to the tab's start" (#550).
+- **Started-task cancel:**
+  - First answer: "Keep rule, fix wording".
+  - I then corrected my own statement that leaving or a no-show report were still options after a start. They close too: `gig_stop_*` answers `STARTED_POLICY_REVIEW` for every action after `started_at`, and `noShowEligibility` refuses once `started_at` is set.
+  - The user then chose "Honest wording only", with **no policy change** (#549, web).
 
 **Stream 1 PRs** (bundle seal in brackets):
 
 | PR | What | Seal | Status |
 |---|---|---|---|
-| #509 | Android session marker | `51130b50` | merged |
-| #510 | owner inbox + "Your offer"/Withdraw | `52125117` | merged |
-| #511 | iOS offer Send with prefill | `6c323702` | merged |
-| #514 | Discover/Explore Map SSR Leaflet | `0a2cc509` | merged |
-| #518 | Manage Train signups failed + no-dates nudge | `ad6cc465` | merged |
-| #522 | web instant accept on `/app/gigs/:id` | `b45639bf` | merged |
-| #524 | web Reviewed step + reviewer names | `8786c694` | merged |
-| #527 | tip copy for `CONNECT_REQUIRED` | `9bb90479` | merged |
-| #533 | native accept-a-counter | `45e240d9` | merged |
-| **#537** | iOS task questions live | `0cde42d1` | **open** |
+| #537 | iOS task questions live (`gig:qa-update`) | `0cde42d1` | merged (batch 32) |
+| #542 | web worker panel after instant accept; no change-order error for bystanders; no payouts banner on $0 | `aac4dc3c` | merged (batch 33) |
+| #549 | web started $0 cancel dialog: honest wording | `9539de1b` | merged (batch 34) |
+| #548 | native helper dock "Start task" + `/start` reply (backend) + $0 delivery copy | `25ad4e68` | batch 35 |
+| #550 | Android tab re-tap + Gigs door | `9de2523c` | batch 35 |
+| #553 | edit/reschedule/confirm replies + reschedule notice (backend; stacked on #548) | `1d082ae3` | batch 35 |
+| #554 | Android edit keeps location | `d482bdbc` | batch 35 |
+| #555 | saved-search task alerts delivered (backend) | `2b29d13f` | batch 35 |
 
-**Audits sealed:**
-- **Free-task lifecycle** `20260926-stream1-free-task-lifecycle-r1` [`1855635d`, 154 files]:
-  - web, Android and iOS instant accept → start → complete → confirm → reviews/tips;
-  - helper "Leave assignment";
-  - the policy-blocked started-task cancel.
-  - Fixtures T1–T9 were removed at 18:16:15Z.
-- **Accept-counter** fixtures were removed at 18:51:16Z.
-- **#537 check:**
-  - before: master code, POST 201 at 21:57:53Z, no app request, "Questions (0)" until reopen;
-  - after: POST 201 at 22:00:15.827Z, refetch +77 ms, "Questions (2)" live;
-  - fixture removed at 22:01:12Z.
-  - Only auth rows (sessions, security events, DPoP JTIs) are left, and they are documented.
+**Defects found and fixed this session**, all reproduced on master code first:
+- Native **start** showed "Something went wrong" (#548).
+- Native **edit**, **reschedule** and iOS **confirm** showed it too (#553). The cause: raw PostGIS strings in the reply.
+- **Reschedule notices** were never delivered (#553; invalid `notification_context_type`).
+- **Saved-search task alerts** were never delivered (#555; same cause, pointed out by Stream 3).
+- **Android edit** moved tasks to 0,0 (#554).
+- The helper's dock said "Bidding closed" (#548).
+- Payment wording on $0 delivery (#548), the web worker panel (#542), and iOS Q&A live updates (#537).
 
 **Runtime and coordination.**
-- The isolated DB was brought to master's migrations at 12:20:48Z, and the backend was restarted (SIGINT) at 12:21Z. No backend change has merged since.
-- **Heavy-slot incident:** Stream 2's heavy lock sat idle for about 4.5 h while its session was stalled. With the **user's approval** (AskUserQuestion), Stream 1 took it over at 17:20:14Z, and Stream 2 agreed afterwards. If a peer holds a slot idle for hours, ask the user before taking it.
-- **Slot 1 hand-offs:** Stream 2 → Stream 3 at 21:46:29Z; Stream 3 → Stream 1 at 21:54:31Z; Stream 1 released it by 22:01:25Z.
+- The runtime followed master through batches 32 and 33. Backend SIGINT restarts happened for #538 (batch 32), for #543 at 00:09:22Z, and for the #553 checks (00:28:48Z, 00:41:41Z, back to master at 00:42:41Z).
+- **Slot hand-offs with Stream 3** this evening:
+  - heavy to Stream 3 at 00:03:40Z, back 00:29:39Z;
+  - Stream 1 heavy 00:31:11Z–00:39:07Z;
+  - slot 1 to Stream 1 at 00:21:02Z, back at 00:30:58Z;
+  - slot 4 Stream 1 00:17:45Z–00:46:58Z.
 
-## 9. Worktrees (`git worktree list`; checked 22:04Z)
+## 9. Worktrees (`git worktree list`, 2026-09-27T00:48Z)
 
-- **Not merged, keep:** `/private/tmp/pantopus-stream1-gig-qa-live` (#537).
 - **Runtime:** `stream1-peer-takeover-d2cb25` (tree == master).
-- **Merged into master, safe to ignore** (all under `/private/tmp/pantopus-stream1-*`):
-  - accept-counter, android-session, backend-views, batch11, gig-bidcount, ios-listing-link, ios-offer-send, listing-dock, manage-train, native-mylistings, native-mylists2, native-nav, native-pulse, native-questions, native-saved, native-wallet, pr425;
-  - tip-reason, web-discover, web-discover-ssr, web-explore-map, web-feed-card, web-gigs, web-hide-trades, web-instant-accept, web-listing-offers, web-location, web-mkt, web-mybids, web-mylistings, web-mypulse, web-pay, web-review-step, web-save-guard, web-saved-links, web-snapshot, web-tasks-map.
-- **Dirty, preserve** — `/private/tmp/pantopus-stream1-web-trade` (branch `claude/stream1-web-trade-modal-failure` at `dbd75332b`):
-  - It has an **uncommitted** change to web `marketplace/[id]/_components/TradeModal.tsx`: a failed load of "your listings" now shows `ErrorState` + Retry instead of "no listings".
-  - **Moot today:** the button that opens TradeModal (`marketplace/[id]/page.tsx:165`, `listing.open_to_trades && !isOwner`) never renders. #504 (decision 6A) found that no listing response carries `open_to_trades`, and it hid the create-form toggle.
-  - Keep the change as is (don't discard, stash or commit it) for when trades return.
-- **Stale entries whose folders are gone:** acctdel, native, native-bids-camera, noshow, offers, package-contract, package-native, reveal-address, verify-resume, web-groups, web-offers, web-resume. Five are unmerged older `wip/…` / `codex/…` branches from before this session. **Leave them**; worktree removal and prune are forbidden.
+- **Open PR branches, keep until merged:**
+
+  | Worktree (`/private/tmp/pantopus-stream1-…`) | PR |
+  |---|---|
+  | `native-helper-dock` | #548 |
+  | `gig-write-replies` | #553 |
+  | `android-tab-nav` | #550 |
+  | `android-edit-location` | #554 |
+  | `saved-search-alerts` | #555 |
+
+- **Merged, may be ignored:** `gig-qa-live` (#537), `web-worker-panel` (#542), `web-stop-copy` (#549).
+- **Dirty, preserve:** `/private/tmp/pantopus-stream1-web-trade` (branch `claude/stream1-web-trade-modal-failure` at `dbd75332b`).
+  - It has an **uncommitted** `TradeModal.tsx` failure-state change.
+  - It's moot while trades are hidden (no listing response carries `open_to_trades`).
+  - Don't discard, stash or commit it.
+- **Stale entries whose folders are gone** ("prunable"; leave them): acctdel, native, native-bids-camera, noshow, offers, package-contract, package-native, reveal-address, verify-resume, web-groups, web-offers, web-resume.
+- **Removal:** worktree removal needs the user's explicit OK. Stream 3 did the one allowed removal.
 
 ## 10. Peers (SendMessage; list sessions with ListAgents)
 
-**Stream 2** (session "Stream 2 Mail journey completion", `uds:/tmp/cc-socks/37889.sock` at handoff): Mail, Home and Guests.
-- Its user asked it to keep going, so it has no handoff yet. Its written fallback is `docs/workstreams/02-home-household.md` → CURRENT RESUME, with a runtime kit at `…/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/`.
-- **Open:** #535, #538. **Next:** 2b (native; needs heavy and the iOS driver).
+- **Stream 2** (Mail, Home, Guests, Place): session **"Stream 2 handoff takeover"**, a successor that started about 00:20Z. Its written state is `docs/workstreams/02-home-household.md` → CURRENT RESUME.
+- **Stream 3** (chat, social, scheduling, Beacons, creator/business): session **"fix(native): live chat keeps working after a token refresh; Android reactions update in place"** (successor). Its state is `docs/workstreams/03-accounts-social.md` → CURRENT RESUME.
+  - **Open:** #552, which goes in batch 35.
+  - **Blocked by user decisions:** S3-22/62/26.
+- **Older idle sessions** also appear in ListAgents. Don't message them: "Stream 2 Mail journey completion", "fix(web): connect booking follow-up and rebooking actions", `stream1-peer-takeover-d2cb25-ab`, `stream2-mail-journey-18b50a-e0`, `stream3-peer-takeover-d8df28-9f`.
+- **Message conventions:**
+  - Peers send "PR #N ready for your queue" with head, bundle and seal, file scope and verification.
+  - Reply with the review result, bundle verification and dry-run (merge-tree) result, then the batch number, and later the merge time and new master.
+  - Slot hand-offs are explicit messages with exact release times.
 
-**Stream 3** (session "fix(web): connect booking follow-up and rebooking actions", `uds:/tmp/cc-socks/39145.sock`): chat, social, scheduling and Beacons.
-- **Open:** #536.
-- **Handoff:** committed at coordination `6d039a691` (`docs/workstreams/03-accounts-social.md` → CURRENT RESUME; takeover prompt `docs/workstreams/NEXT-STREAM3-PROMPT-2026-09-26.md`; runtime kit `.pantopus-recovery/stream3-runtime-kit/`).
-- **Holds:** no device slot and no heavy lock. Its private runtime (API 18134, proxy 18130 in chat-audit mode, web 18131) stays up while its session lives.
-- **A successor Stream 3 session** will use ListAgents and ask who owns the queue. The answer is **the next Stream 1 session**, which runs batch 32 and later batches.
+## 11. Lessons from this session
 
-**Message conventions.**
-- Peers send "PR #N ready for your queue" with head, bundle and seal, file scope and verification.
-- Reply with the review result, bundle verification and dry-run (merge-tree) result, then the batch number, and later the merge time and new master.
-- Slot hand-offs are explicit messages with the exact release time.
+- **Seed fixtures with a location.** Native decode bugs only appear on tasks that have a location, and earlier audits used location-less fixtures, which hid the start, edit, reschedule and confirm errors.
+- **When a native action shows "Something went wrong" but the change is saved:**
+  - Android: check logcat for `JsonDataException`.
+  - iOS: compare the reply's JSON types with the DTO.
+  - `.catch(() => {})` around notification inserts hides real failures; check the backend log for "Failed to create notification".
+- **Before asking the user,** verify every option you describe against the code. A misdescribed option had to be re-asked (§8).
+- **A backend reply fix verifies with installed apps** (no rebuild), which makes before/after cheap: master backend → fix served → master again.
