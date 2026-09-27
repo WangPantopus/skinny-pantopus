@@ -37,6 +37,10 @@ export interface PlaceDashboardViewProps {
   onOpenSection?: (slug: string) => void;
   /** Expand the hero into the full Today's Pulse stream (W2.5). */
   onOpenPulse?: () => void;
+  /** "Try again" on a section that failed to load: re-read the place. */
+  onRetry?: () => void;
+  /** A re-read is in flight (failed sections show loading). */
+  retrying?: boolean;
   /** The resident's places — when 2+, the header opens the multi-home switcher. */
   switchHomes?: PlaceSwitcherHome[];
   /** The home currently shown (highlighted in the switcher). */
@@ -57,6 +61,8 @@ export default function PlaceDashboardView({
   userInitials,
   onOpenSection,
   onOpenPulse,
+  onRetry,
+  retrying = false,
   switchHomes,
   activeHomeId,
   moveInDate = null,
@@ -149,7 +155,7 @@ export default function PlaceDashboardView({
                       {group.sections
                         .filter((section) => !fold || !isUnavailableSection(section))
                         .map((section) => (
-                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim })}</Fragment>
+                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim, onRetry, retrying })}</Fragment>
                         ))}
                       {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={sharedReason} onOpen={onOpen} /> : null}
                     </>
