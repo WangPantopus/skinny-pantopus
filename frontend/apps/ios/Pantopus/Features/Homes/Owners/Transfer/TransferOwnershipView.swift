@@ -362,8 +362,8 @@ private struct TransferRecipientCard: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 Text(
-                    "We'll notify this address. If they don't have a Pantopus "
-                        + "account yet, the claim waits for them to sign up."
+                    "The buyer must already have a Pantopus account with this email. "
+                        + "Ask them to sign up before initiating the transfer."
                 )
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
