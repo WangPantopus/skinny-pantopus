@@ -33,6 +33,8 @@ public struct BookingDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdVia: String?
     public let createdAt: String?
     public let updatedAt: String?
+    /// `GET /my-bookings` only: the booking page's slug while it is live, for "Book again".
+    public let pageSlug: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -57,6 +59,7 @@ public struct BookingDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdVia = "created_via"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case pageSlug = "page_slug"
     }
 }
 

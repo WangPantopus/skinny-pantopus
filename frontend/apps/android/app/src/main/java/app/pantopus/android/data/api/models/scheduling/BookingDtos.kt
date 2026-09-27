@@ -46,6 +46,8 @@ data class BookingDto(
     @Json(name = "created_via") val createdVia: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    /** `GET /my-bookings` only: the booking page's slug while it is live, for "Book again". */
+    @Json(name = "page_slug") val pageSlug: String? = null,
 )
 
 /** One attendee on a booking (seats / RSVP). */

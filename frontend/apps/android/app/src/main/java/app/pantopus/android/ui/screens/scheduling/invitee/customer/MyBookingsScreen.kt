@@ -50,6 +50,7 @@ import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillStatus
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
+import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingStatusPill
 import app.pantopus.android.ui.screens.scheduling.invitee.edge.RescheduleCancelPolicyScreen
 import app.pantopus.android.ui.theme.PantopusColors
@@ -131,6 +132,7 @@ fun MyBookingsScreen(
             onTab = viewModel::selectTab,
             onRow = viewModel::onRowTap,
             onRetry = viewModel::load,
+            onBookAgain = { slug -> onNavigate(SchedulingRoutes.publicBooking(slug)) },
         )
         toastText?.let { ToastBar(it, modifier = Modifier.align(Alignment.BottomCenter)) }
     }
@@ -145,6 +147,7 @@ fun MyBookingsContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
+    onBookAgain: (String) -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize().testTag(MyBookingsTags.SCREEN)) {
         TopBar(onBack = onBack)
@@ -153,7 +156,8 @@ fun MyBookingsContent(
             is MyBookingsUiState.Loading -> LoadingSkeleton()
             is MyBookingsUiState.Empty -> EmptyBody()
             is MyBookingsUiState.Error -> ErrorState(message = state.message, modifier = Modifier.fillMaxSize(), onRetry = onRetry)
-            is MyBookingsUiState.Loaded -> Groups(state.groups, showTagline = tab == MyBookingsTab.Upcoming, onRow = onRow)
+            is MyBookingsUiState.Loaded ->
+                Groups(state.groups, showTagline = tab == MyBookingsTab.Upcoming, onRow = onRow, onBookAgain = onBookAgain)
         }
     }
 }
@@ -230,6 +234,7 @@ private fun Groups(
     groups: List<MyBookingGroup>,
     onRow: (String) -> Unit,
     showTagline: Boolean = true,
+    onBookAgain: (String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s4),
@@ -246,7 +251,7 @@ private fun Groups(
         }
         groups.forEach { group ->
             GroupOverline(group)
-            group.rows.forEach { row -> BookingRow(row = row, onClick = { onRow(row.id) }) }
+            group.rows.forEach { row -> BookingRow(row = row, onClick = { onRow(row.id) }, onBookAgain = onBookAgain) }
         }
         Box(modifier = Modifier.size(Spacing.s8))
     }
@@ -277,6 +282,7 @@ private fun GroupOverline(group: MyBookingGroup) {
 private fun BookingRow(
     row: MyBookingRow,
     onClick: () -> Unit,
+    onBookAgain: (String) -> Unit = {},
 ) {
     val hasFooter = row.footer != null
     Column(
@@ -331,7 +337,7 @@ private fun BookingRow(
             }
         }
         when (val footer = row.footer) {
-            is BookingRowFooter.BookAgain -> BookAgainFooter(onClick = onClick)
+            is BookingRowFooter.BookAgain -> BookAgainFooter(onClick = { onBookAgain(footer.slug) })
             is BookingRowFooter.Pay -> PayFooter(balance = footer.balance, onPay = onClick)
             null -> Unit
         }

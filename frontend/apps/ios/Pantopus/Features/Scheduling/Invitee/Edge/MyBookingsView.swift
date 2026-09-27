@@ -19,15 +19,26 @@ struct MyBookingsView: View {
     }
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.Color.appBg)
-            .navigationTitle("My bookings")
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await viewModel.load() }
-            .refreshable { await viewModel.refresh() }
-            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            .accessibilityIdentifier("scheduling.myBookings")
+        ZStack(alignment: .bottom) {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let toast = viewModel.toastMessage {
+                ToastView(message: ToastMessage(text: toast, kind: .neutral))
+                    .padding(.bottom, Spacing.s16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: toast) {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        viewModel.toastMessage = nil
+                    }
+            }
+        }
+        .background(Theme.Color.appBg)
+        .navigationTitle("My bookings")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.refresh() }
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityIdentifier("scheduling.myBookings")
     }
 
     @ViewBuilder
@@ -119,7 +130,7 @@ struct MyBookingsView: View {
         let isPast = viewModel.segment == .past
         let tz = booking.inviteeTimezone ?? SchedulingTime.deviceTimeZoneIdentifier
         let isBalanceDue = isBalanceDueStatus(booking.status)
-        let showBookAgain = isPast
+        let showBookAgain = isPast && !(booking.pageSlug ?? "").isEmpty
         let showPayAffordance = isBalanceDue
 
         return VStack(spacing: 0) {
@@ -152,6 +163,8 @@ struct MyBookingsView: View {
             }
             .padding(.horizontal, 13)
             .padding(.vertical, Spacing.s3)
+            .contentShape(Rectangle())
+            .onTapGesture { viewModel.rowTapped() }
 
             // Past rows: Book again footer (design: my-bookings-frames.jsx:184-189)
             if showBookAgain {
@@ -161,7 +174,7 @@ struct MyBookingsView: View {
                 HStack {
                     Spacer()
                     Button {
-                        // deferredBackend: re-book requires event-type id from lean payload
+                        viewModel.bookAgain(booking)
                     } label: {
                         HStack(spacing: 5) {
                             Icon(.rotateCcw, size: 12, strokeWidth: 2.3, color: Theme.Color.primary600)
