@@ -2141,6 +2141,15 @@ public struct HubTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onOpenMessages: { profile in
                     Task { @MainActor in
+                        var previousPath = path
+                        previousPath.removeLast()
+                        if let previous = previousPath.last,
+                           case let .chatConversation(destination) = previous,
+                           destination.mode == .person(otherUserId: profile.id),
+                           destination.kind == .dm {
+                            path = previousPath
+                            return
+                        }
                         push(.chatConversation(InboxConversationDestination(
                             mode: .person(otherUserId: profile.id),
                             displayName: profile.displayName,
