@@ -544,7 +544,8 @@ class BillsListViewModel
              *    server spelling) or the historical "cancelled" spelling
              *  - [BillChipStatus.Paid]       when status is "paid"
              *  - [BillChipStatus.Scheduled]  when status is "scheduled"
-             *  - [BillChipStatus.Overdue]    when due_date is in the past
+             *  - [BillChipStatus.Overdue]    when due_date has passed (a bare
+             *    date is due through the end of that day in [zone])
              *  - [BillChipStatus.DueSoon]    when due_date is within 7 days
              *  - [BillChipStatus.Due]        otherwise
              */
@@ -552,8 +553,9 @@ class BillsListViewModel
             fun chipStatus(
                 bill: BillDto,
                 now: Instant,
+                zone: ZoneId = ZoneId.systemDefault(),
             ): BillChipStatus {
-                val due = bill.dueDate?.let(::parseInstant)
+                val due = bill.dueDate?.let { dueDeadline(it, zone) }
                 val sevenDaysOut = now.plus(Duration.ofDays(7))
                 return when {
                     bill.status == "canceled" || bill.status == "cancelled" -> BillChipStatus.Cancelled
@@ -570,6 +572,7 @@ class BillsListViewModel
             fun summarize(
                 bills: List<BillDto>,
                 now: Instant,
+                zone: ZoneId = ZoneId.systemDefault(),
             ): BillsBannerSummary {
                 val thirtyDaysOut = now.plus(Duration.ofDays(30))
                 var totalDue: BigDecimal = BigDecimal.ZERO
@@ -577,10 +580,10 @@ class BillsListViewModel
                 var totalCount = 0
                 var nextDue: Pair<Instant, BillDto>? = null
                 for (bill in bills) {
-                    val chip = chipStatus(bill, now)
+                    val chip = chipStatus(bill, now, zone)
                     if (chip == BillChipStatus.Cancelled || chip == BillChipStatus.Paid) continue
                     totalCount += 1
-                    val due = bill.dueDate?.let(::parseInstant)
+                    val due = bill.dueDate?.let { dueDeadline(it, zone) }
                     if (due == null) {
                         // No due date — still surface in the total when the
                         // bill is upcoming (scheduled with no date, etc.).
@@ -641,6 +644,24 @@ class BillsListViewModel
                 val local = instant.atZone(ZoneId.of("UTC"))
                 return DateTimeFormatter.ofPattern("MMM d", Locale.US).format(local)
             }
+
+            /**
+             * When a bill stops being on time. A bare `yyyy-MM-dd` due date is a
+             * calendar day, so it is due until that day ends in [zone]; a full
+             * timestamp is that moment.
+             */
+            private fun dueDeadline(
+                iso: String,
+                zone: ZoneId,
+            ): Instant? =
+                runCatching { Instant.parse(iso) }
+                    .recoverCatching {
+                        java.time.LocalDate
+                            .parse(iso)
+                            .plusDays(1)
+                            .atStartOfDay(zone)
+                            .toInstant()
+                    }.getOrNull()
 
             private fun parseInstant(iso: String): Instant? =
                 runCatching { Instant.parse(iso) }
