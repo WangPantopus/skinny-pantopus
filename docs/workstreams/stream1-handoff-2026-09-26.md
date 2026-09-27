@@ -124,7 +124,12 @@ _Not yet written. If this section is still empty, the previous session stopped b
 - Head `71e860381e8ae03dadc758bebab099a890c4d0b8` on `73b98f6b6`; bundle `20260927-stream2-add-guest-stub-redirect-r1`, seal `20b07a0d…` (9 files).
 - **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master, the batch 35 tip, #557 and #558; no in-app link to the stub.
 - CI was starting at 02:00:55Z.
-- **Batch 36 plan:** #557, #558 and #559, whichever are green. They are disjoint files.
+**Also a next-batch candidate: S2 [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)**: the TokenAccept test flake. The existing iOS assertion now counts only `/api/v1/tenant/` calls. One test file, 1 line + comment.
+- Head `a406d30554cce728f43e0c02f4c86c31edd82341` on `73b98f6b6`; bundle `20260927-stream2-tokenaccept-test-flake-r1`, seal `7a5ce63d…` (6 files).
+- **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master, batch 35, #557, #558 and #559.
+- The leftover chat view models are Stream 3's to look at; Stream 2 told them.
+
+- **Batch 36 plan:** #557, #558, #559 and #560, whichever are green. They are disjoint files.
 
 **Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
 
@@ -255,7 +260,9 @@ _Not yet written. If this section is still empty, the previous session stopped b
    - A failed or cancelled CI OK logs `CI_fail` once and waits: rerun the flake, or remove the PR from `queue.txt` by hand.
    - **Known flakes:**
      - registry rate limits;
-     - iOS `TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer` ("27 tests, with 3 failures"; a 503-retry timing assertion). It failed on #552 and #553 on 2026-09-27, and Stream 2 was told.
+     - iOS `TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer` ("27 tests, with 3 failures"). It failed on #552 and #553 on 2026-09-27.
+       - The cause is **not** a 503 retry (`retryPolicy: .none`). Stream 2 found that leftover chat view models from earlier tests poll chat GETs into the shared URL stub after sign-in connects `SocketClient.shared`.
+       - Fixed test-only in S2 #560.
      - Rerun only the failed job: `gh run rerun <runId> --failed` (get the run id from the job link in `gh pr checks <n> --json name,link`).
    - Each PR has a 4-hour timeout.
    - Batch CI takes about 35–60 min: batch 33 took 23:33:45 → 00:08:50; batch 32 took 22:35:20 → 23:12:01.
