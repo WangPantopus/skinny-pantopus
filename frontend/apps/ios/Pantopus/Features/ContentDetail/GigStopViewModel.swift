@@ -101,6 +101,7 @@ final class GigStopViewModel: Identifiable {
         guard isCurrent else { return "Your session changed. Reopen task actions to continue." }
         if let progress { return progress.message }
         if attempt != nil { return "The original request is not confirmed. Check its status before trying another action." }
+        if let startedFree = startedFreeTaskMessage { return startedFree }
         if preview?
             .eligible ==
             false { return "This action is unavailable under the current task or payment policy. Check again or contact support." }
@@ -111,6 +112,18 @@ final class GigStopViewModel: Identifiable {
         case .some(.none): return "Review the current task details before continuing."
         default: return "Check the current task and payment details before continuing."
         }
+    }
+
+    /// A started $0 task: the stop rules send every started task to review,
+    /// but there is no fee to review, so say what to do instead (as web does).
+    private var startedFreeTaskMessage: String? {
+        guard let preview, !preview.eligible, preview.unavailableReason == "STARTED_POLICY_REVIEW",
+              preview.terms.amountCents == 0 else { return nil }
+        return preview.terms.ownerId == preview.actorId
+            ? "This task has already started. A started task can't be cancelled here. Message your helper to sort "
+            + "it out; when they mark it delivered, you can confirm it."
+            : "You've already started this task. A started task can't be cancelled here. Message the poster to sort "
+            + "it out, and mark it delivered when you're done."
     }
 
     func retire() {
