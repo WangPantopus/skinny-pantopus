@@ -138,19 +138,21 @@ public struct EditBusinessBannerLogoEditor: View {
 
     private func filledBanner(dirty: Bool, imageURL: String?) -> some View {
         ZStack(alignment: .topTrailing) {
-            // The business's own banner; a neutral surface while it loads
-            // or when the URL is missing.
+            // The business's own banner over a neutral surface (shown while it
+            // loads or without a URL). An overlay, so the image fills the 16:7
+            // frame instead of sizing it (uploads are 16:9).
             Theme.Color.appSurfaceSunken
-            if let url = imageURL.flatMap(URL.init(string:)) {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Theme.Color.appSurfaceSunken
+                .overlay {
+                    if let url = imageURL.flatMap(URL.init(string:)) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Theme.Color.appSurfaceSunken
+                        }
+                        .accessibilityLabel("Business banner")
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .accessibilityLabel("Business banner")
-            }
             // Change-cover affordance — pill chip top-right.
             HStack(spacing: 5) {
                 Icon(.image, size: 12, color: Theme.Color.appTextInverse)
