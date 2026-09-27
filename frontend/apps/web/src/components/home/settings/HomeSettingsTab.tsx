@@ -456,10 +456,10 @@ export default function HomeSettingsTab({
       {/* ===== Section 4: Notifications ===== */}
       <SettingsSection title="Notifications" icon="🔔">
         <div className="space-y-1">
-          <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" disabled={saving} checked={notifBills} onChange={setNotifBills} />
+          <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" checked={notifBills} onChange={setNotifBills} />
           <NotificationToggle label="Task reminders" description="Reminders for assigned and overdue tasks" disabled={saving} checked={notifTasks} onChange={setNotifTasks} />
-          <NotificationToggle label="Mail alerts" description="New mail and package notifications" disabled={saving} checked={notifMail} onChange={setNotifMail} />
-          <NotificationToggle label="Delivery alerts" description="Package delivery status updates" disabled={saving} checked={notifDelivery} onChange={setNotifDelivery} />
+          <NotificationToggle label="Mail alerts" description="New mail and package notifications" checked={notifMail} onChange={setNotifMail} />
+          <NotificationToggle label="Delivery alerts" description="Package delivery status updates" checked={notifDelivery} onChange={setNotifDelivery} />
           <NotificationToggle label="Guest pass activity" description="When someone views a guest pass" disabled={saving} checked={notifGuestPass} onChange={setNotifGuestPass} />
         </div>
       </SettingsSection>
