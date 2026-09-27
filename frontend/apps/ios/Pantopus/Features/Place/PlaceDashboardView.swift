@@ -115,7 +115,10 @@ struct PlaceDashboardView: View {
                     icon: .house,
                     title: "Home tools",
                     subtitle: "Documents, household tasks and members."
-                ) { viewModel.onOpenHubHome() }
+                ) {
+                    viewModel.reloadOnReturn()
+                    viewModel.onOpenHubHome()
+                }
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s3)
                     .accessibilityIdentifier("place.homeTools")
