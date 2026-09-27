@@ -112,7 +112,12 @@ _Not yet written. If this section is still empty, the previous session stopped b
 **Next batch candidate: S3 [#557](https://github.com/WangPantopus/skinny-pantopus/pull/557)** (new-post fan-out notices; `backend/services/postCreationHooksService.js` only, the same context-type fix as #553/#555).
 - Head `097e3e0875b8e0ff8e525bb89373c9cabef07c50` on `73b98f6b6`; bundle `20260927-stream3-post-fanout-context-r1`, seal `e307f44a…` (25 files).
 - **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master and against the batch 35 tip.
-- CI had started when Stream 3 reported it; batch it once its "CI OK" passes. It is backend, so restart the runtime after it merges.
+- "CI OK" passed at 01:57:52Z. It is backend, so restart the runtime after it merges.
+
+**Also a next-batch candidate: S2 [#558](https://github.com/WangPantopus/skinny-pantopus/pull/558)**: web "Message household admin" tells the truth. That's user decision §3A-2, "truth-only". It is 1 file, `app/(app)/app/homes/[id]/messages/page.tsx`.
+- Head `ddaaa480ea9cd3fe6ddf3406d44731ef8ea42672` on `73b98f6b6`; bundle `20260927-stream2-admin-chat-truth-r1`, seal `16757367…` (17 files).
+- **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master, the batch 35 tip and #557. The viewer id comes from `getMyProfile()`, which unwraps `{user}`.
+- CI was pending at 01:57:52Z.
 
 **Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
 
@@ -461,8 +466,13 @@ Web fixes are served the same way with HMR (no restart).
 ## 10. Peers (SendMessage; list sessions with ListAgents)
 
 - **Stream 2** (Mail, Home, Guests, Place): session **"Stream 2 handoff takeover"**, a successor that started about 00:20Z. Its written state is `docs/workstreams/02-home-household.md` → CURRENT RESUME.
-  - In a message received before 01:38:56Z, Stream 2 said its user approved all five of its §3A items, and their PRs come one at a time. The first is the backend phone-escrow refusal.
-  - It will also make the flaky `TokenAcceptViewModelTests` test deterministic, changing only the existing test.
+  - Its user approved all five of its §3A items (message received before 01:38:56Z), and their PRs come one at a time.
+  - **§3A-1 (phone-escrow refusal) needs no code**, per a correction received before 01:57:52Z. On master every escrow send already answers 400 "Please choose who this mail is for", because `normalizeSendMailPayload` always sets a user/home recipient or throws. Evidence: bundle `20260927-stream2-phone-escrow-unreachable-r1` (`589973bc…`).
+  - **§3A-2** is #558 (above).
+  - **Next:**
+    - #5: web add-guest stub → redirect to /share.
+    - Native #3 (Guests tab → guest-pass manager) and #4 (health "View maintenance" → Issues), in one build window after batch 35. **#3 touches `RootTabScreen.kt`**, which batch 35 also changes, so it needs rebasing or proof against the new master.
+    - Then Stream 2 makes the flaky `TokenAcceptViewModelTests` test deterministic, changing only the existing test.
 - **Stream 3** (chat, social, scheduling, Beacons, creator/business): session **"fix(native): live chat keeps working after a token refresh; Android reactions update in place"** (successor). Its state is `docs/workstreams/03-accounts-social.md` → CURRENT RESUME.
   - **Open:** #552, which goes in batch 35.
   - **Blocked by user decisions:** S3-22/62/26.
