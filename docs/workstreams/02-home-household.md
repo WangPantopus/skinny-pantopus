@@ -1,8 +1,142 @@
 # Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
-## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
+## CURRENT RESUME — Stream 2 handoff, 2026-09-27 (read this first; it supersedes every block below)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T10:27Z)
+**How to take over.**
+- Open your session in the Stream 2 main worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`.
+- Follow the takeover prompt `NEXT-STREAM2-AGENT-PROMPT-2026-09-27.md` in the runtime kit (`/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/`).
+- This block is the state. Everything below it is history: the LIVE block of session [f294e5] (2026-09-26T23:48Z → 2026-09-27T11:19:30Z), the 2026-09-26 handoff and the status log. The 40-row inventory further down is kept current.
+
+### 1. State at handoff (2026-09-27T11:19:30Z)
+- **Master** `35c5434df`.
+- **Every PR from this session is merged.** No Stream 2 PR is open, and Stream 1's merge queue is empty (its handoff is final, coordination `0ca8e56de`).
+- **Stream 2 PRs merged on 2026-09-27:** 29 PRs. 24 were opened by this session; #539 #541 #543 #544 #547 were carried over from the 2026-09-26 session. Bundles are in the audit store `../audits/`; the MANIFEST prefix is shown:
+
+| Batch (merge PR → master) | PR | What | Bundle (MANIFEST) |
+|---|---|---|---|
+| 33 #546 → `f7f51eae4` | #539 #541 #543 | native Add guest sections; empty Documents/Access copy; Homes without coordinates no longer 0,0 | (2026-09-26 bundles) |
+| 34 #551 → `73b98f6b6` | #544 #547 | Android Today pull-to-refresh; web Home calendar bill dates | (2026-09-26 bundles) |
+| 36 #561 → `89f3c6bac` | #558 | web "Message household admin" tells the truth (§3A-2) | `…-admin-chat-truth-r1` (`16757367`) |
+| 36 | #559 | unlinked Add guest stub redirects to Guest Passes (§3A-5) | `…-add-guest-stub-redirect-r1` (`20b07a0d`) |
+| 37 #572 → `563cddb47` | #560 | iOS TokenAccept test counts only its own calls (test) | `…-tokenaccept-test-flake-r1` (`7a5ce63d`) |
+| 37 | #563 | native health "View maintenance" opens Issues (§3A-4) | `…-health-view-issues-r1` (`08d77b43`) |
+| 37 | #564 | native Guests tab "Add a guest" opens the pass manager (§3A-3) | `…-guests-tab-pass-manager-r1` (`801cb517`) |
+| 37 | #565 | health score: a bill isn't overdue before its due day ends | `…-health-bills-never-early-r1` (`19e3e963`) |
+| 37 | #570 | Hub bills: never early; canceled bills off the Hub | `…-hub-bills-overdue-r1` (`38bc9175`) |
+| 38 #585 → `f6c66d678` | #568 | Bills lists overdue only after the due day (3 apps) | `…-bills-due-day-r1` (`c15ae334`) |
+| 38 | #569 | Sun times say "as of <date>" when stale (3 apps) | `…-sun-day-label-r1` (`d3c29137`) |
+| 38 | #574 | checklist Hire links the posted task (web + API) | `…-checklist-hire-link-r1` (`f688cbfe`) |
+| 38 | #575 | web checklist Hire/Refresh buttons visible | `…-checklist-button-color-r1` (`8a865808`) |
+| 38 | #578 | checklist Complete/Skip and settings saves always failed (`rpc().catch`) | `…-rpc-catch-saves-r1` (`4f1c7519`) |
+| 38 | #579 | web Place details/Pulse/rail follow the switched place (`?home=`) | `…-place-switch-home-r1` (`e1165c08`) |
+| 39 #599 → `9f3ba7c35` | #587 | a Home's first health score counts the checklist it creates (I01) | `…-i01-first-health-r1` (`a22b7e26`) |
+| 39 | #590 | Pulse shows the season's name | `…-pulse-season-label-r1` (`14554c16`) |
+| 39 | #591 | web Home settings Save confirms with a toast; errors red | `…-settings-save-toast-r1` (`dd09f24c`) |
+| 40 #608 → `a93c76d7f` | #602 | web Place "Try again" re-reads in place | `…-place-try-again-r1` (`2218718b`) |
+| 41 #622 → `73e0baade` | #609 | native checklist Hire links the posted task (PR-B) | `…-checklist-hire-native-r1` (`c42cef4c`) |
+| 41 | #610 | iOS HomeTaskMedia test waits by deadline (test) | `…-home-task-media-wait-r1` (`af6ef8f8`) |
+| 41 | #611 | health score applies the closed-task release | `…-health-release-closed-hires-r1` (`ef546a03`) |
+| 41 | #613 | web Money detail names the real bill period | `…-money-period-note-r1` (`9521dddb`) |
+| 42 #624 → `35c5434df` | #619 | native Place "Try again" re-reads (dashboard + detail) | `…-native-place-try-again-r1` (`1e0f1a7c`) |
+| 42 | #620 | native carryover "remaining" count | `…-native-carryover-count-r1` (`5afe18fd`) |
+| 42 | #621 | native Add Bill review no longer promises splits | `…-native-bill-split-note-r1` (`05b4866f`) |
+
+**Verification-only bundles (no PR):**
+- `…-phone-escrow-unreachable-r1` (`589973bc`): §3A-1 needs no code; every escrow send already answers 400.
+- `…-f01-bill-cohort-r1` (`8e21d5fb`) and `…-native-f01-carryover-r1` (`b68baef4`): F01 on 3 apps.
+- `…-f04-withdrawal-r1` (`a32a429e`).
+- `…-home-patch-location-refuted-r1` (`974f16f6`): Stream 1's lead, refuted.
+- `…-post-merge-check-r1` (`6e44a5aa`): after the merges, #602, #613 and #609 + #611 were re-checked on master (web + Android + API).
+- For Stream 1: `…-listing-slot-release-check-r1` (`916fbb74`), `…-listing-home-access-check-r1` (`f10c0200`) + `-correction` (`765c2955`; the base SHA had been typed by hand), `…-listing-slot-lifecycle-check-r1` (`04360781`).
+
+### 2. Decisions made on 2026-09-27 (all recorded in the LIVE decision log below and in the PR bodies)
+- **User answers (AskUserQuestion, before the never-stop instruction):**
+  - All five §3A items as proposed.
+  - Bills: "overdue" is never early (from 12:00 UTC after the due day).
+  - Sun: "as of <date>" when stale.
+  - I03: "Link the task".
+  - Fixtures: I01/I02 via a new Home + carryover rows, and an F01 10-Home SQL cohort. M03 deferred.
+  - I01: approve the ownership claim by SQL.
+- **Standing instruction (~07:22Z):** never stop to ask. Take the recommended option and record it; the hard limits still hold.
+- **Decisions taken under it:**
+  - I01/I02 Homes were created by SQL, because web Add Home can't pass address validation (Google/Smarty blocked here).
+  - No title prefill on native Hire (Stream 1 asked for a minimal hook).
+  - #591 confirms with a toast.
+  - PR-B device journeys use WHEN Flexible + WHERE Virtual.
+  - iOS PR-B note is a neutral info banner, and "View task" isn't held by the link call.
+  - Android Place retry reuses the full dashboard refresh; Android detail cards get the retry via `LocalPlaceDetailRetry`.
+  - Removed the false Add Bill split line rather than rewording it.
+  - Reset carryover fixture row aec53a27 skipped → pending three times (reviewed single-row UPDATEs, logged in `…-native-carryover-count-r1/fixture-reset.txt`).
+  - Web Place retry first (#602), then native (#619).
+
+### 3. Runtime, devices, fixtures at handoff
+- **Stack** (isolated; never production): Supabase `pantopus-stream2-native-resume-r2` (API 64553, DB 64554); fault proxy 18142 (pid 66574), with **no rules set**; backend 18143 (pid 64623, started on master code; batch 42 changed no backend files); Next dev 18144.
+- **Main worktree:** branch `claude/stream2-mail-list-dismiss` (a local build branch, never a PR) at build commit `ca04ff183`, which is exactly master `35c5434df`, with **no uncommitted changes**.
+- **Devices:**
+  - emulator-5556 (slot 2, Stream 2's) has APK `93632548…` (all Stream 2 PRs).
+  - iOS sim 6F914A30 is shut down with dylib `3bd97273…` installed.
+  - DerivedData is `kit/ios-dd`.
+  - Stream 2 holds only slot 2; no heavy.
+- **Fixtures** (isolated DB 64554; keep them; don't delete):
+  - **Home 70f66a6d "Stream2 Resume Home" (123 Synthetic Lane):**
+    - smoke_season: HEPA 219e099b pending (the Hire test item), AQI 7deceb66 completed;
+    - summer_dry 2026 carryover: a991ef31 completed, 2043bffc completed, aec53a27 skipped.
+  - **F01 cohort:**
+    - 9d885f71 "S2 Cohort Viewer iOS" (125 Synthetic Verification Lane, 45.5120/-122.6860, opted in, 3 paid electric bills);
+    - 9 "S2 Cohort Neighbor 01–09" Homes in geohash-6 cell c20fbj, 27 paid bills (`details.fixture=stream2-f01-cohort`).
+    - The benchmark reads "12% above".
+  - **SQL Homes:** abe5a8c9 "S2 First Load Home", d4eaed7e "S2 Race Home", 105d9e94 "S2 First Load Home 2".
+  - **Synthetic tasks** posted today are all `cancelled`.
+
+### 4. Next queue
+1. **Refresh reality** (prompt §0): confirm the master SHA, and that no Stream 2 PR is open (none was at handoff).
+2. **The runtime is already master-equal** (`ca04ff183` = master `35c5434df`; backend pid 64623 on master code).
+   - When master moves: restore the main worktree to `origin/master` and commit "build: tree = master …".
+   - Then restart the backend by PID, delete `runtime/web-state-*.json` and re-mint tokens.
+   - Rebuild the APK/iOS app when you next need native checks.
+3. **Open candidates** (found, not changed; reproduce first):
+   - **FIRST: web Home edit address coordinates** (lead from Stream 1 at 11:17Z, code-level, not yet run).
+     - `frontend/apps/web/src/app/(app)/app/homes/[id]/edit/page.tsx:133-140` fetches `/api/geo/autocomplete` raw and reads `best.center.lng/.lat`, but the route answers `center: [lng, lat]`, so the saved coordinates become `undefined`.
+     - Stream 1's #606 normalized only the `@pantopus/api` client (`api.geo.autocomplete*`), and this page bypasses it.
+     - Smallest fix: call `api.geo.autocomplete(addr)`, or read the array.
+     - Geocoding providers are egress-blocked here, so emulate the autocomplete reply with a proxy rule (label it EMULATED), reproduce on web, fix, and verify the saved Home location in the DB.
+     - Note: the old user PR #430 changes all three readers to expect arrays. After #606 two of them would break; Stream 1 reported this to the user, so don't touch #430.
+   - **F02 joint Home/Place privacy:** a cohort-cell member without `finance.view` should see only the neighborhood average. It needs a membership fixture on a cohort Home: a reviewed FK/trigger scope, recorded as a decision.
+   - **Native title prefill on checklist Hire** (web sends the item's title; native sends only the category). Parity candidate.
+   - **Web `text-primary` has no DEFAULT:** some checklist/bill-trend/property-card icons fall back to the text colour. Visible, low.
+   - **Health score cache** isn't invalidated on issue writes. Moot today, since every client forces a fresh score.
+   - **`GET …/seasonal-checklist/history`** has no caller on any app.
+   - **Latent/parked from 2026-09-26:** §3B-6 (web Mail due dates; no writer exists), §3B-8 (Dismiss wording needs a server signal), §3B-9 (logging gap), §3B-10 (optional permission gating polish).
+4. **Handed to Stream 1** (their area; don't fix): the native Place **previews** (iOS `PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`; Android `PlaceLaunchScreen.kt:737`) have the dead "Try again" that #607 fixes on web.
+5. **Backlog:** the 40-row inventory below (8 closed / 32 partial-open).
+   - Rows touched today: I01, I02, I03, F01, F02, F03, F04, D04, D05.
+   - Least covered: F02–F05, I04–I07, M01–M04 (M03 deferred by the user). Web Family Mail Party is deferred by the user.
+
+### 5. New lessons (2026-09-27; details in memory `stream2-successor-2026-09-27.md`)
+- **Runtime:**
+  - CSRF_SECRET is unset, so each backend restart invalidates web sessions: delete `runtime/web-state-*.json` and re-mint.
+  - The supabase-js 2.103.3 query builder has no `.catch`; wrap with `Promise.resolve()`.
+  - Master can move under a batch (a docs merge restarts its CI); Stream 1 rebuilds it.
+- **Evidence:**
+  - Never hand-type a SHA: one correction bundle was needed today.
+  - Keep build hashes as 16-char prefixes so the 64-hex scan stays clean.
+- **iOS sim:**
+  - It can come up "system shell crashed" under load; cold-boot and wait for `simctl bootstatus -b`.
+  - The undo window is 10 s, so tap Undo in the very next call.
+  - A swipe from the keyboard area doesn't scroll; press return on a TextField.
+- **Android:**
+  - Swipes are dropped under heavy host load (load avg ~49); use slow 1200 ms swipes and verify.
+  - `adb shell input text` breaks on `(`.
+  - Tap input fields inside their bounds (the Add Bill payee field is x 44–420).
+- **Proxy log:** filter out `control` lines, since rule bodies are logged. Read `backend.log` with `grep -a`.
+- **Merge policy (user, 2026-09-27 ~11:13Z):**
+  - CI is no longer a merge gate. At the user's direction Stream 1 removed master's required `CI OK` check at 11:13:55Z (log, saved settings and restore command: `docs/workstreams/coordinator-state-2026-09-23/repo-settings/README.md`).
+  - A PR is merged once it's verified end to end in the real apps with sealed evidence and reviewed.
+  - The coordinator (Stream 1) still does the merging: send it the head + seal. CI keeps running as information, so keep running the checks for code you change (lint, the existing targeted tests).
+
+## PREVIOUS RESUME — Stream 2 handoff, 2026-09-26T23:45Z (history; superseded by the 2026-09-27 CURRENT RESUME above)
+
+### LIVE (history, ended at the 2026-09-27 handoff) — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T10:27Z)
 - **I03 checklist "Hire" (user decision ~03:30Z: "Link the task"). Open PRs on master `7bdef3e8c`, reported to Stream 1 at ~04:07Z:**
   - [#574](https://github.com/WangPantopus/skinny-pantopus/pull/574) (`ef32ac4be`), PR-A for web + API. Bundle `20260927-stream2-checklist-hire-link-r1` (`f688cbfe…`, 60 files).
     - `POST /api/homes/:id/seasonal-checklist/:itemId/hire {gig_id}`, a rewrite of the uncalled `linkGigToChecklist`. It needs home.edit and the `home_record_context` fence. The task must be the caller's own and open, and the item still pending and unlinked. The link writes an audit row and refreshes the health cache.
@@ -1097,9 +1231,9 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | R04 | **Partial/open.** Existing ordinary claim/review and relationship milestones are reused. 2026-09-26: transfer to an email with no account no longer leaves the Home ownerless ([#473](https://github.com/WangPantopus/skinny-pantopus/pull/473), bundle `20260926-stream2-ownership-transfer-fix-r1`). | Challenge/dispute and recovery paths; the rest of the transfer lifecycle. |
 | R05 | **Partial/open.** Existing lease approval/end/move-out/request repairs and native receipts are reused; PR176 only repairs the Home Settings caller. | Remaining lease attachment/provider/lifecycle combinations and broader release acceptance. |
 | R06 | **Partial/open.** 2026-09-26: native Identity entry, letter PDFs on both apps, and guest/service-provider wording and issue gating on all three platforms ([#493](https://github.com/WangPantopus/skinny-pantopus/pull/493), bundle `20260926-stream2-r06-native-letters-r1`). User-approved 2026-09-26 and done: Proposal A, a guest or service-provider role ends residency in `verifyByCode` and `isStillVerifiedResident` ([#538](https://github.com/WangPantopus/skinny-pantopus/pull/538), bundle `20260926-stream2-residency-guest-role-r1`, batch 32). | Public verification after a resident becomes a guest (security finding with the user, Proposal A); pass view/revoke on native. |
-| I01 | **Repaired: [#587](https://github.com/WangPantopus/skinny-pantopus/pull/587), merged in batch 39 (master `9f3ba7c35`).** 2026-09-27, reproduced on web with a new synthetic Home. The first dashboard showed "50/100 · No seasonal checklist created yet" next to the checklist it had just created, because health was computed 25 ms before the checklist read created the rows. The fix creates the season's rows inside the health read (idempotent). After the fix, the first load shows 55, "2 of 2 incomplete", and 4 concurrent creators leave 2 rows. Every client forces the score, so the 5-minute cache has no visible lag. Bundle `…-i01-first-health-r1`. | Merge #587; uncertain-save recovery after generation. |
-| I02 | **Partial/open.** 2026-09-27:<br>• Carryover renders, expands and acts on web, Android and iOS (bundles `…-rpc-catch-saves-r1`, `…-native-f01-carryover-r1`).<br>• Generation race verified: 5 concurrent first reads return one set of 2 rows, with the 23505 path logged ×4 (`…-i01-first-health-r1`).<br>• Malformed-card/read evidence is reused.<br>• Noticed: after a Skip, iOS keeps "1 remaining" until reload. | Nested row validation, metadata, history (no client UI calls `/seasonal-checklist/history`), pagination. |
-| I03 | **Partial/open.** Web + API repaired and verified 2026-09-27 in #574 (bundle `20260927-stream2-checklist-hire-link-r1`) and #575 (invisible Hire button, `…-checklist-button-color-r1`). Hire now carries the item's title and category, and the posted task is linked (item hired). Closing the task puts the item back to pending. A failed link keeps the task and shows a note. The API refuses other people's, closed and unknown tasks and callers without home.edit. | Native repair open: [#609](https://github.com/WangPantopus/skinny-pantopus/pull/609) (PR-B, the Hire links the posted task on iOS/Android; bundle `…-checklist-hire-native-r1`). #574/#575 merged in batch 38. The health score's handling of a closed linked task is in [#611](https://github.com/WangPantopus/skinny-pantopus/pull/611). |
+| I01 | **Repaired and merged:** [#587](https://github.com/WangPantopus/skinny-pantopus/pull/587) (batch 39) and [#611](https://github.com/WangPantopus/skinny-pantopus/pull/611) (batch 41: a closed task's item is released before scoring). Post-merge check `20260927-stream2-post-merge-check-r1`. 2026-09-27, reproduced on web with a new synthetic Home. The first dashboard showed "50/100 · No seasonal checklist created yet" next to the checklist it had just created, because health was computed 25 ms before the checklist read created the rows. The fix creates the season's rows inside the health read (idempotent). After the fix, the first load shows 55, "2 of 2 incomplete", and 4 concurrent creators leave 2 rows. Every client forces the score, so the 5-minute cache has no visible lag. Bundle `…-i01-first-health-r1`. | Merge #587; uncertain-save recovery after generation. |
+| I02 | **Partial/open.** 2026-09-27:<br>• Carryover renders, expands and acts on web, Android and iOS (bundles `…-rpc-catch-saves-r1`, `…-native-f01-carryover-r1`).<br>• Generation race verified: 5 concurrent first reads return one set of 2 rows, with the 23505 path logged ×4 (`…-i01-first-health-r1`).<br>• Malformed-card/read evidence is reused.<br>• Noticed: after a Skip, iOS keeps "1 remaining" until reload. 2026-09-27: native carryover "remaining" count fixed ([#620](https://github.com/WangPantopus/skinny-pantopus/pull/620), batch 42; bundle `…-native-carryover-count-r1`). | Nested row validation, metadata, history (no client UI calls `/seasonal-checklist/history`), pagination. |
+| I03 | **Partial/open.** Web + API repaired and verified 2026-09-27 in #574 (bundle `20260927-stream2-checklist-hire-link-r1`) and #575 (invisible Hire button, `…-checklist-button-color-r1`). Hire now carries the item's title and category, and the posted task is linked (item hired). Closing the task puts the item back to pending. A failed link keeps the task and shows a note. The API refuses other people's, closed and unknown tasks and callers without home.edit. | Merged 2026-09-27: #574 #575 (batch 38), native [#609](https://github.com/WangPantopus/skinny-pantopus/pull/609) and [#611](https://github.com/WangPantopus/skinny-pantopus/pull/611) (batch 41); post-merge E2E on master passed. Remaining: native title prefill (web parity). |
 | I04 | **Partial/open.** D03 bill date/amount bounded repairs are accepted; they do not close calendar policy. 2026-09-26: the dashboard Calendar card parsed bill `due_date` (SQL date) as UTC, showing every bill a day early ("TODAY … 5:00 PM", a false "1 day overdue" from 5 PM the evening before, Week view on the previous day) and in "$". Fixed with the existing bill helpers ([#547](https://github.com/WangPantopus/skinny-pantopus/pull/547), bundle `20260926-stream2-calendar-dates-r1`). Web Mail due dates have the same root cause (CURRENT RESUME §3B item 6). | Local date rules, dashboard boundaries, recurrence and DST transitions. |
 | I05 | **Partial/open.** Existing property/detail readers are preserved. 2026-09-26: a Home without coordinates got Null Island (0,0) section data ([#543](https://github.com/WangPantopus/skinny-pantopus/pull/543), bundle `20260926-stream2-place-null-coords-r1`). | Provider/data acceptance, stale cache, absent/wrong-property and verification wording. |
 | I06 | **Partial/open.** 2026-09-26: daylight, EPA facilities, heat/cold, seismic, wildfire and civic districts no longer compute at 0,0 for coordinate-less Homes ([#543](https://github.com/WangPantopus/skinny-pantopus/pull/543)). Stale sun data labeled "today" is a candidate (§3B item 7). | Weather, air quality, alerts, daylight and civic sections across geography/provider states. |
@@ -1114,9 +1248,9 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | D08 | **Partial/open.** Browser M02 share lifecycle and Android guest-pass issue/revoke/share evidence are accepted within limits. | Native/hosted external-share expiry, exact-resource scope, account changes and storage lifecycle. |
 | D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. 2026-09-26: web Documents delete really deletes, and Documents/Issues/Access/Share show unavailable instead of empty ([#529](https://github.com/WangPantopus/skinny-pantopus/pull/529), bundle `20260926-stream2-home-docs-r1`). The empty Documents and Access & Codes pages no longer point to web actions that don't exist ([#541](https://github.com/WangPantopus/skinny-pantopus/pull/541)). | Remaining malformed-success readers and complete cross-client verification. |
 | D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
-| F01 | **Partial/open.** 2026-09-27, user-approved SQL cohort in cell c20fbj (9 synthetic neighbor Homes + 9d885f71). Web Home bill card: "1 more neighbor needed" → "$150 vs $133.35, 12% above"; the opt-in toggle needs #578. Place Money signals card and detail show "12% above / $150 per month" on web, Android and iOS. Bundles `…-f01-bill-cohort-r1` and `…-native-f01-carryover-r1`. | Fractions, other currencies, periods other than 3 matching months, totals. |
-| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. 2026-09-27: the Place "Try again" on a section that failed to load did nothing on web (it opened the cached detail page), iOS or Android. Web is fixed by [#602](https://github.com/WangPantopus/skinny-pantopus/pull/602) (bundle `20260927-stream2-place-try-again-r1`); native follows. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
-| F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. | Place bill splits, malformed input, currency changes and permission-limited actions. |
+| F01 | **Partial/open.** 2026-09-27, user-approved SQL cohort in cell c20fbj (9 synthetic neighbor Homes + 9d885f71). Web Home bill card: "1 more neighbor needed" → "$150 vs $133.35, 12% above"; the opt-in toggle needs #578. Place Money signals card and detail show "12% above / $150 per month" on web, Android and iOS. Bundles `…-f01-bill-cohort-r1` and `…-native-f01-carryover-r1`. The Money detail now names the real period ([#613](https://github.com/WangPantopus/skinny-pantopus/pull/613), batch 41). | Fractions, other currencies, periods other than 3 matching months, totals. |
+| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. 2026-09-27: the Place "Try again" on a section that failed to load did nothing on web (it opened the cached detail page), iOS or Android. Fixed and merged: web [#602](https://github.com/WangPantopus/skinny-pantopus/pull/602) (batch 40) and native [#619](https://github.com/WangPantopus/skinny-pantopus/pull/619) (batch 42). The native Place previews (Stream 1's Start/launch area) are handed to Stream 1. | Place financial failures, source absence, access retirement and joint Home/Place privacy. Joint Home/Place privacy for a member without `finance.view` needs a membership fixture (CURRENT RESUME §4). |
+| F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. 2026-09-27: the native Add Bill review no longer promises bill splits, which nothing can create ([#621](https://github.com/WangPantopus/skinny-pantopus/pull/621), batch 42). | Place bill splits, malformed input, currency changes and permission-limited actions. |
 | F04 | **Partial/open.** 2026-09-27, withdrawal on web (cohort Home 9d885f71): turning off "Share bill data anonymously" takes effect on the next read. The Home card falls back to "1 more neighbor needed", Place Money signals folds the bill benchmark into "Coverage is expanding here", and no cached comparison is served. Turning it back on restores "12% above" on both. Bundle `20260927-stream2-f04-withdrawal-r1` (`a32a429e…`). | Contributor eligibility rules, deletion of past bills, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
 | M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). **Known gap, deferred by the user on 2026-09-26:** web Family Mail Party is dormant (banner never appears; `/app/mailbox/party` unlinked); Android works. Maybe a future build; no piecemeal fixes (CURRENT RESUME §2c). | Private-mail recipient/attention/trust combinations, membership state, errors and exact-content returns. |
