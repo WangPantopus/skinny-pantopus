@@ -18,6 +18,9 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **Decision taken without asking (2026-09-27T13:23:40Z):** preserve the existing conversation instance/draft rather than pushing a duplicate for the immediate same-person return; reuse RouteStack value copy, no shared routing API/storage/schema or screen design change.
 - **Observed limit:** web unsent DM draft is in memory and is empty after navigating to the public profile and returning; no durable cross-route draft acceptance or repair claimed in #628.
 
+- **Native verification (2026-09-27T13:34:59Z):** Android candidate8bc20d69e installed/hash-matched (APK `9ffa9f440eb2c42f11c682a9e8c7a62b86e5868adfddd3e4ce99774c7bffc74e`): immediate same-person profile→Message preserves the unsent draft; one Back returns to Connections. Normal profile entry still opens the existing DM and Back returns to the profile. Local API/SQL: 1 room,2 participants,167 messages,9 audit rows; no Send. Evidence remains unsealed until iOS candidate verification/fixture cleanup.
+- **Resources/next (2026-09-27T13:34:59Z):** cold iOS app-only build8bc20d69e since13:26:06Z, source frozen, S3 heavy held then promised to S1 candidate2d3486201. S2 holds iOS driver then hands to S3; Android5554 slot4 retained. Android clean Edit profile footer false “just now” reproduced, no footer repair yet. Earlier 3125bb150 native baseline is byte-equal master312439ca4 before this candidate. No units/lints run.
+
 ## CURRENT RESUME — Stream 3 handoff and prompt revision, 2026-09-27 (2026-09-27T12:41:37Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
