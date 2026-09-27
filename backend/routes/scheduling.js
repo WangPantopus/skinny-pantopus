@@ -1430,7 +1430,15 @@ router.get('/my-bookings', asyncHandler(async (req, res) => {
     .filter((b) => (seen.has(b.id) ? false : seen.add(b.id)))
     .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))
     .slice(0, 200);
-  res.json({ bookings: merged });
+  // "Book again" opens the booking page, so each row carries the page's slug while
+  // the page is live (null otherwise, and the clients hide the button).
+  const pageIds = [...new Set(merged.map((b) => b.page_id).filter(Boolean))];
+  const liveSlugs = new Map();
+  if (pageIds.length) {
+    const { data: pages } = await supabaseAdmin.from('BookingPage').select('id, slug, is_live').in('id', pageIds);
+    for (const p of pages || []) if (p.is_live) liveSlugs.set(p.id, p.slug);
+  }
+  res.json({ bookings: merged.map((b) => ({ ...b, page_slug: liveSlugs.get(b.page_id) || null })) });
 }));
 
 // ============================================================

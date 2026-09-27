@@ -394,6 +394,8 @@ export interface Booking extends Invitee {
   no_show_fee_applied?: boolean | null;
   policy_snapshot?: Record<string, unknown> | null;
   requires_approval?: boolean;
+  /** GET /my-bookings only: the booking page's slug while it is live, for "Book again". */
+  page_slug?: string | null;
   created_at: string;
   updated_at: string;
 }
