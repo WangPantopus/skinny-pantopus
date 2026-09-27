@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:42:41Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:45:36Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
@@ -52,12 +52,12 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Test setup: the persona DM routes need `audience_profile` (F10, reverted at 00:36:21Z). The proxy answered the thread list empty (`fault-s368-inbox-empty.json`), with no DB write; fault-control reset at 04:11:57Z.
 
 ### PR #582: Android Back on a dirty form asks "Discard changes?" (S3-60 Android; shared FormShell, agreed with Stream 1 and Stream 2)
-- **[#582](https://github.com/WangPantopus/skinny-pantopus/pull/582)** head `85839a91a` on `7bdef3e8c` (merges cleanly into `c890f2588`). Bundle `20260927-stream3-android-form-back-discard-r1`, seal `e080a3ed55176d304b8277def03ebb4ccb1112fa1f50135ca5493be2a43f0245` (49 files). Sent to Stream 1.
+- **[#582](https://github.com/WangPantopus/skinny-pantopus/pull/582)** head `85839a91a` on `7bdef3e8c` (merges cleanly into `c890f2588`). Bundle `20260927-stream3-android-form-back-discard-r1`, seal `e080a3ed55176d304b8277def03ebb4ccb1112fa1f50135ca5493be2a43f0245` (49 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - `FormShell` had no `BackHandler`: system Back left a dirty form silently (Edit profile reproduced: the tagline was lost). Fix: `BackHandler(enabled = isDirty && !isSaving && !showDiscardConfirm) { handleClose() }`, like `WizardShell`.
 - After (APK `497dc156…`): Edit profile, PostGigV1 (Stream 1), Pulse (clean pickers and a clean composer don't prompt; a dirty composer asks), Report issue (Stream 2). `PostGigV1SnapshotTest` 2/2.
 
 ### PR #583: Android broadcast composer shows no sample audience counts
-- **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1.
+- **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
 
 ### PR #584: My bookings "Book again" opens the booking page; a row says where to manage it (S3-52, web + API)
@@ -72,6 +72,8 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### Committed, verification pending (need heavy + devices)
 - **S3-59 on Android: a failed review reply now says so.** Branch `claude/stream3-android-review-reply-failure`, head `bbca31072` on `c890f2588`; 1 file (`BusinessOwnerViewModel.kt`) adds "Your reply wasn't posted. <reason>" (iOS got the same in #552). Before captured on the master APK (bundle `20260927-stream3-android-review-reply-failure-r1/before`): the reply shows, the injected 500 lands at 05:11:22Z, and the reply vanishes with no message. The after needs a build.
 - **S3-48 on iOS: notifications tab switch mid-load, and load-more retry.** Branch `claude/stream3-ios-notifications-generation`, head `4c7fe3f9a` on `c890f2588`; 1 file (`NotificationsViewModel.swift`) mirrors Android's d8cce256d and iOS Mailbox: a generation guard, local offsets applied only while current, and `loadMoreError` plus `retryLoadMore` (the shared list's Try again). SwiftLint `--strict` and SwiftFormat are clean. The build on sim `0AE16FA0` (`f009f6be7`) has master's notifications code, so it can serve as the before. Owner has 33 notifications (15 read / 18 unread; 2 pages). Rules `fault-s348-notif-delay.json` (12 s delay) and `fault-s348-notif-page-fail.json` are ready.
+
+- **S3-52 on iOS and Android (follow-up to #584).** Branch `claude/stream3-native-my-bookings-book-again`, head `77d56b4a3` on `563cddb47`, not pushed; 7 existing files. iOS: `BookingDTO.pageSlug`, "Book again" pushes `.inviteeLanding(slug:)` and shows only with a slug, a row tap shows Android's message (toast overlay as in the page editor). Android: `BookingDto.pageSlug`, `BookingRowFooter.BookAgain(slug)` only with a slug, "Book again" → `SchedulingRoutes.publicBooking(slug)` (as `ManageBookingScreen` does). SwiftLint `--strict` and SwiftFormat clean; Android checks need the build. The before (iOS dead "Book again", Android "Book again" = row action) and after need the API verification build `a62037b1d` or #584 merged, proxy-served past rows, and both devices.
 
 ### Committed locally, not pushed: daily briefing failed-delivery (`backend/routes/internalBriefing.js:320`)
 - Branch `claude/stream3-briefing-failed-delivery`, head `2ff8ae956` on `7bdef3e8c`. Stream 2 found supabase-js builders have `then` but no `catch` (confirmed on 2.103.3). A scan of master's backend found 4 direct `.catch` sites: Stream 2's `homeIam.js:629` and `seasonalChecklistService.js:272`, Stream 1's `listings.js:562`, and this one (Stream 2 asked me to take it).
