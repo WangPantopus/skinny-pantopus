@@ -44,6 +44,7 @@ const homeTaskGigService = require('../services/homeTaskGigService');
 const gigPricingService = require('../services/gig/gigPricingService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
+const { hasUsableCoordinates } = require('../services/seederProvisioningService');
 const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
@@ -1109,6 +1110,11 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       || !['after_assignment', 'never_public'].includes(reveal_policy)) {
       return res.status(400).json({ code: 'HOME_RECORD_INVALID', error: 'Review a personal Gig with an explicit location and private address reveal.' });
     }
+  }
+  // (0, 0) is the placeholder older app forms sent for a typed address: the task would sit in the
+  // ocean, where no neighbor's feed or map ever shows it.
+  if (!hasUsableCoordinates(location.latitude, location.longitude)) {
+    return res.status(400).json({ code: 'LOCATION_UNRESOLVED', error: 'Pick an address from the suggestions.' });
   }
   logger.info('Creating gig', { userId, beneficiary_user_id });
 
@@ -3916,6 +3922,9 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       const { latitude, longitude, mode, address, city, state, zip, homeId, place_id,
         geocode_provider, geocode_accuracy, geocode_place_id } =
         updateData.location;
+      if (!hasUsableCoordinates(latitude, longitude)) {
+        return res.status(400).json({ code: 'LOCATION_UNRESOLVED', error: 'Pick an address from the suggestions.' });
+      }
       if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
         return res.status(403).json({ error: "You can't post from that Home." });
       }
