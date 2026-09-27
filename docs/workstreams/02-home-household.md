@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T01:38Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T02:01Z)
 - **Merged since the handoff:** batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) (00:08:50Z → `f7f51eae4`: #543, #539, #541 + S1 #542) and batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → `73b98f6b6`: #544, #547 + S3 #545, S1 #549). **No Stream 2 PR is open.**
 - **User decisions on all five §3A items (AskUserQuestion, answered by 01:36Z; each is the recommended option):**
   1. **Phone escrow:** refuse it truthfully. The API answers 400 "Texting isn't available yet; send to their email", creates no escrow, and stops logging the SMS body (backend only).
@@ -11,6 +11,14 @@
   4. **Health "View maintenance":** opens the existing Issues list, same label (iOS + Android).
   5. **`/app/homes/[id]/members/add-guest`:** redirects to Guest Passes, `/app/homes/[id]/share` (web).
   - **Plan:** one PR each, in the order 1, 2, 5; then 3 and 4 verified in one native build window.
+- **Progress on the decisions (02:01Z):**
+  - **1, done with no code.** On master every escrow send already answers 400 "Please choose who this mail is for.": `normalizeSendMailPayload` always sets a user or home recipient or throws, so `isEscrowSend` is never true. No escrow row is written and no SMS is logged. This holds since the initial import, and no client sends `recipientPhone` or `recipientEmail`. Bundle `20260927-stream2-phone-escrow-unreachable-r1` (`589973bc…`, 7 files).
+  - **2 = [#558](https://github.com/WangPantopus/skinny-pantopus/pull/558)** (head `ddaaa480e` on `73b98f6b6`). Bundle `20260927-stream2-admin-chat-truth-r1` (`16757367…`, 17 files). Reason-specific states: unavailable (403), failed, self, none. Stream 1 reviewed it OK.
+  - **5 = [#559](https://github.com/WangPantopus/skinny-pantopus/pull/559)** (head `71e860381` on `73b98f6b6`). Bundle `20260927-stream2-add-guest-stub-redirect-r1` (`20b07a0d…`, 9 files).
+  - **3 and 4 (native):** the edits are planned. They wait for batch 35 (#556), which also changes `RootTabScreen.kt`.
+    - **4:** only the health route mapping changes (`maintenance` → `view_issues`), plus the two existing tests that pin it. The attention chip "maintenance items past due" keeps `view_maintenance`.
+    - **3:** Android's Members host navigates to `guestPasses`. iOS Hub pushes `.guestPasses`. The iOS You tab's Members had **no** `onAddGuest`, so its Guests CTA was dead; it gains `guestPasses`/`addGuest` routes that reuse the existing views.
+- **Web tools (kit):** `web-admin-chat.cjs` and `web-page-check.cjs` are read-only and abort non-GET `/api`. They reuse a signed-in session (`runtime/web-state-*.json`, mode 600, 40 min), because the web login limiter (10 per 15 min, fixed window from the first hit) cut off a run.
 - **§3B item 6 is latent, not repaired.** No product route writes `Mail.due_date`: only the dev seed in `mailboxV2.js` does, and bill extraction writes `HomeBill.due_date`. 0 of 65 letters in DB 64554 have one.
   - `MailItemDetail`'s amount-due block can't render, because the web builds only a text block.
   - The counter sort shifts every date equally, and `UrgencyIndicator` never shows a date.
@@ -217,6 +225,13 @@
   - **Private token files differ in shape:** the evidence `.control-token` is JSON `{token, pass_id}`, and `.guest-token` is the raw token. The web tools only redact an exact token match.
 
 ## Status log (newest first; each block is the state at its time)
+
+**Stream 2 — 2026-09-27T02:01Z (decisions 1, 2 and 5: 1 needs no code; #558 and #559 opened)**
+
+- **1:** no code; the escrow send can't run on master (bundle `…-phone-escrow-unreachable-r1`).
+- **2 = #558:** "Message household admin" states that tell the truth. **5 = #559:** the add-guest stub redirects to `/share`. Both are verified on the web runtime, read-only.
+- **Runtime:** tree = master `73b98f6b6` + #558 + #559 (build commit on the local build branch).
+- **Next:** native 3 + 4 after batch 35; then the TokenAccept test flake (Stream 1's request).
 
 **Stream 2 — 2026-09-27T01:38Z (successor session: handoff PRs all merged; five §3A decisions approved; runtime detached)**
 
