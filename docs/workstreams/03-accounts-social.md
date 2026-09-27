@@ -2,15 +2,53 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T09:25:36Z)
+## CURRENT RESUME — Stream 3 handoff, 2026-09-27 (2026-09-27T10:21:47Z), read this first
+
+The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T10:21:47Z) stopped at the user's request, at a clean point:
+- every change is in a sealed PR;
+- no fixture is left applied;
+- no device or heavy slot is held.
+
+**Takeover prompt:** [`NEXT-STREAM3-PROMPT-2026-09-27.md`](NEXT-STREAM3-PROMPT-2026-09-27.md). It covers rules, step-0 checks, the PR table, next steps, runtime state and gotchas.
+
+**Runtime manual:** the kit README (`.pantopus-recovery/stream3-runtime-kit/README.md`, section "Update 2026-09-27 (handoff)").
+
+**Detailed record:** the "LIVE — Stream 3 successor session" block below: every PR's evidence, the decisions taken under the standing direction, and the candidates.
+
+### State at handoff
+- **Master:** `621e26616`. Batches 37–39 merged today (`563cddb47`, `f6c66d678`, `9f3ba7c35`).
+- **Open Stream 3 PRs, all sealed with seal comments:**
+  - Batch 40 ([#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), tip `01f75025f`): #593, #594, #595, #596, #600.
+  - Batch 41: #597, #604, #605, #612.
+  - Batch 42 (reviewed by Stream 1; it goes in once CI is green): #618. Its CI was still running at handoff.
+  - Heads, bundles and seals are in the prompt's §4 table.
+- **Blocked rows (explicit user decisions; the standing direction doesn't reopen them):**
+  - S3-22 and S3-62: `/b/` reads insert `BusinessProfileView`.
+  - S3-26: web AI chat is client-only.
+- **User direction (recorded 2026-09-27T07:22:48Z):** don't stop to ask. Take the recommended option and record it here, in the RESULT and in the PR body. The hard limits still apply.
+
+### Next (ordered; details in the prompt §6)
+1. Watch the open PRs. Stream 1 stays queue owner until batches 40, 41 and 42 merge; answer its questions. If #618’s CI fails, fix it on its branch (prompt §6).
+2. **Web:** make `resolvePolicyValue` read the mobile policy shapes (the companion to #618). Details are in the #618 section below and in prompt §6.
+3. **Android:** check profile → Message after a DM header tap (#612 left it unchecked).
+4. Verify the candidates on master before touching them: the iOS business-profile toast; the Edit profile “All changes saved” copy; the New York default schedule; the iOS “Not you?” question.
+5. Keep this file, the kit README and memory current. Commit and push only your own file.
+
+
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z, handed off 2026-09-27 (last update 2026-09-27T10:20:59Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots (2026-09-27T09:25:36Z):** Stream 3 holds no heavy and no device slots. Released:
-  - slot 3 at 09:15:27Z (emulator-5554 shut down at 09:15:24Z; Stream 1 had taken slot 4 at 09:14:49Z);
-  - heavy at 09:18:29Z, taken by Stream 1 at 09:18:46Z;
-  - slot 1 at 09:22:52Z (sim 0AE16FA0 shut down first), for Stream 1.
-- Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`). Batch 40 #608 (Stream 1) has been in CI since 09:01:36Z with #593–#597 and #600.
-- CI: #593/#594/#595/#596/#600 green. #597 re-run was still in iOS tests at 09:11Z. #604/#605 were running at 09:11Z. #612 is bound in the app, which tracks its CI.
+- **Slots (2026-09-27T10:20:59Z):** Stream 3 holds **no heavy and no device slots**. Today’s last holds:
+  - heavy 09:59:01Z–10:12:32Z (the #618 Android build and unit tests);
+  - slot 3 09:31:00Z–10:15:21Z, then 10:16:25Z–10:18:46Z (the #618 before and afters);
+  - every device was shut down before its slot was released.
+- **Batches:**
+  - Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`); master is now `621e26616` (docs #614).
+  - Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), rebuilt at 09:46Z (tip `01f75025f`), holds #593, #594, #595, #596 and #600.
+  - Batch 41 (Stream 1) will take #597, #604, #605 and #612.
+  - #618 goes to batch 42.
+  - Stream 1 stays queue owner until those merge.
+- **CI (REST, 10:20:06Z):** #593, #594, #595, #596, #597, #600, #604, #605 and #612 green. #618 running; it is bound in the app, which tracks its CI.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -65,21 +103,28 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
 
-### IN PROGRESS (2026-09-27T09:38:47Z): Android fails to parse a booking page whose `cancellation_policy` is an object
-- **Defect (reproduced):** `BookingPage.cancellation_policy` is jsonb (migration 166).
-  - Web’s policy editor always saves an object: `{cutoff_min, reschedule_cutoff_min, refund_policy, notes, preset}`, plus `refund_percent_after`, `deposit_non_refundable` and `no_show_handling` for custom (`policyPresets.ts` `toCancellationPolicy`).
-  - iOS saves preset strings, or an object for custom (`CancellationPolicyEditorViewModel.pagePolicyValue`).
-  - Android types the field as `String?` in `BookingPageDto` and `PublicPageView`, so Moshi throws `JsonDataException: Expected a string but was BEGIN_OBJECT at path $.page.cancellation_policy`.
-  - The whole Android Scheduling hub then shows “Couldn’t load scheduling”. Twelve owner screens read `GET /booking-page`; the invitee public page and Manage booking read `PublicPageView`.
-  - The policy editors are behind paid scheduling (web defaults ON in non-prod, OFF in prod), so this surfaces where paid scheduling is on, or for pages that already hold an object.
-- **Before evidence:** bundle `.pantopus-recovery/audits/20260927-stream3-android-booking-page-policy-object-r1/before/`.
-  - Control: hub OK with a null policy at 09:34:49Z.
-  - Error after BP1 at 09:35:25Z, with `GET /booking-page` 200 at 09:35:20Z.
-  - Logcat stack in `logcat-parse-error-safe.txt`.
-  - Master APK `27a5e60e…` (scheduling code identical to `9f3ba7c35`), Member signed in on emulator-5554 (slot 3, held since 09:31:00Z).
-- **Fixture BP1 (APPLIED, revert before handoff):** the Member’s page `a1060a2b` got web’s Flexible object through the real `PUT /api/scheduling/booking-page`, direct to API 18134, at 09:35:05Z. Revert SQL is in the fixture manifest (BP1): set `cancellation_policy` NULL and `updated_at` back to `2026-09-26 06:12:50.488+00`. Not the Owner’s retained `807dd420`.
-- **Fix plan (Android only, decided under the standing direction):** a `CancellationPolicyValue` type plus an adapter registered in `NetworkModule.provideMoshi()`, like `BusinessServiceAreaJsonAdapter`. It normalizes preset strings, Android’s JSON-string custom, iOS/web objects and free text. It is used by `BookingPageDto`/`PublicPageView`, the editor’s `applyPagePolicy`, the business-settings label and the invitee Manage booking card, with sentences reusing the editor’s preview wording.
-- **Related, not in this fix:** web shows Android’s JSON-string custom policy verbatim as notes (`policyValue.ts` `resolvePolicyValue`). This is a web follow-up candidate.
+### PR #618 (sent to Stream 1 before 10:20:06Z; reviewed by Stream 1 for batch 42 once CI is green): Android reads every stored booking-page cancellation policy
+- **[#618](https://github.com/WangPantopus/skinny-pantopus/pull/618):** head `88488d264`, first committed as `b991fd3f7` and amended for detekt’s complexity limit before any push. On master `621e26616`, it merges cleanly with batch 40’s tip and #597/#604/#605/#612.
+- **Bundle:** `20260927-stream3-android-booking-page-policy-object-r1`, seal `c9b9183d3a468892bab206473247f80a31562eb4ea320c00edeb531b5b83acf9` (19 files; seal comment posted).
+- **Defects, both reproduced on the master APK `27a5e60e…`:**
+  - (1) `BookingPage.cancellation_policy` is jsonb. Web always saves an object and iOS saves one for custom, but Android typed the field `String?`, so Moshi’s `JsonDataException` failed the whole page. The Scheduling hub showed “Couldn’t load scheduling” while the API answered 200.
+  - (2) The editor matched presets case-sensitively, so an iOS “moderate” opened as Flexible, and a Save would have overwritten it.
+- **Fix (9 files):**
+  - `CancellationPolicyValue` plus `CancellationPolicyValueJsonAdapter`, registered in `NetworkModule`, like `BusinessServiceAreaJsonAdapter`.
+  - The editor reads presets in any case, and custom fields in either naming.
+  - The business-settings label and the invitee Manage card use the editor’s existing wording.
+  - Two tests were updated for the type change. Writes are unchanged.
+- **After (APK `aced96c1…`):** the hub loads with web’s object, and the editor maps web preset, web custom, iOS custom, iOS lowercase preset and Android’s JSON string correctly.
+- **Checks:** ktlint, detekt, lintDebug and assemble pass; scheduling unit tests 547 with 0 failures.
+- **Fixture BP1** (six values on the Member’s page `a1060a2b`) was reverted exactly at 10:18:43.926Z. Otherwise only sign-in bookkeeping.
+- **Not driven:** the business-settings label (no business booking page) and the invitee Manage card (no live page).
+- **Related web defect (next PR candidate, found by code on master `621e26616`, not yet reproduced on the web app):** web’s `resolvePolicyValue` (`frontend/apps/web/src/components/scheduling/policyValue.ts`) knows only web’s own object shape and preset strings.
+  - (a) Android’s custom policy is a JSON *string*. It becomes a notes-only policy, so the invitee’s `CancellationPolicy` card (`components/scheduling/CancellationPolicy.tsx`) shows the raw JSON text.
+  - (b) iOS’s custom object (`free_cancel_window_min`, `refund_after_pct`, `deposit_non_refundable`, `no_show`) has no `cutoff_min` or `refund_policy`. `plainSentence` then says “You can cancel anytime for a full refund.”, which misstates the host’s terms to invitees, for example 12 h before and 25% after.
+  - Also used by `ManageBookingPanel` (`plainPolicySentence`) and the editor’s `fromCancellationPolicy`.
+  - Fix direction: normalize the mobile custom keys and JSON-text strings in `resolvePolicyValue`, mapping `free_cancel_window_min`→`cutoff_min`, `refund_after_pct`→`refund_percent_after`, and `refund_policy` as `customRefundPolicy` does.
+  - Verify on a live page’s invitee confirm and manage views, with fixture policies (recorded, reverted). Run the covering web Jest first.
+
 
 ### PR #612 (sent to Stream 1 at 2026-09-27T09:25Z): a DM’s header opens the other person’s profile (iOS + Android, web parity)
 - **[#612](https://github.com/WangPantopus/skinny-pantopus/pull/612)** head `2583774f3` on `f6c66d678`: merges cleanly into `9f3ba7c35`, and together with #597 and #605. Bundle `20260927-stream3-native-chat-header-profile-r1`, seal `61c648327e456afd2a9c0886da3c8449ffb6ecd1852dd4aa12f1979b47679146` (31 files; seal comment posted).
@@ -162,6 +207,16 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
   - Recorded in #612’s RESULT and PR body.
 - 2026-09-27T09:22:52Z: **Released slot 1 before checking Android’s profile → Message stacking.** Stream 1 was waiting for the iOS driver, and slot 3 was already released. That check is listed as not done in #612.
 
+- 2026-09-27T09:35:05Z: **Fixture BP1 for the policy reproduction.**
+  - The Member’s own page `a1060a2b` got web’s Flexible object through the real `PUT /api/scheduling/booking-page`, direct to API 18134, with the exact revert recorded in the manifest.
+  - It is not the Owner’s retained `807dd420`.
+  - Why: a page’s policy object is the data state web’s editor produces; the reproduction needs it on a page an Android owner loads.
+- 2026-09-27T09:45:49Z: **Fix Android to read every stored policy shape** (commit `b991fd3f7`, amended to `88488d264` after detekt flagged `ManageBookingViewModel.map` complexity; branch `claude/stream3-android-booking-policy-object`).
+  - `CancellationPolicyValue` plus an adapter, following the `BusinessServiceAreaJsonAdapter` pattern.
+  - The editor, the business-settings label and the invitee Manage booking card use it, with the editor’s existing preview wording. Writes are unchanged.
+  - Two existing tests were updated only because the DTO field type changed.
+  - Rejected: a `String` qualifier adapter (objects as raw JSON text would reach invitee screens), and changing Android’s write format (it would change what web and iOS read; a separate question).
+
 ### Earlier questions (answered above)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
 2. The persona/public profile header's "Share profile" button opens Block/Report on both apps (still true on master `89f3c6bac`: iOS `PublicProfileView.swift:428`, Android `PublicProfileScreen.kt:399`). Making it share would remove the only route to Block/Report. Options: a separate "…" button for Block/Report and a real Share; relabel as "More"; or leave it.
@@ -190,6 +245,16 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
+- **Checked 2026-09-27, closed without a change:**
+  - Web “New message” result avatars: `chat/new/page.tsx:113` already falls back to `profilePicture`.
+  - The Android scheduling `MessagePreviewSheet` insets: the sheet is reachable only from the Workflows/Templates editors, which #468 hid.
+- **New candidates (2026-09-27), in suggested order (details in `NEXT-STREAM3-PROMPT-2026-09-27.md` §6):**
+  1. Web `resolvePolicyValue` misreads mobile policies: Android’s JSON string is shown verbatim, and an iOS custom object is shown as “You can cancel anytime for a full refund.” This is the companion to #618; see the #618 section.
+  2. Android profile → Message after a DM header tap (#612): not checked.
+  3. The iOS business-profile Contact/“Hire to review” failure toast is likely hidden behind the floating tab bar.
+  4. The Edit profile footer says “All changes saved · just now” when nothing was saved (iOS `EditProfileStickyBar.swift:76`, Android `EditProfileScreen.kt:1008`).
+  5. The default availability schedule is created in `America/New_York` (`backend/routes/scheduling.js:52`). Check whether first-run setup fixes it for Pacific users.
+  6. The iOS DM → profile → Message double load (recorded in #612, deliberately left).
 - Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
 - **Candidate, now PR #612 (`2583774f3`, first `c5e133780`; 2026-09-27T08:27:38Z):** the chat header name opens the other person's profile on web (`ConversationView.tsx:349-350`, `chatPersonHref`), but not on Android (tapping it did nothing, 07:32Z). The iOS header has only an audience-profile hook. Next after the dashboard/Connections build.
 - **Checked (2026-09-27T08:27:38Z):** the business "gallery" has no backend. `POST /api/upload/business-media` accepts only `logo`/`banner`; `gallery_file_ids` belongs to catalog items, and galleries otherwise exist only as a Custom Pages block. So hiding the editor gallery (#596) and the dashboard Photos rail is consistent.
