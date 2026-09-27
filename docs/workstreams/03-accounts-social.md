@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:01:47Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:10:04Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
+- **Slots:** none held (heavy 07:26:43Z–07:45:06Z, slot 3 07:27:03Z–08:05:34Z, slot 1 07:37:07Z–08:05:17Z; both devices shut down). Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) merged at 08:01:42Z (master `f6c66d678`) with #567, #573, #576, #582, #583, #584.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -60,6 +60,22 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
 
+### PRs #593–#597 (sent to Stream 1 at 2026-09-27T08:10:04Z; CI running)
+All sealed, with seal comments. Befores used master builds; afters used one local verification tree `72d6e0bd3` (master `563cddb47` + these five heads, disjoint files, each byte-identical). Android APK `84089eba…`, iOS dylib `30f255ba…`.
+- **[#593](https://github.com/WangPantopus/skinny-pantopus/pull/593)** Android: a failed review reply says it wasn't posted (S3-59 parity). Head `bbca31072`, bundle `20260927-stream3-android-review-reply-failure-r1`, seal `ff7689fb971bc7841b057fa2359b079cb846398daac5e6bb29e1a63435235a76`.
+- **[#594](https://github.com/WangPantopus/skinny-pantopus/pull/594)** iOS: notifications tab race and load-more Try again (S3-48 parity). Head `4c7fe3f9a`, bundle `20260927-stream3-ios-notifications-generation-r1`, seal `f2bf64945176a9678a8aea0a8bc9b7f9e479bfb3ba7a3048d2bbfbfdd18490a6`.
+  - Race reproduced via Unread → All: a late Unread page replaced All.
+  - A pull-to-refresh race is masked by `.refreshable` cancellation.
+  - The proxy's `requestDelayMs` hangs delayed GETs upstream, so use `responseDelayMs`.
+- **[#595](https://github.com/WangPantopus/skinny-pantopus/pull/595)** iOS + Android: My bookings "Book again" opens the booking page; iOS rows say where to manage (S3-52; uses #584's `page_slug`). Head `77d56b4a3`, bundle `20260927-stream3-native-my-bookings-book-again-r1`, seal `d5c772f095eac7c271f1e128fcf1f95105c47ef53190cbca19c9d4f145716252`.
+- **[#596](https://github.com/WangPantopus/skinny-pantopus/pull/596)** Android: the page editor hides its inert Gallery (user decision). Head `bc06ecec8`, bundle `20260927-stream3-android-page-editor-gallery-hidden-r1`, seal `895d17368bbac74d41ab79e20ca96ef07159cd5220fea11b272fb899b326d7b9`.
+- **[#597](https://github.com/WangPantopus/skinny-pantopus/pull/597)** iOS + Android: "Share profile" sheet shares the profile, `/u/:username` (user decision). Head `4cd2e5d45`, bundle `20260927-stream3-native-profile-share-r1`, seal `10193489ba3d901e13e245c95ee57de1beee2e699632567d5b648b2eda90fc62`.
+- Side effects: sign-in/out bookkeeping only (fingerprint 07:29:59Z–08:05:40Z).
+- Runtime after the run:
+  - sim `0AE16FA0` has build `72d6e0bd3` with the Owner signed in (shut down);
+  - emulator-5554 restores its snapshot at boot;
+  - the API is on `23e518b11`, `fault-control.json` is `{}`, web is on #584's branch.
+
 ### PR #584: My bookings "Book again" opens the booking page; a row says where to manage it (S3-52, web + API)
 - **[#584](https://github.com/WangPantopus/skinny-pantopus/pull/584)** head `615659fc2` on `563cddb47` (merges cleanly). Bundle `20260927-stream3-my-bookings-dead-controls-r1`, seal `187dcd0fbadcdedb55b58599fc3369f59d2ff3e1343cd0554558c3727a7b4080` (41 files; seal comment posted). Sent to Stream 1 before 05:42:41Z (queued there while it waits on the user); CI running.
 - Defect (S3-52 remainder after `75e061e40`): web and iOS "Book again" on past bookings had no handler (`/my-bookings` rows lack the page slug), and rows showed a chevron that did nothing. Android already answers row taps (manage page if this device booked it, else "Manage this booking from your confirmation email link.").
@@ -69,7 +85,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Not verified: a live page's landing (no live booking page in the isolated DB); iOS and Android follow-up (same wiring from `page_slug`; needs heavy + devices).
 - Runtime note: web 18131 now serves this branch (master `563cddb47` + #584) from `/private/tmp/pantopus-stream3-web-chat-names-r1`.
 
-### Committed, verification pending (need heavy + devices)
+### Committed, verification pending (need heavy + devices) — DONE: now #593, #594, #595 (see above)
 - **S3-59 on Android: a failed review reply now says so.** Branch `claude/stream3-android-review-reply-failure`, head `bbca31072` on `c890f2588`; 1 file (`BusinessOwnerViewModel.kt`) adds "Your reply wasn't posted. <reason>" (iOS got the same in #552). Before captured on the master APK (bundle `20260927-stream3-android-review-reply-failure-r1/before`): the reply shows, the injected 500 lands at 05:11:22Z, and the reply vanishes with no message. The after needs a build.
 - **S3-48 on iOS: notifications tab switch mid-load, and load-more retry.** Branch `claude/stream3-ios-notifications-generation`, head `4c7fe3f9a` on `c890f2588`; 1 file (`NotificationsViewModel.swift`) mirrors Android's d8cce256d and iOS Mailbox: a generation guard, local offsets applied only while current, and `loadMoreError` plus `retryLoadMore` (the shared list's Try again). SwiftLint `--strict` and SwiftFormat are clean. The build on sim `0AE16FA0` (`f009f6be7`) has master's notifications code, so it can serve as the before. Owner has 33 notifications (15 read / 18 unread; 2 pages). Rules `fault-s348-notif-delay.json` (12 s delay) and `fault-s348-notif-page-fail.json` are ready.
 
