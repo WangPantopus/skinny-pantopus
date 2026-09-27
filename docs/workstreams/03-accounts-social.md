@@ -2,16 +2,24 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:35Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:52Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held (heavy released 00:29:39Z; slot 3 / emulator-5554 released 00:28:34Z, emulator stopped; slot 1 released 00:33:59Z).
 
 ### PRs
-- **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): head `70e5447ad`, green; in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
+- **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
 - **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`, CI running at 00:35Z. Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted). Send to Stream 1 when green.
   - Verified on the iOS simulator (builds `498811062`, final `520ed06cf`) and the Android emulator (APK `2b9f468f…`); befores on `36af1f371` builds, identical to master for these files.
+  - Stream 1 plans it for batch 35.
   - Two defects found in verification and fixed in the branch: Booking notifications Back (Swift 5 backward trailing-closure matching bound `{ dismiss() }` to `onTrailing`), and an uploaded 16:9 banner resizing the 16:7 editor banner.
+
+### New finding (from Stream 1's #553 work): new-post notifications are never created
+- `postCreationHooksService.js:148` passes `contextType: 'post'` to `createBulkNotifications`. `Notification.context_type` is the enum `notification_context_type` ('personal', 'business'; baseline migration from prod), so the single bulk insert fails and every "<name> shared a new post" is dropped (only a server log line). Reached by any post whose targets include connections or persona followers.
+- Evidence: `SELECT 'post'::notification_context_type` → "invalid input value for enum" on the isolated DB; code path `POST /api/posts` → `runPostCreatedHooks` (`posts.js:1479`).
+- Fix prepared (same pattern as #553): local branch `claude/stream3-post-fanout-context` (worktree `/private/tmp/pantopus-stream3-post-fanout-r1`, commit `097e3e087` on master `73b98f6b6`, not pushed). Backend Jest 341 suites / 6,286 tests and privacy gates pass locally.
+- **Waiting on the user:** an end-to-end check needs a write scope (the Member posts to connections; the Owner should get the notification). Asked 2026-09-27 ~00:52Z.
+- Handed to Stream 1 (gigs): `savedSearchAlertService.js:96` passes `contextType: 'gig'` the same way.
 
 ### Rows
 - **Done in PRs:** S3-46 and S3-69 web (#545); S3-64 iOS, S3-37 iOS, S3-35 iOS + Android, S3-59 iOS (#552).
