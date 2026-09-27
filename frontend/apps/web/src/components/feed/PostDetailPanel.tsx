@@ -100,6 +100,7 @@ export default function PostDetailPanel({
         }
         if (commentsRes.status === 'rejected') {
           console.warn('Failed to refresh post comments', commentsRes.reason);
+          showToast('Could not refresh comments. Close and reopen this post to retry.');
         }
       }
     } catch (err) {

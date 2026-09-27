@@ -35,8 +35,12 @@ function DocsContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeDocuments(homeId);
+      if (!Array.isArray(res?.documents) || res.documents.some((row) =>
+        !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new Error('Invalid documents response');
+      }
       setLoadError(null);
-      setDocs((res as any)?.documents || []);
+      setDocs(res.documents);
     } catch {
       setLoadError('Current documents could not be loaded. Retry to check current information.'); toast.error('Failed to load documents'); }
   }, [homeId]);

@@ -34,8 +34,12 @@ function AccessContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeAccessSecrets(homeId);
+      if (!Array.isArray(res?.secrets) || res.secrets.some((row) =>
+        !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new Error('Invalid secrets response');
+      }
       setLoadError(null);
-      setSecrets((res as any)?.secrets || []);
+      setSecrets(res.secrets);
     } catch {
       setLoadError('Current access codes could not be loaded. Retry to check current information.'); toast.error('Failed to load access codes'); }
   }, [homeId]);

@@ -371,7 +371,18 @@ export async function getComments(postId: string, params?: {
   limit?: number;
   offset?: number;
 }): Promise<{ comments: PostComment[] }> {
-  return get(`/api/posts/${postId}/comments`, params);
+  if (params) return get(`/api/posts/${postId}/comments`, params);
+
+  // Detail views render the whole thread and have no server-page control.
+  // Keep explicitly paged reads unchanged, but finish every page by default.
+  const comments: PostComment[] = [];
+  const limit = 50;
+  for (let offset = 0; ; offset += limit) {
+    const page = await get<{ comments: PostComment[] }>(`/api/posts/${postId}/comments`, { limit, offset });
+    if (!Array.isArray(page?.comments)) throw new Error('Could not load comments');
+    comments.push(...page.comments);
+    if (page.comments.length < limit) return { comments };
+  }
 }
 
 export async function addComment(postId: string, data: {
