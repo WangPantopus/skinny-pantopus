@@ -12,6 +12,13 @@
   - [#575](https://github.com/WangPantopus/skinny-pantopus/pull/575) (`ab44aec23`): the web checklist Hire pill and "Refresh checklist" button were invisible. `bg-primary` has no DEFAULT in the theme, so they rendered white on white. Now `bg-primary-600`/`-700`. Bundle `20260927-stream2-checklist-button-color-r1` (`8a865808…`, 10 files).
   - Neither PR shares files with the 17 open PRs, and both merge-tree clean against batch 37's tip `18389b9b5`.
   - **PR-B (native)** is agreed with Stream 1. iOS Hub `.composeGig`, iOS You `.composeTask` and Android `composeGig` all open the **V2 wizard** (GigCompose*), which Stream 1 is changing next (address search). PR-B starts on master after Stream 1 pings that its V2 PR merged. Planned edits: an optional checklist context into the wizard, a link call once after the 201, and a quiet note on failure.
+- **[#578](https://github.com/WangPantopus/skinny-pantopus/pull/578) (2026-09-27T04:27:45Z, head `e572bf6cd` on `7bdef3e8c`):** checklist Complete/Skip (503) and web Home settings Save / bill opt-in (500) have **always failed since Sep 11**.
+  - Cause: `supabaseAdmin.rpc(...).catch(...)` throws, because supabase-js 2.103.3 builders have no `.catch`.
+  - Fix: `Promise.resolve(builder)`. Bundle `20260927-stream2-rpc-catch-saves-r1` (`4f1c7519…`, 22 files).
+  - The same pattern in `listings.js` was reported to Stream 1; `internalBriefing.js` is Stream 3's.
+  - Candidate: after a successful web Settings save the tab reloads, so "Settings saved!" is never visible; error messages without "Failed" show in green.
+- **I02 carryover (web):** fixture rows a991ef31 (completed), aec53a27 (pending) and 2043bffc (pending, then completed with #578). "From last season (Summer & Smoke Season)" renders and expands; Complete works after #578.
+- **Stream 1 lead (open):** native Home settings Save may error because `PATCH /api/homes/:id` returns the raw `location` (EWKB). It needs a Home with a location; the F01 cohort gives 9d885f71 one, then check on the devices.
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
