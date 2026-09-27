@@ -213,10 +213,15 @@ export default function PostDetailPage() {
         }
       }
 
-      setComments((prev) => [...prev, nextComment]);
-      setPost((p: Post | null) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
-      showToast(uploadFailed ? 'Comment posted, but image upload failed' : 'Comment posted');
-      return true;
+      const alreadyAdded = comments.some((comment) => comment.id === nextComment.id);
+      setComments((prev) => prev.some((comment) => comment.id === nextComment.id)
+        ? prev.map((comment) => comment.id === nextComment.id ? nextComment : comment)
+        : [...prev, nextComment]);
+      if (!alreadyAdded) {
+        setPost((p: Post | null) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
+      }
+      showToast(uploadFailed ? 'Comment posted; image failed. Send to retry or Clear to discard.' : 'Comment posted');
+      return !uploadFailed;
     } catch {
       showToast('Failed to add comment');
       return false;
