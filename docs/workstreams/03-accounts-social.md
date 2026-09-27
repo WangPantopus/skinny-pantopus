@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:12:10Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:21:24Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
+- **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -22,7 +22,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Stream 1 fixed the gig saved-search case as #555.
 
 ### PR #566: open chats keep getting live messages after a tab switch or a pushed screen (iOS and Android)
-- **[#566](https://github.com/WangPantopus/skinny-pantopus/pull/566)** head `7b801e993` on `73b98f6b6` (merges cleanly into `89f3c6bac`; no chat/realtime file changed on master in between). Bundle `20260927-stream3-chat-resubscribe-r1`, seal `fbbae81d9be68eebc3548153d035c5b1d4cb5d3c594f5bf54cef9e6c528c40bb` (74 files; seal comment posted). CI green (Stream 1: "CI OK" at 03:42:12Z). In batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572), queued 03:44:00Z (#560, #563, #564, #565, #570, #566).
+- **[#566](https://github.com/WangPantopus/skinny-pantopus/pull/566)** head `7b801e993`: **merged** in batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) at 05:19:20Z (#572 at 05:19:18Z, master `563cddb47`). Bundle `20260927-stream3-chat-resubscribe-r1`, seal `fbbae81d9be68eebc3548153d035c5b1d4cb5d3c594f5bf54cef9e6c528c40bb` (74 files; seal comment posted). CI green (Stream 1: "CI OK" at 03:42:12Z). In batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572), queued 03:44:00Z (#560, #563, #564, #565, #570, #566).
 - Defect: both apps' chat screens call `teardown()` when they leave the screen (iOS `.onDisappear`, Android `DisposableEffect`), which cancels the socket listeners; when the thread came back, `load()` returned early because it was already loaded, so nothing listened again until the thread was reopened. Found while acknowledging Stream 2's #560 report (leftover chat view models).
 - Befores with master chat code: iOS (build `520ed06cf`) message 20 still missing 63.4 s after it was stored; Android (master APK `27a5e60e…`) message 24 still missing 61.2 s later; no request from the app; reopening showed them.
 - Fix (2 existing files): iOS `fc56edc1f` re-subscribes and refreshes (merge) on return and makes the socket loops hold the view model weakly (the #560 leak); Android `f009f6be7` re-subscribes and marks the thread viewed on return (the room re-join ack backfills); Android `7b801e993` makes `optStringValue()` treat a JSON null as absent. That last bug was found in the Android after: the backfill gave topic-less messages the topic id "null", which drew a stray "General" divider.
@@ -45,7 +45,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - The gallery "Add" tiles are still inert (no backend); see the pending questions below.
 
 ### PR #576: Android Creator inbox "Send a broadcast · Compose" opens the composer (S3-68 parity)
-- **[#576](https://github.com/WangPantopus/skinny-pantopus/pull/576)** head `edfe11e30` on `89f3c6bac` (merges cleanly into `7bdef3e8c`; recheck after batch 37 merges, since #564 also touches `RootTabScreen.kt`). Bundle `20260927-stream3-android-creator-inbox-compose-r1`, seal `05c034cb08158be8e9c37d1fad5e05e7f531bcf257b443e569a765dcf1c08db3` (19 files; seal comment posted). Reviewed OK by Stream 1; batch 38 once green.
+- **[#576](https://github.com/WangPantopus/skinny-pantopus/pull/576)** head `edfe11e30` on `89f3c6bac` (merges cleanly into `563cddb47`, rechecked after batch 37 merged with #564's `RootTabScreen.kt` change). Bundle `20260927-stream3-android-creator-inbox-compose-r1`, seal `05c034cb08158be8e9c37d1fad5e05e7f531bcf257b443e569a765dcf1c08db3` (19 files; seal comment posted). Reviewed OK by Stream 1; batch 38 once green.
 - Defect: `RootTabScreen` sent Compose to `AUDIENCE_PROFILE`. iOS fixed this in `bcb23ae91`; its Android change there was only S3-12.
 - Fix: 3 files (+15/−5); Compose → `composeBroadcast(personaId)`, or the audience profile without a Beacon.
 - Before (master APK): "Public Profile". After (APK `8fa0a377…`): "Compose broadcast" for @s3fx_member_beacon; nothing sent. `CreatorInboxViewModelTest` 9/9.
@@ -101,7 +101,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 
 ### Candidates (not changed)
 - Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
-- **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Sweep done: S3-10, S3-13, S3-32, S3-36, S3-51 have no gap either; S3-34 is iOS per-stack wiring (Android has one NavHost); S3-48 (iOS) and S3-59 (Android) are committed above, verification pending.
+- **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Sweep done: S3-10, S3-13, S3-32, S3-36, S3-51 have no gap either; S3-34 is iOS per-stack wiring (Android has one NavHost); S3-48 (iOS) and S3-59 (Android) are committed above, verification pending. Web read for the same defect classes, no gap: the web notifications page keys its query cache by filter and zone and discards retired responses (the tab race), and a failed "Load more" shows "Could not load all notifications." with Retry while the button comes back; the web broadcast composer has no sample counts; a failed web review reply shows an error.
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
