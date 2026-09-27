@@ -161,6 +161,12 @@ class PulsePostDetailViewModel
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
+        init {
+            viewModelScope.launch {
+                postsRefresh.ticks.collect { refetchInPlace() }
+            }
+        }
+
         fun openOverflowMenu() {
             _showsOverflowMenu.value = true
         }
