@@ -5452,7 +5452,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ChildRoutes.personaDmThread(row.personaId, row.id),
                             )
                         },
-                        onOpenBroadcast = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
+                        // "Send a broadcast · Compose" opens the composer for the inbox's
+                        // Beacon (as on iOS); without a Beacon, the audience profile sets one up.
+                        onOpenBroadcast = { personaId ->
+                            if (personaId.isNotEmpty()) {
+                                navController.navigate(ChildRoutes.composeBroadcast(personaId))
+                            } else {
+                                navController.navigate(ChildRoutes.AUDIENCE_PROFILE)
+                            }
+                        },
                         // No native DM-policy editor exists; the Beacon (tiers, messaging)
                         // is set up and managed from the audience profile.
                         onOpenSettings = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
