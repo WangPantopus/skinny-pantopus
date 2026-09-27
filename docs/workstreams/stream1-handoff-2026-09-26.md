@@ -6,7 +6,8 @@
 
 > **Live — successor session (queue owner since 2026-09-27T02:50Z), 03:44Z:** batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) queued 03:44:00Z (#560 #563 #564 #565 #570 #566; tip `a3c1b106d`); batch 38 candidates #567 #568 #569 #571 (CI running). S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571) implements §3.2 (bundle `20260927-stream1-quickpost-address-search-r1`, `bba44d1b…`). New user decision (answer before 03:33:40Z): the V2 composer gets the same address search (Stream 1 next). The hub docs' 03:44Z UPDATE blocks hold the detail.
 >
-> **Live, 2026-09-27T05:00Z:** batch 37 #572 rebuilt on `c890f2588` (tip `8c6b21c43`, CI re-running). S1 [#580](https://github.com/WangPantopus/skinny-pantopus/pull/580) (V2 wizard real places; bundle `a4c865b1…`) and [#581](https://github.com/WangPantopus/skinny-pantopus/pull/581) (listing slot release) are open. Audits done (§3.3). A listing Home-membership security finding is escalated to the user. The hub docs' 05:00Z UPDATE blocks hold the detail.
+> **Live, 2026-09-27T07:39Z:** batch 37 merged 05:19:24Z → `563cddb47`; batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) queued 07:25:44Z (14 PRs). New S1 PRs #586 (listing Home access, security), #588 (reschedule notice UTC); slot-lifecycle and edit-copy branches pending checks. The user's standing instruction (~07:22Z): never stop; take the recommended option and record it. See the 07:39Z UPDATE blocks.
+> **Earlier live, 2026-09-27T05:00Z:** batch 37 #572 rebuilt on `c890f2588` (tip `8c6b21c43`, CI re-running). S1 [#580](https://github.com/WangPantopus/skinny-pantopus/pull/580) (V2 wizard real places; bundle `a4c865b1…`) and [#581](https://github.com/WangPantopus/skinny-pantopus/pull/581) (listing slot release) are open. Audits done (§3.3). A listing Home-membership security finding is escalated to the user. The hub docs' 05:00Z UPDATE blocks hold the detail.
 > **§9 correction:** at the user's request the previous session removed its 8 merged PR worktrees (gig-qa-live, web-worker-panel, native-helper-dock, web-stop-copy, android-tab-nav, gig-write-replies, android-edit-location, saved-search-alerts) with `git worktree remove` by 02:51:59Z, and deleted 8 superseded APK copies (the runtime keeps `installed-5558-1e3ed71f8.apk` and now `installed-5558-b4b518313.apk`). New worktree: `/private/tmp/pantopus-stream1-quickpost-address` (#571).
 
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
@@ -256,8 +257,8 @@ Rebuild both from master before native checks.
 - **New this session** (source-verified or seen on device):
   - Native edits clear `exact_city/state/zip`. Proposal: the PATCH keeps them when the location object omits them.
   - Native edit forms know 8 categories only ("Other" → Handyman on Android / none on iOS): a taxonomy decision.
-  - The Android edit form won't save a $0 "Flat" task, and says "We couldn't post your gig." in edit mode.
-  - The reschedule notice prints server-timezone time.
+  - The Android edit form won't save a $0 "Flat" task, and says "We couldn't post your gig." in edit mode. **2026-09-27: the $0 rule is kept** (web also requires a budget above 0 on create and edit; decision recorded). The edit-mode copy is fixed on both apps (branch `claude/stream1-quickpost-edit-copy` `e81043a39`; device check pending).
+  - The reschedule notice prints server-timezone time. **FIXED [#588](https://github.com/WangPantopus/skinny-pantopus/pull/588)** ("… UTC"; bundle `9e41f879…`).
   - The saved-search alert context type is fixed in #555. The same `'post'` bug in `services/postCreationHooksService.js:148` is Stream 3's; they have a local fix (`097e3e087`) awaiting their user's approval of an end-to-end write, likely for batch 36.
 - **Recommended audit** (the pattern behind #548 and #553):
   - Any backend write that replies with a raw `select('*')` row can break native decoding. PostGIS `geography` columns become EWKB hex strings, and `to_jsonb(geography)` too.

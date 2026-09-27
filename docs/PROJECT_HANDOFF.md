@@ -2,6 +2,25 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T07:39Z — Stream 1 (queue owner).** The user's standing instruction (~07:22Z): don't stop; go with the recommended option and record every decision. The decisions are logged below.
+> - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) merged 05:19:24Z → master `563cddb47`.** The runtime is on it (`e6039fe0f`; backend pid 82757 since 07:37:55Z).
+> - **Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) queued 07:25:44Z** (runner pid 77396). Tip `40563cd32`: #567 #568 #569 #573 #574 #575 #576 #578 #579 #580 #581 #582 #583 #584.
+>   - Proofs: ancestry; file set = union (64 files); hunk proofs for `seasonalChecklistService.js` (#574 + #578) and `RootTabScreen.kt` (#576 + master).
+> - **Batch 39 candidates:**
+>   - S1 #571 (its CI re-run passed (checked 07:39:30Z) after a flaky `HomeTaskMediaViewModelTests`), [#586](https://github.com/WangPantopus/skinny-pantopus/pull/586), [#588](https://github.com/WangPantopus/skinny-pantopus/pull/588), the slot-lifecycle PR (after Stream 2's Home run), and the Post task edit copy (after a device check).
+>   - S2 #587.
+> - **New S1 PRs:**
+>   - #586: a listing can name only a Home its lister can access (security). Stream 2 checked it on a real Home.
+>   - #588: the reschedule notice says "… UTC".
+>   - `claude/stream1-listing-slot-lifecycle` `1458bf312`: delete/sold/archive release the Home's inventory slot, and reactivation re-claims it within the cap. Stream 2's delete leak finding covers every status change; its run is in progress.
+>   - `claude/stream1-quickpost-edit-copy` `e81043a39`: the edit-mode error banner says "save your changes", and Android's "1 problems" → "1 problem".
+> - **Decisions (recorded per the standing instruction):**
+>   1. **Listing Home access:** the user chose "Require Home access (Recommended)" (answer before 07:22Z).
+>   2. **Reschedule notice:** explicit "UTC", matching the start reminder. Rejected: dropping the time; a time-zone lookup.
+>   3. **Native edit of a $0 "Flat" task:** kept as is. Web also requires a budget above 0 when creating and editing, the form says to enter a price or pick "Open to offers", and validation blocks the builder's $0→$1 fallback. So the inventory row closes as "consistent with web"; only the edit-mode copy changed.
+>   4. **Slot lifecycle:** an attached listing holds a slot only while `active` (the expiry job's model). Leaving `active` releases it; returning claims it (409 at the cap).
+> - **Runtime:** master. **Slots:** Stream 1 holds none; Stream 3 has heavy and slots 1/3 by user approval.
+
 > **UPDATE 2026-09-27T05:00Z — Stream 1 (queue owner).**
 > - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572)** rebuilt for the user's docs merges (#562, then #577 at 04:27:18Z): tip `8c6b21c43` at 04:42:24Z. The same six heads; its diff from the old tip is #577's docs only. CI is re-running; runner pid 34455.
 > - **Batch 38 candidates** (reviewed, bundles verified, merge-tree clean):
