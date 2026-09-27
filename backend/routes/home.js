@@ -2606,7 +2606,7 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
         severity: severity || 'medium',
         reported_by: userId,
         photos: photos || [],
-        estimated_cost: estimated_cost || null,
+        estimated_cost: estimated_cost ?? null,
         details: details || {},
       })
       .select()
