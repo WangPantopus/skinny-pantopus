@@ -1,6 +1,7 @@
 package app.pantopus.android.data.auth
 
 import app.pantopus.android.data.api.models.auth.AuthErrorBodyParser
+import app.pantopus.android.data.api.models.auth.AuthErrorCodes
 import app.pantopus.android.data.api.net.NonRetriableIOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
@@ -56,6 +57,18 @@ class TokenAuthenticator
             // register / public reads — their 401 is terminal, nothing to renew).
             val isRefreshCall = response.request.url.encodedPath.endsWith("/api/users/refresh")
             if (isRefreshCall || failedToken.isNullOrBlank()) return null
+
+            // A step-up credential rejection follows successful bearer validation.
+            // Let the password sheet retry it without replaying the wrong password
+            // or retiring a valid session. Middleware 401s have no purpose and
+            // continue through the normal refresh path below.
+            if (response.request.method == "POST" && response.request.url.encodedPath == "/api/auth/step-up") {
+                val rejection =
+                    runCatching {
+                        AuthErrorBodyParser.parseStepUp(response.peekBody(MAX_PEEK_BYTES).string())
+                    }.getOrNull()
+                if (rejection?.code == AuthErrorCodes.UNAUTHORIZED && !rejection.purpose.isNullOrBlank()) return null
+            }
 
             synchronized(lock) {
                 // Bail out of pathological loops: if we've already retried this
