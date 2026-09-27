@@ -36,7 +36,7 @@ data class HomeIssueDto(
 /** Envelope for `GET /api/homes/:id/issues` — `backend/routes/home.js:4410`. */
 @JsonClass(generateAdapter = true)
 data class HomeIssuesResponse(
-    val issues: List<HomeIssueDto> = emptyList(),
+    val issues: List<HomeIssueDto>,
 )
 
 /**

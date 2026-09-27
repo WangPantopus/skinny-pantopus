@@ -41,8 +41,12 @@ function MaintenanceContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeIssues(homeId);
+      if (!Array.isArray(res?.issues) || res.issues.some((row) =>
+        !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new Error('Invalid issues response');
+      }
       setLoadError(null);
-      setItems((res as any)?.issues || []);
+      setItems(res.issues);
     } catch {
       setLoadError('Current issues could not be loaded. Retry to check current information.'); toast.error('Failed to load maintenance items'); }
   }, [homeId]);

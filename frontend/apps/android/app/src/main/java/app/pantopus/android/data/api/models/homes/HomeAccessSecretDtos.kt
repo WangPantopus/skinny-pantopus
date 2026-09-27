@@ -32,7 +32,7 @@ data class HomeAccessSecretDto(
 /** Envelope for `GET /api/homes/:id/access`. */
 @JsonClass(generateAdapter = true)
 data class HomeAccessSecretsResponse(
-    val secrets: List<HomeAccessSecretDto> = emptyList(),
+    val secrets: List<HomeAccessSecretDto>,
 )
 
 /** Envelope for `POST` and `PUT` access-secret routes. */
