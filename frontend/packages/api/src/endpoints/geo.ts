@@ -22,12 +22,34 @@ export type NormalizedAddress = {
   geocode_mode?: 'temporary' | 'permanent' | 'verified';
 };
 
+type RawGeoSuggestion = Omit<GeoSuggestion, 'center'> & {
+  center?: { lat: number; lng: number } | [number, number] | null;
+};
+
+/**
+ * `/api/geo/autocomplete` answers each suggestion's `center` in its legacy
+ * `[lng, lat]` shape (kept for the native apps), while every web caller
+ * reads `center.lat` / `center.lng`. Normalize here so a picked suggestion
+ * carries real coordinates (otherwise they are undefined and, for example,
+ * the /start preview cannot be kept for saving).
+ */
+function withObjectCenters(res: { suggestions?: RawGeoSuggestion[] }): { suggestions: GeoSuggestion[] } {
+  const suggestions = (res?.suggestions ?? []).map((s) => {
+    const c = s.center;
+    const center = Array.isArray(c) ? { lat: c[1], lng: c[0] } : c ?? undefined;
+    return { ...s, center } as GeoSuggestion;
+  });
+  return { ...res, suggestions };
+}
+
 export async function autocomplete(q: string): Promise<{ suggestions: GeoSuggestion[] }> {
-  return get<{ suggestions: GeoSuggestion[] }>(`/api/geo/autocomplete?q=${encodeURIComponent(q)}`);
+  return withObjectCenters(await get<{ suggestions: RawGeoSuggestion[] }>(`/api/geo/autocomplete?q=${encodeURIComponent(q)}`));
 }
 
 export async function autocompleteWithAbort(q: string, signal: AbortSignal): Promise<{ suggestions: GeoSuggestion[] }> {
-  return apiRequest<{ suggestions: GeoSuggestion[] }>('GET', `/api/geo/autocomplete?q=${encodeURIComponent(q)}`, undefined, { signal });
+  return withObjectCenters(
+    await apiRequest<{ suggestions: RawGeoSuggestion[] }>('GET', `/api/geo/autocomplete?q=${encodeURIComponent(q)}`, undefined, { signal }),
+  );
 }
 
 export async function resolve(suggestionId: string): Promise<{ normalized: NormalizedAddress }> {
