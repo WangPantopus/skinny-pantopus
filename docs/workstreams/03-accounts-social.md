@@ -15,6 +15,18 @@ The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopp
 
 **Detailed record:** the log below, then the "LIVE — Stream 3 successor session" block (every PR’s evidence, decisions and candidates).
 
+### Launch scope (user direction, 2026-09-27; applied 2026-09-27T11:40:50Z)
+Eight features are flagged off for the first launch; the code is kept, and the user handles the flags.
+- **Do not verify, end-to-end test or fix them.** They are removed from Stream 3’s plans.
+- The shared cut table and rule are in the “LAUNCH SCOPE — 2026-09-27” block at the top of `docs/PROJECT_HANDOFF.md` and `docs/workstreams/README.md` (coordination `d2bf06e36`).
+- The full Stream 3 mapping is in the takeover prompt’s **§0**. Summary:
+  - **Out, #1 Beacon and creator tools:** Beacon pages, Updates, Following, audience, creator inbox, broadcast, fan/creator threads, tiers, paid follow. Rows S3-11/12/13/33/34/35/46/68, and the broadcast “⋯” part of S3-67.
+  - **Out, #2 Personas and identity switching:** persona profiles, Beacon identity, the menu’s “Switch”, Identity Center and view-as, persona DMs. Rows S3-06/27, and the persona-DM part of S3-04.
+  - **Out, #5 Public scheduling for general businesses:** booking pages and setup wizards, event types, public booking and manage-booking, My bookings, host booking tools, team scheduling, the availability UI, booking notifications and channels, policy editors, reminders/workflows, Who’s free, limits. Rows S3-02/05/18/19/20/21/44/45/47/51/52/64, and the “Book” part of S3-07.
+  - **Out where they touch Stream 3 (Stream 1’s #3, #4, #6; Stream 2’s #7, #8):** listing/task cards and pickers in chat, the Gigs/Market filters, the profile Gigs tab, “My bids”, and the cut features’ notification types.
+  - **In scope:** accounts, privacy and blocking, people profiles, connections, DMs and the Messages list, in-scope notifications, crew (business) pages and owner tools, invoices and packages, the daily briefing, the AI assistant. The scheduling engine is tested only through Crew Day.
+  - **Already done in cut areas stays as future-ready work** (e.g. #576, #583, #584, #595, #618, #623); do not re-verify it.
+
 ### State at handoff
 - **Master `35c5434df`.** Stream 3 PRs from this session, all merged:
   - batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), 10:26Z: #593, #594, #595, #596, #600;
@@ -27,10 +39,11 @@ The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopp
   - S3-26: web AI chat is client-only.
 
 ### Next (ordered; details in the prompt §6)
-1. **New hosts on web and iOS keep a New York schedule.** Web `SetupWizard.tsx` and iOS onboarding never update the default schedule’s timezone (the backend seeds America/New_York); only Android’s wizard does. Reproduce with a fresh host, then add the same update.
-2. **Android:** check profile → Message after a DM header tap. #612 didn’t check it; iOS stacks a second DM, which loads twice.
-3. **Verify the candidates on master before touching them:** the iOS business-profile toast; the Edit profile “All changes saved” copy; the iOS “Not you?” question.
+1. **Android:** check profile → Message after a DM header tap. #612 didn’t check it; iOS stacks a second DM, which loads twice.
+2. **Verify the candidates on master before touching them:** the iOS crew-page (business profile) toast; the Edit profile “All changes saved” copy; the iOS “Not you?” question.
+3. **Re-check the in-scope Stream 3 areas end to end** where this session didn’t, reusing sealed evidence when the code is unchanged. Skip everything in the launch scope above.
 4. **Keep this file, the kit README and memory current.** Commit and push only your own files.
+- **Removed by the launch scope (#5):** the New York default-schedule finding (web `SetupWizard.tsx` and iOS onboarding) moves out of the plan. Note for Crew Day: `ensureDefaultSchedule` seeds America/New_York, and only Android’s wizard corrects it.
 
 ### Resumed-session log (10:25Z to 2026-09-27T11:18:27Z)
 - **10:25Z:** the user asked Stream 3 to stay until every PR it opened is merged, then update the handoff.
@@ -225,6 +238,14 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
   - Two existing tests were updated only because the DTO field type changed.
   - Rejected: a `String` qualifier adapter (objects as raw JSON text would reach invitee screens), and changing Android’s write format (it would change what web and iOS read; a separate question).
 
+- 2026-09-27T11:41:07Z: **Launch scope applied to Stream 3’s plans** (the user’s 8-feature cut). Classification calls:
+  - Business pages count as the kept **crew pages**: creation, editor, dashboard, team permissions, verification, reviews, share, unpublish and reports stay in scope; browsing all businesses is out (#6).
+  - S3-22/62 (crew-page CTA and endorse) and S3-26 (AI assistant mail chips) stay in scope, still blocked by the 09-26 user decisions.
+  - Invoices and packages stay (S3-69 in scope). The daily briefing (#600) stays.
+  - The scheduling engine is tested only through Crew Day; the New York schedule finding became a note for Crew Day.
+  - Acceptance rows are split by part: N03 (Beacon/persona/fan out; Pulse posts and comments in), N04 (PersonaBlock out), N05 (booking out; reminders and briefing in), A05 (Marketplace and Calendarly parts out).
+  - Rejected: dropping whole acceptance rows, which would also drop their in-scope parts; and editing the shared UX inventory, which is not Stream 3’s file. Stream 1’s shared block covers the rule.
+
 ### Earlier questions (answered above)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
 2. The persona/public profile header's "Share profile" button opens Block/Report on both apps (still true on master `89f3c6bac`: iOS `PublicProfileView.swift:428`, Android `PublicProfileScreen.kt:399`). Making it share would remove the only route to Block/Report. Options: a separate "…" button for Block/Report and a real Share; relabel as "More"; or leave it.
@@ -253,15 +274,16 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
+- **Launch scope (2026-09-27T11:41:07Z):** in the list below, B7 “Max per week 20”, the template editors, auto-created page timezones, persona items and booking/scheduling items are **out of scope** (cuts #1, #2, #5), so don’t verify them. The iOS “Not you?” question and the Edit profile footer stay in scope.
 - **Checked 2026-09-27, closed without a change:**
   - Web “New message” result avatars: `chat/new/page.tsx:113` already falls back to `profilePicture`.
   - The Android scheduling `MessagePreviewSheet` insets: the sheet is reachable only from the Workflows/Templates editors, which #468 hid.
 - **New candidates (2026-09-27), in suggested order (details in `NEXT-STREAM3-PROMPT-2026-09-27.md` §6):**
-  1. Web `resolvePolicyValue` misreads mobile policies: Android’s JSON string is shown verbatim, and an iOS custom object is shown as “You can cancel anytime for a full refund.” This is the companion to #618; see the #618 section.
+  1. ~~Web `resolvePolicyValue` misreads mobile policies~~: done as #623 (merged 11:14Z). Out of launch scope anyway (#5).
   2. Android profile → Message after a DM header tap (#612): not checked.
   3. The iOS business-profile Contact/“Hire to review” failure toast is likely hidden behind the floating tab bar.
   4. The Edit profile footer says “All changes saved · just now” when nothing was saved (iOS `EditProfileStickyBar.swift:76`, Android `EditProfileScreen.kt:1008`).
-  5. The default availability schedule is created in `America/New_York` (`backend/routes/scheduling.js:52`). Check whether first-run setup fixes it for Pacific users.
+  5. Out of launch scope (#5): the default availability schedule is created in `America/New_York` (`backend/routes/scheduling.js:52`); web and iOS setup don’t correct it. This is a note for Crew Day, not a Stream 3 task now.
   6. The iOS DM → profile → Message double load (recorded in #612, deliberately left).
 - Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
 - **Candidate, now PR #612 (`2583774f3`, first `c5e133780`; 2026-09-27T08:27:38Z):** the chat header name opens the other person's profile on web (`ConversationView.tsx:349-350`, `chatPersonHref`), but not on Android (tapping it did nothing, 07:32Z). The iOS header has only an audience-profile hook. Next after the dashboard/Connections build.

@@ -1,4 +1,4 @@
-# Takeover prompt for the next Stream 3 agent (written 2026-09-27T10:21:47Z; final update 2026-09-27T11:17:35Z, after every Stream 3 PR merged)
+# Takeover prompt for the next Stream 3 agent (written 2026-09-27T10:21:47Z; updated 2026-09-27T11:17:35Z after every Stream 3 PR merged, and 2026-09-27T11:40:27Z for the launch scope in §0)
 
 Copy everything below the line into the new session.
 
@@ -18,6 +18,43 @@ You are **Stream 3** in the user's three-stream Pantopus setup. You are an indep
 - Stream 1 runs the queue. Coordinate any merge with it, and never start a competing queue. Merges no longer wait for CI (§2, Merging).
 
 The previous Stream 3 session (2026-09-26T22:58Z to 2026-09-27T11:17:35Z) stopped at the user's request, at a clean point. **All 11 PRs it opened are merged to master `35c5434df`.** No fixture is applied, and no device or heavy slot is held. **Verify the live state yourself before acting.** Every fact here is a snapshot.
+
+## 0. Launch scope (user direction, 2026-09-27): what you do NOT verify, test or fix
+Eight features are hidden behind feature flags for the first launch.
+- Their code is **not deleted**, and you don’t do the flagging; the user handles that elsewhere.
+- **Do not verify, end-to-end test or fix anything in them.** Remove them from any checklist or plan you inherit.
+- Work already done on them stays as future-ready work.
+
+The full cut table and the rule are in the shared block **“LAUNCH SCOPE — 2026-09-27”** at the top of `docs/PROJECT_HANDOFF.md` and `docs/workstreams/README.md` (Stream 1, coordination `d2bf06e36`). It assigns Stream 3 **#1 Beacon and creator tools**, **#2 Personas and identity switching**, **#5 Public scheduling for general businesses**, and crew pages under **#6**. The rule of thumb: a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays.
+
+**Out of scope for Stream 3:**
+
+| Cut | Stream 3 surfaces now out of scope | UX-inventory rows (all already fixed, except S3-64’s Android part, which the user skipped) | Acceptance parts |
+|---|---|---|---|
+| #1 Beacon and creator tools | Beacon pages, Beacon Updates, Following publishers, audience profile and management, creator inbox, the broadcast composer and reach, fan/creator (persona) chat threads, membership tiers, paid follow and restricted content | S3-11, S3-12, S3-13, S3-33, S3-34, S3-35, S3-46, S3-68, and the broadcast “⋯” part of S3-67 | N03’s Beacon, persona and fan parts |
+| #2 Personas and identity switching | Public personas and persona profiles (including the persona header’s Share/Block sheet), Beacon identity, the menu’s identity “Switch”, Identity Center and view-as, persona DMs | S3-06, S3-27, and the persona-DM part of S3-04 | N04’s PersonaBlock scope |
+| #5 Public scheduling for general businesses | Booking pages and their setup wizards, event (appointment) types, public booking and manage-booking, customer “My bookings”, host booking detail, rebook/follow-up tools, group events and rosters, team scheduling and member hours, business scheduling settings, the availability UI, booking notifications and channel managers, cancellation-policy editors, reminders/workflows/templates, Who’s free, booking limits | S3-02, S3-05, S3-18, S3-19, S3-20, S3-21, S3-44, S3-45, S3-47, S3-51, S3-52, S3-64, and the “Book” part of S3-07 | N05’s booking parts; A05’s Calendarly inventory part |
+| #3, #4, #6 (Stream 1’s cuts, where they touch Stream 3 surfaces) | Listing or task cards and pickers in chat, the Messages “Gigs”/“Market” filters, the public profile’s Gigs tab, “Earnings → My bids”, browsing or searching all businesses | The listing/task parts of S3-16; the “My bids” part of S3-42 | A05’s Marketplace part |
+| #7, #8 (Stream 2’s cuts) | Their notification types: poll, package, pet, family calendar, bill management, letters, e-signing, community mail, mail event invitations | — | — |
+
+**Still in scope for Stream 3:**
+- accounts: sign-in, sessions, sign-out everywhere, account deletion;
+- privacy and blocking;
+- your own profile and other *people’s* public profiles (without persona or Gigs parts);
+- connections;
+- direct messages and the Messages list (without listing, task or persona threads);
+- notifications for in-scope features;
+- **crew pages**, meaning business pages and owner tools: creation, the page editor, the owner dashboard, team permissions, verification, reviews, share, unpublish, reports;
+- **invoices and packages** (financial features; S3-69 stays in scope);
+- the daily briefing;
+- the AI assistant.
+
+**Shared scheduling code** (`backend/routes/scheduling.js`, the availability engine) stays only as the engine underneath Crew Day. Test it only through Crew Day flows, not through booking-page UIs.
+
+**Already done in cut areas, kept as future-ready work; do not re-verify:**
+- #1: #576, #583, and the S3-11/12/13/33/34/35/46/68 fixes;
+- #2: the persona part of #597;
+- #5: #584, #595, #618, #623, and the S3-47/51/52/64 fixes.
 
 ## 1. Read first, in this order
 1. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/03-accounts-social.md`, top block "CURRENT RESUME — Stream 3 final handoff, 2026-09-27". Then the "LIVE — Stream 3 successor session" block under it, which has every PR, decision and candidate from this session. Everything further down is history.
@@ -120,6 +157,12 @@ Evidence bundles are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/
 - **2026-09-27 (user, after the first handoff):**
   - Keep working until every PR Stream 3 opened is merged, then update the handoff. Done: all 11 merged.
   - Merge without waiting for CI once a change is verified end-to-end in the apps (§2, Merging).
+- **2026-09-27 (user, received before 11:39Z): launch scope.** Eight features are flagged off (code kept). Don’t verify, test or fix them, and remove them from plans (§0).
+  - Stream 3’s classification calls, taken under the standing direction:
+    - business pages count as the kept **crew pages** (§0);
+    - S3-22/62 (crew-page CTA/endorse) and S3-26 (AI assistant mail chips) stay in scope, still blocked by the user’s 09-26 decisions;
+    - the New York schedule finding moved out of the plan, as a note for Crew Day;
+    - N03, N04, N05 and A05 are split by part.
 - **2026-09-27 (Stream 3 under the standing direction):** the full list, with times and reasons, is in the status file's "Decisions taken without asking":
   - combined verification builds;
   - hiding the dashboard Photos rail;
@@ -130,28 +173,31 @@ Evidence bundles are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/
   - the Android policy fix design;
   - don’t merge PRs individually while Stream 1’s batches hold them;
   - the web companion #623, verified with a live-page fixture (recorded and reverted).
-- **Still blocked by explicit user decisions:**
+- **Still blocked by explicit user decisions** (in launch scope, since they are crew-page and assistant features):
   - **S3-22 and S3-62:** every `GET /api/b/:username` inserts a `BusinessProfileView` row, and `/b/` reads were not approved.
   - **S3-26:** web AI chat keeps messages client-side only.
   - The standing direction doesn't reopen these. Leave them unless the user raises them.
 
-## 6. What to do next (ordered)
-1. **New hosts on web and iOS keep a New York schedule** (found by code on master `a93c76d7f`; not yet reproduced through a setup wizard).
-   - `ensureDefaultSchedule` (`backend/routes/scheduling.js:52`) seeds Mon–Fri 09–17 in `America/New_York`.
-   - Android’s first-run wizard corrects it: `FirstRunWizardViewModel.kt` around line 290 calls `updateSchedule(timezone = device zone)` and sets the rules.
-   - Web’s `components/scheduling/hub/SetupWizard.tsx` sets only the page timezone and `updateRules`.
-   - iOS `Features/Scheduling/Setup/Onboarding/SchedulingOnboardingModel.swift` sets only the page timezone.
-   - The consequence was seen on the real web app: the Member fixture’s schedule is 09–17 New York, and its public page offered slots from 6:00 AM PDT.
-   - A Pacific host who sets 9–5 in the web or iOS wizard likely offers 6 AM–2 PM Pacific. The pilot is in Clark County, WA.
-   - **Reproduce** with a fresh host through each wizard. The wizards write (page, event type, rules), so this needs a scoped proxy allowance or a direct-API fixture; record and revert it.
-   - **Then** add the schedule-timezone update the Android wizard already does, the smallest change in each wizard.
-2. **Android: check profile → Message after a DM header tap.** #612 didn’t check this. On iOS the stacked DM loads twice (candidate, deliberately left). See whether Android does the same.
-3. **Candidates to verify on current master before touching anything.** They come from the status file’s “New findings and candidates” and “Candidates (not changed)”.
-   - **iOS business profile:** the Contact / “Hire to review” failure toast is set but likely hidden behind the floating tab bar (Android shows it). It’s in `BusinessProfileView.swift` near line 63, with bottom padding `Spacing.s16`. Check which read the iOS profile uses; the proxy refuses `GET /api/b/:username`.
+## 6. What to do next (ordered; launch scope applied, see §0)
+1. **Android: check profile → Message after a DM header tap.** #612 didn’t check this. On iOS the stacked DM loads twice (candidate, deliberately left). See whether Android does the same.
+2. **Candidates to verify on current master before touching anything.** All are in scope; they come from the status file’s candidate lists.
+   - **Crew/business page (iOS):** the Contact / “Hire to review” failure toast is set but likely hidden behind the floating tab bar (Android shows it). It’s in `BusinessProfileView.swift` near line 63, with bottom padding `Spacing.s16`. Check which read the iOS profile uses; the proxy refuses `GET /api/b/:username`.
    - **Edit profile footer:** it says “All changes saved · just now” when nothing was saved (iOS `EditProfileStickyBar.swift:76`, Android `EditProfileScreen.kt:1008`). This is an honest-copy candidate.
    - **iOS login “Not you?” with two remembered accounts:** a product question. Under the standing direction, take the recommended option: clear the hint and confirm before revoking, like `ContinueAsView`. Record it.
-   - **The business-only web policy editor (`RefundPolicyEditor`):** since #623 it reads the apps’ shapes, but no business booking page exists in the isolated DB to check it on the real app.
+3. **Re-check the in-scope Stream 3 areas end to end** where this session didn’t:
+   - accounts, privacy and blocking;
+   - people profiles and connections;
+   - DMs and the Messages list;
+   - notifications for in-scope features;
+   - crew pages and owner tools;
+   - invoices and packages.
+   Reuse sealed evidence when the code is unchanged. Skip everything listed in §0.
 4. **Keep the status file current** after each milestone; commit and push only your file. Keep the kit and memory current too.
+
+**Removed from the plan by the launch scope** (public scheduling, #5), recorded for when those features return:
+- **New hosts on web and iOS keep a New York schedule.** The web `SetupWizard.tsx` and iOS onboarding never update the default schedule’s timezone; the backend’s `ensureDefaultSchedule` (`scheduling.js:52`) seeds America/New_York, and only Android’s first-run wizard corrects it.
+  - Note for whoever verifies **Crew Day**, which keeps the scheduling engine: if Crew Day availability relies on the default schedule, check its timezone there.
+- The business-only web cancellation-policy editor (`RefundPolicyEditor`), and the B7 “Max per week 20” booking-limit placeholder.
 
 ## 7. Runtime state at handoff
 - **Left running** (Stream 3’s isolated runtime only; check with `nc -z`):
