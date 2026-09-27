@@ -1,10 +1,8 @@
 # Stream 1 handoff (final): 2026-09-27
 
-> **State at 2026-09-27T00:57Z.**
-> - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
-> - **Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) was queued at 01:48:03Z, tip `22779dc89`. §2 has the exact state.
+> **Final:** batches 32–36 merged; master **`89f3c6bac`** (2026-09-27T02:31:01Z). Every Stream 1 fix is on master, the queue is empty, and the runtime equals master.
 >
-> **§0 below is the final state.** Always re-verify live.
+> **§0 below is the final state (02:31:47Z): queue empty, runtime = master `89f3c6bac`.** Always re-verify live.
 
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
 
@@ -20,31 +18,45 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 ---
 
-## 0. Final state (this section wins over the rest of the file)
+## 0. Final state (2026-09-27T02:31:47Z; this section wins over the rest of the file)
 
-**Batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556) merged at 2026-09-27T02:23:56Z** → master **`0bd3759f4acc90a770a2337cb9286aeca9f4bb8f`**.
-- Contents: S1 #548, #553, #550, #554, #555 and S3 #552. Every Stream 1 FIXED row in the inventory is now on master.
-- The Stream 1 runtime was brought to `0bd3759f4` and SIGINT-restarted: backend pid **6041**, started 02:24:28Z, log `logs/backend-022428.log`. `/api/hub` returned 200 at 02:24:37Z.
+**The queue is empty, the runtime equals master, and every Stream 1 fix is merged.**
 
-**Batch 36 = [#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)**, queued at 02:25:31Z, runner pid 6514.
-- Tip `35663481ee0fb4b852447136b3b65f936ab4e64c` on `0bd3759f4`. It holds S3 #557 (backend new-post notices), S2 #558 and S2 #559 (web). All were green at 02:24:45Z, and all bundles re-verified.
-- #557 is backend: restart the runtime after it merges (§5.3).
-- BATCH36_RESULT_PLACEHOLDER
+**Master:** **`89f3c6bac5df4f67d52888a300d6128be834101a`**. The last merges:
+- **Batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)**, 2026-09-27T02:23:56Z → `0bd3759f4`: S1 #548, #553, #550, #554, #555 and S3 #552.
+- **Batch 36 [#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)**, 2026-09-27T02:31:01Z → `89f3c6bac`: S3 #557, S2 #558 and S2 #559.
 
-**Next batch candidates:**
-- **S2 [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (iOS test-only flake fix; reviewed OK, see §2). Its iOS CI was running at 02:24:45Z.
-- **S3 chat re-subscribe fix** for both apps: branch `claude/stream3-native-chat-resubscribe`, head `f009f6be7` at 02:23Z. Stream 3 is still verifying and will send the PR.
-- **S2 native §3A #3 + #4**: Guests tab → guest-pass manager; health "View maintenance" → Issues. Android is verified and the iOS journeys were running at 02:23Z. #3 touches `RootTabScreen.kt`, which changed in batch 35.
+The runner log ends "02:31:08 PR561 MERGED … QUEUE EMPTY / QUEUE STOP", `queue.txt` is empty, and no `run.sh` is running.
+
+**Runtime:**
+- Tree = `89f3c6bac` (runtime worktree merged, clean).
+- Backend pid **8667**, started 02:31:29Z (log `logs/backend-023129.log`); SIGINT-restarted for #557.
+- `/api/hub` returned 200 at 02:31:39Z.
+- DB ledger 92 = master's 92 migrations.
+- Proxy 18138 (pid 86966) and Next 18139 (pid 48094) are up.
+
+**Open PRs at 02:31:47Z:**
+- **S2 [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (`a406d3055`): iOS test-only fix of the flaky `TokenAcceptViewModelTests` assertion. **Reviewed OK; "CI OK" passed at 02:31:47Z.**
+  - Put it in your **first batch**, ideally with the iOS PRs below, so that batch's CI already has the fixed test.
+- **#562** `claude/porchlight-product-design` ("docs(product): Porchlight product design proposal"). It isn't from the streams and isn't in the queue, so leave it unless the user asks.
+- #430, #429 and #46 are unrelated; don't touch them.
+
+**Coming from peers:**
+- **S3 chat re-subscribe fix** for both apps (branch `claude/stream3-native-chat-resubscribe`, head `f009f6be7` at 02:23Z). Stream 3 was running its Android/iOS before/after at 02:31Z (heavy + slot 3).
+- **S2 native §3A #3 + #4:** Guests tab → guest-pass manager; health "View maintenance" → Issues. #3 touches `RootTabScreen.kt`, so prove it against `89f3c6bac`.
 
 **Stream 1's own open work:**
-1. The user's decision on native "Post task" at 0,0 (§3.2, HIGH).
+1. **Implement the user's decision on native "Post task" at 0,0** (§3.2, HIGH).
 2. The low inventory items (§3.3).
 
-Stream 1 has no open PRs of its own.
+**Stream 1 holds no slots** (02:31:47Z):
+- Stream 3: heavy (since 02:23:21Z) and slot 3 (emulator-5554).
+- Stream 2: slot 2 (emulator-5556).
+- Slots 1 and 4 are free.
 
-**Stream 1 holds no slots.** Stream 2 and Stream 3 are handing heavy, slot 1 and slot 3 between themselves (§10). My devices are shut down:
+**My devices** are shut down:
 - iOS sim F4DBD47E has the #548 build;
-- Android emulator-5558 has the #554 build (APK `8fedfceda`).
+- emulator-5558 has the #554 build (APK `8fedfceda`).
 
 Rebuild both from master before native checks.
 
@@ -109,7 +121,7 @@ Rebuild both from master before native checks.
   - Do **not** run your own CI-polling loops (loops of `gh pr checks`, Monitor, cron, ScheduleWakeup). A one-off `gh pr checks` right before building a batch is fine.
   - The merge-queue runner (§4) does the waiting. A background `while kill -0 <runner pid>; do sleep 30; done` wait on the runner process (not on CI) is how this session learned a batch had merged.
 
-## 2. State (2026-09-27T00:57Z)
+## 2. State before batch 35 merged (2026-09-27T00:57Z; historical, §0 is current)
 
 **Master.** `73b98f6b6102e44cf3dd7424c9bd0f613a91feeb`: batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) merged at 2026-09-27T00:46:55Z. It holds S2 #544 (Android Today pull-to-refresh), S3 #545 (web invoice PDF / paid checkout error / Audience inbox tab), S2 #547 (web Home calendar bill dates) and S1 #549 (web started $0 cancel copy). No backend change.
 
@@ -439,6 +451,8 @@ Web fixes are served the same way with HMR (no restart).
 | 32 ([#540](https://github.com/WangPantopus/skinny-pantopus/pull/540)) | → `d358dbc83` | 538 535 536 537 | 23:12:01Z |
 | 33 ([#546](https://github.com/WangPantopus/skinny-pantopus/pull/546)) | → `f7f51eae4` | 543 539 541 542 | 09-27 00:08:50Z |
 | 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551)) | → `73b98f6b6` | 544 545 547 549 | 00:46:55Z |
+| 35 ([#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)) | → `0bd3759f4` | 548 553 550 554 555 552 | 02:23:56Z |
+| 36 ([#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)) | → `89f3c6bac` | 557 558 559 | 02:31:01Z |
 
 **User decisions** (AskUserQuestion, 2026-09-26):
 - 1A–6A (09:48Z) and decision A (17:49Z) are merged (see the earlier history in `01-gigs-payments.md`).
@@ -457,11 +471,11 @@ Web fixes are served the same way with HMR (no restart).
 | #537 | iOS task questions live (`gig:qa-update`) | `0cde42d1` | merged (batch 32) |
 | #542 | web worker panel after instant accept; no change-order error for bystanders; no payouts banner on $0 | `aac4dc3c` | merged (batch 33) |
 | #549 | web started $0 cancel dialog: honest wording | `9539de1b` | merged (batch 34) |
-| #548 | native helper dock "Start task" + `/start` reply (backend) + $0 delivery copy | `25ad4e68` | batch 35 |
-| #550 | Android tab re-tap + Gigs door | `9de2523c` | batch 35 |
-| #553 | edit/reschedule/confirm replies + reschedule notice (backend; stacked on #548) | `1d082ae3` | batch 35 |
-| #554 | Android edit keeps location | `d482bdbc` | batch 35 |
-| #555 | saved-search task alerts delivered (backend) | `2b29d13f` | batch 35 |
+| #548 | native helper dock "Start task" + `/start` reply (backend) + $0 delivery copy | `25ad4e68` | merged (batch 35) |
+| #550 | Android tab re-tap + Gigs door | `9de2523c` | merged (batch 35) |
+| #553 | edit/reschedule/confirm replies + reschedule notice (backend; stacked on #548) | `1d082ae3` | merged (batch 35) |
+| #554 | Android edit keeps location | `d482bdbc` | merged (batch 35) |
+| #555 | saved-search task alerts delivered (backend) | `2b29d13f` | merged (batch 35) |
 
 **Defects found and fixed this session**, all reproduced on master code first:
 - Native **start** showed "Something went wrong" (#548).
@@ -483,15 +497,17 @@ Web fixes are served the same way with HMR (no restart).
 ## 9. Worktrees (`git worktree list`, 2026-09-27T00:48Z)
 
 - **Runtime:** `stream1-peer-takeover-d2cb25` (tree == master).
-- **Open PR branches, keep until merged:**
+- **This session's PR branches:**
 
   | Worktree (`/private/tmp/pantopus-stream1-…`) | PR |
   |---|---|
-  | `native-helper-dock` | #548 |
-  | `gig-write-replies` | #553 |
-  | `android-tab-nav` | #550 |
-  | `android-edit-location` | #554 |
-  | `saved-search-alerts` | #555 |
+  | `native-helper-dock` | #548 (merged) |
+  | `gig-write-replies` | #553 (merged) |
+  | `android-tab-nav` | #550 (merged) |
+  | `android-edit-location` | #554 (merged) |
+  | `saved-search-alerts` | #555 (merged) |
+
+  All five are merged, so these worktrees can be ignored; removing them needs the user's OK.
 
 - **Merged, may be ignored:** `gig-qa-live` (#537), `web-worker-panel` (#542), `web-stop-copy` (#549).
 - **Dirty, preserve:** `/private/tmp/pantopus-stream1-web-trade` (branch `claude/stream1-web-trade-modal-failure` at `dbd75332b`).

@@ -31,7 +31,7 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
   git -C /Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25 fetch -q origin master
   ```
   Compare `origin/master` with the master in handoff §0, and check the runtime worktree's tree equals master (`git diff --quiet HEAD origin/master`).
-- `gh pr list --state open`: compare with handoff §0. Unrelated #430, #429 and #46 stay untouched.
+- `gh pr list --state open`: compare with handoff §0. Unrelated #430, #429, #46 and the non-stream docs PR #562 stay untouched unless the user asks.
 - `zsh /private/tmp/pantopus-tools/device-slot.sh status` and `zsh /private/tmp/pantopus-tools/heavy-slot.sh status`.
 - `tail /private/tmp/pantopus-tools/merge-queue/log.txt`, `cat /private/tmp/pantopus-tools/merge-queue/queue.txt`, and `pgrep -f merge-queue/run.sh`.
 - **Runtime:** backend 18132 (pid in handoff §0), fault proxy 18138, Next 18139 (`ps`, `curl -s 127.0.0.1:18132/health`). Also `python3 /private/tmp/pantopus-stream1-runtime-20260925/api.py login alice && python3 … api.py alice GET /api/hub` → 200.
@@ -96,7 +96,7 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
    - The user chose **"Address search in the app"** (2026-09-27): the location field offers the same address suggestions as Add Home (`/api/geo/autocomplete` → `/api/geo/resolve`, metered), and the backend rejects (0, 0) on create and edit.
    - Keep the form's design. Verify before/after on both apps, including that a neighbor now sees the task.
 3. **Integrate peer PRs** as they come (handoff §0 lists them):
-   - S2 #560 (iOS test-only flake fix; reviewed OK);
+   - S2 #560 (iOS test-only flake fix; reviewed OK, "CI OK" passed; batch it first, with the iOS PRs below);
    - Stream 3's chat re-subscribe fix for both apps (`claude/stream3-native-chat-resubscribe`);
    - Stream 2's native §3A #3/#4. #3 touches `RootTabScreen.kt`, so prove it against master.
 4. **Remaining Stream 1 inventory** (all low; handoff §3.3):
@@ -114,12 +114,12 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
    - Verify each hit on device before changing anything.
 
 ## 6. Already done: do NOT redo
-- **Merged batches 25–34** (#499 … #551). Each merged PR is recorded in handoff §8 and the inventory. They include:
+- **Merged batches 25–36** (#499 … #561). Each merged PR is recorded in handoff §8 and the inventory. They include:
   - user decisions 1A–6A and A;
   - the Android Gigs door and tab re-tap decisions (#550);
   - the started-task cancel decision "Honest wording only, no policy change" (#549).
 - **Batch 35** (#556, merged 2026-09-27T02:23:56Z → `0bd3759f4`): #548, #553, #550, #554, #555 and S3 #552.
-- **Batch 36** (#561: S3 #557, S2 #558, S2 #559): check its state in handoff §0.
+- **Batch 36** (#561, merged 2026-09-27T02:31:01Z → `89f3c6bac`): S3 #557, S2 #558, S2 #559. The queue was left empty, with the runtime on `89f3c6bac`.
 - **Sealed and cleaned audits:**
   - free-task lifecycle (`1855635d`);
   - tip copy (`9bb90479`) and accept-counter (`45e240d9`);
