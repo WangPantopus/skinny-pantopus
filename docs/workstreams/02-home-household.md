@@ -54,6 +54,15 @@
   - **PR-B (native checklist Hire):** code is written in the main worktree (iOS: HubTabRoot/YouTabRoot/HomeDashboardView/GigCompose wizard; Android: routes/HomeDashboardScreen/GigComposeViewModel/HomesApi). iOS lint is clean. Builds are waiting for heavy, which Stream 3 holds.
     - **Decision:** no title prefill on native (Stream 1 asked for a minimal hook); noted as a web-parity candidate.
   - **Runtime:** master `563cddb47` + #568 #569 #574 #575 #578 #579 + S1 #580 + #587's file (build `09477d107`), backend pid 84404.
+- **2026-09-27T07:57:24Z:**
+  - **[#590](https://github.com/WangPantopus/skinny-pantopus/pull/590)** (`36dd506a6`): Pulse showed "smoke_season season"; it now shows the season label. Bundle `…-pulse-season-label-r1`.
+  - **[#591](https://github.com/WangPantopus/skinny-pantopus/pull/591)** (`f85cb230f`): web Home settings Save showed no confirmation (the tab remounts) and showed errors in green. It now confirms with a toast and keeps errors red. Bundle `…-settings-save-toast-r1`.
+  - Both passed Stream 1's review; batch 39 = S2 #587 #590 #591 plus S1 PRs.
+  - **Decisions (standing instruction):**
+    - #591 confirms with a toast instead of the lost inline message.
+    - Stream 1 took heavy first (07:46Z); PR-B builds after.
+    - The PR-B device journeys use WHEN Flexible + WHERE Virtual, because geocoding is blocked and location doesn't affect the link.
+  - **PR-B Android before** (APK 4365dbf8, master Hire code): Hire → wizard (Handyman) → post → `POST /api/gigs/magic-post` 201 (task 878f5941) → HEPA item still pending, `gig_id` null. The task is being closed through the web.
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
