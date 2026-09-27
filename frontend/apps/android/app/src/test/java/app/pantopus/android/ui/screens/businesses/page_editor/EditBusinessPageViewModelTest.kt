@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.page_editor
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.upload.UploadRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,7 @@ class EditBusinessPageViewModelTest {
             SavedStateHandle(mapOf(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY to "biz-1")),
             mockk<BusinessesRepository>(relaxed = true),
             networkMonitor,
+            mockk<UploadRepository>(relaxed = true),
         )
 
     @Test

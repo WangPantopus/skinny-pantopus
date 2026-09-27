@@ -15,11 +15,14 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.upload.UploadFile
+import app.pantopus.android.data.upload.UploadRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav-arg key for the business UUID. */
@@ -67,6 +70,7 @@ class EditBusinessPageViewModel
         savedStateHandle: SavedStateHandle,
         private val businesses: BusinessesRepository,
         private val networkMonitor: NetworkMonitor,
+        private val uploads: UploadRepository,
     ) : ViewModel() {
         private val businessId: String =
             requireNotNull(savedStateHandle[EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY]) {
@@ -81,6 +85,10 @@ class EditBusinessPageViewModel
 
         private val _showsDiscardConfirm = MutableStateFlow(false)
         val showsDiscardConfirm: StateFlow<Boolean> = _showsDiscardConfirm.asStateFlow()
+
+        /** The banner or logo being uploaded, if any; one at a time. */
+        private val _uploadingMedia = MutableStateFlow<EditBusinessMediaKind?>(null)
+        val uploadingMedia: StateFlow<EditBusinessMediaKind?> = _uploadingMedia.asStateFlow()
 
         private var localPreviewPersistenceEnabled = false
         private var hasLoadedOnce = false
@@ -270,6 +278,41 @@ class EditBusinessPageViewModel
 
         fun dismissToast() {
             _toast.value = null
+        }
+
+        /**
+         * Upload a picked banner or logo. The server writes it onto the
+         * business profile itself, so it shows as saved (not a pending edit).
+         */
+        fun uploadMedia(
+            kind: EditBusinessMediaKind,
+            bytes: ByteArray,
+            mimeType: String,
+        ) {
+            if (_uploadingMedia.value != null || _state.value !is EditBusinessPageUiState.Loaded) return
+            _uploadingMedia.value = kind
+            viewModelScope.launch {
+                // Randomised name, as in the create wizard: the picker's file
+                // name never reaches storage or access logs.
+                val file =
+                    UploadFile(
+                        filename = "business-${kind.apiType}-${UUID.randomUUID().toString().take(8)}.${extensionFor(mimeType)}",
+                        mimeType = mimeType,
+                        bytes = bytes,
+                    )
+                when (val result = uploads.uploadBusinessMedia(businessId, kind.apiType, file)) {
+                    is NetworkResult.Success -> {
+                        (_state.value as? EditBusinessPageUiState.Loaded)?.let { current ->
+                            val next = withUploadedMedia(current.content, kind, result.data.url)
+                            _state.value = EditBusinessPageUiState.Loaded(EditBusinessPageMapper.withRecomputedMode(next))
+                        }
+                        _toast.value = if (kind == EditBusinessMediaKind.Banner) "Banner updated." else "Logo updated."
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = "Couldn't upload the ${kind.apiType}. ${result.error.message}"
+                }
+                _uploadingMedia.value = null
+            }
         }
 
         private suspend fun fetch(showLoading: Boolean) {
@@ -681,3 +724,26 @@ private fun EditBusinessPageLocation.reverted(): EditBusinessPageLocation =
         error = null,
         pinDirty = false,
     )
+
+/** The content with a freshly uploaded image, already saved on the server. */
+private fun withUploadedMedia(
+    content: EditBusinessPageContent,
+    kind: EditBusinessMediaKind,
+    url: String,
+): EditBusinessPageContent =
+    when (kind) {
+        EditBusinessMediaKind.Banner ->
+            content.copy(banner = EditBusinessPageBannerState.Filled(dirty = false, imageUrl = url))
+        EditBusinessMediaKind.Logo ->
+            content.copy(
+                logo = EditBusinessPageLogoState.Filled(initial = content.name.original.take(1).uppercase(), imageUrl = url),
+            )
+    }
+
+private fun extensionFor(mimeType: String): String =
+    when (mimeType.lowercase()) {
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/heic", "image/heif" -> "heic"
+        else -> "jpg"
+    }

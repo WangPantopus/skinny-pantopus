@@ -49,6 +49,8 @@ sealed interface EditBusinessPageBannerState {
     data class Filled(
         val dirty: Boolean,
         val palette: BannerPalette = BannerPalette.CafeGoldenHour,
+        /** The uploaded banner; the palette shows only while it loads or without one. */
+        val imageUrl: String? = null,
     ) : EditBusinessPageBannerState
 
     enum class BannerPalette { CafeGoldenHour }
@@ -61,9 +63,17 @@ sealed interface EditBusinessPageLogoState {
     data class Filled(
         val initial: String,
         val palette: LogoPalette = LogoPalette.Sunrise,
+        /** The uploaded logo; the initial shows only while it loads or without one. */
+        val imageUrl: String? = null,
     ) : EditBusinessPageLogoState
 
     enum class LogoPalette { Sunrise }
+}
+
+/** The two images the editor uploads (`POST /api/upload/business-media/:id?type=`). */
+enum class EditBusinessMediaKind(val apiType: String) {
+    Banner("banner"),
+    Logo("logo"),
 }
 
 /** One day in the hours card. */
