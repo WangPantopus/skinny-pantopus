@@ -234,6 +234,10 @@ _Not yet written. If this section is still empty, the previous session stopped b
    - **BEHIND:** it logs `MASTER_CHANGED` and waits. If master moves, rebuild the batch on the new master.
    - A changed head logs `REVIEW_REQUIRED`.
    - A failed or cancelled CI OK logs `CI_fail` once and waits: rerun the flake, or remove the PR from `queue.txt` by hand.
+   - **Known flakes:**
+     - registry rate limits;
+     - iOS `TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer` ("27 tests, with 3 failures"; a 503-retry timing assertion). It failed on #552 and #553 on 2026-09-27, and Stream 2 was told.
+     - Rerun only the failed job: `gh run rerun <runId> --failed` (get the run id from the job link in `gh pr checks <n> --json name,link`).
    - Each PR has a 4-hour timeout.
    - Batch CI takes about 35–60 min: batch 33 took 23:33:45 → 00:08:50; batch 32 took 22:35:20 → 23:12:01.
 8. **After the merge:** `git diff --stat <old> <new> -- backend supabase` tells whether the runtime needs migrations and a restart.
@@ -468,3 +472,4 @@ Web fixes are served the same way with HMR (no restart).
   - `.catch(() => {})` around notification inserts hides real failures; check the backend log for "Failed to create notification".
 - **Before asking the user,** verify every option you describe against the code. A misdescribed option had to be re-asked (§8).
 - **A backend reply fix verifies with installed apps** (no rebuild), which makes before/after cheap: master backend → fix served → master again.
+- **An iOS unit-test failure in code your PR doesn't touch:** read the failing test in the job log (`gh run view <run> --job <job> --log | grep "Test Case .* failed"`) before assuming a regression, then rerun the failed job once.
