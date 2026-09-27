@@ -15,7 +15,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -25,7 +25,7 @@ import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
-import { DetailHeader } from '@/components/archetypes/place';
+import { DetailHeader, PlaceHomeContext } from '@/components/archetypes/place';
 import { detailAddress } from '@/components/place/detail/sections';
 import PulseStreamView from './PulseStreamView';
 import PlaceShell from '../PlaceShell';
@@ -91,8 +91,10 @@ export default function PulseStream() {
     staleTime: 60_000,
   });
 
-  const home = homeQuery.data?.home ?? null;
-  const homeId = home?.id ?? null;
+  // The switcher's place (?home=) when there is one, else the primary home.
+  const switchedHome = useContext(PlaceHomeContext);
+  const home = switchedHome ? null : homeQuery.data?.home ?? null;
+  const homeId = switchedHome ?? home?.id ?? null;
 
   // 2) The ranked signal stream (the primary content) — gates the page.
   const pulseQuery = useQuery({

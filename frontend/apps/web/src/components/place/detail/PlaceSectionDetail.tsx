@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -20,7 +20,7 @@ import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
-import { DetailHeader } from '@/components/archetypes/place';
+import { DetailHeader, PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import PlaceShell from '../PlaceShell';
 import { PLACE_DETAIL_BY_SLUG } from './sections';
 import TodayDetail from './TodayDetail';
@@ -86,7 +86,9 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     staleTime: 60_000,
   });
 
-  const homeId = homeQuery.data?.home?.id ?? null;
+  // The switcher's place (?home=) when there is one, else the primary home.
+  const switchedHome = useContext(PlaceHomeContext);
+  const homeId = switchedHome ?? homeQuery.data?.home?.id ?? null;
 
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
@@ -114,7 +116,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
             title="That section doesn't exist"
             description="Head back to your Place to pick up where you left off."
             actionLabel="Back to your Place"
-            onAction={() => router.push('/app/place')}
+            onAction={() => router.push(`/app/place${placeHomeQuery(switchedHome)}`)}
           />
         </div>
       </DetailShell>
