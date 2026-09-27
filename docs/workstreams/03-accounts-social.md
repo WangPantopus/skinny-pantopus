@@ -2,32 +2,33 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T02:22:58Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:03Z)
 
-- **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held (slot 1 released 02:12:30Z; slot 3 released 02:19:55Z, emulator stopped). Heavy is promised to Stream 3 after Stream 2's iOS build, for three builds (Android master before; Android and iOS fix).
+- **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
+- **Slots:** none held. Heavy released 02:52:24Z; slot 1 released 02:51:30Z (sim `0AE16FA0` shut down; it had stayed booted without a slot from 02:12:30Z to 02:37:57Z, my slip, peers told); slot 3 released 02:55:34Z (emulator-5554 shut down).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
-- **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`, CI green after a rerun of a flaky Home test (Stream 1, 01:36Z); in batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556), queued 01:48:03Z. Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted). Send to Stream 1 when green.
+- **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`: **merged** in batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556) at 02:23:56Z (master `0bd3759f4`). Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted).
   - Verified on the iOS simulator (builds `498811062`, final `520ed06cf`) and the Android emulator (APK `2b9f468f…`); befores on `36af1f371` builds, identical to master for these files.
   - Two defects found in verification and fixed in the branch: Booking notifications Back (Swift 5 backward trailing-closure matching bound `{ dismiss() }` to `onTrailing`), and an uploaded 16:9 banner resizing the 16:7 editor banner.
 
 ### PR #557: new-post notifications to connections and followers (found via Stream 1's #553 work)
-- **[#557](https://github.com/WangPantopus/skinny-pantopus/pull/557)** head `097e3e087` on master `73b98f6b6`, CI started 01:49Z. Bundle `20260927-stream3-post-fanout-context-r1`, seal `e307f44afdc21624659ed674787b07411056e106ebb3ca4acd634cc2a1ba7347` (25 files; seal comment posted). **Send to the next Stream 1 queue owner** (the current one hands off after batch 35) with "green at <head>".
+- **[#557](https://github.com/WangPantopus/skinny-pantopus/pull/557)** head `097e3e087`: **merged** in batch 36 [#561](https://github.com/WangPantopus/skinny-pantopus/pull/561) at 02:31:01Z (master `89f3c6bac`). Bundle `20260927-stream3-post-fanout-context-r1`, seal `e307f44afdc21624659ed674787b07411056e106ebb3ca4acd634cc2a1ba7347` (25 files; seal comment posted). My isolated API stays on `23e518b11` (master's migration not approved), so it does not have this change.
 - Defect: `postCreationHooksService.js:148` passed `contextType: 'post'`; `Notification.context_type` is the enum ('personal', 'business'), so the one bulk insert failed and nobody got "<name> shared a new post" for connections/follower posts.
 - Verified end-to-end (user approval 2026-09-27): before, on API `23e518b11`, the Member's post to Connections logged "invalid input value for enum notification_context_type" and the Owner got nothing; after, on a local verification build `e527ab988` (= `23e518b11` + the fix; master's mail migration still not applied), the Owner's web notifications show "Sched Member shared a new post". Backend privacy gates and full Jest (341 suites) pass.
 - Fixture PF1 (2 posts, 1 notification, 1 LocalProfile) removed at 01:46:45Z; fingerprint clean apart from sign-in bookkeeping. API back on `23e518b11`.
 - Proxy: a `post-check.json` allowance (`POST /api/posts` by the Member only) exists and is **off**.
 - Stream 1 fixed the gig saved-search case as #555.
 
-### In progress: open chats stop getting live messages after a tab switch or a pushed screen (iOS and Android)
-- Found while acknowledging Stream 2's #560 report (leftover chat view models). Both apps' chat screens call `teardown()` when they leave the screen (iOS `.onDisappear`, Android `DisposableEffect`), which cancels the socket listeners. When the same thread comes back, `load()` returns early because the thread is already loaded, so nothing listens again until the thread is reopened.
-- **iOS before** (sim `0AE16FA0`, build `520ed06cf`, whose Chat/Inbox/Realtime code equals master `73b98f6b6`): the Owner has the Member DM open; the Member's message 19 appears live. After a tab round trip (Mail → Place → Mail), the Member's message 20 (stored 02:10:26.670Z) was still missing at 02:11:30Z (63 s), with no chat request in the proxy log, while the Mail tab badge showed 1. Going back to the list and reopening showed it.
-- **Fix** (branch `claude/stream3-native-chat-resubscribe`, not pushed; head `f009f6be7` on `73b98f6b6`): iOS `fc56edc1f` re-subscribes and refreshes (merge, no shimmer) when a loaded thread returns, and makes the socket loops hold the view model weakly between events (the #560 leak). Android `f009f6be7` re-subscribes and marks the thread viewed again; the room re-join ack backfills what arrived meanwhile.
-- **Next:** under heavy, build Android `73b98f6b6` (before) and the fix for both apps; Android before and after on emulator-5554, iOS after on sim `0AE16FA0`; record CA12 (messages 19, 20 and the after messages); chat-audit off; seal; PR to the Stream 1 queue owner.
-- Chat-audit mode is **on** since 02:09:03Z for these checks.
-- Emulator-5554 boots from its quickboot snapshot `default_boot`, and `-no-snapshot-save` discards changes, so each boot restores an old APK (`70f275b4…`); reinstall the APK after every boot.
+### PR #566: open chats keep getting live messages after a tab switch or a pushed screen (iOS and Android)
+- **[#566](https://github.com/WangPantopus/skinny-pantopus/pull/566)** head `7b801e993` on `73b98f6b6` (merges cleanly into `89f3c6bac`; no chat/realtime file changed on master in between). Bundle `20260927-stream3-chat-resubscribe-r1`, seal `fbbae81d9be68eebc3548153d035c5b1d4cb5d3c594f5bf54cef9e6c528c40bb` (74 files; seal comment posted). CI at 03:02:15Z: 1 success, 5 in progress, 5 skipped. Stream 1 ("Stream 1 agent handoff") reviewed it OK and plans batch 37 = #560 #563 #564 #565 #566 once each head shows CI OK.
+- Defect: both apps' chat screens call `teardown()` when they leave the screen (iOS `.onDisappear`, Android `DisposableEffect`), which cancels the socket listeners; when the thread came back, `load()` returned early because it was already loaded, so nothing listened again until the thread was reopened. Found while acknowledging Stream 2's #560 report (leftover chat view models).
+- Befores with master chat code: iOS (build `520ed06cf`) message 20 still missing 63.4 s after it was stored; Android (master APK `27a5e60e…`) message 24 still missing 61.2 s later; no request from the app; reopening showed them.
+- Fix (2 existing files): iOS `fc56edc1f` re-subscribes and refreshes (merge) on return and makes the socket loops hold the view model weakly (the #560 leak); Android `f009f6be7` re-subscribes and marks the thread viewed on return (the room re-join ack backfills); Android `7b801e993` makes `optStringValue()` treat a JSON null as absent. That last bug was found in the Android after: the backfill gave topic-less messages the topic id "null", which drew a stray "General" divider.
+- Afters: iOS (build `f009f6be7`, same iOS tree as the head) and Android (APK `16cfda1c…` of the head). A message sent while away is there on return; the next one is live. Both via a tab switch and via a screen opened from a shared card. Static checks: ktlint, detekt, lintDebug; SwiftLint `--strict` and SwiftFormat `--lint` clean.
+- Side effects (fixture CA12): messages 19–38 kept (like CA0–CA11). Two `ListingView` rows and two listing counters, from opening shared listings, reverted exactly at 02:57:38.604Z (fingerprint match). Sign-in bookkeeping and attachment `last_accessed_at` changed. Chat-audit mode was on 02:09:03Z–02:55:44Z and is **off** now.
+- Unverified: push suppression; edits/deletes/reactions/typing/presence separately; real devices.
 
 ### Owner fixture password rotated (user-approved, 2026-09-27 01:49Z)
 - The old one appeared in a screenshot in this session. The new one is only in the private credentials file (`…/private-restart-inputs/sched-fixtures-private.json`, 0600), which every helper reads; web and `fx` logins verified at 01:50Z. Old password → 401. Existing device/web sessions were not revoked. Manifest entry CRED1 (no values).
@@ -46,15 +47,18 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - ~23:15Z: S3-35 revised to "Open Create your Beacon" (the button only shows without a Beacon, so there is no persona id for Stripe onboarding).
 
 ### Runtime state (isolated only)
-- Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit **on** since 02:09:03Z for the re-subscribe checks; upload query/size logging since 00:14:15Z; `post-check.json` off), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
+- Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit off since 02:55:44Z; upload query/size logging since 00:14:15Z; `post-check.json` off), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
 - Fixture S59 (Review `e9fdca7a` + the business `User` rating fields) kept; exact reverts in the manifest.
 - **End-of-audit reverts done:** chat-audit mode off (23:25:54Z); F10 (`audience_profile` for the Member) reverted with its recorded SQL at 2026-09-27T00:36:21Z (manifest `revertedAt`); storage shim off; emulator reverse is `tcp:64531 tcp:64531`. API and web stay off master (migration not approved). CA0–CA11 and F13 kept.
-- Simulator 0AE16FA0: final build `520ed06cf` installed, Owner signed in, one test photo in its library; the paid flag was removed. Emulator-5554: restores its quickboot snapshot at every boot (APK `70f275b4…`), so installs don't survive shutdown.
+- Simulator 0AE16FA0: build `f009f6be7` (#566's iOS tree) installed, Owner signed in, one test photo in its library; the paid flag was removed; shut down. Emulator-5554: restores its quickboot snapshot at every boot (APK `70f275b4…`), so installs don't survive shutdown.
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
 - Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
 - Previously noted: persona header "Share profile" (check master first), B7 "Max per week 20" placeholder.
+- Android Chat list: after messages 21 and 22 arrived, the Sched Member row still previewed message 20 when I went back to the list (02:38:46Z, master APK; `before/android-back-to-list-before.png` in the #566 bundle). Check whether the list refreshes on return before calling it a defect.
+- iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: the same pattern that silently broke Booking notifications Back in #552. Stream 1's area (tasks/marketplace); told Stream 1.
+- Harness: `GET /api/listings/:id` upserts a `ListingView` row for a signed-in non-owner (`backend/routes/listings.js:1433`) and is not on the proxy's implicit-write list. Opening a shared listing from chat wrote two rows during #566 (reverted). Add a refusal rule or a scoped allowance before the next listing check.
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
 
