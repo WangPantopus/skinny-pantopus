@@ -12,6 +12,18 @@
   - [#575](https://github.com/WangPantopus/skinny-pantopus/pull/575) (`ab44aec23`): the web checklist Hire pill and "Refresh checklist" button were invisible. `bg-primary` has no DEFAULT in the theme, so they rendered white on white. Now `bg-primary-600`/`-700`. Bundle `20260927-stream2-checklist-button-color-r1` (`8a865808…`, 10 files).
   - Neither PR shares files with the 17 open PRs, and both merge-tree clean against batch 37's tip `18389b9b5`.
   - **PR-B (native)** is agreed with Stream 1. iOS Hub `.composeGig`, iOS You `.composeTask` and Android `composeGig` all open the **V2 wizard** (GigCompose*), which Stream 1 is changing next (address search). PR-B starts on master after Stream 1 pings that its V2 PR merged. Planned edits: an optional checklist context into the wizard, a link call once after the 201, and a quiet note on failure.
+- **2026-09-27T04:46:04Z:**
+  - **F01 verified on web** with the approved cohort (bundle `20260927-stream2-f01-bill-cohort-r1`, `8e21d5fb…`).
+    - Fixture run 04:29:26Z: 9 neighbor Homes `S2 Cohort Neighbor 01–09` with 27 paid electric bills, plus 9d885f71 placed in cell c20fbj. The viewer's 3 bills were added and paid through the API.
+    - Opt-in toggle: "1 more neighbor needed" → "$150 vs $133.35, 12% above". Place Money signals `ready`. The toggle needs #578.
+  - **[#579](https://github.com/WangPantopus/skinny-pantopus/pull/579)** (`85c9a47fd` on `c890f2588`): after a switch, web Place details, Pulse and the rail showed the primary home. The switch is now `?home=`, matching native. Bundle `…-place-switch-home-r1` (`e1165c08…`).
+  - #578 passed Stream 1's review; #574/#575/#578 are in batch 38 once CI is green.
+  - **Candidates:**
+    - Pulse shows a raw "smoke_season season".
+    - The Money detail note says "12-month average" when the data covers 3 months.
+    - The web Settings "saved" message is lost on reload, and non-"Failed" errors show green.
+    - The Pantopus Hub health cache lag is moot, since every client forces the health score.
+  - **Next:** a native session on 9d885f71 (Stream 1's settings PATCH location lead; F01, carryover and checklist Complete on iOS/Android). Then PR-B after the V2 merge, and the `listings.js` check for Stream 1.
 - **[#578](https://github.com/WangPantopus/skinny-pantopus/pull/578) (2026-09-27T04:27:45Z, head `e572bf6cd` on `7bdef3e8c`):** checklist Complete/Skip (503) and web Home settings Save / bill opt-in (500) have **always failed since Sep 11**.
   - Cause: `supabaseAdmin.rpc(...).catch(...)` throws, because supabase-js 2.103.3 builders have no `.catch`.
   - Fix: `Promise.resolve(builder)`. Bundle `20260927-stream2-rpc-catch-saves-r1` (`4f1c7519…`, 22 files).
