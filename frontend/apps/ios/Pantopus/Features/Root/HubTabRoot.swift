@@ -2864,8 +2864,12 @@ public struct HubTabRoot: View {
                     currentUserId: currentUserId,
                     initialTopic: dest.initialTopic
                 ),
-                mode: dest.kind
-            ) { Task { @MainActor in pop() } }
+                mode: dest.kind,
+                onOpenProfile: { userId in
+                    Task { @MainActor in push(.publicProfile(userId: userId)) }
+                },
+                onBack: { Task { @MainActor in pop() } }
+            )
         case .menu:
             SettingsView(
                 onClose: { Task { @MainActor in pop() } },

@@ -4649,6 +4649,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         arrivalRoomId = arrivalRoomId,
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {

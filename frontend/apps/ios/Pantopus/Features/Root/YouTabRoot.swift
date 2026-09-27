@@ -2015,8 +2015,12 @@ public struct YouTabRoot: View {
                     currentUserId: currentUserId ?? "",
                     initialTopic: dest.initialTopic
                 ),
-                mode: dest.kind
-            ) { Task { @MainActor in pop() } }
+                mode: dest.kind,
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                },
+                onBack: { Task { @MainActor in pop() } }
+            )
         case let .homeBills(homeId):
             BillsListView(
                 viewModel: BillsListViewModel(

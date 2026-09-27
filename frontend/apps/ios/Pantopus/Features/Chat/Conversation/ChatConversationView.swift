@@ -84,6 +84,7 @@ public struct ChatConversationView: View {
     private let onOpenAudienceProfile: @MainActor () -> Void
     private let onUseAIDraft: @MainActor (ChatAIDraftCard) -> Void
     private let onContentLoaded: @MainActor () -> Void
+    private let onOpenProfile: @MainActor (String) -> Void
     private let onBack: @MainActor () -> Void
 
     public init(
@@ -93,6 +94,7 @@ public struct ChatConversationView: View {
         onOpenAudienceProfile: @escaping @MainActor () -> Void = {},
         onUseAIDraft: @escaping @MainActor (ChatAIDraftCard) -> Void = { _ in },
         onContentLoaded: @escaping @MainActor () -> Void = {},
+        onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
         onBack: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
@@ -101,6 +103,7 @@ public struct ChatConversationView: View {
         self.onOpenAudienceProfile = onOpenAudienceProfile
         self.onUseAIDraft = onUseAIDraft
         self.onContentLoaded = onContentLoaded
+        self.onOpenProfile = onOpenProfile
         self.onBack = onBack
     }
 
@@ -126,10 +129,10 @@ public struct ChatConversationView: View {
                 mode: mode,
                 counterparty: viewModel.headerCounterparty,
                 creatorContext: resolvedCreatorContext,
-                onBack: onBack
-            ) {
-                detailsPresented = true
-            }
+                onBack: onBack,
+                onOpenDetails: { detailsPresented = true },
+                onOpenProfile: headerProfileTap
+            )
             if isSelecting {
                 ChatSelectionTopBar(count: selectedMessageIds.count, onCancel: exitSelection)
             }
@@ -418,6 +421,13 @@ public struct ChatConversationView: View {
 
     private var resolvedCreatorContext: ChatCreatorThreadContext {
         creatorContext ?? .defaults()
+    }
+
+    /// A person DM's header opens that person's profile, as web's does.
+    private var headerProfileTap: (@MainActor () -> Void)? {
+        guard mode == .dm, let userId = viewModel.profileUserId else { return nil }
+        let open = onOpenProfile
+        return { open(userId) }
     }
 
     private var composerPlaceholder: String {
@@ -1509,6 +1519,8 @@ private struct ChatConversationHeader: View {
     let onBack: @MainActor () -> Void
     /// Opens the conversation-details drawer (topics + safety actions).
     var onOpenDetails: @MainActor () -> Void = {}
+    /// Opens the other person's profile from their avatar and name (person DMs only).
+    var onOpenProfile: (@MainActor () -> Void)?
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -1518,6 +1530,33 @@ private struct ChatConversationHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
+            identity
+            Spacer(minLength: Spacing.s0)
+            trailingActions
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(height: mode == .creatorThread ? 64 : 56)
+        .background(Theme.Color.appSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
+        }
+        .accessibilityIdentifier("chatConversationHeader")
+    }
+
+    /// Avatar, name and presence; a button to the profile when there is one.
+    @ViewBuilder private var identity: some View {
+        if let onOpenProfile {
+            Button(action: onOpenProfile) { identityContent }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens their profile")
+        } else {
+            identityContent
+        }
+    }
+
+    private var identityContent: some View {
+        HStack(alignment: .center, spacing: 10) {
             avatar
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -1548,17 +1587,7 @@ private struct ChatConversationHeader: View {
                     }
                 }
             }
-            Spacer(minLength: Spacing.s0)
-            trailingActions
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(height: mode == .creatorThread ? 64 : 56)
-        .background(Theme.Color.appSurface)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
-        }
-        .accessibilityIdentifier("chatConversationHeader")
     }
 
     @ViewBuilder private var avatar: some View {
