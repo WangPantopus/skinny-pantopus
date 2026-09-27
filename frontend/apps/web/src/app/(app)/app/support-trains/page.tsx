@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
@@ -49,8 +49,11 @@ export default function SupportTrainsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const requestSequence = useRef(0);
 
   const fetchTrains = useCallback(async () => {
+    const request = ++requestSequence.current;
+    setLoading(true);
     const token = getAuthToken();
     if (!token) {
       router.push('/login');
@@ -62,17 +65,21 @@ export default function SupportTrainsPage() {
       if (roleFilter !== 'all') params.role = roleFilter;
 
       const result = await api.supportTrains.listMySupportTrains(params);
+      if (request !== requestSequence.current) return;
       setTrains(result.support_trains || []);
       setTotal(result.total || 0);
       setError(null);
     } catch (err: any) {
+      if (request !== requestSequence.current) return;
       setError(err?.message || 'Failed to load Support Trains');
+    } finally {
+      if (request === requestSequence.current) setLoading(false);
     }
   }, [roleFilter, router]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchTrains().finally(() => setLoading(false));
+    void fetchTrains();
+    return () => { requestSequence.current += 1; };
   }, [fetchTrains]);
 
   return (
