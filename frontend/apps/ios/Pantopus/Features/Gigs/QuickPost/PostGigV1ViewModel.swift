@@ -164,6 +164,10 @@ public struct PostGigV1Place: Equatable, Sendable {
 
 public struct PostGigV1Form: Equatable, Sendable {
     public var category: GigsCategory
+    /// Edit only: the task's category as stored. An edit keeps it unless
+    /// the owner picks a new one; one these chips don't list (web has
+    /// more, e.g. "Other") shows by name with no chip selected.
+    public var storedCategory: String?
     public var title: String
     public var description: String
     public var price: String
@@ -752,7 +756,7 @@ extension PostGigV1ViewModel {
         return CreateGigBody(
             title: form.title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: form.description.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: form.category == .all ? nil : form.category.rawValue,
+            category: form.categoryForBody,
             price: pay.price,
             payType: pay.payType,
             scheduleType: "scheduled",
@@ -807,7 +811,7 @@ extension PostGigV1ViewModel {
         return UpdateGigBody(
             title: form.title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: form.description.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: form.category == .all ? nil : form.category.rawValue,
+            category: form.categoryForBody,
             price: pay.price,
             payType: pay.payType,
             scheduleType: "scheduled",
@@ -825,7 +829,7 @@ extension PostGigV1ViewModel {
 
     private func validate(form: PostGigV1Form) -> [PostGigV1ValidationError] {
         var errors: [PostGigV1ValidationError] = []
-        if form.category == .all {
+        if form.category == .all, form.storedCategory == nil {
             errors.append(.init(field: .category, message: "Choose a category."))
         }
         if form.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -868,7 +872,8 @@ extension PostGigV1ViewModel {
 
     private func prefill(from gig: GigDTO) {
         var form = PostGigV1Form()
-        form.category = GigsCategory(rawValue: gig.category ?? "") ?? .all
+        form.category = GigsCategory(backendKey: gig.category) ?? .all
+        form.storedCategory = gig.category.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
         form.title = gig.title
         form.description = String((gig.description ?? "").prefix(PostGigV1SampleData.descriptionMaxLength))
         switch gig.payType {
@@ -932,5 +937,16 @@ extension PostGigV1ViewModel {
         if let date = formatter.date(from: string) { return date }
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: string)
+    }
+}
+
+extension PostGigV1Form {
+    /// The category to send: a newly picked chip, otherwise the stored
+    /// value as it was (so an edit never rewrites "Pet Care" to "petcare"
+    /// or "Other" to a chip).
+    var categoryForBody: String? {
+        if category == .all { return storedCategory }
+        if let storedCategory, GigsCategory(backendKey: storedCategory) == category { return storedCategory }
+        return category.rawValue
     }
 }

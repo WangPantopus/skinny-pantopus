@@ -306,6 +306,7 @@ fun PostGigV1Content(
             selected = form.category,
             error = errors.messageFor(PostGigV1Field.Category),
             onSelect = actions.onCategory,
+            storedLabel = form.storedCategory,
         )
     }
 
@@ -750,7 +751,10 @@ private fun CategoryField(
     selected: GigsCategory,
     error: String?,
     onSelect: (GigsCategory) -> Unit,
+    storedLabel: String? = null,
 ) {
+    // Editing a task in a category these chips don't list shows its name.
+    val unlistedLabel = storedLabel.takeIf { selected == GigsCategory.All }
     var expanded by remember { mutableStateOf(false) }
     val border = if (error == null) PantopusColors.appBorder else PantopusColors.error
 
@@ -775,11 +779,17 @@ private fun CategoryField(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
+                val placeholder = selected == GigsCategory.All && unlistedLabel == null
                 Text(
-                    text = if (selected == GigsCategory.All) "Choose a category" else selected.v1Label(),
+                    text =
+                        when {
+                            unlistedLabel != null -> unlistedLabel
+                            placeholder -> "Choose a category"
+                            else -> selected.v1Label()
+                        },
                     style = PantopusTextStyle.small,
-                    fontWeight = if (selected == GigsCategory.All) FontWeight.Normal else FontWeight.Medium,
-                    color = if (selected == GigsCategory.All) PantopusColors.appTextMuted else PantopusColors.appText,
+                    fontWeight = if (placeholder) FontWeight.Normal else FontWeight.Medium,
+                    color = if (placeholder) PantopusColors.appTextMuted else PantopusColors.appText,
                     modifier = Modifier.weight(1f),
                 )
                 PantopusIconImage(

@@ -107,6 +107,12 @@ data class PostGigV1Place(
 
 data class PostGigV1Form(
     val category: GigsCategory = GigsCategory.All,
+    /**
+     * Edit only: the task's category as stored. An edit keeps it unless the
+     * owner picks a new one; one these chips don't list (web has more, e.g.
+     * "Other") shows by name with no chip selected.
+     */
+    val storedCategory: String? = null,
     val title: String = "",
     val description: String = "",
     val price: String = "",
@@ -555,7 +561,8 @@ class PostGigV1ViewModel
                     else -> PostGigV1PriceType.Flat
                 }
             return PostGigV1Form(
-                category = GigsCategory.fromBackendKey(gig.category),
+                category = GigsCategory.fromBackendKeyOrNull(gig.category) ?: GigsCategory.All,
+                storedCategory = gig.category?.takeIf { it.isNotBlank() },
                 title = gig.title,
                 description = gig.description.orEmpty(),
                 price = if (priceType == PostGigV1PriceType.Free) "" else formatPrice(gig.price),
@@ -687,7 +694,7 @@ class PostGigV1ViewModel
             return CreateGigBody(
                 title = form.title.trim(),
                 description = form.description.trim(),
-                category = if (form.category == GigsCategory.All) null else form.category.key,
+                category = form.categoryForBody(),
                 price = price,
                 payType = payType,
                 scheduleType = "scheduled",
@@ -747,7 +754,7 @@ class PostGigV1ViewModel
             now: LocalDateTime,
         ): List<PostGigV1ValidationError> {
             val errors = mutableListOf<PostGigV1ValidationError>()
-            if (form.category == GigsCategory.All) {
+            if (form.category == GigsCategory.All && form.storedCategory == null) {
                 errors += PostGigV1ValidationError(PostGigV1Field.Category, "Choose a category.")
             }
             if (form.title.isBlank()) {
@@ -825,3 +832,15 @@ class PostGigV1PickedPhoto(
     val mimeType: String,
     val bytes: ByteArray,
 )
+
+/**
+ * The category to send: a newly picked chip, otherwise the stored value as
+ * it was (so an edit never rewrites "Pet Care" to "petcare" or "Other" to
+ * "handyman").
+ */
+internal fun PostGigV1Form.categoryForBody(): String? =
+    when {
+        category == GigsCategory.All -> storedCategory
+        storedCategory != null && GigsCategory.fromBackendKeyOrNull(storedCategory) == category -> storedCategory
+        else -> category.key
+    }
