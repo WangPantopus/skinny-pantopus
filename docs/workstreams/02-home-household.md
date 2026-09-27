@@ -12,6 +12,11 @@
   - [#575](https://github.com/WangPantopus/skinny-pantopus/pull/575) (`ab44aec23`): the web checklist Hire pill and "Refresh checklist" button were invisible. `bg-primary` has no DEFAULT in the theme, so they rendered white on white. Now `bg-primary-600`/`-700`. Bundle `20260927-stream2-checklist-button-color-r1` (`8a865808…`, 10 files).
   - Neither PR shares files with the 17 open PRs, and both merge-tree clean against batch 37's tip `18389b9b5`.
   - **PR-B (native)** is agreed with Stream 1. iOS Hub `.composeGig`, iOS You `.composeTask` and Android `composeGig` all open the **V2 wizard** (GigCompose*), which Stream 1 is changing next (address search). PR-B starts on master after Stream 1 pings that its V2 PR merged. Planned edits: an optional checklist context into the wizard, a link call once after the 201, and a quiet note on failure.
+- **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
+  - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
+  - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
+  - (c) **M03:** deferred.
+  - FKs and triggers are reviewed before any insert.
 - **Batches:** 37 = [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) (tip `18389b9b5` on `7bdef3e8c`: #560, #563, #564, #565, #570 + S3 #566). 38 (planned) = #568, #569 + S3 #567 + S1 #571.
 - **Runtime (04:08Z):** tree = master `89f3c6bac` + #560 #563 #564 #565 #568 #569 #570 + #574 #575 (build commit `b7b65c60f`). Backend pid 38072 since 03:55:12Z. Proxy rules are cleared.
   - **Gotcha:** CSRF_SECRET is unset here, so every backend restart invalidates saved `web-state-*.json` sessions (POST 403 "CSRF token missing or invalid"). Delete them and re-login after a restart.
