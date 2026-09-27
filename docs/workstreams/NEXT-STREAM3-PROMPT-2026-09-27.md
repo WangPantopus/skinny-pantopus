@@ -64,9 +64,9 @@ This direction does **not** reverse the user's explicit earlier decisions (§5).
 - Send each PR to Stream 1 with head, seal, side effects, CI and limits.
 - Say exactly what passed on each platform and what stays unverified: real devices, push, providers, money.
 
-### Merging (user direction, 2026-09-27, received about 11:13Z)
+### Merging (user direction, 2026-09-27; Stream 1 acted on it at 11:13:55Z)
 - The user: merge directly, without waiting for CI, "as long as you did app launch end to end test on the feature, function, flows that they work well. We do not care about these unit tests or so many lints here in the CI."
-- At the user's direction, Stream 1 removed master's required "CI OK" check at 11:13:55Z. The prior config is saved in the coordination repo's repo-settings folder, for restore. Force-push and deletion protection are unchanged.
+- At the user's direction, Stream 1 removed master's required "CI OK" check at 11:13:55Z. The prior config and a restore file are in `docs/workstreams/coordinator-state-2026-09-23/repo-settings/` (`master-protection-before-2026-09-27.json`, `master-protection-restore-2026-09-27.json`, README). Force-push and deletion protection are unchanged.
 - So a PR whose change was verified end-to-end on the real apps, with a sealed bundle, can merge as soon as it is reviewed. Merge through the queue owner (Stream 1), or yourself if no queue owner is active. Announce it to both peers, and check `mergeable_state` and merge-tree first.
 
 ### Timestamps and SHAs

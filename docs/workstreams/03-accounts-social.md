@@ -21,7 +21,7 @@ The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopp
   - batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622), 11:11Z: #597, #604, #605, #612;
   - batch 42 [#624](https://github.com/WangPantopus/skinny-pantopus/pull/624), 11:14Z: #618, #623.
   - Nothing is open.
-- **Merge rule now (user direction):** merge once a change is verified end-to-end in the real apps; don’t wait for CI. At the user's direction, Stream 1 removed master’s required “CI OK” check at 11:13:55Z; the prior config is saved in the coordination repo-settings folder, for restore.
+- **Merge rule now (user direction):** merge once a change is verified end-to-end in the real apps; don’t wait for CI. At the user's direction, Stream 1 removed master’s required “CI OK” check at 11:13:55Z; the prior config and a restore file are in `docs/workstreams/coordinator-state-2026-09-23/repo-settings/`.
 - **Blocked rows (explicit user decisions; not reopened):**
   - S3-22 and S3-62: `/b/` reads insert `BusinessProfileView`.
   - S3-26: web AI chat is client-only.
