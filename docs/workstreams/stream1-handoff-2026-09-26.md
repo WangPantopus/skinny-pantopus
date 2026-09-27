@@ -6,6 +6,7 @@
 
 > **Live — successor session (queue owner since 2026-09-27T02:50Z), 03:44Z:** batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) queued 03:44:00Z (#560 #563 #564 #565 #570 #566; tip `a3c1b106d`); batch 38 candidates #567 #568 #569 #571 (CI running). S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571) implements §3.2 (bundle `20260927-stream1-quickpost-address-search-r1`, `bba44d1b…`). New user decision (answer before 03:33:40Z): the V2 composer gets the same address search (Stream 1 next). The hub docs' 03:44Z UPDATE blocks hold the detail.
 >
+> **Live, 2026-09-27T05:00Z:** batch 37 #572 rebuilt on `c890f2588` (tip `8c6b21c43`, CI re-running). S1 [#580](https://github.com/WangPantopus/skinny-pantopus/pull/580) (V2 wizard real places; bundle `a4c865b1…`) and [#581](https://github.com/WangPantopus/skinny-pantopus/pull/581) (listing slot release) are open. Audits done (§3.3). A listing Home-membership security finding is escalated to the user. The hub docs' 05:00Z UPDATE blocks hold the detail.
 > **§9 correction:** at the user's request the previous session removed its 8 merged PR worktrees (gig-qa-live, web-worker-panel, native-helper-dock, web-stop-copy, android-tab-nav, gig-write-replies, android-edit-location, saved-search-alerts) with `git worktree remove` by 02:51:59Z, and deleted 8 superseded APK copies (the runtime keeps `installed-5558-1e3ed71f8.apk` and now `installed-5558-b4b518313.apk`). New worktree: `/private/tmp/pantopus-stream1-quickpost-address` (#571).
 
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
@@ -262,6 +263,16 @@ Rebuild both from master before native checks.
   - Any backend write that replies with a raw `select('*')` row can break native decoding. PostGIS `geography` columns become EWKB hex strings, and `to_jsonb(geography)` too.
   - Scan other Stream 1 routes (listings, posts, offers) for `res.json({ …: <raw row> })` whose reply native decodes with a full DTO. Check the DTO's location type, and verify on device before changing anything.
   - Also grep `createNotification({ … contextType:` for values other than `personal`/`business`.
+  - **Done 2026-09-27 (successor, source audit of master `7bdef3e8c`; no code change):**
+    - **contextType:** clean. No backend caller passes `contextType` anymore; `createNotification` and the bulk insert default to `personal`; the one direct insert (`adminVerification.js:242`) omits it. `Notification.type` is free text, so it cannot drop a notice.
+    - **Raw rows, Stream 1:** clean.
+      - Gig write replies all go through `savedGigReply` (#553): PATCH `/:id`, `/start`, `/reschedule`.
+      - magic-post selects explicit columns.
+      - Listings go through the allowlist `normalizeListing`.
+      - Post create/patch/resolve/global-pin replies spread the raw row (so `location` is hex), but neither native Post model declares `location`.
+    - **Raw rows, other streams:**
+      - Stream 2: `PATCH /api/homes/:id` (`home.js:1853`) replies with the raw Home row (`location` is EWKB hex). **Refuted on device by Stream 2 (04:50–04:57Z):** renaming Home 9d885f71 saved with no error on Android and iOS. Neither app's `HomeDto`/`HomeDTO` declares `location`; my source read had quoted the my-homes wrapper's decoder. No change. The homeIam lockdown replies have the same shape and no native caller.
+      - Stream 3: business locations parse `location`; `display_location` is not declared natively.
 - **Preserved, not open:** native stop sheets on a started $0 task still show "Task amount $0.00 · Cancellation fee $0.00 · Review…". The user's "honest wording only" decision was applied to web (#549); native wording parity is a small follow-up.
 
 **3.4 Keep integrating peer PRs.**

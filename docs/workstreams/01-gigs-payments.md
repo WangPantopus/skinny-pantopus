@@ -2,6 +2,29 @@
 
 ## CURRENT STREAM 1 STATE — 2026-09-26T22:10Z (session handoff)
 
+> **UPDATE 2026-09-27T05:00Z — Stream 1 (queue owner).**
+> - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572)** rebuilt for the user's docs merges (#562, then #577 at 04:27:18Z): tip `8c6b21c43` at 04:42:24Z. The same six heads; its diff from the old tip is #577's docs only. CI is re-running; runner pid 34455.
+> - **Batch 38 candidates** (reviewed, bundles verified, merge-tree clean):
+>   - S3 #567, #573, #576;
+>   - S2 #568, #569, #574, #575, #578, #579;
+>   - S1 #571, [#580](https://github.com/WangPantopus/skinny-pantopus/pull/580), [#581](https://github.com/WangPantopus/skinny-pantopus/pull/581).
+>   - Built on the post-#572 master from green heads.
+> - **S1 #580 (HIGH, user decision "Same address search"): the V2 "Post a task" wizard posts at real places.**
+>   - "A place" lists Add Home's suggestions, on both apps and in the iOS Magic "Where" sheet.
+>   - "Your address" uses the primary Home's point; with no Home it shows a message.
+>   - "Virtual" posts no location.
+>   - iOS now requires Where, like Android and web (iOS used to post in-person tasks with no location).
+>   - magic-post refuses (0, 0).
+>   - Verified on iOS and Android; the geocoder and Home were stand-ins (boundaries). Bundle `20260927-stream1-v2-compose-address-r1` `a4c865b1…` (66 files).
+>   - Stream 2's PR-B (native Hire link) waits for its merge.
+> - **S1 #581:** a failed listing create now releases its inventory slot (supabase-js builder `.catch` TypeError). Stream 2 ran the route before/after on a Home (bundle `916fbb74…`).
+> - **Audits done** (handoff §3.3):
+>   - contextType: clean.
+>   - Raw-row replies, Stream 1: clean.
+>   - Home PATCH raw-location lead: refuted on device by Stream 2 (no Home DTO reads `location`).
+> - **Security finding, escalated to the user:** `POST /api/listings` trusts `homeId`/`isAddressAttached` without a Home membership check. Anyone can claim inventory slots on any Home and set an unearned "address attached" flag. The proposal is pending the user's decision.
+> - **Runtime:** master code (backend pid 64008 since 04:57:00Z); proxy rules cleared. **Slots:** Stream 1 holds none.
+
 > **UPDATE 2026-09-27T03:44Z — new Stream 1 session (queue owner since 02:50Z).**
 > - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572)** queued 03:44:00Z (runner pid 34455), tip `a3c1b106d` on master `89f3c6bac`: S2 #560 → #563 → #564 → #565 → #570 → S3 #566 (all "CI OK" at 03:42:12Z; all six reviewed; bundles re-verified; #564's hunks proven in the tip). #565/#570 are backend → restart the Stream 1 runtime after the merge.
 > - **Batch 38 candidates (reviewed, CI running at 03:42Z):** S3 #567, S2 #568, S2 #569, S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571).
