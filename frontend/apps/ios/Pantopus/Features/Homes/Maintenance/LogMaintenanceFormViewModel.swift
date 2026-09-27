@@ -337,7 +337,10 @@ final class LogMaintenanceFormViewModel {
                     recurrence: recurrence.rawValue,
                     dueDate: dueIso,
                     performedAt: dateCompleted == initial.dateCompleted ? nil : Self.isoTimestampString(from: dateCompleted),
-                    status: nil // Don't reset status on edit.
+                    status: nil, // Don't reset status on edit.
+                    clearVendor: vendor == nil && vendorEncoding(initial) != nil,
+                    clearCost: costText.trimmingCharacters(in: .whitespaces).isEmpty
+                        && Self.parseCost(initial.costText) != nil
                 )
                 response = try await api.request(
                     HomesEndpoints.updateMaintenance(homeId: homeId, taskId: taskId, request: req)

@@ -173,6 +173,8 @@ object NetworkModule {
             // fields must reach the backend as explicit JSON null.
             .add(app.pantopus.android.data.api.models.businesses.BusinessCatalogItemRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.BillDecimalAdapter())
+            .add(app.pantopus.android.data.api.models.homes.MaintenanceCostJsonAdapter())
+            .add(app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // `gig.items` stored as a JSON string by older writers reads as the list inside it.
