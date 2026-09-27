@@ -38,6 +38,12 @@
   - #579 passed review; batch 38 = #574 #575 #578 #579 (Stream 2) plus others, once CI is green.
   - **I01 blocker:** the runtime has no admin, so an Add Home + ownership approval through the app can't complete here. The earlier Homes were verified as fixtures. Needs a user choice.
   - Slot 1 was used 04:56:18–05:00:02Z.
+- **Standing user instruction (~07:22Z, recorded 2026-09-27T07:23:43Z):** never stop to ask. On any issue, take my recommended option, keep working, and record each decision here, in memory and in the PR body. Hard limits unchanged.
+- **Decision log** (per the standing instruction, or answered by the user):
+  - **I01 approval (user answer at ~07:22Z):** "Approve the claim by SQL (Recommended)". Add the new Home through the real web Add Home flow, then mark its ownership verified with a reviewed SQL fixture step, then check the first dashboard load. Rejected: a test admin account (privileged test data); skipping the live check.
+- **Merged:** batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) at 05:19:18Z → master `563cddb47`, with #560 #563 #564 #565 #570 (Stream 2) and #566 (Stream 3).
+  - Still open: #568 #569 #574 #575 #578 #579 (batch 38 candidates).
+  - Stream 1's V2 wizard [#580](https://github.com/WangPantopus/skinny-pantopus/pull/580) (`edb013686`) is open; PR-B is being prepared against it.
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
