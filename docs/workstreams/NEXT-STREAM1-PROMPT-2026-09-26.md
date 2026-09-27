@@ -92,10 +92,9 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
    - If batch 35 or any later batch is still open, let the runner finish or fix it per handoff §4.7.
    - After any merge that touches `backend/` or `supabase/`, bring the runtime to master and SIGINT-restart the backend (handoff §5.3).
    - Mark the merged rows in the inventory.
-2. **Ask the user about the HIGH product defect** (handoff §3.2): the Hub's "Post task" on both native apps (quick-post V1 form) creates new tasks at **0,0**. It sends placeholder coordinates for a free-text address.
-   - Reproduced on the Android app; iOS by source.
-   - Propose the options with a recommendation: **(A)** geocode the typed address in the app before posting + **(D)** make the backend refuse a (0, 0) location on create and edit.
-   - Implement whatever the user chooses, with before/after on both apps.
+2. **Implement the user's decision on the HIGH defect** (handoff §3.2): the Hub's "Post task" on both native apps (quick-post V1 form) creates new tasks at **0,0**.
+   - The user chose **"Address search in the app"** (2026-09-27): the location field offers the same address suggestions as Add Home (`/api/geo/autocomplete` → `/api/geo/resolve`, metered), and the backend rejects (0, 0) on create and edit.
+   - Keep the form's design. Verify before/after on both apps, including that a neighbor now sees the task.
 3. **Integrate peer PRs** as they come. Stream 3 has a `postCreationHooksService.js` context-type fix (local `097e3e087`) waiting for its user's approval of an end-to-end write, likely for batch 36.
 4. **Remaining Stream 1 inventory** (all low; handoff §3.3):
    - web `/app/offers` swallowed failure (OPEN), `/app/discover-hub` orphan, and Discover's double notice;

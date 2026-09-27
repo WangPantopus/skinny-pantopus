@@ -2,7 +2,7 @@
 
 > **State at 2026-09-27T00:57Z.**
 > - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
-> - **Batch 35** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) is being built once its heads are green; a dry run at 00:55Z was clean. §2 has the exact state.
+> - **Batch 35** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) is being built once its heads are green; a dry run after 00:54:55Z was clean. §2 has the exact state.
 >
 > A final update block is added after batch 35 merges (§0). Always re-verify live.
 
@@ -91,7 +91,7 @@ _Not yet written. If this section is still empty, the previous session stopped b
 
 **Batch 35: to build once these heads are green.**
 - At 00:54:55Z #548 and #550 were green; #552, #553, #554 and #555 were running CI.
-- A dry-run chain on `73b98f6b6` (00:55Z, tip `a58163421`, not pushed) was clean. All §4 checks passed, including the three special files below.
+- A dry-run chain on `73b98f6b6` (run after 00:54:55Z, tip `a58163421`, not pushed) was clean. All §4 checks passed, including the three special files below.
 
 | PR | Stream | Head | Scope | Bundle seal (files) | Review |
 |---|---|---|---|---|---|
@@ -148,18 +148,22 @@ _Not yet written. If this section is still empty, the previous session stopped b
    - Check `/api/hub` returns 200 (re-login with `api.py login alice` if you get a 401).
    - Mark #548/#550/#553/#554/#555 merged in the inventory, update the hub docs and memory, and message the peers.
 
-**3.2 Ask the user (product decision, HIGH): native "Post task" creates tasks at 0,0.**
+**3.2 IMPLEMENT the user's decision (HIGH): native "Post task" creates tasks at 0,0.**
 - **The defect:**
   - The Hub's "Post task" on both apps opens the quick-post V1 form (Android `ChildRoutes.quickPostGig`, iOS `PostGigV1View` from `HubTabRoot`).
-  - It has only a free-text location, and it sends `latitude/longitude 0`. iOS does this by design: "the same fallback the V2 composer uses when it has no geocode".
+  - It has only a free-text location, and it sends `latitude/longitude 0`.
   - `POST /api/gigs` stores the coordinates as given, so such tasks are created at POINT(0 0) with no city: invisible in every neighbor's feed and map.
-- **Reproduced on the real Android app:** "1200 Main St, Vancouver, WA 98660" → POINT(0 0), POST 201 at 2026-09-27T00:38:25.430Z. Bundle `20260927-stream1-android-edit-location-r1/android/create-candidate/`. The inventory row is OPEN (high).
-- **Options to propose** (money/UX: geocoding uses Mapbox):
-  - **(A)** Geocode the typed address in the app before posting (CoreLocation `CLGeocoder` / Android `Geocoder`), and refuse to post without a result.
-  - **(B)** Open the existing geocoding composer (V2 / web-style picker) from "Post task". This is a navigation change.
-  - **(C)** Default to the poster's Home or current location, with the typed text as the label.
-  - **(D)** Also make the backend refuse a (0, 0) location on create and edit, so no client can do this again.
-- **Recommendation to give the user:** A + D. That is the smallest in-place repair, and it keeps the form's design.
+  - iOS's code comment cites a "V2 composer" (`GigComposeViewModel`) that no longer exists.
+- **Reproduced on the real Android app:** "1200 Main St, Vancouver, WA 98660" → POINT(0 0), POST 201 at 2026-09-27T00:38:25.430Z. Bundle `20260927-stream1-android-edit-location-r1/android/create-candidate/`.
+- **User decision 2026-09-27 (AskUserQuestion; answer received before 01:34:54Z): "Address search in the app".** Implement:
+  1. **App:** the quick-post location field offers the same address suggestions the Add Home screen already uses:
+     - iOS: `GeoEndpoints` `GET /api/geo/autocomplete?q=` → `POST /api/geo/resolve`, as in `AddHomeWizardViewModel` / `HomeTaskGigViewModel`;
+     - Android: the equivalent existing calls.
+     - A picked suggestion supplies real coordinates plus city/state/zip for create **and** edit (#554 already re-sends loaded coordinates on edit).
+     - These calls are metered and billed, so debounce the typeahead as Add Home does.
+  2. **Backend:** `POST /api/gigs` and `PATCH /api/gigs/:id` reject a (0, 0) location with a clear 400 ("Pick an address from the suggestions"), so no app version can place a task at 0,0 again. Check the web composer never sends (0, 0) first.
+  3. **Design:** keep the form's layout (suggestion list under the existing field, like Add Home).
+  4. **Verify:** before/after on both apps (the task lands at the picked address and shows in a neighbor's nearby feed), web unchanged, and the API refusal of (0, 0).
 
 **3.3 Remaining Stream 1 inventory** (all low unless noted; each row in the inventory has details).
 - **Web:**

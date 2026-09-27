@@ -18,7 +18,7 @@
 >   - #553: native task edit/reschedule and iOS confirm showed false errors (raw PostGIS strings in replies), and reschedule notices were never delivered (invalid `notification_context_type`).
 >   - #554: Android edit moved tasks to 0,0.
 >   - #555: saved-search task alerts were never delivered (same enum cause, found with Stream 3).
-> - **Needs a user decision (HIGH):** the native Hub "Post task" (quick-post V1) creates new tasks at 0,0 on both apps. It was reproduced on Android; the handoff §3.2 has the options.
+> - **User decision (HIGH), not implemented yet:** the native Hub "Post task" (quick-post V1) creates new tasks at 0,0 on both apps (reproduced on Android). On 2026-09-27 the user chose **"Address search in the app"**: Add Home's address suggestions, plus a backend refusal of (0, 0). The next Stream 1 session implements it (handoff §3.2).
 > - **Runtime:** tree = master `73b98f6b6`, backend pid 83519 (00:52:25Z), `/api/hub` 200.
 > - **Slots:** Stream 1 holds nothing.
 
