@@ -1076,6 +1076,10 @@ private struct GigWhereSheet: View {
                         viewModel.form.locationMode == mode ? [.isButton, .isSelected] : .isButton
                     )
                 }
+                if viewModel.form.locationMode == .yourAddress {
+                    YourAddressStatus(viewModel: viewModel)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if viewModel.form.locationMode == .aPlace {
                     VStack(spacing: Spacing.s2) {
                         PantopusTextField(
@@ -1084,6 +1088,7 @@ private struct GigWhereSheet: View {
                             placeholder: "123 Main St",
                             identifier: "gigPicker.where.line1"
                         )
+                        PlaceSuggestions(viewModel: viewModel)
                         PantopusTextField(
                             "City",
                             text: addressBinding(\.city) { viewModel.updatePlaceAddress(city: $0) },

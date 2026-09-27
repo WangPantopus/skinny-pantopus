@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.ai.AiTranscriptionRepository
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.geo.GeoResolveRequest
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.gigs.CareDetailsDto
 import app.pantopus.android.data.api.models.gigs.EventDetailsDto
 import app.pantopus.android.data.api.models.gigs.LogisticsDetailsDto
@@ -22,6 +25,9 @@ import app.pantopus.android.data.api.models.gigs.RemoteDetailsDto
 import app.pantopus.android.data.api.models.gigs.UrgentDetailsDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.GeoApi
+import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigDraftQueue
@@ -83,6 +89,13 @@ data class GigComposeUiState(
      * businesses or fetch failed) keeps the identity chip static.
      */
     val identityOptions: List<GigComposeIdentityOption> = emptyList(),
+    /** Address suggestions under the "A place" Street field (`GET /api/geo/autocomplete`). */
+    val addressSuggestions: List<GeoSuggestion> = emptyList(),
+    val isFindingAddress: Boolean = false,
+    val addressSearchError: String? = null,
+    /** `YourAddress` — true while the primary Home loads, and why it can't be used. */
+    val isLoadingHome: Boolean = false,
+    val homeAddressError: String? = null,
 )
 
 /**
@@ -107,6 +120,8 @@ open class GigComposeViewModel
         private val transcriptionRepository: AiTranscriptionRepository,
         private val draftQueue: GigDraftQueue,
         private val businessesRepository: BusinessesRepository,
+        private val geoApi: GeoApi,
+        private val homesApi: HomesApi,
     ) : ViewModel(),
         WizardModel {
         private val _state =
@@ -157,6 +172,10 @@ open class GigComposeViewModel
          * stacking duplicates.
          */
         private var queuedDraftId: String? = null
+
+        /** The in-flight "A place" address lookup; a newer one supersedes it. */
+        private var addressJob: Job? = null
+        private var addressRevision = 0
 
         // MARK: - WizardModel
 
@@ -733,14 +752,58 @@ open class GigComposeViewModel
         fun selectLocationMode(mode: GigComposeLocationMode) {
             _state.update { it.copy(form = it.form.copy(locationMode = mode)) }
             persist()
+            if (mode == GigComposeLocationMode.YourAddress && _state.value.form.homeAddress == null) loadHomeAddress()
         }
 
+        /**
+         * `YourAddress` posts at the primary Home's saved point
+         * (`GET /api/homes/primary`), as the web composer does.
+         */
+        fun loadHomeAddress() {
+            if (_state.value.isLoadingHome) return
+            _state.update { it.copy(isLoadingHome = true, homeAddressError = null) }
+            viewModelScope.launch {
+                val result = safeApiCall { homesApi.primaryHome() }
+                val home = (result as? NetworkResult.Success)?.data?.home
+                val point = home?.location?.takeUnless { it.latitude == 0.0 && it.longitude == 0.0 }
+                val place =
+                    if (home != null && point != null) {
+                        GigComposePlaceAddress(
+                            line1 = listOfNotNull(home.address, home.address2).joinToString(" ").trim(),
+                            city = home.city.orEmpty(),
+                            state = home.state.orEmpty(),
+                            zip = home.zipcode.orEmpty(),
+                            latitude = point.latitude,
+                            longitude = point.longitude,
+                            homeId = home.id,
+                        )
+                    } else {
+                        null
+                    }
+                val error =
+                    when {
+                        place != null -> null
+                        result is NetworkResult.Failure -> "Couldn't load your home address. Try again."
+                        home != null -> "Your home's location isn't on file yet. Use \"A place\" for this task."
+                        else -> "There's no home on your account yet. Use \"A place\" for this task."
+                    }
+                _state.update { it.copy(isLoadingHome = false, homeAddressError = error, form = it.form.copy(homeAddress = place)) }
+                persist()
+            }
+        }
+
+        /**
+         * A new Street needs a new pick: search as Add Home does (3+
+         * characters after a 300 ms pause; every lookup is billed).
+         * City/State/ZIP stay editable and keep the picked point.
+         */
         fun updatePlaceAddress(
             line1: String? = null,
             city: String? = null,
             state: String? = null,
             zip: String? = null,
         ) {
+            val streetChanged = line1 != null && line1 != _state.value.form.placeAddress.line1
             _state.update {
                 val current = it.form.placeAddress
                 it.copy(
@@ -752,11 +815,75 @@ open class GigComposeViewModel
                                     city = city ?: current.city,
                                     state = state ?: current.state,
                                     zip = zip ?: current.zip,
+                                    latitude = if (streetChanged) null else current.latitude,
+                                    longitude = if (streetChanged) null else current.longitude,
                                 ),
                         ),
                 )
             }
             persist()
+            if (streetChanged) searchPlaces(line1.orEmpty())
+        }
+
+        fun retryPlaceSearch() = searchPlaces(_state.value.form.placeAddress.line1)
+
+        /** Resolve a picked suggestion (`POST /api/geo/resolve`) into the Street, City, State, ZIP and point. */
+        fun selectPlaceSuggestion(suggestion: GeoSuggestion) {
+            if (_state.value.addressSuggestions.none { it.suggestionId == suggestion.suggestionId }) return
+            cancelPlaceSearch(keepSuggestions = true)
+            val revision = addressRevision
+            _state.update { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    val result = safeApiCall { geoApi.resolve(GeoResolveRequest(suggestion.suggestionId)) }
+                    if (revision != addressRevision) return@launch
+                    val place = (result as? NetworkResult.Success)?.data?.normalized?.toComposePlace(suggestion)
+                    if (place == null) {
+                        _state.update { it.copy(isFindingAddress = false, addressSearchError = "Couldn't load that address. Try again.") }
+                        return@launch
+                    }
+                    _state.update {
+                        it.copy(form = it.form.copy(placeAddress = place), addressSuggestions = emptyList(), isFindingAddress = false)
+                    }
+                    persist()
+                }
+        }
+
+        private fun searchPlaces(text: String) {
+            cancelPlaceSearch()
+            val query = text.trim()
+            if (query.length < MIN_ADDRESS_QUERY_LENGTH) return
+            val revision = addressRevision
+            _state.update { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    delay(ADDRESS_SEARCH_DEBOUNCE_MILLIS)
+                    val result = safeApiCall { geoApi.autocomplete(query) }
+                    if (revision != addressRevision) return@launch
+                    val suggestions = (result as? NetworkResult.Success)?.data?.suggestions
+                    val error =
+                        when {
+                            suggestions == null -> "Address search is unavailable. Try again."
+                            suggestions.isEmpty() -> "No matching addresses. Try a more complete address."
+                            else -> null
+                        }
+                    _state.update {
+                        it.copy(isFindingAddress = false, addressSuggestions = suggestions.orEmpty(), addressSearchError = error)
+                    }
+                }
+        }
+
+        private fun cancelPlaceSearch(keepSuggestions: Boolean = false) {
+            addressRevision += 1
+            addressJob?.cancel()
+            addressJob = null
+            _state.update {
+                it.copy(
+                    isFindingAddress = false,
+                    addressSearchError = null,
+                    addressSuggestions = if (keepSuggestions) it.addressSuggestions else emptyList(),
+                )
+            }
         }
 
         // MARK: - E.1 Composer picker sheets
@@ -1182,8 +1309,9 @@ open class GigComposeViewModel
         private fun hasValidLocation(form: GigComposeFormState): Boolean =
             when (form.locationMode) {
                 null -> false
-                GigComposeLocationMode.YourAddress, GigComposeLocationMode.Virtual -> true
-                GigComposeLocationMode.APlace -> form.placeAddress.isComplete
+                GigComposeLocationMode.Virtual -> true
+                GigComposeLocationMode.YourAddress -> form.homeAddress?.hasPoint == true
+                GigComposeLocationMode.APlace -> form.placeAddress.isComplete && form.placeAddress.hasPoint
             }
 
         // MARK: - Persistence
@@ -1218,6 +1346,19 @@ open class GigComposeViewModel
             private const val KEY_PLACE_CITY = "composeGig2.placeCity"
             private const val KEY_PLACE_STATE = "composeGig2.placeState"
             private const val KEY_PLACE_ZIP = "composeGig2.placeZip"
+            private const val KEY_PLACE_LAT = "composeGig2.placeLatitude"
+            private const val KEY_PLACE_LNG = "composeGig2.placeLongitude"
+            private const val KEY_HOME_LINE1 = "composeGig2.homeLine1"
+            private const val KEY_HOME_CITY = "composeGig2.homeCity"
+            private const val KEY_HOME_STATE = "composeGig2.homeState"
+            private const val KEY_HOME_ZIP = "composeGig2.homeZip"
+            private const val KEY_HOME_LAT = "composeGig2.homeLatitude"
+            private const val KEY_HOME_LNG = "composeGig2.homeLongitude"
+            private const val KEY_HOME_ID = "composeGig2.homeId"
+
+            /** Add Home's address search: 3+ characters after a 300 ms pause. */
+            private const val MIN_ADDRESS_QUERY_LENGTH = 3
+            private const val ADDRESS_SEARCH_DEBOUNCE_MILLIS = 300L
             private const val KEY_DEADLINE = "composeGig2.deadline"
             private const val KEY_CANCELLATION = "composeGig2.cancellationPolicy"
             private const val KEY_IS_URGENT = "composeGig2.isUrgent"
@@ -1472,6 +1613,15 @@ open class GigComposeViewModel
                     KEY_PLACE_CITY to form.placeAddress.city,
                     KEY_PLACE_STATE to form.placeAddress.state,
                     KEY_PLACE_ZIP to form.placeAddress.zip,
+                    KEY_PLACE_LAT to form.placeAddress.latitude,
+                    KEY_PLACE_LNG to form.placeAddress.longitude,
+                    KEY_HOME_LINE1 to form.homeAddress?.line1,
+                    KEY_HOME_CITY to form.homeAddress?.city,
+                    KEY_HOME_STATE to form.homeAddress?.state,
+                    KEY_HOME_ZIP to form.homeAddress?.zip,
+                    KEY_HOME_LAT to form.homeAddress?.latitude,
+                    KEY_HOME_LNG to form.homeAddress?.longitude,
+                    KEY_HOME_ID to form.homeAddress?.homeId,
                     KEY_DEADLINE to form.deadlineISO,
                     KEY_CANCELLATION to form.cancellationPolicy?.name,
                     KEY_IS_URGENT to form.isUrgent,
@@ -1516,7 +1666,21 @@ open class GigComposeViewModel
                             city = string(KEY_PLACE_CITY) ?: "",
                             state = string(KEY_PLACE_STATE) ?: "",
                             zip = string(KEY_PLACE_ZIP) ?: "",
+                            latitude = (read(KEY_PLACE_LAT) as? Number)?.toDouble(),
+                            longitude = (read(KEY_PLACE_LNG) as? Number)?.toDouble(),
                         ),
+                    homeAddress =
+                        string(KEY_HOME_ID)?.let { homeId ->
+                            GigComposePlaceAddress(
+                                line1 = string(KEY_HOME_LINE1) ?: "",
+                                city = string(KEY_HOME_CITY) ?: "",
+                                state = string(KEY_HOME_STATE) ?: "",
+                                zip = string(KEY_HOME_ZIP) ?: "",
+                                latitude = (read(KEY_HOME_LAT) as? Number)?.toDouble(),
+                                longitude = (read(KEY_HOME_LNG) as? Number)?.toDouble(),
+                                homeId = homeId,
+                            )
+                        },
                     deadlineISO = string(KEY_DEADLINE),
                     cancellationPolicy =
                         string(KEY_CANCELLATION)?.let { name -> GigCancellationPolicy.entries.firstOrNull { it.name == name } },
@@ -1580,7 +1744,9 @@ open class GigComposeViewModel
                 if (!hasValidTitleAndDescription(title, description)) return null
                 if (!hasValidPrice(budgetType, priceFromBudget(budgetType, form.budgetMin))) return null
                 if (!hasValidScheduledStart(scheduleType, form.scheduledStartISO)) return null
-                val location = composedLocation(locationMode, form.placeAddress) ?: return null
+                // Virtual posts no place (a remote task); the others need a picked point.
+                val location =
+                    if (locationMode == GigComposeLocationMode.Virtual) null else composedLocation(locationMode, form) ?: return null
                 val amount = form.budgetMin.toDoubleOrNull()
                 val scheduleWire = scheduleWireValue(form)
                 val urgentDetails = resolvedUrgentDetails(form, aiDraft)
@@ -1634,16 +1800,7 @@ open class GigComposeViewModel
                 return MagicPostBody(
                     text = magicPostText(form, title, description),
                     draft = draft,
-                    location =
-                        MagicPostLocation(
-                            mode = location.mode,
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            address = location.address,
-                            city = location.city,
-                            state = location.state,
-                            zip = location.zip,
-                        ),
+                    location = location,
                     // P6c — persona switching: null posts as Personal, a
                     // business's postable user id posts on its behalf.
                     beneficiaryUserId = form.beneficiaryUserId,
@@ -1698,50 +1855,46 @@ open class GigComposeViewModel
                     else -> aiDraft?.urgentDetails ?: UrgentDetailsDto(startsAsap = true)
                 }
 
-            private data class ComposedLocation(
-                val mode: String,
-                val latitude: Double,
-                val longitude: Double,
-                val address: String,
-                val city: String? = null,
-                val state: String? = null,
-                val zip: String? = null,
-            )
-
+            /**
+             * The picked point: the primary Home's for `YourAddress`, the
+             * resolved suggestion's for `APlace`. Null while there is none.
+             */
             private fun composedLocation(
                 mode: GigComposeLocationMode,
-                place: GigComposePlaceAddress,
-            ): ComposedLocation? =
-                when (mode) {
-                    GigComposeLocationMode.YourAddress ->
-                        ComposedLocation(
-                            mode = mode.wireMode,
-                            latitude = 0.0,
-                            longitude = 0.0,
-                            address = "Your saved address",
-                        )
-                    GigComposeLocationMode.APlace -> {
-                        if (!place.isComplete) {
-                            null
-                        } else {
-                            ComposedLocation(
-                                mode = mode.wireMode,
-                                latitude = 0.0,
-                                longitude = 0.0,
-                                address = place.line1.trim(),
-                                city = place.city.trim(),
-                                state = place.state.trim(),
-                                zip = place.zip.trim(),
-                            )
-                        }
-                    }
-                    GigComposeLocationMode.Virtual ->
-                        ComposedLocation(
-                            mode = mode.wireMode,
-                            latitude = 0.0,
-                            longitude = 0.0,
-                            address = "Remote / Online",
-                        )
-                }
+                form: GigComposeFormState,
+            ): MagicPostLocation? {
+                val place =
+                    when (mode) {
+                        GigComposeLocationMode.YourAddress -> form.homeAddress
+                        GigComposeLocationMode.APlace -> form.placeAddress.takeIf { it.isComplete }
+                        GigComposeLocationMode.Virtual -> null
+                    } ?: return null
+                val latitude = place.latitude ?: return null
+                val longitude = place.longitude ?: return null
+                return MagicPostLocation(
+                    mode = mode.wireMode,
+                    latitude = latitude,
+                    longitude = longitude,
+                    address = place.line1.trim(),
+                    city = place.city.trim().ifEmpty { null },
+                    state = place.state.trim().ifEmpty { null },
+                    zip = place.zip.trim().ifEmpty { null },
+                    homeId = place.homeId,
+                )
+            }
         }
     }
+
+/** A resolved suggestion as the "A place" fields, or null when it has no usable point. */
+private fun NormalizedAddress.toComposePlace(suggestion: GeoSuggestion): GigComposePlaceAddress? {
+    val lat = latitude ?: return null
+    val lng = longitude ?: return null
+    return GigComposePlaceAddress(
+        line1 = address?.trim().orEmpty().ifEmpty { suggestion.primaryText },
+        city = city.orEmpty(),
+        state = state.orEmpty(),
+        zip = zipcode.orEmpty(),
+        latitude = lat,
+        longitude = lng,
+    ).takeUnless { lat == 0.0 && lng == 0.0 }
+}

@@ -62,6 +62,8 @@ class GigComposeBenchmarkTest {
             transcriptionRepo,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
         )
 
     private fun benchmark(

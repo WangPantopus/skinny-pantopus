@@ -158,6 +158,15 @@ final class GigComposeViewModel: WizardModel, WizardDraftSaving {
     /// until the fetch lands (or forever, on failure / no businesses).
     private(set) var identityOptions: [GigComposeIdentityOption] = [.personal]
 
+    /// "A place" — address suggestions under Street (`GET /api/geo/autocomplete`).
+    private(set) var placeSuggestions: [GeoSuggestion] = []
+    private(set) var isFindingPlace = false
+    private(set) var placeSearchError: String?
+
+    /// `yourAddress` — true while the primary Home loads, and why it can't be used.
+    private(set) var isLoadingHome = false
+    private(set) var homeAddressError: String?
+
     // MARK: - Private dependencies
 
     private let api: APIClient
@@ -168,6 +177,10 @@ final class GigComposeViewModel: WizardModel, WizardDraftSaving {
 
     /// B.3 — in-flight debounce for the Magic Task archetype parse.
     private var detectionTask: Task<Void, Never>?
+
+    /// The in-flight "A place" lookup; a newer one supersedes it.
+    private var placeTask: Task<Void, Never>?
+    private var placeRevision = 0
 
     /// Success-step undo countdown ticker.
     private var undoCountdownTask: Task<Void, Never>?
@@ -676,10 +689,19 @@ extension GigComposeViewModel {
 
     func selectLocationMode(_ mode: GigComposeLocationMode) {
         form.locationMode = mode
+        if mode == .yourAddress, form.homeAddress == nil { loadHomeAddress() }
     }
 
+    /// A new Street needs a new pick: search as Add Home does (3+
+    /// characters after a 300 ms pause; every lookup is billed). City,
+    /// State and ZIP stay editable and keep the picked point.
     func updatePlaceAddress(line1: String? = nil, city: String? = nil, state: String? = nil, zip: String? = nil) {
-        if let line1 { form.placeAddress.line1 = line1 }
+        if let line1, line1 != form.placeAddress.line1 {
+            form.placeAddress.line1 = line1
+            form.placeAddress.latitude = nil
+            form.placeAddress.longitude = nil
+            searchPlaces(for: line1)
+        }
         if let city { form.placeAddress.city = city }
         if let state { form.placeAddress.state = state }
         if let zip { form.placeAddress.zip = zip }
@@ -994,7 +1016,8 @@ extension GigComposeViewModel {
     var whereSummary: String? {
         switch form.locationMode {
         case .yourAddress:
-            return "Your saved address"
+            guard let home = form.homeAddress else { return "Your saved address" }
+            return [home.line1, home.city].filter { !$0.isEmpty }.joined(separator: ", ")
         case .virtual:
             return "Remote / Online"
         case .aPlace:
@@ -1216,7 +1239,6 @@ extension GigComposeViewModel {
     func buildMagicPostBody() -> MagicPostBody? {
         GigMagicPostBuilder.body(
             from: form,
-            coordinate: location.cachedCoordinate(),
             fallbackScheduleType: magicDraft?.scheduleType,
             privacyLevel: magicDraft?.privacyLevel ?? "exact_after_accept",
             aiConfidence: draftConfidence,
@@ -1368,13 +1390,129 @@ private extension GigComposeViewModel {
         return true
     }
 
+    /// Where is required, as on Android and web: without it an in-person
+    /// task is stored with no place and never shows to neighbors.
     var hasValidLocation: Bool {
-        guard let mode = form.locationMode else { return true }
+        guard let mode = form.locationMode else { return false }
         switch mode {
-        case .yourAddress, .virtual:
+        case .virtual:
             return true
+        case .yourAddress:
+            return form.homeAddress?.hasPoint == true
         case .aPlace:
-            return form.placeAddress.isComplete
+            return form.placeAddress.isComplete && form.placeAddress.hasPoint
         }
+    }
+}
+
+// MARK: - Location: address suggestions and the primary Home
+
+extension GigComposeViewModel {
+    func retryPlaceSearch() {
+        searchPlaces(for: form.placeAddress.line1)
+    }
+
+    /// Resolve a picked suggestion (`POST /api/geo/resolve`) into the
+    /// Street, City, State, ZIP and point.
+    func selectPlaceSuggestion(_ suggestion: GeoSuggestion) {
+        guard placeSuggestions.contains(suggestion) else { return }
+        cancelPlaceSearch(keepingSuggestions: true)
+        let revision = placeRevision
+        isFindingPlace = true
+        placeTask = Task {
+            defer { if placeRevision == revision { isFindingPlace = false } }
+            do {
+                let response: GeoResolveResponse = try await api.request(
+                    GeoEndpoints.resolve(suggestionId: suggestion.suggestionId)
+                )
+                guard placeRevision == revision else { return }
+                let normalized = response.normalized
+                guard let latitude = normalized.latitude, let longitude = normalized.longitude,
+                      !(latitude == 0 && longitude == 0) else { throw APIError.invalidResponse }
+                let street = normalized.address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                form.placeAddress = GigComposePlaceAddress(
+                    line1: street.isEmpty ? suggestion.primaryText : street,
+                    city: normalized.city ?? "",
+                    state: normalized.state ?? "",
+                    zip: normalized.zipcode ?? "",
+                    latitude: latitude,
+                    longitude: longitude
+                )
+                placeSuggestions = []
+            } catch is CancellationError {
+                return
+            } catch {
+                guard placeRevision == revision else { return }
+                placeSearchError = "Couldn't load that address. Try again."
+            }
+        }
+    }
+
+    /// `yourAddress` posts at the primary Home's saved point
+    /// (`GET /api/homes/primary`), as the web composer does.
+    func loadHomeAddress() {
+        guard !isLoadingHome else { return }
+        isLoadingHome = true
+        homeAddressError = nil
+        Task {
+            defer { isLoadingHome = false }
+            do {
+                let response: PrimaryHomeResponse = try await api.request(HomesEndpoints.primary())
+                guard let card = response.home else {
+                    homeAddressError = "There's no home on your account yet. Use \"A place\" for this task."
+                    return
+                }
+                guard let point = card.location, !(point.latitude == 0 && point.longitude == 0) else {
+                    homeAddressError = "Your home's location isn't on file yet. Use \"A place\" for this task."
+                    return
+                }
+                let street = [card.home.address, card.home.address2].compactMap(\.self).joined(separator: " ")
+                form.homeAddress = GigComposePlaceAddress(
+                    line1: street.trimmingCharacters(in: .whitespacesAndNewlines),
+                    city: card.home.city ?? "",
+                    state: card.home.state ?? "",
+                    zip: card.home.zipcode ?? "",
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                    homeId: card.id
+                )
+            } catch {
+                homeAddressError = "Couldn't load your home address. Try again."
+            }
+        }
+    }
+
+    private func searchPlaces(for text: String) {
+        cancelPlaceSearch()
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count >= 3 else { return }
+        let revision = placeRevision
+        isFindingPlace = true
+        placeTask = Task {
+            defer { if placeRevision == revision { isFindingPlace = false } }
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+                let response: GeoAutocompleteResponse = try await api.request(GeoEndpoints.autocomplete(query: query))
+                guard placeRevision == revision else { return }
+                placeSuggestions = response.suggestions
+                if response.suggestions.isEmpty {
+                    placeSearchError = "No matching addresses. Try a more complete address."
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard placeRevision == revision else { return }
+                placeSearchError = "Address search is unavailable. Try again."
+            }
+        }
+    }
+
+    private func cancelPlaceSearch(keepingSuggestions: Bool = false) {
+        placeRevision += 1
+        placeTask?.cancel()
+        placeTask = nil
+        isFindingPlace = false
+        placeSearchError = nil
+        if !keepingSuggestions { placeSuggestions = [] }
     }
 }

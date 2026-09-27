@@ -47,6 +47,8 @@ class GigComposeMagicSnapshotTest {
             mockk<AiTranscriptionRepository>(relaxed = true),
             mockk<app.pantopus.android.data.gigs.GigDraftQueue>(relaxed = true),
             mockk<app.pantopus.android.data.businesses.BusinessesRepository>(relaxed = true),
+            mockk<app.pantopus.android.data.api.services.GeoApi>(relaxed = true),
+            mockk<app.pantopus.android.data.api.services.HomesApi>(relaxed = true),
         )
 
     @Test

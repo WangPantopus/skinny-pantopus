@@ -17,6 +17,12 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/my-homes")
     }
 
+    /// `GET /api/homes/primary` — the actor's primary Home card, or
+    /// `{home: null}` (`homeListService.read` with `primary`).
+    public static func primary() -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/primary")
+    }
+
     /// `GET /api/homes/:id` — route `backend/routes/home.js:2891`.
     public static func detail(homeId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/\(homeId)")
