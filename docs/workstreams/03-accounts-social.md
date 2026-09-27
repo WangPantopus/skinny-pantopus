@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:52:47Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T09:02:12Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots (2026-09-27T08:52:47Z):** none held. Heavy 08:33:58Z–08:49:34Z (to Stream 2), slot 3 08:20:35Z–08:46:55Z, slot 1 08:37:28Z–08:51:15Z (to Stream 2). Sim `0AE16FA0` has build `997d129c2` with the Owner signed in (shut down); the emulator is shut down. Batch 38 #585 merged 08:01:42Z (`f6c66d678`).
+- **Slots (2026-09-27T09:02:12Z):** heavy held since 09:01:42Z (Android + iOS builds of `c5e133780`, the DM header → profile); slot 3 held since 08:59:26Z (the Android before is done). Slot 1 is Stream 2's; I'm next. Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`). All nine Stream 3 branches merge-tree clean against it. CI: #593/#594/#595/#596/#600 green; #597 re-run in progress after an unrelated HomeTaskMedia flake (Stream 2 will harden that test); #604/#605 running. Batch 40 (Stream 1) will take #593–#597, #600, #604, #605.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
