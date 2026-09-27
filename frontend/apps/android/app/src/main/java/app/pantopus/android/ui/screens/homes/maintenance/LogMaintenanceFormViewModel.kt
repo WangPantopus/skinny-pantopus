@@ -166,17 +166,19 @@ class LogMaintenanceFormViewModel
                         if (task != null) {
                             applyExisting(task, editTaskId)
                         } else {
-                            _form.value = _form.value.copy(
-                                isLoadingExisting = false,
-                                submitError = "This maintenance entry is no longer available. Close this form and refresh the list.",
-                            )
+                            _form.value =
+                                _form.value.copy(
+                                    isLoadingExisting = false,
+                                    submitError = "This maintenance entry is no longer available. Close this form and refresh the list.",
+                                )
                         }
                     }
                     is NetworkResult.Failure ->
-                        _form.value = _form.value.copy(
-                            isLoadingExisting = false,
-                            submitError = "Couldn't load this maintenance entry. Close and reopen it to try again.",
-                        )
+                        _form.value =
+                            _form.value.copy(
+                                isLoadingExisting = false,
+                                submitError = "Couldn't load this maintenance entry. Close and reopen it to try again.",
+                            )
                 }
             }
         }
