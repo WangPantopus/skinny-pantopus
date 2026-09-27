@@ -50,6 +50,18 @@ enum class GigsFeedScope(
             }
 }
 
+/** Why the Support Trains scope is empty when it isn't "none nearby". */
+enum class SupportTrainsNotice(
+    val headline: String,
+    val body: String,
+) {
+    /** No device location, so nothing was searched. */
+    NoLocation("Location needed", "Turn on location to see Support Trains near you."),
+
+    /** The nearby read failed. */
+    Failed("Couldn't load Support Trains", "Check your connection, then try again."),
+}
+
 /**
  * One nearby Support Train row rendered inline in the Tasks feed.
  * Mirrors RN `components/gig-browse/SupportTrainRow.tsx`.

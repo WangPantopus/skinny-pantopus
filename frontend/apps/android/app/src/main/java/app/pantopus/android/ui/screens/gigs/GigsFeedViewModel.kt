@@ -75,6 +75,10 @@ class GigsFeedViewModel
         private val _feedScope = MutableStateFlow(GigsFeedScope.Tasks)
         val feedScope: StateFlow<GigsFeedScope> = _feedScope.asStateFlow()
 
+        /** Why the Support Trains read has nothing to show: no location, or a failed read. */
+        private val _supportTrainsNotice = MutableStateFlow<SupportTrainsNotice?>(null)
+        val supportTrainsNotice: StateFlow<SupportTrainsNotice?> = _supportTrainsNotice.asStateFlow()
+
         /**
          * Merged, newest-first render rows: gig cards plus (in the scopes
          * that include them) nearby Support Train rows.
@@ -622,6 +626,7 @@ class GigsFeedViewModel
             if (!_feedScope.value.includesSupportTrains || lat == null || lng == null) {
                 loadedTrains = emptyList()
                 trainSortKeys = emptyMap()
+                _supportTrainsNotice.value = if (_feedScope.value.includesSupportTrains) SupportTrainsNotice.NoLocation else null
                 return
             }
             val result =
@@ -637,10 +642,12 @@ class GigsFeedViewModel
                     val trains = result.data.supportTrains
                     loadedTrains = trains.map { projectSupportTrain(it) }
                     trainSortKeys = trains.associate { it.supportTrainId to epochSeconds(it.publishedAt) }
+                    _supportTrainsNotice.value = null
                 }
                 is NetworkResult.Failure -> {
                     loadedTrains = emptyList()
                     trainSortKeys = emptyMap()
+                    _supportTrainsNotice.value = SupportTrainsNotice.Failed
                 }
             }
         }

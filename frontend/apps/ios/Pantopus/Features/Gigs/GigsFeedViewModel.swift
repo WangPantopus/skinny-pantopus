@@ -37,6 +37,9 @@ public final class GigsFeedViewModel {
     /// Nearby Support Trains for the `.all` / `.supportTrains` scopes,
     /// from `GET /api/activities/support-trains/nearby`.
     public private(set) var supportTrains: [SupportTrainRowContent] = []
+    /// Why the Support Trains read has nothing to show when it isn't simply
+    /// "none nearby": no location to search from, or a failed read.
+    public private(set) var supportTrainsNotice: SupportTrainsNotice?
 
     /// Merged, newest-first render rows: gig cards plus (in the scopes
     /// that include them) Support Train rows.
@@ -367,6 +370,7 @@ public final class GigsFeedViewModel {
         guard feedScope.includesSupportTrains, let coordinate = resolvedCoordinate() else {
             loadedTrains = []
             supportTrains = []
+            supportTrainsNotice = feedScope.includesSupportTrains ? .noLocation : nil
             return
         }
         let radiusMeters = radiusMiles * Self.metersPerMile
@@ -381,9 +385,11 @@ public final class GigsFeedViewModel {
             )
             guard generation == fetchGeneration else { return }
             loadedTrains = response.supportTrains
+            supportTrainsNotice = nil
         } catch {
             guard generation == fetchGeneration else { return }
             loadedTrains = []
+            supportTrainsNotice = .failed
         }
         supportTrains = loadedTrains.map(Self.projectSupportTrain)
     }

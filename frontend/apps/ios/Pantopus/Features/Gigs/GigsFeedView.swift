@@ -501,6 +501,12 @@ public struct GigsFeedView: View {
         )
     }
 
+    /// The Support Trains scope explains an empty list it didn't search
+    /// (no location) or couldn't load, instead of "none nearby".
+    private var trainsNotice: SupportTrainsNotice? {
+        viewModel.feedScope == .supportTrains ? viewModel.supportTrainsNotice : nil
+    }
+
     private func emptyFrame(_ empty: GigsFeedEmpty) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
@@ -508,20 +514,29 @@ public struct GigsFeedView: View {
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
-            Text(viewModel.feedScope.emptyHeadline)
+            Text(trainsNotice?.headline ?? viewModel.feedScope.emptyHeadline)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text(viewModel.feedScope.emptyBody)
+            Text(trainsNotice?.body ?? viewModel.feedScope.emptyBody)
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
             Button {
-                onCompose(viewModel.activeCategory)
+                if trainsNotice == .failed {
+                    Task { await viewModel.refresh() }
+                } else {
+                    onCompose(viewModel.activeCategory)
+                }
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.pencil, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text("Post a task")
+                    Icon(
+                        trainsNotice == .failed ? .refreshCw : .pencil,
+                        size: 15,
+                        strokeWidth: 2.4,
+                        color: Theme.Color.appTextInverse
+                    )
+                    Text(trainsNotice == .failed ? "Try again" : "Post a task")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
