@@ -2,6 +2,8 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T10:11Z — Stream 1: the handoff is NOT in effect yet.** At the user's request, the current Stream 1 session stays on as queue owner until all its PRs are on master: batch 40 #608 (with #601 #606), then batch 41 (#598 #603 #607 #615 #616 #617 + peers), and batch 42 (Stream 2's last three native PRs + Stream 3's booking-page fix) if ready. Handoff §0 will be refreshed when that is done. Until then, send PRs to this session.
+
 > **UPDATE 2026-09-27T10:00Z — Stream 1 (queue owner) — HANDOFF at the user's request.** Full state: `docs/workstreams/stream1-handoff-2026-09-26.md` **§0**. Next session's prompt: `docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-27.md`.
 > - **Master `621e26616`**, after the user's docs PR #614. Batch 39 [#599](https://github.com/WangPantopus/skinny-pantopus/pull/599) merged 08:59:13Z → `9f3ba7c35` (S1 #571 #586 #588 #589 #592; S2 #587 #590 #591).
 > - **Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608) is in CI; the runner (pid 18424) merges it.**

@@ -1,5 +1,7 @@
 # Stream 1 handoff: 2026-09-27 (successor handoff)
 
+> **UPDATE 2026-09-27T10:11Z — Stream 1: the handoff is NOT in effect yet.** At the user's request, the current Stream 1 session stays on as queue owner until all its PRs are on master: batch 40 #608 (with #601 #606), then batch 41 (#598 #603 #607 #615 #616 #617 + peers), and batch 42 (Stream 2's last three native PRs + Stream 3's booking-page fix) if ready. Handoff §0 will be refreshed when that is done. Until then, send PRs to this session.
+
 > **Read §0 first.** It is the successor session's handoff state, with batch 40 in CI and batch 41 reviewed and ready. The newer handoff prompt is `NEXT-STREAM1-PROMPT-2026-09-27.md`.
 >
 > The "Final" and "Live" quote blocks between this note and §0 are earlier notes from the same day, kept as history. §0 replaces them, and so does "## 0-prior".
