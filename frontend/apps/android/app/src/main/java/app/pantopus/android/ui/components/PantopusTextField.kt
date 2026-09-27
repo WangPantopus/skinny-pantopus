@@ -78,6 +78,7 @@ fun PantopusTextField(
     fieldTestTag: String? = null,
     containerColor: Color = PantopusColors.appSurface,
     keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+    enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -139,6 +140,7 @@ fun PantopusTextField(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
+                enabled = enabled,
                 textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
                 cursorBrush = SolidColor(PantopusColors.primary600),
                 singleLine = true,
