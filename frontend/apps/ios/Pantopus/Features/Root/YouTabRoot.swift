@@ -76,6 +76,9 @@ public enum YouRoute: Hashable {
     /// P2.2 — Post-a-Task wizard. Pushed from the My tasks FAB / empty
     /// CTA. Routes to the new gig's detail on success.
     case composeTask
+    /// A Home seasonal-checklist "Hire": the same wizard with the item's
+    /// category, linking the posted task back to the item.
+    case composeChecklistHire(category: String, checklist: GigChecklistLink)
     /// A13.8 Phase 4 — edit an open gig with the V1 single-screen
     /// composer (prefill + `PATCH /api/gigs/:id`). Pushed from the My
     /// tasks per-row "Edit" action; routes to the gig's detail on save.
@@ -647,7 +650,7 @@ public struct YouTabRoot: View {
              .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
              .composeBroadcast, .composePost, .editPost, .editSignup, .addGuest, .addBill,
              .claimOwnership, .verifyResidency, .verifyLandlord, .businessWaitlist,
-             .createBusiness, .composeTask, .composeListing, .editListing,
+             .createBusiness, .composeTask, .composeChecklistHire, .composeListing, .editListing,
              .startSupportTrain, .ceremonialMail, .privacyHandshake:
             true
         case let .scheduling(route):
@@ -1649,6 +1652,14 @@ public struct YouTabRoot: View {
                 path.removeAll { $0 == .composeTask }
                 path.append(.gigDetail(gigId: gigId))
             }
+        case let .composeChecklistHire(category, checklist):
+            GigComposeWizardView(preselectedCategoryKey: category, checklistLink: checklist) { gigId in
+                path.removeAll { route in
+                    if case .composeChecklistHire = route { return true }
+                    return false
+                }
+                path.append(.gigDetail(gigId: gigId))
+            }
         case let .editGig(gigId):
             PostGigV1View(
                 viewModel: PostGigV1ViewModel(editGigId: gigId),
@@ -1676,7 +1687,10 @@ public struct YouTabRoot: View {
                             )))
                         }
                     },
-                    onFindPeople: { showFindPeople = true }
+                    onFindPeople: { showFindPeople = true },
+                    onOpenProfile: { userId in
+                        Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                    }
                 )
             )
         case .supportTrains:
@@ -2012,8 +2026,12 @@ public struct YouTabRoot: View {
                     currentUserId: currentUserId ?? "",
                     initialTopic: dest.initialTopic
                 ),
-                mode: dest.kind
-            ) { Task { @MainActor in pop() } }
+                mode: dest.kind,
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                },
+                onBack: { Task { @MainActor in pop() } }
+            )
         case let .homeBills(homeId):
             BillsListView(
                 viewModel: BillsListViewModel(
@@ -2458,11 +2476,11 @@ public struct YouTabRoot: View {
                 onOpenPropertyDetails: { detailsHomeId in
                     Task { @MainActor in path.append(.propertyDetails(homeId: detailsHomeId)) }
                 },
-                onHireHelp: { _ in
+                onHireHelp: { categoryKey, checklist in
                     // H1 — "Hire" on a seasonal-checklist item opens the
-                    // gig composer. The You-tab route carries no category
-                    // preselection, so the wizard starts on category pick.
-                    Task { @MainActor in path.append(.composeTask) }
+                    // gig composer on the item's category and links the
+                    // posted task back to the item.
+                    Task { @MainActor in path.append(.composeChecklistHire(category: categoryKey, checklist: checklist)) }
                 },
                 onAddTask: { id in
                     Task { @MainActor in path.append(.addHouseholdTask(homeId: id)) }

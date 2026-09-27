@@ -42,6 +42,7 @@ const rankingService = require('../services/gig/rankingService');
 const optionalAuth = require('../middleware/optionalAuth');
 const homeTaskGigService = require('../services/homeTaskGigService');
 const gigPricingService = require('../services/gig/gigPricingService');
+const { canonicalGigCategory } = require('../services/magicTaskService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
 const { hasUsableCoordinates } = require('../services/seederProvisioningService');
@@ -222,7 +223,7 @@ async function getUserExclusions(userId) {
   ]);
 
   const dismissedGigIds = new Set((dismissedResult.data || []).map((r) => String(r.gig_id)));
-  const hiddenCategories = new Set((hiddenResult.data || []).map((r) => r.category));
+  const hiddenCategories = new Set((hiddenResult.data || []).map((r) => canonicalGigCategory(r.category)));
 
   return { dismissedGigIds, hiddenCategories };
 }
@@ -235,7 +236,7 @@ function applyUserExclusions(gigs, exclusions) {
   if (dismissedGigIds.size === 0 && hiddenCategories.size === 0) return gigs;
   return gigs.filter((g) => {
     if (dismissedGigIds.has(String(g.id))) return false;
-    if (g.category && hiddenCategories.has(g.category)) return false;
+    if (g.category && hiddenCategories.has(canonicalGigCategory(g.category))) return false;
     return true;
   });
 }
@@ -1155,7 +1156,7 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       title,
       description,
       price,
-      category: category || null,
+      category: canonicalGigCategory(category) || null,
       deadline: deadline || null,
       estimated_duration: estimated_duration || null,
       attachments: attachments || [],
@@ -2072,12 +2073,13 @@ router.get('/search', verifyToken, async (req, res) => {
       q = '',
       limit = 20,
       offset = 0,
-      category,
+      category: rawCategory,
       status = 'open',
       latitude,
       longitude,
       radiusMiles,
     } = req.query;
+    const category = canonicalGigCategory(rawCategory);
     const queryText = String(q || '').trim();
     const safeLimit = Math.min(parseInt(limit) || 20, 50);
     const safeOffset = Math.max(parseInt(offset) || 0, 0);
@@ -2340,7 +2342,7 @@ router.get('/', optionalAuth, async (req, res) => {
       limit = 20,
       offset,
       page,
-      category,
+      category: rawCategory,
       minPrice,
       maxPrice,
       price_min,
@@ -2362,6 +2364,7 @@ router.get('/', optionalAuth, async (req, res) => {
       search, // search query (forwarded to RPC)
       task_archetype, // archetype filter
     } = req.query;
+    const category = canonicalGigCategory(rawCategory);
 
     const { status, error: statusError } = resolvePublicStatusFilter(req.query, 'open');
     if (statusError) {
@@ -2883,7 +2886,7 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: statusError });
     }
     const includeRemote = parseBooleanQuery(req.query.includeRemote, true);
-    const category = req.query.category || null;
+    const category = canonicalGigCategory(req.query.category) || null;
     const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     if (![min_lat, min_lon, max_lat, max_lon].every(Number.isFinite)) {
@@ -3268,7 +3271,7 @@ router.get('/price-benchmark', optionalAuth, async (req, res) => {
     }
 
     const benchmark = await gigPricingService.getGigPriceBenchmark({
-      category,
+      category: canonicalGigCategory(category),
       latitude: lat ? parseFloat(lat) : undefined,
       longitude: lng ? parseFloat(lng) : undefined,
     });
@@ -3754,7 +3757,7 @@ router.post('/hidden-categories', verifyToken, async (req, res) => {
     const { error } = await supabaseAdmin.from('user_hidden_categories').upsert(
       {
         user_id: userId,
-        category: category.trim(),
+        category: canonicalGigCategory(category.trim()),
         hidden_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,category' }
@@ -3785,7 +3788,7 @@ router.delete('/hidden-categories/:category', verifyToken, async (req, res) => {
       .from('user_hidden_categories')
       .delete()
       .eq('user_id', userId)
-      .eq('category', category);
+      .in('category', [...new Set([category, canonicalGigCategory(category)])]);
 
     return res.json({ success: true });
   } catch (err) {
@@ -3916,6 +3919,7 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
     }
 
     const updateData = { ...req.body };
+    if (typeof updateData.category === 'string') updateData.category = canonicalGigCategory(updateData.category);
 
     // Handle location
     if (updateData.location) {

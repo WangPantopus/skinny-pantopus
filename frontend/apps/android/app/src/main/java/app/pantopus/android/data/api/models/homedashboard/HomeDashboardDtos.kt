@@ -233,6 +233,12 @@ data class SeasonalChecklistItemDto(
         get() = status == "completed" || status == "skipped" || status == "hired"
 }
 
+/** Body for `POST /api/homes/:id/seasonal-checklist/:itemId/hire`. */
+@JsonClass(generateAdapter = true)
+data class HireSeasonalChecklistItemRequest(
+    @Json(name = "gig_id") val gigId: String,
+)
+
 /** Body for `PATCH /api/homes/:id/seasonal-checklist/:itemId`. */
 @JsonClass(generateAdapter = true)
 data class UpdateSeasonalChecklistItemRequest(

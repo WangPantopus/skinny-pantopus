@@ -61,6 +61,28 @@ public enum GigsFeedScope: String, CaseIterable, Sendable, Hashable, Identifiabl
     }
 }
 
+/// Why the Support Trains scope is empty when it isn't "none nearby".
+public enum SupportTrainsNotice: Sendable, Equatable {
+    /// No device location, so nothing was searched.
+    case noLocation
+    /// The nearby read failed.
+    case failed
+
+    public var headline: String {
+        switch self {
+        case .noLocation: "Location needed"
+        case .failed: "Couldn't load Support Trains"
+        }
+    }
+
+    public var body: String {
+        switch self {
+        case .noLocation: "Turn on location to see Support Trains near you."
+        case .failed: "Check your connection, then try again."
+        }
+    }
+}
+
 /// One nearby Support Train row rendered inline in the Tasks feed.
 /// Mirrors RN `components/gig-browse/SupportTrainRow.tsx`.
 public struct SupportTrainRowContent: Identifiable, Sendable, Hashable {

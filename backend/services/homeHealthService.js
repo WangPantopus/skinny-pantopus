@@ -224,7 +224,7 @@ async function computeHealthScore(homeId) {
     // 3. Seasonal checklist items for current season/year
     supabaseAdmin
       .from('HomeSeasonalChecklistItem')
-      .select('id, status, title')
+      .select('id, status, title, gig_id')
       .eq('home_id', homeId)
       .eq('season_key', seasonKey)
       .eq('year', currentYear),
@@ -274,6 +274,17 @@ async function computeHealthScore(homeId) {
       checklist = (Array.isArray(created) ? created : []).filter(checklistRow);
     } catch (err) {
       logger.warn('Health score could not create the seasonal checklist', { homeId, error: err.message });
+    }
+  }
+  // A hired item whose task has closed goes back to pending when the
+  // checklist is read. Apply the same rule here, so the score never counts
+  // that item as handled while the checklist beside it shows it pending.
+  if (checklist.some(row => row.status === 'hired')) {
+    try {
+      const { releaseClosedHires } = require('./seasonalChecklistService');
+      checklist = (await releaseClosedHires(homeId, checklist)).filter(checklistRow);
+    } catch (err) {
+      logger.warn('Health score could not check hired checklist tasks', { homeId, error: err.message });
     }
   }
   const contacts = readRows(emergencyRes, row => nonblank(row.id));

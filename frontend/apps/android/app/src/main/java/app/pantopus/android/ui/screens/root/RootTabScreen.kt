@@ -82,6 +82,8 @@ import app.pantopus.android.ui.screens.businesses.payments.BusinessPaymentsScree
 import app.pantopus.android.ui.screens.businesses.team.BusinessTeamScreen
 import app.pantopus.android.ui.screens.ceremonial_mail.CeremonialMailWizardScreen
 import app.pantopus.android.ui.screens.ceremonial_mail_open.CeremonialMailOpenScreen
+import app.pantopus.android.ui.screens.compose.gig.GigChecklistLink
+import app.pantopus.android.ui.screens.compose.gig.GigComposeViewModel
 import app.pantopus.android.ui.screens.compose.gig.GigComposeWizardScreen
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeStep
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeWizardScreen
@@ -1259,9 +1261,15 @@ private object ChildRoutes {
     const val GIG_DETAIL_ID_KEY = "gigId"
     const val GIG_DETAIL = "gigs/{$GIG_DETAIL_ID_KEY}"
 
-    /** Compose gig target — placeholder until the compose flow ships. */
+    /** Compose gig target — placeholder until the compose flow ships.
+     *  A seasonal-checklist "Hire" also passes its Home and item ids. */
     const val COMPOSE_GIG_CATEGORY_KEY = "category"
-    const val COMPOSE_GIG = "gigs/compose?$COMPOSE_GIG_CATEGORY_KEY={$COMPOSE_GIG_CATEGORY_KEY}"
+    const val COMPOSE_GIG_CHECKLIST_HOME_KEY = GigComposeViewModel.CHECKLIST_HOME_KEY
+    const val COMPOSE_GIG_CHECKLIST_ITEM_KEY = GigComposeViewModel.CHECKLIST_ITEM_KEY
+    const val COMPOSE_GIG =
+        "gigs/compose?$COMPOSE_GIG_CATEGORY_KEY={$COMPOSE_GIG_CATEGORY_KEY}" +
+            "&$COMPOSE_GIG_CHECKLIST_HOME_KEY={$COMPOSE_GIG_CHECKLIST_HOME_KEY}" +
+            "&$COMPOSE_GIG_CHECKLIST_ITEM_KEY={$COMPOSE_GIG_CHECKLIST_ITEM_KEY}"
 
     /** Quick-post V1 single-screen gig form. Hub action chip entry point.
      *  A13.8 P4 — an optional `editGigId` arg turns the same screen into
@@ -1480,6 +1488,12 @@ private object ChildRoutes {
 
     /** Build the compose-gig path with the active category pre-fill. */
     fun composeGig(category: String): String = "gigs/compose?$COMPOSE_GIG_CATEGORY_KEY=${java.net.URLEncoder.encode(category, "UTF-8")}"
+
+    /** A seasonal-checklist "Hire": the category pre-fill plus the item to link the posted task to. */
+    fun composeChecklistHire(
+        category: String,
+        link: GigChecklistLink,
+    ): String = composeGig(category) + "&$COMPOSE_GIG_CHECKLIST_HOME_KEY=${link.homeId}&$COMPOSE_GIG_CHECKLIST_ITEM_KEY=${link.itemId}"
 
     fun quickPostGig(category: String): String =
         "gigs/quick-post?$QUICK_POST_GIG_CATEGORY_KEY=${java.net.URLEncoder.encode(category, "UTF-8")}"
@@ -2992,11 +3006,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenSettings = { homeId ->
                             navController.navigate(ChildRoutes.homeSettings(homeId))
                         },
-                        onHireHelp = { categoryKey ->
+                        onHireHelp = { categoryKey, link ->
                             // H1 — "Hire" on a seasonal-checklist item opens
                             // the gig composer pre-filtered to the item's
-                            // category.
-                            navController.navigate(ChildRoutes.composeGig(categoryKey))
+                            // category and links the posted task to the item.
+                            navController.navigate(ChildRoutes.composeChecklistHire(categoryKey, link))
                         },
                         onAddTask = { homeId ->
                             navController.navigate(ChildRoutes.addHouseholdTask(homeId))
@@ -4649,6 +4663,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         arrivalRoomId = arrivalRoomId,
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -4955,6 +4970,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = GigsCategory.All.key
                             },
+                            // A seasonal-checklist "Hire"; GigComposeViewModel reads them via SavedStateHandle.
+                            navArgument(ChildRoutes.COMPOSE_GIG_CHECKLIST_HOME_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument(ChildRoutes.COMPOSE_GIG_CHECKLIST_ITEM_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
                         ),
                 ) { entry ->
                     val raw = entry.arguments?.getString(ChildRoutes.COMPOSE_GIG_CATEGORY_KEY) ?: GigsCategory.All.key
@@ -5082,6 +5108,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onFindPeople = {
                             findPeopleLauncher.launch(null)
                         },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                     )
                 }
                 composable(ChildRoutes.DISCOVER_HUB) {

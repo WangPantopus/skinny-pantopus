@@ -29,6 +29,7 @@ public struct PublicProfileView: View {
     @State private var viewModel: PublicProfileViewModel
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
+    @State private var shareURL: URL?
     private let onBack: @MainActor () -> Void
     private let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
@@ -88,6 +89,10 @@ public struct PublicProfileView: View {
             ),
             titleVisibility: .hidden
         ) {
+            // The header's "Share profile" opens this sheet, so it shares first.
+            if let url = viewModel.profileShareURL {
+                Button("Share profile") { shareURL = url }
+            }
             Button("Block this user", role: .destructive) {
                 showBlockConfirm = true
             }
@@ -106,6 +111,16 @@ public struct PublicProfileView: View {
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { shareURL != nil },
+                set: { if !$0 { shareURL = nil } }
+            )
+        ) {
+            if let shareURL {
+                SystemShareSheet(items: [shareURL])
+            }
         }
         // RN gates the same `DELETE /api/relationships/:id` behind a
         // "Disconnect · Remove this connection?" alert

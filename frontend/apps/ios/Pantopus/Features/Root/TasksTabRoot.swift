@@ -404,6 +404,9 @@ public struct TasksTabRoot: View {
             mode: dest.kind,
             onUseAIDraft: { draft in
                 path.append(Self.route(for: draft))
+            },
+            onOpenProfile: { userId in
+                Task { @MainActor in path.append(.publicProfile(userId: userId)) }
             }
         ) {
             pop()

@@ -6,8 +6,8 @@
  * criteria it satisfies. Fire-and-forget from the creation paths — a
  * fan-out failure must never fail the post.
  *
- * Matching dimensions (NULL = unconstrained): category (exact, case-
- * insensitive), price window, schedule_type, pay_type, keyword (substring
+ * Matching dimensions (NULL = unconstrained): category (case-insensitive;
+ * a native key such as "petcare" matches its label), price window, schedule_type, pay_type, keyword (substring
  * of title/description), and haversine distance within radius_miles of
  * the saved center. Per-search alerts are throttled to one per
  * `THROTTLE_MINUTES` via `last_notified_at`.
@@ -16,6 +16,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { createBulkNotifications } = require('./notificationService');
 const logger = require('../utils/logger');
+const { canonicalGigCategory } = require('./magicTaskService');
 
 const THROTTLE_MINUTES = 30;
 const EARTH_RADIUS_MILES = 3958.8;
@@ -31,7 +32,10 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
 
 /** True when `search` row's criteria all pass for `gig`. */
 function matches(search, gig, gigLat, gigLon) {
-  if (search.category && String(search.category).toLowerCase() !== String(gig.category || '').toLowerCase()) {
+  if (
+    search.category &&
+    String(canonicalGigCategory(search.category)).toLowerCase() !== String(canonicalGigCategory(gig.category || '')).toLowerCase()
+  ) {
     return false;
   }
   const price = gig.price == null ? null : Number(gig.price);

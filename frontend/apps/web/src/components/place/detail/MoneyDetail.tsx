@@ -952,7 +952,8 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
         ) : (
           <SectionCard icon={Zap} title="Bill benchmark" state={bill ? statusToState(bill.status) : 'unavailable'} caption={bill?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
         )}
-        {bill?.source ? <SourceNote name={bill.source} asOf="12-month average" /> : null}
+        {/* The months the comparison actually covers, as the API reports them. */}
+        {bill?.source ? <SourceNote name={bill.source} asOf={billReady ? (bill!.data as PlaceBillBenchmarkData).period : undefined} /> : null}
 
         <DetailSectionLabel>Incentives you may qualify for</DetailSectionLabel>
         {incReady ? (

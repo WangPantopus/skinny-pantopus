@@ -100,7 +100,7 @@ struct HomeDashboardView: View {
     /// `GigsCategory` raw value derived from the item's `gig_category`
     /// so the host can open the gig composer pre-filtered (RN routes to
     /// `/gig-v2/new?initialText=…`).
-    private let onHireHelp: ((String) -> Void)?
+    private let onHireHelp: ((String, GigChecklistLink) -> Void)?
     /// FAB → "Add Task". Opens the household-task create form for this
     /// home. Mirrors RN `homes/[id]/index.tsx:155`
     /// (`/homes/:id/tasks?create=true`).
@@ -135,7 +135,7 @@ struct HomeDashboardView: View {
         onOpenMembers: ((String) -> Void)? = nil,
         onOpenPropertyDetails: ((String) -> Void)? = nil,
         onOpenSettings: (@MainActor @Sendable (String) -> Void)? = nil,
-        onHireHelp: ((String) -> Void)? = nil,
+        onHireHelp: ((String, GigChecklistLink) -> Void)? = nil,
         onAddTask: ((String) -> Void)? = nil,
         onTrackBill: ((String) -> Void)? = nil,
         onTrackPackage: ((String) -> Void)? = nil,
@@ -359,7 +359,10 @@ struct HomeDashboardView: View {
             onComplete: { itemId in Task { await viewModel.completeChecklistItem(itemId) } },
             onSkip: { itemId in Task { await viewModel.skipChecklistItem(itemId) } },
             onHireHelp: { item in
-                onHireHelp?(GigsCategory.from(backendKey: item.gigCategory).rawValue)
+                onHireHelp?(
+                    GigsCategory.from(backendKey: item.gigCategory).rawValue,
+                    GigChecklistLink(homeId: homeId, itemId: item.id)
+                )
             },
             onGenerate: { Task { await viewModel.generateChecklist() } },
             onRetry: { Task { await viewModel.generateChecklist() } }

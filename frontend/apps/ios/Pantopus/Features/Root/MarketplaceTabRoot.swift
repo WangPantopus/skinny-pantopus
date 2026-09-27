@@ -217,6 +217,9 @@ public struct MarketplaceTabRoot: View {
                     if draft.type == "listing" {
                         path.append(.composeListing)
                     }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
                 }
             ) {
                 pop()

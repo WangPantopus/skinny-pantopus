@@ -166,6 +166,7 @@ fun ChatConversationScreen(
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     viewModel: ChatConversationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -360,6 +361,7 @@ fun ChatConversationScreen(
                     creatorContext = resolvedCreatorContext,
                     onBack = onBack,
                     onOpenDetails = { showDetailsSheet = true },
+                    onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
                 )
             }
             gigContext?.let { strip ->
@@ -848,6 +850,16 @@ private fun incomingInitialsFor(
 
 // MARK: - Header
 
+/** A person DM's header opens that person's profile, as web's does; other threads have none. */
+private fun profileTapFor(
+    mode: ChatThreadMode,
+    conversationMode: ChatConversationMode,
+    onOpenProfile: (String) -> Unit,
+): (() -> Unit)? {
+    val userId = (mode as? ChatThreadMode.Person)?.otherUserId?.takeIf { it.isNotBlank() } ?: return null
+    return if (conversationMode == ChatConversationMode.Dm) ({ onOpenProfile(userId) }) else null
+}
+
 @Composable
 internal fun ChatHeader(
     counterparty: ChatCounterparty,
@@ -856,6 +868,8 @@ internal fun ChatHeader(
     creatorContext: ChatCreatorThreadContext = ChatCreatorThreadContext.defaults(),
     // Opens the conversation-details drawer (topics + safety actions).
     onOpenDetails: () -> Unit = {},
+    // Opens the other person's profile from their avatar and name (person DMs only).
+    onOpenProfile: (() -> Unit)? = null,
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     val isFanThread = conversationMode == ChatConversationMode.FanThread
@@ -886,54 +900,63 @@ internal fun ChatHeader(
                 tint = PantopusColors.appText,
             )
         }
-        HeaderAvatar(
-            isAi = isAi,
-            isFanThread = isFanThread,
-            counterparty = counterparty,
-            tierRank = if (isCreator) creatorContext.fanTierRank else null,
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = counterparty.displayName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PantopusColors.appText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (isAi) AiBadge()
-                if (isFanThread) PersonaPill()
-                if (isCreator) {
-                    CreatorTierChip(name = creatorContext.fanTierName, rank = creatorContext.fanTierRank)
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .then(onOpenProfile?.let { Modifier.clickable(onClickLabel = "View profile", onClick = it) } ?: Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            HeaderAvatar(
+                isAi = isAi,
+                isFanThread = isFanThread,
+                counterparty = counterparty,
+                tierRank = if (isCreator) creatorContext.fanTierRank else null,
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = counterparty.displayName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PantopusColors.appText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isAi) AiBadge()
+                    if (isFanThread) PersonaPill()
+                    if (isCreator) {
+                        CreatorTierChip(name = creatorContext.fanTierName, rank = creatorContext.fanTierRank)
+                    }
                 }
-            }
-            val presence =
-                when {
-                    isFanThread -> presenceFor(counterparty, isFanThread = true)
-                    // Drops the sub-line entirely when the membership
-                    // detail isn't known rather than inventing one.
-                    isCreator -> creatorContext.fanSubtitle?.let { (creatorContext.fanTierRank > 1) to it }
-                    else -> presenceFor(counterparty)
-                }
-            presence?.let { (online, text) ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (online) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(PantopusColors.success),
+                val presence =
+                    when {
+                        isFanThread -> presenceFor(counterparty, isFanThread = true)
+                        // Drops the sub-line entirely when the membership
+                        // detail isn't known rather than inventing one.
+                        isCreator -> creatorContext.fanSubtitle?.let { (creatorContext.fanTierRank > 1) to it }
+                        else -> presenceFor(counterparty)
+                    }
+                presence?.let { (online, text) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        if (online) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(PantopusColors.success),
+                            )
+                        }
+                        Text(
+                            text = text,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = PantopusColors.appTextSecondary,
+                            maxLines = 1,
                         )
                     }
-                    Text(
-                        text = text,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = PantopusColors.appTextSecondary,
-                        maxLines = 1,
-                    )
                 }
             }
         }

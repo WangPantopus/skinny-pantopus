@@ -96,7 +96,10 @@ private fun GigStopPreviewForm(
 ) {
     var reason by remember(preview.action, preview.terms) { mutableStateOf<String?>(null) }
     if (!preview.eligible) {
-        Text("This action needs review before it can continue. No cancellation or fee charge has been confirmed.")
+        Text(
+            GigStopPresentation.startedFreeTaskMessage(preview)
+                ?: "This action needs review before it can continue. No cancellation or fee charge has been confirmed.",
+        )
     } else {
         Text(
             when (preview.financialAction) {

@@ -465,4 +465,4 @@ async function getChecklistHistory(homeId) {
     });
 }
 
-module.exports = { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, getChecklistHistory, SEASON_CHECKLISTS };
+module.exports = { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, releaseClosedHires, getChecklistHistory, SEASON_CHECKLISTS };

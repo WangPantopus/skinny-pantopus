@@ -19,6 +19,8 @@ public enum InboxRoute: Hashable {
     case composeGig(category: String)
     case composeListing
     case composePost(intent: String)
+    /// A person's public profile, opened from a DM header.
+    case publicProfile(userId: String)
 }
 
 /// Routing payload for a conversation push — captures the mode the
@@ -243,7 +245,10 @@ public struct InboxTabRoot: View {
                 onUseAIDraft: { draft in
                     path.append(draftRoute(for: draft))
                 },
-                onContentLoaded: { completeConversationArrival(dest) }
+                onContentLoaded: { completeConversationArrival(dest) },
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                }
             ) { if !path.isEmpty { path.removeLast() } }
                 .onDisappear { completeConversationArrival(dest) }
         case .compose:
@@ -292,7 +297,40 @@ public struct InboxTabRoot: View {
                 onCancel: { if !path.isEmpty { path.removeLast() } },
                 onPosted: { _ in if !path.isEmpty { path.removeLast() } }
             )
+        case let .publicProfile(userId):
+            profileDestination(userId: userId)
         }
+    }
+
+    private func profileDestination(userId: String) -> some View {
+        PublicProfileView(
+            userId: userId,
+            onBack: { if !path.isEmpty { path.removeLast() } },
+            onOpenMessages: { profile in
+                Task { @MainActor in
+                    path.append(.conversation(InboxConversationDestination(
+                        mode: .person(otherUserId: profile.id),
+                        displayName: profile.displayName,
+                        initials: Self.profileInitials(from: profile.displayName),
+                        identityKind: nil,
+                        verified: profile.hasVerifiedResidency
+                    )))
+                }
+            },
+            onOpenGig: { gigId in
+                // The Inbox stack has no gig-detail route; the router opens it in Tasks.
+                Task { @MainActor in DeepLinkRouter.shared.handle(path: "/gig/\(gigId)") }
+            },
+            onOpenProfile: { otherId in
+                Task { @MainActor in path.append(.publicProfile(userId: otherId)) }
+            }
+        )
+    }
+
+    private static func profileInitials(from name: String) -> String {
+        let parts = name.split(separator: " ").prefix(2)
+        let joined = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
+        return joined.isEmpty ? "··" : joined
     }
 
     private func draftRoute(for draft: ChatAIDraftCard) -> InboxRoute {

@@ -85,6 +85,7 @@ fun GigsFeedScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeCategory by viewModel.activeCategory.collectAsStateWithLifecycle()
     val feedScope by viewModel.feedScope.collectAsStateWithLifecycle()
+    val supportTrainsNotice by viewModel.supportTrainsNotice.collectAsStateWithLifecycle()
     val feedRows by viewModel.feedRows.collectAsStateWithLifecycle()
     val activeSort by viewModel.activeSort.collectAsStateWithLifecycle()
     val activeFilterCount by viewModel.activeFilterCount.collectAsStateWithLifecycle()
@@ -161,12 +162,17 @@ fun GigsFeedScreen(
                 when (val s = state) {
                     is GigsFeedUiState.Loading -> LoadingFrame()
                     is GigsFeedUiState.BrowseLoading -> BrowseLoadingFrame()
-                    is GigsFeedUiState.Empty ->
+                    is GigsFeedUiState.Empty -> {
+                        // The Support Trains scope explains an empty list it didn't
+                        // search (no location) or couldn't load, instead of "none nearby".
+                        val notice = supportTrainsNotice.takeIf { feedScope == GigsFeedScope.SupportTrains }
                         EmptyFrame(
                             radiusMiles = s.radiusMiles,
-                            headline = feedScope.emptyHeadline,
-                            body = feedScope.emptyBody,
+                            headline = notice?.headline ?: feedScope.emptyHeadline,
+                            body = notice?.body ?: feedScope.emptyBody,
+                            retry = if (notice == SupportTrainsNotice.Failed) viewModel::refresh else null,
                         ) { onCompose(activeCategory) }
+                    }
                     is GigsFeedUiState.Loaded ->
                         PopulatedFrame(
                             rows = s.rows,
@@ -739,6 +745,7 @@ internal fun EmptyFrame(
     radiusMiles: Double,
     headline: String = "No gigs nearby",
     body: String = "Be the first to post one.",
+    retry: (() -> Unit)? = null,
     onPostTask: () -> Unit,
 ) {
     Column(
@@ -786,7 +793,7 @@ internal fun EmptyFrame(
                 Modifier
                     .clip(RoundedCornerShape(Radii.pill))
                     .background(PantopusColors.primary600)
-                    .clickable(onClick = onPostTask)
+                    .clickable(onClick = retry ?: onPostTask)
                     .padding(horizontal = 22.dp)
                     .heightIn(min = 44.dp)
                     .testTag("gigsEmptyPostTask"),
@@ -794,14 +801,14 @@ internal fun EmptyFrame(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(
-                icon = PantopusIcon.Pencil,
+                icon = if (retry != null) PantopusIcon.RefreshCw else PantopusIcon.Pencil,
                 contentDescription = null,
                 size = 15.dp,
                 strokeWidth = 2.4f,
                 tint = PantopusColors.appTextInverse,
             )
             Text(
-                text = "Post a task",
+                text = if (retry != null) "Try again" else "Post a task",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,

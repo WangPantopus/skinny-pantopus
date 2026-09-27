@@ -196,6 +196,7 @@ fun PostGigV1Screen(
             is PostGigV1UiState.Content ->
                 PostGigV1Content(
                     state = s,
+                    isEditMode = viewModel.isEditMode,
                     actions =
                         PostGigV1Actions(
                             onCategory = viewModel::updateCategory,
@@ -287,6 +288,7 @@ data class PostGigV1Actions(
 fun PostGigV1Content(
     state: PostGigV1UiState.Content,
     actions: PostGigV1Actions,
+    isEditMode: Boolean = false,
 ) {
     val errors = state.validationErrors
     val form = state.form
@@ -294,6 +296,7 @@ fun PostGigV1Content(
     if (errors.isNotEmpty()) {
         PostGigV1ErrorBanner(
             errors = errors,
+            isEditMode = isEditMode,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
     }
@@ -1296,6 +1299,7 @@ private fun PhotoTile(
 @Composable
 private fun PostGigV1ErrorBanner(
     errors: List<PostGigV1ValidationError>,
+    isEditMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -1308,7 +1312,8 @@ private fun PostGigV1ErrorBanner(
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
                 .testTag("postGigV1_errorBanner")
                 .semantics {
-                    contentDescription = "${errors.size} problems. ${errors.joinToString(" ") { it.message }}"
+                    contentDescription =
+                        "${errors.size} problem${if (errors.size == 1) "" else "s"}. ${errors.joinToString(" ") { it.message }}"
                 },
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         verticalAlignment = Alignment.Top,
@@ -1328,13 +1333,18 @@ private fun PostGigV1ErrorBanner(
             // A13.8 P4 — design-exact banner copy; per-field messages render
             // inline under the highlighted fields, not in the banner.
             Text(
-                text = "${errors.size} problems — please fix",
+                text = "${errors.size} problem${if (errors.size == 1) "" else "s"} — please fix",
                 style = PantopusTextStyle.small,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.error,
             )
             Text(
-                text = "We couldn't post your gig. See the highlighted fields below.",
+                text =
+                    if (isEditMode) {
+                        "We couldn't save your changes. See the highlighted fields below."
+                    } else {
+                        "We couldn't post your gig. See the highlighted fields below."
+                    },
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.error,
             )

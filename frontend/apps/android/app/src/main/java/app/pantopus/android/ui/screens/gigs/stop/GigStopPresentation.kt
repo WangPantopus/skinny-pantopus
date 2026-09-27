@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.gigs.stop
 
+import app.pantopus.android.data.api.models.gigs.GigStopPreview
 import app.pantopus.android.data.api.models.gigs.GigStopProgress
 import java.util.Locale
 
@@ -14,6 +15,21 @@ object GigStopPresentation {
         }
 
     fun money(cents: Int): String = String.format(Locale.US, "$%.2f", cents / 100.0)
+
+    /**
+     * A started $0 task: the stop rules send every started task to review, but
+     * there is no fee to review, so say what to do instead (as web does).
+     */
+    fun startedFreeTaskMessage(preview: GigStopPreview): String? =
+        when {
+            preview.eligible || preview.unavailableReason != "STARTED_POLICY_REVIEW" || preview.terms.amountCents != 0 -> null
+            preview.terms.ownerId == preview.actorId ->
+                "This task has already started. A started task can't be cancelled here. Message your helper to sort " +
+                    "it out; when they mark it delivered, you can confirm it."
+            else ->
+                "You've already started this task. A started task can't be cancelled here. Message the poster to " +
+                    "sort it out, and mark it delivered when you're done."
+        }
 
     fun message(progress: GigStopProgress): String =
         when {
