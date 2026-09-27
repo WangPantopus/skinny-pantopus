@@ -3954,7 +3954,7 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       return res.status(500).json({ error: 'Failed to update gig' });
     }
 
-    res.json({ gig: updatedGig });
+    res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
     logger.error('Gig update error', { error: err.message, gigId: req.params.id });
     res.status(500).json({ error: 'Failed to update gig' });
@@ -5687,7 +5687,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     const proof = { completion_note: note ? String(note).slice(0, 2000) : null,
       completion_photos: safePhotos, completion_checklist: safeChecklist };
     if (gig.status === 'completed') {
-      if (matchesWorkerCompletion(gig, userId, proof)) return res.json({ gig, reused: true });
+      if (matchesWorkerCompletion(gig, userId, proof)) return res.json({ gig: savedGigReply(gig, true), reused: true });
       return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'This task already has different completion details. Refresh its details.' });
     }
     for (let i = 0; i < safePhotos.length; i++) {
@@ -5713,7 +5713,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       || !Array.isArray(result.notifications) || typeof result.reused !== 'boolean') {
       return res.status(503).json({ error: 'Completion could not be confirmed. Please retry.' });
     }
-    if (result.reused) return res.json({ gig: updatedGig, reused: true });
+    if (result.reused) return res.json({ gig: savedGigReply(updatedGig, true), reused: true });
 
     // ─── Track category affinity (non-blocking) ───
     if (gig.category && gig.accepted_by) {
@@ -5727,7 +5727,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
 
     emitGigUpdate(req, gigId, 'completion-update');
     emitGigUpdate(req, gigId, 'status-change');
-    return res.json({ gig: updatedGig });
+    return res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
     logger.error('Mark completed error', { error: err.message });
     return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to mark gig completed' });
@@ -5848,7 +5848,7 @@ router.post('/:gigId/confirm-completion', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { satisfaction, note, expectedReview } = req.body || {};
     const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note, expectedReview });
-    return res.json({ gig: updatedGig });
+    return res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
     logger.error('Confirm completion error', { error: err.message });
     return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
@@ -5865,7 +5865,7 @@ router.post('/:gigId/complete', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { satisfaction, note, expectedReview } = req.body || {};
     const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note, expectedReview });
-    return res.json({ gig: updatedGig });
+    return res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
     logger.error('Complete gig error', { error: err.message });
     return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
@@ -5977,14 +5977,12 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
           weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
         })}${note ? ` — ${note}` : ''}`,
         link: `/gigs/${gigId}`,
-        contextType: 'gig',
-        contextId: gigId,
         metadata: { gig_id: gigId, scheduled_start: newStart.toISOString() },
       }).catch(() => {});
     }
     emitGigUpdate(req, gigId, 'rescheduled');
 
-    res.json({ message: 'Task rescheduled', gig: updated });
+    res.json({ message: 'Task rescheduled', gig: savedGigReply(updated, true) });
   } catch (err) {
     logger.error('Reschedule gig error', { error: err.message });
     res.status(500).json({ error: 'Failed to reschedule task' });
