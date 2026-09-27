@@ -11,6 +11,7 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { checkHomePermission } = require('../utils/homePermissions');
 const { createNotification, notifyAddressRevealed } = require('../services/notificationService');
 const savedSearchService = require('../services/marketplace/savedSearchService');
 const { LISTING_LIST } = require('../utils/columns');
@@ -454,6 +455,12 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
     // The RPC uses SELECT ... FOR UPDATE to prevent concurrent creates
     // from exceeding the cap.
     const resolvedLayer = layer || CATEGORY_LAYER_MAP[category] || 'goods';
+    // A listing names a Home only when the lister can access that Home (as a
+    // magic-post does), so nobody can fill another household's inventory cap
+    // or mark a listing as attached to an address that isn't theirs.
+    if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't list from that Home." });
+    }
     let slotClaimed = false;
     if (homeId && isAddressAttached) {
       const maxCount = INVENTORY_CAPS[resolvedLayer] || 10;
@@ -505,7 +512,8 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
       layer: resolvedLayer,
       listing_type: resolvedType,
       home_id: homeId || null,
-      is_address_attached: isAddressAttached || false,
+      // "Address attached" needs the Home it is attached to.
+      is_address_attached: Boolean(homeId && isAddressAttached),
       is_wanted: isWanted || false,
       budget_max: budgetMax || null,
       expires_at: expiresAt,
