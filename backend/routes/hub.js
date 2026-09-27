@@ -405,8 +405,9 @@ router.get('/', verifyToken, async (req, res) => {
     const dueBills = (primaryHome && b2.dueBills?.data) || [];
     for (const bill of dueBills) {
       if (bill.status === 'paid') continue;
-      const dueDate = new Date(bill.due_date);
-      const isOverdue = dueDate < now;
+      // A due_date is a calendar day and a Home has no time zone, so a bill is overdue only once
+      // its due day has ended everywhere: the last zone is UTC−12, so from 12:00 UTC the next day.
+      const isOverdue = bill.status === 'overdue' || now.getTime() >= Date.parse(bill.due_date) + 36 * 60 * 60 * 1000;
       const billName = bill.provider_name || bill.bill_type || 'Bill';
       statusItems.push({
         id: `bill_${bill.id}`, type: 'bill_due', pillar: 'home',
