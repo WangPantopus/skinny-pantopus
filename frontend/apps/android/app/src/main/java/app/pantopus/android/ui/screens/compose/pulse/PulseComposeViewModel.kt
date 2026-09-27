@@ -372,6 +372,7 @@ class PulseComposeViewModel
         private var postingTarget: PulsePostingTarget? = null
         private var composePurpose: PulseComposePurpose? = null
         private var flowConfigured = false
+        private var savedAudienceLabel: String? = null
 
         /**
          * C2 — when non-null the create submit goes to
@@ -394,7 +395,13 @@ class PulseComposeViewModel
 
         val flowPurpose: PulseComposePurpose? get() = composePurpose
 
-        val flowTargetLabel: String? get() = postingTarget?.displayLabel
+        val flowTargetLabel: String?
+            get() =
+                if (isEditing) {
+                    if (_visibility.value != baselineVisibility) _visibility.value.label else savedAudienceLabel
+                } else {
+                    postingTarget?.displayLabel
+                }
 
         /**
          * C2 — route the create submit through the business-post endpoint.
@@ -978,6 +985,10 @@ class PulseComposeViewModel
         private fun applyPrefill(post: PostDetailDto) {
             val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
             _activeIntent.value = intent
+            savedAudienceLabel =
+                PulseComposeVisibility.entries.firstOrNull { it.key == post.visibility }?.label
+                    ?: PulseAnnounceAudience.entries.firstOrNull { it.backendVisibility == post.visibility }?.label
+                    ?: "original audience"
 
             // Visibility — fall back to the current selection when the
             // wire value isn't one of the form's three options.
@@ -1104,19 +1115,22 @@ class PulseComposeViewModel
             val bodyValue = trimmedValue(PulseComposeField.Body)
             val titleValue = trimmedValue(PulseComposeField.Title)
             val intent = _activeIntent.value
+            // Preserve the saved scope unless the visible audience selector was changed.
+            val editedVisibility =
+                if (isFlowMode && _visibility.value == baselineVisibility) null else _visibility.value.key
             return when (intent) {
                 PulseComposeIntent.Ask ->
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue,
-                        visibility = _visibility.value.key,
+                        visibility = editedVisibility,
                         serviceCategory = _askCategory.value.key,
                     )
                 PulseComposeIntent.Recommend -> {
                     val business = trimmedValue(PulseComposeField.RecommendBusiness)
                     PostUpdateRequest(
                         content = composeRecommendBody(_recommendRating.value, bodyValue),
-                        visibility = _visibility.value.key,
+                        visibility = editedVisibility,
                         dealBusinessName = business.ifEmpty { null },
                     )
                 }
@@ -1126,7 +1140,7 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue,
-                        visibility = _visibility.value.key,
+                        visibility = editedVisibility,
                         eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
                         eventVenue = venue.ifEmpty { null },
                     )
@@ -1135,7 +1149,7 @@ class PulseComposeViewModel
                     val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                     PostUpdateRequest(
                         content = prefixLastSeen(bodyValue, lastSeen),
-                        visibility = _visibility.value.key,
+                        visibility = editedVisibility,
                         lostFoundType = _lostFoundKind.value.key,
                     )
                 }
@@ -1143,7 +1157,7 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue,
-                        visibility = _announceAudience.value.backendVisibility,
+                        visibility = if (isFlowMode) editedVisibility else _announceAudience.value.backendVisibility,
                     )
             }
         }
