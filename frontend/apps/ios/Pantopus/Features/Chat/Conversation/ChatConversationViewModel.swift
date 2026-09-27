@@ -225,6 +225,13 @@ public final class ChatConversationViewModel {
     /// flag the route carried.
     public private(set) var counterpartyOnline: Bool?
 
+    /// The other person's id in a person DM (for the header's profile link),
+    /// nil in rooms and the AI thread.
+    public var profileUserId: String? {
+        guard case let .person(otherUserId) = mode, !otherUserId.isEmpty else { return nil }
+        return otherUserId
+    }
+
     /// Counterparty the header should render — the static value with the
     /// `online` flag replaced by the live presence override when one has
     /// arrived.
