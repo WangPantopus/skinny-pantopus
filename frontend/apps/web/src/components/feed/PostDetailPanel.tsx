@@ -197,12 +197,12 @@ export default function PostDetailPanel({
     }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
+  const handleDeleteComment = async (commentId: string, deletedIds: ReadonlySet<string>) => {
     if (!postId) return;
     try {
       await api.posts.deleteComment(postId, commentId);
-      const nextCommentCount = Math.max(0, comments.length - 1);
-      setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+      const nextCommentCount = comments.filter((comment) => !deletedIds.has(comment.id)).length;
+      setComments((prev) => prev.filter((comment) => !deletedIds.has(comment.id)));
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
       showToast('Comment deleted');

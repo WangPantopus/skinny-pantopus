@@ -345,7 +345,10 @@ private struct DetailGrid: View {
     }
 
     private var performedByValue: String {
+        let trimmedVendor = task.vendor?.trimmingCharacters(in: .whitespaces) ?? ""
         if let draft {
+            let storedVendor = draft.performedBy == .self ? "" : draft.performerName.trimmingCharacters(in: .whitespaces)
+            guard storedVendor == trimmedVendor else { return trimmedVendor.isEmpty ? "Self" : trimmedVendor }
             switch draft.performedBy {
             case .self: return "Self"
             case .member:
@@ -356,7 +359,6 @@ private struct DetailGrid: View {
                 return trimmed.isEmpty ? "Contractor" : trimmed
             }
         }
-        let trimmedVendor = task.vendor?.trimmingCharacters(in: .whitespaces) ?? ""
         return trimmedVendor.isEmpty ? "Self" : trimmedVendor
     }
 
