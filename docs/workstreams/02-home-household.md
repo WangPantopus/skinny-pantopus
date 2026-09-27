@@ -114,13 +114,18 @@
   - Web Place retry first (#602), then native (#619).
 
 ### 3. Runtime, devices, fixtures at handoff
-- **Stack** (isolated; never production): Supabase `pantopus-stream2-native-resume-r2` (API 64553, DB 64554); fault proxy 18142 (pid 66574), with **no rules set**; backend 18143 (pid 64623, started on master code; batch 42 changed no backend files); Next dev 18144.
-- **Main worktree:** branch `claude/stream2-mail-list-dismiss` (a local build branch, never a PR) at build commit `ca04ff183`, which is exactly master `35c5434df`, with **no uncommitted changes**.
-- **Devices:**
-  - emulator-5556 (slot 2, Stream 2's) has APK `93632548…` (all Stream 2 PRs).
-  - iOS sim 6F914A30 is shut down with dylib `3bd97273…` installed.
-  - DerivedData is `kit/ios-dd`.
-  - Stream 2 holds only slot 2; no heavy.
+- **Everything is STOPPED** (the user asked for resources to be released, 2026-09-27 ~11:55Z). Data and code are kept. **To start, in the kit** (`…/.pantopus-recovery/stream2-runtime-kit/`):
+  1. `docker start` each `supabase_*_pantopus-stream2-native-resume-r2` container, the db first. `docker stop` force-stopped the db after its 10 s timeout; Postgres replays its log on start, so no data is lost. Check it with `bash tools/q.sh -c "select 1"`.
+  2. Proxy: `S2_PROXY_TARGET=18143 python3 tools/detach.py runtime/proxy.log node runtime/fault-proxy.cjs` (port 18142).
+  3. Backend: `python3 tools/detach.py runtime/backend.log runtime/start-backend.sh` (port 18143), then log it in `runtime/backend-restarts.log`.
+  4. Web: `python3 tools/detach.py runtime/web.log runtime/start-web.sh` (port 18144). The first page compile is slow, because `.next-dev` was deleted.
+  5. `python3 tools/mint-tokens.py`. The tokens and saved web sessions were deleted; the web tools log in again by themselves.
+- **Main worktree:** branch `claude/stream2-mail-list-dismiss` (a local build branch, never a PR) at build commit `ca04ff183`, exactly master `35c5434df`, with **no uncommitted changes**.
+- **Devices** (all shut down; no slots held; no heavy):
+  - **emulator-5556** (AVD `Pantopus_Home_Recurrence_Acceptance`) is shut down with APK `93632548…` installed, and slot 2 was released. Cold-boot it with the kit README command after acquiring a slot.
+  - **iOS sim 6F914A30** is shut down with dylib `3bd97273…` installed.
+- **Deleted caches** (regenerable): the kit `ios-dd` DerivedData (8.5 GB, so the next iOS build is a full one), the worktree's Android `app/build` and `.gradle`, and web `.next-dev`.
+- **GitHub:** the 24 merged `claude/stream2-*` branches of this session were deleted. The PRs, their commits in master and the evidence bundles remain, and each PR page can restore its branch.
 - **Fixtures** (isolated DB 64554; keep them; don't delete):
   - **Home 70f66a6d "Stream2 Resume Home" (123 Synthetic Lane):**
     - smoke_season: HEPA 219e099b pending (the Hire test item), AQI 7deceb66 completed;
