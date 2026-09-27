@@ -2439,7 +2439,8 @@ class ChatConversationViewModel
         }
     }
 
-private fun JSONObject.optStringValue(key: String): String? = optString(key).takeIf { it.isNotEmpty() }
+// A JSON null is absent: optString() alone returns the text "null" for it.
+private fun JSONObject.optStringValue(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
 
 /** Banner copy for the pre-bid gig-room send limit (429 `PRE_BID_LIMIT`). */
 private const val PRE_BID_LIMIT_NOTICE =
