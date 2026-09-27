@@ -85,8 +85,10 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         secureWindowController.bind(this)
         observeAppLockPrivacyHold()
-        // Cold-start deep links arrive via the launch intent.
-        forwardDeepLink(intent)
+        // A recreated Activity retains its navigation/ViewModel state. Replaying the
+        // launch link would replace that screen and discard its in-progress input.
+        // Fresh processes still route the launch intent; onNewIntent handles new links.
+        if (lastNonConfigurationInstance == null) forwardDeepLink(intent)
         setContent {
             PantopusTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
