@@ -7,11 +7,26 @@
 // Slugs: today · your-home · risk · block · money · civic · identity.
 // ============================================================
 
-import { useParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import PlaceSectionDetail from '@/components/place/detail/PlaceSectionDetail';
+import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
 
-export default function PlaceSectionPage() {
+function PlaceSectionRoute() {
   const params = useParams<{ section: string }>();
   const section = Array.isArray(params.section) ? params.section[0] : params.section;
-  return <PlaceSectionDetail section={section ?? ''} />;
+  const switchedHome = placeHomeParam(useSearchParams()?.get('home'));
+  return (
+    <PlaceHomeContext.Provider value={switchedHome}>
+      <PlaceSectionDetail section={section ?? ''} />
+    </PlaceHomeContext.Provider>
+  );
+}
+
+export default function PlaceSectionPage() {
+  return (
+    <Suspense>
+      <PlaceSectionRoute />
+    </Suspense>
+  );
 }

@@ -17,6 +17,7 @@ import PlaceDashboard from '@/components/place/PlaceDashboard';
 import SavedPlaceContext from '@/components/place/SavedPlaceContext';
 import PlaceDashboardSkeleton from '@/components/place/PlaceDashboardSkeleton';
 import VerifiedSuccess from '@/components/place/VerifiedSuccess';
+import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
 
 function PlaceRoute() {
   const router = useRouter();
@@ -25,6 +26,7 @@ function PlaceRoute() {
   const justVerified = params?.get('verified') === '1';
   const previewId = params?.get('preview');
   const savedPlaceId = params?.get('savedPlace');
+  const switchedHome = placeHomeParam(params?.get('home'));
 
   if (justVerified) {
     return (
@@ -42,7 +44,7 @@ function PlaceRoute() {
     <>
       {previewId || savedPlaceId ? (
         <div className="mx-auto max-w-[760px] px-4 py-6"><SavedPlaceContext previewId={previewId ?? undefined} savedPlaceId={savedPlaceId ?? undefined} /></div>
-      ) : <PlaceDashboard />}
+      ) : <PlaceHomeContext.Provider value={switchedHome}><PlaceDashboard /></PlaceHomeContext.Provider>}
     </>
   );
 }

@@ -7,8 +7,24 @@
 // feed sibling to the structured dashboard, expanded from its hero.
 // ============================================================
 
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import PulseStream from '@/components/place/pulse/PulseStream';
+import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
+
+function PlacePulseRoute() {
+  const switchedHome = placeHomeParam(useSearchParams()?.get('home'));
+  return (
+    <PlaceHomeContext.Provider value={switchedHome}>
+      <PulseStream />
+    </PlaceHomeContext.Provider>
+  );
+}
 
 export default function PlacePulsePage() {
-  return <PulseStream />;
+  return (
+    <Suspense>
+      <PlacePulseRoute />
+    </Suspense>
+  );
 }

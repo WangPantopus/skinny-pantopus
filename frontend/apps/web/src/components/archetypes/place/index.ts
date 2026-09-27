@@ -35,7 +35,7 @@ export type { HeroCardProps, HeroVariant, HeroNudge } from './HeroCard';
 export { default as AhaCard } from './AhaCard';
 export type { AhaCardProps, AhaTone } from './AhaCard';
 
-export { DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote } from './detail';
+export { DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote, PlaceHomeContext, placeHomeParam, placeHomeQuery } from './detail';
 export type { DetailHeaderProps, InfoNoteTone } from './detail';
 
 export { default as PlaceSwitcher } from './PlaceSwitcher';
