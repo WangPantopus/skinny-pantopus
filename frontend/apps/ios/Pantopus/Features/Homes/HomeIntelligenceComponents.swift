@@ -196,11 +196,12 @@ struct HealthScoreRingCard: View {
 
     /// Map the backend's `topAction.route` (`homeHealthService.js:129`)
     /// onto a dashboard action id. `/dashboard` targets the checklist card
-    /// directly below, so it renders no chip.
+    /// directly below, so it renders no chip. The maintenance score counts
+    /// open Home issues, so its chip opens the Issues list.
     static func actionId(for route: String) -> String? {
         let path = route.split(separator: "/").last.map(String.init) ?? ""
         switch path {
-        case "maintenance": return "view_maintenance"
+        case "maintenance": return "view_issues"
         case "bills": return "view_bills"
         case "emergency": return "view_emergency"
         case "members": return "add_member"
