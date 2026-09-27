@@ -13,10 +13,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +47,7 @@ private const val PLACEHOLDER_ROWS = 3
  * a claim prompt when there is no place yet, the Today group with the
  * address calendar, and an error with retry.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayTabScreen(
     onClaim: () -> Unit,
@@ -49,6 +55,10 @@ fun TodayTabScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
+    // Pull to refresh, like iOS's Today tab (`.refreshable`): the tab stays mounted, so without it
+    // weather, air and alerts keep their first load. The spinner shows only for a pull, not the first load.
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(state) { if (state !is TodayTabUiState.Loading) pulled = false }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
             Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
@@ -56,17 +66,26 @@ fun TodayTabScreen(
                 Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
             }
         }
-        when (val current = state) {
-            TodayTabUiState.Loading -> TodayPlaceholders()
-            TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
-            is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
-            is TodayTabUiState.Loaded ->
-                Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                ) {
-                    PlaceTodayDetailContent(current.intelligence, viewModel)
-                    Spacer(modifier = Modifier.height(96.dp))
-                }
+        PullToRefreshBox(
+            isRefreshing = pulled && state is TodayTabUiState.Loading,
+            onRefresh = {
+                pulled = true
+                viewModel.refresh()
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (val current = state) {
+                TodayTabUiState.Loading -> TodayPlaceholders()
+                TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
+                is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+                is TodayTabUiState.Loaded ->
+                    Column(
+                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                    ) {
+                        PlaceTodayDetailContent(current.intelligence, viewModel)
+                        Spacer(modifier = Modifier.height(96.dp))
+                    }
+            }
         }
     }
 }
