@@ -54,23 +54,26 @@ enum class PostIntent(
 
     companion object {
         /**
-         * Map a backend `Post.purpose` / `Post.post_type` token onto the
-         * nearest UI intent. Unknown values fall back to [Share].
+         * Prefer canonical `post_type`; `purpose` is a broader backend rollup
+         * (for example, lost_found becomes ask). Match the iOS detail mapper.
          */
         fun from(
             purpose: String?,
             postType: String?,
-        ): PostIntent =
-            when ((purpose ?: postType ?: "").lowercase()) {
+        ): PostIntent = map(postType) ?: map(purpose) ?: Share
+
+        private fun map(token: String?): PostIntent? =
+            when ((token ?: "").lowercase()) {
                 "lost_found", "lost", "found" -> LostFound
-                "ask" -> Ask
-                "offer" -> Offer
+                "ask", "ask_local" -> Ask
+                "offer", "service_offer" -> Offer
                 "event" -> Event
                 "alert", "safety", "heads_up" -> Alert
-                "deal", "recommend", "share", "showcase", "story",
+                "deal", "recommend", "recommendation", "share", "showcase", "story",
                 "neighborhood_win", "visitor_guide", "local_update", "learn",
+                "announcement", "general",
                 -> Share
-                else -> Share
+                else -> null
             }
     }
 }
