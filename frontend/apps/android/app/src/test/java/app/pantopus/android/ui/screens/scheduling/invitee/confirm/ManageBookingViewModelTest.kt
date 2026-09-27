@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.scheduling.invitee.confirm
 
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.scheduling.AvailableSlotsResponse
+import app.pantopus.android.data.api.models.scheduling.CancellationPolicyValue
 import app.pantopus.android.data.api.models.scheduling.ManageActions
 import app.pantopus.android.data.api.models.scheduling.ManageBookingDetail
 import app.pantopus.android.data.api.models.scheduling.ManageBookingResponse
@@ -78,7 +79,7 @@ class ManageBookingViewModelTest {
                 slug = "maria",
                 title = "Maria Kessler",
                 ownerType = "user",
-                cancellationPolicy = "Free cancellation up to 24h before.",
+                cancellationPolicy = CancellationPolicyValue(notes = "Free cancellation up to 24h before."),
             ),
     )
 
