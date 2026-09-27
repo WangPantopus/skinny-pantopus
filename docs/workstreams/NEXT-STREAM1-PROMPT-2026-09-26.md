@@ -98,7 +98,9 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
 3. **Integrate peer PRs** as they come (handoff §0 lists them):
    - S2 #560 (iOS test-only flake fix; reviewed OK, "CI OK" passed; batch it first, with the iOS PRs below);
    - Stream 3's chat re-subscribe fix for both apps (`claude/stream3-native-chat-resubscribe`);
-   - Stream 2's native §3A #3/#4. #3 touches `RootTabScreen.kt`, so prove it against master.
+   - Stream 2's native §3A #3/#4, now **#563** (health "View maintenance" → Issues) and **#564** (Guests "Add a guest" → guest-pass manager).
+     - Bundles verified and merge-tree clean against master, but **code not yet reviewed**: read both diffs.
+     - #564 touches `RootTabScreen.kt` and `YouTabRoot.swift`, which batch 35 changed, so prove its hunks in the tip.
 4. **Remaining Stream 1 inventory** (all low; handoff §3.3):
    - web `/app/offers` swallowed failure (OPEN), `/app/discover-hub` orphan, and Discover's double notice;
    - iOS Support Trains without location; Android Tasks feed Support Trains read; iOS Report post (not run);

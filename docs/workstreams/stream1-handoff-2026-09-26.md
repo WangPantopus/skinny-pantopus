@@ -38,6 +38,18 @@ The runner log ends "02:31:08 PR561 MERGED … QUEUE EMPTY / QUEUE STOP", `queue
 **Open PRs at 02:31:47Z:**
 - **S2 [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (`a406d3055`): iOS test-only fix of the flaky `TokenAcceptViewModelTests` assertion. **Reviewed OK; "CI OK" passed at 02:31:47Z.**
   - Put it in your **first batch**, ideally with the iOS PRs below, so that batch's CI already has the fixed test.
+- **S2 [#563](https://github.com/WangPantopus/skinny-pantopus/pull/563)**, health "View maintenance" → Issues (D04):
+  - Head `08a1b6dc4af8db3935a26f2f727a835443948bba` on `73b98f6b6`. Six files: both apps' mapping, the iOS `view_issues` handler/gate, and **2 existing tests' expectations** (a behavior change, not new tests).
+  - Bundle `20260927-stream2-health-view-issues-r1`, seal `08d77b43…` (27 files).
+- **S2 [#564](https://github.com/WangPantopus/skinny-pantopus/pull/564)**, Members → Guests "Add a guest" → guest-pass manager (M02):
+  - Head `cd91364ff09755513bf01b792f795d51fa5a1eae` on `73b98f6b6`. Three files: `RootTabScreen.kt`, `HubTabRoot.swift` and `YouTabRoot.swift`.
+  - `RootTabScreen.kt` and `YouTabRoot.swift` also changed in batch 35 (#550/#552). Prove the tip's hunks as in §4 step 3.
+  - Bundle `20260927-stream2-guests-tab-pass-manager-r1`, seal `801cb517…` (58 files).
+- **Checks by Stream 1 for #563/#564** (after 02:33Z):
+  - both bundles verify;
+  - merge-tree is clean against master `89f3c6bac`, against each other and against #560.
+- **Still to do:** **Their code has NOT been reviewed by Stream 1.** Read both diffs before batching. CI was starting when Stream 2 reported them.
+- **Suggested first batch:** #560 + #563 + #564 (+ Stream 3's chat fix if ready).
 - **#562** `claude/porchlight-product-design` ("docs(product): Porchlight product design proposal"). It isn't from the streams and isn't in the queue, so leave it unless the user asks.
 - #430, #429 and #46 are unrelated; don't touch them.
 
