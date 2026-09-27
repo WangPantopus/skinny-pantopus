@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:03:27Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:21:15Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Heavy released 02:52:24Z; slot 1 released 02:51:30Z (sim `0AE16FA0` shut down; it had stayed booted without a slot from 02:12:30Z to 02:37:57Z, my slip, peers told); slot 3 released 02:55:34Z (emulator-5554 shut down).
+- **Slots:** none held. Last holds: heavy 03:08:46Z–03:16:57Z and slot 3 03:08:46Z–03:19:04Z (for #567; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -29,6 +29,13 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Afters: iOS (build `f009f6be7`, same iOS tree as the head) and Android (APK `16cfda1c…` of the head). A message sent while away is there on return; the next one is live. Both via a tab switch and via a screen opened from a shared card. Static checks: ktlint, detekt, lintDebug; SwiftLint `--strict` and SwiftFormat `--lint` clean.
 - Side effects (fixture CA12): messages 19–38 kept (like CA0–CA11). Two `ListingView` rows and two listing counters, from opening shared listings, reverted exactly at 02:57:38.604Z (fingerprint match). Sign-in bookkeeping and attachment `last_accessed_at` changed. Chat-audit mode was on 02:09:03Z–02:55:44Z and is **off** now.
 - Unverified: push suppression; edits/deletes/reactions/typing/presence separately; real devices.
+
+### PR #567: the Android Messages list stays live after you open a conversation (S3-30 parity)
+- **[#567](https://github.com/WangPantopus/skinny-pantopus/pull/567)** head `0294b046b` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-chat-list-live-r1`, seal `c143cb6cb9bb3dbeb78a48cd53bdb6e8c7202f18e16612f2686bf9942ac87fb0` (32 files; seal comment posted). Sent to Stream 1 ("Stream 1 agent handoff") for batch 37 or 38.
+- Defect: the list's `DisposableEffect` → `teardown()` cancels its socket listeners when a conversation covers it, and `load()` returned early on the way back. The conversation just read kept its unread count, and new messages didn't show until pull-to-refresh. iOS fixed this as S3-30 (#331, `5e254e7d3`); the inventory listed iOS only. Found in #566's evidence.
+- Before (master APK `27a5e60e…`): unread 2 stayed after reading; message 41 still not shown 61.3 s later, with no HTTP request, until pull-to-refresh. After (APK `9daa84ca…`): read state clears on return and new messages arrive live, over two round trips. ktlint, detekt and lintDebug pass.
+- Change: one file (`ChatListViewModel.kt`, +12/−2). A return re-subscribes and merges a fresh read; a failed background read keeps the loaded list.
+- Fixture CA13: messages 39–44 kept. Chat-audit mode was on 03:11:00Z–03:19:04Z and is off now.
 
 ### Owner fixture password rotated (user-approved, 2026-09-27 01:49Z)
 - The old one appeared in a screenshot in this session. The new one is only in the private credentials file (`…/private-restart-inputs/sched-fixtures-private.json`, 0600), which every helper reads; web and `fx` logins verified at 01:50Z. Old password → 401. Existing device/web sessions were not revoked. Manifest entry CRED1 (no values).
@@ -56,8 +63,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### Candidates (not changed)
 - Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
 - Previously noted: persona header "Share profile" (check master first), B7 "Max per week 20" placeholder.
-- Android Chat list: after messages 21 and 22 arrived, the Sched Member row still previewed message 20 when I went back to the list (02:38:46Z, master APK; `before/android-back-to-list-before.png` in the #566 bundle). Check whether the list refreshes on return before calling it a defect.
-- iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: the same pattern that silently broke Booking notifications Back in #552. Stream 1's area (tasks/marketplace); told Stream 1.
+- iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 - Harness: `GET /api/listings/:id` upserts a `ListingView` row for a signed-in non-owner (`backend/routes/listings.js:1433`) and is not on the proxy's implicit-write list. Opening a shared listing from chat wrote two rows during #566 (reverted). Add a refusal rule or a scoped allowance before the next listing check.
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
