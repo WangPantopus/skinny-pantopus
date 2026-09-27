@@ -86,10 +86,16 @@ Every head below was reviewed by Stream 1 and its bundle verified with `tools/ve
 | #611 | S2 | `84bd33ce3` | `20260927-stream2-health-release-closed-hires-r1` (`ef546a03…`) | health score releases closed hires | green |
 | #613 | S2 | `fc3a2004d` | `20260927-stream2-money-period-note-r1` (`9521dddb…`) | web Money note shows the real period | green |
 
+**Dry run at 10:03:38Z on batch 40's tip `01f75025f`:**
+- All 14 heads above merged cleanly, in the table's order, to tip `b145be440` (scratch only; rebuild on the real post-merge master).
+- `python3 docs/workstreams/coordinator-state-2026-09-23/scratchpad/verify-batch.py <base> <tip> <pr>=refs/remotes/pr/<pr> …` reported **RESULT OK**: 60 files, 7 shared, every shared file's hunks reverse-apply.
+- `lint-batch.sh` on the 4 shared Swift files (GigsFeedViewModel, PostGigV1View, HubTabRoot, YouTabRoot) reported swiftlint=0 and swiftformat=0.
+- **Use the same two scripts on the real build.** `verify-batch.py` is new this session: ancestry, file-set union, single-PR blob equality, shared-file hunk proofs.
+
 **Shared files (prove hunks in the tip as in §4 step 3):**
 - `RootTabScreen.kt`: #609, #612, #605.
 - `HubTabRoot.swift` and `YouTabRoot.swift`: #609, #612, #605.
-- `GigsCategory` / `PostGigV1*`: #615 only.
+- `PostGigV1Screen.kt` / `PostGigV1View.swift`: #598 and #615 (merge clean; #615 adds `// swiftlint:disable file_length` to the view).
 - `GigsFeedViewModel.*`: #616 and #603. #603 changes the Support Trains notice, and #616 changes the `agoLabel` call sites; **check they merge cleanly** (merge-tree).
 - `gigs.js`: #617 only.
 - Merge-tree #609 + #612 was clean at 09:27Z.
