@@ -525,6 +525,11 @@ export async function updateChecklistItem(homeId: string, itemId: string, status
   return patch<SeasonalChecklistItem>(`/api/homes/${homeId}/seasonal-checklist/${itemId}`, { status });
 }
 
+/** Link the task just posted for a checklist item; the item becomes hired. */
+export async function linkChecklistItemTask(homeId: string, itemId: string, gigId: string) {
+  return post<SeasonalChecklistItem>(`/api/homes/${homeId}/seasonal-checklist/${itemId}/hire`, { gig_id: gigId });
+}
+
 export async function getSeasonalChecklistHistory(homeId: string) {
   return get<SeasonalChecklistHistory>(`/api/homes/${homeId}/seasonal-checklist/history`);
 }

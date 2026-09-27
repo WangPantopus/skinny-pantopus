@@ -760,7 +760,10 @@ function DashboardTab({
             canEdit={can('home.edit')} busy={intelligence.checklistBusy}
             onComplete={(itemId) => void intelligence.completeChecklistItem(itemId)}
             onSkip={(itemId) => void intelligence.skipChecklistItem(itemId)}
-            onHireHelp={(item) => router.push(`/app/gigs/new?initialText=${encodeURIComponent(item.gig_title_suggestion || item.title)}`)}
+            onHireHelp={(item) => router.push(`/app/gigs/new?${new URLSearchParams({
+              prefill: JSON.stringify({ title: item.gig_title_suggestion || item.title, ...(item.gig_category ? { category: item.gig_category } : {}) }),
+              homeChecklist: `${homeId}:${item.id}`,
+            })}`)}
             onGenerate={() => void intelligence.generateChecklist()} />
         </HomeSummaryBoundary>
       </div>

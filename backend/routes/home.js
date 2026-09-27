@@ -4742,7 +4742,7 @@ router.get('/:id/activity', verifyToken, async (req, res) => {
 // ============ HOME INTELLIGENCE ENDPOINTS ============
 
 const { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadHealthScore } = require('../services/homeHealthService');
-const { getOrCreateChecklist, updateChecklistItem, getChecklistHistory } = require('../services/seasonalChecklistService');
+const { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, getChecklistHistory } = require('../services/seasonalChecklistService');
 const { getSeasonalContext, SEASONS } = require('../services/ai/seasonalEngine');
 const { getProfile: getPropertyProfile } = require('../services/ai/propertyIntelligenceService');
 const intelligenceAuthority = require('../services/homeDashboardService');
@@ -4886,6 +4886,40 @@ router.patch('/:id/seasonal-checklist/:itemId', verifyToken, validate(updateChec
   } catch (err) {
     logger.error('Checklist item update error', { error: err.message, itemId: req.params.itemId });
     res.status(err.statusCode || 503).json({ error: err.message || 'The checklist change could not be confirmed.',
+      code: err.code || 'HOME_CHECKLIST_UNAVAILABLE' });
+  }
+});
+
+const hireChecklistItemSchema = Joi.object({
+  gig_id: Joi.string().uuid().required(),
+});
+
+/**
+ * POST /api/homes/:id/seasonal-checklist/:itemId/hire
+ * Link the task a member just posted for a checklist item and mark it hired.
+ */
+router.post('/:id/seasonal-checklist/:itemId/hire', verifyToken, validate(hireChecklistItemSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const { id: homeId, itemId } = req.params;
+    const userId = req.user.id;
+    if ([homeId, itemId].some(id => Joi.string().uuid().validate(id).error)) {
+      return res.status(400).json({ error: 'Invalid checklist item.', code: 'HOME_CHECKLIST_INVALID' });
+    }
+
+    const access = await checkHomePermission(homeId, userId, 'home.edit');
+    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to edit this home' });
+
+    const { item, changed } = await linkGigToChecklist(homeId, itemId, req.body.gig_id, userId);
+    if (changed) {
+      invalidateHealthScoreCache(homeId);
+      await writeAuditLog(homeId, userId, 'home_checklist_updated', 'HomeSeasonalChecklistItem', itemId,
+        { status: 'hired', gig_id: item.gig_id });
+    }
+    res.json(item);
+  } catch (err) {
+    logger.error('Checklist hire link error', { error: err.message, itemId: req.params.itemId });
+    res.status(err.statusCode || 503).json({ error: err.statusCode ? err.message : 'The checklist link could not be confirmed.',
       code: err.code || 'HOME_CHECKLIST_UNAVAILABLE' });
   }
 });
