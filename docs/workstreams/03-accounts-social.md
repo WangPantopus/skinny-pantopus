@@ -2,14 +2,14 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## CURRENT RESUME — Stream 3 final handoff, 2026-09-27 (2026-09-27T11:18:27Z), read this first
+## CURRENT RESUME — Stream 3 handoff and prompt revision, 2026-09-27 (2026-09-27T12:41:37Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
-- No fixture is applied.
-- No device or heavy slot is held.
-- The web test server runs master with default flags.
+- No fixture was applied at handoff; no device or heavy slot was held.
+- The last runtime release was recorded at 2026-09-27T11:50:57Z: API, no-send proxy, web and file server stopped; Stream 3 Docker containers stopped with their volumes kept. Check the live state before relaunching; see prompt §7 and the runtime kit.
+- The prompt revision below is documentation only; no application was launched and no new app journey or acceptance result is claimed.
 
-**Takeover prompt:** [`NEXT-STREAM3-PROMPT-2026-09-27.md`](NEXT-STREAM3-PROMPT-2026-09-27.md), updated at 2026-09-27T11:18:27Z. It covers rules (including the new merge rule), step-0 checks, the merged-PR table, next steps, runtime state and gotchas.
+**Takeover prompt:** [`NEXT-STREAM3-PROMPT-2026-09-27.md`](NEXT-STREAM3-PROMPT-2026-09-27.md), updated at 2026-09-27T12:41:37Z. It keeps the launch-scope map, merged-PR evidence, runtime and gotchas, and now makes the user's app-launched web/iOS/Android end-to-end requirement explicit: use real local app journeys, cover applicable error/recovery cases, and do not add, update or run unit tests.
 
 **Runtime manual:** the kit README (`.pantopus-recovery/stream3-runtime-kit/README.md`, top section "Update 2026-09-27 (handoff)").
 
@@ -42,7 +42,7 @@ Eight features are flagged off for the first launch; the code is kept, and the u
 ### Next (ordered; details in the prompt §6)
 1. **Android:** check profile → Message after a DM header tap. #612 didn’t check it; iOS stacks a second DM, which loads twice.
 2. **Verify the candidates on master before touching them:** the iOS crew-page (business profile) toast; the Edit profile “All changes saved” copy; the iOS “Not you?” question.
-3. **Re-check the in-scope Stream 3 areas end to end** where this session didn’t, reusing sealed evidence when the code is unchanged. Skip everything in the launch scope above.
+3. **Close remaining in-scope end-to-end coverage gaps** from the existing status and screen inventory: accounts, privacy/blocking, people profiles/connections, DMs/messages, in-scope notifications, crew pages and Crew Day scheduling, invoices/packages, the daily briefing and AI assistant. Exercise real web/iOS/Android callers as applicable, reuse unchanged sealed evidence, and skip every cut feature in the launch scope.
 4. **Keep this file, the kit README and memory current.** Commit and push only your own files.
 - **Removed by the launch scope (#5):** the New York default-schedule finding (web `SetupWizard.tsx` and iOS onboarding) moves out of the plan. Note for Crew Day: `ensureDefaultSchedule` seeds America/New_York, and only Android’s wizard corrects it.
 

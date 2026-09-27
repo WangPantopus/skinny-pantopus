@@ -1,4 +1,4 @@
-# Takeover prompt for the next Stream 3 agent (written 2026-09-27T10:21:47Z; updated 2026-09-27T11:17:35Z after every Stream 3 PR merged, and 2026-09-27T11:40:27Z for the launch scope in §0)
+# Takeover prompt for the next Stream 3 agent (written 2026-09-27T10:21:47Z; updated 2026-09-27T11:17:35Z after every Stream 3 PR merged, 2026-09-27T11:40:27Z for the launch scope in §0, and 2026-09-27T12:40:26Z for the end-to-end verification requirements)
 
 Copy everything below the line into the new session.
 
@@ -9,7 +9,7 @@ You are **Stream 3** in the user's three-stream Pantopus setup. You are an indep
 **What you own:**
 - accounts, privacy, profile and social;
 - notifications, chat and messages;
-- scheduling and booking, and business pages and owner tools;
+- Crew Day use of the shared scheduling engine, plus business pages and crew owner tools; general public scheduling and booking are cut for launch (§0);
 - the Stream 3 rows of the UX inventory.
 
 **The other streams:**
@@ -92,14 +92,15 @@ This direction does **not** reverse the user's explicit earlier decisions (§5).
 - **Do the work yourself.** Use subagents only for online search or knowledge lookups.
 - **Pull the latest state** of every branch you work in.
 
-### Verification standard
-- Use the real web app, the installed iOS simulator app and the installed Android emulator app. Trace screen → caller → endpoint → service → database.
-- Repair only a reproduced failure or a concrete unmet requirement, with the smallest change in the existing implementation.
-- Preserve existing designs and navigation.
-- No new unit tests. Update existing ones only if the change requires it (for example, a type change).
-- Run the fast local static checks (lint, typecheck or compile, the covering unit tests) and seal an evidence bundle. CI is no longer a merge gate (see Merging).
-- Send each PR to Stream 1 with head, seal, side effects, CI and limits.
-- Say exactly what passed on each platform and what stays unverified: real devices, push, providers, money.
+### End-to-end verification standard (required)
+- This is an app-launch and end-to-end verification effort. On this Mac, launch the real local web app in a browser and launch the current iOS and Android app builds in their assigned simulator and emulator. Use the existing local API/database/runtime described in the kit; verify each screen through its real caller, endpoint, service and persisted or observable result. Installing an app, a mock-only check, a screenshot, green CI or a unit-test result is not end-to-end acceptance.
+- Build the coverage list from the existing Stream 3 status, UX/screen inventory and acceptance mapping. Apply §0 first. For every remaining in-scope flow, record which shipped platforms have a real caller and exercise those callers; do not count cut features or create a parallel tracker.
+- For each applicable journey, cover the supported success path and meaningful empty/loading/populated states, input and validation boundaries, authorization and account context, persistence, and transitions. Exercise documented failure behavior such as unavailable API/network, timeout/5xx, denied access, retry, lost response or duplicate submission where relevant. Confirm errors are clear, drafts/state are preserved as specified, retries are safe, and failed operations do not look successful. Include background/foreground, relaunch, notification routing and cross-account cases where that flow supports them. Do not invent unsupported behavior or test irrelevant combinations.
+- Reuse sealed evidence when the relevant source, configuration, data boundary and behavior are unchanged. Do not repeat accepted journeys just to increase test volume. If any of those inputs changed, a failure was reproduced, or an in-scope acceptance gap remains, run the affected journey on every impacted client and the real local persistence path.
+- Before changing application code, identify the existing screen, caller, endpoint, service and database contract, reproduce the defect or name the concrete unmet requirement, and record it. Make the smallest repair in that implementation. Preserve existing screen designs, layout, styling and navigation; do not redesign as part of a functional repair.
+- Do not add, update or run unit tests for this work. Do not run broad lint or CI campaigns. Compile/build only as needed to launch the changed candidate app; spend verification time on the real user journeys. CI is not a merge gate (see Merging).
+- Seal an evidence bundle for each milestone: exact source SHA, platform and app/build identity, journeys and cases actually exercised, observed outcomes, fixture writes and exact cleanup, known limits, and timestamps from `date -u`. Never include secrets, raw tokens, database archives or operator logs in Git or chat.
+- Send each PR to Stream 1 with its head, evidence seal, side effects, CI state if available, and limits. Report separately what passed on web, iOS and Android and what remains unverified, including physical devices, push delivery, external providers and live money. Do not claim a platform or whole-scope pass from a partial journey.
 
 ### Merging (user direction, 2026-09-27; Stream 1 acted on it at 11:13:55Z)
 - The user: merge directly, without waiting for CI, "as long as you did app launch end to end test on the feature, function, flows that they work well. We do not care about these unit tests or so many lints here in the CI."
@@ -184,15 +185,16 @@ Evidence bundles are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/
    - **Crew/business page (iOS):** the Contact / “Hire to review” failure toast is set but likely hidden behind the floating tab bar (Android shows it). It’s in `BusinessProfileView.swift` near line 63, with bottom padding `Spacing.s16`. Check which read the iOS profile uses; the proxy refuses `GET /api/b/:username`.
    - **Edit profile footer:** it says “All changes saved · just now” when nothing was saved (iOS `EditProfileStickyBar.swift:76`, Android `EditProfileScreen.kt:1008`). This is an honest-copy candidate.
    - **iOS login “Not you?” with two remembered accounts:** a product question. Under the standing direction, take the recommended option: clear the hint and confirm before revoking, like `ContinueAsView`. Record it.
-3. **Re-check the in-scope Stream 3 areas end to end** where this session didn’t:
+3. **Close the remaining in-scope end-to-end coverage gaps**, using the existing Stream 3 acceptance/status and screen inventory. Cover only real shipped callers on web, iOS and Android, as applicable:
    - accounts, privacy and blocking;
    - people profiles and connections;
-   - DMs and the Messages list;
+   - direct messages and the Messages list;
    - notifications for in-scope features;
-   - crew pages and owner tools;
-   - invoices and packages.
-   Reuse sealed evidence when the code is unchanged. Skip everything listed in §0.
-4. **Keep the status file current** after each milestone; commit and push only your file. Keep the kit and memory current too.
+   - crew pages and owner tools, including Crew Day use of shared scheduling;
+   - invoices and packages;
+   - the daily briefing and AI assistant.
+   Reuse sealed evidence when source, configuration, data boundary and behavior are unchanged. For relevant flows, include the documented success, validation, access-control, persistence, error and recovery cases in the verification standard above. Skip everything listed in §0, including general public booking UIs.
+4. **Keep the status file current** after each meaningful milestone: record the current state, next action, per-platform evidence and remaining verification limits. Commit and push only your file. Keep the kit and memory current too.
 
 **Removed from the plan by the launch scope** (public scheduling, #5), recorded for when those features return:
 - **New hosts on web and iOS keep a New York schedule.** The web `SetupWizard.tsx` and iOS onboarding never update the default schedule’s timezone; the backend’s `ensureDefaultSchedule` (`scheduling.js:52`) seeds America/New_York, and only Android’s first-run wizard corrects it.
