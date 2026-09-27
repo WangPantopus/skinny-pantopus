@@ -135,6 +135,33 @@ public struct PostGigV1Item: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The address a task is posted at: a suggestion resolved by
+/// `POST /api/geo/resolve`, or (edit mode) the task's own stored point.
+public struct PostGigV1Place: Equatable, Sendable {
+    public let address: String
+    public let latitude: Double
+    public let longitude: Double
+    public let city: String?
+    public let state: String?
+    public let zip: String?
+
+    public init(
+        address: String,
+        latitude: Double,
+        longitude: Double,
+        city: String? = nil,
+        state: String? = nil,
+        zip: String? = nil
+    ) {
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.city = city
+        self.state = state
+        self.zip = zip
+    }
+}
+
 public struct PostGigV1Form: Equatable, Sendable {
     public var category: GigsCategory
     public var title: String
@@ -143,6 +170,9 @@ public struct PostGigV1Form: Equatable, Sendable {
     public var priceType: PostGigV1PriceType
     public var scheduledAt: Date
     public var location: String
+    /// Set once the location text is a picked suggestion (or the edited
+    /// task's unchanged address); typing clears it.
+    public var place: PostGigV1Place?
     public var photos: [PostGigV1Photo]
     /// A13.8 P5 — the fields RN's editor has always carried.
     public var cancellationPolicy: PostGigV1CancellationPolicy
@@ -163,6 +193,7 @@ public struct PostGigV1Form: Equatable, Sendable {
         priceType: PostGigV1PriceType = .flat,
         scheduledAt: Date = Date().addingTimeInterval(86400),
         location: String = "",
+        place: PostGigV1Place? = nil,
         photos: [PostGigV1Photo] = [],
         cancellationPolicy: PostGigV1CancellationPolicy = .standard,
         isUrgent: Bool = false,
@@ -178,6 +209,7 @@ public struct PostGigV1Form: Equatable, Sendable {
         self.priceType = priceType
         self.scheduledAt = scheduledAt
         self.location = location
+        self.place = place
         self.photos = photos
         self.cancellationPolicy = cancellationPolicy
         self.isUrgent = isUrgent
@@ -285,10 +317,17 @@ public final class PostGigV1ViewModel {
     /// One-shot guard around the edit-mode prefill fetch.
     private var editLoaded = false
 
-    /// Exact coordinates captured at edit-load. PATCHing `location` with
-    /// the V1 free-text address rides these so the stored point survives
-    /// (the backend requires lat/lng on the nested location object).
-    private var editOrigin: (latitude: Double, longitude: Double)?
+    /// The edited task's own address and point, captured at edit-load.
+    /// While the location field still shows it, a save leaves the stored
+    /// location alone.
+    private var loadedPlace: PostGigV1Place?
+
+    /// Address suggestions for the location field (`GET /api/geo/autocomplete`).
+    public private(set) var addressSuggestions: [GeoSuggestion] = []
+    public private(set) var isFindingAddress = false
+    public private(set) var addressSearchError: String?
+    private var addressTask: Task<Void, Never>?
+    private var addressRevision = 0
 
     /// In-flight photo uploads keyed by photo id.
     private var uploadTasks: [String: Task<Void, Never>] = [:]
@@ -418,10 +457,6 @@ public final class PostGigV1ViewModel {
         state.form.scheduledAt = date
     }
 
-    public func updateLocation(_ location: String) {
-        state.form.location = location
-    }
-
     // MARK: - A13.8 P5 — the rest of RN's editable field set
 
     public func updateCancellationPolicy(_ policy: PostGigV1CancellationPolicy) {
@@ -536,7 +571,7 @@ public final class PostGigV1ViewModel {
     public func submit() async -> String? {
         guard canAttemptSubmit else { return nil }
         let errors = validate(form: state.form)
-        guard errors.isEmpty else {
+        guard errors.isEmpty, let place = state.form.place else {
             state.validationErrors = errors
             return nil
         }
@@ -546,11 +581,11 @@ public final class PostGigV1ViewModel {
         do {
             let response: CreateGigResponse = if let editGigId {
                 try await api.request(
-                    GigsEndpoints.update(id: editGigId, body: buildUpdateBody(from: state.form))
+                    GigsEndpoints.update(id: editGigId, body: buildUpdateBody(from: state.form, place: place))
                 )
             } else {
                 try await api.request(
-                    GigsEndpoints.create(buildCreateBody(from: state.form))
+                    GigsEndpoints.create(buildCreateBody(from: state.form, place: place))
                 )
             }
             state.postedGigId = response.gig.id
@@ -577,6 +612,101 @@ public final class PostGigV1ViewModel {
     }
 }
 
+// MARK: - Location field: address suggestions
+
+public extension PostGigV1ViewModel {
+    /// Typing replaces the picked address, so the task needs a suggestion
+    /// again. Searches as Add Home does: 3+ characters after a 300 ms pause,
+    /// since every lookup is a billed geocoding call.
+    func updateLocation(_ location: String) {
+        guard location != state.form.location else { return }
+        state.form.location = location
+        if let loadedPlace, location == loadedPlace.address {
+            state.form.place = loadedPlace
+            cancelAddressSearch()
+            return
+        }
+        state.form.place = nil
+        searchAddresses(for: location)
+    }
+
+    func retryAddressSearch() {
+        searchAddresses(for: state.form.location)
+    }
+
+    /// Resolve a picked suggestion (`POST /api/geo/resolve`) into the
+    /// point and city/state/zip the task is saved with.
+    func selectAddress(_ suggestion: GeoSuggestion) {
+        guard addressSuggestions.contains(suggestion) else { return }
+        cancelAddressSearch(keepingSuggestions: true)
+        let revision = addressRevision
+        isFindingAddress = true
+        addressTask = Task {
+            defer { if addressRevision == revision { isFindingAddress = false } }
+            do {
+                let response: GeoResolveResponse = try await api.request(
+                    GeoEndpoints.resolve(suggestionId: suggestion.suggestionId)
+                )
+                guard addressRevision == revision else { return }
+                let normalized = response.normalized
+                guard let latitude = normalized.latitude, let longitude = normalized.longitude,
+                      !(latitude == 0 && longitude == 0) else { throw APIError.invalidResponse }
+                let street = normalized.address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                state.form.place = PostGigV1Place(
+                    address: street.isEmpty ? suggestion.label : street,
+                    latitude: latitude,
+                    longitude: longitude,
+                    city: normalized.city,
+                    state: normalized.state,
+                    zip: normalized.zipcode
+                )
+                state.form.location = suggestion.label
+                state.validationErrors.removeAll { $0.field == .location }
+                addressSuggestions = []
+            } catch is CancellationError {
+                return
+            } catch {
+                guard addressRevision == revision else { return }
+                addressSearchError = "Couldn't load that address. Try again."
+            }
+        }
+    }
+
+    private func searchAddresses(for text: String) {
+        cancelAddressSearch()
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count >= 3 else { return }
+        let revision = addressRevision
+        isFindingAddress = true
+        addressTask = Task {
+            defer { if addressRevision == revision { isFindingAddress = false } }
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+                let response: GeoAutocompleteResponse = try await api.request(GeoEndpoints.autocomplete(query: query))
+                guard addressRevision == revision else { return }
+                addressSuggestions = response.suggestions
+                if response.suggestions.isEmpty {
+                    addressSearchError = "No matching addresses. Try a more complete address."
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard addressRevision == revision else { return }
+                addressSearchError = "Address search is unavailable. Try again."
+            }
+        }
+    }
+
+    private func cancelAddressSearch(keepingSuggestions: Bool = false) {
+        addressRevision += 1
+        addressTask?.cancel()
+        addressTask = nil
+        isFindingAddress = false
+        addressSearchError = nil
+        if !keepingSuggestions { addressSuggestions = [] }
+    }
+}
+
 // MARK: - Body building, validation, edit prefill
 
 extension PostGigV1ViewModel {
@@ -599,12 +729,22 @@ extension PostGigV1ViewModel {
         form.photos.compactMap(\.uploadedURL)
     }
 
-    /// Map the V1 form onto the `POST /api/gigs` body. The legacy composer
-    /// collects a free-text location only, so we send it as the `custom`
-    /// location `address` with a `(0, 0)` placeholder coordinate — the same
-    /// fallback the V2 composer uses when it has no geocode
-    /// (`GigComposeViewModel.fallbackLocation`).
-    private func buildCreateBody(from form: PostGigV1Form) -> CreateGigBody {
+    /// The picked address as the `custom` location the gig routes take.
+    private static func gigLocation(_ place: PostGigV1Place) -> CreateGigLocation {
+        CreateGigLocation(
+            mode: "custom",
+            latitude: place.latitude,
+            longitude: place.longitude,
+            address: place.address,
+            city: place.city,
+            state: place.state,
+            zip: place.zip
+        )
+    }
+
+    /// Map the V1 form onto the `POST /api/gigs` body. The location is the
+    /// picked suggestion's point, so neighbors near that address see the task.
+    private func buildCreateBody(from form: PostGigV1Form, place: PostGigV1Place) -> CreateGigBody {
         let pay = payTypeAndPrice(from: form)
         let attachments = uploadedAttachmentURLs(from: form)
         let tags = form.parsedTags
@@ -627,12 +767,7 @@ extension PostGigV1ViewModel {
             tags: tags.isEmpty ? nil : tags,
             estimatedDuration: Self.durationHours(form.estimatedDuration),
             items: items.isEmpty ? nil : items.map(Self.itemDTO),
-            location: CreateGigLocation(
-                mode: "custom",
-                latitude: 0,
-                longitude: 0,
-                address: form.location.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+            location: Self.gigLocation(place)
         )
     }
 
@@ -657,8 +792,9 @@ extension PostGigV1ViewModel {
 
     /// Map the V1 form onto the `PATCH /api/gigs/:id` body — same field
     /// names as create. `attachments` always rides (an empty array
-    /// clears removed photos); `location` only rides when edit-load
-    /// captured real coordinates, so the stored point is preserved.
+    /// clears removed photos); `location` only rides when a new address
+    /// was picked, so an unchanged one keeps its stored point, city,
+    /// state and zip.
     ///
     /// The list-shaped fields (`tags`, `items`) and the two booleans
     /// (`is_urgent`, `cancellation_policy`) always ride here — otherwise
@@ -666,17 +802,8 @@ extension PostGigV1ViewModel {
     /// `estimated_duration` can only be *set*: the update schema takes
     /// neither `null` (`gigs.js:646`), so clearing them is a backend gap,
     /// not something the client can fake.
-    private func buildUpdateBody(from form: PostGigV1Form) -> UpdateGigBody {
+    private func buildUpdateBody(from form: PostGigV1Form, place: PostGigV1Place) -> UpdateGigBody {
         let pay = payTypeAndPrice(from: form)
-        var location: CreateGigLocation?
-        if let editOrigin {
-            location = CreateGigLocation(
-                mode: "custom",
-                latitude: editOrigin.latitude,
-                longitude: editOrigin.longitude,
-                address: form.location.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-        }
         return UpdateGigBody(
             title: form.title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: form.description.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -692,7 +819,7 @@ extension PostGigV1ViewModel {
             tags: form.parsedTags,
             estimatedDuration: Self.durationHours(form.estimatedDuration),
             items: form.validItems.map(Self.itemDTO),
-            location: location
+            location: place == loadedPlace ? nil : Self.gigLocation(place)
         )
     }
 
@@ -723,6 +850,8 @@ extension PostGigV1ViewModel {
         }
         if form.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             errors.append(.init(field: .location, message: "Add a pickup or meetup location."))
+        } else if form.place == nil {
+            errors.append(.init(field: .location, message: "Pick an address from the suggestions."))
         }
         // RN's exact rule (`useGigForm.ts:290`).
         let duration = form.estimatedDuration.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -778,9 +907,12 @@ extension PostGigV1ViewModel {
                 )
             }
             .filter { !$0.isEmpty }
+        // A task stored at (0, 0) has no real point: its editor asks for an address.
         if let latitude = gig.location?.latitude ?? gig.latitude,
-           let longitude = gig.location?.longitude ?? gig.longitude {
-            editOrigin = (latitude, longitude)
+           let longitude = gig.location?.longitude ?? gig.longitude,
+           !(latitude == 0 && longitude == 0) {
+            loadedPlace = PostGigV1Place(address: form.location, latitude: latitude, longitude: longitude)
+            form.place = loadedPlace
         }
         state.form = form
         state.validationErrors = []

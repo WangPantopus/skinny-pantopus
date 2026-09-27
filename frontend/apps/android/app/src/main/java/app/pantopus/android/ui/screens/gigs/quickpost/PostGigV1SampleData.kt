@@ -33,6 +33,15 @@ object PostGigV1SampleData {
             priceType = PostGigV1PriceType.Flat,
             scheduledAt = LocalDateTime.of(2026, 5, 30, 14, 0),
             location = "Pearl District · NW 11th & Johnson",
+            place =
+                PostGigV1Place(
+                    address = "NW 11th Ave & NW Johnson St",
+                    latitude = 45.5266,
+                    longitude = -122.6845,
+                    city = "Portland",
+                    state = "OR",
+                    zip = "97209",
+                ),
             photos =
                 listOf(
                     PostGigV1Photo(id = "sofa", tone = PostGigV1PhotoTone.Sofa),

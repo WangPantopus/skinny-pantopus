@@ -11,6 +11,7 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { checkHomePermission } = require('../utils/homePermissions');
 const { createNotification, notifyAddressRevealed } = require('../services/notificationService');
 const savedSearchService = require('../services/marketplace/savedSearchService');
 const { LISTING_LIST } = require('../utils/columns');
@@ -454,6 +455,12 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
     // The RPC uses SELECT ... FOR UPDATE to prevent concurrent creates
     // from exceeding the cap.
     const resolvedLayer = layer || CATEGORY_LAYER_MAP[category] || 'goods';
+    // A listing names a Home only when the lister can access that Home (as a
+    // magic-post does), so nobody can fill another household's inventory cap
+    // or mark a listing as attached to an address that isn't theirs.
+    if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't list from that Home." });
+    }
     let slotClaimed = false;
     if (homeId && isAddressAttached) {
       const maxCount = INVENTORY_CAPS[resolvedLayer] || 10;
@@ -505,7 +512,8 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
       layer: resolvedLayer,
       listing_type: resolvedType,
       home_id: homeId || null,
-      is_address_attached: isAddressAttached || false,
+      // "Address attached" needs the Home it is attached to.
+      is_address_attached: Boolean(homeId && isAddressAttached),
       is_wanted: isWanted || false,
       budget_max: budgetMax || null,
       expires_at: expiresAt,
@@ -1534,6 +1542,24 @@ router.patch('/:id', verifyToken, validate(updateListingSchema), async (req, res
 });
 
 
+/** An address-attached listing counts toward its Home's inventory cap. */
+function isAddressAttachedListing(listing) {
+  return Boolean(listing?.home_id && listing.is_address_attached);
+}
+
+/**
+ * Give an address-attached listing's inventory slot back to its Home. Query
+ * builders are thenables without .catch, so the call is wrapped; a refused or
+ * failed release is logged, never thrown.
+ */
+async function releaseListingSlot(listing, context) {
+  const { error } = await Promise.resolve(supabaseAdmin.rpc('release_inventory_slot', {
+    p_home_id: listing.home_id,
+    p_layer: listing.layer,
+  })).catch(err => ({ error: err }));
+  if (error) logger.warn('marketplace.slot_release_error', { error: error.message, listingId: listing.id, context });
+}
+
 /**
  * PATCH /api/listings/:id/status
  * Change listing status (mark sold, archive, reactivate, etc.)
@@ -1548,13 +1574,35 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${LISTING_STATUSES.join(', ')}` });
     }
 
-    const { data: existing, error: fetchErr } = await supabaseAdmin.from('Listing').select('user_id, status').eq('id', id).single();
+    const { data: existing, error: fetchErr } = await supabaseAdmin.from('Listing')
+      .select('id, user_id, status, home_id, is_address_attached, layer').eq('id', id).single();
     if (fetchErr) {
       logger.error('Error fetching listing for status change', { error: fetchErr.message, listingId: id });
       return res.status(500).json({ error: 'Failed to fetch listing' });
     }
     if (!existing) return res.status(404).json({ error: 'Listing not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only change status of your own listings' });
+
+    // An address-attached listing holds one of its Home's inventory slots while
+    // it is active: going back to active claims one (within the cap), and
+    // leaving active gives it back, as the expiry job already does.
+    const reclaimsSlot = status === 'active' && existing.status !== 'active' && isAddressAttachedListing(existing);
+    if (reclaimsSlot) {
+      const maxCount = INVENTORY_CAPS[existing.layer] || 10;
+      const { data: claimed, error: claimErr } = await supabaseAdmin.rpc(
+        'claim_inventory_slot',
+        { p_home_id: existing.home_id, p_layer: existing.layer, p_max_count: maxCount },
+      );
+      if (claimErr) {
+        logger.error('marketplace.status.slot_claim_error', { error: claimErr.message, listingId: id });
+        return res.status(500).json({ error: 'Failed to check inventory cap' });
+      }
+      if (!claimed) {
+        return res.status(409).json({
+          error: `Inventory cap reached: max ${maxCount} active ${existing.layer} listings per address`,
+        });
+      }
+    }
 
     const updates = { status, updated_at: new Date().toISOString() };
     if (status === 'sold') updates.sold_at = new Date().toISOString();
@@ -1569,7 +1617,11 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
 
     if (error) {
       logger.error('Error updating listing status', { error: error.message, listingId: id });
+      if (reclaimsSlot) await releaseListingSlot(existing, 'status_update_failed');
       return res.status(500).json({ error: 'Failed to update listing status' });
+    }
+    if (existing.status === 'active' && status !== 'active' && isAddressAttachedListing(existing)) {
+      await releaseListingSlot(existing, 'status_change');
     }
 
     res.json({ message: `Listing marked as ${status}`, listing });
@@ -1589,7 +1641,8 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const { data: existing, error: fetchErr } = await supabaseAdmin.from('Listing').select('user_id').eq('id', id).single();
+    const { data: existing, error: fetchErr } = await supabaseAdmin.from('Listing')
+      .select('id, user_id, status, home_id, is_address_attached, layer').eq('id', id).single();
     if (fetchErr) {
       logger.error('Error fetching listing for deletion', { error: fetchErr.message, listingId: id });
       return res.status(500).json({ error: 'Failed to fetch listing' });
@@ -1601,6 +1654,10 @@ router.delete('/:id', verifyToken, async (req, res) => {
     if (error) {
       logger.error('Error deleting listing', { error: error.message, listingId: id });
       return res.status(500).json({ error: 'Failed to delete listing' });
+    }
+    // A deleted active listing gives its Home's inventory slot back.
+    if (existing.status === 'active' && isAddressAttachedListing(existing)) {
+      await releaseListingSlot(existing, 'delete');
     }
 
     res.json({ message: 'Listing deleted successfully' });

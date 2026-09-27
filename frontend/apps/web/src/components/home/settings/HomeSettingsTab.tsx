@@ -6,6 +6,7 @@ import type { HomeMember } from '@pantopus/types';
 import TransferAdminWizard from './TransferAdminWizard';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
+import { toast } from '@/components/ui/toast-store';
 
 // ---- Constants ----
 
@@ -181,8 +182,8 @@ export default function HomeSettingsTab({
         },
       } as Record<string, any>);
 
-      setSaveMsg('Settings saved!');
-      setTimeout(() => setSaveMsg(''), 3000);
+      // The Home reload below remounts this tab, so confirm with a toast.
+      toast.success('Settings saved');
       onHomeUpdate();
     } catch (err: unknown) {
       setSaveMsg(failureMessage(err, 'Failed to save settings. Please try again.'));
@@ -235,7 +236,7 @@ export default function HomeSettingsTab({
         {canEdit && (
           <div className="flex items-center gap-3">
             {saveMsg && (
-              <span className={`text-xs ${saveMsg.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+              <span className="text-xs text-red-600">
                 {saveMsg}
               </span>
             )}
@@ -580,7 +581,7 @@ export default function HomeSettingsTab({
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
           {saveMsg && (
-            <span className={`text-xs ${saveMsg.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+            <span className="text-xs text-red-600">
               {saveMsg}
             </span>
           )}

@@ -36,6 +36,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +65,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
@@ -203,6 +205,8 @@ fun PostGigV1Screen(
                             onPriceType = viewModel::updatePriceType,
                             onPickDate = { showDateTimePicker = true },
                             onLocation = viewModel::updateLocation,
+                            onSelectAddress = viewModel::selectAddress,
+                            onRetryAddressSearch = viewModel::retryAddressSearch,
                             onAddPhoto = {
                                 photoPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -258,6 +262,8 @@ data class PostGigV1Actions(
     val onPriceType: (PostGigV1PriceType) -> Unit = {},
     val onPickDate: () -> Unit = {},
     val onLocation: (String) -> Unit = {},
+    val onSelectAddress: (GeoSuggestion) -> Unit = {},
+    val onRetryAddressSearch: () -> Unit = {},
     val onAddPhoto: () -> Unit = {},
     /** P6b — camera capture option on the Add tile. */
     val onTakePhoto: () -> Unit = {},
@@ -358,6 +364,7 @@ fun PostGigV1Content(
             isRequired = true,
             fieldTestTag = "postGigV1_location",
         )
+        AddressSuggestions(state = state, actions = actions)
     }
 
     // A13.8 P5 — the rest of RN's editable field set, so an edit can touch
@@ -412,6 +419,33 @@ fun PostGigV1Content(
     }
 
     LegacyStamp()
+}
+
+/** Address suggestions under the Location field, listed as Add Home lists them. */
+@Composable
+private fun AddressSuggestions(
+    state: PostGigV1UiState.Content,
+    actions: PostGigV1Actions,
+) {
+    if (state.isFindingAddress) {
+        CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = "Finding addresses" })
+    }
+    state.addressSearchError?.let {
+        Text(it, style = PantopusTextStyle.small)
+        TextButton(onClick = actions.onRetryAddressSearch) { Text("Try search again") }
+    }
+    state.addressSuggestions.forEach { suggestion ->
+        TextButton(
+            onClick = { actions.onSelectAddress(suggestion) },
+            enabled = !state.isFindingAddress,
+            modifier = Modifier.fillMaxWidth().testTag("postGigV1_addressSuggestion_${suggestion.suggestionId}"),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(suggestion.primaryText, style = PantopusTextStyle.body)
+                Text(suggestion.secondaryText ?: suggestion.label, style = PantopusTextStyle.small)
+            }
+        }
+    }
 }
 
 /**

@@ -155,6 +155,7 @@ public struct PostGigV1View: View {
                 isRequired: true,
                 identifier: "postGigV1_location"
             )
+            PostGigV1AddressSuggestions(viewModel: viewModel)
         }
 
         // A13.8 P5 — the rest of RN's editable field set, so an edit can
@@ -460,6 +461,32 @@ private struct PostGigV1DateField: View {
             if let error {
                 PostGigV1InlineError(message: error)
             }
+        }
+    }
+}
+
+/// Address suggestions under the Location field, listed as Add Home lists them.
+private struct PostGigV1AddressSuggestions: View {
+    let viewModel: PostGigV1ViewModel
+
+    var body: some View {
+        if viewModel.isFindingAddress {
+            ProgressView("Finding addresses…")
+        }
+        if let error = viewModel.addressSearchError {
+            Text(error).pantopusTextStyle(.small)
+            Button("Try search again", action: viewModel.retryAddressSearch)
+        }
+        ForEach(viewModel.addressSuggestions) { suggestion in
+            Button { viewModel.selectAddress(suggestion) } label: {
+                VStack(alignment: .leading, spacing: Spacing.s1) {
+                    Text(suggestion.primaryText).font(Theme.Font.body)
+                    Text(suggestion.secondaryText ?? suggestion.label).pantopusTextStyle(.small)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            }
+            .disabled(viewModel.isFindingAddress)
+            .accessibilityIdentifier("postGigV1_addressSuggestion_\(suggestion.suggestionId)")
         }
     }
 }

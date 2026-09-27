@@ -5,16 +5,22 @@ package app.pantopus.android.ui.screens.gigs.quickpost
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.geo.GeoResolveRequest
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
 import app.pantopus.android.data.api.models.gigs.CreateGigLocation
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.gigs.GigItemDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +92,19 @@ data class PostGigV1Item(
         get() = name.isBlank() && notes.isBlank() && budgetCap.isBlank() && preferredStore.isBlank()
 }
 
+/**
+ * The address a task is posted at: a suggestion resolved by
+ * `POST /api/geo/resolve`, or (edit mode) the task's own stored point.
+ */
+data class PostGigV1Place(
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+    val city: String? = null,
+    val state: String? = null,
+    val zip: String? = null,
+)
+
 data class PostGigV1Form(
     val category: GigsCategory = GigsCategory.All,
     val title: String = "",
@@ -94,6 +113,8 @@ data class PostGigV1Form(
     val priceType: PostGigV1PriceType = PostGigV1PriceType.Flat,
     val scheduledAt: LocalDateTime = LocalDateTime.now().plusDays(1),
     val location: String = "",
+    /** Set once [location] is a picked suggestion (or the edited task's unchanged address); typing clears it. */
+    val place: PostGigV1Place? = null,
     val photos: List<PostGigV1Photo> = emptyList(),
     // A13.8 P5 — the fields RN's editor has always carried.
     val cancellationPolicy: PostGigV1CancellationPolicy = PostGigV1CancellationPolicy.Standard,
@@ -153,6 +174,10 @@ sealed interface PostGigV1UiState {
         val validationErrors: List<PostGigV1ValidationError> = emptyList(),
         val isSubmitting: Boolean = false,
         val postedGigId: String? = null,
+        /** Address suggestions for the location field (`GET /api/geo/autocomplete`). */
+        val addressSuggestions: List<GeoSuggestion> = emptyList(),
+        val isFindingAddress: Boolean = false,
+        val addressSearchError: String? = null,
     ) : PostGigV1UiState {
         /** P0.2 — true while any photo upload is still in flight. */
         val hasUploadsInFlight: Boolean = form.photos.any { it.status == PostGigV1PhotoStatus.Uploading }
@@ -177,6 +202,7 @@ class PostGigV1ViewModel
     constructor(
         private val repo: GigsRepository,
         private val filesRepo: FilesRepository,
+        private val geoApi: GeoApi,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /**
@@ -202,10 +228,12 @@ class PostGigV1ViewModel
         // filled form on retry (mirrors iOS, where the form survives .error).
         private var lastForm: PostGigV1Form? = null
 
-        // The edited task's own coordinates. The form holds only a free-text
-        // address, so an edit re-sends this point (as iOS does) instead of the
-        // (0, 0) placeholder, which would move the task off the map.
-        private var editOrigin: Pair<Double, Double>? = null
+        // The edited task's own address and point. While the location field
+        // still shows it, a save leaves the stored location alone.
+        private var loadedPlace: PostGigV1Place? = null
+
+        private var addressJob: Job? = null
+        private var addressRevision = 0
 
         // P0.2 — picked-photo bytes (for retry) + per-tile upload jobs.
         private val pendingPhotoBytes = mutableMapOf<String, PostGigV1PickedPhoto>()
@@ -281,8 +309,98 @@ class PostGigV1ViewModel
             updateForm { it.copy(scheduledAt = date) }
         }
 
+        /**
+         * Typing replaces the picked address, so the task needs a suggestion
+         * again. Searches as Add Home does: 3+ characters after a 300 ms
+         * pause, since every lookup is a billed geocoding call.
+         */
         fun updateLocation(location: String) {
-            updateForm { it.copy(location = location) }
+            val current = _state.value as? PostGigV1UiState.Content ?: return
+            if (location == current.form.location) return
+            val restored = loadedPlace?.takeIf { it.address == location }
+            updateForm { it.copy(location = location, place = restored) }
+            if (restored != null) cancelAddressSearch() else searchAddresses(location)
+        }
+
+        fun retryAddressSearch() {
+            val current = _state.value as? PostGigV1UiState.Content ?: return
+            searchAddresses(current.form.location)
+        }
+
+        /**
+         * Resolve a picked suggestion (`POST /api/geo/resolve`) into the
+         * point and city/state/zip the task is saved with.
+         */
+        fun selectAddress(suggestion: GeoSuggestion) {
+            val current = _state.value as? PostGigV1UiState.Content ?: return
+            if (current.addressSuggestions.none { it.suggestionId == suggestion.suggestionId }) return
+            cancelAddressSearch(keepSuggestions = true)
+            val revision = addressRevision
+            updateContent { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    val result = safeApiCall { geoApi.resolve(GeoResolveRequest(suggestion.suggestionId)) }
+                    if (revision != addressRevision) return@launch
+                    val place = (result as? NetworkResult.Success)?.data?.normalized?.toPlace(fallbackAddress = suggestion.label)
+                    if (place == null) {
+                        updateContent {
+                            it.copy(isFindingAddress = false, addressSearchError = "Couldn't load that address. Try again.")
+                        }
+                        return@launch
+                    }
+                    updateContent { content ->
+                        content.copy(
+                            form = content.form.copy(location = suggestion.label, place = place),
+                            validationErrors = content.validationErrors.filterNot { it.field == PostGigV1Field.Location },
+                            addressSuggestions = emptyList(),
+                            isFindingAddress = false,
+                        )
+                    }
+                }
+        }
+
+        private fun searchAddresses(text: String) {
+            cancelAddressSearch()
+            val query = text.trim()
+            if (query.length < MIN_ADDRESS_QUERY_LENGTH) return
+            val revision = addressRevision
+            updateContent { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    delay(ADDRESS_SEARCH_DEBOUNCE_MILLIS)
+                    val result = safeApiCall { geoApi.autocomplete(query) }
+                    if (revision != addressRevision) return@launch
+                    updateContent { content ->
+                        when (result) {
+                            is NetworkResult.Success ->
+                                content.copy(
+                                    isFindingAddress = false,
+                                    addressSuggestions = result.data.suggestions,
+                                    addressSearchError =
+                                        "No matching addresses. Try a more complete address."
+                                            .takeIf { result.data.suggestions.isEmpty() },
+                                )
+                            is NetworkResult.Failure ->
+                                content.copy(
+                                    isFindingAddress = false,
+                                    addressSearchError = "Address search is unavailable. Try again.",
+                                )
+                        }
+                    }
+                }
+        }
+
+        private fun cancelAddressSearch(keepSuggestions: Boolean = false) {
+            addressRevision += 1
+            addressJob?.cancel()
+            addressJob = null
+            updateContent {
+                it.copy(
+                    isFindingAddress = false,
+                    addressSearchError = null,
+                    addressSuggestions = if (keepSuggestions) it.addressSuggestions else emptyList(),
+                )
+            }
         }
 
         // MARK: - A13.8 P5 — the rest of RN's editable field set
@@ -409,10 +527,18 @@ class PostGigV1ViewModel
                 when (val result = repo.detail(gigId)) {
                     is NetworkResult.Success -> {
                         val gig = result.data.gig
+                        val form = formFrom(gig)
                         val latitude = gig.location?.latitude ?: gig.latitude
                         val longitude = gig.location?.longitude ?: gig.longitude
-                        editOrigin = if (latitude != null && longitude != null) latitude to longitude else null
-                        _state.value = PostGigV1UiState.Content(form = formFrom(gig))
+                        // A task stored at (0, 0) has no real point: its editor asks for an address.
+                        loadedPlace =
+                            if (latitude != null && longitude != null) {
+                                PostGigV1Place(address = form.location, latitude = latitude, longitude = longitude)
+                                    .takeUnless { latitude == 0.0 && longitude == 0.0 }
+                            } else {
+                                null
+                            }
+                        _state.value = PostGigV1UiState.Content(form = form.copy(place = loadedPlace))
                     }
                     is NetworkResult.Failure ->
                         _state.value = PostGigV1UiState.FatalError(result.error.message)
@@ -527,10 +653,10 @@ class PostGigV1ViewModel
         /**
          * Map the V1 form onto the `POST /api/gigs` body (also reused as the
          * `PATCH /api/gigs/{id}` body — the route strips fields the update
-         * schema doesn't take). The legacy composer collects a free-text
-         * location only, so a new task rides as the `custom` location `address`
-         * with a `(0, 0)` placeholder coordinate; an edit re-sends the task's
-         * loaded coordinates, or no location when it has none. Pay-type maps Flat→`fixed`,
+         * schema doesn't take). The location is the picked suggestion's point,
+         * so neighbors near that address see the task; an edit sends it only
+         * when a new address was picked, so an unchanged one keeps its stored
+         * point, city, state and zip. Pay-type maps Flat→`fixed`,
          * Hourly→`hourly`, Free→`offers` with a true `price: 0` — the
          * backend schema accepts zero (`Joi.number().min(0)`,
          * `backend/routes/gigs.js:428` / `:644`).
@@ -585,21 +711,15 @@ class PostGigV1ViewModel
                 estimatedDuration = form.estimatedDuration.trim().toDoubleOrNull()?.takeIf { it > 0.0 },
                 items = if (forEdit) items else items.ifEmpty { null },
                 location =
-                    if (forEdit) {
-                        editOrigin?.let { (latitude, longitude) ->
-                            CreateGigLocation(
-                                mode = "custom",
-                                latitude = latitude,
-                                longitude = longitude,
-                                address = form.location.trim(),
-                            )
-                        }
-                    } else {
+                    form.place?.takeUnless { forEdit && it == loadedPlace }?.let { place ->
                         CreateGigLocation(
                             mode = "custom",
-                            latitude = 0.0,
-                            longitude = 0.0,
-                            address = form.location.trim(),
+                            latitude = place.latitude,
+                            longitude = place.longitude,
+                            address = place.address,
+                            city = place.city,
+                            state = place.state,
+                            zip = place.zip,
                         )
                     },
             )
@@ -653,6 +773,8 @@ class PostGigV1ViewModel
             }
             if (form.location.isBlank()) {
                 errors += PostGigV1ValidationError(PostGigV1Field.Location, "Add a pickup or meetup location.")
+            } else if (form.place == null) {
+                errors += PostGigV1ValidationError(PostGigV1Field.Location, "Pick an address from the suggestions.")
             }
             // RN's exact rule (`useGigForm.ts:290`).
             val duration = form.estimatedDuration.trim()
@@ -672,8 +794,26 @@ class PostGigV1ViewModel
 
             /** P4 — nav arg carrying the gig id when opened as an editor. */
             const val EDIT_GIG_ID_KEY = "editGigId"
+
+            /** Add Home's address search: 3+ characters after a 300 ms pause. */
+            private const val MIN_ADDRESS_QUERY_LENGTH = 3
+            private const val ADDRESS_SEARCH_DEBOUNCE_MILLIS = 300L
         }
     }
+
+/** A resolved suggestion as the task's place, or null when it has no usable point. */
+private fun NormalizedAddress.toPlace(fallbackAddress: String): PostGigV1Place? {
+    val lat = latitude ?: return null
+    val lng = longitude ?: return null
+    return PostGigV1Place(
+        address = address?.trim().orEmpty().ifEmpty { fallbackAddress },
+        latitude = lat,
+        longitude = lng,
+        city = city,
+        state = state,
+        zip = zipcode,
+    ).takeUnless { lat == 0.0 && lng == 0.0 }
+}
 
 /**
  * P0.2 — raw bytes of a picked photo, held by the view-model for upload +

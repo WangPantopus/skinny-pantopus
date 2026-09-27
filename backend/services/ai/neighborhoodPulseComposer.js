@@ -19,7 +19,7 @@ const logger = require('../../utils/logger');
 const propertyIntelligenceService = require('./propertyIntelligenceService');
 const neighborhoodProfileService = require('./neighborhoodProfileService');
 const seededBusinessService = require('./seededBusinessService');
-const { getSeasonalContext } = require('./seasonalEngine');
+const { getSeasonalContext, SEASONS } = require('./seasonalEngine');
 const noaa = require('../external/noaa');
 const airNow = require('../external/airNow');
 
@@ -99,7 +99,7 @@ function buildSeasonalSignal(seasonalCtx) {
     priority: hasHomeTip ? 7 : 6,
     title: seasonalCtx.seasonal_tip
       ? seasonalCtx.seasonal_tip.split('.')[0]
-      : `${seasonalCtx.primary_season} season`,
+      : (SEASONS[seasonalCtx.primary_season]?.label || 'This season'),
     detail: seasonalCtx.home_specific_tip || seasonalCtx.seasonal_tip || '',
     icon: 'leaf',
     color: 'amber',

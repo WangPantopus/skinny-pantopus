@@ -6,16 +6,25 @@ import { toast } from '@/components/ui/toast-store';
 import type { SearchScope } from './discoverTypes';
 
 // ── Empty State ──────────────────────────────────────────────
-export function EmptyState({ category, scope }: { category?: string; scope: SearchScope }) {
+export function EmptyState({ category, scope, needsLocation = false }: {
+  category?: string;
+  scope: SearchScope;
+  /** No location yet, so no search ran: don't claim "No results found". */
+  needsLocation?: boolean;
+}) {
   const router = useRouter();
   const href = category ? `/app/gigs/new?category=${category}` : '/app/gigs-v2/new';
   const isBusinessScope = scope === 'businesses';
   return (
     <div className="text-center py-16 px-6">
       <div className="mb-4 flex justify-center"><Search className="w-10 h-10 text-app-muted" /></div>
-      <h3 className="text-lg font-semibold text-app-strong mb-1">No results found</h3>
+      <h3 className="text-lg font-semibold text-app-strong mb-1">
+        {needsLocation ? 'Local businesses show up here' : 'No results found'}
+      </h3>
       <p className="text-sm text-app-muted max-w-sm mx-auto mb-6">
-        {isBusinessScope ? 'Post a task to get quotes from local providers.' : 'Try a different search term or category.'}
+        {needsLocation
+          ? 'Add a location above to see providers near you, or post a task to get quotes.'
+          : isBusinessScope ? 'Post a task to get quotes from local providers.' : 'Try a different search term or category.'}
       </p>
       {isBusinessScope && (
         <button
