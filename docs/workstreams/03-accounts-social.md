@@ -2,10 +2,15 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T09:02:12Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T09:25:36Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots (2026-09-27T09:02:12Z):** heavy held since 09:01:42Z (Android + iOS builds of `c5e133780`, the DM header → profile); slot 3 held since 08:59:26Z (the Android before is done). Slot 1 is Stream 2's; I'm next. Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`). All nine Stream 3 branches merge-tree clean against it. CI: #593/#594/#595/#596/#600 green; #597 re-run in progress after an unrelated HomeTaskMedia flake (Stream 2 will harden that test); #604/#605 running. Batch 40 (Stream 1) will take #593–#597, #600, #604, #605.
+- **Slots (2026-09-27T09:25:36Z):** Stream 3 holds no heavy and no device slots. Released:
+  - slot 3 at 09:15:27Z (emulator-5554 shut down at 09:15:24Z; Stream 1 had taken slot 4 at 09:14:49Z);
+  - heavy at 09:18:29Z, taken by Stream 1 at 09:18:46Z;
+  - slot 1 at 09:22:52Z (sim 0AE16FA0 shut down first), for Stream 1.
+- Batch 39 #599 merged 08:59:13Z (master `9f3ba7c35`). Batch 40 #608 (Stream 1) has been in CI since 09:01:36Z with #593–#597 and #600.
+- CI: #593/#594/#595/#596/#600 green. #597 re-run was still in iOS tests at 09:11Z. #604/#605 were running at 09:11Z. #612 is bound in the app, which tracks its CI.
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -59,6 +64,32 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### PR #583: Android broadcast composer shows no sample audience counts
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1; CI green (6 success, 6 skipped, checked 05:45:19Z).
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
+
+### IN PROGRESS (2026-09-27T09:38:47Z): Android fails to parse a booking page whose `cancellation_policy` is an object
+- **Defect (reproduced):** `BookingPage.cancellation_policy` is jsonb (migration 166).
+  - Web’s policy editor always saves an object: `{cutoff_min, reschedule_cutoff_min, refund_policy, notes, preset}`, plus `refund_percent_after`, `deposit_non_refundable` and `no_show_handling` for custom (`policyPresets.ts` `toCancellationPolicy`).
+  - iOS saves preset strings, or an object for custom (`CancellationPolicyEditorViewModel.pagePolicyValue`).
+  - Android types the field as `String?` in `BookingPageDto` and `PublicPageView`, so Moshi throws `JsonDataException: Expected a string but was BEGIN_OBJECT at path $.page.cancellation_policy`.
+  - The whole Android Scheduling hub then shows “Couldn’t load scheduling”. Twelve owner screens read `GET /booking-page`; the invitee public page and Manage booking read `PublicPageView`.
+  - The policy editors are behind paid scheduling (web defaults ON in non-prod, OFF in prod), so this surfaces where paid scheduling is on, or for pages that already hold an object.
+- **Before evidence:** bundle `.pantopus-recovery/audits/20260927-stream3-android-booking-page-policy-object-r1/before/`.
+  - Control: hub OK with a null policy at 09:34:49Z.
+  - Error after BP1 at 09:35:25Z, with `GET /booking-page` 200 at 09:35:20Z.
+  - Logcat stack in `logcat-parse-error-safe.txt`.
+  - Master APK `27a5e60e…` (scheduling code identical to `9f3ba7c35`), Member signed in on emulator-5554 (slot 3, held since 09:31:00Z).
+- **Fixture BP1 (APPLIED, revert before handoff):** the Member’s page `a1060a2b` got web’s Flexible object through the real `PUT /api/scheduling/booking-page`, direct to API 18134, at 09:35:05Z. Revert SQL is in the fixture manifest (BP1): set `cancellation_policy` NULL and `updated_at` back to `2026-09-26 06:12:50.488+00`. Not the Owner’s retained `807dd420`.
+- **Fix plan (Android only, decided under the standing direction):** a `CancellationPolicyValue` type plus an adapter registered in `NetworkModule.provideMoshi()`, like `BusinessServiceAreaJsonAdapter`. It normalizes preset strings, Android’s JSON-string custom, iOS/web objects and free text. It is used by `BookingPageDto`/`PublicPageView`, the editor’s `applyPagePolicy`, the business-settings label and the invitee Manage booking card, with sentences reusing the editor’s preview wording.
+- **Related, not in this fix:** web shows Android’s JSON-string custom policy verbatim as notes (`policyValue.ts` `resolvePolicyValue`). This is a web follow-up candidate.
+
+### PR #612 (sent to Stream 1 at 2026-09-27T09:25Z): a DM’s header opens the other person’s profile (iOS + Android, web parity)
+- **[#612](https://github.com/WangPantopus/skinny-pantopus/pull/612)** head `2583774f3` on `f6c66d678`: merges cleanly into `9f3ba7c35`, and together with #597 and #605. Bundle `20260927-stream3-native-chat-header-profile-r1`, seal `61c648327e456afd2a9c0886da3c8449ffb6ecd1852dd4aa12f1979b47679146` (31 files; seal comment posted).
+- Before: both apps’ DM header name and avatar did nothing; checked on master-equivalent builds (Android APK `27a5e60e…`, iOS `997d129c2`).
+- After, Android (APK `5bebb34d…` of the head): name or avatar → profile (`GET /api/users/id` 200/304), and Back → DM.
+- After, iOS (dylib `01b0fe77…`): the same from the Place tab. From the Mail tab, the new Inbox `publicProfile` route: Messages → DM → name → profile, and the profile’s Message → DM.
+- Checks: ktlint, detekt, lintDebug and assemble pass; the iOS build passes; SwiftLint `--strict` and SwiftFormat are clean. The Marketplace:221 and Tasks:408 backward-matching warnings are gone.
+- Side effects: none from the change. Sign-in bookkeeping and the existing `File.access_count` attachment counter only; every write was blocked at the proxy.
+- Candidate (not changed): on iOS, DM → header → profile → Message stacks a second copy of the same DM, and the DM below reloads too (two topics/messages GETs). The Hub root’s existing profile → Message code already does this when that DM is lower in the stack. Popping back would avoid it.
+- Correction to the #604/#605 bundles: “The build’s two remaining warnings” meant the two warnings in those PRs’ changed files, not the whole build. Their iOS lint was re-run correctly at 09:16Z and is clean.
 
 ### PRs #604 and #605 (sent to Stream 1 at 2026-09-27T08:52:47Z)
 Afters on local verification tree `997d129c2` (master `f6c66d678` + both heads, byte-identical). Android APK `735d5744…`, iOS dylib `95506dfc…`. No table changed (08:21:58Z–08:51:30Z).
@@ -123,7 +154,13 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 
 - 2026-09-27T08:19:57Z: **Native Connections rows open the person's profile** (connected, incoming and sent; not blocked), as web's rows already do (`router.push(`/${username}`)`). Local branch `claude/stream3-native-connections-open-profile`; shared call sites in `RootTabScreen.kt`, `HubTabRoot.swift` and `YouTabRoot.swift` were announced to both peers, and Stream 1 had no edits there. Rejected: leaving rows without a profile route. Build and device check pending, together with the dashboard Photos branch `claude/stream3-native-dashboard-photos-hidden` (`38a3ca314`).
 
-- 2026-09-27T08:59:17Z: **A DM's header opens the other person's profile** on iOS and Android (web parity: `ConversationView.tsx` links the name). Person DMs only (not rooms, the AI thread or persona threads). Local branch `claude/stream3-native-chat-header-profile` (`c5e133780`). Shared call sites were announced to both peers, who reported no overlap: Android `RootTabScreen.kt` (ChatConversationHost); iOS Hub, You, Marketplace, Tasks and Inbox roots, where Inbox gains a `publicProfile` route like the others and Hub/You label `onBack`. Rejected: an in-chat sheet, which would diverge from the push navigation pattern. Build and device check pending.
+- 2026-09-27T08:59:17Z: **A DM's header opens the other person's profile** on iOS and Android (web parity: `ConversationView.tsx` links the name). Person DMs only (not rooms, the AI thread or persona threads). Local branch `claude/stream3-native-chat-header-profile` (`c5e133780`, squashed to `2583774f3` after SwiftLint/SwiftFormat/detekt fixes; the detekt fix updates the signature-keyed `LongParameterList` baseline entry for `ChatConversationHost`). Shared call sites were announced to both peers, who reported no overlap: Android `RootTabScreen.kt` (ChatConversationHost); iOS Hub, You, Marketplace, Tasks and Inbox roots, where Inbox gains a `publicProfile` route like the others and Hub/You label `onBack`. Rejected: an in-chat sheet, which would diverge from the push navigation pattern. Build and device check pending.
+
+- 2026-09-27T09:22:52Z: **The iOS double load after DM → profile → Message stays a candidate, not part of #612.**
+  - Web stacks pages the same way, and the Hub root’s existing profile → Message code already reloads the DM below.
+  - Popping back to the DM below would change navigation behavior beyond the parity fix.
+  - Recorded in #612’s RESULT and PR body.
+- 2026-09-27T09:22:52Z: **Released slot 1 before checking Android’s profile → Message stacking.** Stream 1 was waiting for the iOS driver, and slot 3 was already released. That check is listed as not done in #612.
 
 ### Earlier questions (answered above)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
@@ -154,7 +191,7 @@ All sealed, with seal comments. Befores used master builds; afters used one loca
 
 ### Candidates (not changed)
 - Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
-- **Candidate, now being fixed as `c5e133780` (2026-09-27T08:27:38Z):** the chat header name opens the other person's profile on web (`ConversationView.tsx:349-350`, `chatPersonHref`), but not on Android (tapping it did nothing, 07:32Z). The iOS header has only an audience-profile hook. Next after the dashboard/Connections build.
+- **Candidate, now PR #612 (`2583774f3`, first `c5e133780`; 2026-09-27T08:27:38Z):** the chat header name opens the other person's profile on web (`ConversationView.tsx:349-350`, `chatPersonHref`), but not on Android (tapping it did nothing, 07:32Z). The iOS header has only an audience-profile hook. Next after the dashboard/Connections build.
 - **Checked (2026-09-27T08:27:38Z):** the business "gallery" has no backend. `POST /api/upload/business-media` accepts only `logo`/`banner`; `gallery_file_ids` belongs to catalog items, and galleries otherwise exist only as a Custom Pages block. So hiding the editor gallery (#596) and the dashboard Photos rail is consistent.
 - **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. Checked since: S3-49, S3-50 and S3-66 have no gap on the other app; S3-60 became #582. Sweep done: S3-10, S3-13, S3-32, S3-36, S3-51 have no gap either; S3-34 is iOS per-stack wiring (Android has one NavHost); S3-48 (iOS) and S3-59 (Android) are committed above, verification pending. Web read for the same defect classes, no gap: the web notifications page keys its query cache by filter and zone and discards retired responses (the tab race), and a failed "Load more" shows "Could not load all notifications." with Retry while the button comes back; the web broadcast composer has no sample counts; a failed web review reply shows an error.
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
