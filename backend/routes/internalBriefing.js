@@ -313,11 +313,15 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
 
     // Update delivery row to failed if we have one
     if (deliveryId) {
-      await supabaseAdmin
-        .from('DailyBriefingDelivery')
-        .update({ status: 'failed', error_message: err.message })
-        .eq('id', deliveryId)
-        .catch(() => {}); // Don't let logging fail the error response
+      // Query builders are thenables without .catch, so wrap the update:
+      // otherwise this line throws, the row stays 'composing' (which later
+      // runs skip as already processed) and the 500 below is never sent.
+      await Promise.resolve(
+        supabaseAdmin
+          .from('DailyBriefingDelivery')
+          .update({ status: 'failed', error_message: err.message })
+          .eq('id', deliveryId),
+      ).catch(() => {}); // Don't let logging fail the error response
     }
 
     return res.status(500).json({ status: 'failed', error: err.message });
