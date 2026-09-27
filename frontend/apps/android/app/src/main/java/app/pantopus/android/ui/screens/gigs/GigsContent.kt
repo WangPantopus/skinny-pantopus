@@ -29,12 +29,19 @@ enum class GigsCategory(
 
     companion object {
         /** Backend-key → enum. Unknown keys fall back to Handyman. */
-        fun fromBackendKey(raw: String?): GigsCategory {
+        fun fromBackendKey(raw: String?): GigsCategory = fromBackendKeyOrNull(raw) ?: Handyman
+
+        /**
+         * Backend-key → enum, or null for a category these chips don't list
+         * (web has more, e.g. "Other"). Web labels ("Pet Care") match too.
+         */
+        fun fromBackendKeyOrNull(raw: String?): GigsCategory? {
             val key =
                 (raw ?: "")
                     .lowercase()
                     .replace("_", "")
                     .replace("-", "")
+                    .replace(" ", "")
             return when (key) {
                 "all" -> All
                 "handyman", "handy", "repair", "repairs" -> Handyman
@@ -43,9 +50,9 @@ enum class GigsCategory(
                 "petcare", "pet", "pets", "dogwalking", "petsitting" -> PetCare
                 "childcare", "child", "babysitting", "nanny" -> ChildCare
                 "tutoring", "tutor", "lessons", "teaching" -> Tutoring
-                "tech", "technology", "it", "computer" -> Tech
+                "tech", "technology", "techsupport", "it", "computer" -> Tech
                 "delivery", "deliveries", "courier" -> Delivery
-                else -> Handyman
+                else -> null
             }
         }
     }
