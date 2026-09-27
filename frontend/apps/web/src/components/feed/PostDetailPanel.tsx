@@ -190,7 +190,7 @@ export default function PostDetailPanel({
         : [...prev, nextComment]);
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
-      showToast(uploadFailed ? 'Comment posted; image failed. Send to retry or Clear to discard.' : 'Comment posted');
+      showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
       return !uploadFailed;
     } catch (err) {
       console.warn('Failed to add comment', err);

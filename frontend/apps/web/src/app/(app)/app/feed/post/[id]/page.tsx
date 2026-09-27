@@ -220,7 +220,7 @@ export default function PostDetailPage() {
       if (!alreadyAdded) {
         setPost((p: Post | null) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
       }
-      showToast(uploadFailed ? 'Comment posted; image failed. Send to retry or Clear to discard.' : 'Comment posted');
+      showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
       return !uploadFailed;
     } catch {
       showToast('Failed to add comment');
