@@ -2,24 +2,18 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
-> **UPDATE 2026-09-27T00:57Z: Stream 1 is handing off.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). Its §0 gets the post-batch-35 state.
-> - **Merged:**
->   - batch 32 #540 (23:12:01Z → `d358dbc83`);
->   - batch 33 #546 (2026-09-27T00:08:50Z → `f7f51eae4`);
->   - batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → **`73b98f6b6`**: S2 #544, S3 #545, S2 #547, S1 #549).
-> - **Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556), queued at 01:48:03Z (tip `22779dc89`):**
->   - S1 #548 + #553 (stacked; backend);
->   - S1 #550, #554 (Android);
->   - S1 #555 (backend);
->   - S3 #552 (native).
+> **UPDATE 2026-09-27T02:25Z: Stream 1 handed off.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md); **§0 is the final state**. The successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).
+> - **Merged today:**
+>   - batch 34 #551 (00:46:55Z → `73b98f6b6`);
+>   - **batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)** (02:23:56Z → **`0bd3759f4`**: S1 #548, #553, #550, #554, #555 and S3 #552).
 >
->   It shares `RootTabScreen.kt` (#550/#552), which is proven clean. Restart the runtime after it merges.
-> - **New Stream 1 fixes:**
->   - #553: native task edit/reschedule and iOS confirm showed false errors (raw PostGIS strings in replies), and reschedule notices were never delivered (invalid `notification_context_type`).
->   - #554: Android edit moved tasks to 0,0.
->   - #555: saved-search task alerts were never delivered (same enum cause, found with Stream 3).
-> - **User decision (HIGH), not implemented yet:** the native Hub "Post task" (quick-post V1) creates new tasks at 0,0 on both apps (reproduced on Android). On 2026-09-27 the user chose **"Address search in the app"**: Add Home's address suggestions, plus a backend refusal of (0, 0). The next Stream 1 session implements it (handoff §3.2).
-> - **Runtime:** tree = master `73b98f6b6`, backend pid 83519 (00:52:25Z), `/api/hub` 200.
+>   Every Stream 1 fix is on master.
+> - **Batch 36 = [#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)**, queued at 02:25:31Z (S3 #557 backend; S2 #558, #559 web). Restart the runtime after it merges.
+> - **Next:**
+>   - S2 #560 (iOS test flake fix; reviewed, CI running);
+>   - the S3 chat re-subscribe fix and the S2 native §3A #3/#4 (both coming).
+> - **User decision to implement (HIGH):** native "Post task" creates tasks at 0,0. The user chose **"Address search in the app"** (Add Home's suggestions + the backend refusing (0, 0)); see handoff §3.2.
+> - **Runtime:** tree = `0bd3759f4`, backend pid 6041, `/api/hub` 200.
 > - **Slots:** Stream 1 holds nothing.
 
 - **Who runs the queue:** this Stream 1 session stopped at the user's request. **The next Stream 1 session runs batch 32** and all later batches. Its takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and its prompt is [docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).

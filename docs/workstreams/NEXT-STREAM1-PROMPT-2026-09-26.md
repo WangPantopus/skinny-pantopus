@@ -95,7 +95,10 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
 2. **Implement the user's decision on the HIGH defect** (handoff §3.2): the Hub's "Post task" on both native apps (quick-post V1 form) creates new tasks at **0,0**.
    - The user chose **"Address search in the app"** (2026-09-27): the location field offers the same address suggestions as Add Home (`/api/geo/autocomplete` → `/api/geo/resolve`, metered), and the backend rejects (0, 0) on create and edit.
    - Keep the form's design. Verify before/after on both apps, including that a neighbor now sees the task.
-3. **Integrate peer PRs** as they come. Stream 3 has a `postCreationHooksService.js` context-type fix (local `097e3e087`) waiting for its user's approval of an end-to-end write, likely for batch 36.
+3. **Integrate peer PRs** as they come (handoff §0 lists them):
+   - S2 #560 (iOS test-only flake fix; reviewed OK);
+   - Stream 3's chat re-subscribe fix for both apps (`claude/stream3-native-chat-resubscribe`);
+   - Stream 2's native §3A #3/#4. #3 touches `RootTabScreen.kt`, so prove it against master.
 4. **Remaining Stream 1 inventory** (all low; handoff §3.3):
    - web `/app/offers` swallowed failure (OPEN), `/app/discover-hub` orphan, and Discover's double notice;
    - iOS Support Trains without location; Android Tasks feed Support Trains read; iOS Report post (not run);
@@ -115,7 +118,8 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
   - user decisions 1A–6A and A;
   - the Android Gigs door and tab re-tap decisions (#550);
   - the started-task cancel decision "Honest wording only, no policy change" (#549).
-- **Batch 35** (#548, #553, #550, #554, #555, and S3 #552 if green): check its state in handoff §0.
+- **Batch 35** (#556, merged 2026-09-27T02:23:56Z → `0bd3759f4`): #548, #553, #550, #554, #555 and S3 #552.
+- **Batch 36** (#561: S3 #557, S2 #558, S2 #559): check its state in handoff §0.
 - **Sealed and cleaned audits:**
   - free-task lifecycle (`1855635d`);
   - tip copy (`9bb90479`) and accept-counter (`45e240d9`);
