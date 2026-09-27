@@ -3,7 +3,6 @@ const { createHash } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const s3 = require('../services/s3Service');
 const blockService = require('../services/blockService');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
