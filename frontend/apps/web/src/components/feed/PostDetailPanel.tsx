@@ -61,19 +61,35 @@ export default function PostDetailPanel({
   /** Index into `post.media_urls` when viewing full-screen image; `null` = closed */
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const targetVersion = useRef(0);
+  const readVersion = useRef(0);
+
+  useEffect(() => {
+    targetVersion.current += 1;
+    setCommentPosting(false);
+    setToast('');
+    return () => { targetVersion.current += 1; };
+  }, [postId, currentUserId, open]);
 
   const showToast = (message: string) => {
+    const target = targetVersion.current;
     setToast(message);
-    window.setTimeout(() => setToast(''), 2500);
+    window.setTimeout(() => {
+      if (target === targetVersion.current) setToast('');
+    }, 2500);
   };
 
   const loadPost = useCallback(async (id: string) => {
+    const target = targetVersion.current;
+    const read = ++readVersion.current;
+    const isCurrent = () => target === targetVersion.current && read === readVersion.current;
     setLoading(true);
     try {
       const [postRes, commentsRes] = await Promise.allSettled([
         api.posts.getPost(id),
         api.posts.getComments(id),
       ]);
+      if (!isCurrent()) return;
 
       if (postRes.status === 'fulfilled') {
         setPost(postRes.value.post);
@@ -104,9 +120,10 @@ export default function PostDetailPanel({
         }
       }
     } catch (err) {
+      if (!isCurrent()) return;
       console.warn('Unexpected panel load error', err);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [initialPost]);
 
@@ -119,7 +136,8 @@ export default function PostDetailPanel({
       setPost(null);
       setComments([]);
     }
-  }, [initialPost, loadPost, open, postId]);
+    return () => { readVersion.current += 1; };
+  }, [currentUserId, initialPost, loadPost, open, postId]);
 
   useEffect(() => {
     if (!open) {
@@ -163,6 +181,7 @@ export default function PostDetailPanel({
 
   const handleAddComment = async ({ text, parentId, files = [], clientRequestId }: { text: string; parentId?: string; files?: File[]; clientRequestId: string }) => {
     if (!postId) return false;
+    const target = targetVersion.current;
     setCommentPosting(true);
     try {
       const res = await api.posts.addComment(postId, {
@@ -183,6 +202,7 @@ export default function PostDetailPanel({
         }
       }
 
+      if (target !== targetVersion.current) return false;
       const alreadyAdded = comments.some((comment) => comment.id === nextComment.id);
       const nextCommentCount = comments.length + (alreadyAdded ? 0 : 1);
       setComments((prev) => prev.some((comment) => comment.id === nextComment.id)
@@ -193,24 +213,28 @@ export default function PostDetailPanel({
       showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
       return !uploadFailed;
     } catch (err) {
+      if (target !== targetVersion.current) return false;
       console.warn('Failed to add comment', err);
       showToast('Failed to add comment');
       return false;
     } finally {
-      setCommentPosting(false);
+      if (target === targetVersion.current) setCommentPosting(false);
     }
   };
 
   const handleDeleteComment = async (commentId: string, deletedIds: ReadonlySet<string>) => {
     if (!postId) return;
+    const target = targetVersion.current;
     try {
       await api.posts.deleteComment(postId, commentId);
+      if (target !== targetVersion.current) return;
       const nextCommentCount = comments.filter((comment) => !deletedIds.has(comment.id)).length;
       setComments((prev) => prev.filter((comment) => !deletedIds.has(comment.id)));
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
       showToast('Comment deleted');
     } catch (err) {
+      if (target !== targetVersion.current) return;
       console.warn('Failed to delete comment', err);
       showToast('Failed to delete comment');
     }
