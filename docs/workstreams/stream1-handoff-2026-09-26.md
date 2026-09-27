@@ -411,7 +411,7 @@ Web fixes are served the same way with HMR (no restart).
 - The PR body cites the seal.
 
 **Living inventory:** `20260925-stream1-domain-inventory-r1/INVENTORY.md`, unsealed by design.
-- **Count:** 157 table rows (2026-09-27T00:50Z) with 61 PASS and 69 FIXED.
+- **Count:** 153 table rows at handoff (lines starting with `| ` minus 9 header/separator lines). About 61 are PASS and 70 FIXED; since batch 36 every FIXED row is merged.
   - The header's merge-state note says which FIXED rows are on master: #537 and #542 are merged, #549 is in batch 34, and #548/#550/#553/#554 go in batch 35.
 - **Open rows:**
   - 2 OPEN: web `/app/offers`, and the native quick-post create at 0,0 (high);
