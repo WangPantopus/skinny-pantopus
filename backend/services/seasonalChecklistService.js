@@ -109,6 +109,17 @@ function filterItems(definitions, homeContext) {
   });
 }
 
+// Match the metadata requirements of the existing native checklist readers.
+// Older rows can satisfy SQL types while still being unusable checklist items.
+function assertChecklistMetadata(items) {
+  if (items.some(item => !item
+    || typeof item.title !== 'string' || !item.title.trim()
+    || typeof item.item_key !== 'string' || !item.item_key.trim()
+    || !Number.isInteger(item.sort_order) || item.sort_order < 0)) {
+    throw new Error('Current seasonal checklist contains unavailable item metadata.');
+  }
+}
+
 // ── Season succession (for carryover logic) ─────────────────────────────────
 // Maps each season to its immediate predecessor in the calendar cycle.
 const PREVIOUS_SEASON = {
@@ -235,6 +246,7 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
     }
   }
 
+  assertChecklistMetadata(items);
   items = await releaseClosedHires(homeId, items);
 
   // 3. Optionally fetch incomplete items from the previous season
@@ -257,6 +269,7 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
     throw new Error('Previous seasonal checklist items could not be loaded.');
   }
 
+  assertChecklistMetadata(prevItems);
   return { items, carryover: prevItems || [] };
 }
 
