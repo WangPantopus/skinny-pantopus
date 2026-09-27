@@ -182,6 +182,7 @@ private fun RenameEditor(
                 rename.error?.let { PantopusFieldState.Error(it) }
                     ?: PantopusFieldState.Default,
             fieldTestTag = "homeSettingsRenameField",
+            enabled = !rename.isSaving,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             Text(
