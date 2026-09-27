@@ -293,6 +293,8 @@ class LogMaintenanceFormViewModel
                                     dueDate = req.dueDate,
                                     status = null,
                                     performedAt = req.performedAt.takeIf { current.dateCompleted != initial.dateCompleted },
+                                    clearVendor = req.vendor == null && encodeVendor(initial) != null,
+                                    clearCost = current.costText.isBlank() && parseCost(initial.costText) != null,
                                 ),
                             )
                     }
