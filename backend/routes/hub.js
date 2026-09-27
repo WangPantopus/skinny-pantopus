@@ -298,6 +298,7 @@ router.get('/', verifyToken, async (req, res) => {
           .from('HomeBill')
           .select('id, bill_type, provider_name, amount, due_date, status')
           .eq('home_id', primaryHome.id)
+          .in('status', ['due', 'overdue'])
           .not('due_date', 'is', null)
           .lte('due_date', weekFromNow.toISOString())
           .order('due_date', { ascending: true })
