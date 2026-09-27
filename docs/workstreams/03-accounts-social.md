@@ -2,26 +2,39 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:05Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T00:35Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner: the resumed Stream 1 session ("Stream 1 peer takeover handoff"). Stream 2's successor is "Stream 2 handoff takeover".
-- **Merged:** #536 in batch 32 [#540](https://github.com/WangPantopus/skinny-pantopus/pull/540) at 23:12:01Z (master `d358dbc83`). Chat-audit mode turned off at 23:25:54Z (`chat-audit.json` enabled false; the file is read per request, no proxy restart). Storage shim not running.
-- **Open PR [#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web, S3-69 web part + S3-46): head `70e5447ad`, green (6/6 required checks). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`, 35 files) + addendum1 (seal `8e0243cc…`: two stale Jest assertions updated; app source unchanged). Stream 1 plans it for batch 34.
-- **Native branch `claude/stream3-native-dead-controls`** (worktree `/private/tmp/pantopus-stream3-chat-keyboard-r1`, local head `498811062`, base `d358dbc83`), builds under heavy since 00:03:40Z:
-  - S3-64 iOS: Scheduling Settings → Notification channels opens the H15 manager (the frozen H15 route now shows it).
-  - S3-37 iOS: banner/logo targets open the photo picker and upload with the existing business-media endpoint; real images render; the backend-less Gallery section is hidden.
-  - S3-35 iOS + Android: Set up payments opens Create your Beacon (user decision revised 2026-09-26 ~23:15Z: the button only shows without a Beacon, so there is no persona id to onboard with).
-  - S3-59 iOS: a failed review reply shows the screen's toast. The composer already kept the draft on this build, so the inventory's "draft is lost" part was stale.
-  - Found while verifying S3-64 (not an inventory row): Scheduling → Settings → Booking notifications could not be left (Back bound to `onTrailing` by Swift 5 backward trailing-closure matching; compiler warning at `SchedulingNotificationPrefsScreen.swift:38`). One-line fix in the same branch.
-- **iOS befores done** (installed build `36af1f371`, identical to master for these files) on sim `0AE16FA0`, slot 1 (Stream 1 OK 23:49Z). Notes: bundle `20260926-stream3-native-dead-controls-r1/ios/before/`.
-- **Rows closed without a change:**
-  - S3-69 iOS: `SchedulingInvoiceDetailView` is unreachable (only pushed from `InvoicesListView`, and nothing pushes `.invoicesList`); the owner's Invoices row opens `BusinessInvoicesView`, and invoice links open the recipient view. The commit was dropped before push.
-- **Blocked by user decision (no write-free or provider-free path):**
+- **Slots:** none held (heavy released 00:29:39Z; slot 3 / emulator-5554 released 00:28:34Z, emulator stopped; slot 1 released 00:33:59Z).
+
+### PRs
+- **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): head `70e5447ad`, green; in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
+- **[#552](https://github.com/WangPantopus/skinny-pantopus/pull/552)** (native; S3-64, S3-37, S3-35, S3-59 + Booking notifications Back): head `520ed06cf`, CI running at 00:35Z. Bundle `20260926-stream3-native-dead-controls-r1`, seal `33d6a0c9b62363e9854e7549805fa17027f70dd0d1d79eca57b787640735e38c` (68 files; seal comment posted). Send to Stream 1 when green.
+  - Verified on the iOS simulator (builds `498811062`, final `520ed06cf`) and the Android emulator (APK `2b9f468f…`); befores on `36af1f371` builds, identical to master for these files.
+  - Two defects found in verification and fixed in the branch: Booking notifications Back (Swift 5 backward trailing-closure matching bound `{ dismiss() }` to `onTrailing`), and an uploaded 16:9 banner resizing the 16:7 editor banner.
+
+### Rows
+- **Done in PRs:** S3-46 and S3-69 web (#545); S3-64 iOS, S3-37 iOS, S3-35 iOS + Android, S3-59 iOS (#552).
+- **Closed without a change:** S3-69 iOS. `SchedulingInvoiceDetailView` is unreachable (only `InvoicesListView` pushes it, and nothing pushes `.invoicesList`); owner Invoices opens `BusinessInvoicesView`, links open the recipient view.
+- **Blocked by user decision** (2026-09-26 ~23:05Z; no write-free or provider-free path):
   - S3-22 / S3-62: every `GET /api/b/:username` inserts a `BusinessProfileView` row unconditionally (`businessPublicPage.js:177`, `:365`), and the endorse button only renders on that page.
-  - S3-26: web AI chat keeps messages only in the browser (`useAIChat.ts`); a mail summary appears only from a live provider stream.
-- **Fixture S59** (approved): Review `e9fdca7a` (Member → business `2b3c28da`, on Member task `c6730f88`); the rating trigger also stamped the business `User` row. Both reverts are in the manifest (DELETE, then restore `User.updated_at`).
-- **Harness changes to undo at the end:** sim `0AE16FA0` UserDefaults `scheduling.paidEnabled` (set for the S3-69 check) and one test photo added to its library; web launcher gained an opt-in `S3_WEB_PAID=1` (web now runs with paid flags off again). F10 stays until the Android S3-35 check.
-- **Candidates (not changed):** Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
+  - S3-26: web AI chat keeps messages only in the browser (`useAIChat.ts`); a mail summary exists only in a live provider stream.
+- **Skipped by user decision:** S3-64 Android.
+- **Stale inventory detail:** S3-59's "the draft is lost" — the composer already kept the text.
+
+### User decisions (2026-09-26)
+- ~23:05Z: Review fixture approved; `/b/` reads, canned AI reply and master's migration `20260926100000` not approved (API stays on `23e518b11`); S3-46 honest error + Inbox link; S3-64 skip Android.
+- ~23:15Z: S3-35 revised to "Open Create your Beacon" (the button only shows without a Beacon, so there is no persona id for Stripe onboarding).
+
+### Runtime state (isolated only)
+- Running: Docker stack `pantopus-stream3-block-r1`, API 18134 (`23e518b11`), proxy 18130 (chat-audit off since 23:25:54Z; upload query/size logging since 00:14:15Z), web 18131 on `/private/tmp/pantopus-stream3-web-chat-names-r1` at #545's head with paid client flags off, file server 18198. Storage shim off. `fault-control.json` = `{}`.
+- Fixture S59 (Review `e9fdca7a` + the business `User` rating fields) kept; exact reverts in the manifest. F10 (`audience_profile` for the Member) kept.
+- Simulator 0AE16FA0: final build `520ed06cf` installed, Owner signed in, one test photo in its library; the paid flag was removed. Emulator-5554: APK `2b9f468f…`, Owner signed in.
+- Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
+
+### Candidates (not changed)
+- Android's page editor banner/logo controls are also inert (S3-37 is iOS-only in the inventory).
+- Previously noted: persona header "Share profile" (check master first), B7 "Max per week 20" placeholder.
 
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-26T22:15Z (read this first)
 
