@@ -423,7 +423,8 @@ data class CreateGigBody(
     @Json(name = "estimated_duration") val estimatedDuration: Double? = null,
     /** Errand / shopping line items (`gigs.js:487`). */
     val items: List<GigItemDto>? = null,
-    val location: CreateGigLocation,
+    /** Required on create; an edit omits it to keep the stored point. */
+    val location: CreateGigLocation?,
 )
 
 /**

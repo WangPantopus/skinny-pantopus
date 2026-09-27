@@ -451,13 +451,6 @@ public struct YouTabRoot: View {
         return nil
     }
 
-    /// Current user's handle — used to open the public-profile setup
-    /// (privacy handshake) for "Set up Public Profile".
-    private var currentUserHandle: String {
-        if case let .signedIn(user) = auth.state { return user.username }
-        return ""
-    }
-
     /// True when opened from the `monthly_receipt` push — the Monthly
     /// Receipt card renders expanded (RN `/(tabs)/profile?tab=receipt`).
     private let expandMonthlyReceipt: Bool
@@ -1831,7 +1824,9 @@ public struct YouTabRoot: View {
                     }
                 },
                 onOpenSetup: {
-                    Task { @MainActor in path.append(.privacyHandshake(personaHandle: currentUserHandle)) }
+                    // This CTA only shows without a Beacon, and payments need
+                    // one: open Beacon creation, as web's setup starts there.
+                    Task { @MainActor in path.append(.editPersona(personaId: "")) }
                 },
                 onOpenCreatorInbox: {
                     Task { @MainActor in path.append(.creatorInbox) }

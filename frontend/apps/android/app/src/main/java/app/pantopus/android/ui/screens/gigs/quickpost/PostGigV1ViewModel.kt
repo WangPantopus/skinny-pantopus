@@ -202,6 +202,11 @@ class PostGigV1ViewModel
         // filled form on retry (mirrors iOS, where the form survives .error).
         private var lastForm: PostGigV1Form? = null
 
+        // The edited task's own coordinates. The form holds only a free-text
+        // address, so an edit re-sends this point (as iOS does) instead of the
+        // (0, 0) placeholder, which would move the task off the map.
+        private var editOrigin: Pair<Double, Double>? = null
+
         // P0.2 — picked-photo bytes (for retry) + per-tile upload jobs.
         private val pendingPhotoBytes = mutableMapOf<String, PostGigV1PickedPhoto>()
         private val uploadJobs = mutableMapOf<String, Job>()
@@ -402,8 +407,13 @@ class PostGigV1ViewModel
         private fun loadForEdit(gigId: String) {
             viewModelScope.launch {
                 when (val result = repo.detail(gigId)) {
-                    is NetworkResult.Success ->
-                        _state.value = PostGigV1UiState.Content(form = formFrom(result.data.gig))
+                    is NetworkResult.Success -> {
+                        val gig = result.data.gig
+                        val latitude = gig.location?.latitude ?: gig.latitude
+                        val longitude = gig.location?.longitude ?: gig.longitude
+                        editOrigin = if (latitude != null && longitude != null) latitude to longitude else null
+                        _state.value = PostGigV1UiState.Content(form = formFrom(gig))
+                    }
                     is NetworkResult.Failure ->
                         _state.value = PostGigV1UiState.FatalError(result.error.message)
                 }
@@ -518,8 +528,9 @@ class PostGigV1ViewModel
          * Map the V1 form onto the `POST /api/gigs` body (also reused as the
          * `PATCH /api/gigs/{id}` body — the route strips fields the update
          * schema doesn't take). The legacy composer collects a free-text
-         * location only, so it rides as the `custom` location `address` with
-         * a `(0, 0)` placeholder coordinate. Pay-type maps Flat→`fixed`,
+         * location only, so a new task rides as the `custom` location `address`
+         * with a `(0, 0)` placeholder coordinate; an edit re-sends the task's
+         * loaded coordinates, or no location when it has none. Pay-type maps Flat→`fixed`,
          * Hourly→`hourly`, Free→`offers` with a true `price: 0` — the
          * backend schema accepts zero (`Joi.number().min(0)`,
          * `backend/routes/gigs.js:428` / `:644`).
@@ -574,12 +585,23 @@ class PostGigV1ViewModel
                 estimatedDuration = form.estimatedDuration.trim().toDoubleOrNull()?.takeIf { it > 0.0 },
                 items = if (forEdit) items else items.ifEmpty { null },
                 location =
-                    CreateGigLocation(
-                        mode = "custom",
-                        latitude = 0.0,
-                        longitude = 0.0,
-                        address = form.location.trim(),
-                    ),
+                    if (forEdit) {
+                        editOrigin?.let { (latitude, longitude) ->
+                            CreateGigLocation(
+                                mode = "custom",
+                                latitude = latitude,
+                                longitude = longitude,
+                                address = form.location.trim(),
+                            )
+                        }
+                    } else {
+                        CreateGigLocation(
+                            mode = "custom",
+                            latitude = 0.0,
+                            longitude = 0.0,
+                            address = form.location.trim(),
+                        )
+                    },
             )
         }
 

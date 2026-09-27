@@ -4,10 +4,12 @@
 //
 //  P4.2 — A13.10 Edit Business Page. Banner + logo composite. Two
 //  variants: empty (dashed drop targets with "Add banner" / "Logo"
-//  labels) and filled (background palette with optional dirty rim +
-//  "New" chip + Change buttons).
+//  labels) and filled (the real image with optional dirty rim +
+//  "New" chip + Change buttons). With `onPick`, each target opens the
+//  photo picker.
 //
 
+import PhotosUI
 import SwiftUI
 
 /// Banner + logo editor block. Banner is 16:7 with the logo well
@@ -17,24 +19,86 @@ import SwiftUI
 public struct EditBusinessBannerLogoEditor: View {
     private let banner: EditBusinessPageBannerState
     private let logo: EditBusinessPageLogoState
+    private let uploading: BusinessMediaKind?
+    /// Receives the picked image and its MIME type. `nil` (previews) leaves
+    /// the targets inert.
+    private let onPick: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
+    @State private var bannerSelection: PhotosPickerItem?
+    @State private var logoSelection: PhotosPickerItem?
+    @State private var showsBannerPicker = false
+    @State private var showsLogoPicker = false
 
-    public init(banner: EditBusinessPageBannerState, logo: EditBusinessPageLogoState) {
+    public init(
+        banner: EditBusinessPageBannerState,
+        logo: EditBusinessPageLogoState,
+        uploading: BusinessMediaKind? = nil,
+        onPick: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil
+    ) {
         self.banner = banner
         self.logo = logo
+        self.uploading = uploading
+        self.onPick = onPick
     }
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: Spacing.s0) {
-                bannerBlock
+                pickerTarget(.banner, isPresented: $showsBannerPicker, selection: $bannerSelection) { bannerBlock }
                 Color.clear.frame(height: 44)
             }
 
-            logoBlock
+            pickerTarget(.logo, isPresented: $showsLogoPicker, selection: $logoSelection) { logoBlock }
                 .padding(.leading, Spacing.s4)
                 .offset(y: logoOffset)
         }
+        .onChange(of: bannerSelection) { _, item in load(item, as: .banner) }
+        .onChange(of: logoSelection) { _, item in load(item, as: .logo) }
         .accessibilityIdentifier("editBusinessPage.bannerLogo")
+    }
+
+    /// A plain button that presents the photo picker (the modifier form keeps
+    /// the label out of PhotosPicker's nonisolated label closure).
+    @ViewBuilder
+    private func pickerTarget(
+        _ kind: BusinessMediaKind,
+        isPresented: Binding<Bool>,
+        selection: Binding<PhotosPickerItem?>,
+        @ViewBuilder label: () -> some View
+    ) -> some View {
+        if onPick == nil {
+            label()
+        } else {
+            Button { isPresented.wrappedValue = true } label: {
+                label()
+                    .overlay {
+                        if uploading == kind {
+                            ProgressView()
+                                .tint(Theme.Color.appTextInverse)
+                                .padding(Spacing.s2)
+                                .background(Theme.Color.appText.opacity(0.6))
+                                .clipShape(Circle())
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(uploading != nil)
+            .photosPicker(isPresented: isPresented, selection: selection, matching: .images)
+            .accessibilityIdentifier("editBusinessPage.pick.\(kind.rawValue)")
+        }
+    }
+
+    private func load(_ item: PhotosPickerItem?, as kind: BusinessMediaKind) {
+        guard let item, let onPick else { return }
+        // Clear the selection so picking the same photo again still fires.
+        switch kind {
+        case .banner: bannerSelection = nil
+        case .logo: logoSelection = nil
+        }
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+            let mime = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            onPick(kind, data, mime)
+        }
     }
 
     /// Approximate baseline — at typical iPhone width (~328pt after the
@@ -49,8 +113,8 @@ public struct EditBusinessBannerLogoEditor: View {
             switch banner {
             case .empty:
                 emptyBanner
-            case let .filled(dirty, palette):
-                filledBanner(dirty: dirty, palette: palette)
+            case let .filled(dirty, _, imageURL):
+                filledBanner(dirty: dirty, imageURL: imageURL)
             }
         }
         .aspectRatio(16 / 7, contentMode: .fit)
@@ -78,14 +142,23 @@ public struct EditBusinessBannerLogoEditor: View {
         )
     }
 
-    private func filledBanner(
-        dirty: Bool,
-        palette _: EditBusinessPageBannerState.BannerPalette
-    ) -> some View {
+    private func filledBanner(dirty: Bool, imageURL: String?) -> some View {
         ZStack(alignment: .topTrailing) {
-            // Background palette art — Roost-Café golden-hour
-            // storefront drawn in SwiftUI shapes (no raster asset).
-            CafeGoldenHourBanner()
+            // The business's own banner over a neutral surface (shown while it
+            // loads or without a URL). An overlay, so the image fills the 16:7
+            // frame instead of sizing it (uploads are 16:9).
+            Theme.Color.appSurfaceSunken
+                .overlay {
+                    if let url = imageURL.flatMap(URL.init(string:)) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Theme.Color.appSurfaceSunken
+                        }
+                        .accessibilityLabel("Business banner")
+                    }
+                }
+                .clipped()
             // Change-cover affordance — pill chip top-right.
             HStack(spacing: 5) {
                 Icon(.image, size: 12, color: Theme.Color.appTextInverse)
@@ -147,9 +220,9 @@ public struct EditBusinessBannerLogoEditor: View {
             )
             .pantopusShadow(.sm)
             .accessibilityIdentifier("editBusinessPage.logoEmpty")
-        case let .filled(initial, palette):
+        case let .filled(initial, palette, imageURL):
             VStack(alignment: .leading, spacing: 2) {
-                LogoDisc(initial: initial, palette: palette)
+                LogoDisc(initial: initial, palette: palette, imageURL: imageURL)
                 Text("Change logo")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.Color.business)
@@ -163,6 +236,7 @@ public struct EditBusinessBannerLogoEditor: View {
 private struct LogoDisc: View {
     let initial: String
     let palette: EditBusinessPageLogoState.LogoPalette
+    let imageURL: String?
 
     var body: some View {
         ZStack {
@@ -179,6 +253,16 @@ private struct LogoDisc: View {
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .tracking(-1)
                 .foregroundStyle(Theme.Color.appTextInverse)
+            if let url = imageURL.flatMap(URL.init(string:)) {
+                // The real logo; the initial disc shows while it loads.
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color.clear
+                }
+                .frame(width: 76, height: 76)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+            }
         }
         .frame(width: 76, height: 76)
         .overlay(
@@ -194,99 +278,6 @@ private struct LogoDisc: View {
         case .sunrise:
             // Warm cream → amber → bronze, matches the cafe palette.
             [Theme.Color.warningLight, Theme.Color.warning, Theme.Color.warmAmber]
-        }
-    }
-}
-
-/// Hand-rolled storefront illustration — sun + awning + windows +
-/// silhouettes. Mirrors the design's CSS SVG so we don't need a raster
-/// asset and the banner stays crisp at any density.
-private struct CafeGoldenHourBanner: View {
-    var body: some View {
-        ZStack {
-            // Sky gradient.
-            LinearGradient(
-                colors: [
-                    Theme.Color.warningLight,
-                    Theme.Color.warning,
-                    Theme.Color.warmAmber
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Sun + glow.
-            GeometryReader { proxy in
-                let w = proxy.size.width
-                let h = proxy.size.height
-                ZStack {
-                    Circle()
-                        .fill(Theme.Color.warningLight)
-                        .frame(width: w * 0.18, height: w * 0.18)
-                        .blur(radius: w * 0.05)
-                        .opacity(0.85)
-                    Circle()
-                        .fill(Color.white.opacity(0.95))
-                        .frame(width: w * 0.08, height: w * 0.08)
-                }
-                .position(x: w * 0.78, y: h * 0.28)
-            }
-
-            // Sidewalk band (bottom 15%).
-            GeometryReader { proxy in
-                Path { path in
-                    let w = proxy.size.width
-                    let h = proxy.size.height
-                    path.addRect(CGRect(x: 0, y: h * 0.85, width: w, height: h * 0.15))
-                }
-                .fill(Theme.Color.appText)
-            }
-
-            // Facade + windows + awning.
-            GeometryReader { proxy in
-                let w = proxy.size.width
-                let h = proxy.size.height
-                ZStack {
-                    // Facade
-                    Rectangle()
-                        .fill(Theme.Color.appText)
-                        .frame(width: w * 0.75, height: h * 0.45)
-                        .position(x: w * 0.5, y: h * 0.66)
-                    // Awning (red trapezoid)
-                    awning(width: w * 0.8)
-                        .fill(Theme.Color.errorSolid)
-                        .frame(width: w * 0.8, height: h * 0.12)
-                        .position(x: w * 0.5, y: h * 0.39)
-                    // Door
-                    Rectangle()
-                        .fill(Theme.Color.warmAmber.opacity(0.9))
-                        .frame(width: w * 0.10, height: h * 0.40)
-                        .position(x: w * 0.5, y: h * 0.67)
-                    // Windows (3)
-                    ForEach(0..<3) { idx in
-                        let xPositions: [CGFloat] = [0.22, 0.5, 0.78]
-                        if xPositions.indices.contains(idx) {
-                            let position = xPositions[idx]
-                            Rectangle()
-                                .fill(Theme.Color.warningLight)
-                                .frame(width: w * 0.14, height: h * 0.28)
-                                .position(x: w * position, y: h * 0.62)
-                                .opacity(0.92)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func awning(width: CGFloat) -> Path {
-        Path { path in
-            // Trapezoid — wider on bottom.
-            path.move(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: width, y: 0))
-            path.addLine(to: CGPoint(x: width * 0.95, y: -40))
-            path.addLine(to: CGPoint(x: width * 0.05, y: -40))
-            path.closeSubpath()
         }
     }
 }

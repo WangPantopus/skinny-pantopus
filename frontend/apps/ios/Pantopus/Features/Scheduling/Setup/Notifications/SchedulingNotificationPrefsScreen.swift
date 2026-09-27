@@ -35,7 +35,10 @@ struct SchedulingNotificationPrefsScreen: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            SetupTopBar(title: "Notifications", leading: .back) { dismiss() }
+            // Labelled on purpose: an unlabelled trailing closure binds to
+            // `onTrailing` (backward matching), which left Back with no action.
+            // swiftlint:disable:next trailing_closure
+            SetupTopBar(title: "Notifications", leading: .back, onLeading: { dismiss() })
             content
         }
         .background(Theme.Color.appBg)

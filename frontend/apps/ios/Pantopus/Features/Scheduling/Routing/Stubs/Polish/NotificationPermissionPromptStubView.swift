@@ -4,7 +4,8 @@
 //
 //  Foundation (I0b) routed seam — H15 Notifications · Stream I18.
 //  FILLED by I18: the view-model stub carries the route payload (owner + push),
-//  and the body now hosts the real channel-connect prompt. The router and the
+//  and the body hosts the H15 channel manager, whose channel rows open the
+//  channel-connect prompt as a sheet. The router and the
 //  `NotifPermissionPromptStubView`/`…ViewModel` type names are frozen, so the
 //  real screen + view model live in `Features/Scheduling/Polish/H15/*` and are
 //  bridged here (mirrors the I13 stub-fill pattern).
@@ -32,19 +33,14 @@ final class NotifPermissionPromptStubViewModel {
 }
 
 struct NotifPermissionPromptStubView: View {
-    private let viewModel: NotificationPermissionViewModel
+    private let owner: SchedulingOwner
 
     init(viewModel stub: NotifPermissionPromptStubViewModel) {
-        viewModel = NotificationPermissionViewModel(
-            owner: stub.owner,
-            initialFrame: .push,
-            accountEmail: NotificationPermissionScreenView.currentAccountEmail(),
-            service: .shared
-        ) { _ in }
+        owner = stub.owner
     }
 
     var body: some View {
-        NotificationPermissionScreenView(viewModel: viewModel)
+        NotificationChannelManagerView(owner: owner, client: .shared)
     }
 }
 

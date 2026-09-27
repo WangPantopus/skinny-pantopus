@@ -93,8 +93,6 @@ async function alertMatchingSavedSearches(gig, coords) {
         body: hit.name ? `${hit.name}: ${gig.title}` : gig.title,
         icon: 'search',
         link: `/gigs/${gig.id}`,
-        contextType: 'gig',
-        contextId: gig.id,
         metadata: { gig_id: gig.id, saved_search_id: hit.id },
       }))
     );

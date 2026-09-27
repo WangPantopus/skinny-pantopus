@@ -2394,6 +2394,13 @@ extension GigDetailViewModel {
                 primary: ContentDetailDockButton(label: "Mark as delivered", icon: .checkCheck)
             )
         }
+        // The assigned worker's next step, as in the Task progress panel.
+        if status == "assigned", let viewer, viewer == gig.acceptedBy {
+            return ContentDetailDock(
+                secondary: secondary,
+                primary: ContentDetailDockButton(label: "Start task", icon: .play)
+            )
+        }
         if status == "open", !owner { return dock }
         let label = status == "open" ? "Your task" : ["cancelled", "canceled"].contains(status ?? "") ? "Cancelled" : "Bidding closed"
         return ContentDetailDock(
