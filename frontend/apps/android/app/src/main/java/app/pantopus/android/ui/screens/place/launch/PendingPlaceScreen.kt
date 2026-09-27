@@ -86,7 +86,10 @@ fun PendingPlaceScreen(
                     Text(it.detail)
                 }
                 state.preview.sections.orEmpty().forEach {
-                    PlaceSectionView(env = it, onOpen = null, onVerify = null, onClaim = null)
+                    PlaceSectionView(
+                        env = it, onOpen = null, onVerify = null, onClaim = null,
+                        onRetry = onRetryPreview, retrying = state.isLoadingPreview,
+                    )
                 }
             }
             else -> CircularProgressIndicator()

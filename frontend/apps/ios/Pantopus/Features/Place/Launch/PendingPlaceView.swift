@@ -50,7 +50,11 @@ struct PendingPlaceView: View {
                             Text(aha.detail).font(Theme.Font.body)
                         }
                         ForEach(preview.sections ?? [], id: \.id) { section in
-                            PlaceSectionView(env: section, onOpen: nil, onVerify: nil, onClaim: nil)
+                            PlaceSectionView(
+                                env: section, onOpen: nil, onVerify: nil, onClaim: nil,
+                                onRetry: { Task { await viewModel.loadPreview() } },
+                                retrying: viewModel.isLoadingPreview
+                            )
                         }
                     } else {
                         ProgressView("Loading preview…")
