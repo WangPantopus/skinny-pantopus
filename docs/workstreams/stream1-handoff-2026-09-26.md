@@ -119,6 +119,13 @@ _Not yet written. If this section is still empty, the previous session stopped b
 - **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master, the batch 35 tip and #557. The viewer id comes from `getMyProfile()`, which unwraps `{user}`.
 - CI was pending at 01:57:52Z.
 
+**Also a next-batch candidate: S2 [#559](https://github.com/WangPantopus/skinny-pantopus/pull/559)**: user decision §3A-5.
+- **Change:** the unlinked web stub `/app/homes/:id/members/add-guest` showed a fake "…has been added as a guest" toast and made no API call. It now redirects to Guest Passes (`/app/homes/:id/share`), like `/message` → `/messages`. One file.
+- Head `71e860381e8ae03dadc758bebab099a890c4d0b8` on `73b98f6b6`; bundle `20260927-stream2-add-guest-stub-redirect-r1`, seal `20b07a0d…` (9 files).
+- **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master, the batch 35 tip, #557 and #558; no in-app link to the stub.
+- CI was starting at 02:00:55Z.
+- **Batch 36 plan:** #557, #558 and #559, whichever are green. They are disjoint files.
+
 **Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
 
 **Runtime.**
@@ -470,7 +477,7 @@ Web fixes are served the same way with HMR (no restart).
   - **§3A-1 (phone-escrow refusal) needs no code**, per a correction received before 01:57:52Z. On master every escrow send already answers 400 "Please choose who this mail is for", because `normalizeSendMailPayload` always sets a user/home recipient or throws. Evidence: bundle `20260927-stream2-phone-escrow-unreachable-r1` (`589973bc…`).
   - **§3A-2** is #558 (above).
   - **Next:**
-    - #5: web add-guest stub → redirect to /share.
+    - #5: web add-guest stub → redirect to /share. **Done as #559** (above).
     - Native #3 (Guests tab → guest-pass manager) and #4 (health "View maintenance" → Issues), in one build window after batch 35. **#3 touches `RootTabScreen.kt`**, which batch 35 also changes, so it needs rebasing or proof against the new master.
     - Then Stream 2 makes the flaky `TokenAcceptViewModelTests` test deterministic, changing only the existing test.
 - **Stream 3** (chat, social, scheduling, Beacons, creator/business): session **"fix(native): live chat keeps working after a token refresh; Android reactions update in place"** (successor). Its state is `docs/workstreams/03-accounts-social.md` → CURRENT RESUME.
