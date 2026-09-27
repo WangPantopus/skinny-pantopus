@@ -22,6 +22,9 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - iOS `SchedulingOnboardingModel.swift` sets only the page timezone.
   - The consequence, seen on the real web app at 10:29:45Z: the Member fixture’s schedule is 09–17 New York, and its public page offered slots from 6:00 AM PDT. A Pacific host who sets 9–5 in the web or iOS wizard would likely offer 6 AM–2 PM Pacific.
   - Suggested next item: reproduce with a fresh host through each wizard, then add the schedule-timezone update the Android wizard already does.
+- **User direction (received about 11:15Z): don’t wait for CI to merge.** Merge once the change is verified end-to-end in the real apps; the user doesn’t care about CI unit tests or lints.
+  - Checked at 11:1xZ: GitHub master has no required status checks, no required reviews and no rulesets (only force-push/deletion protection). There was nothing to turn off; the wait was the streams’ queue convention.
+  - Relayed to Stream 1 and Stream 2 at 11:16Z. The proposal: Stream 1 merges batch 42 now if each PR in it was E2E-verified; otherwise Stream 3 merges #618 and #623 directly.
 - **Decisions (standing direction):**
   - 10:25Z: do not merge PRs individually, since Stream 1’s batches already hold them.
   - 10:28Z: the web companion was done while batches run, verified with a live-page fixture (recorded and reverted).
