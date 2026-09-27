@@ -25,6 +25,8 @@ public struct EditBusinessBannerLogoEditor: View {
     private let onPick: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
     @State private var bannerSelection: PhotosPickerItem?
     @State private var logoSelection: PhotosPickerItem?
+    @State private var showsBannerPicker = false
+    @State private var showsLogoPicker = false
 
     public init(
         banner: EditBusinessPageBannerState,
@@ -41,11 +43,11 @@ public struct EditBusinessBannerLogoEditor: View {
     public var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: Spacing.s0) {
-                pickerTarget(.banner, selection: $bannerSelection) { bannerBlock }
+                pickerTarget(.banner, isPresented: $showsBannerPicker, selection: $bannerSelection) { bannerBlock }
                 Color.clear.frame(height: 44)
             }
 
-            pickerTarget(.logo, selection: $logoSelection) { logoBlock }
+            pickerTarget(.logo, isPresented: $showsLogoPicker, selection: $logoSelection) { logoBlock }
                 .padding(.leading, Spacing.s4)
                 .offset(y: logoOffset)
         }
@@ -54,16 +56,19 @@ public struct EditBusinessBannerLogoEditor: View {
         .accessibilityIdentifier("editBusinessPage.bannerLogo")
     }
 
+    /// A plain button that presents the photo picker (the modifier form keeps
+    /// the label out of PhotosPicker's nonisolated label closure).
     @ViewBuilder
     private func pickerTarget(
         _ kind: BusinessMediaKind,
+        isPresented: Binding<Bool>,
         selection: Binding<PhotosPickerItem?>,
         @ViewBuilder label: () -> some View
     ) -> some View {
         if onPick == nil {
             label()
         } else {
-            PhotosPicker(selection: selection, matching: .images) {
+            Button { isPresented.wrappedValue = true } label: {
                 label()
                     .overlay {
                         if uploading == kind {
@@ -77,6 +82,7 @@ public struct EditBusinessBannerLogoEditor: View {
             }
             .buttonStyle(.plain)
             .disabled(uploading != nil)
+            .photosPicker(isPresented: isPresented, selection: selection, matching: .images)
             .accessibilityIdentifier("editBusinessPage.pick.\(kind.rawValue)")
         }
     }
