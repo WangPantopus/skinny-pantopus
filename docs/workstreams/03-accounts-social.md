@@ -2,6 +2,16 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — Stream 3 Codex takeover, 2026-09-27T12:53:32Z
+
+- **State:** discovery → verification. User takeover prompt launch scope applied; no cut-feature work, unit tests or broad lint/CI campaign. Peers: Stream 1 chat `01a0e2e9-cf51-7e92-811a-e0195dd8bfe8` retains queue/shared handoff; Stream 2 chat `01a0e2e8-a9df-7141-aebc-956653228ee6` owns Home.
+- **Fresh source:** origin/master `35c5434dfa4969cc323e62fb59821c9f69df6932`; batch #624 merged and master CI [36316539221](https://github.com/WangPantopus/skinny-pantopus/actions/runs/36316539221) succeeded. Native branch `codex/stream3-profile-message-return` in existing `/private/tmp/pantopus-stream3-chat-keyboard-r1`; no application edits.
+- **First milestone:** #612 follow-up, Android DM → person profile → Message. Inspect existing RootTabScreen/ChatConversationHost/PublicProfile callers and existing direct-room API/ChatRoom/ChatParticipant contract; reproduce before proposing a repair. Completion means actual app round trip, correct existing room, safe Back/re-entry, observable request/persistence outcomes and sealed evidence. Reuse #612 web/iOS evidence where source/config/behavior is unchanged; iOS duplicate-load candidate remains unaccepted.
+- **Runtime:** six S3 ports confirmed free and five containers stopped; no S3 device/heavy slot held. Restart only retained S3 stack and baseline API `23e518b11` (migration decision preserved), proxy18130/web18131/file18198. Both peers notified. Stream 1 has heavy; S3 waits for handoff while performing source/evidence and web work.
+- **Decisions taken without asking (2026-09-27T12:53:32Z):** adapt private Android build helper to assembleDebug only, omitting legacy lint tasks to obey current user direction; preserve artifact/source binding checks. No product-code change, unit test or provider call authorized by this harness adjustment.
+- **Limits:** no new real-app journey accepted yet. Earlier `/b/`, canned AI and migration decisions remain blocked. Physical devices, external providers, push and live money remain unverified.
+- **Next:** restore isolated runtime, compare accepted source, build current Android under the next heavy window and exercise the first round trip. Update this block and link the milestone bundle after verification.
+
 ## CURRENT RESUME — Stream 3 handoff and prompt revision, 2026-09-27 (2026-09-27T12:41:37Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T11:18:27Z) stopped at the user's request, after the user asked it to stay until every PR it opened was merged. **All 11 are merged to master.**
