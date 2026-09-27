@@ -75,7 +75,7 @@ function ChecklistItemRow({
         ) : item.status === 'skipped' ? (
           <CheckCircle2 className="h-5 w-5 text-app-text-secondary" />
         ) : (
-          <Circle className="h-5 w-5 text-app-border hover:text-primary transition-colors" />
+          <Circle className="h-5 w-5 text-app-border hover:text-primary-600 transition-colors" />
         )}
       </button>
 
@@ -181,7 +181,7 @@ export default function SeasonalChecklist({
     return (
       <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-4">
         <div className="flex flex-col items-center gap-2 py-6">
-          <Leaf className="h-8 w-8 text-primary" />
+          <Leaf className="h-8 w-8 text-primary-600" />
           <p className="text-sm font-semibold text-app-text mt-1">
             No seasonal tasks right now
           </p>
@@ -209,7 +209,7 @@ export default function SeasonalChecklist({
     <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-4 space-y-2">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <SeasonIcon seasonKey={season.key} className="h-4.5 w-4.5 text-primary flex-shrink-0" />
+        <SeasonIcon seasonKey={season.key} className="h-4.5 w-4.5 text-primary-600 flex-shrink-0" />
         <h3 className="flex-1 text-sm font-bold text-app-text truncate">{season.label}</h3>
         <span className="text-xs font-semibold text-app-text-secondary flex-shrink-0">
           {progress.completed}/{progress.total} done
