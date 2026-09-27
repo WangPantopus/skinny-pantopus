@@ -1005,7 +1005,7 @@ private fun EditProfileCleanStrip() {
             tint = PantopusColors.appTextMuted,
         )
         Text(
-            text = "All changes saved · just now",
+            text = "No unsaved changes",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
