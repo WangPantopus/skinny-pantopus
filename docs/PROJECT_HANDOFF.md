@@ -2,6 +2,28 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
+> For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
+> **Do not verify, end-to-end test or fix anything related to them.** Remove them from every checklist, inventory, acceptance row and handoff plan going forward. Work already done on them stays as future-ready work (they may be flagged back on later).
+>
+> | # | Cut | What it covers | What covers the need instead (stays in scope) |
+> |---|---|---|---|
+> | 1 | Beacon and creator tools | Publisher pages, following publishers, updates and media, audience management, creator inbox, membership tiers and restricted content | Nothing needed at launch |
+> | 2 | Personas and identity switching | Public personas, Beacon identity, and switching between profiles | One account, plus a business role for crews |
+> | 3 | Marketplace | Listings, search, offers, trades and buyer–seller chat | Later, "free on my porch" as a street offer |
+> | 4 | Open Gigs marketplace | Posting any task for bids, competitive bidding, unrestricted categories and broad provider search | Crew Day and rebooking a known crew. Payments, tips and AI drafting stay |
+> | 5 | Public scheduling for general businesses | Booking pages, appointment types, shared resources and team scheduling | The scheduling engine keeps running underneath Crew Day. Invoices and packages stay with the financial features |
+> | 6 | General business directory | Browsing and searching all businesses | Focused crew pages, with verification and team permissions kept |
+> | 7 | Household extras | Polls, package tracking, a separate pet section, a general family calendar and full bill management | Pets become care notes, dates live in plans and reminders, and bills stay as the input to bill explanation |
+> | 8 | Mail extras | Personal and ceremonial letters, e-signing, the community mail stream and event invitations by mail | Postcards, welcome cards and the digest. Events come later as plans |
+>
+> **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
+> - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
+> - **Stream 2:** #7 Household extras, #8 Mail extras.
+> - **Stream 3:** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
+> - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
+
+
 > **UPDATE 2026-09-27T11:17Z — Stream 1 FINAL (handoff in effect). Every Stream 1 PR from this session is merged; the queue is empty.**
 > - **Batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622)** merged 11:11:36Z → `73e0baade` (S1 #598 #603 #607 #617; S3 #597 #604 #605 #612; S2 #609 #610 #611 #613).
 > - **Batch 42 [#624](https://github.com/WangPantopus/skinny-pantopus/pull/624)** merged **directly** at 11:14:24Z → **master `35c5434df`** (S1 #615 #616; S3 #618 #623; S2 #619 #620 #621). All seven PRs' own CI ended green.
