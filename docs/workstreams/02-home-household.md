@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T08:03Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T08:53Z)
 - **I03 checklist "Hire" (user decision ~03:30Z: "Link the task"). Open PRs on master `7bdef3e8c`, reported to Stream 1 at ~04:07Z:**
   - [#574](https://github.com/WangPantopus/skinny-pantopus/pull/574) (`ef32ac4be`), PR-A for web + API. Bundle `20260927-stream2-checklist-hire-link-r1` (`f688cbfe…`, 60 files).
     - `POST /api/homes/:id/seasonal-checklist/:itemId/hire {gig_id}`, a rewrite of the uncalled `linkGigToChecklist`. It needs home.edit and the `home_record_context` fence. The task must be the caller's own and open, and the item still pending and unlinked. The link writes an audit row and refreshes the health cache.
@@ -69,6 +69,28 @@
     - At 07:58:45Z sharing was turned back on, and both surfaces show "12% above" again. The cohort is left opted in.
   - **Batch 38** [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) (tip `40563cd32`) has CI green (15 passed, 1 skipped) and is waiting for Stream 1's merge. **Batch 39** = #587 #590 #591.
   - **PR-B** waits for heavy, which Stream 1 has held since 07:46:09Z. Next: `kit/tools/heavy-window-prb.sh`, then the Android and iOS afters, then the PR on master once #585 lands.
+- **2026-09-27T08:53Z:**
+  - **Batch 38 merged** ([#585](https://github.com/WangPantopus/skinny-pantopus/pull/585), 08:01:42Z → master `f6c66d678`), including #568 #569 #574 #575 #578 #579 and S1 #580. Batch 39 = #599 (with #587 #590 #591), queued 08:10:48Z.
+  - **Runtime:** master-equal again. Build `75e64098b` = master `f6c66d678` + #587 #590 #591; backend pid 93507 since 08:04:03Z; web sessions re-minted.
+  - **[#602](https://github.com/WangPantopus/skinny-pantopus/pull/602)** (`27781d5bf`, web, 4 files; bundle `20260927-stream2-place-try-again-r1`, `2218718b…`, 23 files): F02, Place "Try again" on a section that failed to load.
+    - On master, the click fell through to the card: it opened the group detail page, which showed the cached error and made no request.
+    - Now it re-reads in place, with loading feedback. `PlaceSectionRenderOptions` gains `onRetry`/`retrying`; Stream 1 stacks its StartFunnel preview one-liner on it.
+    - The error was emulated in the browser; the other sections were real.
+  - **Native, same dead "Try again" (verified before):** iOS sim (Environment real error, Bill benchmark emulated) and Android emulator-5556 (Wildfire real, Bill benchmark emulated). Both made no request and did nothing. The native PR follows PR-B. Stage `stage-place-retry-native`.
+  - **PR-B device journeys (Home 70f66a6d, HEPA item 219e099b; WHEN Flexible + WHERE Virtual; Open to bids):**
+    - **iOS** (dylib `13460be7`): Hire → V2 wizard (Handyman preset) → post → `magic-post` 201 → `…/hire` 200 → item hired with task a5182b3c and an audit row; health 55 → 70. The web close cancelled the task, and the next checklist read released the item (log 08:27:02Z).
+    - **iOS failure:** a one-time 503 injected on `…/hire`: the task posted and the note showed.
+    - **Android** (APK `fd303df3`): the same success (task 8ea6bc3a) and failure (task da508b36) paths. The failure shows the blue InfoNote.
+    - All 4 synthetic tasks were closed through the web owner flow ("No cancellation fee"). The item is pending.
+  - **Decisions (standing instruction):**
+    - iOS link-failure note: the first build reused `GigComposeInfoBanner`, a green success toast with a check (`gigCompose.undoneToast`). It now uses a new neutral `GigComposeNoteBanner` (info colors and icon), matching Android's `InfoNote`.
+    - iOS "View task" showed a spinner until the link returned, because `isSubmitting` covered the link call. It is now cleared before the link; Android already did this.
+    - Place "Try again": the web PR first (Stream 1 needs the option); native after PR-B, in its own window.
+    - Slot 1 was released early (08:34:55Z) while I waited for heavy, then re-acquired at 08:51:46Z.
+  - **Candidate (health, recorded; fix after batch 39 merges, since it builds on #587):**
+    - After a linked task closes, the first dashboard load computes the health score in parallel with the checklist read that releases the item. The score counted the item as hired (70) while the checklist showed it pending. Proxy 08:27:02.166Z (health) vs release 08:27:02.159Z.
+    - Planned: the health read releases closed hires the same way (through `getOrCreateChecklist`).
+  - **Heavy** 08:49:55Z: final PR-B build window (Android ktlint ✓, detekt, VM test, APK, then iOS).
 - **User fixture decisions (2026-09-27T04:14:13Z, AskUserQuestion, all the recommended options; isolated runtime only; rows kept):**
   - (a) **I01/I02:** create one synthetic Home through the real Add Home + ownership-approval flow, and insert 3 `summer_dry` 2026 checklist rows on 70f66a6d by SQL for carryover.
   - (b) **F01:** seed a 10-Home bill cohort by SQL: 9d885f71 gets a fictional location, plus 9 synthetic neighbor Homes (no accounts) in the same geohash-6 cell. All are opted in, with 3 months of paid USD electric bills each.
@@ -1054,7 +1076,7 @@ R01–R02 receipts; every other row retains an explicit boundary below.
 | D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. 2026-09-26: web Documents delete really deletes, and Documents/Issues/Access/Share show unavailable instead of empty ([#529](https://github.com/WangPantopus/skinny-pantopus/pull/529), bundle `20260926-stream2-home-docs-r1`). The empty Documents and Access & Codes pages no longer point to web actions that don't exist ([#541](https://github.com/WangPantopus/skinny-pantopus/pull/541)). | Remaining malformed-success readers and complete cross-client verification. |
 | D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
 | F01 | **Partial/open.** 2026-09-27, user-approved SQL cohort in cell c20fbj (9 synthetic neighbor Homes + 9d885f71). Web Home bill card: "1 more neighbor needed" → "$150 vs $133.35, 12% above"; the opt-in toggle needs #578. Place Money signals card and detail show "12% above / $150 per month" on web, Android and iOS. Bundles `…-f01-bill-cohort-r1` and `…-native-f01-carryover-r1`. | Fractions, other currencies, periods other than 3 matching months, totals. |
-| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
+| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. 2026-09-27: the Place "Try again" on a section that failed to load did nothing on web (it opened the cached detail page), iOS or Android. Web is fixed by [#602](https://github.com/WangPantopus/skinny-pantopus/pull/602) (bundle `20260927-stream2-place-try-again-r1`); native follows. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
 | F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. | Place bill splits, malformed input, currency changes and permission-limited actions. |
 | F04 | **Partial/open.** 2026-09-27, withdrawal on web (cohort Home 9d885f71): turning off "Share bill data anonymously" takes effect on the next read. The Home card falls back to "1 more neighbor needed", Place Money signals folds the bill benchmark into "Coverage is expanding here", and no cached comparison is served. Turning it back on restores "12% above" on both. Bundle `20260927-stream2-f04-withdrawal-r1` (`a32a429e…`). | Contributor eligibility rules, deletion of past bills, freshness, scale and retention. |
 | F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
