@@ -545,8 +545,18 @@ public final class PulsePostDetailViewModel {
 
         for parent in topLevel {
             rows.append(row(from: parent, indent: 0))
-            let replies = (repliesByParent[parent.id] ?? [])
-                .sorted { ($0.createdAt) < ($1.createdAt) }
+            // Reply is available on every row. Keep descendants in the thread
+            // while preserving the existing single-level visual indentation.
+            var replies: [PostCommentDTO] = []
+            var pending = Array((repliesByParent[parent.id] ?? [])
+                .sorted { $0.createdAt < $1.createdAt }.reversed())
+            var visited: Set<String> = [parent.id]
+            while let reply = pending.popLast() {
+                guard visited.insert(reply.id).inserted else { continue }
+                replies.append(reply)
+                pending.append(contentsOf: (repliesByParent[reply.id] ?? [])
+                    .sorted { $0.createdAt < $1.createdAt }.reversed())
+            }
             totalReplyCount += replies.count
             let cap = showingAllReplies ? replies.count : min(maxInitialReplies, replies.count)
             for reply in replies.prefix(cap) {

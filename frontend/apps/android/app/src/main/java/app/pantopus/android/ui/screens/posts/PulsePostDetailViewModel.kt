@@ -519,7 +519,17 @@ class PulsePostDetailViewModel
 
             for (parent in topLevel) {
                 rows += rowFrom(parent, indent = 0)
-                val replies = repliesByParent[parent.id].orEmpty()
+                // Reply is available on every row; flatten descendants using
+                // the existing single-level indentation and expansion control.
+                val replies = mutableListOf<PostCommentDto>()
+                val pending = ArrayDeque(repliesByParent[parent.id].orEmpty().asReversed())
+                val visited = mutableSetOf(parent.id)
+                while (pending.isNotEmpty()) {
+                    val reply = pending.removeLast()
+                    if (!visited.add(reply.id)) continue
+                    replies += reply
+                    pending.addAll(repliesByParent[reply.id].orEmpty().asReversed())
+                }
                 totalReplyCount += replies.size
                 val cap =
                     if (showingAllReplies.value) {
