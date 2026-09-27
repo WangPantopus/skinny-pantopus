@@ -3,6 +3,10 @@
 package app.pantopus.android.ui.screens.gigs.quickpost
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
+import app.pantopus.android.data.api.models.geo.GeoResolveResponse
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
 import app.pantopus.android.data.api.models.gigs.CreateGigResponse
 import app.pantopus.android.data.api.models.gigs.GigDetailResponse
@@ -10,6 +14,7 @@ import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
@@ -19,6 +24,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -42,6 +48,7 @@ import org.junit.Test
 class PostGigV1ViewModelTest {
     private val repo: GigsRepository = mockk()
     private val filesRepo: FilesRepository = mockk(relaxed = true)
+    private val geoApi: GeoApi = mockk()
 
     @Before
     fun setUp() {
@@ -53,15 +60,39 @@ class PostGigV1ViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun filledVm(): PostGigV1ViewModel {
-        val vm = PostGigV1ViewModel(repo, filesRepo, SavedStateHandle())
+    private fun TestScope.filledVm(): PostGigV1ViewModel {
         val form = PostGigV1SampleData.filledForm
+        val place = requireNotNull(form.place)
+        val suggestion =
+            GeoSuggestion(
+                suggestionId = "sugg-1",
+                primaryText = place.address,
+                label = form.location,
+                center = listOf(place.longitude, place.latitude),
+                kind = "address",
+            )
+        coEvery { geoApi.autocomplete(any()) } returns GeoAutocompleteResponse(listOf(suggestion))
+        coEvery { geoApi.resolve(any()) } returns
+            GeoResolveResponse(
+                NormalizedAddress(
+                    address = place.address,
+                    city = place.city,
+                    state = place.state,
+                    zipcode = place.zip,
+                    latitude = place.latitude,
+                    longitude = place.longitude,
+                ),
+            )
+        val vm = PostGigV1ViewModel(repo, filesRepo, geoApi, SavedStateHandle())
         vm.updateCategory(form.category)
         vm.updateTitle(form.title)
         vm.updateDescription(form.description)
         vm.updatePrice(form.price)
         vm.updateScheduledAt(form.scheduledAt)
+        // The location is typed, then picked from the address suggestions.
         vm.updateLocation(form.location)
+        advanceTimeBy(301)
+        vm.selectAddress(suggestion)
         return vm
     }
 
@@ -90,7 +121,7 @@ class PostGigV1ViewModelTest {
     @Test
     fun submit_invalid_form_surfaces_validation_and_skips_network() =
         runTest {
-            val vm = PostGigV1ViewModel(repo, filesRepo, SavedStateHandle()) // empty default form
+            val vm = PostGigV1ViewModel(repo, filesRepo, geoApi, SavedStateHandle()) // empty default form
             vm.submit(now = PostGigV1SampleData.referenceNow)
             val content = vm.state.value as PostGigV1UiState.Content
             assertTrue(content.validationErrors.isNotEmpty())
@@ -227,6 +258,7 @@ class PostGigV1ViewModelTest {
         PostGigV1ViewModel(
             repo,
             filesRepo,
+            geoApi,
             SavedStateHandle(mapOf(PostGigV1ViewModel.EDIT_GIG_ID_KEY to gigId)),
         )
 
@@ -240,6 +272,8 @@ class PostGigV1ViewModelTest {
             payType = "fixed",
             scheduledStart = "2026-05-30T14:00:00Z",
             exactAddress = "Pearl District · NW 11th & Johnson",
+            latitude = 45.5266,
+            longitude = -122.6845,
             attachments = listOf("https://cdn.pantopus.app/sofa.jpg"),
         )
 

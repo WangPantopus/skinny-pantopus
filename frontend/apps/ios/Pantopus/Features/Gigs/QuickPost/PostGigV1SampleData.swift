@@ -31,6 +31,14 @@ public enum PostGigV1SampleData {
             priceType: .flat,
             scheduledAt: makeDate(year: 2026, month: 5, day: 30, hour: 14),
             location: "Pearl District · NW 11th & Johnson",
+            place: PostGigV1Place(
+                address: "NW 11th Ave & NW Johnson St",
+                latitude: 45.5266,
+                longitude: -122.6845,
+                city: "Portland",
+                state: "OR",
+                zip: "97209"
+            ),
             photos: [
                 PostGigV1Photo(id: "sofa", status: .uploaded(url: "https://cdn.pantopus.app/gigs/sofa.jpg")),
                 PostGigV1Photo(id: "stairs", status: .uploaded(url: "https://cdn.pantopus.app/gigs/stairs.jpg")),
