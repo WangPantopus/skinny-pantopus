@@ -335,7 +335,8 @@ const updatePostSchema = Joi.object({
 
 const createCommentSchema = Joi.object({
   comment: Joi.string().allow('').max(2000).required(),
-  parentCommentId: Joi.string().uuid().optional()
+  parentCommentId: Joi.string().uuid().optional(),
+  clientRequestId: Joi.string().uuid().optional(),
 });
 
 const updateCommentSchema = Joi.object({
@@ -2773,7 +2774,7 @@ router.get('/:id/likes', verifyToken, async (req, res) => {
 router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (req, res) => {
   try {
     const { id: postId } = req.params;
-    const { comment, parentCommentId } = req.body;
+    const { comment, parentCommentId, clientRequestId } = req.body;
     const userId = req.user.id;
     const post = await requireVisiblePost({
       postId,
@@ -2788,6 +2789,35 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
     }
 
+    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
+    const audienceAuthors = await loadPersonaCommentAuthors(post, [userId]);
+    const commentSelection = '*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)';
+    // A draft keeps its command ID through uncertain replies. Scope it to the
+    // authenticated author and post, using the existing primary key for races.
+    const commentId = clientRequestId ? createHash('sha256')
+      .update(`pantopus:post-comment:v1:${postId.toLowerCase()}:${userId.toLowerCase()}:${clientRequestId.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('PostComment')
+        .select(commentSelection).eq('id', commentId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = async (existing) => {
+      if (existing.post_id !== post.id || existing.user_id !== userId ||
+          existing.comment !== normalizedComment || existing.parent_comment_id !== (parentCommentId || null)) {
+        return res.status(409).json({ error: 'This comment request was already used for a different comment.' });
+      }
+      return res.status(201).json({
+        message: 'Comment added successfully',
+        comment: (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0],
+      });
+    };
+    if (commentId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+    }
+
     // Rate limit: max 5 comments per user per post within 60 seconds
     const rateLimitWindow = new Date(Date.now() - 60 * 1000).toISOString();
     const { count: recentCount, error: rlErr } = await supabaseAdmin
@@ -2800,21 +2830,23 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       return res.status(429).json({ error: 'You are commenting too quickly. Please wait a moment before posting again.' });
     }
 
-    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
-
-    const audienceAuthors = await loadPersonaCommentAuthors(post, [userId]);
     const commenterName = () => audienceAuthors
       ? Promise.resolve(audienceAuthors.get(userId)?.displayName || 'Fan')
       : getUserDisplayName(userId);
 
     // comment_count auto-incremented by DB trigger
-    const { data: newComment, error } = await supabaseAdmin
-      .from('PostComment')
-      .insert({ post_id: postId, user_id: userId, comment: normalizedComment, parent_comment_id: parentCommentId || null })
-      .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .single();
+    const row = { post_id: postId, user_id: userId, comment: normalizedComment, parent_comment_id: parentCommentId || null };
+    const insert = commentId
+      ? supabaseAdmin.from('PostComment').upsert({ ...row, id: commentId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('PostComment').insert(row);
+    const { data: newComment, error } = await insert.select(commentSelection).maybeSingle();
 
     if (error) { logger.error('Error creating comment', { error: error.message, postId }); return res.status(500).json({ error: 'Failed to create comment' }); }
+    if (!newComment && commentId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+    }
+    if (!newComment) throw new Error('Comment insert returned no row');
 
     // Notify post owner of new comment (not on own post)
     if (post.user_id !== userId) {
