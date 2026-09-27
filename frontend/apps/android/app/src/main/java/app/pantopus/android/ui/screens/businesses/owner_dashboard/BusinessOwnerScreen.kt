@@ -14,7 +14,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -43,12 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -64,8 +58,6 @@ import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.MapPreview
 import app.pantopus.android.ui.components.RatingDistribution
 import app.pantopus.android.ui.components.Shimmer
-import app.pantopus.android.ui.screens.business_profile.BusinessGalleryItem
-import app.pantopus.android.ui.screens.business_profile.BusinessGalleryTint
 import app.pantopus.android.ui.screens.business_profile.BusinessOpenState
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileContent
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileLoadedFrame
@@ -470,8 +462,8 @@ private fun OwnerSections(
     )
     ManageServicesList(services = profile.services, onManage = onManageCatalog)
 
-    OwnerSectionHeader(title = "Photos")
-    ManageGalleryRail(gallery = profile.gallery, onAdd = onEditPage, onEditTile = onEditPage)
+    // No gallery backend yet: the Photos rail only offered "Add photo", which
+    // opens the page editor, and the editor's gallery is hidden too (as on iOS).
 
     OwnerSectionHeader(title = "Team", actionLabel = "Manage", actionIcon = PantopusIcon.Users, onAction = onOpenTeam)
     TeamSummaryRow(onOpen = onOpenTeam)
@@ -729,141 +721,6 @@ private fun ManageServiceRow(
         PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
 }
-
-// MARK: - Manage gallery
-
-@Composable
-private fun ManageGalleryRail(
-    gallery: List<BusinessGalleryItem>,
-    onAdd: () -> Unit,
-    onEditTile: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("businessOwner.manageGallery"),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        AddPhotoTile(onAdd = onAdd)
-        gallery.forEach { item ->
-            GalleryEditTile(item = item, onEditTile = onEditTile)
-        }
-    }
-}
-
-@Composable
-private fun AddPhotoTile(onAdd: () -> Unit) {
-    val shape = RoundedCornerShape(Radii.lg)
-    val dashColor = PantopusColors.business
-    Box(
-        modifier =
-            Modifier
-                .size(width = 92.dp, height = 92.dp)
-                .clip(shape)
-                .background(PantopusColors.businessBg)
-                .drawBehind {
-                    val radius = Radii.lg.toPx()
-                    drawRoundRect(
-                        color = dashColor,
-                        cornerRadius = CornerRadius(radius, radius),
-                        style =
-                            Stroke(
-                                width = 1.5.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()), 0f),
-                            ),
-                    )
-                }
-                .clickable(onClick = onAdd)
-                .semantics { contentDescription = "Add photo" }
-                .testTag("businessOwner.addPhoto"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            PantopusIconImage(
-                icon = PantopusIcon.Plus,
-                contentDescription = null,
-                size = 20.dp,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.business,
-            )
-            Text(text = "Add", color = PantopusColors.business, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-private fun GalleryEditTile(
-    item: BusinessGalleryItem,
-    onEditTile: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .size(width = 116.dp, height = 92.dp)
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(galleryTint(item.tint))
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (item.moreCount != null) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
-                Text(text = "+${item.moreCount}", color = PantopusColors.appTextInverse, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-        } else {
-            PantopusIconImage(
-                icon = PantopusIcon.Image,
-                contentDescription = null,
-                size = 24.dp,
-                strokeWidth = 1.6f,
-                tint = PantopusColors.appTextInverse.copy(alpha = 0.92f),
-            )
-            item.label?.let { label ->
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f))))
-                                .padding(horizontal = Spacing.s2, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = label,
-                            color = PantopusColors.appTextInverse,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
-            Box(modifier = Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.TopEnd) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.appText.copy(alpha = 0.55f))
-                            .clickable(onClick = onEditTile)
-                            .semantics { contentDescription = "Edit photo" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Pencil,
-                        contentDescription = null,
-                        size = 11.dp,
-                        tint = PantopusColors.appTextInverse,
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun galleryTint(tint: BusinessGalleryTint): Color =
-    when (tint) {
-        BusinessGalleryTint.Primary -> PantopusColors.business
-        BusinessGalleryTint.Success -> PantopusColors.success
-        BusinessGalleryTint.Slate -> PantopusColors.slate
-        BusinessGalleryTint.Deep -> PantopusColors.businessDark
-    }
 
 // MARK: - Team summary row
 

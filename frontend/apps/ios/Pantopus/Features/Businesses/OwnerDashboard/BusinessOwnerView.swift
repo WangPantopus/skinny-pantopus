@@ -324,8 +324,8 @@ struct OwnerEditFrame: View {
             )
             ManageServicesList(services: profile.services, onManage: onManageCatalog)
 
-            OwnerSectionHeader(title: "Photos")
-            ManageGalleryRail(gallery: profile.gallery, onAdd: onEditPage, onEditTile: onEditPage)
+            // No gallery backend yet: the Photos rail only offered "Add photo", which
+            // opens the page editor, where the gallery is hidden too (#552).
 
             OwnerSectionHeader(title: "Team", actionLabel: "Manage", actionIcon: .users, onAction: onOpenTeam)
             TeamSummaryRow(onOpen: onOpenTeam)
@@ -598,118 +598,6 @@ struct ManageServicesList: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("businessOwner.addService")
-    }
-}
-
-// MARK: - Manage gallery
-
-@MainActor
-struct ManageGalleryRail: View {
-    let gallery: [BusinessGalleryItem]
-    let onAdd: @MainActor () -> Void
-    let onEditTile: @MainActor () -> Void
-
-    private static let addWidth: CGFloat = 92
-    private static let tileWidth: CGFloat = 116
-    private static let tileHeight: CGFloat = 92
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.s2) {
-                addTile
-                ForEach(gallery) { item in
-                    tile(item)
-                }
-            }
-        }
-        .accessibilityIdentifier("businessOwner.manageGallery")
-    }
-
-    private var addTile: some View {
-        Button { onAdd() } label: {
-            VStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 20, strokeWidth: 2.2, color: Theme.Color.business)
-                Text("Add")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.business)
-            }
-            .frame(width: Self.addWidth, height: Self.tileHeight)
-            .background(Theme.Color.businessBg)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                    .strokeBorder(Theme.Color.business, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add photo")
-        .accessibilityIdentifier("businessOwner.addPhoto")
-    }
-
-    private func tile(_ item: BusinessGalleryItem) -> some View {
-        ZStack {
-            tint(item.tint)
-            if let moreCount = item.moreCount {
-                Color.black.opacity(0.55)
-                Text("+\(moreCount)")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
-            } else {
-                Icon(.image, size: 24, strokeWidth: 1.6, color: Theme.Color.appTextInverse)
-                    .opacity(0.92)
-                if let label = item.label {
-                    labelScrim(label)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                }
-                editFab
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(6)
-            }
-        }
-        .frame(width: Self.tileWidth, height: Self.tileHeight)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.moreCount.map { "See \($0) more photos" } ?? (item.label ?? "Photo"))
-    }
-
-    private var editFab: some View {
-        Button { onEditTile() } label: {
-            Icon(.pencil, size: 11, color: Theme.Color.appTextInverse)
-                .frame(width: 22, height: 22)
-                .background(Theme.Color.appText.opacity(0.55), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Edit photo")
-    }
-
-    private func labelScrim(_ label: String) -> some View {
-        Text(label)
-            .font(.system(size: 10.5, weight: .semibold))
-            .foregroundStyle(Theme.Color.appTextInverse)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Spacing.s2)
-            .padding(.vertical, 6)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0), Color.black.opacity(0.45)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-    }
-
-    private func tint(_ tint: BusinessGalleryTint) -> Color {
-        switch tint {
-        case .primary: Theme.Color.business
-        case .success: Theme.Color.success
-        case .slate: Theme.Color.slate
-        case .deep: Theme.Color.businessDark
-        }
     }
 }
 
