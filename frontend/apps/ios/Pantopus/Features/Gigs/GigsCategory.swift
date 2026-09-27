@@ -57,21 +57,29 @@ public enum GigsCategory: String, CaseIterable, Sendable, Hashable {
     /// Map the backend `category` string to one of our chips. Unknown
     /// values fall back to `handyman` so the row still renders a chip.
     public static func from(backendKey raw: String?) -> GigsCategory {
+        GigsCategory(backendKey: raw) ?? .handyman
+    }
+
+    /// Map the backend `category` string to one of our chips, or `nil` for
+    /// a category these chips don't list (web has more, e.g. "Other").
+    /// Web labels ("Pet Care") match too.
+    public init?(backendKey raw: String?) {
         let key = (raw ?? "")
             .lowercased()
             .replacingOccurrences(of: "_", with: "")
             .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: " ", with: "")
         switch key {
-        case "all": return .all
-        case "handyman", "handy", "repair", "repairs": return .handyman
-        case "cleaning", "clean": return .cleaning
-        case "moving", "move", "movers": return .moving
-        case "petcare", "pet", "pets", "dogwalking", "petsitting": return .petcare
-        case "childcare", "child", "babysitting", "nanny": return .childcare
-        case "tutoring", "tutor", "lessons", "teaching": return .tutoring
-        case "tech", "technology", "it", "computer": return .tech
-        case "delivery", "deliveries", "courier": return .delivery
-        default: return .handyman
+        case "all": self = .all
+        case "handyman", "handy", "repair", "repairs": self = .handyman
+        case "cleaning", "clean": self = .cleaning
+        case "moving", "move", "movers": self = .moving
+        case "petcare", "pet", "pets", "dogwalking", "petsitting": self = .petcare
+        case "childcare", "child", "babysitting", "nanny": self = .childcare
+        case "tutoring", "tutor", "lessons", "teaching": self = .tutoring
+        case "tech", "technology", "techsupport", "it", "computer": self = .tech
+        case "delivery", "deliveries", "courier": self = .delivery
+        default: return nil
         }
     }
 }

@@ -133,7 +133,7 @@ class SchedulingSettingsRootViewModel
                 paidEnabled = featureFlags.paidSchedulingEnabled,
                 remindersValue = page.reminderMinutes.sortedDescending().joinToString(" · ") { reminderLabel(it) }.ifBlank { null },
                 timezoneValue = storedZone ?: "${ZoneId.systemDefault().id} · auto",
-                hasCancellationPolicy = !page.cancellationPolicy.isNullOrBlank(),
+                hasCancellationPolicy = page.cancellationPolicy != null,
                 paymentsConnected = paymentsConnected,
                 monoFooter = "pantopus.com/book/${page.slug ?: "…"} · owner · you",
                 pillar = owner.pillar(),

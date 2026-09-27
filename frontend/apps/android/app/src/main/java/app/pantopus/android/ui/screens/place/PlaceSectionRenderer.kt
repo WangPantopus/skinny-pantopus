@@ -24,6 +24,8 @@ fun PlaceSectionView(
     onOpen: (() -> Unit)? = null,
     onVerify: (() -> Unit)? = null,
     onClaim: (() -> Unit)? = null,
+    // "Try again" on a section that failed to load: re-read the place.
+    onRetry: (() -> Unit)? = null,
 ) {
     val lockHandler =
         if (env.band == app.pantopus.android.data.api.models.place.PlaceBand.D) onVerify else onClaim
@@ -61,6 +63,7 @@ fun PlaceSectionView(
                         state = PlacePresentation.cardState(env),
                         caption = env.unavailableReason,
                         onTap = onOpen,
+                        onRetry = onRetry,
                     )
             }
         }
@@ -91,6 +94,7 @@ fun PlaceSectionView(
                 sparkline = cfg.sparkline && isLive,
                 inline = cfg.inline,
                 onTap = onOpen,
+                onRetry = onRetry,
             )
         }
     }

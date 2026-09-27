@@ -13,6 +13,7 @@ import app.pantopus.android.data.scheduling.SchedulingError
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
 import app.pantopus.android.data.scheduling.SchedulingRepository
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
+import app.pantopus.android.ui.screens.scheduling.payments.CancellationRefundPolicyViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -212,7 +213,7 @@ class ManageBookingViewModel
                 locationSub = location.sub,
                 inviteeName = booking.inviteeName,
                 cancelledOnLabel = if (status == ManageStatus.Cancelled) cancelledOn(booking.startAt) else null,
-                cancellationPolicy = page?.cancellationPolicy,
+                cancellationPolicy = CancellationRefundPolicyViewModel.policySentence(page?.cancellationPolicy),
                 pageSlug = page?.slug,
                 canReschedule = canReschedule,
                 canCancel = canCancel,

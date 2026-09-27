@@ -28,6 +28,9 @@ final class PlaceDashboardViewModel {
     /// `Home.move_in_date`, read alongside the intelligence; nil until the
     /// detail fetch lands or when the home has none. Drives `JustMovedCard`.
     private(set) var moveInDate: String?
+    /// A re-read of a loaded dashboard is in flight (pull to refresh or a
+    /// section's "Try again").
+    private(set) var isRefreshing = false
 
     private let api: APIClient
     let onOpenDetail: (PlaceDetailGroup) -> Void
@@ -84,6 +87,8 @@ final class PlaceDashboardViewModel {
     }
 
     func refresh() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
         await fetch()
     }
 

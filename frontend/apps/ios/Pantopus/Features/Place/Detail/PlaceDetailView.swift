@@ -105,6 +105,8 @@ extension PlaceDetailViewModel {
         let state = PlacePresentation.cardState(env)
         let isLive = state == .loaded || state == .stale
         let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
+        // "Try again" on a section that failed to load re-reads this page.
+        let retry: () -> Void = { Task { await self.refresh() } }
         PlaceSectionCard(
             icon: cfg.icon,
             title: cfg.title,
@@ -116,7 +118,8 @@ extension PlaceDetailViewModel {
             statusDot: reading.statusDot,
             sparkline: false,
             inline: false,
-            onTap: nil
+            onTap: nil,
+            onRetry: retry
         )
     }
 }

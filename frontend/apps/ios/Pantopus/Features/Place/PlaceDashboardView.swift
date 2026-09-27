@@ -221,7 +221,9 @@ struct PlaceDashboardView: View {
                         env: section,
                         onOpen: detail.map { d in { viewModel.onOpenDetail(d) } },
                         onVerify: { showVerify = true },
-                        onClaim: { showVerify = true }
+                        onClaim: { showVerify = true },
+                        onRetry: { Task { await viewModel.refresh() } },
+                        retrying: viewModel.isRefreshing
                     )
                 }
             }

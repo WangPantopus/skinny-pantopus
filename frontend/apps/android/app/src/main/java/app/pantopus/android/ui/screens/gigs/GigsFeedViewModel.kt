@@ -945,7 +945,7 @@ class GigsFeedViewModel
              */
             internal fun projectSupportTrain(dto: GigsFeedNearbyTrainDto): SupportTrainRowContent {
                 val distance = dto.distanceMeters?.let { supportTrainDistanceLabel(it) }
-                val age = ageLabel(dto.publishedAt)?.let { "$it ago" }
+                val age = agoLabel(dto.publishedAt)
                 val city = dto.city?.takeIf { it.isNotBlank() }
                 val state = dto.state?.takeIf { it.isNotBlank() }
                 val area =
@@ -978,7 +978,7 @@ class GigsFeedViewModel
             fun projectCard(gig: GigDto): GigCardContent {
                 val category = GigsCategory.fromBackendKey(gig.category)
                 val distance = distanceLabel(resolvedDistanceMiles(gig))
-                val age = ageLabel(gig.createdAt)?.let { "$it ago" }
+                val age = agoLabel(gig.createdAt)
                 val meta = listOfNotNull(distance, age).joinToString(" · ")
                 return GigCardContent(
                     id = gig.id,
@@ -1080,6 +1080,9 @@ class GigsFeedViewModel
                     else -> "${miles.toInt()}mi"
                 }
             }
+
+            /** "3m ago", or "just now" under a minute (never "now ago"). */
+            private fun agoLabel(iso: String?): String? = ageLabel(iso)?.let { if (it == "now") "just now" else "$it ago" }
 
             private fun ageLabel(iso: String?): String? {
                 if (iso.isNullOrEmpty()) return null

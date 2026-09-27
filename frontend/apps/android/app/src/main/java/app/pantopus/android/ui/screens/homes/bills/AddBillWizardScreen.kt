@@ -356,22 +356,6 @@ private fun ReviewStep(
                 color = PantopusColors.error,
             )
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Users,
-                contentDescription = null,
-                size = 14.dp,
-                tint = PantopusColors.appTextSecondary,
-            )
-            Text(
-                text = "Splits with household members can be configured after the bill is added.",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
     }
 }
 

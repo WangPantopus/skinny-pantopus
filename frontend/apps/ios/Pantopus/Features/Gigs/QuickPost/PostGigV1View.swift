@@ -11,6 +11,8 @@
 import PhotosUI
 import SwiftUI
 
+// swiftlint:disable file_length
+
 public struct PostGigV1View: View {
     @State private var viewModel: PostGigV1ViewModel
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -69,6 +71,7 @@ public struct PostGigV1View: View {
         FormFieldGroup("Category") {
             PostGigV1CategoryField(
                 selected: viewModel.state.form.category,
+                storedLabel: viewModel.state.form.storedCategory,
                 error: viewModel.error(for: .category),
                 onSelect: viewModel.updateCategory
             )
@@ -251,11 +254,15 @@ public struct PostGigV1View: View {
 
 private struct PostGigV1CategoryField: View {
     let selected: GigsCategory
+    /// Editing a task in a category these chips don't list shows its name.
+    let storedLabel: String?
     let error: String?
     let onSelect: (GigsCategory) -> Void
 
-    private var valueLabel: String {
-        selected == .moving ? "Moving & hauling" : selected.label
+    /// `nil` → the "Choose a category" placeholder.
+    private var valueLabel: String? {
+        guard selected != .all else { return storedLabel }
+        return selected == .moving ? "Moving & hauling" : selected.label
     }
 
     var body: some View {
@@ -269,10 +276,10 @@ private struct PostGigV1CategoryField: View {
                 }
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Text(selected == .all ? "Choose a category" : valueLabel)
+                    Text(valueLabel ?? "Choose a category")
                         .pantopusTextStyle(.small)
-                        .fontWeight(selected == .all ? .regular : .medium)
-                        .foregroundStyle(selected == .all ? Theme.Color.appTextMuted : Theme.Color.appText)
+                        .fontWeight(valueLabel == nil ? .regular : .medium)
+                        .foregroundStyle(valueLabel == nil ? Theme.Color.appTextMuted : Theme.Color.appText)
                     Spacer()
                     Icon(.chevronDown, size: 16, color: Theme.Color.appTextSecondary)
                 }

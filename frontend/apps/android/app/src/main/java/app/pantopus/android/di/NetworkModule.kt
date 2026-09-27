@@ -167,6 +167,8 @@ object NetworkModule {
             // hours are cleared.
             .add(app.pantopus.android.data.api.models.hub.NotificationPreferencesPatchJsonAdapter())
             .add(app.pantopus.android.data.api.models.businesses.BusinessServiceAreaJsonAdapter())
+            // Booking page `cancellation_policy`: a preset name, free text or an object (jsonb).
+            .add(app.pantopus.android.data.api.models.scheduling.CancellationPolicyValueJsonAdapter())
             // C2 catalog item write: a full-form editor body whose cleared
             // fields must reach the backend as explicit JSON null.
             .add(app.pantopus.android.data.api.models.businesses.BusinessCatalogItemRequestJsonAdapter())

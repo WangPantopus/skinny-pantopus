@@ -353,7 +353,8 @@ struct SeasonalChecklistCard: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("\(carryover.items.count) remaining")
+                        // Only items still to do; a skip or completion updates the row in place.
+                        Text("\(carryover.items.filter { $0.status == "pending" }.count) remaining")
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
