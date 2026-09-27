@@ -343,12 +343,16 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   };
 
   const handleMessage = async () => {
-    if (!currentUser) { router.push('/login'); return; }
+    // The public profile can render before the viewer's profile read finishes.
+    // The session marker already covers cookie auth; the chat endpoint verifies it.
+    if (!getAuthToken()) { router.push('/login'); return; }
     const recipientId = profile?.id;
     if (!recipientId || pendingMessage.current) return;
+    const current = captureAction();
     pendingMessage.current = true;
     try {
       const res = await api.chat.createDirectChat(recipientId) as Record<string, unknown>;
+      if (!current()) return;
       const resRoom = res.room as Record<string, unknown> | undefined;
       const roomId = (res.roomId as string) || (resRoom?.id as string);
       if (roomId) {
@@ -357,6 +361,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         toast.error('Couldn\'t start a conversation. Try again.');
       }
     } catch (err: unknown) {
+      if (!current()) return;
       console.error('Failed to create chat:', err);
       // The server's reason (e.g. "Unable to message this user", rate limits)
       // instead of a button that silently does nothing.
