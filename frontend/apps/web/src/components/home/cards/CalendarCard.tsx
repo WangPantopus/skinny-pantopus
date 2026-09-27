@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Calendar, ChevronLeft } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
 import HouseholdCalendar from '../HouseholdCalendar';
+import { parseHomeBillDate } from '../homeBillAmount';
 
 type ViewMode = 'agenda' | 'week' | 'month';
 
@@ -141,9 +142,9 @@ function WeekView({ events, tasks, bills }: { events: Record<string, any>[]; tas
     });
 
     const dayBills = bills.filter((b) => {
-      if (!b.due_date) return false;
-      const due = new Date(b.due_date);
-      return due >= dayStart && due <= dayEnd;
+      // A due_date is a calendar day, not a UTC instant.
+      const due = parseHomeBillDate(b.due_date);
+      return due != null && due >= dayStart && due <= dayEnd;
     });
 
     return [
