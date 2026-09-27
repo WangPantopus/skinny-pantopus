@@ -19,6 +19,15 @@ struct PlaceSectionView: View {
     var onVerify: (() -> Void)?
     /// Band B/C → claim (T1 → T3).
     var onClaim: (() -> Void)?
+    /// "Try again" on a section that failed to load: re-read the place.
+    var onRetry: (() -> Void)?
+    /// A re-read is in flight; a failed section shows loading until it lands.
+    var retrying = false
+
+    private var cardState: PlaceSectionCardState {
+        let state = PlacePresentation.cardState(env)
+        return retrying && state == .error ? .loading : state
+    }
 
     private var lockHandler: (() -> Void)? {
         env.band == .d ? onVerify : onClaim
@@ -57,16 +66,17 @@ struct PlaceSectionView: View {
             PlaceSectionCard(
                 icon: .users,
                 title: "Verified homes nearby",
-                state: PlacePresentation.cardState(env),
+                state: cardState,
                 caption: env.unavailableReason,
-                onTap: onOpen
+                onTap: onOpen,
+                onRetry: onRetry
             )
         }
     }
 
     private var sectionCard: some View {
         let cfg = PlacePresentation.config(for: env.id)
-        let state = PlacePresentation.cardState(env)
+        let state = cardState
         let isLive = state == .loaded || state == .stale
         let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
         return PlaceSectionCard(
@@ -81,7 +91,8 @@ struct PlaceSectionView: View {
             sparkline: cfg.sparkline && isLive,
             actionLabel: nil,
             inline: cfg.inline,
-            onTap: onOpen
+            onTap: onOpen,
+            onRetry: onRetry
         )
     }
 }

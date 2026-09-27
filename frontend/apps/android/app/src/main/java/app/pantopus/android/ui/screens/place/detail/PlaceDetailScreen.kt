@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,7 +60,9 @@ fun PlaceDetailScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp),
                 ) {
-                    GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel)
+                    CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
+                        GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel)
+                    }
                     Spacer(modifier = Modifier.height(40.dp))
                 }
         }
@@ -94,18 +98,21 @@ private fun PlaceDetailSkeleton() {
     }
 }
 
+/** The detail page's re-read, the default "Try again" for its fallback cards. */
+val LocalPlaceDetailRetry = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 /**
  * Fallback card for a section with no bespoke layout.
  *
  * [onRetry] is what makes the ERROR state's "Try again" a button rather
  * than a label: [PlaceSectionCard] always draws it, and a caller that
- * passes nothing ships a tap that does nothing. Pass `viewModel::refresh`
- * wherever a re-read is the actual remedy.
+ * passes nothing ships a tap that does nothing. It defaults to the detail
+ * page's re-read ([LocalPlaceDetailRetry]).
  */
 @Composable
 fun PlaceDetailFallbackCard(
     env: PlaceSectionEnvelope,
-    onRetry: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = LocalPlaceDetailRetry.current,
 ) {
     val cfg = PlacePresentation.config(env.sectionId)
     val cardState = PlacePresentation.cardState(env)

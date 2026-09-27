@@ -124,6 +124,7 @@ fun PlaceDashboardScreen(
                     onOpenPulse = onOpenPulse,
                     onComposeMessage = onComposeMessage,
                     onOpenInbox = onOpenInbox,
+                    onRetry = viewModel::refresh,
                 )
         }
     }
@@ -173,6 +174,7 @@ internal fun PlaceDashboardContent(
     onOpenHomeTools: () -> Unit = {},
     onOpenMenu: () -> Unit = {},
     homeId: String = "",
+    onRetry: (() -> Unit)? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     val isClaimed = intel.tier == PlaceTier.T3
@@ -256,6 +258,7 @@ internal fun PlaceDashboardContent(
                 onOpenDetail = onOpenDetail,
                 onVerify = onVerify,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                onRetry = onRetry,
             )
         }
         item {
@@ -310,6 +313,7 @@ private fun PlaceGroupBlockView(
     onOpenDetail: (PlaceDetailGroup) -> Unit,
     onVerify: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
 ) {
     val detail = PlaceDetailGroup.forGroup(group.groupId)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -321,6 +325,7 @@ private fun PlaceGroupBlockView(
                     onOpen = detail?.let { d -> { onOpenDetail(d) } },
                     onVerify = onVerify,
                     onClaim = onVerify,
+                    onRetry = onRetry,
                 )
             }
         }
