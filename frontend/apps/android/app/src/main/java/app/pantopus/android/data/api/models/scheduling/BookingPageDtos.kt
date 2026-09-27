@@ -2,8 +2,11 @@
 
 package app.pantopus.android.data.api.models.scheduling
 
+import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonReader
+import okio.Buffer
 
 /**
  * The host's public booking page. `GET/PUT /booking-page`,
@@ -28,7 +31,7 @@ data class BookingPageDto(
     @Json(name = "confirmation_message") val confirmationMessage: String? = null,
     val timezone: String? = null,
     @Json(name = "reminder_minutes") val reminderMinutes: List<Int> = emptyList(),
-    @Json(name = "cancellation_policy") val cancellationPolicy: String? = null,
+    @Json(name = "cancellation_policy") val cancellationPolicy: CancellationPolicyValue? = null,
     val visibility: String? = null,
     val branding: Map<String, Any?>? = null,
     @Json(name = "created_at") val createdAt: String? = null,
@@ -41,6 +44,78 @@ data class BookingPageDto(
 data class BookingPageResponse(
     val page: BookingPageDto,
 )
+
+/**
+ * A page's `cancellation_policy` (jsonb) in the shapes its writers store: a preset name (iOS and
+ * Android presets, in either case), a custom policy as an object (iOS, web) or as that object's
+ * JSON text (Android), web's structured presets, or free text. Read as a `String`, an object
+ * failed the whole page. Decoded by [CancellationPolicyValueJsonAdapter].
+ */
+data class CancellationPolicyValue(
+    /** `flexible`, `moderate`, `strict` or `custom`; null for free text. */
+    val preset: String? = null,
+    /** Free-cancellation cutoff before the start, in minutes. */
+    val cutoffMin: Int? = null,
+    /** Refund after the cutoff, in percent. */
+    val refundAfterPct: Int? = null,
+    val depositNonRefundable: Boolean? = null,
+    /** No-show handling as its writer spelled it (`charge_full`, `charge_deposit`, `no_charge`). */
+    val noShow: String? = null,
+    /** Free text, shown as written. */
+    val notes: String? = null,
+)
+
+/**
+ * Decodes [CancellationPolicyValue] from a string or an object. Registered in
+ * [app.pantopus.android.di.NetworkModule] ahead of `KotlinJsonAdapterFactory`.
+ */
+class CancellationPolicyValueJsonAdapter {
+    @FromJson
+    fun fromJson(reader: JsonReader): CancellationPolicyValue? =
+        when (reader.peek()) {
+            JsonReader.Token.STRING -> fromText(reader.nextString())
+            JsonReader.Token.BEGIN_OBJECT -> fromObject(reader.readJsonValue() as? Map<*, *>)
+            else -> {
+                reader.skipValue()
+                null
+            }
+        }
+
+    private fun fromText(text: String): CancellationPolicyValue? {
+        val trimmed = text.trim()
+        return when {
+            trimmed.isEmpty() -> null
+            trimmed.lowercase() in PRESETS -> CancellationPolicyValue(preset = trimmed.lowercase())
+            trimmed.startsWith("{") -> parseObject(trimmed) ?: CancellationPolicyValue(notes = trimmed)
+            else -> CancellationPolicyValue(notes = trimmed)
+        }
+    }
+
+    private fun parseObject(json: String): CancellationPolicyValue? =
+        runCatching { JsonReader.of(Buffer().writeUtf8(json)).readJsonValue() as? Map<*, *> }
+            .getOrNull()
+            ?.let(::fromObject)
+
+    private fun fromObject(map: Map<*, *>?): CancellationPolicyValue? {
+        if (map == null) return null
+        val notes = (map["notes"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+        val preset = (map["preset"] as? String)?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        return CancellationPolicyValue(
+            preset = preset ?: if (notes == null) "custom" else null,
+            cutoffMin = map.intValue("free_cancel_window_min") ?: map.intValue("cutoff_min"),
+            refundAfterPct = map.intValue("refund_after_pct") ?: map.intValue("refund_percent_after"),
+            depositNonRefundable = map["deposit_non_refundable"] as? Boolean,
+            noShow = (map["no_show"] ?: map["no_show_handling"]) as? String,
+            notes = notes,
+        )
+    }
+
+    private fun Map<*, *>.intValue(key: String): Int? = (this[key] as? Number)?.toInt()
+
+    private companion object {
+        val PRESETS = setOf("flexible", "moderate", "strict")
+    }
+}
 
 /**
  * Body for `PUT /booking-page`. All optional (partial update). `ownerType`/

@@ -25,7 +25,7 @@ data class PublicPageView(
     val timezone: String? = null,
     val branding: Map<String, Any?>? = null,
     @Json(name = "owner_type") val ownerType: String? = null,
-    @Json(name = "cancellation_policy") val cancellationPolicy: String? = null,
+    @Json(name = "cancellation_policy") val cancellationPolicy: CancellationPolicyValue? = null,
 )
 
 /** The invitee-facing projection of an event type (public reads). */

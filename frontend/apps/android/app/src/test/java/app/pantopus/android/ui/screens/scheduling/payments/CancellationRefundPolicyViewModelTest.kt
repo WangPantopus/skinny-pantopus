@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.scheduling.payments
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.scheduling.BookingPageDto
 import app.pantopus.android.data.api.models.scheduling.BookingPageResponse
+import app.pantopus.android.data.api.models.scheduling.CancellationPolicyValue
 import app.pantopus.android.data.api.models.scheduling.EventTypeDetailResponse
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
@@ -67,7 +68,9 @@ class CancellationRefundPolicyViewModelTest {
     fun `page-level load maps preset string to selection`() =
         runTest(dispatcher) {
             coEvery { repo.getBookingPage(any()) } returns
-                NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = "Moderate")))
+                NetworkResult.Success(
+                    BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = CancellationPolicyValue(preset = "Moderate"))),
+                )
             val vm = vm()
             vm.load()
             advanceUntilIdle()
@@ -75,13 +78,18 @@ class CancellationRefundPolicyViewModelTest {
         }
 
     @Test
-    fun `page-level load parses custom JSON`() =
+    fun `page-level load maps a custom policy`() =
         runTest(dispatcher) {
-            val json =
-                """{"preset":"custom","free_cancel_window_min":720,"refund_after_pct":25,""" +
-                    """"deposit_non_refundable":false,"no_show":"no_charge"}"""
+            val policy =
+                CancellationPolicyValue(
+                    preset = "custom",
+                    cutoffMin = 720,
+                    refundAfterPct = 25,
+                    depositNonRefundable = false,
+                    noShow = "no_charge",
+                )
             coEvery { repo.getBookingPage(any()) } returns
-                NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = json)))
+                NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = policy)))
             val vm = vm()
             vm.load()
             advanceUntilIdle()
@@ -108,9 +116,13 @@ class CancellationRefundPolicyViewModelTest {
     fun `page-level save sends preset string and flags didSave`() =
         runTest(dispatcher) {
             coEvery { repo.getBookingPage(any()) } returns
-                NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = "Strict")))
+                NetworkResult.Success(
+                    BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = CancellationPolicyValue(preset = "Strict"))),
+                )
             coEvery { repo.updateBookingPage(any(), any()) } returns
-                NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = "Strict")))
+                NetworkResult.Success(
+                    BookingPageResponse(BookingPageDto(id = "p", cancellationPolicy = CancellationPolicyValue(preset = "Strict"))),
+                )
             val vm = vm()
             vm.load()
             advanceUntilIdle()

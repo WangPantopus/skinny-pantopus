@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.scheduling.business
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.scheduling.CancellationPolicyValue
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.models.scheduling.UpdateNotificationPrefsRequest
@@ -15,6 +16,7 @@ import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
 import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
+import app.pantopus.android.ui.screens.scheduling.payments.CancellationRefundPolicyViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,7 +85,7 @@ class BusinessSchedulingSettingsViewModel
 
         private var prefs: Map<String, Any?> = emptyMap()
         private var eventTypes: List<EventTypeDto> = emptyList()
-        private var cancellationPolicy: String? = null
+        private var cancellationPolicy: CancellationPolicyValue? = null
 
         fun load() {
             _state.value = UiState.Loading
@@ -267,7 +269,7 @@ class BusinessSchedulingSettingsViewModel
         }
 
         private fun cancellationValue(): String {
-            cancellationPolicy?.takeIf { it.isNotBlank() }?.let { return it }
+            cancellationPolicy?.let { return CancellationRefundPolicyViewModel.policyLabel(it) }
             val window = mostCommon(eventTypes.mapNotNull { it.cancellationWindowMin })
             if (window != null && window > 0) return "Flexible · ${durationLabel(window)}"
             return if (eventTypes.isEmpty()) "Set per service" else "Flexible"

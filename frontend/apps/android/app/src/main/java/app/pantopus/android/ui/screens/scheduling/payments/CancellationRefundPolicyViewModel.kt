@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.scheduling.payments
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.scheduling.CancellationPolicyValue
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.models.scheduling.UpdateEventTypeRequest
@@ -13,9 +14,6 @@ import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
-import com.squareup.moshi.JsonAdapter
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,8 +26,9 @@ import javax.inject.Inject
  * (Flexible / Moderate / Strict / Custom) with inline custom rows, a live
  * "what the invitee sees" preview, and a Save that round-trips:
  *  - page-level ([eventTypeId] == null) → `PUT /booking-page` `cancellation_policy`
- *    (a preset name string, or a compact JSON object string for Custom — the
- *    backend column is `Joi.string().max(1000)`).
+ *    (a preset name string, or a compact JSON object string for Custom). The
+ *    jsonb column also holds iOS and web objects; reads take every shape via
+ *    [CancellationPolicyValue].
  *  - per-service ([eventTypeId] != null) → `PUT /event-types/:id`
  *    `cancellation_window_min` / `reschedule_cutoff_min` / `refund_policy` /
  *    `no_show_fee_cents` / `deposit_refundable`.
@@ -92,12 +91,6 @@ class CancellationRefundPolicyViewModel
         // Captured for the per-service no-show-fee mapping.
         private var priceCents = 0
         private var depositCents = 0
-
-        @Suppress("UNCHECKED_CAST")
-        private val policyAdapter: JsonAdapter<Map<String, Any?>> =
-            Moshi.Builder().build().adapter(
-                Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java),
-            )
 
         fun load() {
             if (!flags.paidSchedulingEnabled) {
@@ -314,28 +307,21 @@ class CancellationRefundPolicyViewModel
                 }
         }
 
-        private fun applyPagePolicy(value: String?) {
-            if (value.isNullOrBlank()) {
-                select(Preset.Flexible)
+        // Presets match in any case (iOS stores "flexible", Android "Flexible"); free text or no
+        // policy opens on Flexible.
+        private fun applyPagePolicy(value: CancellationPolicyValue?) {
+            val preset = presetOf(value)
+            if (value == null || preset != Preset.Custom) {
+                select(preset ?: Preset.Flexible)
                 return
             }
-            Preset.entries.firstOrNull { it.rawValue == value }?.let {
-                select(it)
-                return
+            selectedPreset = Preset.Custom
+            value.cutoffMin?.let { customCutoffHours = it / MINUTES_PER_HOUR }
+            value.refundAfterPct?.let { customRefundPct = it }
+            depositNonRefundable = value.depositNonRefundable ?: true
+            value.noShow?.let { raw ->
+                NoShowMode.entries.firstOrNull { it.rawValue == raw }?.let { noShowMode = it }
             }
-            if (value.trimStart().startsWith("{")) {
-                runCatching { policyAdapter.fromJson(value) }.getOrNull()?.let { obj ->
-                    selectedPreset = Preset.Custom
-                    (obj["free_cancel_window_min"] as? Number)?.let { customCutoffHours = it.toInt() / MINUTES_PER_HOUR }
-                    (obj["refund_after_pct"] as? Number)?.let { customRefundPct = it.toInt() }
-                    depositNonRefundable = (obj["deposit_non_refundable"] as? Boolean) ?: true
-                    (obj["no_show"] as? String)?.let { raw ->
-                        NoShowMode.entries.firstOrNull { it.rawValue == raw }?.let { noShowMode = it }
-                    }
-                    return
-                }
-            }
-            select(Preset.Flexible)
         }
 
         private fun emitLoaded() {
@@ -358,34 +344,7 @@ class CancellationRefundPolicyViewModel
         }
 
         private fun previewText(): String =
-            when (selectedPreset) {
-                Preset.Flexible -> "Free cancellation up to 24 hours before. After that, no refund."
-                Preset.Moderate -> "50% refund up to 48 hours before. After that, no refund."
-                Preset.Strict -> "No refund once the booking is confirmed."
-                Preset.Custom -> customPreviewText()
-            }
-
-        private fun customPreviewText(): String {
-            val parts = mutableListOf<String>()
-            if (customCutoffHours > 0) {
-                parts += "${hoursLabel(customCutoffHours)} before: full refund."
-                parts +=
-                    if (customRefundPct > 0) {
-                        "After that: $customRefundPct% refund."
-                    } else {
-                        "After that: no refund."
-                    }
-            } else {
-                parts +=
-                    if (customRefundPct > 0) {
-                        "$customRefundPct% refund anytime."
-                    } else {
-                        "No refund once confirmed."
-                    }
-            }
-            if (depositNonRefundable) parts += "Deposit is non-refundable."
-            return parts.joinToString(" ")
-        }
+            presetText(selectedPreset) ?: customText(customCutoffHours, customRefundPct, depositNonRefundable)
 
         private fun footnote(): String =
             if (selectedPreset == Preset.Flexible) {
@@ -418,6 +377,60 @@ class CancellationRefundPolicyViewModel
                 } else {
                     "$hours hour${if (hours == 1) "" else "s"}"
                 }
+
+            internal fun presetOf(policy: CancellationPolicyValue?): Preset? =
+                policy?.preset?.let { name -> Preset.entries.firstOrNull { it.rawValue.equals(name, ignoreCase = true) } }
+
+            /** What invitees read for a stored page policy: this editor's preview wording, or its free text. */
+            internal fun policySentence(policy: CancellationPolicyValue?): String? {
+                if (policy == null) return null
+                val preset = presetOf(policy)
+                presetText(preset ?: Preset.Custom)?.let { return it }
+                if (preset == null) policy.notes?.let { return it }
+                return customText(
+                    cutoffHours = (policy.cutoffMin ?: 0) / MINUTES_PER_HOUR,
+                    refundPct = policy.refundAfterPct ?: 0,
+                    depositNonRefundable = policy.depositNonRefundable ?: false,
+                )
+            }
+
+            /** A stored page policy's name for settings rows: the preset, or its free text. */
+            internal fun policyLabel(policy: CancellationPolicyValue): String =
+                presetOf(policy)?.rawValue ?: policy.notes ?: Preset.Custom.rawValue
+
+            private fun presetText(preset: Preset): String? =
+                when (preset) {
+                    Preset.Flexible -> "Free cancellation up to 24 hours before. After that, no refund."
+                    Preset.Moderate -> "50% refund up to 48 hours before. After that, no refund."
+                    Preset.Strict -> "No refund once the booking is confirmed."
+                    Preset.Custom -> null
+                }
+
+            private fun customText(
+                cutoffHours: Int,
+                refundPct: Int,
+                depositNonRefundable: Boolean,
+            ): String {
+                val parts = mutableListOf<String>()
+                if (cutoffHours > 0) {
+                    parts += "${hoursLabel(cutoffHours)} before: full refund."
+                    parts +=
+                        if (refundPct > 0) {
+                            "After that: $refundPct% refund."
+                        } else {
+                            "After that: no refund."
+                        }
+                } else {
+                    parts +=
+                        if (refundPct > 0) {
+                            "$refundPct% refund anytime."
+                        } else {
+                            "No refund once confirmed."
+                        }
+                }
+                if (depositNonRefundable) parts += "Deposit is non-refundable."
+                return parts.joinToString(" ")
+            }
         }
     }
 
