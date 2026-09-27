@@ -98,6 +98,13 @@ final class GigComposeViewModel: WizardModel, WizardDraftSaving {
     /// step transition.
     private(set) var infoMessage: String?
 
+    /// A quiet note that is neither success nor error (a checklist link
+    /// that did not save). Cleared on the next step transition.
+    private(set) var noteMessage: String?
+    /// Set by a Home seasonal-checklist "Hire": the posted task is linked
+    /// back to that checklist item once.
+    var checklistLink: GigChecklistLink?
+
     /// Holds the new gig's id once `submit()` succeeds so the success
     /// step's primary CTA can route to the detail.
     private(set) var createdGigId: String?
@@ -936,6 +943,7 @@ extension GigComposeViewModel {
         form.step = step.rawValue
         errorMessage = nil
         infoMessage = nil
+        noteMessage = nil
         if let stepNumber = step.stepNumber {
             Analytics.track(
                 .screenComposeGigWizardStepViewed(
@@ -1152,6 +1160,11 @@ extension GigComposeViewModel {
             nearbyHelpers = response.nearbyHelpers ?? 0
             transition(to: .success)
             startUndoCountdown(windowMs: response.gig.undoWindowMs ?? 10000)
+            if let checklistLink {
+                // The task is posted; its success actions don't wait for the link.
+                isSubmitting = false
+                await linkChecklistItem(checklistLink, gigId: response.gig.id)
+            }
         } catch {
             if Self.isConnectivityError(error) {
                 stashOfflineDraft()
@@ -1160,6 +1173,18 @@ extension GigComposeViewModel {
                 errorMessage = (error as? APIError)?.errorDescription
                     ?? "Couldn't post your task. Please try again."
             }
+        }
+    }
+
+    /// A checklist "Hire": link the posted task to its item once. The task
+    /// stands either way; a failed link only leaves a quiet note.
+    private func linkChecklistItem(_ link: GigChecklistLink, gigId: String) async {
+        do {
+            let _: SeasonalChecklistItemDTO = try await api.request(
+                HomeDashboardEndpoints.hireSeasonalChecklistItem(homeId: link.homeId, itemId: link.itemId, gigId: gigId)
+            )
+        } catch {
+            noteMessage = "This task could not be marked on your seasonal checklist."
         }
     }
 
@@ -1514,5 +1539,16 @@ extension GigComposeViewModel {
         isFindingPlace = false
         placeSearchError = nil
         if !keepingSuggestions { placeSuggestions = [] }
+    }
+}
+
+/// A Home seasonal-checklist item whose "Hire" opened the wizard.
+public struct GigChecklistLink: Hashable, Sendable {
+    public let homeId: String
+    public let itemId: String
+
+    public init(homeId: String, itemId: String) {
+        self.homeId = homeId
+        self.itemId = itemId
     }
 }

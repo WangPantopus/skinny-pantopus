@@ -31,6 +31,7 @@ public struct GigComposeWizardView: View {
 
     init(
         preselectedCategoryKey: String? = nil,
+        checklistLink: GigChecklistLink? = nil,
         viewModel: GigComposeViewModel? = nil,
         onOpenGigDetail: @escaping (String) -> Void
     ) {
@@ -40,11 +41,9 @@ public struct GigComposeWizardView: View {
         // when the user backgrounds + resumes mid-wizard. The
         // preselected category is applied in `onAppear` only when the
         // restored snapshot is empty (or absent).
-        if let viewModel {
-            _viewModel = State(initialValue: viewModel)
-        } else {
-            _viewModel = State(initialValue: GigComposeViewModel(initialState: .empty))
-        }
+        let model = viewModel ?? GigComposeViewModel(initialState: .empty)
+        model.checklistLink = checklistLink
+        _viewModel = State(initialValue: model)
     }
 
     public var body: some View {
@@ -56,6 +55,9 @@ public struct GigComposeWizardView: View {
             stepContent
             if let info = viewModel.infoMessage {
                 GigComposeInfoBanner(message: info)
+            }
+            if let note = viewModel.noteMessage {
+                GigComposeNoteBanner(message: note)
             }
             if let error = viewModel.errorMessage {
                 GigComposeErrorBanner(message: error)
@@ -1802,6 +1804,26 @@ private struct GigComposeInfoBanner: View {
         .background(Theme.Color.successBg)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .accessibilityIdentifier("gigCompose.undoneToast")
+    }
+}
+
+/// A quiet note that is neither success nor error, e.g. a checklist link
+/// that did not save while the task itself posted.
+private struct GigComposeNoteBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            Icon(.info, size: 18, color: Theme.Color.info)
+            Text(message)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.info)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Spacing.s3)
+        .background(Theme.Color.infoBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .accessibilityIdentifier("composeGigInfoNote")
     }
 }
 

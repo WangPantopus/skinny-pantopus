@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.compose.gig.GigChecklistLink
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -97,8 +98,8 @@ fun HomeDashboardScreen(
     /** H1 — "Hire" on a seasonal-checklist item. Receives the
      *  [app.pantopus.android.ui.screens.gigs.GigsCategory] key derived from
      *  the item's `gig_category` so the host can open the gig composer
-     *  pre-filtered (RN routes to `/gig-v2/new?initialText=…`). */
-    onHireHelp: ((String) -> Unit)? = null,
+     *  pre-filtered, and the item to link the posted task back to. */
+    onHireHelp: ((String, GigChecklistLink) -> Unit)? = null,
     /** FAB → "Add Task" — the household-task create form for this home.
      *  Mirrors RN `homes/[id]/index.tsx:155`. */
     onAddTask: ((String) -> Unit)? = null,
@@ -332,8 +333,9 @@ fun HomeDashboardScreen(
             onComplete = viewModel::completeChecklistItem,
             onSkip = viewModel::skipChecklistItem,
             onHireHelp = { item ->
-                if (viewModel.can("home.edit")) {
-                    onHireHelp?.invoke(GigsCategory.fromBackendKey(item.gigCategory).key)
+                val homeId = viewModel.currentHomeId()
+                if (viewModel.can("home.edit") && homeId != null) {
+                    onHireHelp?.invoke(GigsCategory.fromBackendKey(item.gigCategory).key, GigChecklistLink(homeId, item.id))
                         ?: openPlaceholder("hire_help")
                 }
             },

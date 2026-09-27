@@ -65,6 +65,21 @@ public enum HomeDashboardEndpoints {
         )
     }
 
+    /// `POST /api/homes/:id/seasonal-checklist/:itemId/hire` — links the
+    /// task the member just posted for a checklist item; the item becomes
+    /// `hired`. Responds with the updated `HomeSeasonalChecklistItem` row.
+    public static func hireSeasonalChecklistItem(
+        homeId: String,
+        itemId: String,
+        gigId: String
+    ) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/homes/\(homeId)/seasonal-checklist/\(itemId)/hire",
+            body: HireSeasonalChecklistItemBody(gigId: gigId)
+        )
+    }
+
     /// `GET /api/homes/:id/property-value` — route `backend/routes/home.js:7752`.
     public static func propertyValue(homeId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/property-value")
@@ -75,6 +90,19 @@ public enum HomeDashboardEndpoints {
     /// 403s for members without `finance.view` / `finance.manage`.
     public static func billTrends(homeId: String, currency: String = "USD") -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/bill-trends", query: ["format": "2", "currency": currency])
+    }
+}
+
+/// Request body for `POST /api/homes/:id/seasonal-checklist/:itemId/hire`.
+public struct HireSeasonalChecklistItemBody: Encodable, Sendable, Equatable {
+    public let gigId: String
+
+    public init(gigId: String) {
+        self.gigId = gigId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case gigId = "gig_id"
     }
 }
 

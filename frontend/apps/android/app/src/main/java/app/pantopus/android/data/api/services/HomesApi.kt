@@ -1,5 +1,7 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.homedashboard.HireSeasonalChecklistItemRequest
+import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homes.CastVoteRequest
 import app.pantopus.android.data.api.models.homes.CastVoteResponse
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
@@ -515,4 +517,15 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
     ): retrofit2.Response<Unit>
+
+    /**
+     * `POST /api/homes/:id/seasonal-checklist/:itemId/hire` — links the task
+     * the member just posted for a checklist item; the item becomes `hired`.
+     */
+    @POST("api/homes/{id}/seasonal-checklist/{itemId}/hire")
+    suspend fun hireSeasonalChecklistItem(
+        @Path("id") homeId: String,
+        @Path("itemId") itemId: String,
+        @Body body: HireSeasonalChecklistItemRequest,
+    ): SeasonalChecklistItemDto
 }

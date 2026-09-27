@@ -278,6 +278,7 @@ fun GigComposeWizardScreen(
             GigComposeStep.Success -> SuccessStep(state, viewModel)
         }
         state.errorMessage?.let { ErrorBanner(it) }
+        state.infoMessage?.let { InfoNote(it) }
     }
 
     // E.1 — composer picker sheets presented over the wizard. The
@@ -1206,6 +1207,24 @@ private fun RadioCircle(isSelected: Boolean) {
                         .background(PantopusColors.primary600),
             )
         }
+    }
+}
+
+@Composable
+private fun InfoNote(message: String) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.md))
+                .background(PantopusColors.infoBg)
+                .padding(Spacing.s3)
+                .testTag("composeGigInfoNote"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(icon = PantopusIcon.Info, contentDescription = null, size = 18.dp, tint = PantopusColors.info)
+        Text(text = message, style = PantopusTextStyle.caption, color = PantopusColors.info)
     }
 }
 

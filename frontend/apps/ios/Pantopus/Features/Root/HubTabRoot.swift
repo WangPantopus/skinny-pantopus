@@ -224,7 +224,8 @@ public enum HubRoute: Hashable {
     /// active category so the map renders the same filtered window.
     case nearbyMapForGigs(categoryKey: String)
     /// Compose gig target — placeholder until the compose flow ships.
-    case composeGig(category: String)
+    /// A seasonal-checklist "Hire" also carries its checklist item.
+    case composeGig(category: String, checklist: GigChecklistLink? = nil)
     /// Quick-post V1 single-screen gig form. Reached from the Hub action chip;
     /// the Gigs feed FAB keeps the V2 wizard for power users.
     case quickPostGig(category: String)
@@ -1539,10 +1540,11 @@ public struct HubTabRoot: View {
                 onOpenSettings: { id in
                     Task { @MainActor in push(.homeSettings(homeId: id)) }
                 },
-                onHireHelp: { categoryKey in
+                onHireHelp: { categoryKey, checklist in
                     // H1 — "Hire" on a seasonal-checklist item opens the
-                    // gig composer pre-filtered to the item's category.
-                    Task { @MainActor in push(.composeGig(category: categoryKey)) }
+                    // gig composer pre-filtered to the item's category and
+                    // links the posted task back to the item.
+                    Task { @MainActor in push(.composeGig(category: categoryKey, checklist: checklist)) }
                 },
                 onAddTask: { id in
                     Task { @MainActor in push(.addHouseholdTask(homeId: id)) }
@@ -2418,8 +2420,8 @@ public struct HubTabRoot: View {
                     }
                 }
             )
-        case let .composeGig(category):
-            GigComposeWizardView(preselectedCategoryKey: category) { gigId in
+        case let .composeGig(category, checklist):
+            GigComposeWizardView(preselectedCategoryKey: category, checklistLink: checklist) { gigId in
                 // Replace the wizard with the gig's detail so Back goes
                 // to the Gigs feed, not the success screen.
                 path.removeAll { route in
