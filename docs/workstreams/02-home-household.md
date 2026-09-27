@@ -2,7 +2,7 @@
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
 
-### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T02:01Z)
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T02:34Z)
 - **Merged since the handoff:** batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) (00:08:50Z → `f7f51eae4`: #543, #539, #541 + S1 #542) and batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → `73b98f6b6`: #544, #547 + S3 #545, S1 #549). **No Stream 2 PR is open.**
 - **User decisions on all five §3A items (AskUserQuestion, answered by 01:36Z; each is the recommended option):**
   1. **Phone escrow:** refuse it truthfully. The API answers 400 "Texting isn't available yet; send to their email", creates no escrow, and stops logging the SMS body (backend only).
@@ -15,9 +15,23 @@
   - **1, done with no code.** On master every escrow send already answers 400 "Please choose who this mail is for.": `normalizeSendMailPayload` always sets a user or home recipient or throws, so `isEscrowSend` is never true. No escrow row is written and no SMS is logged. This holds since the initial import, and no client sends `recipientPhone` or `recipientEmail`. Bundle `20260927-stream2-phone-escrow-unreachable-r1` (`589973bc…`, 7 files).
   - **2 = [#558](https://github.com/WangPantopus/skinny-pantopus/pull/558)** (head `ddaaa480e` on `73b98f6b6`). Bundle `20260927-stream2-admin-chat-truth-r1` (`16757367…`, 17 files). Reason-specific states: unavailable (403), failed, self, none. Stream 1 reviewed it OK.
   - **5 = [#559](https://github.com/WangPantopus/skinny-pantopus/pull/559)** (head `71e860381` on `73b98f6b6`). Bundle `20260927-stream2-add-guest-stub-redirect-r1` (`20b07a0d…`, 9 files).
-  - **3 and 4 (native):** the edits are planned. They wait for batch 35 (#556), which also changes `RootTabScreen.kt`.
-    - **4:** only the health route mapping changes (`maintenance` → `view_issues`), plus the two existing tests that pin it. The attention chip "maintenance items past due" keeps `view_maintenance`.
-    - **3:** Android's Members host navigates to `guestPasses`. iOS Hub pushes `.guestPasses`. The iOS You tab's Members had **no** `onAddGuest`, so its Guests CTA was dead; it gains `guestPasses`/`addGuest` routes that reuse the existing views.
+  - **Merged:** #558 and #559 in batch 36 ([#561](https://github.com/WangPantopus/skinny-pantopus/pull/561), 02:31:01Z → master `89f3c6bac`).
+  - **4 = [#563](https://github.com/WangPantopus/skinny-pantopus/pull/563)** (head `08a1b6dc4` on `73b98f6b6`). Health "View maintenance" opens Issues on both apps. Bundle `20260927-stream2-health-view-issues-r1` (`08d77b43…`, 27 files).
+    - Verified on Android and iOS with 5 synthetic open issues, canceled after through the product route.
+    - The iOS "before" is code level.
+  - **3 = [#564](https://github.com/WangPantopus/skinny-pantopus/pull/564)** (head `cd91364ff` on `73b98f6b6`). The Guests tab's "Add a guest" opens the guest-pass manager on Android, iOS Hub and the iOS You cover (where it previously did nothing). Bundle `20260927-stream2-guests-tab-pass-manager-r1` (`801cb517…`, 58 files).
+    - One synthetic pass, `S2D3YouProbe`, was created and then revoked in the UI.
+  - **TokenAccept flake (Stream 1's request) = [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (test only). The extra requests came from chat view models that earlier tests left running, not a 503 retry. Stream 3 is fixing the chat loops.
+  - **Queue:** #560, #563 and #564 are recorded in Stream 1's handoff as the suggested first batch for its successor; re-send them to the new Stream 1 session.
+- **Candidates found (not changed):**
+  - The health score cache (5 min) isn't invalidated when an issue is created or updated.
+  - Web `/share` says "could not be loaded" for a 403 (the §3B item 10 class).
+  - **Lead to check next:** Android `BillsListViewModel` parses the bill `due_date` (a SQL date) with `parseInstant`, the #547 pattern.
+  - §3B item 7 (sun "today"): every app hard-codes "today", but the section carries `as_of`, a `stale` status and `sunrise`'s own date. A copy proposal is ready for the user.
+- **Runtime (02:34Z):** tree = master `89f3c6bac` + #560 + #563 + #564 (build commit `c30198b22`). Backend pid 9784 (detached; backend == master).
+  - emulator-5556 has APK `f21969e6…` (the #563/#564 build); sim 6F914A30 is shut down with dylib `9e58b6f9…`.
+  - DerivedData is now in the kit (`ios-dd`), so the next iOS build is incremental.
+  - **Slots:** heavy 02:09:57–02:22:46Z; slot 1 02:13:47–02:18:02Z and 02:23:11–02:30:50Z. Stream 2 holds only slot 2.
 - **Web tools (kit):** `web-admin-chat.cjs` and `web-page-check.cjs` are read-only and abort non-GET `/api`. They reuse a signed-in session (`runtime/web-state-*.json`, mode 600, 40 min), because the web login limiter (10 per 15 min, fixed window from the first hit) cut off a run.
 - **§3B item 6 is latent, not repaired.** No product route writes `Mail.due_date`: only the dev seed in `mailboxV2.js` does, and bill extraction writes `HomeBill.due_date`. 0 of 65 letters in DB 64554 have one.
   - `MailItemDetail`'s amount-due block can't render, because the web builds only a text block.
@@ -225,6 +239,16 @@
   - **Private token files differ in shape:** the evidence `.control-token` is JSON `{token, pass_id}`, and `.guest-token` is the raw token. The web tools only redact an exact token match.
 
 ## Status log (newest first; each block is the state at its time)
+
+**Stream 2 — 2026-09-27T02:34Z (all five §3A decisions done: 1 no code; #558 and #559 merged; #563 and #564 native opened; #560 test flake)**
+
+- **Merged:** #558 (admin-chat truth) and #559 (add-guest stub redirect) in batch 36 (#561, 02:31:01Z).
+- **Opened:**
+  - #563: health "View maintenance" → Issues (iOS + Android).
+  - #564: Guests tab "Add a guest" → guest-pass manager (Android, iOS Hub and the iOS You cover, where it had been dead).
+  - Both are verified on devices; bundles `…-health-view-issues-r1` and `…-guests-tab-pass-manager-r1`.
+- **#560:** the TokenAccept iOS test flake (test only); the root cause is leftover chat view models, reported to Stream 3.
+- **Fixtures:** 5 probe issues on 9d885f71, canceled; 1 probe pass, `S2D3YouProbe`, revoked. Both through product routes.
 
 **Stream 2 — 2026-09-27T02:01Z (decisions 1, 2 and 5: 1 needs no code; #558 and #559 opened)**
 
