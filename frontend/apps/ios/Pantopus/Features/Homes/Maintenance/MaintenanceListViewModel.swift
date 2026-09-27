@@ -465,7 +465,7 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
 
     private static func ytdCost(for task: MaintenanceTaskDTO, yearStart: Date) -> Decimal? {
         guard let cost = task.cost,
-              let performedAt = parseDate(task.updatedAt ?? task.createdAt ?? ""),
+              let performedAt = parseDate(task.performedAt ?? task.updatedAt ?? task.createdAt ?? ""),
               performedAt >= yearStart else {
             return nil
         }

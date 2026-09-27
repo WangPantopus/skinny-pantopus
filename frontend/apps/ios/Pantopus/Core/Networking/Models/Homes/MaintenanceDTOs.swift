@@ -27,6 +27,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let cost: Decimal?
     public let recurrence: String
     public let dueDate: String?
+    public let performedAt: String?
     public let status: String
     public let createdAt: String?
     public let updatedAt: String?
@@ -40,6 +41,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case cost
         case recurrence
         case dueDate = "due_date"
+        case performedAt = "performed_at"
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -55,6 +57,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         cost = try MaintenanceTaskDTO.decodeOptionalDecimal(in: container, key: .cost)
         recurrence = try container.decodeIfPresent(String.self, forKey: .recurrence) ?? "one_time"
         dueDate = try container.decodeIfPresent(String.self, forKey: .dueDate)
+        performedAt = try container.decodeIfPresent(String.self, forKey: .performedAt)
         status = try container.decodeIfPresent(String.self, forKey: .status) ?? "scheduled"
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
@@ -69,6 +72,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         cost: Decimal? = nil,
         recurrence: String = "one_time",
         dueDate: String? = nil,
+        performedAt: String? = nil,
         status: String = "scheduled",
         createdAt: String? = nil,
         updatedAt: String? = nil,
@@ -81,6 +85,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.cost = cost
         self.recurrence = recurrence
         self.dueDate = dueDate
+        self.performedAt = performedAt
         self.status = status
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -123,6 +128,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
     public let cost: Decimal?
     public let recurrence: String?
     public let dueDate: String?
+    public let performedAt: String?
     public let status: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -131,6 +137,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         case cost
         case recurrence
         case dueDate = "due_date"
+        case performedAt = "performed_at"
         case status
     }
 
@@ -140,6 +147,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         cost: Decimal? = nil,
         recurrence: String? = nil,
         dueDate: String? = nil,
+        performedAt: String? = nil,
         status: String? = nil
     ) {
         self.task = task
@@ -147,6 +155,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         self.cost = cost
         self.recurrence = recurrence
         self.dueDate = dueDate
+        self.performedAt = performedAt
         self.status = status
     }
 
@@ -159,6 +168,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         }
         if let recurrence { try c.encode(recurrence, forKey: .recurrence) }
         if let dueDate { try c.encode(dueDate, forKey: .dueDate) }
+        if let performedAt { try c.encode(performedAt, forKey: .performedAt) }
         if let status { try c.encode(status, forKey: .status) }
     }
 }
@@ -171,6 +181,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public let cost: Decimal?
     public let recurrence: String?
     public let dueDate: String?
+    public let performedAt: String?
     public let status: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -179,6 +190,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         case cost
         case recurrence
         case dueDate = "due_date"
+        case performedAt = "performed_at"
         case status
     }
 
@@ -188,6 +200,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         cost: Decimal? = nil,
         recurrence: String? = nil,
         dueDate: String? = nil,
+        performedAt: String? = nil,
         status: String? = nil
     ) {
         self.task = task
@@ -195,6 +208,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         self.cost = cost
         self.recurrence = recurrence
         self.dueDate = dueDate
+        self.performedAt = performedAt
         self.status = status
     }
 
@@ -207,6 +221,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         }
         if let recurrence { try c.encode(recurrence, forKey: .recurrence) }
         if let dueDate { try c.encode(dueDate, forKey: .dueDate) }
+        if let performedAt { try c.encode(performedAt, forKey: .performedAt) }
         if let status { try c.encode(status, forKey: .status) }
     }
 }
