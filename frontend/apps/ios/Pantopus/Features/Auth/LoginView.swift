@@ -24,6 +24,7 @@ struct LoginView: View {
     @State private var viewModel = LoginViewModel()
     @State private var path: [AuthRoute] = []
     @State private var showPassword: Bool = false
+    @State private var showRemoveConfirmation = false
     @State private var deepLink = DeepLinkRouter.shared
 
     var body: some View {
@@ -59,7 +60,23 @@ struct LoginView: View {
 
                     if let remembered = viewModel.rememberedAccount {
                         RememberedAccountCard(hint: remembered) {
-                            Task { await viewModel.forgetRememberedAccount(using: auth) }
+                            showRemoveConfirmation = true
+                        }
+                        .confirmationDialog(
+                            "Remove this account from this device?",
+                            isPresented: $showRemoveConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Remove account", role: .destructive) {
+                                Task {
+                                    await viewModel.forgetRememberedAccount(userId: remembered.userId, using: auth)
+                                }
+                            }
+                            .accessibilityIdentifier("loginRemoveAccountConfirm")
+                            Button("Cancel", role: .cancel) {}
+                                .accessibilityIdentifier("loginRemoveAccountCancel")
+                        } message: {
+                            Text("You'll need to sign in again on this device. Your account itself is not deleted.")
                         }
                         .padding(.horizontal, Spacing.s5)
                         .padding(.bottom, Spacing.s3)
@@ -679,6 +696,7 @@ final class LoginViewModel {
     /// successful sign-in), so `prepare` must not resurrect it on the next
     /// `onAppear`.
     private var didDismissSecurityMessage = false
+    private var rememberedHintDismissed = false
 
     var canSubmit: Bool {
         !isLoading && AuthValidation.email(email) == nil && password.count >= 6
@@ -687,7 +705,7 @@ final class LoginViewModel {
     /// Read the remembered account + the reason the last session ended.
     /// Idempotent; called from `onAppear`.
     func prepare(using auth: AuthManager) {
-        rememberedAccount = auth.rememberedAccounts.first
+        rememberedAccount = rememberedHintDismissed ? nil : auth.rememberedAccounts.first
         if let reason = auth.sessionEndReason, securityMessage == nil, !didDismissSecurityMessage {
             securityMessage = reason.message
         }
@@ -714,11 +732,15 @@ final class LoginViewModel {
 
     /// "Not you?" on the remembered-account card: forget the hint (and any
     /// stored tokens for that user) on this device.
-    func forgetRememberedAccount(using auth: AuthManager) async {
-        guard let remembered = rememberedAccount else { return }
+    func forgetRememberedAccount(userId: String? = nil, using auth: AuthManager) async {
+        guard !isLoading, let remembered = rememberedAccount,
+              userId == nil || userId == remembered.userId else { return }
+        rememberedHintDismissed = true
+        // Whatever the user already typed stays; only this visit's hint goes.
+        rememberedAccount = nil
+        isLoading = true
+        defer { isLoading = false }
         await auth.removeRememberedAccount(userId: remembered.userId)
-        // Whatever the user already typed stays; only the hint goes.
-        rememberedAccount = auth.rememberedAccounts.first
     }
 
     /// Dismissing is final: the reason is cleared on `AuthManager` too, so a

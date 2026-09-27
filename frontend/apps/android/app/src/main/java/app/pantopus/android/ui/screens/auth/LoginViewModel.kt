@@ -137,13 +137,14 @@ class LoginViewModel
          * "Not you?" on the remembered-account header — forget that account
          * on this device (Block Store hint + resume grant).
          */
-        fun forgetRememberedAccount(userId: String) {
-            if (_uiState.value.isLoading || _uiState.value.rememberedAccount?.userId != userId) return
+        fun forgetRememberedAccount(userId: String? = null) {
+            val targetId = userId ?: _uiState.value.rememberedAccount?.userId ?: return
+            if (_uiState.value.isLoading || _uiState.value.rememberedAccount?.userId != targetId) return
             rememberedHintDismissed = true
             _uiState.update { it.copy(rememberedAccount = null, isLoading = true) }
             viewModelScope.launch {
                 try {
-                    authRepository.removeRememberedAccount(userId)
+                    authRepository.removeRememberedAccount(targetId)
                 } finally {
                     _uiState.update { it.copy(isLoading = false) }
                 }
