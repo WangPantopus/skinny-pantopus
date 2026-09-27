@@ -41,10 +41,10 @@ enum EditBusinessPageMapper {
             EditBusinessPageContent(
                 businessId: business.id,
                 mode: seedMode(isPublished: isPublished, publishedAt: profile?.publishedAt),
-                banner: hasBanner ? .filled(dirty: false, palette: .cafeGoldenHour) : .empty,
+                banner: hasBanner ? .filled(dirty: false, palette: .cafeGoldenHour, imageURL: business.coverPhotoURL) : .empty,
                 logo: (profile?.logoFileId ?? "").isEmpty
                     ? .empty
-                    : .filled(initial: String(name.prefix(1)).uppercased(), palette: .sunrise),
+                    : .filled(initial: String(name.prefix(1)).uppercased(), palette: .sunrise, imageURL: business.profilePictureURL),
                 name: field(name),
                 tagline: field(business.tagline, placeholder: "One short line, no punctuation"),
                 category: field(
@@ -115,7 +115,7 @@ enum EditBusinessPageMapper {
 
     private static func mediaEditCount(_ content: EditBusinessPageContent) -> Int {
         var count = 0
-        if case let .filled(dirty, _) = content.banner, dirty { count += 1 }
+        if case let .filled(dirty, _, _) = content.banner, dirty { count += 1 }
         if case let .rows(rows, _) = content.hours, rows.contains(where: \.isDirty) { count += 1 }
         if case let .chips(chips) = content.services, chips.contains(where: \.isFresh) {
             count += 1

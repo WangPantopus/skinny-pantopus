@@ -148,6 +148,11 @@ final class SchedulingSettingsModel {
         push(.notificationPreferences(owner: owner))
     }
 
+    /// H15 channel manager (push / email / SMS status), the web's Scheduling → Channels.
+    func openChannels() {
+        push(.notificationPermissionPrompt(owner: owner))
+    }
+
     func openReminders() {
         push(.defaultReminders(owner: owner))
     }

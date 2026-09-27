@@ -95,6 +95,12 @@ struct SchedulingSettingsScreen: View {
                 sub: "Choose your channels",
                 trailing: .chevron
             ) { model.openNotifications() }
+            SettingsDivider()
+            SettingsRow(
+                label: "Notification channels",
+                sub: "Make sure reminders reach you",
+                trailing: .chevron
+            ) { model.openChannels() }
         }
     }
 
