@@ -33,6 +33,7 @@ final class PlaceDashboardViewModel {
     private(set) var isRefreshing = false
 
     private let api: APIClient
+    private var reloadPending = false
     let onOpenDetail: (PlaceDetailGroup) -> Void
     /// Open the full Today's Pulse stream (the hero taps here).
     let onOpenPulse: () -> Void
@@ -82,8 +83,15 @@ final class PlaceDashboardViewModel {
     }
 
     func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state, !reloadPending { return }
+        if reloadPending { state = .loading }
+        reloadPending = false
         await fetch()
+    }
+
+    /// Home tools can change the privacy projection while this view is retained.
+    func reloadOnReturn() {
+        reloadPending = true
     }
 
     func refresh() async {

@@ -116,7 +116,10 @@ fun PlaceDashboardScreen(
                     moveInDate = current.moveInDate,
                     onOpenMailDay = onOpenMailDay,
                     onOpenPrivacyMirror = onOpenPrivacyMirror,
-                    onOpenHomeTools = onOpenHomeTools,
+                    onOpenHomeTools = {
+                        viewModel.reloadOnReturn()
+                        onOpenHomeTools()
+                    },
                     onOpenMenu = onOpenMenu,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
