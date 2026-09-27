@@ -100,8 +100,12 @@ public final class PulsePostDetailViewModel {
 
     /// Inline composer's draft text. Bound from the view.
     public var composerText: String = "" {
-        didSet { if composerText.isEmpty { pendingComment = nil } }
+        didSet {
+            if composerText != oldValue { composerRevision &+= 1 }
+            if composerText.isEmpty { pendingComment = nil }
+        }
     }
+    private var composerRevision: UInt = 0
     private var pendingComment: PostCommentRequest?
 
     /// True while a comment is in flight.
@@ -119,7 +123,9 @@ public final class PulsePostDetailViewModel {
     public var showsOverflowMenu: Bool = false
 
     /// Comment the composer is replying to; nil sends a top-level comment.
-    public private(set) var replyTarget: ReplyTarget?
+    public private(set) var replyTarget: ReplyTarget? {
+        didSet { composerRevision &+= 1 }
+    }
 
     /// Set after a successful author delete so the view can pop back.
     public private(set) var didDeletePost: Bool = false
@@ -399,6 +405,7 @@ public final class PulsePostDetailViewModel {
     public func sendComment() async {
         let body = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, case .loaded = state, !isSendingComment else { return }
+        let submittedRevision = composerRevision
         isSendingComment = true
         defer { isSendingComment = false }
         let parentId = replyTarget?.commentId
@@ -411,8 +418,11 @@ public final class PulsePostDetailViewModel {
                 PostsEndpoints.createComment(id: postId, body: req),
                 as: PostCommentCreateResponse.self
             )
-            composerText = ""
-            replyTarget = nil
+            pendingComment = nil
+            if submittedRevision == composerRevision {
+                composerText = ""
+                replyTarget = nil
+            }
             await fetch()
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {

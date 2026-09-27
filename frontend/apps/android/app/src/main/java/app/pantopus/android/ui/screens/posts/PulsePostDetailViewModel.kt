@@ -102,6 +102,7 @@ class PulsePostDetailViewModel
         private val _nearbyProviders = MutableStateFlow<List<NearbyProviderRow>>(emptyList())
         val nearbyProviders: StateFlow<List<NearbyProviderRow>> = _nearbyProviders.asStateFlow()
 
+        private var composerRevision = 0L
         private var pendingComment: PostCommentRequest? = null
         private val _composerText = MutableStateFlow("")
         val composerText: StateFlow<String> = _composerText.asStateFlow()
@@ -194,6 +195,7 @@ class PulsePostDetailViewModel
         }
 
         fun setComposerText(text: String) {
+            if (text != _composerText.value) composerRevision += 1
             if (text.isEmpty()) pendingComment = null
             _composerText.value = text
         }
@@ -213,11 +215,13 @@ class PulsePostDetailViewModel
             commentId: String,
             authorName: String,
         ) {
+            composerRevision += 1
             _replyTarget.value = PulseReplyTarget(commentId = commentId, authorName = authorName)
         }
 
         /** Clear the reply banner without losing typed text. */
         fun cancelReply() {
+            composerRevision += 1
             _replyTarget.value = null
         }
 
@@ -393,13 +397,16 @@ class PulsePostDetailViewModel
             val req = pendingComment?.takeIf { it.comment == body && it.parentCommentId == parentId }
                 ?: PostCommentRequest(body, parentId, java.util.UUID.randomUUID().toString())
             pendingComment = req
+            val submittedRevision = composerRevision
             _isSendingComment.value = true
             viewModelScope.launch {
                 when (repo.createComment(postId, req)) {
                     is NetworkResult.Success -> {
                         pendingComment = null
-                        _composerText.value = ""
-                        _replyTarget.value = null
+                        if (submittedRevision == composerRevision) {
+                            _composerText.value = ""
+                            _replyTarget.value = null
+                        }
                         fetch()
                     }
                     is NetworkResult.Failure -> {
