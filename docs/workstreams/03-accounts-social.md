@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T03:56:30Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T04:14:05Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held. Last holds: heavy 03:36:48Z–03:48:55Z and slot 4 03:48:44Z–03:54:23Z (for #573; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
+- **Slots:** none held. Last holds: heavy 03:59:46Z–04:10:10Z and slot 3 03:59:46Z–04:12:19Z (for #576; emulator-5554 is shut down). Earlier, sim `0AE16FA0` stayed booted without a slot from 02:12:30Z to 02:37:57Z (my slip; peers told).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
@@ -38,11 +38,18 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Fixture CA13: messages 39–44 kept. Chat-audit mode was on 03:11:00Z–03:19:04Z and is off now.
 
 ### PR #573: the Android business page editor's banner and logo controls upload a photo (S3-37 parity)
-- **[#573](https://github.com/WangPantopus/skinny-pantopus/pull/573)** head `f7e7bd4ce` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-page-editor-media-r1`, seal `9deab38e2c0cb584f41387deeacb4bc6df122e270945e1696921a63565c1db39` (32 files; seal comment posted). Sent to Stream 1.
+- **[#573](https://github.com/WangPantopus/skinny-pantopus/pull/573)** head `f7e7bd4ce` on `89f3c6bac` (merges cleanly). Bundle `20260927-stream3-android-page-editor-media-r1`, seal `9deab38e2c0cb584f41387deeacb4bc6df122e270945e1696921a63565c1db39` (32 files; seal comment posted). Reviewed OK by Stream 1; batch 38.
 - Defect: Android's "Change banner", "Change logo", "Add banner" and the "Logo" tile had no click handler, and a stored banner was drawn as the stock café palette. iOS fixed this in #552; the inventory listed iOS only.
 - Fix: 5 editor files, plus one test line (a relaxed `UploadRepository` mock for the new constructor parameter). The targets open the photo picker and upload via the existing `UploadRepository.uploadBusinessMedia`; the editor shows real cover/profile images and keeps the palette without one.
 - Before (master APK `27a5e60e…`): targets not clickable (uiautomator); taps open nothing. After (APK `bbbacb05…`): banner and logo upload with spinner, image and toast; a 500 keeps the old image and shows the reason. The proxy answered all three uploads before upstream; no DB or storage write. ktlint, detekt, lintDebug; `EditBusinessPageViewModelTest` 6/6; `verifyPaparazziDebug` `EditBusinessPageSnapshotTest` 2/2 (goldens unchanged).
 - The gallery "Add" tiles are still inert (no backend); see the pending questions below.
+
+### PR #576: Android Creator inbox "Send a broadcast · Compose" opens the composer (S3-68 parity)
+- **[#576](https://github.com/WangPantopus/skinny-pantopus/pull/576)** head `edfe11e30` on `89f3c6bac` (merges cleanly into `7bdef3e8c`; recheck after batch 37 merges, since #564 also touches `RootTabScreen.kt`). Bundle `20260927-stream3-android-creator-inbox-compose-r1`, seal `05c034cb08158be8e9c37d1fad5e05e7f531bcf257b443e569a765dcf1c08db3` (19 files; seal comment posted). Sent to Stream 1.
+- Defect: `RootTabScreen` sent Compose to `AUDIENCE_PROFILE`. iOS fixed this in `bcb23ae91`; its Android change there was only S3-12.
+- Fix: 3 files (+15/−5); Compose → `composeBroadcast(personaId)`, or the audience profile without a Beacon.
+- Before (master APK): "Public Profile". After (APK `8fa0a377…`): "Compose broadcast" for @s3fx_member_beacon; nothing sent. `CreatorInboxViewModelTest` 9/9.
+- Test setup: the persona DM routes need `audience_profile` (F10, reverted at 00:36:21Z). The proxy answered the thread list empty (`fault-s368-inbox-empty.json`), with no DB write; fault-control reset at 04:11:57Z.
 
 ### Pending user questions (asked in chat at 2026-09-27T03:30:38Z; no change until answered)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
@@ -72,7 +79,9 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - Web launcher opt-in `S3_WEB_PAID=1` exists (default off). Kit synced (`stream3-runtime-kit`).
 
 ### Candidates (not changed)
-- Previously noted: B7 "Max per week 20" placeholder. The persona "Share profile" item is now a pending user question (above).
+- Previously noted: B7 "Max per week 20" placeholder (a disabled stepper holding a made-up 20 on all three platforms; the backend has no weekly cap). The persona "Share profile" item is now a pending user question (above).
+- **Android broadcast composer shows sample reach counts:** `ComposeBroadcastViewModel.kt:85` seeds `audienceReach` from `ComposeBroadcastSampleData`. When `membership-stats` fails (seen with the flag off during #576), it shows "All beacons · 1,247" as if real.
+- **Parity sweep method:** the S3-30, S3-37 and S3-68 Android gaps were all inventory rows listed for one platform. The remaining single-platform native rows to check on the other app: S3-10, S3-13, S3-32, S3-34, S3-36, S3-48, S3-49, S3-50, S3-51, S3-59, S3-60, S3-66.
 - iOS build warnings "backward matching of the unlabeled trailing closure … label the argument with 'onBack'" at `Features/Root/TasksTabRoot.swift:408` and `MarketplaceTabRoot.swift:221`: Stream 1 checked (03:18Z): both screens pass `{ pop() }` to `ChatConversationView`, whose last parameter is `onBack`, so Back works today. The risk is only a future Swift 6 switch (forward scan). Recorded in Stream 1's inventory; no change.
 - Harness: `GET /api/listings/:id` upserts a `ListingView` row for a signed-in non-owner (`backend/routes/listings.js:1433`) and is not on the proxy's implicit-write list. Opening a shared listing from chat wrote two rows during #566 (reverted). Add a refusal rule or a scoped allowance before the next listing check.
 
