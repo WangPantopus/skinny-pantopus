@@ -412,7 +412,8 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     }
 
     static func summarize(tasks: [MaintenanceTaskDTO], now: Date) -> MaintenanceBannerSummary {
-        let calendar = Calendar(identifier: .gregorian)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         let yearStart = calendar.date(
             from: calendar.dateComponents([.year], from: now)
         ) ?? now
@@ -465,7 +466,7 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
 
     private static func ytdCost(for task: MaintenanceTaskDTO, yearStart: Date) -> Decimal? {
         guard let cost = task.cost,
-              let performedAt = parseDate(task.updatedAt ?? task.createdAt ?? ""),
+              let performedAt = parseDate(task.performedAt ?? task.updatedAt ?? task.createdAt ?? ""),
               performedAt >= yearStart else {
             return nil
         }

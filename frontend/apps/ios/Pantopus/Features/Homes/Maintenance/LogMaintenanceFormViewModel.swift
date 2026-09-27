@@ -323,6 +323,7 @@ final class LogMaintenanceFormViewModel {
                     cost: parsedCost,
                     recurrence: recurrence.rawValue,
                     dueDate: dueIso,
+                    performedAt: Self.isoTimestampString(from: dateCompleted),
                     status: "completed"
                 )
                 response = try await api.request(
@@ -335,6 +336,7 @@ final class LogMaintenanceFormViewModel {
                     cost: parsedCost,
                     recurrence: recurrence.rawValue,
                     dueDate: dueIso,
+                    performedAt: dateCompleted == initial.dateCompleted ? nil : Self.isoTimestampString(from: dateCompleted),
                     status: nil // Don't reset status on edit.
                 )
                 response = try await api.request(
@@ -466,7 +468,7 @@ final class LogMaintenanceFormViewModel {
     }
 
     static func parsePerformedDate(dto: MaintenanceTaskDTO?) -> Date? {
-        guard let iso = dto?.updatedAt ?? dto?.createdAt else { return nil }
+        guard let iso = dto?.performedAt ?? dto?.updatedAt ?? dto?.createdAt else { return nil }
         return MaintenanceListViewModel.parseDate(iso)
     }
 

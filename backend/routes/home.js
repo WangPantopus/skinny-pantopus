@@ -2906,7 +2906,7 @@ router.get('/:id/maintenance', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/maintenance
  *
- * Body: { task, vendor?, cost?, recurrence?, due_date?, status? }.
+ * Body: { task, vendor?, cost?, recurrence?, due_date?, status?, performed_at? }.
  *  - `task` is required (non-empty); everything else is optional.
  *  - `status` defaults to `scheduled`; `recurrence` defaults to `one_time`.
  */
@@ -2918,7 +2918,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
-    const { task, vendor, cost, recurrence, due_date, status } = req.body || {};
+    const { task, vendor, cost, recurrence, due_date, status, performed_at } = req.body || {};
 
     if (!task || typeof task !== 'string' || !task.trim()) {
       return res.status(400).json({ error: 'task is required' });
@@ -2928,6 +2928,10 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     }
     if (recurrence && !MAINTENANCE_RECURRENCE_VALUES.has(recurrence)) {
       return res.status(400).json({ error: 'Invalid recurrence' });
+    }
+    if (performed_at !== undefined
+      && (typeof performed_at !== 'string' || !Number.isFinite(Date.parse(performed_at)))) {
+      return res.status(400).json({ error: 'Invalid completion date' });
     }
 
     const { data, error } = await supabaseAdmin
@@ -2939,6 +2943,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
         cost: cost == null ? null : cost,
         recurrence: recurrence || 'one_time',
         due_date: due_date || null,
+        ...(performed_at !== undefined ? { performed_at: new Date(performed_at).toISOString() } : {}),
         status: status || 'scheduled',
         created_by: userId,
       })
@@ -2978,7 +2983,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
     if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
 
-    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status'];
+    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at'];
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
@@ -2991,6 +2996,17 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid recurrence' });
     }
 
+    if (updates.performed_at !== undefined
+      && (typeof updates.performed_at !== 'string' || !Number.isFinite(Date.parse(updates.performed_at)))) {
+      return res.status(400).json({ error: 'Invalid completion date' });
+    }
+    if (current.gig_id && updates.performed_at !== undefined) {
+      return res.status(409).json({ error: 'The completion date of Gig work comes from its completion record.' });
+    }
+    if (updates.performed_at !== undefined) {
+      updates.performed_at = new Date(updates.performed_at).toISOString();
+    }
+
     if (current.gig_id && updates.cost !== undefined
       && (updates.cost == null ? null : Number(updates.cost)) !== (current.cost == null ? null : Number(current.cost))) {
       return res.status(409).json({ error: 'The cost of completed Gig work comes from its payment record.' });
@@ -2998,7 +3014,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     // A saved completion retry and edits to automatic Gig history keep the
     // original performer/time. Only a manual task's first completion stamps them.
     if (updates.status === 'completed' && current.status !== 'completed' && !current.gig_id) {
-      updates.performed_at = new Date().toISOString();
+      updates.performed_at = updates.performed_at ?? new Date().toISOString();
       updates.performed_by = userId;
     }
 

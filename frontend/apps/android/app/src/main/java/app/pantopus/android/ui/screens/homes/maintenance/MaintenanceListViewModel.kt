@@ -545,7 +545,8 @@ class MaintenanceListViewModel
             ): BigDecimal? {
                 val cost = task.cost ?: return null
                 val performedAt =
-                    task.updatedAt?.let(::parseInstant)
+                    task.performedAt?.let(::parseInstant)
+                        ?: task.updatedAt?.let(::parseInstant)
                         ?: task.createdAt?.let(::parseInstant)
                         ?: return null
                 return if (!performedAt.isBefore(yearStart)) cost else null

@@ -189,7 +189,7 @@ class LogMaintenanceFormViewModel
                 LogMaintenanceFormState(
                     category = stored?.category ?: inferredCategory,
                     title = task.task,
-                    dateCompleted = parseInstant(task.updatedAt ?: task.createdAt) ?: Instant.now(),
+                    dateCompleted = parseInstant(task.performedAt ?: task.updatedAt ?: task.createdAt) ?: Instant.now(),
                     performedBy = performedBy,
                     performerName = stored?.performerName ?: (task.vendor.orEmpty()),
                     performerContact = stored?.performerContact.orEmpty(),
@@ -273,6 +273,7 @@ class LogMaintenanceFormViewModel
                         recurrence = current.recurrence.raw,
                         dueDate = if (current.nextDueEnabled) formatDay(current.nextDueDate) else null,
                         status = "completed",
+                        performedAt = current.dateCompleted.toString(),
                     )
                 val result =
                     when (val m = mode) {
@@ -288,6 +289,7 @@ class LogMaintenanceFormViewModel
                                     recurrence = req.recurrence,
                                     dueDate = req.dueDate,
                                     status = null,
+                                    performedAt = req.performedAt.takeIf { current.dateCompleted != initial.dateCompleted },
                                 ),
                             )
                     }
