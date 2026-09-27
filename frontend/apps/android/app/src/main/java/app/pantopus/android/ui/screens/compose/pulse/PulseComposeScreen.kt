@@ -166,8 +166,8 @@ fun PulseComposeScreen(
         if (shouldDismiss) {
             val postId =
                 (state as? PulseComposeUiState.Success)?.postId
-            viewModel.acknowledgeDismiss()
             delay(700)
+            viewModel.acknowledgeDismiss()
             onPosted(postId)
             onBack()
         }

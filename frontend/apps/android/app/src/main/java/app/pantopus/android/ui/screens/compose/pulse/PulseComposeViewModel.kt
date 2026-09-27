@@ -820,7 +820,7 @@ class PulseComposeViewModel
         }
 
         fun submit() {
-            if (_state.value is PulseComposeUiState.Submitting) return
+            if (_state.value is PulseComposeUiState.Submitting || _state.value is PulseComposeUiState.Success) return
             val invalid = validateAll()
             if (invalid != null) {
                 _shakeTrigger.value = _shakeTrigger.value + 1
