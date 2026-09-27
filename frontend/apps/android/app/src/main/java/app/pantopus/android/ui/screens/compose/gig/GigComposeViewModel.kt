@@ -23,6 +23,7 @@ import app.pantopus.android.data.api.models.gigs.MagicTaskItemDto
 import app.pantopus.android.data.api.models.gigs.PriceBenchmarkDto
 import app.pantopus.android.data.api.models.gigs.RemoteDetailsDto
 import app.pantopus.android.data.api.models.gigs.UrgentDetailsDto
+import app.pantopus.android.data.api.models.homedashboard.HireSeasonalChecklistItemRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
@@ -62,6 +63,8 @@ data class GigComposeUiState(
     val isSubmitting: Boolean = false,
     val createdGigId: String? = null,
     val errorMessage: String? = null,
+    /** A quiet note, e.g. a posted task that couldn't be linked to its checklist item. */
+    val infoMessage: String? = null,
     /**
      * E.1 — the composer picker sheet currently presented over the wizard,
      * or null. Transient UI state — never persisted to [SavedStateHandle]
@@ -132,6 +135,16 @@ open class GigComposeViewModel
 
         /** One-shot navigation events the screen reacts to. */
         val pendingEvent = MutableStateFlow<GigComposeOutboundEvent?>(null)
+
+        /**
+         * Set by a Home seasonal-checklist "Hire" (nav args [CHECKLIST_HOME_KEY]
+         * / [CHECKLIST_ITEM_KEY]): the posted task is linked back to that item once.
+         */
+        private val checklistLink: GigChecklistLink? =
+            GigChecklistLink.from(
+                savedStateHandle.get<String>(CHECKLIST_HOME_KEY),
+                savedStateHandle.get<String>(CHECKLIST_ITEM_KEY),
+            )
 
         /**
          * P0.1 — in-flight debounce + magic-draft call for the Magic Task
@@ -1072,6 +1085,18 @@ open class GigComposeViewModel
             }
         }
 
+        /** A checklist "Hire": link the posted task once; a failure keeps the task and leaves a quiet note. */
+        private suspend fun linkChecklistItem(
+            link: GigChecklistLink,
+            gigId: String,
+        ) {
+            val result =
+                safeApiCall {
+                    homesApi.hireSeasonalChecklistItem(link.homeId, link.itemId, HireSeasonalChecklistItemRequest(gigId))
+                }
+            if (result is NetworkResult.Failure) _state.update { it.copy(infoMessage = CHECKLIST_LINK_FAILED_MESSAGE) }
+        }
+
         // MARK: - A12.8 Submit via magic-post
 
         private suspend fun submit() {
@@ -1112,6 +1137,7 @@ open class GigComposeViewModel
                         )
                     }
                     persist()
+                    checklistLink?.let { linkChecklistItem(it, gig.id) }
                 }
                 is NetworkResult.Failure -> {
                     // P6c — an IO-layer failure (offline mid-flight,
@@ -1380,6 +1406,11 @@ open class GigComposeViewModel
 
             /** A12.8 — backend `UNDO_WINDOW_MS` fallback. */
             private const val DEFAULT_UNDO_WINDOW_MS = 10_000L
+
+            /** Nav args set by a Home seasonal-checklist "Hire". */
+            const val CHECKLIST_HOME_KEY = "checklistHome"
+            const val CHECKLIST_ITEM_KEY = "checklistItem"
+            internal const val CHECKLIST_LINK_FAILED_MESSAGE = "This task could not be marked on your seasonal checklist."
 
             /** P0.2 — `file_type` form field on `POST /api/files/upload`. */
             private const val GIG_PHOTO_FILE_TYPE = "gig_photo"
@@ -1897,4 +1928,24 @@ private fun NormalizedAddress.toComposePlace(suggestion: GeoSuggestion): GigComp
         latitude = lat,
         longitude = lng,
     ).takeUnless { lat == 0.0 && lng == 0.0 }
+}
+
+/** A Home seasonal-checklist item whose "Hire" opened the wizard. */
+data class GigChecklistLink(
+    val homeId: String,
+    val itemId: String,
+) {
+    companion object {
+        private val ID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+        /** Both nav args, when both are ids; otherwise no link. */
+        fun from(
+            homeId: String?,
+            itemId: String?,
+        ): GigChecklistLink? {
+            val home = homeId?.takeIf { ID.matches(it) }
+            val item = itemId?.takeIf { ID.matches(it) }
+            return if (home != null && item != null) GigChecklistLink(home, item) else null
+        }
+    }
 }
