@@ -61,10 +61,12 @@ The runner log ends "02:31:08 PR561 MERGED … QUEUE EMPTY / QUEUE STOP", `queue
 1. **Implement the user's decision on native "Post task" at 0,0** (§3.2, HIGH).
 2. The low inventory items (§3.3).
 
-**Stream 1 holds no slots** (02:31:47Z):
-- Stream 3: heavy (since 02:23:21Z) and slot 3 (emulator-5554).
+**Stream 1 holds no slots.** The latest peer report, received after 02:37:57Z:
+- Stream 3: heavy (since 02:23:21Z), slot 1 (iOS driver, taken 02:37:57Z after Stream 2 handed it over) and slot 3 (emulator-5554), all for its chat re-subscribe checks.
 - Stream 2: slot 2 (emulator-5556).
-- Slots 1 and 4 are free.
+- Slot 4 is free.
+
+Check `device-slot.sh status` live.
 
 **My devices** are shut down:
 - iOS sim F4DBD47E has the #548 build;
