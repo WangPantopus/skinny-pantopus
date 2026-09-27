@@ -104,7 +104,8 @@ class BusinessOwnerViewModel
 
         /**
          * Commit a review reply: optimistic local update, then `POST …/respond`.
-         * On failure the optimistic change is rolled back.
+         * On failure the optimistic change is rolled back and a toast says why;
+         * the composer keeps the draft for another try.
          */
         fun submitReply(
             reviewId: String,
@@ -119,9 +120,13 @@ class BusinessOwnerViewModel
 
             viewModelScope.launch {
                 val result = businesses.respondToReview(businessId, reviewId, trimmed)
-                if (result is NetworkResult.Failure && _state.value is BusinessOwnerUiState.Loaded) {
-                    // Roll back to the pre-optimistic content.
-                    _state.value = current
+                if (result is NetworkResult.Failure) {
+                    if (_state.value is BusinessOwnerUiState.Loaded) {
+                        // Roll back to the pre-optimistic content.
+                        _state.value = current
+                    }
+                    // Say so, rather than letting the reply silently vanish (as on iOS).
+                    _toast.value = "Your reply wasn't posted. ${result.error.message.ifBlank { "Please try again." }}"
                 }
             }
         }

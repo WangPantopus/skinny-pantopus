@@ -23,12 +23,11 @@ enum class BookingPillKind {
 /**
  * Optional footer affordance on a row (design frames: Past = "Book again",
  * Action-needed = "Pay {balance}"). The lean /my-bookings payload doesn't carry
- * the price/discovery data these need yet, so the VM leaves this null today —
- * the renderer supports it for when the backend joins those fields.
+ * a balance, so the VM never builds [Pay] today.
  */
 sealed interface BookingRowFooter {
-    /** Past-row "Book again" link (rotate-ccw + accent label). */
-    data object BookAgain : BookingRowFooter
+    /** Past-row "Book again" link to the booking page [slug] (rotate-ccw + accent label). */
+    data class BookAgain(val slug: String) : BookingRowFooter
 
     /** Action-needed "Pay {balance}" affordance with a "{balance} due at confirm" caption. */
     data class Pay(val balance: String) : BookingRowFooter

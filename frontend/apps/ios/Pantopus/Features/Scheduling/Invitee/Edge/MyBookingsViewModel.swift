@@ -39,6 +39,7 @@ final class MyBookingsViewModel {
     private(set) var upcomingGroups: [BookingGroup] = []
     private(set) var pastGroups: [BookingGroup] = []
     var segment: Segment = .upcoming
+    var toastMessage: String?
     private var didLoad = false
     private var isFetching = false
 
@@ -58,6 +59,19 @@ final class MyBookingsViewModel {
 
     func refresh() async {
         await fetch()
+    }
+
+    /// "Book again" opens the booking page. The row only carries its slug
+    /// while the page is live, and the view hides the button without one.
+    func bookAgain(_ booking: BookingDTO) {
+        guard let slug = booking.pageSlug, !slug.isEmpty else { return }
+        push(.inviteeLanding(slug: slug))
+    }
+
+    /// The list has no manage token (only the confirmation email carries
+    /// it), so a row says where to manage the booking, as Android does.
+    func rowTapped() {
+        toastMessage = "Manage this booking from your confirmation email link."
     }
 
     /// Whether the currently-selected segment has any rows.

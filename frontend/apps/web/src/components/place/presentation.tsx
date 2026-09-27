@@ -467,6 +467,15 @@ function lockHandler(env: PlaceSection, handlers?: PlaceSectionHandlers): (() =>
 export interface PlaceSectionRenderOptions extends PlaceSectionHandlers {
   /** Tap-through to the section's group-detail page (W2.3). */
   onOpen?: () => void;
+  /** "Try again" on a section that failed to load: re-read the place. */
+  onRetry?: () => void;
+  /** A re-read is in flight; a failed section shows loading until it lands. */
+  retrying?: boolean;
+}
+
+function cardState(env: PlaceSection, opts?: PlaceSectionRenderOptions): PlaceSectionState {
+  const state = statusToState(env.status);
+  return state === 'error' && opts?.retrying ? 'loading' : state;
 }
 
 export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOptions): ReactNode {
@@ -494,8 +503,9 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
       <SectionCard
         icon={Users}
         title="Verified homes nearby"
-        state={statusToState(env.status)}
+        state={cardState(env, opts)}
         caption={env.unavailable_reason ?? undefined}
+        onRetry={opts?.onRetry}
         onClick={onOpen}
       />
     );
@@ -513,7 +523,7 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
     );
   }
 
-  const state = statusToState(env.status);
+  const state = cardState(env, opts);
   const reading = (state === 'loaded' || state === 'stale') && env.data ? cfg.format?.(env.data, env) ?? {} : {};
 
   return (
@@ -528,6 +538,7 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
       chip={reading.chip}
       statusDot={reading.statusDot}
       caption={state === 'unavailable' ? env.unavailable_reason ?? undefined : reading.caption}
+      onRetry={opts?.onRetry}
       onClick={onOpen}
     />
   );

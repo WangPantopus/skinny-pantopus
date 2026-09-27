@@ -32,6 +32,8 @@ export default function OffersPage() {
   const [received, setReceived] = useState<Offer[]>([]);
   const [sent, setSent] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
+  // Which lists failed to load, so a failure isn't shown as "No offers yet".
+  const [failed, setFailed] = useState<{ received: boolean; sent: boolean }>({ received: false, sent: false });
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
 
@@ -48,7 +50,10 @@ export default function OffersPage() {
       ]);
       if (recvRes.status === 'fulfilled') setReceived(((recvRes.value as Record<string, any>).offers || []) as Offer[]);
       if (sentRes.status === 'fulfilled') setSent(((sentRes.value as Record<string, any>).bids || []) as Offer[]);
-    } catch {}
+      setFailed({ received: recvRes.status === 'rejected', sent: sentRes.status === 'rejected' });
+    } catch {
+      setFailed({ received: true, sent: true });
+    }
     setLoading(false);
   };
 
@@ -122,7 +127,14 @@ export default function OffersPage() {
             onNavigate={(path) => router.push(path)}
           />
         )}
-        emptyState={{
+        emptyState={failed[tab] ? {
+          icon: tab === 'received' ? Inbox : Send,
+          headline: tab === 'received' ? "Couldn't load offers" : "Couldn't load your bids",
+          subcopy: 'Check your connection and try again.',
+          tone: 'personal',
+          ctaLabel: 'Try again',
+          onCtaClick: () => { void loadData(); },
+        } : {
           icon: tab === 'received' ? Inbox : Send,
           headline:
             filter !== 'all'

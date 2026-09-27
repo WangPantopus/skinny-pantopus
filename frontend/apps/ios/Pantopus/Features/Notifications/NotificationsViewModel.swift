@@ -314,6 +314,12 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     private var notifications: [NotificationDTO] = []
     private var hasMore: Bool = false
     private var loadingPage: Bool = false
+    /// Bumped by every first-page load (tab, zone, refresh), so a page that
+    /// was requested for the previous filter is dropped when it lands late.
+    private var loadGeneration = 0
+    /// Why the next page failed while rows are on screen. The list shows it
+    /// with Try again (`retryLoadMore`) in place of the page spinner.
+    public private(set) var loadMoreError: String?
     /// Per-context pagination cursors. The Personal zone fans out over
     /// two contexts, so a single `notifications.count` offset would skip
     /// rows on the second page (RN keeps the same per-context map —
@@ -396,7 +402,14 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     }
 
     public func loadMoreIfNeeded() async {
-        guard hasMore, !loadingPage else { return }
+        // After a failed page only Try again (`retryLoadMore`) asks again.
+        guard hasMore, !loadingPage, loadMoreError == nil else { return }
+        await fetch(reset: false)
+    }
+
+    public func retryLoadMore() async {
+        guard loadMoreError != nil, !loadingPage else { return }
+        loadMoreError = nil
         await fetch(reset: false)
     }
 
@@ -518,18 +531,27 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch(reset: Bool) async {
+        if reset {
+            loadGeneration &+= 1
+            loadMoreError = nil
+            offsets = [:]
+        }
+        let generation = loadGeneration
         loadingPage = true
-        defer { loadingPage = false }
-        if reset { offsets = [:] }
-        await fetchPage(reset: reset)
+        await fetchPage(reset: reset, generation: generation)
+        // A late page from an older load must not clear the current load's guard.
+        if generation == loadGeneration { loadingPage = false }
     }
 
-    /// Pull one page for the active zone.
-    private func fetchPage(reset: Bool) async {
+    /// Pull one page for the active zone. The result is applied only while
+    /// `generation` is still current: switching All/Unread/Read or the zone
+    /// mid-request must not show the old filter's rows (UX inventory S3-48).
+    private func fetchPage(reset: Bool, generation: Int) async {
         let unreadOnly = selectedTab == NotificationsTab.unread
         do {
             let contexts = activeContexts ?? [""]
             var incoming: [NotificationDTO] = []
+            var nextOffsets = offsets
             var anyMore = false
             var scopedUnread = 0
             var sawUnreadCount = false
@@ -537,19 +559,21 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
                 let response: NotificationsListResponse = try await api.request(
                     NotificationsEndpoints.list(
                         limit: pageSize,
-                        offset: offsets[context] ?? 0,
+                        offset: nextOffsets[context] ?? 0,
                         unreadOnly: unreadOnly,
                         context: context.isEmpty ? nil : context
                     )
                 )
                 incoming.append(contentsOf: response.notifications)
-                offsets[context] = (offsets[context] ?? 0) + response.notifications.count
+                nextOffsets[context] = (nextOffsets[context] ?? 0) + response.notifications.count
                 anyMore = anyMore || (response.hasMore ?? false)
                 if let count = response.unreadCount {
                     scopedUnread += count
                     sawUnreadCount = true
                 }
             }
+            guard generation == loadGeneration else { return }
+            offsets = nextOffsets
             notifications = reset
                 ? Self.sortedByRecency(incoming)
                 : Self.merged(existing: notifications, incoming: incoming)
@@ -560,10 +584,13 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             revealZoneStripIfAudienceSeen()
             rebuild()
         } catch {
+            guard generation == loadGeneration else { return }
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load notifications."
             if reset {
-                state = .error(
-                    message: (error as? APIError)?.errorDescription ?? "Couldn't load notifications."
-                )
+                state = .error(message: message)
+            } else {
+                // A later page failed: keep the rows; Try again asks for it again.
+                loadMoreError = "Couldn't load more notifications. \(message)"
             }
         }
     }

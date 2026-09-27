@@ -67,7 +67,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessCompletionStrip
-import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessGalleryEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessHoursEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessIdentityStrip
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessMapPreview
@@ -247,7 +246,8 @@ internal fun EditBusinessPageLoadedFrame(
                 )
                 HoursSection(content = content)
                 ServicesSection(content = content)
-                GallerySection(content = content)
+                // No gallery backend yet: the Gallery section only held add tiles
+                // that did nothing, so it stays hidden until one exists (as on iOS).
                 ContactSection(content = content, onFieldChange = onFieldChange)
                 LocationSection(content = content, onFieldChange = onFieldChange)
                 Spacer(modifier = Modifier.height(40.dp))
@@ -481,16 +481,6 @@ private fun ServicesSection(content: EditBusinessPageContent) {
                 }
             }
             is EditBusinessPageServicesState.Prompt -> PromptBlock(prompt = svc.prompt)
-        }
-    }
-}
-
-@Composable
-private fun GallerySection(content: EditBusinessPageContent) {
-    SectionWrapper(overline = "Gallery") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            BizLabel(label = "Photos", hint = content.gallery.hintLabel)
-            EditBusinessGalleryEditor(state = content.gallery)
         }
     }
 }
