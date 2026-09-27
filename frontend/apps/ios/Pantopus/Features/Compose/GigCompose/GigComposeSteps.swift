@@ -254,23 +254,40 @@ public enum GigCancellationPolicy: String, CaseIterable, Sendable, Codable, Hash
 }
 
 /// Plain-old-data address fields collected in step 5 when the user
-/// picks `aPlace`. Mirrors `AddHomeAddressFields`.
+/// picks `aPlace` (and, for `yourAddress`, copied from the primary
+/// Home). Mirrors `AddHomeAddressFields`.
 public struct GigComposePlaceAddress: Codable, Sendable, Equatable {
     public var line1: String
     public var city: String
     public var state: String
     public var zip: String
+    /// The picked suggestion's point (`POST /api/geo/resolve`); a new
+    /// Street clears it.
+    public var latitude: Double?
+    public var longitude: Double?
+    /// `yourAddress` — the Home it came from, so the task shows on that Home.
+    public var homeId: String?
 
     public init(
         line1: String = "",
         city: String = "",
         state: String = "",
-        zip: String = ""
+        zip: String = "",
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        homeId: String? = nil
     ) {
         self.line1 = line1
         self.city = city
         self.state = state
         self.zip = zip
+        self.latitude = latitude
+        self.longitude = longitude
+        self.homeId = homeId
+    }
+
+    public var hasPoint: Bool {
+        latitude != nil && longitude != nil
     }
 
     /// True when every required component carries a non-whitespace value.
@@ -455,6 +472,9 @@ public struct GigComposeFormState: Codable, Sendable, Equatable {
     public var scheduledStartISO: String?
     public var locationMode: GigComposeLocationMode?
     public var placeAddress: GigComposePlaceAddress
+    /// `yourAddress` — the primary Home's address and point, loaded when
+    /// that mode is picked.
+    public var homeAddress: GigComposePlaceAddress?
     /// E.1 — optional hard deadline (`deadline`), ISO-8601. nil ⇒ flexible
     /// (no deadline sent).
     public var deadlineISO: String?
@@ -513,6 +533,7 @@ public struct GigComposeFormState: Codable, Sendable, Equatable {
         scheduledStartISO: String? = nil,
         locationMode: GigComposeLocationMode? = nil,
         placeAddress: GigComposePlaceAddress = .init(),
+        homeAddress: GigComposePlaceAddress? = nil,
         deadlineISO: String? = nil,
         cancellationPolicy: GigCancellationPolicy? = nil,
         isUrgent: Bool = false,
@@ -547,6 +568,7 @@ public struct GigComposeFormState: Codable, Sendable, Equatable {
         self.scheduledStartISO = scheduledStartISO
         self.locationMode = locationMode
         self.placeAddress = placeAddress
+        self.homeAddress = homeAddress
         self.deadlineISO = deadlineISO
         self.cancellationPolicy = cancellationPolicy
         self.isUrgent = isUrgent

@@ -678,7 +678,8 @@ final class GigsFeedViewModelTests: XCTestCase {
             title: "Hang 3 shelves in the living room",
             description: "Need three IKEA Lack shelves mounted on drywall.",
             budgetType: .fixed,
-            budgetMin: "60"
+            budgetMin: "60",
+            locationMode: .virtual
         )
     }
 

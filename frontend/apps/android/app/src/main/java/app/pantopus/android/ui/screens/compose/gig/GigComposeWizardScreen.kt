@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -409,6 +410,9 @@ private fun WhereSection(
                 onTap = { vm.selectLocationMode(mode) },
             )
         }
+        if (state.form.locationMode == GigComposeLocationMode.YourAddress) {
+            YourAddressStatus(state, vm)
+        }
         if (state.form.locationMode == GigComposeLocationMode.APlace) {
             FormFieldsBlock {
                 PantopusTextField(
@@ -418,6 +422,7 @@ private fun WhereSection(
                     placeholder = "123 Main St",
                     fieldTestTag = "composeGig_place_line1",
                 )
+                PlaceSuggestions(state, vm)
                 PantopusTextField(
                     label = "City",
                     value = state.form.placeAddress.city,
@@ -443,6 +448,72 @@ private fun WhereSection(
                 }
             }
         }
+    }
+}
+
+/** `YourAddress` — which Home address the task posts at, or why it can't. */
+@Composable
+private fun YourAddressStatus(
+    state: GigComposeUiState,
+    vm: GigComposeViewModel,
+) {
+    val home = state.form.homeAddress
+    LaunchedEffect(Unit) {
+        if (home == null && !state.isLoadingHome && state.homeAddressError == null) vm.loadHomeAddress()
+    }
+    when {
+        state.isLoadingHome ->
+            CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = "Finding your home address" })
+        home != null ->
+            Text(
+                "Posts at " + listOf(home.line1, home.city).filter { it.isNotBlank() }.joinToString(", "),
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("composeGig_home_address"),
+            )
+        state.homeAddressError != null -> {
+            Text(state.homeAddressError, style = PantopusTextStyle.small, modifier = Modifier.testTag("composeGig_home_error"))
+            TextButton(onClick = vm::loadHomeAddress) { Text("Try again") }
+        }
+    }
+}
+
+/** Address suggestions under Street, listed as Add Home lists them. */
+@Composable
+private fun PlaceSuggestions(
+    state: GigComposeUiState,
+    vm: GigComposeViewModel,
+) {
+    val place = state.form.placeAddress
+    if (state.isFindingAddress) {
+        CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = "Finding addresses" })
+    }
+    state.addressSearchError?.let {
+        Text(it, style = PantopusTextStyle.small)
+        TextButton(onClick = vm::retryPlaceSearch) { Text("Try search again") }
+    }
+    state.addressSuggestions.forEach { suggestion ->
+        TextButton(
+            onClick = { vm.selectPlaceSuggestion(suggestion) },
+            enabled = !state.isFindingAddress,
+            modifier = Modifier.fillMaxWidth().testTag("composeGig_place_suggestion_${suggestion.suggestionId}"),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(suggestion.primaryText, style = PantopusTextStyle.body)
+                Text(suggestion.secondaryText ?: suggestion.label, style = PantopusTextStyle.small)
+            }
+        }
+    }
+    val waitingForPick =
+        place.line1.isNotBlank() && !place.hasPoint && !state.isFindingAddress &&
+            state.addressSearchError == null && state.addressSuggestions.isEmpty()
+    if (waitingForPick) {
+        Text(
+            "Pick an address from the suggestions.",
+            style = PantopusTextStyle.small,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.testTag("composeGig_place_pick_hint"),
+        )
     }
 }
 
@@ -915,7 +986,7 @@ private fun formattedScheduledStart(
 private fun locationSummary(form: GigComposeFormState): String =
     when (form.locationMode) {
         null -> "—"
-        GigComposeLocationMode.YourAddress -> "Your saved address"
+        GigComposeLocationMode.YourAddress -> form.homeAddress?.takeIf { it.isComplete }?.let(::placeSummary) ?: "Your saved address"
         GigComposeLocationMode.Virtual -> "Virtual"
         GigComposeLocationMode.APlace -> placeSummary(form.placeAddress)
     }

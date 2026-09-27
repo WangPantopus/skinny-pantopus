@@ -74,7 +74,8 @@ final class GigComposeViewModelTests: XCTestCase {
             category: .handyman,
             title: "Hang 3 shelves in the living room",
             description: "Need three IKEA Lack shelves mounted on drywall. I have studs marked.",
-            photoIds: []
+            photoIds: [],
+            locationMode: .virtual
         )
     }
 
@@ -91,7 +92,17 @@ final class GigComposeViewModelTests: XCTestCase {
             budgetMax: "",
             scheduleType: .oneTime,
             scheduledStartISO: future,
-            locationMode: .yourAddress
+            locationMode: .yourAddress,
+            // "Your address" posts at the primary Home's saved point.
+            homeAddress: GigComposePlaceAddress(
+                line1: "1200 Main St",
+                city: "Vancouver",
+                state: "WA",
+                zip: "98660",
+                latitude: 45.628,
+                longitude: -122.6739,
+                homeId: "5f0c1e6a-0000-4000-8000-000000000001"
+            )
         )
     }
 
@@ -140,7 +151,7 @@ final class GigComposeViewModelTests: XCTestCase {
     // MARK: - Step 2 — Fill gaps validation
 
     func testFillGapsRequiresTitleAndDescriptionLengths() {
-        let seed = GigComposeFormState(step: GigComposeStep.fillGaps.rawValue, category: .handyman)
+        let seed = GigComposeFormState(step: GigComposeStep.fillGaps.rawValue, category: .handyman, locationMode: .virtual)
         let vm = makeVM(initialState: seed)
         XCTAssertFalse(vm.chrome.primaryCTAEnabled, "Empty fields must block Continue.")
         vm.setTitle("1234")
@@ -169,12 +180,17 @@ final class GigComposeViewModelTests: XCTestCase {
         await vm.awaitUploadsForTesting()
     }
 
-    func testFillGapsAllowsUnsetScheduleAndLocation() {
-        // A12.8 — When/Where are optional on Fill gaps; magic-post
-        // defaults them ("flexible" + no location).
-        let vm = makeVM(initialState: filledAtFillGaps())
+    func testFillGapsAllowsUnsetScheduleButRequiresWhere() {
+        // A12.8 — When stays optional on Fill gaps (magic-post defaults it
+        // to "flexible"). Where is required, as on Android and web: with
+        // none the task is stored without a place and never shows nearby.
+        var seed = filledAtFillGaps()
+        seed.locationMode = nil
+        let vm = makeVM(initialState: seed)
         XCTAssertNil(vm.form.scheduleType)
-        XCTAssertNil(vm.form.locationMode)
+        XCTAssertFalse(vm.chrome.primaryCTAEnabled, "No Where must block Continue.")
+        XCTAssertNil(vm.buildMagicPostBody(), "No Where must not build a magic-post body.")
+        vm.selectLocationMode(.virtual)
         XCTAssertTrue(vm.chrome.primaryCTAEnabled)
     }
 
@@ -196,11 +212,33 @@ final class GigComposeViewModelTests: XCTestCase {
         XCTAssertNil(vm.form.scheduledStartISO, "Switching off one-time must clear the leftover date.")
     }
 
-    func testFillGapsAPlaceRequiresCompleteAddress() {
+    func testFillGapsAPlaceRequiresCompleteAddress() async {
+        let autocompleteJSON = """
+        {"suggestions":[{"suggestion_id":"s1","primary_text":"123 Main St",
+         "label":"123 Main St, Portland, OR 97214","center":[-122.65,45.52],"kind":"address"}]}
+        """
+        let resolveJSON = """
+        {"normalized":{"address":"123 Main St","city":"Portland","state":"OR","zipcode":"97214",
+         "latitude":45.52,"longitude":-122.65}}
+        """
+        SequencedURLProtocol.routeResponses = [
+            "/api/geo/autocomplete": [.status(200, body: autocompleteJSON)],
+            "/api/geo/resolve": [.status(200, body: resolveJSON)]
+        ]
         let vm = makeVM(initialState: filledAtFillGaps())
         vm.selectLocationMode(.aPlace)
         XCTAssertFalse(vm.chrome.primaryCTAEnabled)
         vm.updatePlaceAddress(line1: "123 Main St", city: "Portland", state: "OR", zip: "97214")
+        // A typed address is not enough: the task needs the picked suggestion's point.
+        XCTAssertFalse(vm.chrome.primaryCTAEnabled)
+        for _ in 0..<100 where vm.placeSuggestions.isEmpty {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        guard let suggestion = vm.placeSuggestions.first else { return XCTFail("Expected a suggestion") }
+        vm.selectPlaceSuggestion(suggestion)
+        for _ in 0..<100 where !vm.form.placeAddress.hasPoint {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertTrue(vm.chrome.primaryCTAEnabled)
     }
 
@@ -260,7 +298,8 @@ final class GigComposeViewModelTests: XCTestCase {
         let vm = makeVM(initialState: seed)
         let body = vm.buildMagicPostBody()
         XCTAssertEqual(body?.taskFormat, "remote")
-        XCTAssertEqual(body?.location?.mode, "custom")
+        // A remote task has no place (as on web): no (0, 0) placeholder.
+        XCTAssertNil(body?.location)
     }
 
     func testRecurringMapsToFlexibleWireValue() {

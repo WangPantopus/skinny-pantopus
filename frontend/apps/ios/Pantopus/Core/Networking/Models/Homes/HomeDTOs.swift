@@ -153,6 +153,11 @@ public struct MyHomesResponse: Decodable, Sendable, Hashable {
     public let message: String?
 }
 
+/// `GET /api/homes/primary` envelope — the actor's primary Home card, or null.
+public struct PrimaryHomeResponse: Decodable, Sendable, Hashable {
+    public let home: MyHome?
+}
+
 /// `GET /api/homes/:id` envelope — route `backend/routes/home.js:2891`.
 public struct HomeDetailResponse: Decodable, Sendable, Hashable {
     public let home: HomeDetail

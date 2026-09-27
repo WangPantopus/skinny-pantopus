@@ -290,12 +290,20 @@ class GigComposePickedPhoto(
     val bytes: ByteArray,
 )
 
-/** Plain-old-data address fields collected for `APlace`. */
+/**
+ * Plain-old-data address fields collected for `APlace` (and, for
+ * `YourAddress`, copied from the primary Home).
+ */
 data class GigComposePlaceAddress(
     val line1: String = "",
     val city: String = "",
     val state: String = "",
     val zip: String = "",
+    /** The picked suggestion's point (`POST /api/geo/resolve`); a new Street clears it. */
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    /** `YourAddress` — the Home it came from, so the task shows on that Home. */
+    val homeId: String? = null,
 ) {
     val isComplete: Boolean
         get() =
@@ -303,6 +311,8 @@ data class GigComposePlaceAddress(
                 city.trim().isNotEmpty() &&
                 state.trim().isNotEmpty() &&
                 zip.trim().isNotEmpty()
+
+    val hasPoint: Boolean get() = latitude != null && longitude != null
 }
 
 /** A12.8 — projected smart-template chip for the empty describe state. */
@@ -433,6 +443,8 @@ data class GigComposeFormState(
     val scheduledStartISO: String? = null,
     val locationMode: GigComposeLocationMode? = null,
     val placeAddress: GigComposePlaceAddress = GigComposePlaceAddress(),
+    /** `YourAddress` — the primary Home's address and point, loaded when that mode is picked. */
+    val homeAddress: GigComposePlaceAddress? = null,
     /** E.1 — optional hard deadline (`deadline`), ISO-8601. null ⇒ flexible. */
     val deadlineISO: String? = null,
     /** E.1 — cancellation policy (`cancellation_policy`). null ⇒ backend default. */

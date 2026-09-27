@@ -35,6 +35,7 @@ import app.pantopus.android.data.widget.WidgetTaskSnapshot
 import app.pantopus.android.ui.screens.compose.gig.GigComposeBudgetType
 import app.pantopus.android.ui.screens.compose.gig.GigComposeFormState
 import app.pantopus.android.ui.screens.compose.gig.GigComposeLocationMode
+import app.pantopus.android.ui.screens.compose.gig.GigComposePlaceAddress
 import app.pantopus.android.ui.screens.compose.gig.GigComposeScheduleType
 import app.pantopus.android.ui.screens.compose.gig.GigComposeViewModel
 import io.mockk.coEvery
@@ -922,6 +923,16 @@ class GigsFeedViewModelTest {
             budgetMin = "60",
             scheduleType = GigComposeScheduleType.Flexible,
             locationMode = GigComposeLocationMode.YourAddress,
+            homeAddress =
+                GigComposePlaceAddress(
+                    line1 = "1200 Main St",
+                    city = "Vancouver",
+                    state = "WA",
+                    zip = "98660",
+                    latitude = 45.628,
+                    longitude = -122.6739,
+                    homeId = "5f0c1e6a-0000-4000-8000-000000000001",
+                ),
         )
 
     private fun queuedDraft(id: String = "d1") =

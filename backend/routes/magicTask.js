@@ -35,6 +35,7 @@ const {
 const { fanoutUrgentTask } = require('../services/urgentFanoutService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { hasUsableCoordinates } = require('../services/seederProvisioningService');
 
 // ── Undo window duration (ms) ────────────────────────────────
 const UNDO_WINDOW_MS = 10_000; // 10 seconds
@@ -429,7 +430,15 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
     }
 
     // ── Build gig data ──
-    const normalizedLocation = normalizeMagicPostLocation(location);
+    let normalizedLocation = normalizeMagicPostLocation(location);
+    // (0, 0) is the placeholder older app composers sent for every place: a remote task simply has
+    // no place, and an in-person one must come from the address suggestions, as on POST /api/gigs.
+    if (normalizedLocation && !hasUsableCoordinates(normalizedLocation.latitude, normalizedLocation.longitude)) {
+      if (task_format !== 'remote') {
+        return res.status(400).json({ code: 'LOCATION_UNRESOLVED', error: 'Pick an address from the suggestions.' });
+      }
+      normalizedLocation = null;
+    }
     // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
     if (normalizedLocation?.homeId
       && !(await checkHomePermission(normalizedLocation.homeId, userId, 'home.view')).hasAccess) {
