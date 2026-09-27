@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
@@ -50,6 +51,8 @@ export default function PostDetailPanel({
   canComment = true,
   commentDisabledMessage = null,
 }: PostDetailPanelProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [post, setPost] = useState<Post | null>(initialPost);
   const [comments, setComments] = useState<PostCommentType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -336,7 +339,9 @@ export default function PostDetailPanel({
     post?.creator?.username ||
     'Neighbor';
 
-  return (
+  if (!mounted) return null;
+  // Match SlidePanel: keep the existing overlay above the app shell's stacking context.
+  return createPortal(
     <>
       <div
         className={`fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 ${
@@ -376,6 +381,7 @@ export default function PostDetailPanel({
             <div className="flex items-center gap-1">
               <button
                 onClick={onClose}
+                aria-label="Close post"
                 className="rounded-lg p-2 text-app-muted transition hover-bg-app hover:text-app"
               >
                 <X className="h-5 w-5" />
@@ -642,6 +648,7 @@ export default function PostDetailPanel({
             )}
           </div>
         )}
-    </>
+    </>,
+    document.body
   );
 }
