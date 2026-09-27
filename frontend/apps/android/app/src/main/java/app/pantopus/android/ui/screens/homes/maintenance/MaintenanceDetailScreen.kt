@@ -567,8 +567,10 @@ private fun performedByValue(
     task: MaintenanceTaskDto,
     draft: MaintenanceDraft?,
 ): String {
-    if (draft == null) {
-        val vendor = task.vendor?.trim().orEmpty()
+    val vendor = task.vendor?.trim().orEmpty()
+    val storedVendor =
+        if (draft?.performedBy == MaintenancePerformedBy.Self) "" else draft?.performerName?.trim()
+    if (draft == null || storedVendor != vendor) {
         return if (vendor.isEmpty()) "Self" else vendor
     }
     return when (draft.performedBy) {

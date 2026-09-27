@@ -193,8 +193,8 @@ final class LogMaintenanceFormViewModel {
                 category: stored?.category ?? inferredCategory,
                 title: dto?.task ?? "",
                 dateCompleted: Self.parsePerformedDate(dto: dto) ?? baseNow,
-                performedBy: stored?.performedBy ?? Self.inferPerformedBy(vendor: dto?.vendor),
-                performerName: stored?.performerName ?? (dto?.vendor ?? ""),
+                performedBy: Self.inferPerformedBy(vendor: dto?.vendor, stored: stored),
+                performerName: dto?.vendor ?? "",
                 performerContact: stored?.performerContact ?? "",
                 costText: Self.format(cost: dto?.cost),
                 notes: stored?.notes ?? "",
@@ -254,8 +254,8 @@ final class LogMaintenanceFormViewModel {
         if let parsed = Self.parsePerformedDate(dto: dto) {
             dateCompleted = parsed
         }
-        performedBy = stored?.performedBy ?? Self.inferPerformedBy(vendor: dto.vendor)
-        performerName = stored?.performerName ?? (dto.vendor ?? "")
+        performedBy = Self.inferPerformedBy(vendor: dto.vendor, stored: stored)
+        performerName = dto.vendor ?? ""
         performerContact = stored?.performerContact ?? ""
         costText = Self.format(cost: dto.cost)
         notes = stored?.notes ?? ""
@@ -309,7 +309,7 @@ final class LogMaintenanceFormViewModel {
         defer { isSubmitting = false }
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
-        let vendor = vendorEncoding()
+        let vendor = vendorEncoding(currentSnapshot())
         let parsedCost = Self.parseCost(costText)
         let dueIso = nextDueEnabled ? Self.isoDayString(from: nextDueDate) : nil
 
@@ -331,9 +331,9 @@ final class LogMaintenanceFormViewModel {
                 )
             case let .edit(taskId):
                 let req = UpdateMaintenanceRequest(
-                    task: trimmedTitle,
-                    vendor: vendor,
-                    cost: parsedCost,
+                    task: trimmedTitle == initial.title.trimmingCharacters(in: .whitespaces) ? nil : trimmedTitle,
+                    vendor: vendor == vendorEncoding(initial) ? nil : vendor,
+                    cost: costText == initial.costText ? nil : parsedCost,
                     recurrence: recurrence.rawValue,
                     dueDate: dueIso,
                     performedAt: dateCompleted == initial.dateCompleted ? nil : Self.isoTimestampString(from: dateCompleted),
@@ -407,9 +407,9 @@ final class LogMaintenanceFormViewModel {
         draftStore.upsert(draft, for: taskId)
     }
 
-    private func vendorEncoding() -> String? {
-        let trimmed = performerName.trimmingCharacters(in: .whitespaces)
-        switch performedBy {
+    private func vendorEncoding(_ snapshot: Snapshot) -> String? {
+        let trimmed = snapshot.performerName.trimmingCharacters(in: .whitespaces)
+        switch snapshot.performedBy {
         case .self: return nil
         case .member, .contractor:
             return trimmed.isEmpty ? nil : trimmed
@@ -472,7 +472,13 @@ final class LogMaintenanceFormViewModel {
         return MaintenanceListViewModel.parseDate(iso)
     }
 
-    static func inferPerformedBy(vendor: String?) -> MaintenancePerformedBy {
+    static func inferPerformedBy(vendor: String?, stored: MaintenanceDraft? = nil) -> MaintenancePerformedBy {
+        if let stored {
+            let storedVendor = stored.performedBy == .self ? "" : stored.performerName.trimmingCharacters(in: .whitespaces)
+            if storedVendor == (vendor?.trimmingCharacters(in: .whitespaces) ?? "") {
+                return stored.performedBy
+            }
+        }
         guard let vendor, !vendor.trimmingCharacters(in: .whitespaces).isEmpty else {
             return .self
         }
