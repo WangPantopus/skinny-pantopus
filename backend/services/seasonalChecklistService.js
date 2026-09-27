@@ -115,7 +115,9 @@ function assertChecklistMetadata(items) {
   if (items.some(item => !item
     || typeof item.title !== 'string' || !item.title.trim()
     || typeof item.item_key !== 'string' || !item.item_key.trim()
-    || !Number.isInteger(item.sort_order) || item.sort_order < 0)) {
+    || !Number.isInteger(item.sort_order) || item.sort_order < 0
+    || (item.completed_at != null && (typeof item.completed_at !== 'string'
+      || !Number.isFinite(Date.parse(item.completed_at)))))) {
     throw new Error('Current seasonal checklist contains unavailable item metadata.');
   }
 }
