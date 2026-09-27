@@ -1,6 +1,26 @@
 # Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
-## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first)
+## CURRENT RESUME — Stream 2 handoff, 2026-09-26T23:45Z (read this first; the LIVE block below supersedes its §1 state)
+
+### LIVE — Stream 2 successor session "Stream 2 handoff takeover" [f294e5], since 2026-09-26T23:48Z (update 2026-09-27T01:38Z)
+- **Merged since the handoff:** batch 33 [#546](https://github.com/WangPantopus/skinny-pantopus/pull/546) (00:08:50Z → `f7f51eae4`: #543, #539, #541 + S1 #542) and batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → `73b98f6b6`: #544, #547 + S3 #545, S1 #549). **No Stream 2 PR is open.**
+- **User decisions on all five §3A items (AskUserQuestion, answered by 01:36Z; each is the recommended option):**
+  1. **Phone escrow:** refuse it truthfully. The API answers 400 "Texting isn't available yet; send to their email", creates no escrow, and stops logging the SMS body (backend only).
+  2. **"Message household admin":** truth-only fix. When the reads are denied, say the admin can't be messaged from here and keep Request help; never open a chat with yourself (web only).
+  3. **Members → Guests tab:** its "Add a guest" opens the existing guest-pass manager (iOS + Android).
+  4. **Health "View maintenance":** opens the existing Issues list, same label (iOS + Android).
+  5. **`/app/homes/[id]/members/add-guest`:** redirects to Guest Passes, `/app/homes/[id]/share` (web).
+  - **Plan:** one PR each, in the order 1, 2, 5; then 3 and 4 verified in one native build window.
+- **§3B item 6 is latent, not repaired.** No product route writes `Mail.due_date`: only the dev seed in `mailboxV2.js` does, and bill extraction writes `HomeBill.due_date`. 0 of 65 letters in DB 64554 have one.
+  - `MailItemDetail`'s amount-due block can't render, because the web builds only a text block.
+  - The counter sort shifts every date equally, and `UrgencyIndicator` never shows a date.
+  - Repair it with local-date parsing (`parseHomeBillDate`) only if a writer appears.
+- **Runtime:** the proxy 18142 (pid 66574, run from `kit/runtime/fault-proxy.cjs`, logging to `kit/runtime/proxy-requests.jsonl`) and backend 18143 (pid 66680) were restarted at 23:51Z as detached processes with the new `kit/tools/detach.py`, so they outlive the session that starts them.
+  - Next 18144 (pids 53425/53431) is unchanged.
+  - The main worktree tree = master `73b98f6b6` (build commit `d3d6bd86f`); the running backend code equals master's.
+- **Kit fixes:** `android-today-refresh-check.sh` LOG now points at `kit/runtime/proxy-requests.jsonl`; `heavy-window-sections.sh` DerivedData is `${S2_IOS_DD:-$SP/ios-dd}`. The old session deleted its scratchpad DerivedData, so the next iOS build is a full one.
+- **Worktrees:** the old session removed `add-guest` (#535) and `residency-guest` (#538) at the user's request; `add-guest-sections` (#539, merged) remains.
+- **Devices and slots:** emulator-5556 (slot 2) still runs as a child of the old session (qemu pid 2558); cold-boot it from the kit if it stops. The iOS sim 6F914A30 is shut down. No heavy.
 
 **Who owns what.**
 - **Stream 2 (independent peer):** Home, residency, Place, Home intelligence, records, bills, Mail/guests and the related Support-train UX, on the real web app, iOS simulator and Android emulator.
@@ -47,7 +67,7 @@
   - Android has a working party flow. It may be built in the future as a feature, with a design pass.
 
 ### 3. Open items
-**3A. Needs a user decision. Propose; don't build before approval.**
+**3A. User decisions: all five were approved on 2026-09-27 as proposed (see LIVE for the exact choices). The descriptions below stay as the record.**
 1. **Escrowed mail to a phone number** (Stream 3's finding 15, handed to Stream 2; security + product).
    - **Path:** `POST /api/mailbox` to a non-user phone recipient creates escrowed mail and "texts" the claim link through `backend/services/smsService.js`.
      - That service is a placeholder that only logs "Would send SMS" (caller `backend/routes/mailbox.js` ~line 2021).
@@ -74,7 +94,7 @@
 5. **Unlinked web stub `/app/homes/[id]/members/add-guest`.** It fakes success ("<name> has been added as a guest", no API), and nothing links to it since #528. Proposal: remove or redirect it (it removes a page).
 
 **3B. Candidates (not approved; reproduce first, then fix in place if it's a clear truth/correctness repair, or propose).**
-6. **Web Mail due dates** use `new Date(<SQL date>)`, the same root cause as #547, so they show a day early in US time zones:
+6. **(Latent; see LIVE: no product route writes `Mail.due_date`.) Web Mail due dates** use `new Date(<SQL date>)`, the same root cause as #547, so they show a day early in US time zones:
    - `components/mailbox/MailItemDetail.tsx:155` (bill block "Due …");
    - `app/(app)/app/mailbox/settings/mail-day/page.tsx:269`;
    - the counter page sort (`mailbox/counter/page.tsx:21`).
@@ -197,6 +217,14 @@
   - **Private token files differ in shape:** the evidence `.control-token` is JSON `{token, pass_id}`, and `.guest-token` is the raw token. The web tools only redact an exact token match.
 
 ## Status log (newest first; each block is the state at its time)
+
+**Stream 2 — 2026-09-27T01:38Z (successor session: handoff PRs all merged; five §3A decisions approved; runtime detached)**
+
+- **Merged:** #539, #541 and #543 in batch 33 (#546, 00:08:50Z); #544 and #547 in batch 34 (#551, 00:46:55Z; master `73b98f6b6`).
+- **User decisions:** all five §3A items were approved as proposed; they're listed in LIVE. Next: the phone-escrow refusal (backend).
+- **§3B item 6** is latent: no product route writes `Mail.due_date`.
+- **Runtime:** proxy and backend restarted detached from the kit (23:51Z); tree = master.
+
 
 _Previous header (2026-09-25):_ Independent Stream 2 agent (peer of Streams 1 and 3; Stream 1 is only the serial merge steward). App worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`, branch `claude/stream2-mail-list-dismiss` (master `27eb23ad2` merged in; the PR branches are separate worktrees under `/private/tmp/pantopus-stream2-*`). The September 22 block below and every older section stay historical/authoritative for their journeys.
 
