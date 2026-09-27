@@ -50,6 +50,8 @@ function PostTaskPageContent() {
   const [showCategories, setShowCategories] = useState(false);
   const [items, setItems] = useState<TaskItem[]>([]);
   const [prefillSource, setPrefillSource] = useState<{ sourceType: string; sourceId: string; sourceTitle: string } | null>(null);
+  // A Home seasonal-checklist "Hire": link the posted task back to that item.
+  const [checklistLink, setChecklistLink] = useState<{ homeId: string; itemId: string } | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -202,6 +204,9 @@ function PostTaskPageContent() {
           sourceTitle: data.sourceTitle || data.title || '',
         });
       }
+      const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+      const link = new RegExp(`^(${uuid}):(${uuid})$`, 'i').exec(searchParams.get('homeChecklist') ?? '');
+      if (link && !searchParams.get('editGigId')) setChecklistLink({ homeId: link[1], itemId: link[2] });
     } catch { /* invalid prefill JSON */ }
   }, [searchParams]);
 
@@ -351,6 +356,11 @@ function PostTaskPageContent() {
         setUploadProgress('Creating task...');
         const res = await api.gigs.createGigV2(payload as unknown as Parameters<typeof api.gigs.createGigV2>[0]);
         targetGigId = String(res?.gig?.id || '');
+        if (targetGigId && checklistLink) {
+          // The task stands even when its checklist item cannot be marked.
+          await api.homeProfile.linkChecklistItemTask(checklistLink.homeId, checklistLink.itemId, targetGigId)
+            .catch(() => toast.info('This task could not be marked on your seasonal checklist.'));
+        }
       }
 
       if (!targetGigId) {
