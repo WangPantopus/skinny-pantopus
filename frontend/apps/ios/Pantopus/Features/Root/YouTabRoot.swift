@@ -300,6 +300,10 @@ public enum YouRoute: Hashable {
     /// T6.3a / P9 — Members. The home-context "me.members" action tile +
     /// "Household" section row both push here with the resolved home id.
     case homeMembers(homeId: String)
+    /// A13.6 — guest-pass manager, opened by the Members screen's Guests tab.
+    case guestPasses(homeId: String)
+    /// A13.1 — Add Guest form, pushed from the guest-pass manager's FAB.
+    case addGuest(homeId: String)
     /// T5.3.4 — per-listing offers panel. Pushed from a listing detail
     /// "View offers" affordance (visible when the current user owns the
     /// listing). The optional `title` is a hint rendered as the
@@ -648,7 +652,7 @@ public struct YouTabRoot: View {
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
              .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
-             .composeBroadcast, .composePost, .editPost, .editSignup, .addBill,
+             .composeBroadcast, .composePost, .editPost, .editSignup, .addGuest, .addBill,
              .claimOwnership, .verifyResidency, .verifyLandlord, .businessWaitlist,
              .createBusiness, .composeTask, .composeListing, .editListing,
              .startSupportTrain, .ceremonialMail, .privacyHandshake:
@@ -2593,7 +2597,18 @@ public struct YouTabRoot: View {
                 homeId: homeId
             ) { Task { @MainActor in pop() } }
         case let .homeMembers(homeId):
-            MembersListView(homeId: homeId)
+            // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
+            MembersListView(homeId: homeId) {
+                Task { @MainActor in path.append(.guestPasses(homeId: homeId)) }
+            }
+        case let .guestPasses(homeId):
+            GuestPassesListView(homeId: homeId) {
+                Task { @MainActor in path.append(.addGuest(homeId: homeId)) }
+            }
+        case let .addGuest(homeId):
+            AddGuestFormView(
+                viewModel: AddGuestFormViewModel(homeId: homeId)
+            )
         case let .publicProfile(userId):
             PublicProfileView(
                 userId: userId,
