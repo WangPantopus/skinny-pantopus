@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const registerHomeTaskMediaRoutes = require('./homeTaskMediaRoutes');
@@ -841,38 +842,47 @@ router.post('/comment-media/:commentId', uploadLimiter, verifyToken, upload.arra
       return res.status(403).json({ error: 'Only the comment author can upload media' });
     }
 
-    const { data: existingFiles } = await supabaseAdmin
+    const attachmentFields = 'id, comment_id, file_url, original_filename, mime_type, file_size, file_type, created_at';
+    const { data: existingFiles, error: existingErr } = await supabaseAdmin
       .from('File')
-      .select('id')
-      .eq('comment_id', commentId)
+      .select(attachmentFields)
+      .eq('comment_id', comment.id)
       .eq('is_deleted', false);
-
-    const existingCount = (existingFiles || []).length;
-    if (existingCount + files.length > 4) {
-      return res.status(400).json({ error: `Maximum 4 images per comment. Currently: ${existingCount}` });
+    if (existingErr) {
+      return res.status(503).json({ error: 'Comment images could not be checked. Please retry.' });
     }
 
-    const attachments = [];
+    // The multipart filename changes on retries. Scope sanitized image bytes to
+    // this author/comment instead, so a lost reply reuses both File and object.
+    const pending = new Map();
     for (const file of files) {
-      const category = s3.categorizeFile(file.mimetype);
-      if (category !== 'image') {
+      if (s3.categorizeFile(file.mimetype) !== 'image') {
         return res.status(400).json({ error: 'Comment media only supports images' });
       }
+      const hash = crypto.createHash('sha256')
+        .update(JSON.stringify(['comment-media-v1', comment.id, userId, file.mimetype]))
+        .update(file.buffer).digest('hex');
+      const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+      pending.set(id, file);
+    }
+    const attachments = [...(existingFiles || [])];
+    const existingIds = new Set(attachments.map((file) => file.id));
+    const newCount = [...pending.keys()].filter((id) => !existingIds.has(id)).length;
+    if (attachments.length + newCount > 4) {
+      return res.status(400).json({ error: `Maximum 4 images per comment. Currently: ${attachments.length}` });
+    }
 
-      const { url, key } = await s3.uploadGeneral(
-        file.buffer,
-        file.originalname,
-        userId,
-        `comments/${commentId}`,
-        file.mimetype
-      );
-
+    for (const [id, file] of pending) {
+      if (existingIds.has(id)) continue;
+      const key = `comments/${comment.id}/${userId}/${id}`;
+      const { url } = await s3.uploadToS3(file.buffer, key, file.mimetype);
       const ext = (path.extname(file.originalname || '').replace('.', '') || '').toLowerCase();
       const { data: saved, error: saveErr } = await supabaseAdmin
         .from('File')
         .insert({
+          id,
           user_id: userId,
-          filename: key.split('/').pop() || file.originalname,
+          filename: id,
           original_filename: file.originalname,
           file_path: key,
           file_url: url,
@@ -883,22 +893,30 @@ router.post('/comment-media/:commentId', uploadLimiter, verifyToken, upload.arra
           visibility: 'public',
           processing_status: 'completed',
           post_id: comment.post_id,
-          comment_id: commentId,
+          comment_id: comment.id,
           metadata: {
             uploaded_via: 'post_comment',
-            comment_id: commentId,
+            comment_id: comment.id,
             post_id: comment.post_id,
           },
         })
-        .select('id, comment_id, file_url, original_filename, mime_type, file_size, file_type, created_at')
+        .select(attachmentFields)
         .single();
 
       if (saveErr) {
-        await s3.deleteFromS3(key);
+        // Another retry may already have committed this same image. Never
+        // delete its shared object after a duplicate or uncertain DB response.
+        const { data: committed, error: readErr } = await supabaseAdmin
+          .from('File').select(attachmentFields)
+          .eq('id', id).eq('comment_id', comment.id).eq('user_id', userId)
+          .eq('is_deleted', false).maybeSingle();
+        if (!readErr && committed) {
+          attachments.push(committed);
+          continue;
+        }
         logger.error('Comment media save error', { error: saveErr.message, commentId });
-        return res.status(500).json({ error: 'Failed to save uploaded comment media' });
+        return res.status(503).json({ error: 'Comment image could not be confirmed. Please retry.' });
       }
-
       attachments.push(saved);
     }
 

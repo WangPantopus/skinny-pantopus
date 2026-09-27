@@ -106,8 +106,9 @@ export default function CommentThread({
     if (!newComment.trim() && selectedFiles.length === 0) return;
     if (isPosting || submittingRef.current) return;
     submittingRef.current = true;
-    const signature = JSON.stringify([currentUserId, newComment.trim(), replyTo?.id,
-      selectedFiles.map((file) => [file.name, file.size, file.lastModified])]);
+    // Images are uploaded after the comment exists. Changing/removing an image
+    // during recovery must keep the command for that same text and reply target.
+    const signature = JSON.stringify([currentUserId, newComment.trim(), replyTo?.id]);
     if (pendingComment.current?.signature !== signature) {
       pendingComment.current = { signature, id: crypto.randomUUID() };
     }

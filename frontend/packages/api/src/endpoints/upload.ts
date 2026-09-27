@@ -479,6 +479,14 @@ export async function uploadCommentMedia(
   const response = await apiClient.post(`/api/upload/comment-media/${commentId}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  const attachments = response.data?.attachments;
+  if (!Array.isArray(attachments) || attachments.length === 0 || attachments.length > 4
+    || attachments.some((item) => !item || typeof item.id !== 'string' || !item.id
+      || item.comment_id !== commentId || typeof item.file_url !== 'string' || !item.file_url
+      || typeof item.mime_type !== 'string' || !item.mime_type.startsWith('image/'))
+    || new Set(attachments.map((item) => item.id)).size !== attachments.length) {
+    throw new Error('Comment images were not confirmed. Please retry.');
+  }
   return response.data;
 }
 
