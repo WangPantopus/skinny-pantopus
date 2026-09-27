@@ -4,7 +4,7 @@
 > - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
 > - **Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) was queued at 01:48:03Z, tip `22779dc89`. §2 has the exact state.
 >
-> A final update block is added after batch 35 merges (§0). Always re-verify live.
+> **§0 below is the final state.** Always re-verify live.
 
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
 
@@ -20,9 +20,33 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 ---
 
-## 0. Final update (filled in after batch 35 merges)
+## 0. Final state (this section wins over the rest of the file)
 
-_Not yet written. If this section is still empty, the previous session stopped before batch 35 merged: follow §3.1._
+**Batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556) merged at 2026-09-27T02:23:56Z** → master **`0bd3759f4acc90a770a2337cb9286aeca9f4bb8f`**.
+- Contents: S1 #548, #553, #550, #554, #555 and S3 #552. Every Stream 1 FIXED row in the inventory is now on master.
+- The Stream 1 runtime was brought to `0bd3759f4` and SIGINT-restarted: backend pid **6041**, started 02:24:28Z, log `logs/backend-022428.log`. `/api/hub` returned 200 at 02:24:37Z.
+
+**Batch 36 = [#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)**, queued at 02:25:31Z, runner pid 6514.
+- Tip `35663481ee0fb4b852447136b3b65f936ab4e64c` on `0bd3759f4`. It holds S3 #557 (backend new-post notices), S2 #558 and S2 #559 (web). All were green at 02:24:45Z, and all bundles re-verified.
+- #557 is backend: restart the runtime after it merges (§5.3).
+- BATCH36_RESULT_PLACEHOLDER
+
+**Next batch candidates:**
+- **S2 [#560](https://github.com/WangPantopus/skinny-pantopus/pull/560)** (iOS test-only flake fix; reviewed OK, see §2). Its iOS CI was running at 02:24:45Z.
+- **S3 chat re-subscribe fix** for both apps: branch `claude/stream3-native-chat-resubscribe`, head `f009f6be7` at 02:23Z. Stream 3 is still verifying and will send the PR.
+- **S2 native §3A #3 + #4**: Guests tab → guest-pass manager; health "View maintenance" → Issues. Android is verified and the iOS journeys were running at 02:23Z. #3 touches `RootTabScreen.kt`, which changed in batch 35.
+
+**Stream 1's own open work:**
+1. The user's decision on native "Post task" at 0,0 (§3.2, HIGH).
+2. The low inventory items (§3.3).
+
+Stream 1 has no open PRs of its own.
+
+**Stream 1 holds no slots.** Stream 2 and Stream 3 are handing heavy, slot 1 and slot 3 between themselves (§10). My devices are shut down:
+- iOS sim F4DBD47E has the #548 build;
+- Android emulator-5558 has the #554 build (APK `8fedfceda`).
+
+Rebuild both from master before native checks.
 
 ## 1. Role and standing rules (from the user; still in force)
 
