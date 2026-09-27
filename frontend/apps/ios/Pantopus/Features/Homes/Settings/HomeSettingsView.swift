@@ -106,6 +106,7 @@ struct HomeSettingsIdentityCard: View {
                 state: renameFieldState,
                 identifier: "homeSettingsRenameField"
             )
+            .disabled(viewModel.isSavingName)
             HStack(spacing: Spacing.s2) {
                 Button {
                     Task { await viewModel.saveRenaming() }
