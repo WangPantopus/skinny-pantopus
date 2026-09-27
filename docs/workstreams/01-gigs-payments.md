@@ -2,7 +2,7 @@
 
 ## CURRENT STREAM 1 STATE — 2026-09-26T22:10Z (session handoff)
 
-> **UPDATE 2026-09-27T01:00Z: Stream 1 is handing off.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). Its §0 gets the post-batch-35 state.
+> **UPDATE 2026-09-27T00:57Z: Stream 1 is handing off.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md), and the successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md). Its §0 gets the post-batch-35 state.
 > - **Merged:**
 >   - batch 32 #540 (23:12:01Z → `d358dbc83`);
 >   - batch 33 #546 (2026-09-27T00:08:50Z → `f7f51eae4`);

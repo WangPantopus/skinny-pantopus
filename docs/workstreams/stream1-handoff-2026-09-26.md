@@ -1,6 +1,6 @@
 # Stream 1 handoff (final): 2026-09-27
 
-> **State at 2026-09-27T01:00Z.**
+> **State at 2026-09-27T00:57Z.**
 > - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
 > - **Batch 35** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) is being built once its heads are green; a dry run at 00:55Z was clean. §2 has the exact state.
 >
@@ -85,7 +85,7 @@ _Not yet written. If this section is still empty, the previous session stopped b
   - Do **not** run your own CI-polling loops (loops of `gh pr checks`, Monitor, cron, ScheduleWakeup). A one-off `gh pr checks` right before building a batch is fine.
   - The merge-queue runner (§4) does the waiting. A background `while kill -0 <runner pid>; do sleep 30; done` wait on the runner process (not on CI) is how this session learned a batch had merged.
 
-## 2. State (2026-09-27T01:00Z)
+## 2. State (2026-09-27T00:57Z)
 
 **Master.** `73b98f6b6102e44cf3dd7424c9bd0f613a91feeb`: batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) merged at 2026-09-27T00:46:55Z. It holds S2 #544 (Android Today pull-to-refresh), S3 #545 (web invoice PDF / paid checkout error / Audience inbox tab), S2 #547 (web Home calendar bill dates) and S1 #549 (web started $0 cancel copy). No backend change.
 
