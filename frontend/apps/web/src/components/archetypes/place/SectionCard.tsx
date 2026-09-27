@@ -142,7 +142,8 @@ export default function SectionCard({
           <CloudOff size={16} strokeWidth={2} className="text-app-text-secondary" />
           <span className="text-[15px] font-medium text-app-text-strong">{"Couldn't load this"}</span>
         </div>
-        <div className="mt-2">
+        {/* Try again only re-reads; the click must not also open the card. */}
+        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
           <TextButton arrow={false} onClick={onRetry}>Try again</TextButton>
         </div>
       </div>

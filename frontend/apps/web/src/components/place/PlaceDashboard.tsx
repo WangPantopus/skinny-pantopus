@@ -171,6 +171,8 @@ export default function PlaceDashboard() {
         homeId={homeId as string}
         onOpenSection={(slug) => router.push(`/app/place/${slug}${placeHomeQuery(linkHomeId)}`)}
         onOpenPulse={() => router.push(`/app/place/pulse${placeHomeQuery(linkHomeId)}`)}
+        onRetry={() => { void intelQuery.refetch(); }}
+        retrying={intelQuery.isFetching}
         switchHomes={switchHomes}
         activeHomeId={homeId}
         moveInDate={homeQuery.data?.home?.id === homeId ? homeQuery.data?.home?.move_in_date ?? null : null}
