@@ -261,7 +261,21 @@ async function computeHealthScore(homeId) {
     && ['open', 'in_progress', 'scheduled'].includes(row.status) && instant(row.created_at));
   const outstandingBills = readRows(billsRes, row => nonblank(row.id) && ['due', 'overdue'].includes(row.status)
     && (row.due_date === null || day(row.due_date)) && nullableText(row.provider_name) && nonblank(row.bill_type));
-  const checklist = readRows(checklistRes, row => nonblank(row.id) && ['pending', 'completed', 'skipped', 'hired'].includes(row.status));
+  const checklistRow = row => nonblank(row.id) && ['pending', 'completed', 'skipped', 'hired'].includes(row.status);
+  let checklist = readRows(checklistRes, checklistRow);
+  // The dashboard reads the score and the checklist in parallel, and the
+  // checklist read creates the season's items on a Home's first view. Create
+  // them here too (idempotent) so that first score doesn't report "No
+  // seasonal checklist created yet" beside the checklist being shown.
+  if (checklist.length === 0) {
+    try {
+      const { getOrCreateChecklist } = require('./seasonalChecklistService');
+      const created = await getOrCreateChecklist(homeId, seasonKey, currentYear);
+      checklist = (Array.isArray(created) ? created : []).filter(checklistRow);
+    } catch (err) {
+      logger.warn('Health score could not create the seasonal checklist', { homeId, error: err.message });
+    }
+  }
   const contacts = readRows(emergencyRes, row => nonblank(row.id));
   const members = readRows(membersRes, row => nonblank(row.user_id) && (row.user === null
     || (row.user && row.user.id === row.user_id && nullableText(row.user.profile_picture_url))));
