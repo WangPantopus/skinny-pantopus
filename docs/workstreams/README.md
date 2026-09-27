@@ -2,6 +2,16 @@
 
 ## CURRENT RESUME POINT — 2026-09-26T22:10Z (batch 31 merged; batch 32 = 4 PRs in CI; Stream 1 handoff)
 
+> **UPDATE 2026-09-27T10:32Z — Stream 1 (queue owner, still on duty).**
+> - **Batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608) merged 10:26:20Z → master `a93c76d7f`** (#593–#596, #600, #601, #602, #606). Runtime merged (`a3303f983`); backend SIGINT-restarted (pid 52627); `/api/hub` 200.
+> - **Batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622) queued 10:31:03Z** (runner pid 55394), tip `e162f607b`: S1 #598 #603 #607 #617; S3 #597 #604 #605 #612; S2 #609 #610 #611 #613.
+>   - `verify-batch.py` passed. It now does exact hunk proofs (tip minus each PR's hunks == master) for files that are shared or changed on master since a PR's base. Here: PostGigV1Screen/PostGigV1View (#598 vs master's #571) and RootTabScreen/HubTabRoot/YouTabRoot (#605 + #612 + #609).
+>   - Shared-Swift lint passed.
+> - **Batch 42 (next, after #622 merges):** S1 #615 #616, S3 #618, S2 #619 #620 #621. All are reviewed and their bundles verified; each was still in its own CI at 10:26Z.
+> - **Handoff notes:**
+>   - Stream 3 handed off at 10:21:47Z, then returned per the user until its PRs merge.
+>   - New Stream 1 lead, recorded for later: the native Start/launch previews' "Try again" is dead (`PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`, `PlaceLaunchScreen.kt:737` pass no `onRetry`). It's a one-argument fix per call site once S2 #619 merges.
+
 > **UPDATE 2026-09-27T10:11Z — Stream 1: the handoff is NOT in effect yet.** At the user's request, the current Stream 1 session stays on as queue owner until all its PRs are on master: batch 40 #608 (with #601 #606), then batch 41 (#598 #603 #607 #615 #616 #617 + peers), and batch 42 (Stream 2's last three native PRs + Stream 3's booking-page fix) if ready. Handoff §0 will be refreshed when that is done. Until then, send PRs to this session.
 
 > **UPDATE 2026-09-27T10:00Z — Stream 1 (queue owner) — HANDOFF at the user's request.** Full state: `docs/workstreams/stream1-handoff-2026-09-26.md` **§0**. Next session's prompt: `docs/workstreams/NEXT-STREAM1-PROMPT-2026-09-27.md`.

@@ -8,9 +8,12 @@ Checks:
   1. ancestry: the tip contains the base and every head;
   2. file-set union: base..tip changes exactly the union of the PRs' own files
      (each PR diffed from its merge-base with the base);
-  3. single-PR files: the tip's blob equals that PR head's blob;
-  4. shared files: every PR's hunks for that file reverse-apply to the tip version
-     (`patch -R --dry-run`), so each PR's change is present.
+  3. fast path: a file only one PR touches, unchanged on the base since that PR's merge-base,
+     equals that PR head's blob;
+  4. every other file (shared by several PRs, or also changed on the base since a PR's
+     merge-base): starting from the tip's version, reverse-apply each touching PR's own diff
+     (last merged first, `patch -R -F0`) and require the result to equal the base's version,
+     so the tip is exactly the base plus those PRs' hunks.
 Exit status 0 only if every check passes.
 """
 import subprocess, sys, tempfile, os
@@ -51,34 +54,49 @@ if union != tipfiles:
     fail(f'file set differs: only in tip {sorted(tipfiles - union)[:10]}, only in PRs {sorted(union - tipfiles)[:10]}')
 print('file-set union:', len(union), 'files; tip changes', len(tipfiles))
 
-# 3/4. per file
+# 3/4. per file. Fast path: a file only one PR touches, unchanged on the base since that PR's
+# merge-base, must equal the PR head's blob. Otherwise prove it exactly: starting from the tip's
+# version, reverse-apply every touching PR's own diff (last merged first, no fuzz) and require
+# the result to equal the base's version, so tip == base + exactly those PRs' hunks.
 owners = {}
+order = [n for n, _ in prs]
 for n, (_, fs) in files_by_pr.items():
     for f in fs:
         owners.setdefault(f, []).append(n)
 heads = dict(prs)
-shared = 0
+proved = 0
 for f, ns in sorted(owners.items()):
+    ns = sorted(ns, key=order.index)
     tip_blob = git('rev-parse', f'{tip}:{f}', check=False).strip()
     if len(ns) == 1:
+        mb = files_by_pr[ns[0]][0]
         head_blob = git('rev-parse', f'{heads[ns[0]]}:{f}', check=False).strip()
-        if tip_blob != head_blob:
-            fail(f'{f}: tip blob != #{ns[0]} head blob')
-        continue
-    shared += 1
+        base_changed = subprocess.run(['git', 'diff', '--quiet', mb, base, '--', f]).returncode != 0
+        if tip_blob == head_blob and not base_changed:
+            continue
+    proved += 1
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, 'file')
-        content = subprocess.run(['git', 'show', f'{tip}:{f}'], capture_output=True).stdout
-        open(path, 'wb').write(content)
-        for n in ns:
+        tip_bytes = subprocess.run(['git', 'show', f'{tip}:{f}'], capture_output=True)
+        base_bytes = subprocess.run(['git', 'show', f'{base}:{f}'], capture_output=True)
+        open(path, 'wb').write(tip_bytes.stdout if tip_bytes.returncode == 0 else b'')
+        good = True
+        for n in reversed(ns):
             mb = files_by_pr[n][0]
             diff = subprocess.run(['git', 'diff', mb, heads[n], '--', f], capture_output=True).stdout
-            r = subprocess.run(['patch', '-R', '--dry-run', '-p1', '-s', '-f', '-d', d, '-i', '-'],
-                               input=diff.replace(f'a/{f}'.encode(), b'a/file').replace(f'b/{f}'.encode(), b'b/file'),
-                               capture_output=True)
+            diff = diff.replace(f'a/{f}'.encode(), b'a/file').replace(f'b/{f}'.encode(), b'b/file')
+            r = subprocess.run(['patch', '-R', '-p1', '-s', '-f', '-F0', '-d', d, '-i', '-'], input=diff, capture_output=True)
             if r.returncode != 0:
-                fail(f'{f}: #{n} hunks do not reverse-apply to the tip ({r.stdout.decode()[:120]} {r.stderr.decode()[:120]})')
-        print(f'shared file {f}: PRs {", ".join("#" + n for n in ns)} checked')
-print('single-PR files:', len(owners) - shared, '| shared files:', shared)
+                fail(f'{f}: #{n} hunks do not reverse-apply exactly ({(r.stdout + r.stderr).decode()[:160]})')
+                good = False
+                break
+        if good:
+            got = open(path, 'rb').read() if os.path.exists(path) else b''
+            want = base_bytes.stdout if base_bytes.returncode == 0 else b''
+            if got != want:
+                fail(f'{f}: tip minus PRs {", ".join("#" + n for n in ns)} != base version')
+            else:
+                print(f'proved {f}: tip == base + {", ".join("#" + n for n in ns)}')
+print('files:', len(owners), '| blob-equal fast path:', len(owners) - proved, '| exact hunk proofs:', proved)
 print('RESULT', 'OK' if ok else 'FAILED')
 sys.exit(0 if ok else 1)
