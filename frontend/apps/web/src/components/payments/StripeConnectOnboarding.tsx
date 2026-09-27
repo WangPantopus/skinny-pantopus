@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CreditCard, Wallet } from 'lucide-react';
 import { payments } from '@pantopus/api';
 const {
@@ -31,18 +31,26 @@ export default function StripeConnectOnboarding({
   const [connecting, setConnecting] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadInFlight = useRef(false);
 
   const loadAccount = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
+    setLoading(true);
     try {
       const result = await getStripeAccount();
       setAccount(result.account || null);
+      setLoadError(null);
       if (result.account?.payouts_enabled && result.account?.charges_enabled) {
         onComplete?.();
       }
-    } catch {
-      // No account yet — that's fine
+    } catch (err: unknown) {
       setAccount(null);
+      const status = (err as { statusCode?: number })?.statusCode;
+      setLoadError(status === 404 ? null : "Couldn't load payout status. Please try again.");
     } finally {
+      loadInFlight.current = false;
       setLoading(false);
     }
   }, [onComplete]);
@@ -103,7 +111,7 @@ export default function StripeConnectOnboarding({
     }
   }, []);
 
-  if (loading) return null;
+  if (loading && !loadError) return null;
 
   // Already fully onboarded — show nothing
   if (account?.payouts_enabled && account?.charges_enabled) {
@@ -121,7 +129,9 @@ export default function StripeConnectOnboarding({
         <span className="flex-shrink-0 text-amber-600"><CreditCard className="w-5 h-5" /></span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-amber-800">
-            {!hasAccount
+            {loadError
+              ? loadError
+              : !hasAccount
               ? 'Set up payouts to get paid for your work.'
               : needsInfo
                 ? 'Complete your account setup to receive payouts.'
@@ -129,11 +139,13 @@ export default function StripeConnectOnboarding({
           </p>
         </div>
         <button
-          onClick={handleConnect}
-          disabled={connecting}
+          onClick={loadError ? loadAccount : handleConnect}
+          disabled={connecting || loading}
           className="px-3 py-1.5 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition disabled:opacity-50 flex-shrink-0"
         >
-          {connecting
+          {loadError
+            ? loading ? 'Retrying…' : 'Retry'
+            : connecting
             ? '...'
             : !hasAccount
               ? 'Set Up'
@@ -154,14 +166,18 @@ export default function StripeConnectOnboarding({
         </div>
         <div className="flex-1">
           <h4 className="font-semibold text-app-text">
-            {!hasAccount
+            {loadError
+              ? 'Payout status unavailable'
+              : !hasAccount
               ? 'Start receiving payouts'
               : needsInfo
                 ? 'Complete your payout setup'
                 : 'Account verification in progress'}
           </h4>
           <p className="text-sm text-app-text-secondary mt-1">
-            {!hasAccount
+            {loadError
+              ? loadError
+              : !hasAccount
               ? 'Connect your bank account through Stripe to get paid for completed gigs. Setup takes about 5 minutes.'
               : needsInfo
                 ? 'Your Stripe account needs more information before you can receive payouts.'
@@ -185,11 +201,13 @@ export default function StripeConnectOnboarding({
           <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
             <button
               type="button"
-              onClick={handleConnect}
-              disabled={connecting}
+              onClick={loadError ? loadAccount : handleConnect}
+              disabled={connecting || loading}
               className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 inline-flex items-center justify-center"
             >
-              {connecting ? (
+              {loadError ? (
+                loading ? 'Retrying…' : 'Retry'
+              ) : connecting ? (
                 <span className="flex items-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
