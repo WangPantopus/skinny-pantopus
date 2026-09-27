@@ -567,6 +567,13 @@ public final class PublicProfileViewModel {
         return true
     }
 
+    /// The profile's public web link for the header's "Share profile" sheet
+    /// (web `/u/:username`, the link web's own profile Share uses).
+    public var profileShareURL: URL? {
+        guard case let .loaded(payload) = state, !payload.profile.username.isEmpty else { return nil }
+        return URL(string: InviteLinks.profileURLString(username: payload.profile.username))
+    }
+
     /// Handle for the privacy handshake sheet.
     public var loadedPersonaHandle: String {
         guard case let .loaded(payload) = state else { return "" }

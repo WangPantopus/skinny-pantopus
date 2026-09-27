@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,8 +35,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
 import app.pantopus.android.ui.screens.profile.tabs.ProfileGigsSection
 import app.pantopus.android.ui.screens.profile.tabs.ProfilePortfolioSection
@@ -98,6 +101,7 @@ fun PublicProfileScreen(
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LaunchedEffect(showHandshake) {
         if (showHandshake) {
@@ -208,6 +212,12 @@ fun PublicProfileScreen(
                 sheetState = sheetState,
             ) {
                 OverflowSheetContent(
+                    // The header's "Share profile" opens this sheet, so it shares first.
+                    shareUrl = profileShareUrl(state),
+                    onShare = { url ->
+                        viewModel.setShowOverflow(false)
+                        context.shareText(url)
+                    },
                     onBlock = {
                         viewModel.setShowOverflow(false)
                         showBlockConfirm = true
@@ -670,8 +680,16 @@ private fun ProfileFollowRow(
     }
 }
 
+/** The profile's public link (web `/u/:username`, the link web's own profile Share uses), or null without one. */
+private fun profileShareUrl(state: PublicProfileUiState): String? {
+    val username = (state as? PublicProfileUiState.Loaded)?.content?.profile?.username
+    return username?.takeIf { it.isNotBlank() }?.let(InviteLinks::profileUrl)
+}
+
 @Composable
 private fun OverflowSheetContent(
+    shareUrl: String?,
+    onShare: (String) -> Unit,
     onBlock: () -> Unit,
     onReport: () -> Unit,
     onCancel: () -> Unit,
@@ -680,6 +698,7 @@ private fun OverflowSheetContent(
         modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s5),
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
+        shareUrl?.let { url -> OverflowSheetRow(label = "Share profile", onClick = { onShare(url) }) }
         OverflowSheetRow(label = "Block this user", destructive = true, onClick = onBlock)
         OverflowSheetRow(label = "Report", onClick = onReport)
         OverflowSheetRow(label = "Cancel", onClick = onCancel)

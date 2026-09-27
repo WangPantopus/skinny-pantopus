@@ -53,6 +53,9 @@ object InviteLinks {
     /** A business's public page (web `/b/:username`), which the app also opens. */
     fun businessUrl(username: String): String = publicPageUrl("/b/${Uri.encode(username)}")
 
+    /** A person's public profile (web `/u/:username`, the link web's own profile Share uses). */
+    fun profileUrl(username: String): String = publicPageUrl("/u/${Uri.encode(username)}")
+
     const val INVITE_MESSAGE =
         "Join me on Pantopus — your neighborhood for trusted home help, " +
             "local gigs, and your whole household in one place. $DOWNLOAD_URL"
