@@ -183,6 +183,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public let dueDate: String?
     public let performedAt: String?
     public let status: String?
+    public let clearVendor: Bool
+    public let clearCost: Bool
 
     private enum CodingKeys: String, CodingKey {
         case task
@@ -201,7 +203,9 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         recurrence: String? = nil,
         dueDate: String? = nil,
         performedAt: String? = nil,
-        status: String? = nil
+        status: String? = nil,
+        clearVendor: Bool = false,
+        clearCost: Bool = false
     ) {
         self.task = task
         self.vendor = vendor
@@ -210,15 +214,17 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         self.dueDate = dueDate
         self.performedAt = performedAt
         self.status = status
+        self.clearVendor = clearVendor
+        self.clearCost = clearCost
     }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         if let task { try c.encode(task, forKey: .task) }
-        if let vendor { try c.encode(vendor, forKey: .vendor) }
+        if let vendor { try c.encode(vendor, forKey: .vendor) } else if clearVendor { try c.encodeNil(forKey: .vendor) }
         if let cost {
             try c.encode(NSDecimalNumber(decimal: cost).doubleValue, forKey: .cost)
-        }
+        } else if clearCost { try c.encodeNil(forKey: .cost) }
         if let recurrence { try c.encode(recurrence, forKey: .recurrence) }
         if let dueDate { try c.encode(dueDate, forKey: .dueDate) }
         if let performedAt { try c.encode(performedAt, forKey: .performedAt) }

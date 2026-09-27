@@ -2,8 +2,12 @@
 
 package app.pantopus.android.data.api.models.homes
 
+import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonReader
+import com.squareup.moshi.JsonWriter
+import com.squareup.moshi.ToJson
 import java.math.BigDecimal
 
 /**
@@ -58,7 +62,6 @@ data class CreateMaintenanceRequest(
 )
 
 /** Body for `PUT /api/homes/:id/maintenance/:taskId`. All fields optional. */
-@JsonClass(generateAdapter = true)
 data class UpdateMaintenanceRequest(
     val task: String? = null,
     val vendor: String? = null,
@@ -67,4 +70,32 @@ data class UpdateMaintenanceRequest(
     @Json(name = "due_date") val dueDate: String? = null,
     @Json(name = "performed_at") val performedAt: String? = null,
     val status: String? = null,
+    val clearVendor: Boolean = false,
+    val clearCost: Boolean = false,
 )
+
+/** Preserve omitted fields while sending deliberate clears as JSON null. */
+class UpdateMaintenanceRequestJsonAdapter {
+    @ToJson
+    fun toJson(writer: JsonWriter, value: UpdateMaintenanceRequest) {
+        val previous = writer.serializeNulls
+        writer.serializeNulls = true
+        try {
+            writer.beginObject()
+            value.task?.let { writer.name("task").value(it) }
+            if (value.vendor != null || value.clearVendor) writer.name("vendor").value(value.vendor)
+            if (value.cost != null || value.clearCost) writer.name("cost").value(value.cost)
+            value.recurrence?.let { writer.name("recurrence").value(it) }
+            value.dueDate?.let { writer.name("due_date").value(it) }
+            value.performedAt?.let { writer.name("performed_at").value(it) }
+            value.status?.let { writer.name("status").value(it) }
+            writer.endObject()
+        } finally {
+            writer.serializeNulls = previous
+        }
+    }
+
+    @FromJson
+    fun fromJson(reader: JsonReader): UpdateMaintenanceRequest =
+        error("UpdateMaintenanceRequest is request-only; deserialization is not supported.")
+}
