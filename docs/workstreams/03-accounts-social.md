@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:21:24Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:42:41Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
@@ -59,6 +59,15 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### PR #583: Android broadcast composer shows no sample audience counts
 - **[#583](https://github.com/WangPantopus/skinny-pantopus/pull/583)** head `7b4f4556a` on `7bdef3e8c`. Bundle `20260927-stream3-android-composer-reach-r1`, seal `0ced0053c5a69b71d9c49e8effefa13b79cea3d084ff5b78ad24711545322b50` (17 files). Sent to Stream 1.
 - The reach was seeded from `ComposeBroadcastSampleData` (1,247/518/212/64), so it showed while membership-stats failed. Now `emptyMap()` like iOS; one existing test updated (it asserted the sample 518). `ComposeBroadcastViewModelTest` 24/24.
+
+### PR #584: My bookings "Book again" opens the booking page; a row says where to manage it (S3-52, web + API)
+- **[#584](https://github.com/WangPantopus/skinny-pantopus/pull/584)** head `615659fc2` on `563cddb47` (merges cleanly). Bundle `20260927-stream3-my-bookings-dead-controls-r1`, seal `187dcd0fbadcdedb55b58599fc3369f59d2ff3e1343cd0554558c3727a7b4080` (41 files; seal comment posted). Sent to Stream 1 before 05:42:41Z (queued there while it waits on the user); CI running.
+- Defect (S3-52 remainder after `75e061e40`): web and iOS "Book again" on past bookings had no handler (`/my-bookings` rows lack the page slug), and rows showed a chevron that did nothing. Android already answers row taps (manage page if this device booked it, else "Manage this booking from your confirmation email link.").
+- Change: `GET /api/scheduling/my-bookings` adds `page_slug` (live pages only, else null); web "Book again" links `/book/:slug` and hides without a slug; a web row click shows Android's message. "Pay" can't appear with real data (no balance field, no `balance_due` status); unchanged.
+- Before (web): the row click and "Book again" did nothing. After: the real payload has `page_slug: null` for F5b (page `807dd420` is the retained draft, not live); a row click shows the message; a past row with an offline page has no "Book again"; "Book again" with a slug goes to `/book/<slug>`. Past rows came from proxy answers built from the real row. The API verification build `a62037b1d` (`23e518b11` + the API commit) served the after 05:35:57Z–05:38:06Z; the API went back to `23e518b11` at 05:38:11Z.
+- Checks: web ESLint 0 errors, type-check gate, web Jest 122/1893; backend full Jest 341 suites and privacy gates.
+- Not verified: a live page's landing (no live booking page in the isolated DB); iOS and Android follow-up (same wiring from `page_slug`; needs heavy + devices).
+- Runtime note: web 18131 now serves this branch (master `563cddb47` + #584) from `/private/tmp/pantopus-stream3-web-chat-names-r1`.
 
 ### Committed, verification pending (need heavy + devices)
 - **S3-59 on Android: a failed review reply now says so.** Branch `claude/stream3-android-review-reply-failure`, head `bbca31072` on `c890f2588`; 1 file (`BusinessOwnerViewModel.kt`) adds "Your reply wasn't posted. <reason>" (iOS got the same in #552). Before captured on the master APK (bundle `20260927-stream3-android-review-reply-failure-r1/before`): the reply shows, the injected 500 lands at 05:11:22Z, and the reply vanishes with no message. The after needs a build.
