@@ -12,7 +12,7 @@ import type { PostComment } from '@pantopus/types';
 
 interface CommentThreadProps {
   comments: PostComment[];
-  onAddComment: (input: { text: string; parentId?: string; files?: File[] }) => Promise<boolean | void>;
+  onAddComment: (input: { text: string; parentId?: string; files?: File[]; clientRequestId: string }) => Promise<boolean | void>;
   onDeleteComment: (commentId: string) => Promise<void>;
   onLikeComment?: (commentId: string) => Promise<void>;
   currentUserId?: string;
@@ -88,7 +88,10 @@ export default function CommentThread({
     };
   }, [previewUrls]);
 
+  const pendingComment = useRef<{ signature: string; id: string } | null>(null);
+
   const resetComposer = () => {
+    pendingComment.current = null;
     setNewComment('');
     setReplyTo(null);
     setSelectedFiles([]);
@@ -103,11 +106,17 @@ export default function CommentThread({
     if (!newComment.trim() && selectedFiles.length === 0) return;
     if (isPosting || submittingRef.current) return;
     submittingRef.current = true;
+    const signature = JSON.stringify([currentUserId, newComment.trim(), replyTo?.id,
+      selectedFiles.map((file) => [file.name, file.size, file.lastModified])]);
+    if (pendingComment.current?.signature !== signature) {
+      pendingComment.current = { signature, id: crypto.randomUUID() };
+    }
     try {
       const saved = await onAddComment({
         text: newComment.trim(),
         parentId: replyTo?.id,
         files: selectedFiles,
+        clientRequestId: pendingComment.current.id,
       });
       if (saved !== false) resetComposer();
     } catch {

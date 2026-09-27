@@ -99,7 +99,10 @@ public final class PulsePostDetailViewModel {
     public private(set) var state: PulsePostDetailState = .loading
 
     /// Inline composer's draft text. Bound from the view.
-    public var composerText: String = ""
+    public var composerText: String = "" {
+        didSet { if composerText.isEmpty { pendingComment = nil } }
+    }
+    private var pendingComment: PostCommentRequest?
 
     /// True while a comment is in flight.
     public private(set) var isSendingComment: Bool = false
@@ -398,7 +401,11 @@ public final class PulsePostDetailViewModel {
         guard !body.isEmpty, case .loaded = state, !isSendingComment else { return }
         isSendingComment = true
         defer { isSendingComment = false }
-        let req = PostCommentRequest(comment: body, parentCommentId: replyTarget?.commentId)
+        let parentId = replyTarget?.commentId
+        if pendingComment?.comment != body || pendingComment?.parentCommentId != parentId {
+            pendingComment = PostCommentRequest(comment: body, parentCommentId: parentId, clientRequestId: UUID().uuidString)
+        }
+        guard let req = pendingComment else { return }
         do {
             _ = try await client.request(
                 PostsEndpoints.createComment(id: postId, body: req),

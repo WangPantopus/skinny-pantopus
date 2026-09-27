@@ -10,6 +10,7 @@ import com.squareup.moshi.JsonClass
 data class PostCommentRequest(
     val comment: String,
     val parentCommentId: String? = null,
+    val clientRequestId: String? = null,
 )
 
 /** `POST /api/posts/:id/comments` envelope — returns the new row. */
