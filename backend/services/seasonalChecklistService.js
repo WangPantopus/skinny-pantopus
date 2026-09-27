@@ -270,9 +270,10 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
  * @returns {Promise<object|null>}  Confirmed current item; throws on unavailable or denied changes
  */
 async function updateChecklistItem(homeId, itemId, status, userId) {
-  const { data, error } = await supabaseAdmin.rpc('update_home_seasonal_item', {
+  // Query builders are thenables without .catch: wrap one so a failed request maps to 503.
+  const { data, error } = await Promise.resolve(supabaseAdmin.rpc('update_home_seasonal_item', {
     p_home_id: homeId, p_actor_id: userId, p_item_id: itemId, p_status: status,
-  }).catch(() => ({ data: null, error: true }));
+  })).catch(() => ({ data: null, error: true }));
   if (error || !data || typeof data.ok !== 'boolean') {
     throw Object.assign(new Error('The checklist change could not be confirmed. Reload before retrying.'), {
       code: 'HOME_CHECKLIST_UNAVAILABLE', statusCode: 503,
