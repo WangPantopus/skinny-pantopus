@@ -286,6 +286,7 @@ export default function HomeSettingsTab({
             {canEdit ? (
               <input
                 value={homeName}
+                disabled={saving}
                 onChange={(e) => setHomeName(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
                 placeholder="e.g., My Camas Home"
@@ -312,6 +313,7 @@ export default function HomeSettingsTab({
             {canEdit ? (
               <select
                 value={homeType}
+                disabled={saving}
                 onChange={(e) => setHomeType(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
               >
@@ -334,6 +336,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Default Guest Pass Expiry</label>
               <select
                 value={defaultGuestHours}
+                disabled={saving}
                 onChange={(e) => setDefaultGuestHours(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
               >
@@ -347,6 +350,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Default Visibility for New Items</label>
               <select
                 value={defaultVisibility}
+                disabled={saving}
                 onChange={(e) => setDefaultVisibility(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
               >
@@ -361,6 +365,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Guest Welcome Message</label>
               <textarea
                 value={guestWelcome}
+                disabled={saving}
                 onChange={(e) => setGuestWelcome(e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
@@ -381,6 +386,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">House Rules</label>
               <textarea
                 value={houseRules}
+                disabled={saving}
                 onChange={(e) => setHouseRules(e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
@@ -394,6 +400,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Parking Instructions</label>
               <textarea
                 value={parkingInstructions}
+                disabled={saving}
                 onChange={(e) => setParkingInstructions(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
@@ -406,6 +413,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Entry Instructions</label>
               <textarea
                 value={entryInstructions}
+                disabled={saving}
                 onChange={(e) => setEntryInstructions(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
@@ -418,6 +426,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Trash Day</label>
               <select
                 value={trashDay}
+                disabled={saving}
                 onChange={(e) => setTrashDay(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
               >
@@ -431,6 +440,7 @@ export default function HomeSettingsTab({
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Local Tips</label>
               <textarea
                 value={localTips}
+                disabled={saving}
                 onChange={(e) => setLocalTips(e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
@@ -446,11 +456,11 @@ export default function HomeSettingsTab({
       {/* ===== Section 4: Notifications ===== */}
       <SettingsSection title="Notifications" icon="🔔">
         <div className="space-y-1">
-          <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" checked={notifBills} onChange={setNotifBills} />
-          <NotificationToggle label="Task reminders" description="Reminders for assigned and overdue tasks" checked={notifTasks} onChange={setNotifTasks} />
-          <NotificationToggle label="Mail alerts" description="New mail and package notifications" checked={notifMail} onChange={setNotifMail} />
-          <NotificationToggle label="Delivery alerts" description="Package delivery status updates" checked={notifDelivery} onChange={setNotifDelivery} />
-          <NotificationToggle label="Guest pass activity" description="When someone views a guest pass" checked={notifGuestPass} onChange={setNotifGuestPass} />
+          <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" disabled={saving} checked={notifBills} onChange={setNotifBills} />
+          <NotificationToggle label="Task reminders" description="Reminders for assigned and overdue tasks" disabled={saving} checked={notifTasks} onChange={setNotifTasks} />
+          <NotificationToggle label="Mail alerts" description="New mail and package notifications" disabled={saving} checked={notifMail} onChange={setNotifMail} />
+          <NotificationToggle label="Delivery alerts" description="Package delivery status updates" disabled={saving} checked={notifDelivery} onChange={setNotifDelivery} />
+          <NotificationToggle label="Guest pass activity" description="When someone views a guest pass" disabled={saving} checked={notifGuestPass} onChange={setNotifGuestPass} />
         </div>
       </SettingsSection>
 
@@ -647,11 +657,13 @@ function NotificationToggle({
   description,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   description: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex items-center justify-between px-1 py-2.5 cursor-pointer hover:bg-app-hover rounded-lg transition">
@@ -660,7 +672,8 @@ function NotificationToggle({
         <div className="text-[10px] text-app-text-muted">{description}</div>
       </div>
       <div
-        onClick={(e) => { e.preventDefault(); onChange(!checked); }}
+        aria-disabled={disabled}
+        onClick={(e) => { e.preventDefault(); if (!disabled) onChange(!checked); }}
         className={`relative w-10 h-6 rounded-full transition-colors ${
           checked ? 'bg-gray-900' : 'bg-gray-300'
         }`}
