@@ -4,6 +4,10 @@
 >
 > **§0 below is the final state (02:31:47Z): queue empty, runtime = master `89f3c6bac`.** Always re-verify live.
 
+> **Live — successor session (queue owner since 2026-09-27T02:50Z), 03:44Z:** batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572) queued 03:44:00Z (#560 #563 #564 #565 #570 #566; tip `a3c1b106d`); batch 38 candidates #567 #568 #569 #571 (CI running). S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571) implements §3.2 (bundle `20260927-stream1-quickpost-address-search-r1`, `bba44d1b…`). New user decision (answer before 03:33:40Z): the V2 composer gets the same address search (Stream 1 next). The hub docs' 03:44Z UPDATE blocks hold the detail.
+>
+> **§9 correction:** at the user's request the previous session removed its 8 merged PR worktrees (gig-qa-live, web-worker-panel, native-helper-dock, web-stop-copy, android-tab-nav, gig-write-replies, android-edit-location, saved-search-alerts) with `git worktree remove` by 02:51:59Z, and deleted 8 superseded APK copies (the runtime keeps `installed-5558-1e3ed71f8.apk` and now `installed-5558-b4b518313.apk`). New worktree: `/private/tmp/pantopus-stream1-quickpost-address` (#571).
+
 This is the complete takeover note for the **Stream 1** session (Claude, peer of Streams 2 and 3). It replaces the 22:08Z version of this file.
 
 **Read order:**

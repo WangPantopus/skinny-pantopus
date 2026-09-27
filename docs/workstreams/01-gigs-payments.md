@@ -2,6 +2,13 @@
 
 ## CURRENT STREAM 1 STATE — 2026-09-26T22:10Z (session handoff)
 
+> **UPDATE 2026-09-27T03:44Z — new Stream 1 session (queue owner since 02:50Z).**
+> - **Batch 37 [#572](https://github.com/WangPantopus/skinny-pantopus/pull/572)** queued 03:44:00Z (runner pid 34455), tip `a3c1b106d` on master `89f3c6bac`: S2 #560 → #563 → #564 → #565 → #570 → S3 #566 (all "CI OK" at 03:42:12Z; all six reviewed; bundles re-verified; #564's hunks proven in the tip). #565/#570 are backend → restart the Stream 1 runtime after the merge.
+> - **Batch 38 candidates (reviewed, CI running at 03:42Z):** S3 #567, S2 #568, S2 #569, S1 [#571](https://github.com/WangPantopus/skinny-pantopus/pull/571).
+> - **S1 #571 (HIGH, user decision "Address search in the app"):** native "Post task" (V1 quick-post) lists Add Home's address suggestions; create posts the picked point + city/state/zip; edit keeps the stored location unless a new address is picked; `POST/PATCH /api/gigs` refuse (0, 0) with 400 `LOCATION_UNRESOLVED`. Verified on iOS, Android and the API (geocoder = proxy stand-in; the runtime has no Mapbox). Bundle `20260927-stream1-quickpost-address-search-r1`, MANIFEST `bba44d1b…` (46 files).
+> - **New HIGH finding + user decision (03:33Z): the V2 composer (Nearby → "Post a task")** stores every Android task at (0, 0) via `magic-post` (reproduced) and iOS posts at the phone's location. User chose **"Same address search"**: A place → suggestions; Your address → the Home's point; Virtual → no location; magic-post refuses (0, 0). Stream 1 implements it next.
+> - **Runtime:** master code (backend pid 33017 since 03:39:57Z). **Slots:** Stream 1 holds none.
+
 > **UPDATE 2026-09-27T02:31Z: Stream 1 handed off with the queue empty.** The final takeover note is [docs/workstreams/stream1-handoff-2026-09-26.md](stream1-handoff-2026-09-26.md); **§0 is the final state**. The successor prompt is [NEXT-STREAM1-PROMPT-2026-09-26.md](NEXT-STREAM1-PROMPT-2026-09-26.md).
 > - **Merged:**
 >   - batch 35 [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556) (02:23:56Z → `0bd3759f4`: S1 #548, #553, #550, #554, #555 and S3 #552);
