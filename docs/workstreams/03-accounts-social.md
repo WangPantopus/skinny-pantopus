@@ -2,10 +2,10 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:19:57Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T08:35:41Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
-- **Slots:** none held (heavy 07:26:43Z–07:45:06Z, slot 3 07:27:03Z–08:05:34Z, slot 1 07:37:07Z–08:05:17Z; both devices shut down). Batch 38 [#585](https://github.com/WangPantopus/skinny-pantopus/pull/585) merged at 08:01:42Z (master `f6c66d678`) with #567, #573, #576, #582, #583, #584.
+- **Slots (2026-09-27T08:35:41Z):** heavy held since 08:33:58Z (after the Stream 1 release at 08:33:51Z) for Android + iOS builds of the local verification tree `997d129c2` (dashboard Photos rail hidden `38a3ca314` + Connections rows open profile `324460396`). Slot 3 held since 08:20:35Z (the Android befores are done). Slot 1 queue: Stream 1, then Stream 3. After heavy, Stream 2 is next. Earlier holds: heavy 07:26:43Z–07:45:06Z, slot 3 07:27:03Z–08:05:34Z, slot 1 07:37:07Z–08:05:17Z. Batch 38 #585 merged 08:01:42Z (`f6c66d678`).
 
 ### PRs
 - **[#545](https://github.com/WangPantopus/skinny-pantopus/pull/545)** (web; S3-69 web part, S3-46): **merged** in batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) at 00:46:57Z (master `73b98f6b6`). Bundle `20260926-stream3-web-pdf-checkout-r1` (seal `892831e1…`) + addendum1 (`8e0243cc…`, two stale Jest assertions).
