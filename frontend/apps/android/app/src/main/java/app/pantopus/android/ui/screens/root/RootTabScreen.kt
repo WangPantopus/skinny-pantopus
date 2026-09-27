@@ -4330,15 +4330,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMessages = { profile ->
                             // Verified residency is the fact behind "Verified neighbor";
                             // `profile.verified` is the account flag sign-in sets.
-                            navController.navigate(
-                                ChildRoutes.chatConversationFromPicker(
-                                    userId = profile.id,
-                                    displayName = profile.displayName,
-                                    initials = initialsFromName(profile.displayName),
-                                    verified = profile.residency?.get("verified") == true,
-                                    locality = profile.locality,
-                                ),
-                            )
+                            val previous = navController.previousBackStackEntry
+                            if (previous?.destination?.route == ChildRoutes.CHAT_CONVERSATION &&
+                                previous.arguments?.getString(ChildRoutes.CHAT_KIND_KEY) == "person" &&
+                                previous.arguments?.getString(ChildRoutes.CHAT_ID_KEY) == profile.id
+                            ) {
+                                // Return to the existing conversation and its unsent draft.
+                                navController.popBackStack()
+                            } else {
+                                navController.navigate(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = profile.id,
+                                        displayName = profile.displayName,
+                                        initials = initialsFromName(profile.displayName),
+                                        verified = profile.residency?.get("verified") == true,
+                                        locality = profile.locality,
+                                    ),
+                                )
+                            }
                         },
                         // Gigs tab rows open gig detail; review cards open the
                         // reviewer's own public profile.

@@ -308,6 +308,15 @@ public struct InboxTabRoot: View {
             onBack: { if !path.isEmpty { path.removeLast() } },
             onOpenMessages: { profile in
                 Task { @MainActor in
+                    var previousPath = path
+                    previousPath.removeLast()
+                    if let previous = previousPath.last,
+                       case let .conversation(destination) = previous,
+                       destination.mode == .person(otherUserId: profile.id),
+                       destination.kind == .dm {
+                        path = previousPath
+                        return
+                    }
                     path.append(.conversation(InboxConversationDestination(
                         mode: .person(otherUserId: profile.id),
                         displayName: profile.displayName,
