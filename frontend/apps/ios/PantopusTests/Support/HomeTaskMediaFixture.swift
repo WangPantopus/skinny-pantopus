@@ -94,7 +94,11 @@ struct HomeTaskMediaFixture {
     }
 
     func waitForRequest(_ predicate: (URLRequest) -> Bool) async throws {
-        for _ in 0..<100 {
+        // A deadline, not a poll count: a download starts only after a full
+        // list() round (task, list, task), and on a loaded CI runner that took
+        // longer than 100 short sleeps (~1.8 s).
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
             if SequencedURLProtocol.capturedRequests.contains(where: predicate) { return }
             try await Task.sleep(for: .milliseconds(5))
         }
