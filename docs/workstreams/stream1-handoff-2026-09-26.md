@@ -109,6 +109,11 @@ _Not yet written. If this section is still empty, the previous session stopped b
   - #548's iOS `GigDetailViewModel.swift` differs from #553's head only by master's #537 line.
 - **After batch 35 merges:** restart the Stream 1 backend (#548, #553 and #555 change the backend; no migrations), then mark the inventory rows merged.
 
+**Next batch candidate: S3 [#557](https://github.com/WangPantopus/skinny-pantopus/pull/557)** (new-post fan-out notices; `backend/services/postCreationHooksService.js` only, the same context-type fix as #553/#555).
+- Head `097e3e0875b8e0ff8e525bb89373c9cabef07c50` on `73b98f6b6`; bundle `20260927-stream3-post-fanout-context-r1`, seal `e307f44a…` (25 files).
+- **Reviewed OK by Stream 1:** bundle verified; merge-tree clean against master and against the batch 35 tip.
+- CI had started when Stream 3 reported it; batch it once its "CI OK" passes. It is backend, so restart the runtime after it merges.
+
 **Other open PRs** (not in the stream queue; don't touch): #430, #429 (Ballot P0), #46.
 
 **Runtime.**
