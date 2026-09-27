@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.shared.form
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -121,6 +122,9 @@ fun FormShell(
         focusManager.clearFocus()
         if (isDirty) showDiscardConfirm = true else onClose()
     }
+    // System Back on a dirty form asks too, like the close button, instead
+    // of leaving the screen and dropping the edits. A clean form's Back is unchanged.
+    BackHandler(enabled = isDirty && !isSaving && !showDiscardConfirm) { handleClose() }
 
     val handleCommit = {
         focusManager.clearFocus()
