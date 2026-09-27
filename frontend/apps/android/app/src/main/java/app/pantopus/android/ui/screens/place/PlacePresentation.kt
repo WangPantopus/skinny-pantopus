@@ -116,6 +116,16 @@ object PlacePresentation {
     }
 
     /**
+     * "today", or "as of Sep 24" when cached sun times belong to an earlier
+     * day (their own local wall-clock date, e.g. "2026-09-24T06:59").
+     */
+    fun fmtSunDay(iso: String): String? {
+        val day = runCatching { java.time.LocalDate.parse(iso.substringBefore('T')) }.getOrNull() ?: return null
+        if (day == java.time.LocalDate.now()) return "today"
+        return "as of " + day.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+    }
+
+    /**
      * "6:42a" — the compact sun clock. Sunrise/sunset arrive as LOCAL
      * wall-clock with no zone or seconds ("2026-06-12T05:19"), so parse
      * them as a LocalDateTime and read the hour/minute directly (no zone

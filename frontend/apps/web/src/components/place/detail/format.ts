@@ -25,6 +25,18 @@ export function fmtTime(iso: string | null | undefined): string | undefined {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * "today", or "as of Sep 24" when cached sun times belong to an earlier day
+ * (their own local wall-clock date, e.g. "2026-09-24T06:59").
+ */
+export function fmtSunDay(sunrise: string | null | undefined): string | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(sunrise ?? '');
+  if (!match) return undefined;
+  const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (day.toDateString() === new Date().toDateString()) return 'today';
+  return `as of ${day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
 export function fmtMonthYear(iso: string | null | undefined): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
