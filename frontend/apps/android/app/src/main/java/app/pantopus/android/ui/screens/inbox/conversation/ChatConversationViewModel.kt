@@ -326,7 +326,16 @@ class ChatConversationViewModel
         }
 
         fun load() {
-            if (_state.value is ChatConversationUiState.Loaded) return
+            if (_state.value is ChatConversationUiState.Loaded) {
+                // Back on screen after teardown() (a pushed screen, a tab
+                // switch): listen again. Re-joining the rooms backfills what
+                // arrived meanwhile.
+                if (connectionJob == null) {
+                    publishViewedRooms()
+                    subscribeToSockets()
+                }
+                return
+            }
             // Seed AI continuity: a new VM instance for the AI thread keeps
             // appending to the conversation the app session already opened.
             if (mode is ChatThreadMode.Ai && aiConversationId == null) {
