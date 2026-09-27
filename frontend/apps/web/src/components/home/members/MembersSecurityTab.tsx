@@ -128,32 +128,41 @@ export default function MembersSecurityTab({
   const [showLockdown, setShowLockdown] = useState(false);
   const [secretsCount, setSecretsCount] = useState(0);
   const [securityLoading, setSecurityLoading] = useState(true);
-  const [securityError, setSecurityError] = useState('');
+  const [securityErrors, setSecurityErrors] = useState<Partial<Record<'passes' | 'settings' | 'secrets', string>>>({});
   const securityGeneration = useRef(0);
 
   // Load supplementary data
   const loadSecurity = useCallback(async () => {
     const generation = ++securityGeneration.current;
     setSecurityLoading(true);
-    setSecurityError('');
+    setSecurityErrors({});
     try {
-      const [passesRes, settingsRes, secretsRes] = await Promise.all([
+      const [passesRes, settingsRes, secretsRes] = await Promise.allSettled([
         api.homeIam.getGuestPasses(homeId),
         api.homeProfile.getHomeSettings(homeId),
         api.homeProfile.getHomeAccessSecrets(homeId),
       ]);
       if (generation !== securityGeneration.current) return;
-      const passes = (passesRes as Record<string, any>).passes || [];
-      const active = passes.filter(
-        (p: GuestPass) => !p.revoked_at && p.status !== 'revoked' && p.status !== 'expired' &&
-          (!p.end_at || new Date(p.end_at) > new Date())
-      );
-      setActivePasses(active.length);
-      setLockdownEnabled((settingsRes as Record<string, any>)?.home?.lockdown_enabled || false);
-      setSecretsCount(((secretsRes as Record<string, any>).secrets || []).length);
+      const errors: Partial<Record<'passes' | 'settings' | 'secrets', string>> = {};
+      if (passesRes.status === 'fulfilled') {
+        const passes = (passesRes.value as Record<string, any>).passes || [];
+        const active = passes.filter(
+          (p: GuestPass) => !p.revoked_at && p.status !== 'revoked' && p.status !== 'expired' &&
+            (!p.end_at || new Date(p.end_at) > new Date())
+        );
+        setActivePasses(active.length);
+      } else errors.passes = failureMessage(passesRes.reason, 'Guest passes could not be loaded. Please try again.');
+      if (settingsRes.status === 'fulfilled') {
+        setLockdownEnabled((settingsRes.value as Record<string, any>)?.home?.lockdown_enabled || false);
+      } else errors.settings = failureMessage(settingsRes.reason, 'Lockdown status could not be loaded. Please try again.');
+      if (secretsRes.status === 'fulfilled') {
+        setSecretsCount(((secretsRes.value as Record<string, any>).secrets || []).length);
+      } else errors.secrets = failureMessage(secretsRes.reason, 'Access secrets could not be loaded. Please try again.');
+      setSecurityErrors(errors);
     } catch (error) {
       if (generation !== securityGeneration.current) return;
-      setSecurityError(failureMessage(error, 'Security details could not be loaded. Please try again.'));
+      const message = failureMessage(error, 'Security details could not be loaded. Please try again.');
+      setSecurityErrors({ passes: message, settings: message, secrets: message });
     } finally {
       if (generation === securityGeneration.current) setSecurityLoading(false);
     }
@@ -255,7 +264,10 @@ export default function MembersSecurityTab({
         onClose={() => setShowLockdown(false)}
         homeId={homeId}
         lockdownEnabled={lockdownEnabled}
-        onLockdownChange={(enabled) => setLockdownEnabled(enabled)}
+        onLockdownChange={(enabled) => {
+          setLockdownEnabled(enabled);
+          loadSecurity();
+        }}
       />
 
       {/* Residency Claims (existing) */}
@@ -336,8 +348,6 @@ export default function MembersSecurityTab({
         <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-3">Security Center</h3>
         {securityLoading ? (
           <div className="py-8 text-center text-sm text-app-text-muted">Loading security details…</div>
-        ) : securityError ? (
-          <ErrorState message={securityError} onRetry={loadSecurity} />
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Guest Passes Card */}
@@ -346,8 +356,10 @@ export default function MembersSecurityTab({
               <span className="text-lg">🔗</span>
               <span className="text-sm font-semibold text-app-text">Guest Passes</span>
             </div>
-            <div className="text-2xl font-bold text-app-text">{activePasses}</div>
-            <p className="text-[10px] text-app-text-muted mt-0.5">active pass{activePasses !== 1 ? 'es' : ''}</p>
+            {securityErrors.passes ? <ErrorState message={securityErrors.passes} onRetry={loadSecurity} /> : <>
+              <div className="text-2xl font-bold text-app-text">{activePasses}</div>
+              <p className="text-[10px] text-app-text-muted mt-0.5">active pass{activePasses !== 1 ? 'es' : ''}</p>
+            </>}
           </div>
 
           {/* Secret Vault Card */}
@@ -356,13 +368,18 @@ export default function MembersSecurityTab({
               <span className="text-lg">🔐</span>
               <span className="text-sm font-semibold text-app-text">Secret Vault</span>
             </div>
-            <div className="text-2xl font-bold text-app-text">{secretsCount}</div>
-            <p className="text-[10px] text-app-text-muted mt-0.5">access secret{secretsCount !== 1 ? 's' : ''} stored</p>
+            {securityErrors.secrets ? <ErrorState message={securityErrors.secrets} onRetry={loadSecurity} /> : <>
+              <div className="text-2xl font-bold text-app-text">{secretsCount}</div>
+              <p className="text-[10px] text-app-text-muted mt-0.5">access secret{secretsCount !== 1 ? 's' : ''} stored</p>
+            </>}
           </div>
 
           {/* Lockdown Mode Card */}
           {can('security.manage') && (
-            <div className={`bg-app-surface rounded-xl border p-4 ${lockdownEnabled ? 'border-red-300 bg-red-50/30' : 'border-app-border'}`}>
+            <div className={`bg-app-surface rounded-xl border p-4 ${!securityErrors.settings && lockdownEnabled ? 'border-red-300 bg-red-50/30' : 'border-app-border'}`}>
+              {securityErrors.settings ? (
+                <ErrorState title="Lockdown status unavailable" message={securityErrors.settings} onRetry={loadSecurity} />
+              ) : (
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -384,6 +401,7 @@ export default function MembersSecurityTab({
                   Manage
                 </button>
               </div>
+              )}
             </div>
           )}
 
