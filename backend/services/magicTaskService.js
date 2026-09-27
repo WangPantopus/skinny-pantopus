@@ -30,6 +30,21 @@ const VALID_CATEGORIES = [
   'Errands', 'Grocery Pickup',
 ];
 
+// The native apps' chips send lowercase keys ("petcare", "tech"); web and the
+// V2 composer send the labels above. Category filters are exact matches, so a
+// key and its label must be stored and queried as one value: the label.
+const categoryKey = (value) => String(value).toLowerCase().replace(/[\s_-]+/g, '');
+const CATEGORY_BY_KEY = new Map([
+  ...VALID_CATEGORIES.map((label) => [categoryKey(label), label]),
+  ['tech', 'Tech Support'],
+]);
+
+/** A known category key or label → its label; anything else unchanged. */
+function canonicalGigCategory(value) {
+  if (typeof value !== 'string' || !value.trim()) return value;
+  return CATEGORY_BY_KEY.get(categoryKey(value)) || value;
+}
+
 const VALID_PAY_TYPES = ['fixed', 'hourly', 'offers'];
 const VALID_SCHEDULE_TYPES = ['asap', 'today', 'scheduled', 'flexible'];
 const VALID_LOCATION_MODES = ['home', 'current', 'address', 'map_pin'];
@@ -770,4 +785,5 @@ module.exports = {
   generateMagicDraft,
   generateBasicDraft,
   VALID_CATEGORIES,
+  canonicalGigCategory,
 };
