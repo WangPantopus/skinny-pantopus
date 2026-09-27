@@ -23,7 +23,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
-const { generateMagicDraft, generateBasicDraft, VALID_CATEGORIES } = require('../services/magicTaskService');
+const { generateMagicDraft, generateBasicDraft, VALID_CATEGORIES, canonicalGigCategory } = require('../services/magicTaskService');
 const { inferEngagementMode } = require('../services/offerScoringService');
 const {
   careDetailsSchema,
@@ -448,7 +448,7 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       ? calculateApproxLocation(normalizedLocation.latitude, normalizedLocation.longitude)
       : null;
     const resolvedEngagementMode = inferEngagementMode(
-      draft.category || '',
+      canonicalGigCategory(draft.category) || '',
       draft.schedule_type || 'asap',
       engagement_mode || null,
     );
@@ -479,7 +479,7 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       title: draft.title,
       description: draft.description,
       price,
-      category: draft.category || 'Other',
+      category: canonicalGigCategory(draft.category) || 'Other',
       user_id: effectiveUserId,
       created_by: createdBy,
       beneficiary_user_id: beneficiary_user_id || null,

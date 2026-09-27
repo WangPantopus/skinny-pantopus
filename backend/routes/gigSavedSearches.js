@@ -8,6 +8,7 @@
 
 const express = require('express');
 const Joi = require('joi');
+const { canonicalGigCategory } = require('../services/magicTaskService');
 
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -76,7 +77,7 @@ router.post('/saved-searches', verifyToken, validate(createSavedSearchSchema), a
     const row = {
       user_id: userId,
       name: body.name || null,
-      category: body.category || null,
+      category: canonicalGigCategory(body.category) || null,
       search: body.search || null,
       min_price: body.min_price ?? null,
       max_price: body.max_price ?? null,
@@ -104,7 +105,7 @@ router.post('/saved-searches', verifyToken, validate(createSavedSearchSchema), a
           .order('created_at', { ascending: false });
         const same = (dupe || []).find(
           (s) =>
-            (s.category || '') === (row.category || '') &&
+            (canonicalGigCategory(s.category) || '') === (row.category || '') &&
             (s.search || '') === (row.search || '') &&
             String(s.min_price ?? '') === String(row.min_price ?? '') &&
             String(s.max_price ?? '') === String(row.max_price ?? '') &&

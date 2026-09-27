@@ -499,7 +499,7 @@ describe('Gig Location Filtering', () => {
         })
         .expect(200);
 
-      expect(capturedParams.p_category).toBe('cleaning');
+      expect(capturedParams.p_category).toBe('Cleaning'); // a native key is queried as its label
       expect(capturedParams.p_min_price).toBe(20);
       expect(capturedParams.p_max_price).toBe(100);
     });
@@ -606,7 +606,7 @@ describe('Gig Location Filtering', () => {
       expect(capturedParams.min_lat).toBe(37.7);
       expect(capturedParams.max_lat).toBe(37.85);
       expect(capturedParams.p_include_remote).toBe(true);
-      expect(capturedParams.p_category).toBe('cleaning');
+      expect(capturedParams.p_category).toBe('Cleaning'); // a native key is queried as its label
       expect(capturedParams.gig_status).toBe('open');
 
       expect(res.body.gigs).toHaveLength(2);
