@@ -19,7 +19,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Download,
   FileText,
   List,
   Send,
@@ -113,8 +112,8 @@ export default function InvoiceDetail({
   const canSend =
     status === "draft" || status === "sent" || status === "overdue";
   // Design: paid → Share + Download PDF; void → Share; refunded → Share + Download PDF.
+  // There is no PDF route yet, so Download PDF is omitted, like mark-paid and refund.
   const canShare = status === "paid" || status === "void" || status === "refunded";
-  const canDownload = status === "paid" || status === "refunded";
 
   const handleShare = async () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
@@ -187,17 +186,6 @@ export default function InvoiceDetail({
                 >
                   <Share2 className="h-4 w-4" aria-hidden />
                   Share
-                </button>
-              )}
-              {canDownload && (
-                <button
-                  type="button"
-                  disabled
-                  title="PDF download coming soon"
-                  className="flex h-12 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary-600 text-[13.5px] font-bold text-white opacity-50 shadow-sm"
-                >
-                  <Download className="h-4 w-4" aria-hidden />
-                  Download PDF
                 </button>
               )}
             </div>

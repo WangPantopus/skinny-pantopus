@@ -2,6 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import { ClipboardList, Wallet, Calendar, Package, Zap, CircleAlert, Hand } from 'lucide-react';
+import { formatHomeBillAmount, parseHomeBillDate } from './homeBillAmount';
 
 /**
  * HouseholdCalendar — mini calendar + AI-suggested reminders widget.
@@ -16,6 +17,8 @@ type CalendarEntry = {
   type: 'task' | 'bill' | 'event' | 'package';
   title: string;
   date: Date;
+  /** A calendar date with no time of day (a bill's due date). */
+  allDay?: boolean;
   meta?: string;
   icon: ReactNode;
   accent: string;
@@ -43,6 +46,10 @@ export default function HouseholdCalendar({
 }) {
   const now = new Date();
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // Bills are due on a calendar day: count days from today's local midnight.
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const daysFromToday = (d: Date) => Math.round((d.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
 
   // ── Build unified timeline entries ──────────────────────────
   const entries = useMemo<CalendarEntry[]>(() => {
@@ -67,16 +74,17 @@ export default function HouseholdCalendar({
     // Bills with due dates
     for (const b of bills) {
       if (b.status === 'paid' || b.status === 'canceled') continue;
-      const d = b.due_date ? new Date(b.due_date) : null;
+      const d = parseHomeBillDate(b.due_date);
       if (!d || d > weekAhead) continue;
       items.push({
         id: `bill-${b.id}`,
         type: 'bill',
         title: b.provider_name || b.bill_type?.replace('_', ' ') || 'Bill',
         date: d,
-        meta: `$${Number(b.amount || 0).toFixed(2)}`,
+        allDay: true,
+        meta: formatHomeBillAmount(b.amount, b.currency),
         icon: <Wallet className="w-4 h-4" />,
-        accent: d < now ? 'border-l-red-400' : 'border-l-amber-400',
+        accent: d < startOfToday ? 'border-l-red-400' : 'border-l-amber-400',
       });
     }
 
@@ -120,28 +128,29 @@ export default function HouseholdCalendar({
     // Bills due within 3 days
     for (const b of bills) {
       if (b.status === 'paid' || b.status === 'canceled') continue;
-      const d = b.due_date ? new Date(b.due_date) : null;
+      const d = parseHomeBillDate(b.due_date);
       if (!d) continue;
-      const daysUntil = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const daysUntil = daysFromToday(d);
+      const amount = formatHomeBillAmount(b.amount, b.currency);
       if (daysUntil >= 0 && daysUntil <= 3) {
         const name = b.provider_name || b.bill_type?.replace('_', ' ') || 'Bill';
         r.push({
           id: `remind-bill-${b.id}`,
           icon: <Zap className="w-4 h-4" />,
           text: daysUntil === 0
-            ? `${name} ($${Number(b.amount || 0).toFixed(0)}) is due today`
-            : `${name} ($${Number(b.amount || 0).toFixed(0)}) due in ${daysUntil} day${daysUntil > 1 ? 's' : ''} — auto-pay?`,
+            ? `${name} (${amount}) is due today`
+            : `${name} (${amount}) due in ${daysUntil} day${daysUntil > 1 ? 's' : ''} — auto-pay?`,
           actionLabel: 'Mark Paid',
           accent: 'bg-amber-50 border-amber-200',
         });
       }
       // Overdue bills
-      if (d < now) {
-        const daysOverdue = Math.ceil((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntil < 0) {
+        const daysOverdue = -daysUntil;
         r.push({
           id: `remind-overdue-${b.id}`,
           icon: <CircleAlert className="w-4 h-4 text-red-500" />,
-          text: `${b.provider_name || b.bill_type} is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue ($${Number(b.amount || 0).toFixed(0)})`,
+          text: `${b.provider_name || b.bill_type} is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue (${amount})`,
           accent: 'bg-red-50 border-red-200',
         });
       }
@@ -254,9 +263,11 @@ export default function HouseholdCalendar({
                         <span className="text-[11px] text-app-text-secondary">{item.meta}</span>
                       )}
                     </div>
-                    <span className="text-[11px] text-app-text-muted flex-shrink-0">
-                      {item.date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                    </span>
+                    {!item.allDay && (
+                      <span className="text-[11px] text-app-text-muted flex-shrink-0">
+                        {item.date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
