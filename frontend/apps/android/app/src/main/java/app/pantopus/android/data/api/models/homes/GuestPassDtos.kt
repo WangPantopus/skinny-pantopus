@@ -4,6 +4,7 @@ package app.pantopus.android.data.api.models.homes
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * One `HomeGuestPass` row from `backend/routes/homeIam.js`. The list
@@ -63,7 +64,15 @@ data class CreateGuestPassResponse(
 @JsonClass(generateAdapter = true)
 data class GuestPassesResponse(
     val passes: List<GuestPassDto>,
-)
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<GuestPassDto?> = passes
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid guest passes response")
+        }
+    }
+}
 
 /** 200 envelope for `DELETE /api/homes/:id/guest-passes/:passId`. */
 @JsonClass(generateAdapter = true)

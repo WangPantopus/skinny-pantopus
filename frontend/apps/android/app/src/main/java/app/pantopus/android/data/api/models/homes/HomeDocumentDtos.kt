@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.homes
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * DTOs for the Home Documents endpoints under `backend/routes/home.js`:
@@ -36,7 +37,15 @@ data class HomeDocumentDto(
 @JsonClass(generateAdapter = true)
 data class GetHomeDocumentsResponse(
     val documents: List<HomeDocumentDto>,
-)
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<HomeDocumentDto?> = documents
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid Home documents response")
+        }
+    }
+}
 
 /** `POST /api/homes/:id/documents` body. */
 @JsonClass(generateAdapter = true)
