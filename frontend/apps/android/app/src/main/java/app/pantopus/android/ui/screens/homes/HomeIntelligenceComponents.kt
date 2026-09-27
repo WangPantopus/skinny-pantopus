@@ -526,8 +526,9 @@ private fun SeasonalLoaded(
                     color = PantopusColors.appTextSecondary,
                     modifier = Modifier.weight(1f),
                 )
+                // Only items still to do; a skip or completion updates the row in place.
                 Text(
-                    text = "${carryover.items.size} remaining",
+                    text = "${carryover.items.count { !it.isResolved }} remaining",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextMuted,
                 )
