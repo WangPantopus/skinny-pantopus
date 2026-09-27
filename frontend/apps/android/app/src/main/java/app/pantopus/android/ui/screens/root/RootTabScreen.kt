@@ -1947,11 +1947,33 @@ private fun EmailFallbackDialog(
 
 private fun NavHostController.isOnBackStack(route: String): Boolean = runCatching { getBackStackEntry(route) }.isSuccess
 
-private fun NavHostController.navigateToRootTab(route: PantopusRoute) {
+private fun NavHostController.navigateToRootTab(
+    route: PantopusRoute,
+    restoreState: Boolean = true,
+) {
     navigate(route.path) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
-        restoreState = true
+        this.restoreState = restoreState
+    }
+}
+
+/**
+ * Re-tapping the lit bar tab returns to that tab's first screen, as tab bars
+ * usually do. Place's first screen is the Place dashboard when the W3
+ * auto-land pushed it, else the Hub. When the lit tab's screens sit on another
+ * root (Tasks opened from the Hub is lit as Nearby), the tab reopens fresh.
+ */
+private fun NavHostController.popToTabRoot(tab: PantopusRoute) {
+    when {
+        tab == PantopusRoute.Place && isOnBackStack(ChildRoutes.PLACE_DASHBOARD) ->
+            popBackStack(ChildRoutes.PLACE_DASHBOARD, inclusive = false)
+        isOnBackStack(tab.path) -> popBackStack(tab.path, inclusive = false)
+        else ->
+            navigate(tab.path) {
+                popUpTo(graph.findStartDestination().id)
+                launchSingleTop = true
+            }
     }
 }
 
@@ -2451,7 +2473,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     selected = currentRoute,
                     badges = badges,
                     onSelect = { target ->
-                        if (target == currentRoute) return@PantopusBottomBar
+                        if (target == currentRoute) {
+                            navController.popToTabRoot(target)
+                            return@PantopusBottomBar
+                        }
                         navController.navigate(target.path) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
@@ -2541,8 +2566,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                                 navController.navigateToRootTab(PantopusRoute.Pulse)
                                             PillarTile.Pillar.Marketplace ->
                                                 navController.navigateToRootTab(PantopusRoute.Marketplace)
+                                            // The Gigs door always opens the task list, not a
+                                            // task an earlier link left in the Tasks stack.
                                             PillarTile.Pillar.Gigs ->
-                                                navController.navigateToRootTab(PantopusRoute.Tasks)
+                                                navController.navigateToRootTab(PantopusRoute.Tasks, restoreState = false)
                                         }
                                     is HubNavigationIntent.DiscoveryTapped ->
                                         routeForDiscovery(intent.item).also { navController.navigate(it) }
