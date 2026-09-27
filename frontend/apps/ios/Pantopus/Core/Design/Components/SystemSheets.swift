@@ -47,6 +47,14 @@ public enum InviteLinks {
         return publicWebOrigin + "/b/" + encoded
     }
 
+    /// A person's public profile (web `/u/:username`, the link web's own
+    /// profile Share uses).
+    public static func profileURLString(username: String) -> String {
+        let pathCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+        let encoded = username.addingPercentEncoding(withAllowedCharacters: pathCharacters) ?? username
+        return publicWebOrigin + "/u/" + encoded
+    }
+
     /// This build's web origin (`PantopusPublicWebURL`), or production when
     /// it's missing or not an http(s) URL. No trailing slash.
     private static var publicWebOrigin: String {
