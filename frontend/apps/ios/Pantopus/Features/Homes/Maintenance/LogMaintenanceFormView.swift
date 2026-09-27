@@ -243,6 +243,7 @@ private struct DetailsGroup: View {
                 )
                 .labelsHidden()
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
                 .accessibilityIdentifier("logMaintenance_dateCompleted")
             }
         }

@@ -25,6 +25,7 @@ data class MaintenanceTaskDto(
     val cost: BigDecimal? = null,
     val recurrence: String = "one_time",
     @Json(name = "due_date") val dueDate: String? = null,
+    @Json(name = "performed_at") val performedAt: String? = null,
     val status: String = "scheduled",
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
@@ -52,6 +53,7 @@ data class CreateMaintenanceRequest(
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
     @Json(name = "due_date") val dueDate: String? = null,
+    @Json(name = "performed_at") val performedAt: String? = null,
     val status: String? = null,
 )
 
@@ -63,5 +65,6 @@ data class UpdateMaintenanceRequest(
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
     @Json(name = "due_date") val dueDate: String? = null,
+    @Json(name = "performed_at") val performedAt: String? = null,
     val status: String? = null,
 )
