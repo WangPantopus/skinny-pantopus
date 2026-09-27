@@ -34,6 +34,7 @@ class HomeTabHostViewModel
         private val _arrival = MutableStateFlow(PlaceArrivalState())
         val arrival = _arrival.asStateFlow()
         private var resolveJob: Job? = null
+        private var previewJob: Job? = null
         private val userId: String? get() = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         init {
@@ -66,10 +67,14 @@ class HomeTabHostViewModel
         }
 
         fun loadPreview() {
+            if (previewJob?.isActive == true) return
             val draft = _arrival.value.draft ?: return
-            _arrival.value = _arrival.value.copy(previewError = false)
-            viewModelScope.launch {
-                when (val result = placeRepository.publicPreview(draft.label)) {
+            _arrival.value = _arrival.value.copy(previewError = false, isLoadingPreview = true)
+            previewJob = viewModelScope.launch {
+                val result = placeRepository.publicPreview(draft.label)
+                if (userId != draft.userId || _arrival.value.draft?.id != draft.id) return@launch
+                _arrival.value = _arrival.value.copy(isLoadingPreview = false)
+                when (result) {
                     is NetworkResult.Success -> _arrival.value = _arrival.value.copy(preview = result.data)
                     is NetworkResult.Failure -> _arrival.value = _arrival.value.copy(previewError = true)
                 }
@@ -116,6 +121,7 @@ class HomeTabHostViewModel
 
         fun finish() {
             if (_arrival.value.isSaving) return
+            previewJob?.cancel()
             _arrival.value.draft?.let { PlacePendingStore.clear(id = it.id) }
             resolve()
         }
@@ -128,6 +134,7 @@ data class PlaceArrivalState(
     val error: String? = null,
     val preview: PlacePreview? = null,
     val previewError: Boolean = false,
+    val isLoadingPreview: Boolean = false,
 )
 
 sealed interface HomeLanding {

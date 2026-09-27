@@ -10,6 +10,7 @@ final class PendingPlaceViewModel {
     private(set) var errorMessage: String?
     private(set) var preview: PlacePreview?
     private(set) var previewError = false
+    private(set) var isLoadingPreview = false
     private let userId: String
     private let defaults: UserDefaults
     private let currentUser: () -> String?
@@ -35,10 +36,14 @@ final class PendingPlaceViewModel {
     }
 
     func loadPreview() async {
-        guard let draft else { return }
+        guard !isLoadingPreview, let draft else { return }
+        isLoadingPreview = true
         previewError = false
+        defer { isLoadingPreview = false }
         do {
-            preview = try await APIClient.shared.request(PlaceEndpoints.publicPreview(address: draft.label))
+            let result: PlacePreview = try await APIClient.shared.request(PlaceEndpoints.publicPreview(address: draft.label))
+            guard !Task.isCancelled, currentUser() == userId else { return }
+            preview = result
         } catch {
             guard !Task.isCancelled else { return }
             previewError = true

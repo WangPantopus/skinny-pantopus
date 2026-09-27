@@ -26,7 +26,10 @@ fun PlaceSectionView(
     onClaim: (() -> Unit)? = null,
     // "Try again" on a section that failed to load: re-read the place.
     onRetry: (() -> Unit)? = null,
+    retrying: Boolean = false,
 ) {
+    val baseState = PlacePresentation.cardState(env)
+    val cardState = if (retrying && baseState == PlaceSectionCardState.ERROR) PlaceSectionCardState.LOADING else baseState
     val lockHandler =
         if (env.band == app.pantopus.android.data.api.models.place.PlaceBand.D) onVerify else onClaim
 
@@ -60,7 +63,7 @@ fun PlaceSectionView(
                     PlaceSectionCard(
                         title = "Verified homes nearby",
                         icon = PantopusIcon.Users,
-                        state = PlacePresentation.cardState(env),
+                        state = cardState,
                         caption = env.unavailableReason,
                         onTap = onOpen,
                         onRetry = onRetry,
@@ -79,7 +82,7 @@ fun PlaceSectionView(
         }
         else -> {
             val cfg = PlacePresentation.config(env.sectionId)
-            val state = PlacePresentation.cardState(env)
+            val state = cardState
             val isLive = state == PlaceSectionCardState.LOADED || state == PlaceSectionCardState.STALE
             val reading = if (isLive) PlacePresentation.reading(env) else PlaceSectionReading()
             PlaceSectionCard(

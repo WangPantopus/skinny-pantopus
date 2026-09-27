@@ -19,6 +19,8 @@ struct PlacePreviewBody: View {
     var onSignIn: () -> Void
     var onCreateAccount: () -> Void
     var onBack: () -> Void
+    var onRetry: () -> Void
+    var retrying: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -250,7 +252,10 @@ struct PlacePreviewBody: View {
                 PlaceGroupLabel(text: entry.label).padding(.top, 18)
                 VStack(spacing: 8) {
                     ForEach(items, id: \.id) { env in
-                        PlaceSectionView(env: env, onOpen: nil, onVerify: onCreateAccount, onClaim: onCreateAccount)
+                        PlaceSectionView(
+                            env: env, onOpen: nil, onVerify: onCreateAccount, onClaim: onCreateAccount,
+                            onRetry: onRetry, retrying: retrying
+                        )
                     }
                 }
             }

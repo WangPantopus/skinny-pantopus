@@ -97,6 +97,11 @@ final class PlaceLaunchViewModel {
         }
     }
 
+    func retryPreview() {
+        guard !isLoadingPreview, let selected else { return }
+        loadPreview(address: selected.label)
+    }
+
     func prepareForAuth() -> Bool {
         guard let selected, selected.label == query,
               PlacePendingStore.stash(selected) else {
