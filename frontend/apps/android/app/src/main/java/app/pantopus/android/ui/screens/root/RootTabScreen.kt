@@ -4148,7 +4148,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val homeId = entry.arguments?.getString(MEMBERS_LIST_HOME_ID_KEY).orEmpty()
                     MembersListScreen(
                         onBack = { navController.popBackStack() },
-                        onAddGuest = { navController.navigate(ChildRoutes.addGuest(homeId)) },
+                        // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
+                        onAddGuest = { navController.navigate(ChildRoutes.guestPasses(homeId)) },
                         onReviewResidency = { navController.navigate(ChildRoutes.homeClaimReview(homeId, residency = true)) },
                     )
                 }

@@ -1932,12 +1932,13 @@ public struct HubTabRoot: View {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .homeMembers(homeId):
+            // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
             MembersListView(homeId: homeId) {
-                modalRoute = HubModalRoute(route: .addGuest(homeId: homeId))
+                Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeMemberRequests(homeId):
             MembersListView(homeId: homeId, initialTab: MembersTab.requests) {
-                modalRoute = HubModalRoute(route: .addGuest(homeId: homeId))
+                Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeOwners(homeId):
             OwnersListView(
@@ -2968,9 +2969,8 @@ public struct HubTabRoot: View {
                 }
             )
         case let .addGuest(homeId):
-            // A13.1 — Add Guest form. Normally presented via
-            // `fullScreenCover` from the Members screen's Guests tab; this
-            // route case remains concrete for debug/deep-link parity.
+            // A13.1 — Add Guest form, pushed from the guest-pass manager's
+            // FAB (the Members screen's Guests tab opens that manager).
             AddGuestFormView(
                 viewModel: AddGuestFormViewModel(homeId: homeId)
             )
