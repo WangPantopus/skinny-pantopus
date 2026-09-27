@@ -447,7 +447,8 @@ extension TokenAcceptViewModelTests {
                 guard case .error = vm.state else { return XCTFail("Denied/unavailable preview must hide details") }
             }
             await vm.accept()
-            XCTAssertEqual(URLProtocolStub.capturedRequests.count, 1)
+            // Other tests' leftover background requests can reach the shared stub, so count this invitation's calls only.
+            XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix("/api/v1/tenant/") == true }.count, 1)
         }
     }
 
