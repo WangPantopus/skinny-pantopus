@@ -2,7 +2,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T05:45:36Z)
+## LIVE — Stream 3 successor session, started 2026-09-26T22:58Z (update 2026-09-27T07:22:06Z)
 
 - **Session:** "fix(native): live chat keeps working after a token refresh…" [4fe2f0]. Queue owner since 02:50Z: "Stream 1 agent handoff" (the previous Stream 1 session handed off after batch 36). Stream 2's successor is "Stream 2 handoff takeover".
 - **Slots:** none held. Last hold: slot 3 05:08:49Z–05:11:47Z (S3-59 Android before, no build). After batch 37 (master `563cddb47`), `git merge-tree` shows #567, #573, #576, #582, #583 and the three local branches below merge cleanly (2026-09-27T05:21:24Z). Heavy and the iOS driver are NOT taken: both peers show "waiting" (blocked on their users), and my 05:06Z request for heavy (Android + iOS builds) and slots 3/1 has no explicit OK yet.
@@ -83,7 +83,13 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ### Harness change (runtime only)
 - The no-send proxy refuses `GET /api/homes/:id/seasonal-checklist`, `/property-value` (Home first-view writes, confirmed intended by Stream 2) and `GET /api/listings/:uuid` (ListingView upsert) as implicit writes (04:58Z; backup `no-send-proxy.cjs.pre-implicit-home-listing-*`). Fixture FS1: those Home rows from #582's Report issue path were deleted at 04:57:38.039Z.
 
-### Pending user questions (asked in chat at 2026-09-27T03:30:38Z; no change until answered)
+### User decisions 2026-09-27 (AskUserQuestion, answered before 2026-09-27T07:22:06Z)
+- **Devices:** take heavy + slot 3 (emulator-5554) + slot 1 (iOS driver, sim 0AE16FA0) now, since both peers were blocked on the user; notify both peers first, never touch Stream 2's slot 2, release everything when done.
+- **Briefing fix:** run the injected-failure check on the isolated API (1–2 `DailyBriefingDelivery` test rows, recorded and deleted; no provider).
+- **Android page-editor gallery:** hide it like iOS (#552).
+- **"Share profile" (iOS + Android public/persona profile):** keep the button; its sheet gets a real Share action above Block/Report.
+
+### Earlier questions (answered above)
 1. Android page editor gallery: hide it like iOS (#552), or leave it?
 2. The persona/public profile header's "Share profile" button opens Block/Report on both apps (still true on master `89f3c6bac`: iOS `PublicProfileView.swift:428`, Android `PublicProfileScreen.kt:399`). Making it share would remove the only route to Block/Report. Options: a separate "…" button for Block/Report and a real Share; relabel as "More"; or leave it.
 
