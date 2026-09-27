@@ -2,7 +2,7 @@
 
 > **State at 2026-09-27T00:57Z.**
 > - **Merged:** batches 32 (#540), 33 (#546) and 34 ([#551](https://github.com/WangPantopus/skinny-pantopus/pull/551), 00:46:55Z). Master is **`73b98f6b6`**.
-> - **Batch 35** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) is being built once its heads are green; a dry run after 00:54:55Z was clean. §2 has the exact state.
+> - **Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556)** (S1 #548 + #553 + #550 + #554 + #555 and S3 #552) was queued at 01:48:03Z, tip `22779dc89`. §2 has the exact state.
 >
 > A final update block is added after batch 35 merges (§0). Always re-verify live.
 
@@ -89,9 +89,10 @@ _Not yet written. If this section is still empty, the previous session stopped b
 
 **Master.** `73b98f6b6102e44cf3dd7424c9bd0f613a91feeb`: batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) merged at 2026-09-27T00:46:55Z. It holds S2 #544 (Android Today pull-to-refresh), S3 #545 (web invoice PDF / paid checkout error / Audience inbox tab), S2 #547 (web Home calendar bill dates) and S1 #549 (web started $0 cancel copy). No backend change.
 
-**Batch 35: to build once these heads are green.**
-- At 00:54:55Z #548 and #550 were green; #552, #553, #554 and #555 were running CI.
-- A dry-run chain on `73b98f6b6` (run after 00:54:55Z, tip `a58163421`, not pushed) was clean. All §4 checks passed, including the three special files below.
+**Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556).**
+- Queued at 01:48:03Z, tip `22779dc89ba8c48eddda2bed5a0aab612f6e4184` on `73b98f6b6`, merge order as in the table. The runner (pid 90397) is active.
+- Every head showed "CI OK" passing at 01:46:32Z. #552 and #553 each needed one rerun of the flaky iOS `TokenAcceptViewModelTests` job (§4.7).
+- All §4 checks passed on the real tip, including the three special files below. All six bundles re-verified.
 
 | PR | Stream | Head | Scope | Bundle seal (files) | Review |
 |---|---|---|---|---|---|
@@ -134,7 +135,8 @@ _Not yet written. If this section is still empty, the previous session stopped b
 
 **3.1 Finish the queue.**
 1. **Batch 34** merged at 00:46:55Z (`PR551 MERGED` in the runner log).
-2. **Batch 35 = #548, #553, #550, #554, #555, #552**, in that order, backend first. #553 goes after #548 because its head contains #548.
+2. **Batch 35 = #556** (queued 01:48:03Z): #548, #553, #550, #554, #555, #552, in that order. Check the runner log for `PR556 MERGED`. If it logs `CI_fail`, look at the failed job (a `TokenAccept` flake gets one `gh run rerun <run> --failed`); otherwise follow §4.7.
+   The steps below are how the batch was built (for the next batch).
    - One-off `gh pr checks` on each head (all must show "CI OK" pass).
    - Build on the **new** master and verify exactly as §4. Exceptions:
      - #553's files = `backend/routes/gigs.js` plus #548's files. Its tip blob for `gigs.js` must equal #553's head blob.

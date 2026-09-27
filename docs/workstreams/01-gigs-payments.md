@@ -7,7 +7,7 @@
 >   - batch 32 #540 (23:12:01Z → `d358dbc83`);
 >   - batch 33 #546 (2026-09-27T00:08:50Z → `f7f51eae4`);
 >   - batch 34 [#551](https://github.com/WangPantopus/skinny-pantopus/pull/551) (00:46:55Z → **`73b98f6b6`**: S2 #544, S3 #545, S2 #547, S1 #549).
-> - **Batch 35 (being built once all heads are green):**
+> - **Batch 35 = [#556](https://github.com/WangPantopus/skinny-pantopus/pull/556), queued at 01:48:03Z (tip `22779dc89`):**
 >   - S1 #548 + #553 (stacked; backend);
 >   - S1 #550, #554 (Android);
 >   - S1 #555 (backend);
