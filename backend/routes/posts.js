@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const s3 = require('../services/s3Service');
 const blockService = require('../services/blockService');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
@@ -3084,8 +3085,56 @@ router.delete('/:postId/comments/:commentId', verifyToken, async (req, res) => {
       logger.error('Comment lookup error', { error: existingErr.message, commentId, postId });
       return res.status(500).json({ error: 'Failed to delete comment' });
     }
-    if (!existing) return res.status(404).json({ error: 'Comment not found' });
+    // An already absent target is the desired result of a retried delete.
+    if (!existing) return res.json({ message: 'Comment deleted successfully' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own comments' });
+    // The database cascades descendant comments and File rows, but cannot
+    // delete their object bytes. Discover the same subtree before that cascade.
+    const subtree = new Set([existing.id]);
+    let frontier = [existing.id];
+    while (frontier.length > 0) {
+      const next = [];
+      for (let start = 0; start < frontier.length; start += 100) {
+        for (let offset = 0; ; offset += 1000) {
+          const { data: children, error: childErr } = await supabaseAdmin.from('PostComment')
+            .select('id').eq('post_id', postId)
+            .in('parent_comment_id', frontier.slice(start, start + 100))
+            .order('id').range(offset, offset + 999);
+          if (childErr || !Array.isArray(children)) {
+            return res.status(503).json({ error: 'Comment replies could not be checked. Please retry.' });
+          }
+          for (const child of children) {
+            if (!subtree.has(child.id)) { subtree.add(child.id); next.push(child.id); }
+          }
+          if (children.length < 1000) break;
+        }
+      }
+      frontier = next;
+    }
+    const ids = [...subtree];
+    const files = [];
+    for (let start = 0; start < ids.length; start += 100) {
+      for (let offset = 0; ; offset += 1000) {
+        const { data: page, error: fileErr } = await supabaseAdmin.from('File')
+          .select('id, comment_id, user_id, file_path').eq('post_id', postId)
+          .in('comment_id', ids.slice(start, start + 100)).order('id').range(offset, offset + 999);
+        if (fileErr || !Array.isArray(page)) {
+          return res.status(503).json({ error: 'Comment images could not be checked. Please retry.' });
+        }
+        files.push(...page);
+        if (page.length < 1000) break;
+      }
+    }
+    if (files.some((file) => typeof file.file_path !== 'string'
+      || !file.file_path.startsWith(`comments/${file.comment_id}/${file.user_id}/`))) {
+      return res.status(503).json({ error: 'Comment image storage could not be verified. Please retry.' });
+    }
+    for (const file of files) {
+      // Object deletion is itself safe to repeat if its earlier reply was lost.
+      if (!await s3.deleteFromS3(file.file_path)) {
+        return res.status(503).json({ error: 'Comment images could not be removed. Please retry.' });
+      }
+    }
     // comment_count auto-decremented by DB trigger
     const { error } = await supabaseAdmin.from('PostComment').delete().eq('id', commentId).eq('post_id', postId);
     if (error) { logger.error('Error deleting comment', { error: error.message, commentId }); return res.status(500).json({ error: 'Failed to delete comment' }); }
