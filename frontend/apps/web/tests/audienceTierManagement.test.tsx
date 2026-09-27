@@ -199,9 +199,9 @@ describe('AudienceDashboardPage', () => {
     expect(screen.getByRole('tab', { name: /Updates/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Fans/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Inbox/ })).toBeInTheDocument();
-    // "Coming soon" pill on the inactive tabs.
+    // "Coming soon" pill on Fans only; Inbox opens /app/audience/inbox.
     const pills = screen.getAllByText(/Coming soon/);
-    expect(pills.length).toBeGreaterThanOrEqual(2);
+    expect(pills).toHaveLength(1);
   });
 
   test('empty state renders when user has no persona', async () => {

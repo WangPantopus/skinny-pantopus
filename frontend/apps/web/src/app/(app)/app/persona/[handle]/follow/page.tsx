@@ -170,11 +170,10 @@ export default function FollowHandshakePage() {
           if (typeof window !== 'undefined') window.location.assign(res.subscribeUrl);
           return;
         }
-        // P1.8 placeholder — Stripe Checkout lands in P1.9. Inform
-        // the fan and route them back to the persona page so their
-        // handshake choices aren't lost in flight.
-        toast.info('Stripe Checkout is coming in the next release. Your handshake is saved.');
-        router.push(`/@${handle}?handshake=pending`);
+        // The server returns no checkout URL only when Stripe couldn't
+        // start checkout; no membership was created and nothing was
+        // charged. Keep the fan on the form so they can try again.
+        setSubmitError("We couldn't start checkout. Nothing was charged. Try again.");
         return;
       }
 
