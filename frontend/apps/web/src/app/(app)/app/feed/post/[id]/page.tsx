@@ -225,12 +225,12 @@ export default function PostDetailPage() {
     }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
+  const handleDeleteComment = async (commentId: string, deletedIds: ReadonlySet<string>) => {
     if (!postId) return;
     try {
       await api.posts.deleteComment(postId, commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-      setPost((p: Post | null) => (p ? { ...p, comment_count: Math.max(0, (p.comment_count || 1) - 1) } : p));
+      setComments((prev) => prev.filter((c) => !deletedIds.has(c.id)));
+      setPost((p: Post | null) => (p ? { ...p, comment_count: Math.max(0, (p.comment_count || deletedIds.size) - deletedIds.size) } : p));
       showToast('Comment deleted');
     } catch {
       showToast('Failed to delete comment');
