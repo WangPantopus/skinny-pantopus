@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,12 +25,13 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -50,6 +53,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -453,6 +457,7 @@ private fun commentSummary(
         "$commentCount ${if (commentCount == 1) "comment" else "comments"}"
     }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CommentComposer(
     avatarName: String,
@@ -478,28 +483,53 @@ private fun CommentComposer(
             size = 28.dp,
         )
         val canSend = text.trim().isNotEmpty() && !isSending
-        OutlinedTextField(
+        val interactionSource = remember { MutableInteractionSource() }
+        val fieldColors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
+            unfocusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
+            focusedContainerColor = PantopusColors.appSurface,
+            unfocusedContainerColor = PantopusColors.appSurface,
+            focusedPlaceholderColor = PantopusColors.appTextSecondary,
+            unfocusedPlaceholderColor = PantopusColors.appTextSecondary,
+        )
+        BasicTextField(
             value = text,
             onValueChange = onTextChange,
-            placeholder = { Text(placeholder, fontSize = 14.sp) },
             singleLine = true,
-            shape = RoundedCornerShape(Radii.pill),
-            textStyle = TextStyle(fontSize = 14.sp),
+            textStyle = TextStyle(fontSize = 14.sp, color = PantopusColors.appText),
+            cursorBrush = SolidColor(PantopusColors.primary600),
+            interactionSource = interactionSource,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-            colors =
-                OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
-                    unfocusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
-                    focusedContainerColor = PantopusColors.appSurface,
-                    unfocusedContainerColor = PantopusColors.appSurface,
-                ),
             modifier =
                 Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .heightIn(min = 44.dp)
                     .testTag("pulsePostDetail-composer")
                     .semantics { contentDescription = placeholder },
+            decorationBox = { innerTextField ->
+                OutlinedTextFieldDefaults.DecorationBox(
+                    value = text,
+                    innerTextField = innerTextField,
+                    enabled = true,
+                    singleLine = true,
+                    visualTransformation = VisualTransformation.None,
+                    interactionSource = interactionSource,
+                    placeholder = { Text(placeholder, fontSize = 14.sp) },
+                    colors = fieldColors,
+                    // Keep the existing compact pill without clipping the input's line box.
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    container = {
+                        OutlinedTextFieldDefaults.Container(
+                            enabled = true,
+                            isError = false,
+                            interactionSource = interactionSource,
+                            colors = fieldColors,
+                            shape = RoundedCornerShape(Radii.pill),
+                        )
+                    },
+                )
+            },
         )
         Box(
             modifier =
