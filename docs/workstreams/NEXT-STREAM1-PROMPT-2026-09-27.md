@@ -20,6 +20,17 @@ Your goal is the best possible app in your domain: every reachable journey works
 - **Record every such decision:** what, why, and what you rejected. Put it in the hub docs' UPDATE block and the inventory row, the PR body and memory, and list it in your next status message as "decided per your standing instruction".
 - **The hard safety limits in §3 still hold.** The user never lifted them.
 
+## 0.1 ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; still in force)
+- **What's cut:** 8 features are hidden behind flags for the first launch. The code is kept, and the user handles the flagging. **Don't verify, end-to-end test or fix anything related to them.**
+- **Where it's written:** the shared table is at the top of `docs/PROJECT_HANDOFF.md` / `docs/workstreams/README.md`, and Stream 1's mapping is in handoff §0.0.
+- **Stream 1's cuts:**
+  - **#3 Marketplace:** listings, offers, trades, listing Q&A, buyer–seller chat, listing Home slots, My Listings, Snap & sell.
+  - **#4 Open Gigs marketplace:** public task posting, browse feed/map/search/categories/filters, saved searches, task bookmarks, bids/offers/My bids, stranger instant-accept, task Q&A, provider search.
+  - **#6 General business directory:** Discover businesses, business search, the map business layer.
+  - Hub/Discover entry points into these.
+- **Still in:** payments, tips, AI drafting, the task lifecycle after assignment (known crew), My tasks and the rebook rail, Support Trains, Hub, Pulse, Posts, `/start`/Place preview, accounts.
+- **Inventory tags:** `⛔ OUT OF LAUNCH SCOPE` rows are skipped entirely. For `◐ PARTLY OUT` rows, only the named part is skipped.
+
 ## 1. Read first, in this order
 1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`: verification-first rules; preserve designs; the smallest in-place repair.
 2. `/Users/yingpengwang/pantopus-coordination/docs/PROJECT_HANDOFF.md` → the newest Stream 1 UPDATE block.
@@ -110,17 +121,15 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
   - `adb shell input text` needs `%s` for spaces.
 
 ## 5. Do these next, in order
-These follow handoff §0.6.
+These follow handoff §0.6, with the launch scope applied.
 1. **Native Start/launch preview "Try again" is dead** (iOS `PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`; Android `PlaceLaunchScreen.kt:737`).
-   - Pass `onRetry` (and `retrying` on iOS) to re-run the preview load, now that S2 #619 added them to `PlaceSectionView`.
+   - Pass `onRetry` (and `retrying` on iOS) to re-run the preview load; S2 #619 added them to `PlaceSectionView`.
    - Verify before/after with the web #607 proxy stand-ins.
 2. **iOS Report post** (inventory "not run"): seed a post by bob through `api.py` with a real location; run the flow on iOS (and check Android parity); clean up.
-3. **Candidates** (verify first):
-   - the iOS listing-Offers empty state's "Post a task" CTA;
-   - native feed rows for a task with no category show HANDYMAN;
-   - the web edit form shows a legacy raw key.
-4. **Legacy category-key rows** (#617): act only on a founder-reported non-zero count, then with a guarded per-row relabel.
-5. **Keep integrating peer PRs** under the §4 merge policy, and keep the hub docs current.
+3. **Keep integrating peer PRs** under the §4 merge policy, and keep the hub docs current. **Skip any PR or check that only serves a cut feature.**
+4. **Don't do** (dropped by the launch scope):
+   - the listing-Offers CTA, the no-category feed chip and the web edit raw-key candidates;
+   - the legacy category-key relabel.
 
 ## 6. Already done: do NOT redo
 - **Merged:**

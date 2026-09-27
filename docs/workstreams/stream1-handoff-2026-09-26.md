@@ -35,6 +35,23 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 The successor Stream 1 session (queue owner 2026-09-27T02:50Z → 2026-09-27T11:16Z) wrote this section. Every value was checked live (UTC from `date -u`, SHAs from git, PR state from `gh`). **Re-verify master, open PRs and CI before acting.** The next session's prompt is `NEXT-STREAM1-PROMPT-2026-09-27.md`.
 
+### 0.0 ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to everything below)
+- **What's cut:** 8 features are hidden behind flags for the first launch. The code is kept, and the user handles the flagging.
+- **Rule:** they are **not verified, end-to-end tested or fixed**. The shared table is at the top of PROJECT_HANDOFF/README (coordination `d2bf06e36`).
+- **Stream 1's cuts:**
+  - **#3 Marketplace:** listings, listing offers, trades, listing Q&A, buyer–seller chat, listing Home slots, My Listings, Snap & sell.
+  - **#4 Open Gigs marketplace:**
+    - public task posting (V1/V2/magic-post UI);
+    - browse feed/map/search/categories/filters, saved searches and alerts, hidden categories, task bookmarks;
+    - bids/gig offers/counters, My bids, bid expiry, stranger instant-accept, task Q&A, provider search.
+  - **#6 General business directory:** Discover businesses, business search, the map business layer.
+  - Hub/Discover entry points into these, and #1/#2 touch points.
+- **Still in:**
+  - payments, tips, AI drafting;
+  - the task lifecycle after assignment (start/complete/confirm/review/stop/reschedule) as a known crew uses it;
+  - My tasks and the rebook rail; Support Trains; Hub; Pulse; Posts; `/start`/Place preview; accounts.
+- **Merged work in cut areas stays as future-ready work:** #580, #581, #586, #589, #592, #601, #606, #615, #616, #617 and others. Don't re-verify them. The inventory tags 101 rows `⛔ OUT OF LAUNCH SCOPE` / `◐ PARTLY OUT`.
+
 ### 0.1 Final state: every Stream 1 PR merged; queue empty
 - **Master: `35c5434df`** (batch 42). The runtime worktree equals master (runtime commit `d5df4e81c`).
 - **Merged today:**
@@ -96,18 +113,18 @@ The user's instruction (~07:22Z): "do not stop anymore, just go with what you re
 10. **Magic-post** is canonicalized too (in #617).
 - The user decided these directly: listing Home access = "Require Home access" (#586); V1 = "Address search in the app" (#571); V2 = "Same address search" (#580).
 
-### 0.6 Remaining Stream 1 work, in order
-1. **Native Start/launch preview "Try again" is dead.** Lead from Stream 2, confirmed in code.
+### 0.6 Remaining Stream 1 work, in order (launch scope applied 2026-09-27)
+1. **Native Start/launch preview "Try again" is dead** (in scope: the `/start` funnel and Place preview).
    - `PlaceSectionCard` calls `onRetry?()`, but `PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53` (iOS) and `PlaceLaunchScreen.kt:737` (Android) pass no `onRetry`.
-   - S2 #619 (merged) gave `PlaceSectionView` `onRetry`/`retrying`, so the fix is one argument per call site: re-run that screen's preview load.
-   - Before/after: reuse the web #607 fault-proxy stand-ins (bundle `20260927-stream1-web-start-funnel-retry-r1`, `stub/`). It's the native twin of the merged web #607.
-2. **iOS Report post** (inventory: "not run"): seed a post by bob with a real location through `api.py`, run the report flow on iOS (and check Android parity), then clean up.
-3. **Candidates** (seen, not yet verified as defects; check web/Android first):
-   - the iOS listing-Offers empty state's "Post a task" CTA;
-   - native feed rows for a task with **no** category show HANDYMAN;
-   - the web edit form shows a legacy raw key.
-4. **Legacy category-key rows** (after #617): nothing to do unless the founder reports a non-zero count from the read-only query in #617. Then do a guarded per-row relabel (`Gig` has BEFORE UPDATE guard triggers). Never query hosted databases yourself.
-5. **Watch master's post-merge CI once** (0.2), and fix forward on a real break.
+   - S2 #619 (merged) gave `PlaceSectionView` `onRetry`/`retrying`. The fix is one argument per call site: re-run that screen's preview load.
+   - Before/after: reuse the web #607 fault-proxy stand-ins (bundle `20260927-stream1-web-start-funnel-retry-r1`, `stub/`).
+2. **iOS Report post** (inventory: "not run"; in scope: Posts): seed a post by bob with a real location through `api.py`, run the report flow on iOS (and check Android parity), then clean up.
+3. **Watch master's post-merge CI once** (0.2), and fix forward on a real break.
+4. **Dropped by the launch scope** (don't do these):
+   - the iOS listing-Offers empty-state CTA (#3);
+   - native feed rows for a no-category task (#4);
+   - the web edit form's raw legacy key (#4);
+   - the legacy category-key relabel after #617 (#4).
 
 ### 0.7 Evidence bundles made this session
 All are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`:
