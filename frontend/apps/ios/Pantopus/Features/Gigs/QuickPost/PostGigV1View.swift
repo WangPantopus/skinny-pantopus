@@ -62,7 +62,7 @@ public struct PostGigV1View: View {
 
     @ViewBuilder private var formContent: some View {
         if !viewModel.state.validationErrors.isEmpty {
-            PostGigV1ErrorBanner(errors: viewModel.state.validationErrors)
+            PostGigV1ErrorBanner(errors: viewModel.state.validationErrors, isEditMode: viewModel.isEditMode)
                 .padding(.horizontal, Spacing.s4)
         }
 
