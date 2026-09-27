@@ -250,6 +250,7 @@ export default function DiscoverListView({
                   <EmptyState
                     category={filters.categories.length === 1 ? filters.categories[0] : undefined}
                     scope={scope}
+                    needsLocation={noLocation}
                   />
                 )}
 
