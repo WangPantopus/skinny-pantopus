@@ -8,7 +8,7 @@ const LOCKDOWN_EFFECTS = [
   { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately' },
   { icon: '🔒', text: 'Hides sensitive data from non-admins', detail: 'Access codes, financial data, and documents become hidden' },
   { icon: '🚫', text: 'Blocks new member invitations', detail: 'No one can be invited until lockdown is lifted' },
-  { icon: '🔑', text: 'Forces re-authentication', detail: 'All members must sign in again to verify identity' },
+  { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
   { icon: '📋', text: 'Logs all activity with elevated detail', detail: 'Every action is recorded in the audit log' },
 ];
 
@@ -143,7 +143,7 @@ export default function LockdownPanel({
                 </p>
                 <p className="text-xs text-red-600">
                   This will immediately revoke all guest passes, hide sensitive data from non-admins,
-                  and block new invitations. All members will need to re-authenticate.
+                  and block new invitations.
                 </p>
                 <div>
                   <label className="block text-[10px] text-red-600 mb-1">Type LOCKDOWN to confirm</label>
