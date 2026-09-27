@@ -200,6 +200,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     private let api: APIClient
     private let onMessage: @MainActor (ConnectionsChatTarget) -> Void
     private let onFindPeople: @MainActor () -> Void
+    private let onOpenProfile: @MainActor (String) -> Void
     private let now: @Sendable () -> Date
     private let calendar: Calendar
     private let timeZone: TimeZone
@@ -215,6 +216,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         initialTab: String? = nil,
         onMessage: @escaping @MainActor (ConnectionsChatTarget) -> Void = { _ in },
         onFindPeople: @escaping @MainActor () -> Void = {},
+        onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
         now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
         timeZone: TimeZone = .current
@@ -223,6 +225,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         selectedTab = ConnectionsTab.linked(initialTab)
         self.onMessage = onMessage
         self.onFindPeople = onFindPeople
+        self.onOpenProfile = onOpenProfile
         self.now = now
         self.calendar = calendar
         self.timeZone = timeZone
@@ -584,6 +587,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             ) { [weak self] in
                 MainActor.assumeIsolated { self?.onMessage(target) }
             },
+            onTap: profileTap(user?.id),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .userPlus,
@@ -622,6 +626,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 verified: false
             ),
             trailing: .statusChip(text: "Pending", variant: .warning),
+            onTap: profileTap(user?.id),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .clock
@@ -696,10 +701,20 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                     Task { @MainActor in await self?.reject(requestId: requestId) }
                 }
             ),
+            onTap: profileTap(user?.id),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .userPlus
         )
+    }
+
+    /// A row opens the person's public profile, as web's Connections rows do.
+    /// Blocked rows don't; a row without a user id has nothing to open.
+    private func profileTap(_ userId: String?) -> @Sendable () -> Void {
+        guard let userId, !userId.isEmpty else { return {} }
+        return { [weak self] in
+            MainActor.assumeIsolated { self?.onOpenProfile(userId) }
+        }
     }
 
     // MARK: - Helpers (pure)
