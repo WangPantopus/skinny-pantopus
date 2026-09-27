@@ -205,6 +205,11 @@ class ConnectionsViewModel
                 field = value
                 applyState()
             }
+        var onOpenProfile: (String) -> Unit = {}
+            set(value) {
+                field = value
+                applyState()
+            }
         var onFindPeople: () -> Unit = {}
             set(value) {
                 field = value
@@ -579,6 +584,7 @@ class ConnectionsViewModel
                         foreground = PantopusColors.primary600,
                         onClick = { onMessage(target) },
                     ),
+                onTap = profileTap(user?.id),
                 body = "Connected $timeFragment",
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.UserPlus,
@@ -621,6 +627,7 @@ class ConnectionsViewModel
                         verified = false,
                     ),
                 trailing = RowTrailing.Status(text = "Pending", variant = StatusChipVariant.Warning),
+                onTap = profileTap(user?.id),
                 body = "Sent $timeFragment",
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.Clock,
@@ -707,11 +714,15 @@ class ConnectionsViewModel
                                 onClick = { reject(requestId) },
                             ),
                     ),
+                onTap = profileTap(user?.id),
                 body = "New request $timeFragment",
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.UserPlus,
             )
         }
+
+        /** A row opens the person's public profile, as web's Connections rows do; blocked rows don't. */
+        private fun profileTap(userId: String?): () -> Unit = userId?.takeIf { it.isNotBlank() }?.let { id -> { onOpenProfile(id) } } ?: {}
 
         @Suppress("UnusedPrivateMember")
         private fun onFindPeopleStub() {

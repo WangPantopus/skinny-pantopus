@@ -2593,7 +2593,10 @@ public struct HubTabRoot: View {
                             )))
                         }
                     },
-                    onFindPeople: { showFindPeople = true }
+                    onFindPeople: { showFindPeople = true },
+                    onOpenProfile: { userId in
+                        Task { @MainActor in push(.publicProfile(userId: userId)) }
+                    }
                 )
             )
         case .supportTrains:
