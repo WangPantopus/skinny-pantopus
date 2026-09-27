@@ -68,9 +68,14 @@ function scoreMaintenance(issues) {
   return { score: 25, issues: [] };
 }
 
+// A due_date is a calendar day and a Home has no time zone, so a bill counts as overdue only
+// once its due day has ended everywhere: the last zone is UTC−12, so from 12:00 UTC the next day.
+const dueDayEndedEverywhere = (dueDate, now) =>
+  day(dueDate) && now.getTime() >= Date.parse(dueDate) + 36 * 60 * 60 * 1000;
+
 function scoreBills(bills) {
   const now = new Date();
-  const overdueBills = bills.filter(b => b.status === 'overdue' || (b.status === 'due' && b.due_date && new Date(b.due_date) < now));
+  const overdueBills = bills.filter(b => b.status === 'overdue' || (b.status === 'due' && dueDayEndedEverywhere(b.due_date, now)));
 
   if (overdueBills.length >= 2) {
     return { score: 0, issues: [`${overdueBills.length} overdue bills`] };
