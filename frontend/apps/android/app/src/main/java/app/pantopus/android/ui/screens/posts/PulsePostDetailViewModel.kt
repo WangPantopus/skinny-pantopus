@@ -102,6 +102,7 @@ class PulsePostDetailViewModel
         private val _nearbyProviders = MutableStateFlow<List<NearbyProviderRow>>(emptyList())
         val nearbyProviders: StateFlow<List<NearbyProviderRow>> = _nearbyProviders.asStateFlow()
 
+        private var pendingComment: PostCommentRequest? = null
         private val _composerText = MutableStateFlow("")
         val composerText: StateFlow<String> = _composerText.asStateFlow()
 
@@ -193,6 +194,7 @@ class PulsePostDetailViewModel
         }
 
         fun setComposerText(text: String) {
+            if (text.isEmpty()) pendingComment = null
             _composerText.value = text
         }
 
@@ -387,11 +389,15 @@ class PulsePostDetailViewModel
         fun sendComment() {
             val body = _composerText.value.trim()
             if (body.isEmpty() || _isSendingComment.value) return
+            val parentId = _replyTarget.value?.commentId
+            val req = pendingComment?.takeIf { it.comment == body && it.parentCommentId == parentId }
+                ?: PostCommentRequest(body, parentId, java.util.UUID.randomUUID().toString())
+            pendingComment = req
             _isSendingComment.value = true
             viewModelScope.launch {
-                val req = PostCommentRequest(comment = body, parentCommentId = _replyTarget.value?.commentId)
                 when (repo.createComment(postId, req)) {
                     is NetworkResult.Success -> {
+                        pendingComment = null
                         _composerText.value = ""
                         _replyTarget.value = null
                         fetch()

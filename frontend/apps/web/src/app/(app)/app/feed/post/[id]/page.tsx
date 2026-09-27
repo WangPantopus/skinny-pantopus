@@ -192,13 +192,14 @@ export default function PostDetailPage() {
     });
   }, [post, saveMutation]);
 
-  const handleAddComment = async ({ text, parentId, files = [] }: { text: string; parentId?: string; files?: File[] }) => {
+  const handleAddComment = async ({ text, parentId, files = [], clientRequestId }: { text: string; parentId?: string; files?: File[]; clientRequestId: string }) => {
     if (!postId) return false;
     setCommentPosting(true);
     try {
       const res = await api.posts.addComment(postId, {
         comment: text,
         parentCommentId: parentId,
+        clientRequestId,
       });
 
       let nextComment = res.comment;

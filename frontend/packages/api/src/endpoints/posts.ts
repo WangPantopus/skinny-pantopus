@@ -377,6 +377,7 @@ export async function getComments(postId: string, params?: {
 export async function addComment(postId: string, data: {
   comment: string;
   parentCommentId?: string;
+  clientRequestId?: string;
 }): Promise<{ message: string; comment: PostComment }> {
   return post(`/api/posts/${postId}/comments`, data);
 }
