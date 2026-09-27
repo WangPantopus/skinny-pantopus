@@ -85,7 +85,7 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
     return (
       <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
         <div className="flex flex-col items-center gap-1 py-4">
-          <TrendingUp className="h-7 w-7 text-primary" />
+          <TrendingUp className="h-7 w-7 text-primary-600" />
           <p className="mt-1 text-sm font-medium text-app-text-primary">
             No estimate available
           </p>
