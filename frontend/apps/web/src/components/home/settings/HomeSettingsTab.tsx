@@ -118,8 +118,16 @@ export default function HomeSettingsTab({
     try {
       const res = await api.homeProfile.getHomeSettings(homeId);
       if (revision !== loadGeneration.current) return;
-      const h = (res as Record<string, any>).home || {};
-      const prefs = (res as Record<string, any>).preferences || {};
+      const h = (res as Record<string, any> | null)?.home;
+      const prefs = (res as Record<string, any> | null)?.preferences;
+      if (
+        !h || typeof h !== 'object' || Array.isArray(h) ||
+        !prefs || typeof prefs !== 'object' || Array.isArray(prefs) ||
+        (h.name !== null && typeof h.name !== 'string') ||
+        (h.home_type !== null && typeof h.home_type !== 'string')
+      ) {
+        throw new Error('Home settings could not be loaded. Please try again.');
+      }
 
       setHomeName(h.name || home?.name || '');
       setHomeType(h.home_type || home?.home_type || 'house');
