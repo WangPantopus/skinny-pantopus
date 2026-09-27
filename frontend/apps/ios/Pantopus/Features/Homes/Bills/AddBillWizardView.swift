@@ -209,13 +209,6 @@ private struct ReviewStep: View {
                     .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.error)
             }
-            // Backend note — splits write API isn't shipped yet.
-            HStack(spacing: Spacing.s2) {
-                Icon(.users, size: 14, color: Theme.Color.appTextSecondary)
-                Text("Splits with household members can be configured after the bill is added.")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-            }
         }
     }
 
