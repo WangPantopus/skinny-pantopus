@@ -199,26 +199,21 @@ Evidence bundles are under `/Users/yingpengwang/estimate-rescue/skinny-pantopus/
   - Note for whoever verifies **Crew Day**, which keeps the scheduling engine: if Crew Day availability relies on the default schedule, check its timezone there.
 - The business-only web cancellation-policy editor (`RefundPolicyEditor`), and the B7 “Max per week 20” booking-limit placeholder.
 
-## 7. Runtime state at handoff
-- **Left running** (Stream 3’s isolated runtime only; check with `nc -z`):
-  - Docker stack `supabase_*_pantopus-stream3-block-r1`: Kong 64531, Postgres 64532.
-  - API 18134 on its baseline `S3_SRC=/private/tmp/pantopus-stream3-chat-realtime-r1` (branch `claude/stream3-chat-realtime-joins`, `23e518b11`), `S3_BACKEND_TREE_OF=23e518b11df5216ec8db9980e68d12462f6cc1c4`. Master’s migration `20260926100000` is not applied, by user decision.
-  - No-send proxy 18130: `chat-audit.json` enabled false, `fault-control.json` `{}`, `post-check.json` enabled false.
-  - Web 18131: `/private/tmp/pantopus-stream3-web-chat-names-r1`, detached at master `35c5434df` (it includes #623), with the launcher’s default (paid client flags off); relaunched at 11:16:26Z. For paid-scheduling screens, relaunch with `S3_WEB_PAID=1`.
-  - Chat test-file server 18198. The storage shim (64533) is off.
-- These processes were started from the previous session’s shell and may be gone in yours. If a port is down, relaunch from the kit README’s process table.
-- **Fixtures:** none applied.
-  - BR1/BR2 (briefing check) were deleted.
-  - BP1 (the Member’s page `a1060a2b`: policy, and `is_live` for the web check) was last reverted exactly at 10:40:34.368Z, with its entry in `$R/fixtures-20260926/manifest.json`. The page is not live.
-  - Kept from earlier and still in force: S59 Review `e9fdca7a` (approved), and CA0–CA13 chat messages.
-- **Devices:** all shut down, and no Stream 3 slot or heavy is held.
-  - Sim `0AE16FA0` has the #612 build `2583774f3` (dylib `01b0fe77…`), Owner signed in.
-  - Emulator-5554 restores its quickboot snapshot on boot: old APK `70f275b4…`, expired Owner session.
+## 7. Runtime state at handoff (everything released at the user’s request, 2026-09-27T11:50:57Z)
+- **Stopped:** API 18134, no-send proxy 18130, web 18131, file server 18198. Relaunch them from the kit README’s process table, in its order.
+- **Docker stack** `supabase_*_pantopus-stream3-block-r1`: stopped with `docker stop`; **both volumes are kept** (db + storage). Start the db first with `docker --context desktop-linux start`, then the others. The db exits with 137 and runs crash recovery on start; that is expected. Never recreate the stack.
+- **API baseline** for relaunch: `S3_SRC=/private/tmp/pantopus-stream3-chat-realtime-r1 S3_BACKEND_TREE_OF=23e518b11df5216ec8db9980e68d12462f6cc1c4`. Master’s migration `20260926100000` is not applied, by user decision.
+- **Web** relaunch tree: `/private/tmp/pantopus-stream3-web-chat-names-r1`, detached at master `35c5434df`, default flags. `.next-dev` was deleted, so the first page load recompiles.
+- **Deleted (all rebuildable):** every built iOS app copy (`$R/ios-app-*`), every APK (`$R/stream3-*.apk`), the iOS DerivedData cache `$R/ios-dd`, and the Android build output in `pantopus-stream3-chat-keyboard-r1`. The next build is a full build, about 10+ minutes per platform.
+  - Kept: the Swift package cache `$R/ios-spm` (5.3 GB, avoids re-downloading), logs, fixtures and all evidence bundles.
 - **Worktrees:**
-  - `/private/tmp/pantopus-stream3-chat-keyboard-r1`: the native build worktree, on branch `claude/stream3-android-booking-policy-object` (#618, merged), clean. Start new work from `origin/master`.
-  - `/private/tmp/pantopus-stream3-post-fanout-r1`: the API verify-build worktree, back on `claude/stream3-post-fanout-context`.
-  - `/private/tmp/pantopus-stream3-chat-realtime-r1`: the API source.
-  - `/private/tmp/pantopus-stream3-web-chat-names-r1`: the web source.
+  - Removed: `pantopus-stream3-post-fanout-r1`, whose branch is merged; recreate it from `origin/master` if an API verify build needs it.
+  - Kept:
+    - `pantopus-stream3-chat-keyboard-r1`: the native build worktree, on merged branch `claude/stream3-android-booking-policy-object`; start new work from `origin/master`;
+    - `pantopus-stream3-chat-realtime-r1`: the API source;
+    - `pantopus-stream3-web-chat-names-r1`: the web source and Playwright.
+- **Fixtures:** none applied. BP1 was last reverted at 10:40:34.368Z (manifest). Kept from earlier and still in force: S59 Review `e9fdca7a`, and CA0–CA13 chat messages.
+- **Devices:** sim `0AE16FA0` and AVD `Pantopus_Stream3_Accounts_R3` are shut down; no slot or heavy is held. The sim still has the #612 build installed; the emulator restores its old snapshot on boot.
 - `/private/tmp` is wiped when the Mac restarts. The kit README says how to rebuild `$R`.
 
 ## 8. Do not duplicate

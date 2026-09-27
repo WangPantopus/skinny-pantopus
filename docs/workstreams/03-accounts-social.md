@@ -28,6 +28,7 @@ Eight features are flagged off for the first launch; the code is kept, and the u
   - **Already done in cut areas stays as future-ready work** (e.g. #576, #583, #584, #595, #618, #623); do not re-verify it.
 
 ### State at handoff
+- **Runtime released (2026-09-27T11:50:57Z, user request):** servers stopped; Docker stack stopped (volumes kept); built apps, APKs, iOS DerivedData and Android/web build caches deleted; the merged `post-fanout-r1` worktree removed. Details and relaunch steps are in prompt §7.
 - **Master `35c5434df`.** Stream 3 PRs from this session, all merged:
   - batch 40 [#608](https://github.com/WangPantopus/skinny-pantopus/pull/608), 10:26Z: #593, #594, #595, #596, #600;
   - batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622), 11:11Z: #597, #604, #605, #612;
