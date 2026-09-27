@@ -49,7 +49,7 @@ export default function IssueSlidePanel({
       setDescription(issue.description || '');
       setSeverity(issue.severity || 'medium');
       setStatus(issue.status || 'open');
-      setEstimatedCost(issue.estimated_cost ? String(issue.estimated_cost) : '');
+      setEstimatedCost(issue.estimated_cost != null ? String(issue.estimated_cost) : '');
     } else {
       setTitle('');
       setDescription('');
@@ -72,9 +72,9 @@ export default function IssueSlidePanel({
     try {
       const payload: Record<string, any> = {
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: description.trim(),
         severity,
-        estimated_cost: estimatedCost ? parseFloat(estimatedCost) : undefined,
+        estimated_cost: estimatedCost ? parseFloat(estimatedCost) : null,
       };
       if (isEdit) {
         payload.status = status;
