@@ -2,6 +2,22 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## RESUMED 2026-09-27 after the handoff (live notes, 2026-09-27T10:42:29Z) — read this before the CURRENT RESUME below
+- **User request:** keep working until every PR Stream 3 opened is merged to master, then update the handoff again.
+- **Plan (Stream 3’s recommendation, agreed with Stream 1 at 10:25Z):** keep Stream 1’s batches. Stream 3 fixes any failure in its PRs, and takes over merging only if Stream 1 stops first (announced to both peers).
+- **Merged:** batch 40 #608 at 10:26:20Z (master `a93c76d7f`): #593, #594, #595, #596, #600.
+- **Queued:** batch 41 [#622](https://github.com/WangPantopus/skinny-pantopus/pull/622) (tip `e162f607b`, queued 10:31:03Z) with #597, #604, #605, #612. Batch 42 (built after #622 merges): #618, plus #623 if green.
+- **New PR [#623](https://github.com/WangPantopus/skinny-pantopus/pull/623), web only:** the companion to #618. Head `e04e1a933` on `a93c76d7f`; bundle `20260927-stream3-web-policy-mobile-shapes-r1`, seal `8225da0538e8f8725719603d31b0aacf575be3b04e74cd0f7b77083be293c619`.
+  - `resolvePolicyValue` reads the apps’ custom policies. Invitees no longer see raw JSON, or “You can cancel anytime for a full refund” for an iOS 12h/25% policy, and the host row no longer says “Set up”.
+  - Before/after on the real web app, as owner and as an anonymous invitee. ESLint, typecheck gate and web Jest (1893) pass.
+- **Runtime changes in this phase:**
+  - Web 18131 now runs from `/private/tmp/pantopus-stream3-web-chat-names-r1` on branch `claude/stream3-web-policy-mobile-shapes` (#623), with paid client flags on (`S3_WEB_PAID=1`); it was relaunched at 10:27:04Z.
+  - Fixture BP1 was re-applied (Member page `a1060a2b` live, five policy values) and reverted exactly at 10:40:34.368Z, `is_live` included.
+  - `handoff-tools-20260926/web-anon-step.mjs` (signed-out web visitor) was added.
+- **Decisions (standing direction):**
+  - 10:25Z: do not merge PRs individually, since Stream 1’s batches already hold them.
+  - 10:28Z: the web companion was done while batches run, verified with a live-page fixture (recorded and reverted).
+
 ## CURRENT RESUME — Stream 3 handoff, 2026-09-27 (2026-09-27T10:21:47Z), read this first
 
 The Stream 3 successor session (2026-09-26T22:58Z to 2026-09-27T10:21:47Z) stopped at the user's request, at a clean point:
