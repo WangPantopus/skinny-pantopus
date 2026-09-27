@@ -556,10 +556,13 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
       logger.error('marketplace.create.error', { error: insertErr.message, userId });
       // Release the inventory slot if we claimed one before the failed insert
       if (slotClaimed) {
-        await supabaseAdmin.rpc('release_inventory_slot', {
+        // Query builders are thenables without .catch: wrap the call so it is
+        // sent, and log a refused or failed release instead of throwing here.
+        const { error: relErr } = await Promise.resolve(supabaseAdmin.rpc('release_inventory_slot', {
           p_home_id: homeId,
           p_layer: resolvedLayer,
-        }).catch(relErr => logger.warn('marketplace.create.slot_release_error', { error: relErr.message }));
+        })).catch(err => ({ error: err }));
+        if (relErr) logger.warn('marketplace.create.slot_release_error', { error: relErr.message });
       }
       return res.status(500).json({ error: 'Failed to create listing' });
     }
