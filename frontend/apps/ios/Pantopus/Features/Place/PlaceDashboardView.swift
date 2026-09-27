@@ -19,9 +19,11 @@ struct PlaceDashboardView: View {
     @State private var showSwitcher = false
     @State private var showVerify = false
 
+    private let isActive: Bool
     private let onOpenMenu: () -> Void
 
-    init(viewModel: PlaceDashboardViewModel, onOpenMenu: @escaping () -> Void = {}) {
+    init(viewModel: PlaceDashboardViewModel, isActive: Bool = true, onOpenMenu: @escaping () -> Void = {}) {
+        self.isActive = isActive
         self.onOpenMenu = onOpenMenu
         _viewModel = State(initialValue: viewModel)
     }
@@ -64,7 +66,9 @@ struct PlaceDashboardView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await viewModel.load() }
+        .task(id: isActive) {
+            if isActive { await viewModel.load() }
+        }
         .refreshable { await viewModel.refresh() }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(isPresented: $showSwitcher) {

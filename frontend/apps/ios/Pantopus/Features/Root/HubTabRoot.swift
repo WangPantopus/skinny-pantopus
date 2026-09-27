@@ -3315,7 +3315,8 @@ public struct HubTabRoot: View {
                     onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
                     onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
-                )
+                ),
+                isActive: path.last == route && rootTabs.selected == owningTab
             ) { showNavDrawer = true }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
