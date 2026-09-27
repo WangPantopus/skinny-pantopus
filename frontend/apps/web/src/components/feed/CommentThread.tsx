@@ -13,7 +13,7 @@ import type { PostComment } from '@pantopus/types';
 interface CommentThreadProps {
   comments: PostComment[];
   onAddComment: (input: { text: string; parentId?: string; files?: File[]; clientRequestId: string }) => Promise<boolean | void>;
-  onDeleteComment: (commentId: string) => Promise<void>;
+  onDeleteComment: (commentId: string, deletedIds: ReadonlySet<string>) => Promise<void>;
   onLikeComment?: (commentId: string) => Promise<void>;
   currentUserId?: string;
   isPosting?: boolean;
@@ -293,7 +293,17 @@ export default function CommentThread({
                       confirmLabel: 'Delete',
                       variant: 'destructive',
                     });
-                    if (yes) void onDeleteComment(comment.id);
+                    if (!yes) return;
+                    // The existing parent foreign key cascades through replies.
+                    const deletedIds = new Set<string>();
+                    const pending = [comment.id];
+                    while (pending.length > 0) {
+                      const id = pending.pop()!;
+                      if (deletedIds.has(id)) continue;
+                      deletedIds.add(id);
+                      pending.push(...(repliesMap[id] || []).map((reply) => reply.id));
+                    }
+                    void onDeleteComment(comment.id, deletedIds);
                   }}
                   className="text-[10px] font-semibold text-red-400 hover:text-red-500 transition"
                 >
