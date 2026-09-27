@@ -51,8 +51,12 @@ function ShareContent() {
       // Revoked passes belong in Past Passes, which already labels them.
       const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
       if (request !== generation.current) return;
+      if (!Array.isArray(res?.passes) || res.passes.some((row) =>
+        !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new Error('Invalid passes response');
+      }
       setLoadError(null);
-      setPasses(res?.passes || []);
+      setPasses(res.passes);
     } catch (err: unknown) {
       if (request !== generation.current) return;
       setLoadError('Current guest passes could not be loaded. Retry to check current information.');
