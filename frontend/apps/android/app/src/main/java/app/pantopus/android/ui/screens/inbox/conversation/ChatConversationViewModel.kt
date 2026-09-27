@@ -326,7 +326,16 @@ class ChatConversationViewModel
         }
 
         fun load() {
-            if (_state.value is ChatConversationUiState.Loaded) return
+            if (_state.value is ChatConversationUiState.Loaded) {
+                // Back on screen after teardown() (a pushed screen, a tab
+                // switch): listen again. Re-joining the rooms backfills what
+                // arrived meanwhile.
+                if (connectionJob == null) {
+                    publishViewedRooms()
+                    subscribeToSockets()
+                }
+                return
+            }
             // Seed AI continuity: a new VM instance for the AI thread keeps
             // appending to the conversation the app session already opened.
             if (mode is ChatThreadMode.Ai && aiConversationId == null) {
@@ -2430,7 +2439,8 @@ class ChatConversationViewModel
         }
     }
 
-private fun JSONObject.optStringValue(key: String): String? = optString(key).takeIf { it.isNotEmpty() }
+// A JSON null is absent: optString() alone returns the text "null" for it.
+private fun JSONObject.optStringValue(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotEmpty() }
 
 /** Banner copy for the pre-bid gig-room send limit (429 `PRE_BID_LIMIT`). */
 private const val PRE_BID_LIMIT_NOTICE =

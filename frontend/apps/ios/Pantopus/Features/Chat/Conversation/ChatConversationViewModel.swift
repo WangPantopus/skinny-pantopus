@@ -519,7 +519,15 @@ public final class ChatConversationViewModel {
     // MARK: - Public API
 
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            // Back on screen after `teardown()` (a pushed screen, a tab
+            // switch): listen again and catch up on what arrived meanwhile.
+            if socketTasks.isEmpty {
+                subscribeToSockets()
+                await refresh()
+            }
+            return
+        }
         await restoreAIConversationIfNeeded()
         await loadTopicsIfNeeded()
         await fetch(.reload)
@@ -1671,9 +1679,13 @@ public final class ChatConversationViewModel {
     // MARK: - Realtime
 
     private func subscribeToSockets() {
+        // Each loop holds the view model weakly between events, so one that
+        // is dropped without `teardown()` stops handling events and can be
+        // freed, instead of staying alive (and polling) inside the loop.
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await state in socket.connectionStates() {
+            guard let stream = self?.socket.connectionStates() else { return }
+            for await state in stream {
+                guard let self else { return }
                 if state == .connected {
                     joinedRoomIds.removeAll()
                     joinActiveRoomsIfPossible()
@@ -1682,50 +1694,58 @@ public final class ChatConversationViewModel {
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "message:new", as: ChatRealtimeMessage.self) {
+            guard let stream = self?.socket.events(named: "message:new", as: ChatRealtimeMessage.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleIncoming(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "message:edited", as: ChatRealtimeMessageUpdate.self) {
+            guard let stream = self?.socket.events(named: "message:edited", as: ChatRealtimeMessageUpdate.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleUpdate(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "message:deleted", as: ChatRealtimeMessageDelete.self) {
+            guard let stream = self?.socket.events(named: "message:deleted", as: ChatRealtimeMessageDelete.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleDelete(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "message:reaction_updated", as: ChatRealtimeReaction.self) {
+            guard let stream = self?.socket.events(named: "message:reaction_updated", as: ChatRealtimeReaction.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleReaction(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "typing:user", as: ChatRealtimeTyping.self) {
+            guard let stream = self?.socket.events(named: "typing:user", as: ChatRealtimeTyping.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleTypingStarted(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "typing:stopped", as: ChatRealtimeTyping.self) {
+            guard let stream = self?.socket.events(named: "typing:stopped", as: ChatRealtimeTyping.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handleTypingStopped(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "user:online", as: ChatRealtimePresence.self) {
+            guard let stream = self?.socket.events(named: "user:online", as: ChatRealtimePresence.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handlePresence(event, online: true)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let self else { return }
-            for await event in socket.events(named: "user:offline", as: ChatRealtimePresence.self) {
+            guard let stream = self?.socket.events(named: "user:offline", as: ChatRealtimePresence.self) else { return }
+            for await event in stream {
+                guard let self else { return }
                 handlePresence(event, online: false)
             }
         })
