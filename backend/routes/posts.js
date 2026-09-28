@@ -2561,10 +2561,59 @@ router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id').eq('id', id).single();
-    if (!existing) return res.status(404).json({ error: 'Post not found' });
+    const { data: existing, error: lookupError } = await supabaseAdmin.from('Post')
+      .select('user_id, media_urls, media_thumbnails, media_live_urls').eq('id', id).maybeSingle();
+    if (lookupError) return res.status(500).json({ error: 'Failed to delete post' });
+    // A lost successful reply must not make the desired absence unrecoverable.
+    if (!existing) return res.json({ message: 'Post deleted successfully' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
-    const { error } = await supabaseAdmin.from('Post').delete().eq('id', id);
+
+    const keys = new Set();
+    const prefix = `posts/${id}/${existing.user_id}/`;
+    const publicPrefix = s3.getPublicUrl(prefix);
+    for (const urls of [existing.media_urls, existing.media_thumbnails, existing.media_live_urls]) {
+      if (urls != null && !Array.isArray(urls)) {
+        return res.status(503).json({ error: 'Post media could not be checked. Please retry.' });
+      }
+      for (const url of urls || []) {
+        // External/shared references do not authorize deleting another object's bytes.
+        if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
+        const name = url.slice(publicPrefix.length);
+        if (!/^\d+_[a-f0-9]{16}(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+          return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
+        }
+        const key = prefix + name;
+        keys.add(key);
+        if (!/_(?:thumb|card|detail|full)\.[a-z0-9]+$/.test(name)) {
+          for (const variant of require('../services/marketplace/imageResizeService').getImageVariantKeys(key)) {
+            keys.add(variant);
+          }
+        }
+      }
+    }
+    // Post deletion also cascades comment attachments; retain their keys first.
+    for (let offset = 0; ; offset += 1000) {
+      const { data: files, error: fileError } = await supabaseAdmin.from('File')
+        .select('id, comment_id, user_id, file_path').eq('post_id', id).order('id').range(offset, offset + 999);
+      if (fileError || !Array.isArray(files)) {
+        return res.status(503).json({ error: 'Post attachments could not be checked. Please retry.' });
+      }
+      for (const file of files) {
+        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/` : prefix;
+        if (typeof file.file_path !== 'string' || !file.file_path.startsWith(filePrefix)
+          || file.file_path.slice(filePrefix.length).includes('/') || file.file_path.includes('..')) {
+          return res.status(503).json({ error: 'Post attachment storage could not be verified. Please retry.' });
+        }
+        keys.add(file.file_path);
+      }
+      if (files.length < 1000) break;
+    }
+    for (const key of keys) {
+      if (!await s3.deleteFromS3(key)) {
+        return res.status(503).json({ error: 'Post media could not be removed. Please retry.' });
+      }
+    }
+    const { error } = await supabaseAdmin.from('Post').delete().eq('id', id).eq('user_id', userId);
     if (error) { logger.error('Error deleting post', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to delete post' }); }
     res.json({ message: 'Post deleted successfully' });
   } catch (err) {

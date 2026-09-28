@@ -32,23 +32,27 @@ const VARIANTS = [
  * @param {string} s3Key - The S3 key of the original image (e.g. uploads/listings/abc/photo1.png)
  * @returns {Promise<Object|null>} { thumb, card, detail, full } URLs, or null if sharp unavailable
  */
+function getImageVariantKeys(s3Key) {
+  const ext = path.extname(s3Key);
+  const baseName = s3Key.slice(0, -ext.length);
+  return VARIANTS.map(({ suffix }) => `${baseName}${suffix}.jpg`);
+}
+
 async function processListingImage(originalBuffer, s3Key) {
   if (!sharp) return null;
 
-  const ext = path.extname(s3Key);
-  const baseName = s3Key.slice(0, -ext.length);
-
+  const variantKeys = getImageVariantKeys(s3Key);
   const results = {};
 
   await Promise.all(
-    VARIANTS.map(async ({ suffix, width, height, fit }) => {
+    VARIANTS.map(async ({ suffix, width, height, fit }, index) => {
       try {
         const buffer = await sharp(originalBuffer)
           .resize(width, height, { fit, withoutEnlargement: true })
           .jpeg({ quality: 80, progressive: true })
           .toBuffer();
 
-        const variantKey = `${baseName}${suffix}.jpg`;
+        const variantKey = variantKeys[index];
         const { url } = await s3Service.uploadToS3(buffer, variantKey, 'image/jpeg');
 
         // Map suffix to clean key name (e.g. _thumb → thumb)
@@ -63,5 +67,5 @@ async function processListingImage(originalBuffer, s3Key) {
 }
 
 module.exports = {
-  processListingImage,
+  processListingImage, getImageVariantKeys,
 };
