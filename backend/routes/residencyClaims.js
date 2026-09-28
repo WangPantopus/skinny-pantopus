@@ -62,11 +62,12 @@ router.post('/:id/residency-claims', verifyToken, residencyClaimIssueLimiter, as
       userId,
       scope: req.body && req.body.scope,
       expiresInDays: req.body && req.body.expires_in_days,
+      clientRequestId: req.body && req.body.clientRequestId,
     });
     return res.status(201).json({ claim });
   } catch (err) {
     if (err instanceof residencyClaimService.ClaimError) {
-      const status = err.code === 'SCOPE_UNAVAILABLE' ? 422 : 400;
+      const status = err.code === 'SCOPE_UNAVAILABLE' ? 422 : err.statusCode;
       return res.status(status).json({ error: err.message, code: err.code });
     }
     logger.error('residencyClaim: issue failed', { homeId: id, userId, error: err.message });

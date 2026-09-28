@@ -68,9 +68,10 @@ function claimVerifyUrl(code) {
 
 /** Error whose `code` the route maps to a 4xx instead of a 500. */
 class ClaimError extends Error {
-  constructor(message, code) {
+  constructor(message, code, statusCode = 400) {
     super(message);
     this.code = code;
+    this.statusCode = statusCode;
   }
 }
 
@@ -207,13 +208,42 @@ async function residencyVerifiedAt(homeId, userId) {
 /**
  * Issue a claim for the (already T4-gated) resident of a home.
  */
-async function issueClaim({ homeId, userId, scope, expiresInDays }) {
+async function issueClaim({ homeId, userId, scope, expiresInDays, clientRequestId }) {
   if (!CLAIM_SCOPES.includes(scope)) throw new ClaimError('Unknown claim scope.', 'BAD_SCOPE');
   const days = expiresInDays === undefined || expiresInDays === null
     ? DEFAULT_EXPIRY_DAYS
     : Number(expiresInDays);
   if (!EXPIRY_DAYS_CHOICES.includes(days)) {
     throw new ClaimError(`Expiry must be one of ${EXPIRY_DAYS_CHOICES.join(', ')} days.`, 'BAD_EXPIRY');
+  }
+
+  if (clientRequestId != null && (typeof clientRequestId !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(clientRequestId))) {
+    throw new ClaimError('Invalid claim request.', 'BAD_REQUEST_ID');
+  }
+  // Reuse the existing primary key for one unchanged actor/Home command.
+  const claimId = clientRequestId == null ? null : crypto.createHash('sha256')
+    .update('pantopus:residency-claim:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
+    .digest('hex').slice(0, 32);
+  const readRetry = async () => {
+    const { data, error } = await supabaseAdmin.from('ResidencyClaim').select('*').eq('id', claimId).maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  const acknowledgeRetry = (existing) => {
+    if (existing.home_id !== homeId.toLowerCase() || existing.user_id !== userId.toLowerCase() ||
+        existing.scope !== scope ||
+        new Date(existing.expires_at).getTime() - new Date(existing.issued_at).getTime() !== days * DAY_MS) {
+      throw new ClaimError('This claim request was already used for different details.', 'REQUEST_CONFLICT', 409);
+    }
+    if (existing.status !== 'active' || new Date(existing.expires_at).getTime() <= Date.now()) {
+      throw new ClaimError('This claim is no longer active. Start a new claim to issue another.', 'CLAIM_INACTIVE', 409);
+    }
+    return serializeClaim(existing);
+  };
+  if (claimId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
   }
 
   const [{ data: home, error: homeErr }, { data: user, error: userErr }] = await Promise.all([
@@ -236,7 +266,7 @@ async function issueClaim({ homeId, userId, scope, expiresInDays }) {
   const issuedAt = new Date();
   const nowIso = issuedAt.toISOString();
   const row = {
-    id: crypto.randomUUID(),
+    id: claimId || crypto.randomUUID(),
     home_id: homeId,
     user_id: userId,
     claim_code: generateLetterCode(),
@@ -249,11 +279,19 @@ async function issueClaim({ homeId, userId, scope, expiresInDays }) {
     residency_verified_at: verifiedAt,
   };
 
-  const { data: saved, error } = await supabaseAdmin.from('ResidencyClaim').insert(row).select().single();
+  const insert = claimId
+    ? supabaseAdmin.from('ResidencyClaim').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+    : supabaseAdmin.from('ResidencyClaim').insert(row);
+  const { data: saved, error } = await insert.select().maybeSingle();
   if (error) {
     logger.error('residencyClaim: insert failed', { homeId, userId, error: error.message });
     throw new Error('Could not save the claim');
   }
+  if (!saved && claimId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
+  }
+  if (!saved) throw new Error('Could not save the claim');
   logger.info('residencyClaim: issued', { claimId: saved.id, homeId, userId, scope });
   return serializeClaim(saved);
 }

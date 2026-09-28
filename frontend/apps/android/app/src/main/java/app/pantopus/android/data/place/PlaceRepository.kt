@@ -211,8 +211,9 @@ class PlaceRepository
             homeId: String,
             scope: String,
             expiresInDays: Int,
+            clientRequestId: String? = null,
         ): NetworkResult<ResidencyClaimResponse> =
-            safeApiCall { residencyClaimsApi.issue(homeId, IssueResidencyClaimRequest(scope, expiresInDays)) }
+            safeApiCall { residencyClaimsApi.issue(homeId, IssueResidencyClaimRequest(scope, expiresInDays, clientRequestId)) }
 
         suspend fun revokeResidencyClaim(
             homeId: String,

@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -516,6 +516,7 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
 function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; address: string; onBack: () => void }) {
   const [scope, setScope] = useState<ResidencyClaimScope>('city');
   const [days, setDays] = useState<ResidencyClaimExpiryDays>(30);
+  const pendingIssue = useRef<{ draft: string; id: string } | null>(null);
   const queryClient = useQueryClient();
 
   const claimsQuery = useQuery({
@@ -524,8 +525,15 @@ function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; addres
   });
 
   const issueMutation = useMutation({
-    mutationFn: () => api.residencyClaims.issueResidencyClaim(homeId, scope, days),
+    mutationFn: () => {
+      const draft = JSON.stringify({ homeId, scope, days });
+      if (pendingIssue.current?.draft !== draft) {
+        pendingIssue.current = { draft, id: crypto.randomUUID() };
+      }
+      return api.residencyClaims.issueResidencyClaim(homeId, scope, days, pendingIssue.current.id);
+    },
     onSuccess: async (claim) => {
+      pendingIssue.current = null;
       queryClient.invalidateQueries({ queryKey: queryKeys.residencyClaims(homeId) });
       toast.success(`Claim issued — code ${claim.claim_code}.`);
       try {

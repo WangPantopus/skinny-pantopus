@@ -71,10 +71,12 @@ export async function issueResidencyClaim(
   homeId: string,
   scope: ResidencyClaimScope,
   expiresInDays?: ResidencyClaimExpiryDays,
+  clientRequestId?: string,
 ): Promise<ResidencyClaim> {
   const res = await post<{ claim: ResidencyClaim }>(`/api/homes/${homeId}/residency-claims`, {
     scope,
     expires_in_days: expiresInDays,
+    clientRequestId,
   });
   return res.claim;
 }
