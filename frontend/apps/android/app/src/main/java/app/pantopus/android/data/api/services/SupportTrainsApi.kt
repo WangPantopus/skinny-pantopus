@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResp
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -136,5 +137,5 @@ interface SupportTrainsApi {
     @POST("api/activities/support-trains/{id}/complete")
     suspend fun complete(
         @Path("id") supportTrainId: String,
-    ): ResponseBody
+    ): SupportTrainListItemDto
 }

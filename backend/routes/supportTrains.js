@@ -1546,6 +1546,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
 
+    // A reply can be lost after the authorized close has committed.
+    if (st.status === 'completed') return res.json({ id: st.id, status: 'completed' });
+
     if (!['published', 'active', 'paused'].includes(st.status)) {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
