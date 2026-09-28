@@ -114,6 +114,31 @@ export default function GuestViewPage() {
     return () => { generation.current++; };
   }, [loadPass]);
 
+  useEffect(() => {
+    if (state !== 'success' || !data?.pass.expires_at) return;
+    const expiry = Date.parse(data.pass.expires_at);
+    if (!Number.isFinite(expiry)) return;
+    const request = generation.current;
+    let timer: ReturnType<typeof setTimeout>;
+    const update = () => {
+      clearTimeout(timer);
+      if (request !== generation.current) return;
+      const remaining = expiry - Date.now();
+      if (remaining <= 0) {
+        setData(null);
+        applyFailure({ code: 'SHARE_EXPIRED' });
+      } else {
+        timer = setTimeout(update, Math.min(remaining, 2_147_483_647));
+      }
+    };
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, [data, state, token, applyFailure]);
+
   const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passcode.trim() || submitting) return;

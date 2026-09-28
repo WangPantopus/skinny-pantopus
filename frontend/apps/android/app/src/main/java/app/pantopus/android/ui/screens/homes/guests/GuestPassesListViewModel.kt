@@ -180,6 +180,17 @@ class GuestPassesListViewModel
 
         // ─── State projection ─────────────────────────────────────
 
+        /** Only retire displayed active rows; never replace a read error with cached content. */
+        fun nextExpiry(): Instant? {
+            val loaded = _state.value as? ListOfRowsUiState.Loaded ?: return null
+            val ids = loaded.sections.firstOrNull { it.id == GuestPassesSection.ACTIVE }?.rows?.map { it.id } ?: return null
+            return passes.filter { it.id in ids }.mapNotNull { parseInstant(it.endAt) }.minOrNull()
+        }
+
+        fun refreshExpiry() {
+            if (_state.value is ListOfRowsUiState.Loaded) applyState()
+        }
+
         private fun applyState() {
             val now = Instant.now()
             val active = passes.filter { isActive(it, now) }

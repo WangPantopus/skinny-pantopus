@@ -118,6 +118,7 @@ export default function ShareCenter({
   const [showPastPasses, setShowPastPasses] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [listError, setListError] = useState('');
+  const [now, setNow] = useState(Date.now);
   // A superseded list read must not replace the current one.
   const generation = useRef(0);
 
@@ -146,6 +147,21 @@ export default function ShareCenter({
     loadPasses();
     return () => { generation.current++; };
   }, [loadPasses]);
+
+  useEffect(() => {
+    const expiry = Math.min(...passes
+      .filter((pass) => !pass.revoked_at && (!pass.status || pass.status === 'active'))
+      .map((pass) => pass.end_at ? Date.parse(pass.end_at) : NaN)
+      .filter((end) => Number.isFinite(end) && end > now));
+    if (!Number.isFinite(expiry)) return;
+    const update = () => setNow(Date.now());
+    const timer = setTimeout(update, Math.min(Math.max(0, expiry - Date.now()), 2_147_483_647));
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, [passes, now]);
 
   const handleQuickCreate = (kind: GuestPass['kind']) => {
     setPreselectedKind(kind);
