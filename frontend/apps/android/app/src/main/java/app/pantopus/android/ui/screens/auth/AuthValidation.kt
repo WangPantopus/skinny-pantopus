@@ -26,7 +26,7 @@ object AuthValidation {
 
     fun password(value: String): String? {
         if (value.isEmpty()) return "Password is required."
-        if (value.length < 8) return "Password must be at least 8 characters."
+        if (value.length < 12) return "Password must be at least 12 characters."
         if (!letterRegex.containsMatchIn(value)) return "Password must include at least one letter."
         if (!digitRegex.containsMatchIn(value)) return "Password must include at least one number."
         return null
@@ -79,7 +79,7 @@ object AuthValidation {
         val hasLetter = letterRegex.containsMatchIn(value)
         val hasDigit = digitRegex.containsMatchIn(value)
         val hasSymbol = symbolRegex.containsMatchIn(value)
-        if (value.length < 8 || !hasLetter || !hasDigit) return 1
+        if (value.length < 12 || !hasLetter || !hasDigit) return 1
         if (value.length >= 12 && hasSymbol) return 3
         return 2
     }

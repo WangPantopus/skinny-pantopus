@@ -72,14 +72,14 @@ class SetNewPasswordViewModel
             /**
              * Helper line under the new-password field. Praise once the meter
              * reaches "Strong"; otherwise the guiding rule. Two-state per the
-             * design (`Use 8+ …` → `Great — …`).
+             * design (`Use 12+ …` → `Great — …`).
              */
             val strengthHint: String
                 get() =
                     if (passwordStrength >= 3) {
                         "Great — long, with a number and a symbol."
                     } else {
-                        "Use 8+ characters with a number and a symbol."
+                        "Use 12+ characters with a number and a symbol."
                     }
 
             val confirmMatch: ConfirmMatch
