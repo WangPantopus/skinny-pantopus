@@ -598,7 +598,7 @@ export default function TodayDetail({ intelligence, homeId = null }: { intellige
         {calendarReady ? (
           <AddressCalendarCard homeId={homeId} data={calendar!.data as PlaceAddressCalendarData} />
         ) : (
-          <SectionCard icon={Trash2} title="Pickup days, tax dates, hearings" state={calendar ? statusToState(calendar.status) : 'unavailable'} caption={calendar?.unavailable_reason ?? 'No calendar for this address yet.'} />
+          <SectionCard icon={Trash2} title="Pickup days, tax dates, hearings" state={calendar ? statusToState(calendar.status) : 'unavailable'} caption={calendar?.unavailable_reason ?? 'No calendar for this address yet.'} onRetry={() => window.location.reload()} />
         )}
         {calendar?.source ? <SourceNote name={calendar.source} asOf="next two weeks" /> : null}
 
