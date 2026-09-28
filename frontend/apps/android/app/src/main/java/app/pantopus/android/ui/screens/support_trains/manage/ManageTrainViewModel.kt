@@ -195,6 +195,7 @@ class ManageTrainViewModel
         private val _state = MutableStateFlow(ManageTrainUiState())
         val state: StateFlow<ManageTrainUiState> = _state.asStateFlow()
         private var updateRequestId = java.util.UUID.randomUUID().toString()
+        private val closeRequestId = java.util.UUID.randomUUID().toString()
 
         /**
          * Load the dashboard. With a `seed` (previews / tests) it renders
@@ -343,37 +344,45 @@ class ManageTrainViewModel
         }
 
         fun hideCloseSheet() {
+            if (_state.value.isSubmitting) return
             _state.update { it.copy(sheetMode = ManageTrainSheetMode.HIDDEN) }
         }
 
         fun updateThankYouNote(value: String) {
+            if (_state.value.isSubmitting) return
             _state.update { it.copy(thankYouNote = value) }
         }
 
-        /**
-         * Close & thank. Optimistically flips the train to `closed`, then
-         * sends the thank-you note as a final broadcast (`POST /:id/updates`)
-         * when one was typed and marks the train completed
-         * (`POST /:id/complete`). The backend has no single "close with
-         * thanks" route, so this composes the two calls.
-         */
+        /** Keep the confirmation open until both the optional thanks and close are confirmed. */
         fun confirmClose() {
             val current = _state.value
+            if (current.isSubmitting) return
             val content = (current.state as? ManageTrainState.Loaded)?.content ?: return
             val note = current.thankYouNote.trim()
-            val next = content.copy(isActive = false)
-            _state.update {
-                it.copy(
-                    state = ManageTrainState.Loaded(next),
-                    sheetMode = ManageTrainSheetMode.CLOSED,
-                    toast = "Train closed · thanks sent to ${content.helpersValue} helpers",
-                )
-            }
+            _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
                 if (note.isNotEmpty()) {
-                    repo.postUpdate(trainId, SupportTrainUpdateBody(body = note))
+                    when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))) {
+                        is NetworkResult.Success -> Unit
+                        is NetworkResult.Failure -> {
+                            _state.update { it.copy(isSubmitting = false,
+                                actionError = result.error.displayMessage("Couldn't send the thank-you note.")) }
+                            return@launch
+                        }
+                    }
                 }
-                repo.complete(trainId)
+                when (val result = repo.complete(trainId)) {
+                    is NetworkResult.Success -> _state.update {
+                        it.copy(isSubmitting = false,
+                            state = ManageTrainState.Loaded(content.copy(isActive = false, status = "completed")),
+                            sheetMode = ManageTrainSheetMode.CLOSED,
+                            toast = if (note.isEmpty()) "Train closed" else "Train closed · thanks sent to ${content.helpersValue} helpers")
+                    }
+                    is NetworkResult.Failure -> _state.update {
+                        it.copy(isSubmitting = false,
+                            actionError = result.error.displayMessage("Couldn't close this train."))
+                    }
+                }
             }
         }
 

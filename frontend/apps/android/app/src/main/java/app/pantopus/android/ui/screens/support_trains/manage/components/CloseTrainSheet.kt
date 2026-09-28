@@ -61,6 +61,7 @@ fun CloseTrainSheet(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Column(
         modifier =
@@ -81,8 +82,9 @@ fun CloseTrainSheet(
         ThankYouBlock(
             value = thankYouNote,
             onValueChange = onUpdateThankYouNote,
+            enabled = enabled,
         )
-        ActionRow(onCancel = onCancel, onConfirm = onConfirm)
+        ActionRow(onCancel = onCancel, onConfirm = onConfirm, enabled = enabled)
     }
 }
 
@@ -187,6 +189,7 @@ private fun SummaryStat(
 
 @Composable
 private fun ThankYouBlock(
+    enabled: Boolean,
     value: String,
     onValueChange: (String) -> Unit,
 ) {
@@ -199,6 +202,7 @@ private fun ThankYouBlock(
         )
         OutlinedTextField(
             value = value,
+            readOnly = !enabled,
             onValueChange = onValueChange,
             modifier =
                 Modifier
@@ -226,6 +230,7 @@ private fun ThankYouBlock(
 
 @Composable
 private fun ActionRow(
+    enabled: Boolean,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -246,7 +251,7 @@ private fun ActionRow(
                         .clip(RoundedCornerShape(Radii.lg))
                         .background(PantopusColors.appSurface)
                         .border(BorderStroke(1.dp, PantopusColors.appBorder), RoundedCornerShape(Radii.lg))
-                        .clickable(onClick = onCancel)
+                        .clickable(enabled = enabled, onClick = onCancel)
                         .testTag(MANAGE_TRAIN_CLOSE_SHEET_CANCEL_TAG),
                 contentAlignment = Alignment.Center,
             ) {
@@ -264,7 +269,7 @@ private fun ActionRow(
                         .height(46.dp)
                         .clip(RoundedCornerShape(Radii.lg))
                         .background(PantopusColors.error)
-                        .clickable(onClick = onConfirm)
+                        .clickable(enabled = enabled, onClick = onConfirm)
                         .testTag(MANAGE_TRAIN_CLOSE_SHEET_CONFIRM_TAG),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,

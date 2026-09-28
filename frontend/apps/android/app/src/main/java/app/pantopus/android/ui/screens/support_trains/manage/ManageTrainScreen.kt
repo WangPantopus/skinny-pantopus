@@ -131,6 +131,7 @@ fun ManageTrainScreen(
                 CloseSheetOverlay(
                     content = content.close,
                     thankYouNote = state.thankYouNote,
+                    isSubmitting = state.isSubmitting,
                     onUpdateNote = viewModel::updateThankYouNote,
                     onCancel = viewModel::hideCloseSheet,
                     onConfirm = viewModel::confirmClose,
@@ -621,6 +622,7 @@ private fun StickyCTA(
 @Composable
 private fun CloseSheetOverlay(
     content: CloseTrainSheetContent,
+    isSubmitting: Boolean,
     thankYouNote: String,
     onUpdateNote: (String) -> Unit,
     onCancel: () -> Unit,
@@ -632,7 +634,7 @@ private fun CloseSheetOverlay(
                 Modifier
                     .fillMaxSize()
                     .background(PantopusColors.appText.copy(alpha = 0.45f))
-                    .clickable(onClick = onCancel)
+                    .clickable(enabled = !isSubmitting, onClick = onCancel)
                     .testTag(MANAGE_TRAIN_CLOSE_SHEET_SCRIM_TAG),
         )
         Column(
@@ -646,6 +648,7 @@ private fun CloseSheetOverlay(
             CloseTrainSheet(
                 content = content,
                 thankYouNote = thankYouNote,
+                enabled = !isSubmitting,
                 onUpdateThankYouNote = onUpdateNote,
                 onCancel = onCancel,
                 onConfirm = onConfirm,
