@@ -400,7 +400,7 @@ async function createNotification({ userId, type, title, body, icon, link, metad
 /**
  * Create notifications for multiple users at once.
  */
-async function createBulkNotifications(notifications) {
+async function createBulkNotifications(notifications, { sendPush = true } = {}) {
   try {
     const rows = [];
     for (const n of notifications) {
@@ -452,7 +452,7 @@ async function createBulkNotifications(notifications) {
     }
 
     // Send push notifications to all affected users' devices (respecting preferences)
-    if (data && data.length > 0) {
+    if (sendPush && data && data.length > 0) {
       for (const notif of data) {
         Promise.all([isPushEnabled(notif.user_id), isTypeEnabled(notif.user_id, notif.type)])
           .then(([pushEnabled, typeEnabled]) => {

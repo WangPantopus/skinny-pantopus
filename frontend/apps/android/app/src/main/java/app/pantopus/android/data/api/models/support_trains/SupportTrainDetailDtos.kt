@@ -121,6 +121,7 @@ data class SupportTrainUpdateDto(
     val body: String? = null,
     @Json(name = "media_urls") val mediaUrls: List<String>? = null,
     @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "push_to_phones") val pushToPhones: Boolean? = null,
 )
 
 /**
@@ -169,4 +170,5 @@ data class SupportTrainUpdateBody(
     val body: String,
     @Json(name = "media_urls") val mediaUrls: List<String>? = null,
     @Json(name = "client_request_id") val clientRequestId: String? = null,
+    @Json(name = "push_to_phones") val pushToPhones: Boolean? = null,
 )

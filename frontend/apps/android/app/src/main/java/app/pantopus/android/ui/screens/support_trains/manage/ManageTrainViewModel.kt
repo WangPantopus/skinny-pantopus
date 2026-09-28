@@ -328,9 +328,7 @@ class ManageTrainViewModel
 
         /**
          * Send the typed update via `POST /api/support-trains/:id/updates`.
-         * Keeps the draft until its receipt is confirmed; the audience
-         * filter + push-to-phones toggle have no backend field (the endpoint
-         * broadcasts to everyone) so they stay client-only.
+         * Keeps the draft until its receipt confirms the text and delivery choice.
          */
         fun sendUpdate() {
             val current = _state.value
@@ -342,7 +340,7 @@ class ManageTrainViewModel
                     ?: content.helpersValue
             _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
-                when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId))) {
+                when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId, pushToPhones = current.pushToPhones))) {
                     is NetworkResult.Success -> {
                         updateRequestId = java.util.UUID.randomUUID().toString()
                         _state.update {
