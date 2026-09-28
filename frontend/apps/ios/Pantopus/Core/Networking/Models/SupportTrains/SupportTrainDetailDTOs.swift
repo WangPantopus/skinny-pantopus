@@ -293,14 +293,17 @@ public struct SupportTrainCoarseLocationDTO: Decodable, Sendable, Hashable {
 public struct SupportTrainUpdateBody: Encodable, Sendable {
     public let body: String
     public let mediaUrls: [String]?
+    public let clientRequestId: String?
 
-    public init(body: String, mediaUrls: [String]? = nil) {
+    public init(body: String, mediaUrls: [String]? = nil, clientRequestId: String? = nil) {
         self.body = body
         self.mediaUrls = mediaUrls
+        self.clientRequestId = clientRequestId
     }
 
     enum CodingKeys: String, CodingKey {
         case body
         case mediaUrls = "media_urls"
+        case clientRequestId = "client_request_id"
     }
 }
