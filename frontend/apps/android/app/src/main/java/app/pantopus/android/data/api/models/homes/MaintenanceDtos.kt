@@ -75,6 +75,7 @@ data class CreateMaintenanceRequest(
     @Json(name = "due_date") val dueDate: String? = null,
     @Json(name = "performed_at") val performedAt: String? = null,
     val status: String? = null,
+    val clientRequestId: String? = null,
 )
 
 /** Body for `PUT /api/homes/:id/maintenance/:taskId`. All fields optional. */

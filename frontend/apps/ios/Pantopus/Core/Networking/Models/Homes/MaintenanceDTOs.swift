@@ -122,7 +122,7 @@ public struct HomeMaintenanceResponse: Decodable, Sendable {
 
 /// Body for `POST /api/homes/:id/maintenance`. Server requires
 /// `task` (non-empty string); everything else optional.
-public struct CreateMaintenanceRequest: Encodable, Sendable {
+public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public let task: String
     public let vendor: String?
     public let cost: Decimal?
@@ -130,6 +130,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
     public let dueDate: String?
     public let performedAt: String?
     public let status: String?
+    public var clientRequestId: String?
 
     private enum CodingKeys: String, CodingKey {
         case task
@@ -139,6 +140,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         case dueDate = "due_date"
         case performedAt = "performed_at"
         case status
+        case clientRequestId
     }
 
     public init(
@@ -157,6 +159,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         self.dueDate = dueDate
         self.performedAt = performedAt
         self.status = status
+        clientRequestId = nil
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -170,6 +173,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable {
         if let dueDate { try c.encode(dueDate, forKey: .dueDate) }
         if let performedAt { try c.encode(performedAt, forKey: .performedAt) }
         if let status { try c.encode(status, forKey: .status) }
+        if let clientRequestId { try c.encode(clientRequestId, forKey: .clientRequestId) }
     }
 }
 

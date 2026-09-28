@@ -80,6 +80,7 @@ final class LogMaintenanceFormViewModel {
     private let draftStore: MaintenanceDraftStore
     private let now: @Sendable () -> Date
     private var initial: Snapshot
+    private var pendingCreate: (draft: CreateMaintenanceRequest, id: String)?
 
     /// Max photos the form accepts — matches the design's "up to 4".
     static let maxPhotos: Int = 4
@@ -326,7 +327,7 @@ final class LogMaintenanceFormViewModel {
             let response: HomeMaintenanceResponse
             switch mode {
             case .create:
-                let req = CreateMaintenanceRequest(
+                var req = CreateMaintenanceRequest(
                     task: trimmedTitle,
                     vendor: vendor,
                     cost: parsedCost,
@@ -335,6 +336,8 @@ final class LogMaintenanceFormViewModel {
                     performedAt: Self.isoTimestampString(from: dateCompleted),
                     status: "completed"
                 )
+                if pendingCreate?.draft != req { pendingCreate = (req, UUID().uuidString) }
+                req.clientRequestId = pendingCreate?.id
                 response = try await api.request(
                     HomesEndpoints.createMaintenance(homeId: homeId, request: req)
                 )
@@ -356,6 +359,7 @@ final class LogMaintenanceFormViewModel {
                 )
             }
 
+            pendingCreate = nil
             let taskId = response.task.id
             persistExtras(for: taskId)
 
