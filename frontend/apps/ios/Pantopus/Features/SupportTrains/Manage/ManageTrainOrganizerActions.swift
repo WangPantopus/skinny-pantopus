@@ -220,6 +220,16 @@ public extension ManageTrainViewModel {
             SupportTrainActionsEndpoints.fund(supportTrainId: supportTrainId),
             as: SupportTrainFundDTO.self
         )
+        let helperIdentities = reservations?.reservations.filter { $0.status != "canceled" }.map { row -> String? in
+            guard ["reserved", "delivered", "confirmed"].contains(row.status ?? "") else { return nil }
+            if let id = row.userId, !id.isEmpty { return "user:\(id)" }
+            guard let email = row.guestEmail?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !email.isEmpty else { return nil }
+            return "guest:\(email.lowercased())"
+        }
+        let helperCount: Int? = helperIdentities.flatMap { ids in
+            ids.contains(where: { $0 == nil }) ? nil : Set(ids.compactMap { $0 }).count
+        }
         replaceOrganizerSurfaces(
             helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows),
             helpersFailed: reservations == nil,
@@ -227,6 +237,7 @@ public extension ManageTrainViewModel {
                 ["delivered", "confirmed"].contains($0.status ?? "") &&
                     ["cook", "takeout"].contains($0.contributionMode ?? "")
             }.count,
+            helperCount: helperCount,
             organizers: Self.organizerRows(organizers?.organizers ?? []),
             fund: fundSummary
         )
