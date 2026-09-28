@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-28T05:30:33Z (batch88 merged; retained verification continues)
+## CURRENT RESUME POINT — 2026-09-28T05:43:20Z (batch89 merged; retained verification continues)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,12 @@
 
 
 
+
+> **UPDATE 2026-09-28T05:43:20Z — batch89 merged; pass expiry review complete.**
+> - Master `6da56f20efb33f6678636b96bcb4746c7a3b2556`; batch89 [#736](https://github.com/WangPantopus/skinny-pantopus/pull/736), exact `42c528c4f6a70024a3ce6bc881d809dd26b09b10`, merged05:42:35Z; S2 [#735](https://github.com/WangPantopus/skinny-pantopus/pull/735), exact `21dfabda7eea48a7faecfbce5bd25cf8a307c38c`, merged05:42:37Z. Personal exact four-file review/16 source bindings/seal and actual UI/persistence receipts pass. Batch ancestry/four-file union/final blobs pass; no shared Swift, unit/lint execution or CI gate. Required checks absent live. Reviewed queue empty; held#718 and unrelated PRs preserved; attachment#736 hit app100 limit.
+> - S2 [84-file expiry evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream2-residency-pass-expiry-r1/REPORT.md), MANIFEST `ca30aed5d9848a0f08c5937c9edc8aa8afad26905c524012130766c915d9cb7b`: mounted web/iOS/Android Active→Expired, inactive copy; public verifier withdraws statement with no extra page read and preserves newer result. Controlled shortened owned expiry, not full-day waiting; clipboard race source-only. Exact one claim/14 access rows0,349 non-auth whole hashes restored, normal auth retained. Peer next I04 detail retry remains unreviewed.
+> - S1 actual iOSC2 Profile→Support trains→Review signups empty is reachable. Next use one owned nonempty signup to verify existing Edit Save/persistence; no new fixture or app change yet, no acceptance claim. Prior #720/#725/#730/#733 journeys reused. Shared driver handed S2 at05:42Z for its own6F comparison; C2 remains S1/Photos hold, Android5558 stopped, no S1 heavy request. Live leases prevail. Runtimeb54/backend5554 unchanged.
+> - Roughly95% bounded detailed retained repair coverage, not30-row acceptance or launch readiness. Eight cuts excluded; user-managed flag implementation unverified. #718 exact trashed C2 asset still awaits local authentication; iOS Post DynamicType design approval pending. Decision: reuse existing status components/timers, no new service/schema/design; keep remaining Profile edit verification separate from accepted main Manage journeys.
 
 > **UPDATE 2026-09-28T05:30:33Z — batch88 merged; native Train delivery/confirmation retries accepted.**
 > - Master `681217d63267f5105331048522563bd1fc3dd255`; batch88 [#734](https://github.com/WangPantopus/skinny-pantopus/pull/734), exact `d338185c681237d88a528ad8105a6dd92da40053`, merged05:29:06Z. S2 [#732](https://github.com/WangPantopus/skinny-pantopus/pull/732) `977a94fc55dbd7b02dfc5a26c5b4263542889d3b` and S1 [#733](https://github.com/WangPantopus/skinny-pantopus/pull/733) `b54ab1ccd10b03ca704c0b8427e14e76d5c28092` merged05:29:08/09Z. Exact ancestry/two-file union/both head blobs pass; no shared Swift, unit/lint execution or CI gate, required checks absent live. Reviewed queue empty; held#718 and unrelated#46/#429/#430/#625 untouched. Attachment attempts#732–734 hit app100 limit; direct links retained.
