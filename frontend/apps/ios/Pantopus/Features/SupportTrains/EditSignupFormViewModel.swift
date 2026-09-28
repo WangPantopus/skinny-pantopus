@@ -151,6 +151,10 @@ public final class EditSignupFormViewModel {
             toast = ToastMessage(text: "Fix the highlighted field.", kind: .error)
             return false
         }
+        if fields[.dropoffTime]?.value.isEmpty == false, newArrivalISO() == nil {
+            toast = ToastMessage(text: "Couldn't load the signup date. Reopen it and try again.", kind: .error)
+            return false
+        }
         isSaving = true
         defer { isSaving = false }
         let updated: SupportTrainReservationDTO
@@ -242,9 +246,8 @@ public final class EditSignupFormViewModel {
     }
 
     /// Build the new `estimated_arrival_at` ISO string by overlaying
-    /// the picked `HH:mm` on the original arrival date. Falls back to
-    /// the original value when no time is set or the original arrival
-    /// is missing / unparseable.
+    /// the picked `HH:mm` on the original arrival date, or the assigned
+    /// slot date when the helper has not supplied an arrival time.
     private func newArrivalISO() -> String? {
         guard fields[.dropoffTime]?.value != Self.originalValue(for: .dropoffTime, in: reservation) else {
             return reservation.estimatedArrivalAt
@@ -257,12 +260,17 @@ public final class EditSignupFormViewModel {
               let hour = Int(parts[0]),
               let minute = Int(parts[1]) else { return reservation.estimatedArrivalAt }
         let calendar = Calendar(identifier: .gregorian)
-        let baseDate: Date = if let original = reservation.estimatedArrivalAt,
-                                let parsed = Self.parseISO(original) {
-            parsed
+        let baseDate: Date?
+        if let original = reservation.estimatedArrivalAt, let parsed = Self.parseISO(original) {
+            baseDate = parsed
         } else {
-            Date()
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = calendar
+            formatter.dateFormat = "yyyy-MM-dd"
+            baseDate = reservation.slotDate.flatMap { formatter.date(from: $0) }
         }
+        guard let baseDate else { return nil }
         var components = calendar.dateComponents(
             [.year, .month, .day, .timeZone],
             from: baseDate

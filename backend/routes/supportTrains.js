@@ -3169,7 +3169,7 @@ router.patch(
   validate(editReservationSchema),
   asyncHandler(async (req, res) => {
     const { reservationId } = req.params;
-    const selection = '*, User:user_id (id, username, name, profile_picture_url)';
+    const selection = '*, User:user_id (id, username, name, profile_picture_url), Slot:slot_id (slot_date)';
     const { data: reservation, error: readError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(selection)
@@ -3198,7 +3198,7 @@ router.patch(
         : value === reservation[key]
     );
     // A lost reply may be retried with the original version. Never write it twice.
-    if (unchanged) return res.json(reservation);
+    if (unchanged) return res.json({ ...reservation, slot_date: reservation.Slot?.slot_date || null });
     const { data: updated, error: writeError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .update(patch)
@@ -3214,7 +3214,7 @@ router.patch(
     if (!updated) {
       return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Reopen it before editing again.' });
     }
-    res.json(updated);
+    res.json({ ...updated, slot_date: updated.Slot?.slot_date || null });
   })
 );
 
@@ -3456,6 +3456,7 @@ router.get(
       note_to_recipient, private_note_to_organizer,
       guest_address_shared_at, guest_address_shared_by, guest_address_share_count,
       created_at, updated_at, canceled_at,
+      Slot:slot_id ( slot_date ),
       User:user_id ( id, username, name, profile_picture_url )
     `
       )
@@ -3498,6 +3499,7 @@ router.get(
       const item = {
         id: r.id,
         slot_id: r.slot_id,
+        slot_date: r.Slot?.slot_date || null,
         status: r.status,
         contribution_mode: r.contribution_mode,
         dish_title: r.dish_title,
