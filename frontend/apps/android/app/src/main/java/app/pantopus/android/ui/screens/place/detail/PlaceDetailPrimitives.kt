@@ -210,12 +210,14 @@ fun PlaceDot(
  * as a green confirmation). Auto-dismisses; consuming is the VM's.
  */
 @Composable
-fun PlaceActionToastLine(viewModel: PlaceDetailViewModel) {
+fun PlaceActionToastLine(viewModel: PlaceDetailViewModel, retainErrors: Boolean = false) {
     val toast by viewModel.actionToast.collectAsStateWithLifecycle()
     val current = toast ?: return
-    LaunchedEffect(current) {
-        delay(ACTION_TOAST_MS)
-        viewModel.consumeActionToast()
+    LaunchedEffect(current, retainErrors) {
+        if (!retainErrors || !current.isError) {
+            delay(ACTION_TOAST_MS)
+            viewModel.consumeActionToast()
+        }
     }
     Text(
         current.message,
