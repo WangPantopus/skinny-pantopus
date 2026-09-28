@@ -22,11 +22,11 @@ enum AuthValidation {
             : "Enter a valid email address."
     }
 
-    /// ≥8 chars, ≥1 letter, ≥1 number. Mirrors the spec spelled out in
-    /// the P4 prompt.
+    /// ≥12 chars, ≥1 letter, ≥1 number. The minimum matches the server's
+    /// registration and password-reset contract.
     static func password(_ value: String) -> String? {
         if value.isEmpty { return "Password is required." }
-        if value.count < 8 { return "Password must be at least 8 characters." }
+        if value.count < 12 { return "Password must be at least 12 characters." }
         let hasLetter = value.range(of: "[A-Za-z]", options: .regularExpression) != nil
         let hasDigit = value.range(of: "[0-9]", options: .regularExpression) != nil
         if !hasLetter { return "Password must include at least one letter." }
@@ -85,7 +85,7 @@ enum AuthValidation {
         let hasLetter = value.range(of: "[A-Za-z]", options: .regularExpression) != nil
         let hasDigit = value.range(of: "[0-9]", options: .regularExpression) != nil
         let hasSymbol = value.range(of: "[^A-Za-z0-9]", options: .regularExpression) != nil
-        if value.count < 8 || !hasLetter || !hasDigit { return 1 }
+        if value.count < 12 || !hasLetter || !hasDigit { return 1 }
         if value.count >= 12, hasSymbol { return 3 }
         return 2
     }

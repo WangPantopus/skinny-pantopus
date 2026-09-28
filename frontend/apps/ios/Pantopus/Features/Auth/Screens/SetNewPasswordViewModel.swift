@@ -9,7 +9,7 @@
 //  and handed in as an init arg.
 //
 //  Submit is gated on the two passwords matching AND the new password
-//  passing the same client-side strength rules as signup (≥ 8 chars, ≥ 1
+//  passing the same client-side strength rules as signup (≥ 12 chars, ≥ 1
 //  letter, ≥ 1 number — `AuthValidation.password`). The 3-bar meter and
 //  the helper line communicate *how* strong; the green field check
 //  communicates *acceptable*. On success the view flips to the bespoke
@@ -48,7 +48,7 @@ final class SetNewPasswordViewModel {
     }
 
     /// True when the new password passes the shared client-side strength
-    /// rules (≥ 8 chars, ≥ 1 letter, ≥ 1 number — same as signup).
+    /// rules (≥ 12 chars, ≥ 1 letter, ≥ 1 number — same as signup).
     var passwordsMeetStrength: Bool {
         AuthValidation.password(password) == nil
     }
@@ -77,11 +77,11 @@ final class SetNewPasswordViewModel {
 
     /// Helper line under the new-password field. Praise once the meter
     /// reaches "Strong"; otherwise the guiding rule. Two-state per the
-    /// design (`Use 8+ …` → `Great — …`).
+    /// design (`Use 12+ …` → `Great — …`).
     var strengthHint: String {
         passwordStrength >= 3
             ? "Great — long, with a number and a symbol."
-            : "Use 8+ characters with a number and a symbol."
+            : "Use 12+ characters with a number and a symbol."
     }
 
     /// Green check once the new password is acceptable; otherwise neutral

@@ -155,7 +155,7 @@ struct SignUpView: View {
             PantopusTextField(
                 "Password",
                 text: $viewModel.password,
-                placeholder: "8+ characters",
+                placeholder: "12+ characters",
                 state: state(for: .password),
                 isSecure: true,
                 contentType: .newPassword,
@@ -295,7 +295,7 @@ private struct PasswordStrengthMeter: View {
                     .foregroundStyle(color)
                     .frame(width: 48, alignment: .trailing)
             }
-            Text("Min 8 chars · letters + numbers. Symbols make it stronger.")
+            Text("Min 12 chars · letters + numbers. Symbols make it stronger.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }

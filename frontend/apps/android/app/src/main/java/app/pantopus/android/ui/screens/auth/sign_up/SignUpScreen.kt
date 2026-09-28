@@ -393,7 +393,7 @@ private fun PasswordStrengthMeter(state: SignUpViewModel.UiState) {
             )
         }
         Text(
-            text = "Min 8 chars · letters + numbers. Symbols make it stronger.",
+            text = "Min 12 chars · letters + numbers. Symbols make it stronger.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
