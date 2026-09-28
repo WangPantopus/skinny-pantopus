@@ -52,11 +52,12 @@ router.post('/:id/fridge-cards', verifyToken, fridgeCardIssueLimiter, async (req
       userId,
       label: req.body && req.body.label,
       sections: req.body && req.body.sections,
+      clientRequestId: req.body && req.body.clientRequestId,
     });
     return res.status(201).json({ card });
   } catch (err) {
     if (err instanceof fridgeCardService.FridgeCardError) {
-      return res.status(400).json({ error: err.message, code: err.code });
+      return res.status(err.status).json({ error: err.message, code: err.code });
     }
     logger.error('fridgeCard: issue failed', { homeId: id, userId, error: err.message });
     return res.status(500).json({ error: 'Could not issue the card. Try again.' });

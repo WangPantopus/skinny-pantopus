@@ -61,8 +61,9 @@ export async function issueFridgeCard(
   homeId: string,
   sections: FridgeCardSection[],
   label?: string,
+  clientRequestId?: string,
 ): Promise<FridgeCard> {
-  const res = await post<{ card: FridgeCard }>(`/api/homes/${homeId}/fridge-cards`, { sections, label });
+  const res = await post<{ card: FridgeCard }>(`/api/homes/${homeId}/fridge-cards`, { sections, label, clientRequestId });
   return res.card;
 }
 
