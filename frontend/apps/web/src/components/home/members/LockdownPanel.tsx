@@ -37,6 +37,10 @@ export default function LockdownPanel({
     setError('');
     try {
       const res = await api.homeProfile.enableLockdown(homeId);
+      if (res?.home?.id !== homeId || res.home.lockdown_enabled !== true ||
+        !Number.isInteger(res.guest_passes_revoked) || res.guest_passes_revoked < 0) {
+        throw new Error('Lockdown could not be confirmed. Check the current status and try again.');
+      }
       onLockdownChange(true);
       setResult({ message: 'Lockdown enabled', passesRevoked: res.guest_passes_revoked });
       setShowConfirm(false);
@@ -51,7 +55,10 @@ export default function LockdownPanel({
     setToggling(true);
     setError('');
     try {
-      await api.homeProfile.disableLockdown(homeId);
+      const res = await api.homeProfile.disableLockdown(homeId);
+      if (res?.home?.id !== homeId || res.home.lockdown_enabled !== false) {
+        throw new Error('Lockdown could not be confirmed. Check the current status and try again.');
+      }
       onLockdownChange(false);
       setResult({ message: 'Lockdown disabled' });
       setShowConfirm(false);
