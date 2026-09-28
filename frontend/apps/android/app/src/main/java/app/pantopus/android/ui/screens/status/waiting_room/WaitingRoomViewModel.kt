@@ -8,11 +8,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
+import app.pantopus.android.ui.screens.homes.currentVerificationKind
 import app.pantopus.android.ui.screens.status.StatusCta
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,13 +74,15 @@ class WaitingRoomViewModel
     @Inject
     constructor(
         private val homesRepo: HomesRepository,
-        private val homeAdminRepo: HomeAdminRepository,
+        accessFactory: HomeDashboardAccessFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val homeId: String =
             requireNotNull(savedStateHandle[WAITING_ROOM_HOME_ID_KEY]) {
                 "WaitingRoomViewModel requires a '$WAITING_ROOM_HOME_ID_KEY' nav arg."
             }
+
+        private val authority = accessFactory.create(homeId, viewModelScope)
 
         private val stateKey = savedStateHandle.get<String>(WAITING_ROOM_STATE_KEY)
         private val seedState =
@@ -150,21 +154,18 @@ class WaitingRoomViewModel
             _phase.value = WaitingRoomPhase.Loaded
         }
 
-        /**
-         * No claim row for this home. RN serves the Verification Center
-         * on this same route, branching on `verification_status` from
-         * `GET /api/homes/:id/me`
-         * (`src/app/homes/[id]/waiting-room.tsx:26-70`). Only when the
-         * caller *is* verified (or the call fails) do we fall back to the
-         * "No claim in review" notice.
-         */
+        /** Pending residents have denied Home access with a safe verification context. */
         private suspend fun applyVerificationFallback() {
             val access =
-                when (val result = homeAdminRepo.myVerificationAccess(homeId)) {
-                    is NetworkResult.Success -> result.data
-                    is NetworkResult.Failure -> null
+                try {
+                    authority.read()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.LoadFailed)
+                    return
                 }
-            if (access == null || !access.hasAccess || !access.needsVerification) {
+            if (access.currentVerificationKind() == null) {
                 _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.NoClaim)
                 return
             }
@@ -172,9 +173,6 @@ class WaitingRoomViewModel
                 WaitingRoomPhase.Verification(
                     HomeVerificationContent.make(
                         status = HomeVerificationStatus.from(access.verificationStatus),
-                        isInChallengeWindow = access.isInChallengeWindow,
-                        challengeWindowEndsAt = access.challengeWindowEndsAt,
-                        postcardExpiresAt = access.postcardExpiresAt,
                     ),
                 )
         }

@@ -179,7 +179,7 @@ data class HomeVerificationContent(
                         "Verify your address to unlock full home management."
                 HomeVerificationStatus.PendingApproval ->
                     "A household member needs to approve your request. " +
-                        "Pull down to check for updates."
+                        "Reopen this screen to check for updates."
                 HomeVerificationStatus.PendingDoc ->
                     "Your uploaded documents are being reviewed. " +
                         "This usually takes 1-2 business days."
