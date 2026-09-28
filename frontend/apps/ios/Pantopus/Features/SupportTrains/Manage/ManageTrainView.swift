@@ -458,7 +458,13 @@ public struct ManageTrainView: View {
                         .onTapGesture { viewModel.hideCloseSheet() }
                         .accessibilityIdentifier("manageTrainCloseSheetScrim")
                     CloseTrainSheet(
-                        content: content.close,
+                        content: CloseTrainSheetContent(
+                            daysEarlyLabel: content.close.daysEarlyLabel,
+                            mealsDelivered: viewModel.deliveredMeals.map(String.init) ?? "—",
+                            neighborsHelped: content.close.neighborsHelped,
+                            coverageDays: content.close.coverageDays,
+                            recipientQuote: content.close.recipientQuote
+                        ),
                         thankYouNote: $viewModel.thankYouNote,
                         onCancel: { viewModel.hideCloseSheet() },
                         onConfirm: { Task { await viewModel.confirmClose() } }

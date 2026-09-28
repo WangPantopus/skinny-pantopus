@@ -67,7 +67,7 @@ data class SupportTrainListItemDto(
  */
 @JsonClass(generateAdapter = true)
 data class SupportTrainReservationsResponse(
-    val reservations: List<SupportTrainReservationDto> = emptyList(),
+    val reservations: List<SupportTrainReservationDto>,
 )
 
 /**

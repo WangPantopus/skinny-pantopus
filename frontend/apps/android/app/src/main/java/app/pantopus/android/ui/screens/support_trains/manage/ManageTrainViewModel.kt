@@ -127,6 +127,8 @@ data class ManageTrainUiState(
     val helperRows: List<ManageHelperRow> = emptyList(),
     /** True when that read failed: the Helpers section says so instead of "No signups yet". */
     val helpersFailed: Boolean = false,
+    /** Null while the existing reservation read cannot establish delivery counts. */
+    val deliveredMeals: Int? = null,
     /** Slot roster from the detail payload. */
     val slotRows: List<ManageSlotRow> = emptyList(),
     /** Co-organizer roster from `GET /:id/organizers`. */
@@ -209,7 +211,8 @@ class ManageTrainViewModel
             // Keep an already-loaded dashboard on screen while refreshing
             // (an organizer action re-runs `load()`); mirrors iOS.
             _state.update {
-                if (it.state is ManageTrainState.Loaded) it else it.copy(state = ManageTrainState.Loading)
+                if (it.state is ManageTrainState.Loaded) it.copy(deliveredMeals = null)
+                else it.copy(state = ManageTrainState.Loading, deliveredMeals = null)
             }
             viewModelScope.launch {
                 when (val result = repo.detail(trainId)) {
@@ -250,6 +253,9 @@ class ManageTrainViewModel
                 it.copy(
                     helperRows = ManageOrganizerProjection.helperRows(reservations, slots),
                     helpersFailed = reservationsResult is NetworkResult.Failure,
+                    deliveredMeals = if (reservationsResult is NetworkResult.Success) reservations.count {
+                        it.status in listOf("delivered", "confirmed") && it.contributionMode in listOf("cook", "takeout")
+                    } else null,
                     organizerRows = ManageOrganizerProjection.organizerRows(organizers),
                     fund = fund,
                 )

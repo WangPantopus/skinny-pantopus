@@ -223,6 +223,10 @@ public extension ManageTrainViewModel {
         replaceOrganizerSurfaces(
             helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows),
             helpersFailed: reservations == nil,
+            deliveredMeals: reservations?.reservations.filter {
+                ["delivered", "confirmed"].contains($0.status ?? "") &&
+                    ["cook", "takeout"].contains($0.contributionMode ?? "")
+            }.count,
             organizers: Self.organizerRows(organizers?.organizers ?? []),
             fund: fundSummary
         )
