@@ -289,11 +289,12 @@ private fun ResidencyClaimRow(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.primary600,
-                        modifier = Modifier.clickable {
-                            if (expiresAt == null || expiresAt > System.currentTimeMillis()) {
-                                clipboard.setText(AnnotatedString(claim.verifyUrl))
-                            }
-                        },
+                        modifier =
+                            Modifier.clickable {
+                                if (expiresAt == null || expiresAt > System.currentTimeMillis()) {
+                                    clipboard.setText(AnnotatedString(claim.verifyUrl))
+                                }
+                            },
                     )
                     Text(
                         "Revoke",
