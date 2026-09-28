@@ -9,7 +9,7 @@ const LOCKDOWN_EFFECTS = [
   { icon: '🔒', text: 'Hides sensitive data from non-admins', detail: 'Access codes, financial data, and documents become hidden' },
   { icon: '🚫', text: 'Blocks new member invitations', detail: 'No one can be invited until lockdown is lifted' },
   { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
-  { icon: '📋', text: 'Logs all activity with elevated detail', detail: 'Every action is recorded in the audit log' },
+  { icon: '📋', text: 'Records Lockdown changes', detail: 'Enabling and disabling Lockdown are added to the audit log' },
 ];
 
 export default function LockdownPanel({
