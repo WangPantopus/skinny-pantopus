@@ -71,6 +71,7 @@ data class IssueFridgeCardSection(
 data class IssueFridgeCardRequest(
     val label: String? = null,
     val sections: List<IssueFridgeCardSection>,
+    val clientRequestId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

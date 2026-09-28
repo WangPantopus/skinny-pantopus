@@ -100,7 +100,7 @@ public struct FridgeCard: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-public struct IssueFridgeCardSection: Encodable, Sendable {
+public struct IssueFridgeCardSection: Encodable, Sendable, Equatable {
     public let key: String
     public let items: [FridgeCardItem]
 
@@ -110,13 +110,19 @@ public struct IssueFridgeCardSection: Encodable, Sendable {
     }
 }
 
-public struct IssueFridgeCardRequest: Encodable, Sendable {
+public struct IssueFridgeCardRequest: Encodable, Sendable, Equatable {
     public let label: String?
     public let sections: [IssueFridgeCardSection]
+    public let clientRequestId: String?
 
-    public init(label: String?, sections: [IssueFridgeCardSection]) {
+    public init(
+        label: String?,
+        sections: [IssueFridgeCardSection],
+        clientRequestId: String? = nil
+    ) {
         self.label = label
         self.sections = sections
+        self.clientRequestId = clientRequestId
     }
 }
 

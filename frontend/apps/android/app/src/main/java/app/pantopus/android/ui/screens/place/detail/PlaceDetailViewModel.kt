@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.UUID
 import javax.inject.Inject
 
 const val PLACE_DETAIL_HOME_ID_KEY = "homeId"
@@ -297,6 +298,8 @@ class PlaceDetailViewModel
 
         private val _isIssuingCard = MutableStateFlow(false)
         val isIssuingCard: StateFlow<Boolean> = _isIssuingCard.asStateFlow()
+        private var pendingFridgeDraft: IssueFridgeCardRequest? = null
+        private var pendingFridgeRequestId: String? = null
 
         /** The card link the UI should copy to the clipboard, once. */
         private val _cardLinkToCopy = MutableStateFlow<String?>(null)
@@ -331,8 +334,14 @@ class PlaceDetailViewModel
             viewModelScope.launch {
                 _actionToast.value = null
                 _isIssuingCard.value = true
-                when (val r = repo.issueFridgeCard(homeId, body)) {
+                if (pendingFridgeDraft != body) {
+                    pendingFridgeDraft = body
+                    pendingFridgeRequestId = UUID.randomUUID().toString()
+                }
+                when (val r = repo.issueFridgeCard(homeId, body.copy(clientRequestId = pendingFridgeRequestId))) {
                     is NetworkResult.Success -> {
+                        pendingFridgeDraft = null
+                        pendingFridgeRequestId = null
                         _cardLinkToCopy.value = r.data.card.cardUrl
                         _actionToast.value = PlaceActionToast("Card issued — link copied.", isError = false)
                     }

@@ -39,9 +39,10 @@ function cardUrl(code) {
 }
 
 class FridgeCardError extends Error {
-  constructor(message, code) {
+  constructor(message, code, status = 400) {
     super(message);
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -115,8 +116,38 @@ function serializeCard(row, { includeContent = true } = {}) {
 // ── Lifecycle ────────────────────────────────────────────────
 
 /** Issue a card for the (already gated) home. */
-async function issueCard({ homeId, userId, label, sections }) {
+async function issueCard({ homeId, userId, label, sections, clientRequestId }) {
   const normalized = normalizeSections(sections);
+  const cardLabel = cleanLine(label, MAX_CARD_LABEL_LEN) || null;
+  if (clientRequestId != null && (typeof clientRequestId !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(clientRequestId))) {
+    throw new FridgeCardError('Invalid card request.', 'BAD_REQUEST_ID');
+  }
+  // Retain one command through uncertain replies, scoped to this actor and Home.
+  // The existing primary key also arbitrates concurrent first attempts.
+  const cardId = clientRequestId == null ? null : crypto.createHash('sha256')
+    .update(`pantopus:fridge-card:v1:${homeId.toLowerCase()}:${userId.toLowerCase()}:${clientRequestId.toLowerCase()}`)
+    .digest('hex').slice(0, 32);
+  const readRetry = async () => {
+    const { data, error } = await supabaseAdmin.from('FridgeCard').select('*').eq('id', cardId).maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  const acknowledgeRetry = (existing) => {
+    if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() ||
+        existing.label !== cardLabel ||
+        JSON.stringify(normalizeSections(existing.content.sections)) !== JSON.stringify(normalized)) {
+      throw new FridgeCardError('This card request was already used for different details.', 'REQUEST_CONFLICT', 409);
+    }
+    if (existing.status !== 'active') {
+      throw new FridgeCardError('This card was already revoked. Start a new card to issue another.', 'CARD_REVOKED', 409);
+    }
+    return serializeCard(existing);
+  };
+  if (cardId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
+  }
 
   const { data: home, error: homeErr } = await supabaseAdmin
     .from('Home')
@@ -126,11 +157,11 @@ async function issueCard({ homeId, userId, label, sections }) {
   if (homeErr || !home) throw new Error('Home not found');
 
   const row = {
-    id: crypto.randomUUID(),
+    id: cardId || crypto.randomUUID(),
     home_id: homeId,
     created_by: userId,
     card_code: generateLetterCode(),
-    label: cleanLine(label, MAX_CARD_LABEL_LEN) || null,
+    label: cardLabel,
     content: {
       address: addressBlockFromHome(home),
       sections: normalized,
@@ -139,11 +170,19 @@ async function issueCard({ homeId, userId, label, sections }) {
     issued_at: new Date().toISOString(),
   };
 
-  const { data: saved, error } = await supabaseAdmin.from('FridgeCard').insert(row).select().single();
+  const insert = cardId
+    ? supabaseAdmin.from('FridgeCard').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+    : supabaseAdmin.from('FridgeCard').insert(row);
+  const { data: saved, error } = await insert.select().maybeSingle();
   if (error) {
     logger.error('fridgeCard: insert failed', { homeId, userId, error: error.message });
     throw new Error('Could not save the card');
   }
+  if (!saved && cardId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
+  }
+  if (!saved) throw new Error('Could not save the card');
   logger.info('fridgeCard: issued', { cardId: saved.id, homeId, userId });
   return serializeCard(saved);
 }
