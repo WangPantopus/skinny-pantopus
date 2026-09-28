@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-28T10:54Z (batch104 merged; helper-count afters)
+## CURRENT RESUME POINT — 2026-09-28T11:20Z (batch105 merged; distinct helper count accepted)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,12 @@
 
 
 
+
+> **UPDATE 2026-09-28T11:20Z — batch105 merged; native distinct helper count accepted.**
+> - Master `c5b93ac371be6807a31aa65585eb081ea64734b4`. Batch105 [#772](https://github.com/WangPantopus/skinny-pantopus/pull/772), exact `288363aa5957c723734b657750edbb57d21b6a41`, merged11:18:40Z; S1[#771](https://github.com/WangPantopus/skinny-pantopus/pull/771), exact `45a22d56c3d89918103387347bc20f9e3cb30a38`, merged11:18:42Z. Personal five-file review and existing batch ancestry/union/all-head-blob proof pass; no shared Swift/lint/unit execution or CI gate. Live required checks absent; reviewed queue empty, held718/unrelated46/429/430/625 preserved. Attachment attempts771/772 hit app100 limit; direct links retained.
+> - Actual installed iOS C2/Android5558 helper metrics now count one person once across multiple dates: empty0, Bob/two dates1, Bob+Dana2 despite a canceled contribution, Dana canceled1, all canceled0; repeated503/unknown, malformed-read unknown, recovery/cold reopening and Close Cancel accepted within [207-file result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-train-helper-count-r1/RESULT.md), MANIFEST `e95cb74f12afc1a7bd9d17de11ad02dc74ad868dd9620dc457b156fa00d99aa0`.26 source bindings/83 safe events/72 full-row equalities. Five existing files47+/9 reuse existing nested user identity and reservation read; no new file/schema/read/design. Prior175-filee864 before and unchanged empty9f reused; initial nonempty03 and iOS08 crossed-restart captures explicitly excluded. No iOS malformed-Close, numeric command-toast, guest/provider or whole-Train claim. Web has no equivalent summary, Android Review still unreachable.
+> - One exact Train/Activity, three slots/three canceled reservations/six notices/chat/dependents cleaned11:15:09.925575Z in one locked16-guard transaction;16 scopes0/18 retained whole-table fingerprints restored.353 counts baseline except preserved normal AuthDpopJti188→189; users6/File0/storage0 unchanged. Both apps stopped; ownAndroid7702 gone/no reverses/exactslot2 released. C2 prior locked Photos restored, driver explicitly returned S2 at11:13Z; separate718 authhold/slot1 retained. Backend58975/f198 relevant source unchanged, health20011:16Z; web18139 retained, faults/holds0. Heavy/device live leases govern; S2 owns mounted Home expiry work/builds, unreviewed; S3 frozen.
+> - Next existing retained organizer leads: coverage-days meaning, push switch and web tab underline; inspect current contract and reuse sealed before evidence, then only demonstrated bounded repairs/real affected-client afters. Existing Start/Posts/account/Train command evidence reused. Roughly95% detailed retained bounded repair coverage (89 retained/mixed,86 PASS/FIXED/REUSE labels plus3 notes), not30-row/full-client/launch readiness. All8cuts excluded/user-owned flags unverified;718 local Photos authentication and iOS Post DynamicType approval remain.
 
 > **UPDATE 2026-09-28T10:54Z — batch104 merged; helper-count native afters in progress.**
 > - Master `c8258180311b42af65be612035aaaad309d4e7ca`. Batch104 [#770](https://github.com/WangPantopus/skinny-pantopus/pull/770), exact `6c8774956520942b0683916a85677f86a0647168`, merged10:52:50Z; S2[#769](https://github.com/WangPantopus/skinny-pantopus/pull/769), exact `0e240d8849fdeb7b230378f7ff579b6875a056a0`, merged10:52:52Z. Personal one-file review and existing ancestry/union/head-blob proof pass; no shared Swift/lint/unit execution/CI gate. Live required checks absent. Reviewed queue empty; held718/unrelated preserved. Attach769/770 attempts hit100 limit.
