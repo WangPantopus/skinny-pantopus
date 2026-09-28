@@ -26,6 +26,7 @@ final class PlaceResidencyPassViewModel {
 
     private(set) var state: State = .loading
     private(set) var isIssuing = false
+    private var pendingIssue: (draft: IssueResidencyClaimRequest, id: String)?
     // (message, isError): a failed issue must never render in
     // confirmation green — the person may believe a link was copied.
     private(set) var toast: (message: String, isError: Bool)?
@@ -53,15 +54,25 @@ final class PlaceResidencyPassViewModel {
     }
 
     func issue() async {
+        guard !isIssuing else { return }
         isIssuing = true
         defer { isIssuing = false }
+        let draft = IssueResidencyClaimRequest(scope: scope, expiresInDays: expiresInDays)
+        if pendingIssue?.draft != draft {
+            pendingIssue = (draft, UUID().uuidString)
+        }
         do {
             let response: ResidencyClaimResponse = try await api.request(
                 ResidencyClaimsEndpoints.issue(
                     homeId: homeId,
-                    request: IssueResidencyClaimRequest(scope: scope, expiresInDays: expiresInDays)
+                    request: IssueResidencyClaimRequest(
+                        scope: scope,
+                        expiresInDays: expiresInDays,
+                        clientRequestId: pendingIssue?.id
+                    )
                 )
             )
+            pendingIssue = nil
             UIPasteboard.general.string = response.claim.verifyUrl
             toast = ("Claim issued — verification link copied.", false)
             await load()

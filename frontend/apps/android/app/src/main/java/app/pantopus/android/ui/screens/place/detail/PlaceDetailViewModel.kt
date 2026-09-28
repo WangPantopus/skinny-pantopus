@@ -240,6 +240,8 @@ class PlaceDetailViewModel
 
         private val _isIssuingClaim = MutableStateFlow(false)
         val isIssuingClaim: StateFlow<Boolean> = _isIssuingClaim.asStateFlow()
+        private var pendingClaimDraft: Pair<String, Int>? = null
+        private var pendingClaimRequestId: String? = null
 
         /** The verify link the UI should copy to the clipboard, once. */
         private val _claimLinkToCopy = MutableStateFlow<String?>(null)
@@ -260,9 +262,17 @@ class PlaceDetailViewModel
             expiresInDays: Int,
         ) {
             viewModelScope.launch {
+                if (_isIssuingClaim.value) return@launch
                 _isIssuingClaim.value = true
-                when (val r = repo.issueResidencyClaim(homeId, scope, expiresInDays)) {
+                val draft = scope to expiresInDays
+                if (pendingClaimDraft != draft) {
+                    pendingClaimDraft = draft
+                    pendingClaimRequestId = UUID.randomUUID().toString()
+                }
+                when (val r = repo.issueResidencyClaim(homeId, scope, expiresInDays, pendingClaimRequestId)) {
                     is NetworkResult.Success -> {
+                        pendingClaimDraft = null
+                        pendingClaimRequestId = null
                         _claimLinkToCopy.value = r.data.claim.verifyUrl
                         _actionToast.value = PlaceActionToast("Claim issued — verification link copied.", isError = false)
                     }

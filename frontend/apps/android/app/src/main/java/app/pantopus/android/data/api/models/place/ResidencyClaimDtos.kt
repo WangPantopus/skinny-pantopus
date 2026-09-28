@@ -67,6 +67,7 @@ data class ResidencyClaim(
 data class IssueResidencyClaimRequest(
     val scope: String,
     @Json(name = "expires_in_days") val expiresInDays: Int,
+    val clientRequestId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
