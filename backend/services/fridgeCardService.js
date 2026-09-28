@@ -179,7 +179,23 @@ async function revokeCard({ homeId, cardId }) {
     logger.error('fridgeCard: revoke failed', { cardId, error: error.message });
     throw new Error('Could not revoke the card');
   }
-  return data ? serializeCard(data) : null;
+  if (data) return serializeCard(data);
+
+  // A lost reply or another manager's revoke can leave a client with
+  // an active card. Return the existing receipt without changing its
+  // revocation time; the route still checks the current Home permission.
+  const { data: revoked, error: readError } = await supabaseAdmin
+    .from('FridgeCard')
+    .select()
+    .eq('id', cardId)
+    .eq('home_id', homeId)
+    .eq('status', 'revoked')
+    .maybeSingle();
+  if (readError) {
+    logger.error('fridgeCard: revoke readback failed', { cardId, error: readError.message });
+    throw new Error('Could not revoke the card');
+  }
+  return revoked ? serializeCard(revoked) : null;
 }
 
 /**
