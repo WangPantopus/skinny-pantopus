@@ -372,6 +372,7 @@ public struct AddSupportTrainSlotBody: Encodable, Sendable {
     public let startTime: String?
     public let endTime: String?
     public let capacity: Int
+    public let clientRequestId: String?
 
     public init(
         slotDate: String,
@@ -379,7 +380,8 @@ public struct AddSupportTrainSlotBody: Encodable, Sendable {
         supportMode: String,
         startTime: String?,
         endTime: String?,
-        capacity: Int = 1
+        capacity: Int = 1,
+        clientRequestId: String? = nil
     ) {
         self.slotDate = slotDate
         self.slotLabel = slotLabel
@@ -387,6 +389,7 @@ public struct AddSupportTrainSlotBody: Encodable, Sendable {
         self.startTime = startTime
         self.endTime = endTime
         self.capacity = capacity
+        self.clientRequestId = clientRequestId
     }
 
     enum CodingKeys: String, CodingKey {
@@ -396,6 +399,7 @@ public struct AddSupportTrainSlotBody: Encodable, Sendable {
         case startTime = "start_time"
         case endTime = "end_time"
         case capacity
+        case clientRequestId = "client_request_id"
     }
 }
 
