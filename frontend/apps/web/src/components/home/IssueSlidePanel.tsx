@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import SlidePanel from './SlidePanel';
 
 const SEVERITIES = [
@@ -42,6 +42,7 @@ export default function IssueSlidePanel({
   const [estimatedCost, setEstimatedCost] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
 
   useEffect(() => {
     if (issue) {
@@ -58,6 +59,7 @@ export default function IssueSlidePanel({
       setEstimatedCost('');
     }
     setError('');
+    pendingCreate.current = null;
   }, [issue, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,8 +80,15 @@ export default function IssueSlidePanel({
       };
       if (isEdit) {
         payload.status = status;
+      } else {
+        const draft = JSON.stringify(payload);
+        if (pendingCreate.current?.draft !== draft) {
+          pendingCreate.current = { draft, id: crypto.randomUUID() };
+        }
+        payload.clientRequestId = pendingCreate.current.id;
       }
       await onSave(payload);
+      pendingCreate.current = null;
       onClose();
     } catch (err: unknown) {
       // The SDK rejects with a plain { message } object, not an Error; keep the

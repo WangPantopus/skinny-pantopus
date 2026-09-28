@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, AlertCircle, CalendarDays, Wrench, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -34,6 +34,9 @@ function MaintenanceContent() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
+
+  useEffect(() => { pendingCreate.current = null; }, [homeId, showCreate]);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -74,7 +77,13 @@ function MaintenanceContent() {
     if (!newTitle.trim()) return;
     setCreating(true);
     try {
-      await api.homeProfile.createHomeIssue(homeId!, { title: newTitle.trim(), description: newDesc.trim() || undefined });
+      const payload = { title: newTitle.trim(), description: newDesc.trim() || undefined };
+      const draft = JSON.stringify(payload);
+      if (pendingCreate.current?.draft !== draft) {
+        pendingCreate.current = { draft, id: crypto.randomUUID() };
+      }
+      await api.homeProfile.createHomeIssue(homeId!, { ...payload, clientRequestId: pendingCreate.current.id });
+      pendingCreate.current = null;
       setNewTitle(''); setNewDesc(''); setShowCreate(false);
       toast.success('Issue reported');
       await fetchItems();

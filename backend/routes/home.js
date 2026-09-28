@@ -2593,29 +2593,62 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Insufficient permissions to report issues' });
     }
 
-    const { title, description, severity, photos, estimated_cost, details } = req.body;
+    const { title, description, severity, photos, estimated_cost, details, clientRequestId } = req.body;
 
     if (!title) return res.status(400).json({ error: 'title is required' });
+    if (clientRequestId != null && Joi.string().uuid().validate(clientRequestId).error) {
+      return res.status(400).json({ error: 'Invalid issue request' });
+    }
 
-    const { data, error } = await supabaseAdmin
-      .from('HomeIssue')
-      .insert({
-        home_id: homeId,
-        title,
-        description: description || null,
-        severity: severity || 'medium',
-        reported_by: userId,
-        photos: photos || [],
-        estimated_cost: estimated_cost ?? null,
-        details: details || {},
-      })
-      .select()
-      .single();
+    // One unchanged actor/Home command reuses the existing primary key.
+    const issueId = clientRequestId == null ? null : crypto.createHash('sha256')
+      .update('pantopus:home-issue:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
+      .digest('hex').slice(0, 32);
+    const row = {
+      ...(issueId ? { id: issueId } : {}),
+      home_id: homeId,
+      title,
+      description: description || null,
+      severity: severity || 'medium',
+      reported_by: userId,
+      photos: photos || [],
+      estimated_cost: estimated_cost ?? null,
+      details: details || {},
+    };
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('HomeIssue').select('*').eq('id', issueId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = (existing) => {
+      const { isDeepStrictEqual } = require('node:util');
+      if (existing.home_id !== homeId.toLowerCase() || existing.reported_by !== userId.toLowerCase() ||
+          existing.title !== row.title || existing.description !== row.description || existing.severity !== row.severity ||
+          !isDeepStrictEqual(existing.photos, row.photos) || !isDeepStrictEqual(existing.details, row.details) ||
+          (existing.estimated_cost == null ? null : Number(existing.estimated_cost)) !==
+            (row.estimated_cost == null ? null : Number(row.estimated_cost)) || existing.status !== 'open') {
+        return res.status(409).json({ error: 'This issue request no longer matches the original report. Start a new report for different details.' });
+      }
+      return res.status(201).json({ issue: existing });
+    };
+    if (issueId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    const insert = issueId
+      ? supabaseAdmin.from('HomeIssue').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('HomeIssue').insert(row);
+    const { data, error } = await insert.select().maybeSingle();
 
     if (error) {
       logger.error('Error creating home issue', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create issue' });
     }
+    if (!data && issueId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    if (!data) return res.status(500).json({ error: 'Failed to create issue' });
 
     res.status(201).json({ issue: data });
   } catch (err) {

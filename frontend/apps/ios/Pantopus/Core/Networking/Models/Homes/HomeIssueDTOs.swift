@@ -93,11 +93,13 @@ public struct CreateHomeIssueRequest: Encodable, Sendable, Hashable {
     public let title: String
     public let description: String?
     public let severity: String?
+    public let clientRequestId: String?
 
-    public init(title: String, description: String? = nil, severity: String? = nil) {
+    public init(title: String, description: String? = nil, severity: String? = nil, clientRequestId: String? = nil) {
         self.title = title
         self.description = description
         self.severity = severity
+        self.clientRequestId = clientRequestId
     }
 }
 

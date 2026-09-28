@@ -111,13 +111,18 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     private(set) var state: ListOfRowsState = .loading
 
     /// One-shot navigation/presentation signal consumed by the view.
-    var pendingEvent: HomeIssuesEvent?
+    var pendingEvent: HomeIssuesEvent? {
+        didSet {
+            if pendingEvent == .openReport { pendingCreate = nil }
+        }
+    }
 
     /// Inline error shown as a toast after a failed mutation.
     var toast: ToastMessage?
 
     /// Last-fetched payload so tab swaps don't refetch.
     private var issues: [HomeIssueDTO]?
+    private var pendingCreate: (draft: CreateHomeIssueRequest, id: String)?
 
     /// The viewer's effective Home permissions (`GET /api/homes/:id/me`).
     /// Unreadable access leaves the list read-only; the server still decides.
@@ -179,16 +184,23 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return false }
         let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draft = CreateHomeIssueRequest(
+            title: trimmedTitle,
+            description: (trimmedDescription?.isEmpty ?? true) ? nil : trimmedDescription
+        )
+        if pendingCreate?.draft != draft { pendingCreate = (draft, UUID().uuidString) }
         do {
             _ = try await api.request(
                 HomeIssuesEndpoints.create(
                     homeId: homeId,
                     request: CreateHomeIssueRequest(
-                        title: trimmedTitle,
-                        description: (trimmedDescription?.isEmpty ?? true) ? nil : trimmedDescription
+                        title: draft.title,
+                        description: draft.description,
+                        clientRequestId: pendingCreate?.id
                     )
                 )
             ) as HomeIssueResponse
+            pendingCreate = nil
             await fetch()
             return true
         } catch {

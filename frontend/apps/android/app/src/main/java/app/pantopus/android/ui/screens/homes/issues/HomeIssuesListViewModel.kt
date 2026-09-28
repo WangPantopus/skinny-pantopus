@@ -40,6 +40,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav-arg key for the home whose issues are listed. */
@@ -127,6 +128,7 @@ open class HomeIssuesListViewModel
         val toast = MutableStateFlow<String?>(null)
 
         private var issues: List<HomeIssueDto>? = null
+        private var pendingCreate: Pair<CreateHomeIssueRequest, String>? = null
 
         /** The viewer's effective Home permissions; unreadable access leaves the list read-only. */
         private var access: HomeAccessDto? = null
@@ -151,6 +153,7 @@ open class HomeIssuesListViewModel
         }
 
         fun acknowledgeEvent() {
+            if (pendingEvent.value == HomeIssuesEvent.OpenReport) pendingCreate = null
             pendingEvent.value = null
         }
 
@@ -184,14 +187,17 @@ open class HomeIssuesListViewModel
             val trimmedTitle = title.trim()
             if (trimmedTitle.isEmpty()) return false
             val trimmedDescription = description?.trim()?.takeIf { it.isNotEmpty() }
+            val draft = CreateHomeIssueRequest(title = trimmedTitle, description = trimmedDescription)
+            if (pendingCreate?.first != draft) pendingCreate = draft to UUID.randomUUID().toString()
             return when (
                 val result =
                     repo.createHomeIssue(
                         homeId,
-                        CreateHomeIssueRequest(title = trimmedTitle, description = trimmedDescription),
+                        draft.copy(clientRequestId = pendingCreate?.second),
                     )
             ) {
                 is NetworkResult.Success -> {
+                    pendingCreate = null
                     fetch()
                     true
                 }
