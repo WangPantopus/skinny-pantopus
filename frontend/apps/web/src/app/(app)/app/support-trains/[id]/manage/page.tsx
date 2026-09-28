@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
+import ErrorState from '@/components/ui/ErrorState';
 import {
   ArrowLeft,
   Copy,
@@ -33,6 +34,8 @@ export default function ManageSupportTrainPage() {
 
   const [data, setData] = useState<any>(null);
   const [reservations, setReservations] = useState<any[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservationsError, setReservationsError] = useState<string | null>(null);
   const [invites, setInvites] = useState<any[]>([]);
   const [fund, setFund] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
@@ -49,21 +52,33 @@ export default function ManageSupportTrainPage() {
   const [sortField, setSortField] = useState<'created_at' | 'status'>('created_at');
   const [sortAsc, setSortAsc] = useState(false);
 
+  const fetchReservations = useCallback(async () => {
+    setReservationsLoading(true);
+    setReservationsError(null);
+    try {
+      const result = await api.supportTrains.listReservations(id);
+      setReservations(result.reservations || []);
+    } catch {
+      setReservationsError('Signups could not be loaded. Please try again.');
+    } finally {
+      setReservationsLoading(false);
+    }
+  }, [id]);
+
   const fetchAll = useCallback(async () => {
     if (!getAuthToken()) {
       router.push('/login');
       return;
     }
     try {
-      const [trainData, resData, invData, fundData, contribData] = await Promise.all([
+      const [trainData, , invData, fundData, contribData] = await Promise.all([
         api.supportTrains.getSupportTrain(id),
-        api.supportTrains.listReservations(id).catch(() => ({ reservations: [] })),
+        fetchReservations(),
         api.supportTrains.listInvites(id).catch(() => ({ invites: [] })),
         api.supportTrains.getFund(id).catch(() => null),
         api.supportTrains.listContributions(id, { limit: 50 }).catch(() => ({ contributions: [] })),
       ]);
       setData(trainData);
-      setReservations(resData.reservations || []);
       setInvites(invData.invites || []);
       setFund(fundData);
       setContributions(contribData.contributions || []);
@@ -74,7 +89,7 @@ export default function ManageSupportTrainPage() {
     } catch {
       /* empty */
     }
-  }, [id, router]);
+  }, [id, router, fetchReservations]);
 
   useEffect(() => {
     setLoading(true);
@@ -157,7 +172,9 @@ export default function ManageSupportTrainPage() {
     ['reserved', 'delivered', 'confirmed'].includes(String(reservation?.status || ''))
   ).length;
   const canDeleteSupportTrain = data.viewer_support_train_role === 'primary';
-  const deleteDisabledReason = activeHelperCount > 0
+  const deleteDisabledReason = reservationsLoading || reservationsError
+    ? 'Delete is unavailable until signups can be checked.'
+    : activeHelperCount > 0
     ? 'Delete is unavailable because helpers have already committed to this train.'
     : null;
 
@@ -346,11 +363,19 @@ export default function ManageSupportTrainPage() {
         <div className="p-4 border-b border-app-border flex items-center justify-between">
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2">
             <Users className="w-5 h-5 text-app-text-muted" />
-            Reservations ({reservations.length})
+            Reservations{!reservationsLoading && !reservationsError && ` (${reservations.length})`}
           </h2>
         </div>
 
-        {reservations.length === 0 ? (
+        {reservationsLoading ? (
+          <div className="p-8 text-center text-app-text-muted">Loading signups…</div>
+        ) : reservationsError ? (
+          <ErrorState
+            title="Couldn't load signups"
+            message={reservationsError}
+            onRetry={fetchReservations}
+          />
+        ) : reservations.length === 0 ? (
           <div className="p-8 text-center text-app-text-muted">No reservations yet</div>
         ) : (
           <div className="overflow-x-auto">
