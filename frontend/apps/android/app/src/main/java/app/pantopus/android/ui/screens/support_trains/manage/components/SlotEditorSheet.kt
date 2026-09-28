@@ -89,7 +89,7 @@ fun SlotEditorSheet(
                         .align(Alignment.CenterStart)
                         .padding(start = Spacing.s2)
                         .height(44.dp)
-                        .clickable(onClick = onCancel)
+                        .clickable(enabled = !isSubmitting, onClick = onCancel)
                         .padding(horizontal = Spacing.s3)
                         .testTag("slotEditorCloseButton")
                         .semantics {
@@ -115,7 +115,7 @@ fun SlotEditorSheet(
                 label = "Date",
                 value = draft.slotDate,
                 tag = "slotEditorDateField",
-                onClick = { pickerTarget = PickerTarget.DATE },
+                onClick = { if (!isSubmitting) pickerTarget = PickerTarget.DATE },
             )
 
             FieldLabel("What kind of date is this?")
@@ -123,7 +123,7 @@ fun SlotEditorSheet(
                 options = ManageSlotEditorState.LABELS,
                 selected = draft.slotLabel,
                 tagPrefix = "slotEditorLabel",
-                onSelect = { draft = draft.copy(slotLabel = it) },
+                onSelect = { if (!isSubmitting) draft = draft.copy(slotLabel = it) },
             )
 
             FieldLabel("How can neighbors help?")
@@ -131,20 +131,20 @@ fun SlotEditorSheet(
                 options = ManageSlotEditorState.MODES,
                 selected = draft.supportMode,
                 tagPrefix = "slotEditorMode",
-                onSelect = { draft = draft.copy(supportMode = it) },
+                onSelect = { if (!isSubmitting) draft = draft.copy(supportMode = it) },
             )
 
             EditorRow(
                 label = "Window opens",
                 value = draft.startTime,
                 tag = "slotEditorStartField",
-                onClick = { pickerTarget = PickerTarget.START },
+                onClick = { if (!isSubmitting) pickerTarget = PickerTarget.START },
             )
             EditorRow(
                 label = "Window closes",
                 value = draft.endTime,
                 tag = "slotEditorEndField",
-                onClick = { pickerTarget = PickerTarget.END },
+                onClick = { if (!isSubmitting) pickerTarget = PickerTarget.END },
             )
 
             if (draft.endTime <= draft.startTime) {

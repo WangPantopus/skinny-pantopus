@@ -70,6 +70,7 @@ data class ManageOrganizerRow(
 
 /** Add / edit state for the slot editor sheet. */
 data class ManageSlotEditorState(
+    val clientRequestId: String = java.util.UUID.randomUUID().toString(),
     val slotId: String? = null,
     /** `yyyy-MM-dd`, the shape both slot schemas validate. */
     val slotDate: String,

@@ -67,6 +67,15 @@ public struct ManageTrainView: View {
                 onSave: { edited in Task { await viewModel.saveSlot(edited) } },
                 onCancel: { viewModel.dismissSlotEditor() }
             )
+            .interactiveDismissDisabled(viewModel.isSubmitting)
+            .alert("Something went wrong", isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.acknowledgeActionError() } }
+            )) {
+                Button("OK", role: .cancel) { viewModel.acknowledgeActionError() }
+            } message: {
+                Text(viewModel.actionError ?? "")
+            }
         }
         .alert(
             viewModel.pendingConfirm?.title ?? "",
@@ -89,7 +98,7 @@ public struct ManageTrainView: View {
         .alert(
             "Something went wrong",
             isPresented: Binding(
-                get: { viewModel.actionError != nil },
+                get: { viewModel.actionError != nil && viewModel.slotEditor == nil },
                 set: { if !$0 { viewModel.acknowledgeActionError() } }
             )
         ) {

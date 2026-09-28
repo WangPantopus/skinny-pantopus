@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainReservati
 import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -86,7 +87,7 @@ interface SupportTrainsApi {
     suspend fun addSlot(
         @Path("id") supportTrainId: String,
         @Body body: AddSupportTrainSlotBody,
-    ): ResponseBody
+    ): SupportTrainSlotDto
 
     /**
      * `POST /api/support-trains/:id/publish` — flip the draft to

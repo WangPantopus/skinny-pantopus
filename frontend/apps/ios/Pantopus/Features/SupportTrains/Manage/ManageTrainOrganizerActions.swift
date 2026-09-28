@@ -134,6 +134,7 @@ public struct ManageOrganizerRow: Sendable, Hashable, Identifiable {
 
 /// Add / edit state for the slot editor sheet.
 public struct ManageSlotEditorState: Sendable, Hashable, Identifiable {
+    public let clientRequestId = UUID().uuidString
     public let slotId: String?
     public var slotDate: Date
     public var slotLabel: String
@@ -332,18 +333,21 @@ public extension ManageTrainViewModel {
     }
 
     func dismissSlotEditor() {
+        guard !isSubmitting else { return }
         slotEditor = nil
     }
 
     /// `POST /:id/slots` when adding, `PATCH /:id/slots/:slotId` when
     /// editing. Times are sent as `HH:mm` per both Joi schemas.
     func saveSlot(_ editor: ManageSlotEditorState) async {
-        slotEditor = nil
+        guard !isSubmitting else { return }
+        slotEditor = editor
+        var saved = false
         let date = Self.isoDateString(editor.slotDate)
         let start = Self.clockString(editor.startTime)
         let end = Self.clockString(editor.endTime)
         if let slotId = editor.slotId {
-            await run(
+            saved = await run(
                 SupportTrainActionsEndpoints.updateSlot(
                     supportTrainId: supportTrainId,
                     slotId: slotId,
@@ -356,10 +360,11 @@ public extension ManageTrainViewModel {
                     )
                 ),
                 success: "Date updated",
-                failure: "Couldn't update that date."
+                failure: "Couldn't update that date.",
+                validatingSlot: editor
             )
         } else {
-            await run(
+            saved = await run(
                 SupportTrainsEndpoints.addSlot(
                     supportTrainId: supportTrainId,
                     body: AddSupportTrainSlotBody(
@@ -367,13 +372,16 @@ public extension ManageTrainViewModel {
                         slotLabel: editor.slotLabel,
                         supportMode: editor.supportMode,
                         startTime: start,
-                        endTime: end
+                        endTime: end,
+                        clientRequestId: editor.clientRequestId
                     )
                 ),
                 success: "Date added",
-                failure: "Couldn't add that date."
+                failure: "Couldn't add that date.",
+                validatingSlot: editor
             )
         }
+        if saved { slotEditor = nil }
     }
 
     /// Removing a date is `PATCH … { status: "canceled" }` — the same
@@ -528,16 +536,37 @@ public extension ManageTrainViewModel {
 
     // MARK: - Plumbing
 
-    private func run(_ endpoint: Endpoint, success: String, failure: String) async {
-        guard !isSubmitting else { return }
+    @discardableResult
+    private func run(
+        _ endpoint: Endpoint,
+        success: String,
+        failure: String,
+        validatingSlot editor: ManageSlotEditorState? = nil
+    ) async -> Bool {
+        guard !isSubmitting else { return false }
+        actionError = nil
         setSubmitting(true)
         defer { setSubmitting(false) }
         do {
-            _ = try await api.request(endpoint, as: EmptyResponse.self)
+            if let editor {
+                let saved = try await api.request(endpoint, as: SupportTrainSlotDTO.self)
+                guard UUID(uuidString: saved.id) != nil,
+                      editor.slotId == nil || saved.id == editor.slotId,
+                      saved.slotDate == Self.isoDateString(editor.slotDate),
+                      saved.slotLabel == editor.slotLabel,
+                      saved.supportMode == editor.supportMode,
+                      saved.startTime.map({ String($0.prefix(5)) }) == Self.clockString(editor.startTime),
+                      saved.endTime.map({ String($0.prefix(5)) }) == Self.clockString(editor.endTime)
+                else { throw APIError.invalidResponse }
+            } else {
+                _ = try await api.request(endpoint, as: EmptyResponse.self)
+            }
             await load()
             toast = success
+            return true
         } catch {
             actionError = (error as? APIError)?.errorDescription ?? failure
+            return false
         }
     }
 
@@ -621,7 +650,7 @@ public extension ManageTrainViewModel {
         guard let value, !value.isEmpty else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: String(value.prefix(10)))
     }
@@ -629,7 +658,7 @@ public extension ManageTrainViewModel {
     internal nonisolated static func isoDateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
@@ -637,7 +666,7 @@ public extension ManageTrainViewModel {
     internal nonisolated static func longDateLabel(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: date)
     }
