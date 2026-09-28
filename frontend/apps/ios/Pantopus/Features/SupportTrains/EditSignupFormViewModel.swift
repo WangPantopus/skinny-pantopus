@@ -53,19 +53,17 @@ public final class EditSignupFormViewModel {
     // MARK: - Dependencies / callbacks
 
     private let supportTrainId: String
-    private let api: APIClient
+    private let api = APIClient.shared
     private let store: SupportTrainReservationsStore
     private let onSaved: @MainActor (SupportTrainReservationDTO) -> Void
 
     public init(
         supportTrainId: String,
         reservation: SupportTrainReservationDTO,
-        api: APIClient = .shared,
         store: SupportTrainReservationsStore = .shared,
         onSaved: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) {
         self.supportTrainId = supportTrainId
-        self.api = api
         self.reservation = reservation
         self.store = store
         self.onSaved = onSaved
@@ -248,6 +246,9 @@ public final class EditSignupFormViewModel {
     /// the original value when no time is set or the original arrival
     /// is missing / unparseable.
     private func newArrivalISO() -> String? {
+        guard fields[.dropoffTime]?.value != Self.originalValue(for: .dropoffTime, in: reservation) else {
+            return reservation.estimatedArrivalAt
+        }
         let value = (fields[.dropoffTime]?.value ?? "")
             .trimmingCharacters(in: .whitespaces)
         guard !value.isEmpty else { return reservation.estimatedArrivalAt }

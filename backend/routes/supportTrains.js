@@ -3157,7 +3157,7 @@ const editReservationSchema = Joi.object({
   restaurant_name: Joi.string().max(200).allow('', null).required(),
   estimated_arrival_at: Joi.string().isoDate().allow(null).required(),
   private_note_to_organizer: Joi.string().max(1000).allow('', null).required(),
-  expected_updated_at: Joi.string().isoDate().required(),
+  expected_updated_at: Joi.string().isoDate().raw().required(),
 });
 
 router.patch(
