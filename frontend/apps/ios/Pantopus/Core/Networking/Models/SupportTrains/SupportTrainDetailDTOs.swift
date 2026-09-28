@@ -223,12 +223,14 @@ public struct SupportTrainUpdateDTO: Decodable, Sendable, Identifiable, Hashable
     public let body: String?
     public let mediaUrls: [String]?
     public let createdAt: String?
+    public let pushToPhones: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, body
         case authorUserId = "author_user_id"
         case mediaUrls = "media_urls"
         case createdAt = "created_at"
+        case pushToPhones = "push_to_phones"
     }
 }
 
@@ -294,16 +296,19 @@ public struct SupportTrainUpdateBody: Encodable, Sendable {
     public let body: String
     public let mediaUrls: [String]?
     public let clientRequestId: String?
+    public let pushToPhones: Bool?
 
-    public init(body: String, mediaUrls: [String]? = nil, clientRequestId: String? = nil) {
+    public init(body: String, mediaUrls: [String]? = nil, clientRequestId: String? = nil, pushToPhones: Bool? = nil) {
         self.body = body
         self.mediaUrls = mediaUrls
         self.clientRequestId = clientRequestId
+        self.pushToPhones = pushToPhones
     }
 
     enum CodingKeys: String, CodingKey {
         case body
         case mediaUrls = "media_urls"
         case clientRequestId = "client_request_id"
+        case pushToPhones = "push_to_phones"
     }
 }

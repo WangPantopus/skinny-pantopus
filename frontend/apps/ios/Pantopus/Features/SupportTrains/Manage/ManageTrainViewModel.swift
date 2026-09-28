@@ -390,12 +390,11 @@ public final class ManageTrainViewModel {
     }
 
     /// Send the typed update via `POST /api/support-trains/:id/updates`.
-    /// Keeps the draft until its receipt is confirmed; the audience
-    /// filter + push-to-phones toggle have no backend field (the endpoint
-    /// broadcasts to everyone) so they stay client-only.
+    /// Keeps the draft until its receipt confirms the text and delivery choice.
     public func sendUpdate() async {
         guard canSendUpdate, case let .loaded(content) = state else { return }
         let body = draftMessage
+        let push = pushToPhones
         let helperCount = content.audienceChips.first { $0.id == selectedAudienceId }?.count ?? content.helpersValue
         actionError = nil
         toast = nil
@@ -405,11 +404,11 @@ public final class ManageTrainViewModel {
             let saved = try await api.request(
                 SupportTrainsEndpoints.postUpdate(
                     supportTrainId: trainId,
-                    body: SupportTrainUpdateBody(body: body, clientRequestId: updateRequestId)
+                    body: SupportTrainUpdateBody(body: body, clientRequestId: updateRequestId, pushToPhones: push)
                 ),
                 as: SupportTrainUpdateDTO.self
             )
-            guard UUID(uuidString: saved.id) != nil, saved.body == body else {
+            guard UUID(uuidString: saved.id) != nil, saved.body == body, saved.pushToPhones == push else {
                 throw APIError.invalidResponse
             }
             updateRequestId = UUID().uuidString

@@ -1609,6 +1609,7 @@ router.post(
 
 const createUpdateSchema = Joi.object({
   client_request_id: Joi.string().uuid().optional(),
+  push_to_phones: Joi.boolean().default(true),
   body: Joi.string().min(1).max(5000).required(),
   media_urls: Joi.array().items(Joi.string().uri()).max(6).optional(),
 });
@@ -1656,10 +1657,10 @@ router.post(
     };
     const acknowledgeRetry = (existing) => {
       if (existing.support_train_id !== st.id || existing.author_user_id !== userId ||
-          existing.body !== req.body.body ||
+          existing.body !== req.body.body || existing.push_to_phones !== req.body.push_to_phones ||
           JSON.stringify(existing.media_urls || []) !== JSON.stringify(req.body.media_urls || [])) {
         return res.status(409).json({ error: 'UPDATE_REQUEST_CHANGED',
-          message: 'This update was already sent with different text. Review the updates before starting a new message.' });
+          message: 'This update was already sent with different text or delivery settings. Review the updates before starting a new message.' });
       }
       return res.status(201).json(existing);
     };
@@ -1672,6 +1673,7 @@ router.post(
         author_user_id: userId,
         body: req.body.body,
         media_urls: req.body.media_urls || null,
+        push_to_phones: req.body.push_to_phones,
     };
     const insert = updateId
       ? supabaseAdmin.from('SupportTrainUpdate').upsert({ ...row, id: updateId }, { onConflict: 'id', ignoreDuplicates: true })
@@ -1691,7 +1693,7 @@ router.post(
       event: 'support_train.update_posted',
       supportTrainId: st.id,
       actorUserId: userId,
-      payload: { body: req.body.body, update_id: data.id },
+      payload: { body: req.body.body, update_id: data.id, push_to_phones: data.push_to_phones },
     });
 
     res.status(201).json(data);
