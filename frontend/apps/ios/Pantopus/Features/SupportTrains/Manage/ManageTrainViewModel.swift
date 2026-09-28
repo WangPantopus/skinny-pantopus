@@ -214,6 +214,7 @@ public final class ManageTrainViewModel {
     public var draftMessage: String = ""
     public var selectedAudienceId: String = ""
     public var pushToPhones: Bool = true
+    private var updateRequestId = UUID().uuidString
 
     /// Editable thank-you note typed inside the close sheet.
     public var thankYouNote: String = ""
@@ -350,7 +351,7 @@ public final class ManageTrainViewModel {
     /// `Send update` enable rule (textarea non-empty + valid).
     public var canSendUpdate: Bool {
         let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && characterCount <= manageTrainMessageMaxChars
+        return !isSubmitting && !trimmed.isEmpty && characterCount <= manageTrainMessageMaxChars
     }
 
     public func updateDraftMessage(_ value: String) {
@@ -373,25 +374,33 @@ public final class ManageTrainViewModel {
     }
 
     /// Send the typed update via `POST /api/support-trains/:id/updates`.
-    /// Optimistically clears the draft + flashes the toast; the audience
+    /// Keeps the draft until its receipt is confirmed; the audience
     /// filter + push-to-phones toggle have no backend field (the endpoint
     /// broadcasts to everyone) so they stay client-only.
     public func sendUpdate() async {
         guard canSendUpdate, case let .loaded(content) = state else { return }
         let body = draftMessage
         let helperCount = content.audienceChips.first { $0.id == selectedAudienceId }?.count ?? content.helpersValue
-        draftMessage = ""
-        toast = "Update sent · \(helperCount) helpers"
+        actionError = nil
+        toast = nil
+        setSubmitting(true)
+        defer { setSubmitting(false) }
         do {
-            _ = try await api.request(
+            let saved = try await api.request(
                 SupportTrainsEndpoints.postUpdate(
                     supportTrainId: trainId,
-                    body: SupportTrainUpdateBody(body: body)
+                    body: SupportTrainUpdateBody(body: body, clientRequestId: updateRequestId)
                 ),
-                as: EmptyResponse.self
+                as: SupportTrainUpdateDTO.self
             )
+            guard UUID(uuidString: saved.id) != nil, saved.body == body else {
+                throw APIError.invalidResponse
+            }
+            updateRequestId = UUID().uuidString
+            if draftMessage == body { draftMessage = "" }
+            toast = "Update sent · \(helperCount) helpers"
         } catch {
-            // Best-effort broadcast — the optimistic toast stays put.
+            actionError = (error as? APIError)?.errorDescription ?? "Couldn't send that update."
         }
     }
 

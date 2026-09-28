@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateBod
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -125,7 +126,7 @@ interface SupportTrainsApi {
     suspend fun postUpdate(
         @Path("id") supportTrainId: String,
         @Body body: SupportTrainUpdateBody,
-    ): ResponseBody
+    ): SupportTrainUpdateDto
 
     /**
      * `POST /api/support-trains/:id/complete` — mark the train completed
