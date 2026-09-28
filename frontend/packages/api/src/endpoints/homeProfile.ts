@@ -73,6 +73,16 @@ export async function getNearbyGigs(homeId: string, params?: {
 
 // ---- HomeIssue ----
 
+function confirmedHomeIssue(result: { issue: any }, homeId: string, issueId?: string, status?: string) {
+  const issue = result?.issue;
+  if (!issue || typeof issue.id !== 'string' || !issue.id || issue.home_id !== homeId ||
+      typeof issue.title !== 'string' || (issueId !== undefined && issue.id !== issueId) ||
+      (status !== undefined && issue.status !== status)) {
+    throw new Error('Issue save was not confirmed. Reload before retrying.');
+  }
+  return result;
+}
+
 export async function getHomeIssues(homeId: string, params?: {
   status?: string;
   severity?: string;
@@ -86,7 +96,8 @@ export async function createHomeIssue(homeId: string, data: {
   severity?: string;
   clientRequestId?: string;
 }) {
-  return post<{ issue: any }>(`/api/homes/${homeId}/issues`, data);
+  const result = await post<{ issue: any }>(`/api/homes/${homeId}/issues`, data);
+  return confirmedHomeIssue(result, homeId, undefined, 'open');
 }
 
 export async function updateHomeIssue(homeId: string, issueId: string, data: Partial<{
@@ -96,7 +107,8 @@ export async function updateHomeIssue(homeId: string, issueId: string, data: Par
   severity: string;
   assigned_vendor_id: string;
 }>) {
-  return put<{ issue: any }>(`/api/homes/${homeId}/issues/${issueId}`, data);
+  const result = await put<{ issue: any }>(`/api/homes/${homeId}/issues/${issueId}`, data);
+  return confirmedHomeIssue(result, homeId, issueId, data.status);
 }
 
 // ---- HomeBill + HomeBillSplit ----
