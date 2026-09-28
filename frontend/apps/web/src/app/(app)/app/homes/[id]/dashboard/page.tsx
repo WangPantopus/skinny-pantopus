@@ -725,7 +725,7 @@ function DashboardTab({
   // Empty state
   const isEmpty = tasks.length === 0 && issues.length === 0 && bills.length === 0 &&
     packages.length === 0 && documents.length === 0 && homeGigs.length === 0 &&
-    events.length === 0 && secrets.length === 0 && pets.length === 0 && polls.length === 0 && Object.keys(entityErrors).length === 0;
+    events.length === 0 && secrets.length === 0 && emergencies.length === 0 && pets.length === 0 && polls.length === 0 && Object.keys(entityErrors).length === 0;
 
   return (
     <div className="space-y-4">
