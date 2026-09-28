@@ -277,7 +277,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
               icon: '📝',
               link,
               metadata: { support_train_id: supportTrainId, update_id: payload.update_id },
-            }))
+            })),
+            { sendPush: payload.push_to_phones !== false }
           );
         }
         break;
