@@ -463,6 +463,7 @@ public struct ManageTrainView: View {
                         onCancel: { viewModel.hideCloseSheet() },
                         onConfirm: { Task { await viewModel.confirmClose() } }
                     )
+                    .disabled(viewModel.isSubmitting)
                     .clipShape(
                         UnevenRoundedRectangle(
                             topLeadingRadius: Radii.xl2,

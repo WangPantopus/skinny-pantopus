@@ -215,6 +215,7 @@ public final class ManageTrainViewModel {
     public var selectedAudienceId: String = ""
     public var pushToPhones: Bool = true
     private var updateRequestId = UUID().uuidString
+    private let closeRequestId = UUID().uuidString
 
     /// Editable thank-you note typed inside the close sheet.
     public var thankYouNote: String = ""
@@ -415,21 +416,23 @@ public final class ManageTrainViewModel {
     }
 
     public func hideCloseSheet() {
+        guard !isSubmitting else { return }
         sheetMode = .hidden
     }
 
     public func updateThankYouNote(_ value: String) {
+        guard !isSubmitting else { return }
         thankYouNote = value
     }
 
-    /// Close & thank. Optimistically flips the train to `.closed`, then
-    /// sends the thank-you note as a final broadcast (`POST /:id/updates`)
-    /// when one was typed and marks the train completed
-    /// (`POST /:id/complete`). The backend has no single "close with
-    /// thanks" route, so this composes the two calls.
+    /// Keep the confirmation open until both the optional thanks and close are confirmed.
     public func confirmClose() async {
-        guard case let .loaded(content) = state else { return }
+        guard !isSubmitting, case let .loaded(content) = state else { return }
         let note = thankYouNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        actionError = nil
+        toast = nil
+        setSubmitting(true)
+        defer { setSubmitting(false) }
         let next = ManageTrainContent(
             trainId: content.trainId,
             title: content.title,
@@ -450,27 +453,31 @@ public final class ManageTrainViewModel {
             pushToPhones: content.pushToPhones,
             organizeRows: content.organizeRows,
             closeRow: content.closeRow,
-            close: content.close
+            close: content.close,
+            status: "completed",
+            viewerRole: content.viewerRole
         )
-        state = .loaded(next)
-        sheetMode = .closed
-        toast = "Train closed · thanks sent to \(content.helpersValue) helpers"
         do {
             if !note.isEmpty {
-                _ = try await api.request(
+                let update = try await api.request(
                     SupportTrainsEndpoints.postUpdate(
                         supportTrainId: trainId,
-                        body: SupportTrainUpdateBody(body: note)
+                        body: SupportTrainUpdateBody(body: note, clientRequestId: closeRequestId)
                     ),
-                    as: EmptyResponse.self
+                    as: SupportTrainUpdateDTO.self
                 )
+                guard UUID(uuidString: update.id) != nil, update.body == note else { throw APIError.invalidResponse }
             }
-            _ = try await api.request(
+            let saved = try await api.request(
                 SupportTrainsEndpoints.complete(supportTrainId: trainId),
-                as: EmptyResponse.self
+                as: SupportTrainStatusResponse.self
             )
+            guard saved.id == trainId, saved.status == "completed" else { throw APIError.invalidResponse }
+            state = .loaded(next)
+            sheetMode = .closed
+            toast = note.isEmpty ? "Train closed" : "Train closed · thanks sent to \(content.helpersValue) helpers"
         } catch {
-            // Optimistic close already reflected; surfacing failures is a follow-up.
+            actionError = (error as? APIError)?.errorDescription ?? "Couldn't close this train."
         }
     }
 }

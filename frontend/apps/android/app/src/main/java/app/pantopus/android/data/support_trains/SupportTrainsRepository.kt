@@ -138,7 +138,11 @@ class SupportTrainsRepository
          */
         suspend fun complete(supportTrainId: String): NetworkResult<Unit> =
             safeApiCall {
-                api.complete(supportTrainId).close()
+                val saved = api.complete(supportTrainId)
+                if (saved.id != supportTrainId || saved.status != "completed") {
+                    throw JsonDataException("Train closure could not be confirmed.")
+                }
+                Unit
             }
 
         // ─── S1 · helper reservations ──────────────────────────────────
