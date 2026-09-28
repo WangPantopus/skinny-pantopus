@@ -61,7 +61,7 @@ object ManageTrainProjection {
                     daysEarlyLabel = "Locks new signups · $days days early",
                     mealsDelivered = "—", // Delivery is established by the organizer reservation read.
                     neighborsHelped = helpers,
-                    coverageDays = "${days}d",
+                    coverageDays = "${coverageDays(slots)}d",
                     recipientQuote = dto.story ?: "",
                 ),
             status = dto.status ?: "",
@@ -122,6 +122,15 @@ object ManageTrainProjection {
         val max = slots.mapNotNull { parseDate(it.slotDate) }.maxByOrNull { it.time } ?: return 0
         val diff = ((max.time - startOfTodayUtc().time) / MILLIS_PER_DAY).toInt()
         return maxOf(0, diff)
+    }
+
+    private fun coverageDays(slots: List<SupportTrainSlotDto>): Int {
+        val dates = slots.mapNotNull { parseDate(it.slotDate) }
+        val first = dates.minByOrNull { it.time } ?: return 0
+        val last = dates.maxByOrNull { it.time } ?: return 0
+        // Coverage is elapsed calendar days, capped at the scheduled span.
+        val end = minOf(startOfTodayUtc().time, last.time)
+        return maxOf(0, ((end - first.time) / MILLIS_PER_DAY).toInt() + 1)
     }
 
     private fun parseDate(value: String?): Date? {

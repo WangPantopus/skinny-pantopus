@@ -54,7 +54,7 @@ extension ManageTrainViewModel {
                 daysEarlyLabel: "Locks new signups · \(days) days early",
                 mealsDelivered: "—", // Delivery is established by the organizer reservation read.
                 neighborsHelped: helpers,
-                coverageDays: "\(days)d",
+                coverageDays: "\(coverageDays(slots: slots))d",
                 recipientQuote: dto.story ?? ""
             ),
             status: dto.status ?? "",
@@ -119,6 +119,17 @@ extension ManageTrainViewModel {
         let today = calendar.startOfDay(for: Date())
         let days = calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: latest)).day ?? 0
         return max(0, days)
+    }
+
+    private nonisolated static func coverageDays(slots: [SupportTrainSlotDTO]) -> Int {
+        let calendar = utcCalendar()
+        let dates = slots.compactMap { parseDate($0.slotDate) }
+        guard let first = dates.min(), let last = dates.max() else { return 0 }
+        let today = calendar.startOfDay(for: Date())
+        // Coverage is elapsed calendar days, capped at the scheduled span.
+        let end = min(today, calendar.startOfDay(for: last))
+        let elapsed = calendar.dateComponents([.day], from: calendar.startOfDay(for: first), to: end).day ?? -1
+        return max(0, elapsed + 1)
     }
 
     private nonisolated static func parseDate(_ value: String?) -> Date? {

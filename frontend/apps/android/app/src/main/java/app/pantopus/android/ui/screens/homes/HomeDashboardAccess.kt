@@ -11,6 +11,7 @@ import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 
@@ -48,9 +49,14 @@ class HomeDashboardAccess(
         check(response.homeId == homeId && HomeClaimReviewSnapshot.validToken(response.accessRevision)) {
             "Current Home authority could not be confirmed."
         }
+        check(response.expiryMillis()?.let { it > System.currentTimeMillis() } != false) {
+            "Home access expired."
+        }
         return response.copy(permissions = response.permissions.distinct().sorted())
     }
 }
+
+internal fun HomeDashboardAuthorityDto.expiryMillis(): Long? = accessExpiresAt?.let { Instant.parse(it).toEpochMilli() }
 
 internal fun HomeDashboardAuthorityDto.sharedAccess(): HomeAccessDto? =
     if (hasAccess && "home.view" in permissions) {

@@ -4,6 +4,7 @@ import { homeIam } from '@pantopus/api';
 export function homeAccessFingerprint(access: homeIam.HomeAccess): string {
   return JSON.stringify({
     hasAccess: access.hasAccess,
+    expiresAt: access.access_expires_at,
     permissions: [...access.permissions].sort(),
     role: access.effective_role_base ?? access.role_base,
     owner: access.isOwner,
@@ -13,6 +14,28 @@ export function homeAccessFingerprint(access: homeIam.HomeAccess): string {
     age: access.age_band,
     occupancy: access.occupancy,
   });
+}
+
+export function homeAccessExpiry(access: homeIam.HomeAccess): number | null {
+  if (access.access_expires_at == null) return null;
+  const expiry = typeof access.access_expires_at === 'string' ? Date.parse(access.access_expires_at) : NaN;
+  if (!Number.isFinite(expiry) || expiry <= Date.now()) {
+    throw new Error('Home access changed or could not be confirmed. Reload to check current access.');
+  }
+  return expiry;
+}
+
+/** Keep long-lived timers within the browser limit and recheck the saved date. */
+export function watchHomeAccessExpiry(expiry: number | null, retire: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const check = () => {
+    if (expiry === null) return;
+    const remaining = expiry - Date.now();
+    if (remaining <= 0) retire();
+    else timer = setTimeout(check, Math.min(remaining, 2_147_483_647));
+  };
+  check();
+  return () => clearTimeout(timer);
 }
 
 /** A current applicant may open verification; this never authorizes Home data. */
