@@ -25,6 +25,7 @@ import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import java.time.Instant
 
 /** Test tag on the Guest passes list root container. */
 const val GUEST_PASSES_LIST_TAG = "guestPassesList"
@@ -60,6 +61,14 @@ fun GuestPassesListScreen(
             delay(TOAST_MS)
             viewModel.dismissToast()
         }
+    }
+
+    LaunchedEffect(state) {
+        val expiry = viewModel.nextExpiry()?.toEpochMilli() ?: return@LaunchedEffect
+        while (expiry > Instant.now().toEpochMilli()) {
+            delay((expiry - Instant.now().toEpochMilli()).coerceAtLeast(1L))
+        }
+        viewModel.refreshExpiry()
     }
 
     LaunchedEffect(pendingEvent) {

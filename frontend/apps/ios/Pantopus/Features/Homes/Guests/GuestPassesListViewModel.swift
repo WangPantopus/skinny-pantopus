@@ -184,6 +184,20 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
 
     // MARK: - State projection
 
+    /// Follow the displayed active rows so a deadline that just elapsed still
+    /// triggers projection. An error/loading state must never be replaced by a timer.
+    var nextExpiry: Date? {
+        guard case let .loaded(sections, _) = state,
+              let active = sections.first(where: { $0.id == GuestPassesSection.active }) else { return nil }
+        let ids = Set(active.rows.map(\.id))
+        return passes.filter { ids.contains($0.id) }.compactMap { $0.endAt.flatMap(Self.parseISO) }.min()
+    }
+
+    func refreshExpiry() {
+        guard case .loaded = state else { return }
+        applyState()
+    }
+
     private func applyState() {
         let active = activePasses
         let past = pastPasses

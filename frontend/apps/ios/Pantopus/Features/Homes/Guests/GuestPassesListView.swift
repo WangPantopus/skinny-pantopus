@@ -26,6 +26,14 @@ public struct GuestPassesListView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("guestPassesList")
             .task { await viewModel.load() }
+            .task(id: viewModel.nextExpiry) {
+                guard let expiry = viewModel.nextExpiry else { return }
+                while expiry > Date() {
+                    do { try await Task.sleep(for: .seconds(max(0, expiry.timeIntervalSinceNow))) } catch { return }
+                }
+                guard !Task.isCancelled else { return }
+                viewModel.refreshExpiry()
+            }
             .refreshable { await viewModel.refresh() }
             .onAppear { Task { await viewModel.refreshIfLoaded() } }
             .onChange(of: viewModel.pendingEvent) { _, event in
