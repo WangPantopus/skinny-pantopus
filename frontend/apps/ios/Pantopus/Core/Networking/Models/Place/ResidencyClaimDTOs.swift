@@ -86,18 +86,21 @@ public struct ResidencyClaim: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-public struct IssueResidencyClaimRequest: Encodable, Sendable {
+public struct IssueResidencyClaimRequest: Encodable, Sendable, Equatable {
     public let scope: String
     public let expiresInDays: Int
+    public let clientRequestId: String?
 
-    public init(scope: ResidencyClaimScope, expiresInDays: Int) {
+    public init(scope: ResidencyClaimScope, expiresInDays: Int, clientRequestId: String? = nil) {
         self.scope = scope.rawValue
         self.expiresInDays = expiresInDays
+        self.clientRequestId = clientRequestId
     }
 
     private enum CodingKeys: String, CodingKey {
         case scope
         case expiresInDays = "expires_in_days"
+        case clientRequestId
     }
 }
 
