@@ -33,8 +33,8 @@ object ManageTrainProjection {
         val percent = if (total > 0) Math.round(filled.toFloat() * 100f / total.toFloat()) else 0
         val days = daysLeft(slots)
         val isActive = dto.status in listOf("published", "active", "paused")
-        // No helper roster in `/:id` — proxy the count from covered slots.
-        val helpers = filled.toString()
+        // The separate organizer reservation read establishes distinct helpers.
+        val helpers = "—"
 
         return ManageTrainContent(
             trainId = dto.id,

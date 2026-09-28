@@ -76,7 +76,7 @@ public struct OrganizeRowContent: Sendable, Hashable, Identifiable {
 public struct CloseTrainSheetContent: Sendable, Hashable {
     public let daysEarlyLabel: String
     public let mealsDelivered: String
-    public let neighborsHelped: String
+    public var neighborsHelped: String
     public let coverageDays: String
     public let recipientQuote: String
 
@@ -104,7 +104,7 @@ public struct ManageTrainContent: Sendable, Hashable {
 
     // 4-cell StatCellRow values + tones (tones are derived in the view).
     public let slotFillValue: String
-    public let helpersValue: String
+    public var helpersValue: String
     public let daysLeftValue: String
     public let dropoutValue: String
 
@@ -117,7 +117,7 @@ public struct ManageTrainContent: Sendable, Hashable {
 
     // Send-an-update form
     public let draftMessage: String
-    public let audienceChips: [AudienceChipContent]
+    public var audienceChips: [AudienceChipContent]
     public let selectedAudienceId: String
     public let pushToPhones: Bool
 
@@ -126,7 +126,7 @@ public struct ManageTrainContent: Sendable, Hashable {
     public let closeRow: OrganizeRowContent
 
     /// Close-train sheet
-    public let close: CloseTrainSheetContent
+    public var close: CloseTrainSheetContent
 
     /// Lifecycle status straight off the payload — `draft` / `published`
     /// / `active` / `paused` / `completed` / `archived`. Drives which
@@ -302,6 +302,7 @@ public final class ManageTrainViewModel {
         helpers: [ManageHelperRow]? = nil,
         helpersFailed: Bool? = nil,
         deliveredMeals: Int? = nil,
+        helperCount: Int? = nil,
         slots: [ManageSlotRow]? = nil,
         organizers: [ManageOrganizerRow]? = nil,
         fund: SupportTrainFundDTO? = nil
@@ -309,6 +310,15 @@ public final class ManageTrainViewModel {
         if let helpers { helperRows = helpers }
         if let helpersFailed { self.helpersFailed = helpersFailed }
         self.deliveredMeals = deliveredMeals
+        if case .loaded(var content) = state {
+            let count = helperCount.map(String.init) ?? "—"
+            content.helpersValue = count
+            content.audienceChips = content.audienceChips.map {
+                AudienceChipContent(id: $0.id, label: $0.label, count: $0.id == "all" ? count : $0.count)
+            }
+            content.close.neighborsHelped = count
+            state = .loaded(content)
+        }
         if let slots { slotRows = slots }
         if let organizers { organizerRows = organizers }
         if let fund { self.fund = fund }
