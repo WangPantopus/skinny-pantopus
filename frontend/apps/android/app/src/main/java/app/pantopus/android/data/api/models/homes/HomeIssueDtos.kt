@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.homes
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * One row of the `HomeIssue` table returned by
@@ -37,7 +38,15 @@ data class HomeIssueDto(
 @JsonClass(generateAdapter = true)
 data class HomeIssuesResponse(
     val issues: List<HomeIssueDto>,
-)
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<HomeIssueDto?> = issues
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid Home issues response")
+        }
+    }
+}
 
 /**
  * Envelope for `POST` / `PUT` — both reply `{ issue }`
