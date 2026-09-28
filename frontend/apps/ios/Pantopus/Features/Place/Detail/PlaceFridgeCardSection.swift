@@ -32,6 +32,7 @@ final class PlaceFridgeCardViewModel {
     var label = ""
     var drafts: [FridgeCardSectionKey: [FridgeCardItem]] = [:]
     private var seeded = false
+    private var pendingIssue: (draft: IssueFridgeCardRequest, id: String)?
     let homeId: String
     private let api: APIClient
 
@@ -102,16 +103,25 @@ final class PlaceFridgeCardViewModel {
             return items.isEmpty ? nil : IssueFridgeCardSection(key: key, items: items)
         }
         guard !sections.isEmpty else { return }
+        let draft = IssueFridgeCardRequest(
+            label: label.trimmingCharacters(in: .whitespaces).isEmpty ? nil : label,
+            sections: sections
+        )
+        if pendingIssue?.draft != draft {
+            pendingIssue = (draft, UUID().uuidString)
+        }
         do {
             let response: FridgeCardResponse = try await api.request(
                 FridgeCardsEndpoints.issue(
                     homeId: homeId,
                     request: IssueFridgeCardRequest(
-                        label: label.trimmingCharacters(in: .whitespaces).isEmpty ? nil : label,
-                        sections: sections
+                        label: draft.label,
+                        sections: sections,
+                        clientRequestId: pendingIssue?.id
                     )
                 )
             )
+            pendingIssue = nil
             UIPasteboard.general.string = response.card.cardUrl
             toast = ("Card issued — link copied. Open it to print for the fridge.", false)
             await load()

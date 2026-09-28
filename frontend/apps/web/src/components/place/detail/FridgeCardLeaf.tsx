@@ -175,6 +175,7 @@ function SectionEditor({
 export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: string; address: string; onBack: () => void }) {
   const [label, setLabel] = useState('');
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const pendingIssue = useRef<{ draft: string; id: string } | null>(null);
   const queryClient = useQueryClient();
 
   const cardsQuery = useQuery({
@@ -225,7 +226,12 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
       const sections: FridgeCardSection[] = SECTION_DEFS
         .map((def) => ({ key: def.key, items: draft[def.key].filter((i) => i.label.trim() || i.note.trim()) }))
         .filter((s) => s.items.length > 0);
-      const card = await api.fridgeCards.issueFridgeCard(homeId, sections, label.trim() || undefined);
+      const cardLabel = label.trim() || undefined;
+      const snapshot = JSON.stringify({ homeId, sections, label: cardLabel });
+      if (pendingIssue.current?.draft !== snapshot) {
+        pendingIssue.current = { draft: snapshot, id: crypto.randomUUID() };
+      }
+      const card = await api.fridgeCards.issueFridgeCard(homeId, sections, cardLabel, pendingIssue.current.id);
       if (!card || typeof card !== 'object' || Array.isArray(card)
         || typeof card.id !== 'string' || !card.id.trim()
         || card.home_id !== homeId || card.status !== 'active'
@@ -235,6 +241,7 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
       return card;
     },
     onSuccess: async (card) => {
+      pendingIssue.current = null;
       queryClient.invalidateQueries({ queryKey: queryKeys.fridgeCards(homeId) });
       toast.success('Card issued — open it to print for the fridge.');
       try {
