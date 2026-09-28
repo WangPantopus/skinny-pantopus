@@ -4,7 +4,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { homeAccessFingerprint, readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
+import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from '@/components/home/homeAccessFingerprint';
 
 // ── Types ──
 
@@ -215,16 +215,22 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
   const generation = useRef(0);
   const scopeHome = useRef(homeId);
   const ready = useRef<(() => boolean) | null>(null);
-  const retireGeneration = useCallback(() => { generation.current++; ready.current = null; }, []);
+  const stopExpiry = useRef<(() => void) | null>(null);
+  const retireGeneration = useCallback(() => {
+    generation.current++; ready.current = null;
+    stopExpiry.current?.(); stopExpiry.current = null;
+  }, []);
 
   const loadDashboard = useCallback(async () => {
-    const revision = ++generation.current;
+    retireGeneration();
+    const revision = generation.current;
+    let expiry: number | null = null;
     scopeHome.current = homeId; ready.current = null;
     const token = getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => revision === generation.current && token === getAuthToken()
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
-      && document.visibilityState !== 'hidden';
+      && document.visibilityState !== 'hidden' && (expiry === null || Date.now() < expiry);
     dispatch({ type: 'LOAD_START' });
     try {
       if (!token) {
@@ -256,6 +262,13 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       if (accessRes.hasAccess !== true || !Array.isArray(accessRes.permissions)) {
         throw new Error('Current access to this home could not be confirmed. Reload to check access.');
       }
+      expiry = homeAccessExpiry(accessRes);
+      stopExpiry.current = watchHomeAccessExpiry(expiry, () => {
+        if (revision !== generation.current) return;
+        retireGeneration();
+        dispatch({ type: 'LOAD_ERROR', error: 'Home access changed or could not be confirmed. Reload to check current access.' });
+      });
+      if (!current()) return;
       const access: HomeAccessState = {
         permissions: accessRes.permissions, role_base: accessRes.effective_role_base ?? accessRes.role_base ?? null, isOwner: accessRes.isOwner === true,
       };
@@ -332,7 +345,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         error: e instanceof Error ? e.message : 'Current home access could not be confirmed. Reload to try again.',
       });
     }
-  }, [homeId, router]);
+  }, [homeId, router, retireGeneration]);
 
   useEffect(() => {
     void loadDashboard();

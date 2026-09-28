@@ -61,6 +61,15 @@ function currentOccupancy(occupancy, now = Date.now()) {
   return true;
 }
 
+// Project the same saved end boundaries used by currentOccupancy so mounted
+// clients can retire already-loaded content without waiting for another read.
+function homeAccessExpiresAt(occupancy) {
+  const ends = [occupancy?.end_at, occupancy?.access_end_at]
+    .filter(value => value != null).map(value => new Date(value).getTime());
+  if (ends.some(value => !Number.isFinite(value))) throw new Error('Invalid Home access expiry');
+  return ends.length ? new Date(Math.min(...ends)).toISOString() : null;
+}
+
 function ageAllows(age, permission) {
   if (!HOME_PERMISSIONS.includes(permission)) return false;
   if (age == null || age === 'adult') return true;
@@ -75,4 +84,4 @@ function effectiveRole(role, age) {
 }
 
 module.exports = { ROLE_RANK, OLD_TO_NEW_PERM, HOME_PERMISSIONS, resolveHomeRole,
-  currentOccupancy, ageAllows, effectiveRole, NON_RESIDENT_ROLES };
+  currentOccupancy, homeAccessExpiresAt, ageAllows, effectiveRole, NON_RESIDENT_ROLES };

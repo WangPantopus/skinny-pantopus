@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 
 import * as api from '@pantopus/api';
-import { readCurrentHomeAccess } from './homeAccessFingerprint';
+import { homeAccessExpiry, readCurrentHomeAccess, watchHomeAccessExpiry } from './homeAccessFingerprint';
 
 // ============================================================
 // Types
@@ -11,6 +11,7 @@ import { readCurrentHomeAccess } from './homeAccessFingerprint';
 
 export interface HomeAccess {
   hasAccess: boolean;
+  access_expires_at?: string | null;
   isOwner: boolean;
   role_base: string | null;
   effective_role_base?: string | null;
@@ -128,16 +129,22 @@ export function HomePermissionsProvider({
   const generation = useRef(0);
   const scopeHome = useRef(homeId);
   const ready = useRef<(() => boolean) | null>(null);
-  const retireGeneration = useCallback(() => { generation.current++; ready.current = null; }, []);
+  const stopExpiry = useRef<(() => void) | null>(null);
+  const retireGeneration = useCallback(() => {
+    generation.current++; ready.current = null;
+    stopExpiry.current?.(); stopExpiry.current = null;
+  }, []);
 
   const load = useCallback(async () => {
-    const revision = ++generation.current;
+    retireGeneration();
+    const revision = generation.current;
+    let expiry: number | null = null;
     scopeHome.current = homeId; ready.current = null;
     const token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => revision === generation.current && token === api.getAuthToken()
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
-      && document.visibilityState !== 'hidden';
+      && document.visibilityState !== 'hidden' && (expiry === null || Date.now() < expiry);
     setAccess(null); setLoading(true);
     setError(null);
     try {
@@ -148,6 +155,13 @@ export function HomePermissionsProvider({
       if ((confirmed.hasAccess !== true && confirmed.verification_required !== true) || !Array.isArray(confirmed.permissions)) {
         throw new Error('Current access to this home could not be confirmed. Reload to check access.');
       }
+      expiry = homeAccessExpiry(confirmed);
+      stopExpiry.current = watchHomeAccessExpiry(expiry, () => {
+        if (revision !== generation.current) return;
+        retireGeneration(); setAccess(null); setLoading(false);
+        setError('Home access changed or could not be confirmed. Reload to check current access.');
+      });
+      if (!current()) return;
       ready.current = current;
       setAccess(confirmed);
     } catch (err: unknown) {
@@ -178,7 +192,7 @@ export function HomePermissionsProvider({
     } finally {
       if (current()) setLoading(false);
     }
-  }, [homeId]);
+  }, [homeId, retireGeneration]);
 
   useEffect(() => {
     void load();

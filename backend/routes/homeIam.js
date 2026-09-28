@@ -33,7 +33,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const { invalidateRoleCache } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
-const { OLD_TO_NEW_PERM } = require('../utils/homeAccessPolicy');
+const { OLD_TO_NEW_PERM, homeAccessExpiresAt } = require('../utils/homeAccessPolicy');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeExternalShareService = require('../services/homeExternalShareService');
 const {
@@ -123,6 +123,7 @@ router.get('/:id/me', verifyToken, async (req, res) => {
 
     res.json({
       hasAccess: true,
+      access_expires_at: homeAccessExpiresAt(occ),
       // 5 navigation booleans
       can_manage_home,
       can_manage_access,

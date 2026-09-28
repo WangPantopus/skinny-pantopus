@@ -2,7 +2,7 @@ const db = require('../config/supabaseAdmin');
 const { createHash } = require('node:crypto');
 const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../serializers/identitySerializers');
 const { getUserAccess } = require('../utils/homePermissions');
-const { ROLE_RANK, currentOccupancy, resolveHomeRole } = require('../utils/homeAccessPolicy');
+const { ROLE_RANK, currentOccupancy, homeAccessExpiresAt, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const { staleAffectsTrust } = require('../utils/verificationAge');
 const { homeMailVisibilityClauses } = require('../utils/homeMailAccess');
 const { HOME_LIST, HOME_BILL_LIST, HOME_ISSUE_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
@@ -90,7 +90,8 @@ async function readAuthority({ homeId, actorId }) {
       const current = await readAccess(homeId, actorId);
       if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
       return { hasAccess: true, home_id: homeId, permissions: current.permissions, is_owner: current.isOwner,
-        role_base: current.effective_role_base, access_revision: revision(current) };
+        role_base: current.effective_role_base, access_revision: revision(current),
+        access_expires_at: homeAccessExpiresAt(current.occupancy) };
     } catch (error) {
       if (error.code === 'HOME_DASHBOARD_DENIED') return denied(opening);
       throw error;
