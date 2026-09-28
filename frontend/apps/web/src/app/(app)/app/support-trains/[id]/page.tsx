@@ -596,7 +596,7 @@ export default function SupportTrainDetailPage() {
                     {data.coarse_location.zip_code}
                   </p>
                   <p className="text-xs text-app-text-muted italic mt-1">
-                    Exact address will appear after you sign up.
+                    Exact address appears after the organizer shares it with you.
                   </p>
                 </DetailSection>
               )}
