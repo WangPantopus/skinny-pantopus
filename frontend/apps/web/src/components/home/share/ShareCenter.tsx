@@ -126,7 +126,11 @@ export default function ShareCenter({
     try {
       const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
       if (request !== generation.current) return;
-      setPasses(res.passes || []);
+      if (!Array.isArray(res?.passes) || res.passes.some((pass) =>
+        !pass || typeof pass !== 'object' || Array.isArray(pass))) {
+        throw new Error('Invalid guest passes response');
+      }
+      setPasses(res.passes);
       setListError('');
     } catch (err: unknown) {
       if (request !== generation.current) return;
