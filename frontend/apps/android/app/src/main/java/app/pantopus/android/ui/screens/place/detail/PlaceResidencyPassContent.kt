@@ -41,6 +41,8 @@ import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.theme.PantopusColors
+import kotlinx.coroutines.delay
+import java.time.Instant
 
 // ─── Residency Pass (Wave 1) — Identity detail, T4 ───────────
 // Pick ONE fact to share, pick a lifetime, issue — the verify link is
@@ -235,8 +237,25 @@ private fun ResidencyClaimRow(
     viewModel: PlaceDetailViewModel,
 ) {
     val clipboard = LocalClipboardManager.current
+    val expiresAt = remember(claim.expiresAt) { runCatching { Instant.parse(claim.expiresAt).toEpochMilli() }.getOrNull() }
+    var now by remember(claim.id, claim.expiresAt) { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(claim.id, claim.status, expiresAt) {
+        now = System.currentTimeMillis()
+        if (claim.status == ResidencyClaimStatus.ACTIVE && expiresAt != null) {
+            while (expiresAt > now) {
+                delay(expiresAt - now)
+                now = System.currentTimeMillis()
+            }
+        }
+    }
+    val status =
+        if (claim.status == ResidencyClaimStatus.ACTIVE && expiresAt != null && expiresAt <= now) {
+            ResidencyClaimStatus.EXPIRED
+        } else {
+            claim.status
+        }
     val chip =
-        when (claim.status) {
+        when (status) {
             ResidencyClaimStatus.ACTIVE -> PlaceChipModel(PlaceChipTone.SUCCESS, "Active")
             ResidencyClaimStatus.REVOKED -> PlaceChipModel(PlaceChipTone.WARNING, "Revoked")
             ResidencyClaimStatus.EXPIRED -> PlaceChipModel(PlaceChipTone.NEUTRAL, "Expired")
@@ -263,14 +282,18 @@ private fun ResidencyClaimRow(
                     else -> "Checked ${claim.viewCount} times"
                 }
             Text("Until $until · $views", fontSize = 11.5.sp, color = PantopusColors.appTextMuted)
-            if (claim.status == ResidencyClaimStatus.ACTIVE) {
+            if (status == ResidencyClaimStatus.ACTIVE) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         "Copy link",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.primary600,
-                        modifier = Modifier.clickable { clipboard.setText(AnnotatedString(claim.verifyUrl)) },
+                        modifier = Modifier.clickable {
+                            if (expiresAt == null || expiresAt > System.currentTimeMillis()) {
+                                clipboard.setText(AnnotatedString(claim.verifyUrl))
+                            }
+                        },
                     )
                     Text(
                         "Revoke",
