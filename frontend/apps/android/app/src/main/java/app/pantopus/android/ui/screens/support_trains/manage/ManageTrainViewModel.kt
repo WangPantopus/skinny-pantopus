@@ -251,7 +251,7 @@ class ManageTrainViewModel
                 }
             val helperIds = reservations.filter { it.status != "canceled" }.map { row ->
                 if (row.status !in listOf("reserved", "delivered", "confirmed")) null
-                else row.userId?.takeIf { it.isNotBlank() }?.let { "user:$it" }
+                else (row.helperUser?.id ?: row.userId)?.takeIf { it.isNotBlank() }?.let { "user:$it" }
                     ?: row.guestEmail?.trim()?.takeIf { it.isNotEmpty() }?.lowercase()?.let { "guest:$it" }
             }
             val helperCount = if (reservationsResult is NetworkResult.Success && helperIds.none { it == null }) {

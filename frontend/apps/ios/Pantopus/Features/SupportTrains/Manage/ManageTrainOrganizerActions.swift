@@ -222,7 +222,7 @@ public extension ManageTrainViewModel {
         )
         let helperIdentities = reservations?.reservations.filter { $0.status != "canceled" }.map { row -> String? in
             guard ["reserved", "delivered", "confirmed"].contains(row.status ?? "") else { return nil }
-            if let id = row.userId, !id.isEmpty { return "user:\(id)" }
+            if let id = row.helper?.id ?? row.userId, !id.isEmpty { return "user:\(id)" }
             guard let email = row.guestEmail?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !email.isEmpty else { return nil }
             return "guest:\(email.lowercased())"
