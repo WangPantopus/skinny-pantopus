@@ -72,7 +72,7 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FridgeCardComposer(viewModel)
-        PlaceActionToastLine(viewModel)
+        PlaceActionToastLine(viewModel, retainErrors = true)
         when (val current = state) {
             is FridgeCardsUiState.Loading -> Unit
             is FridgeCardsUiState.Error ->
