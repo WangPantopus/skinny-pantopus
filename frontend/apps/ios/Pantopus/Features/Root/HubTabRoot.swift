@@ -280,7 +280,7 @@ public enum HubRoute: Hashable {
     /// reservation). Pushed from the Review-signups per-row Edit
     /// action with the seed DTO baked into the route so the form can
     /// prefill without a re-fetch.
-    case editSignup(reservation: SupportTrainReservationDTO)
+    case editSignup(supportTrainId: String, reservation: SupportTrainReservationDTO)
     /// A13.13 / P4.3 — Manage train (organizer surface). Pushed from
     /// the A10.9 detail dock overflow when the viewer is the organizer
     /// and from the `pantopus://support-trains/:id/manage` deep link.
@@ -2708,13 +2708,13 @@ public struct HubTabRoot: View {
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
-                            push(.editSignup(reservation: reservation))
+                            push(.editSignup(supportTrainId: supportTrainId, reservation: reservation))
                         }
                     }
                 )
             )
-        case let .editSignup(reservation):
-            EditSignupFormView(reservation: reservation) {
+        case let .editSignup(supportTrainId, reservation):
+            EditSignupFormView(supportTrainId: supportTrainId, reservation: reservation) {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .manageTrain(trainId):

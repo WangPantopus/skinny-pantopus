@@ -148,6 +148,7 @@ public struct SupportTrainReservationsResponse: Decodable, Sendable {
 public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Hashable {
     public let id: String
     public let slotId: String?
+    public let slotDate: String?
     public let userId: String?
     public let guestName: String?
     public let status: String?
@@ -199,10 +200,12 @@ public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Has
         canceledAt: String?,
         helper: SupportTrainHelperDTO?,
         guestEmail: String? = nil,
-        exactAddressShared: Bool? = nil
+        exactAddressShared: Bool? = nil,
+        slotDate: String? = nil
     ) {
         self.id = id
         self.slotId = slotId
+        self.slotDate = slotDate
         self.userId = userId
         self.guestName = guestName
         self.status = status
@@ -224,6 +227,7 @@ public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Has
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         slotId = try container.decodeIfPresent(String.self, forKey: .slotId)
+        slotDate = try container.decodeIfPresent(String.self, forKey: .slotDate)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         guestName = try container.decodeIfPresent(String.self, forKey: .guestName)
         status = try container.decodeIfPresent(String.self, forKey: .status)
@@ -249,6 +253,7 @@ public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Has
     enum CodingKeys: String, CodingKey {
         case id, status
         case slotId = "slot_id"
+        case slotDate = "slot_date"
         case userId = "user_id"
         case guestName = "guest_name"
         case guestEmail = "guest_email"
