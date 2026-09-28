@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-28T08:18Z (batch96 merged; date repair in progress)
+## CURRENT RESUME POINT — 2026-09-28T08:35Z (batch97 merged; date repair in final builds)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,12 @@
 
 
 
+
+> **UPDATE 2026-09-28T08:35Z — batch97 merged; date editor receipt guard in final builds.**
+> - Master `5119d77609c9d7b751eeb8ea41b407df1293443e`; batch97[#754](https://github.com/WangPantopus/skinny-pantopus/pull/754) exactd45bfd37733c35c061dc6eca04d72915d7d8293d merged08:28:44Z, S2[#753](https://github.com/WangPantopus/skinny-pantopus/pull/753) exactab1b54369b1d0d417bd3a8a5f18d61b63d0947e2 merged08:28:46Z. Exact two-file union/ancestry/headblob proof passes; no shared Swift/unit/lint execution/CI gate; required checks absent live. Queue reviewed-empty,718/unrelated preserved; attachment753/754 hit100limit.
+> - Personally reviewed S2[73-file access/Lockdown result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream2-lockdown-member-policy-r1/REPORT.md), MANIFEST986c3f0fc2abe4ae316da053d78bbe53a688de3afa50a8514fd702a5342bfc9c/13bindings/351of353fullfingerprints. Actual access-only Overview falselyempty→existingcardrevealed; actual granted-member sensitive read and owner openinvite duringLockdown prove old promises false. Existing two-file predicate/copy repair, prior751preserved, no native equivalent command. Unusable during-member raster and refresh-frame invite screenshot excluded; actual DOM/originalrequests/fullrows support bounded results. Exact18rows cleaned by product16 plus separately guarded two newly acknowledged fixture commands; only ordinary auth histories differ. D07partial,129priorfiles reused, next leads peer-owned/unreviewed.
+> - S1 a86 real Android/iOS repeated503 retaineddraft, committedlost201/originalretry identical seven complete scoped rowsets each, pendingdouble/Close ignored; Androidedit503/retry/discard/cold passed. iOS Edit then exposed Sept29→Sep28 picker (UTC vs device timezone); threeexistinghelpers corrected698 (built, neverinstalled). Bothnative Add/Edit malformed201/200{} also falselydismiss/show success with no SQL effect. ExistingDTO receipt validation added in12d86ffb5, serial final appbuilds underS1heavy lease; afters pending/noPR/noacceptance. [Active unsealed reproduction](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-train-date-recovery-r1/REPRODUCTION.md).
+> - Exact owned Trainf312604f/activityf30955d6/chat06110b1b/nine slots remain for checkedcleanup. Backend99167sourcea86 equals finalbackendbytes, web18139HMR12d; faults/holds0. C2slot1driver/5558slot2/QEMU56436 S1, heavy since08:28:20 serialguard builds; peers notified/no contention. Prior removal/address/Profile/other accepted seals reused. Next final actual malformed/recovery/date/cold/readback/cleanup/seal then remaining existing organizer/U rows. Roughly95% detailed retained bounded evidence, not wholecatalog/readiness; all8cuts/userflags unchanged, separate718Photosauth/PostDynamicTypeapproval pending.
 
 > **UPDATE 2026-09-28T08:18Z — batch96 merged; native Train date recovery repair in progress.**
 > - Master `64aeadc7a75f7fa35acc312b06382b744f1b1b88`. Batch96 [#752](https://github.com/WangPantopus/skinny-pantopus/pull/752) exact060400e5521782a53b8788d0b53578d5e27809b3 merged08:13:13Z; S2[#751](https://github.com/WangPantopus/skinny-pantopus/pull/751) exact94dde95c8a9e33a4d9460bafcccd732ab29a78a6 merged08:13:15Z. Exact one-file ancestry/union/blob proof passes; no shared Swift/unit/lint execution or CI gate. Required checks absent live. Reviewed queue empty; held718 and unrelated46/429/430/625 preserved. Attachment751/752 attempts hit app100 limit.
