@@ -114,7 +114,7 @@ function AccessContent() {
                         <p className="text-sm font-medium text-app-text">{secret.label || secret.title}</p>
                         {secret.description && <p className="text-xs text-app-text-secondary mt-0.5">{secret.description}</p>}
                         <p className="text-base font-semibold font-mono tracking-wider text-app-text mt-2">
-                          {revealed[secret.id] ? (secret.value || secret.code) : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
+                          {revealed[secret.id] ? (secret.secret_value ?? secret.value ?? secret.code) : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
                         </p>
                       </div>
                       <div className="flex flex-col gap-1.5 flex-shrink-0">
@@ -122,7 +122,7 @@ function AccessContent() {
                           {revealed[secret.id] ? <EyeOff className="w-4 h-4 text-app-text-secondary" /> : <Eye className="w-4 h-4 text-app-text-secondary" />}
                         </button>
                         {revealed[secret.id] && (
-                          <button onClick={() => copyValue(secret.value || secret.code)} className="w-9 h-9 rounded-lg bg-app-surface-sunken flex items-center justify-center hover:bg-app-hover transition" title="Copy">
+                          <button onClick={() => copyValue(secret.secret_value ?? secret.value ?? secret.code)} className="w-9 h-9 rounded-lg bg-app-surface-sunken flex items-center justify-center hover:bg-app-hover transition" title="Copy">
                             <Copy className="w-4 h-4 text-emerald-600" />
                           </button>
                         )}
