@@ -201,7 +201,8 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
   useEffect(() => {
     if (seededRef.current) return;
     const rows = (emergencies || []) as { label?: string; location_in_home?: string; location?: string }[];
-    if (!rows.length) return;
+    if (!Array.isArray(rows) || !rows.length
+      || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) return;
     seededRef.current = true;
     setDraft((d) => (d.utilities.length ? d : {
       ...d,
