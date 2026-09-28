@@ -51,6 +51,32 @@ public struct ReserveSlotBody: Encodable, Sendable {
     }
 }
 
+/// Organizer edit of an existing reservation. Nil fields are encoded so clearing persists.
+public struct EditSupportTrainReservationBody: Encodable, Sendable {
+    public let dishTitle: String?
+    public let restaurantName: String?
+    public let estimatedArrivalAt: String?
+    public let privateNoteToOrganizer: String?
+    public let expectedUpdatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case dishTitle = "dish_title"
+        case restaurantName = "restaurant_name"
+        case estimatedArrivalAt = "estimated_arrival_at"
+        case privateNoteToOrganizer = "private_note_to_organizer"
+        case expectedUpdatedAt = "expected_updated_at"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(dishTitle, forKey: .dishTitle)
+        try container.encode(restaurantName, forKey: .restaurantName)
+        try container.encode(estimatedArrivalAt, forKey: .estimatedArrivalAt)
+        try container.encode(privateNoteToOrganizer, forKey: .privateNoteToOrganizer)
+        try container.encode(expectedUpdatedAt, forKey: .expectedUpdatedAt)
+    }
+}
+
 /// The three contribution lanes a helper can pick, gated by the train's
 /// `support_modes` block. Values match `reserveSchema`'s enum exactly.
 public enum SupportTrainContributionMode: String, Sendable, CaseIterable, Hashable {

@@ -2,14 +2,7 @@
 //  EditSignupFormViewModel.swift
 //  Pantopus
 //
-//  P3.7 — Edit Signup form (organizer-side mutation of a helper
-//  reservation). The form prefills from the current reservation and
-//  commits its patch into `SupportTrainReservationsStore.shared` so
-//  the Review-signups list can replay it on appear. The corresponding
-//  backend route (`PATCH /api/support-trains/:id/reservations
-//  /:reservationId`) lands separately; until then the optimistic store
-//  patch is the user-facing source of truth — same precedent the
-//  Confirm action already follows.
+//  Organizer signup edits persist before the existing success feedback and list update.
 //
 
 import Foundation
@@ -59,14 +52,18 @@ public final class EditSignupFormViewModel {
 
     // MARK: - Dependencies / callbacks
 
+    private let supportTrainId: String
+    private let api = APIClient.shared
     private let store: SupportTrainReservationsStore
     private let onSaved: @MainActor (SupportTrainReservationDTO) -> Void
 
     public init(
+        supportTrainId: String,
         reservation: SupportTrainReservationDTO,
         store: SupportTrainReservationsStore = .shared,
         onSaved: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) {
+        self.supportTrainId = supportTrainId
         self.reservation = reservation
         self.store = store
         self.onSaved = onSaved
@@ -145,18 +142,37 @@ public final class EditSignupFormViewModel {
 
     // MARK: - Save
 
-    /// Validate, build the patched DTO, optimistically commit it to
-    /// the shared store, and notify the host. Returns true on success.
+    /// Validate and persist before notifying the list. Failed saves keep the draft.
     @discardableResult
     public func save() async -> Bool {
+        guard !isSaving, state == .editing else { return false }
         if validateAll() != nil {
             shakeTrigger &+= 1
             toast = ToastMessage(text: "Fix the highlighted field.", kind: .error)
             return false
         }
+        if fields[.dropoffTime]?.value.isEmpty == false, newArrivalISO() == nil {
+            toast = ToastMessage(text: "Couldn't load the signup date. Reopen it and try again.", kind: .error)
+            return false
+        }
         isSaving = true
         defer { isSaving = false }
-        let updated = buildUpdatedReservation()
+        let updated: SupportTrainReservationDTO
+        do {
+            updated = try await api.request(
+                SupportTrainActionsEndpoints.editReservation(
+                    supportTrainId: supportTrainId,
+                    reservationId: reservation.id,
+                    body: buildBody()
+                )
+            )
+        } catch {
+            toast = ToastMessage(
+                text: (error as? APIError)?.errorDescription ?? "Couldn't save this signup. Try again.",
+                kind: .error
+            )
+            return false
+        }
         store.apply(updated)
         onSaved(updated)
         toast = ToastMessage(text: "Signup updated.", kind: .success)
@@ -205,7 +221,7 @@ public final class EditSignupFormViewModel {
         }
     }
 
-    private func buildUpdatedReservation() -> SupportTrainReservationDTO {
+    private func buildBody() -> EditSupportTrainReservationBody {
         let trimmedContribution = (fields[.contribution]?.value ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNotes = (fields[.dietaryNotes]?.value ?? "")
@@ -220,33 +236,22 @@ public final class EditSignupFormViewModel {
             restaurantName = reservation.restaurantName
         }
         let arrival = newArrivalISO()
-        return SupportTrainReservationDTO(
-            id: reservation.id,
-            slotId: reservation.slotId,
-            userId: reservation.userId,
-            guestName: reservation.guestName,
-            status: reservation.status,
-            contributionMode: reservation.contributionMode,
+        return EditSupportTrainReservationBody(
             dishTitle: dishTitle,
             restaurantName: restaurantName,
             estimatedArrivalAt: arrival,
-            noteToRecipient: reservation.noteToRecipient,
             privateNoteToOrganizer: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            createdAt: reservation.createdAt,
-            // Bumping `updatedAt` flips the row to the "Edited" chip in
-            // the list view — same client-side derivation
-            // `SupportTrainReservationDTO.wasEdited` uses.
-            updatedAt: Self.isoNow(),
-            canceledAt: reservation.canceledAt,
-            helper: reservation.helper
+            expectedUpdatedAt: reservation.updatedAt ?? ""
         )
     }
 
     /// Build the new `estimated_arrival_at` ISO string by overlaying
-    /// the picked `HH:mm` on the original arrival date. Falls back to
-    /// the original value when no time is set or the original arrival
-    /// is missing / unparseable.
+    /// the picked `HH:mm` on the original arrival date, or the assigned
+    /// slot date when the helper has not supplied an arrival time.
     private func newArrivalISO() -> String? {
+        guard fields[.dropoffTime]?.value != Self.originalValue(for: .dropoffTime, in: reservation) else {
+            return reservation.estimatedArrivalAt
+        }
         let value = (fields[.dropoffTime]?.value ?? "")
             .trimmingCharacters(in: .whitespaces)
         guard !value.isEmpty else { return reservation.estimatedArrivalAt }
@@ -255,12 +260,17 @@ public final class EditSignupFormViewModel {
               let hour = Int(parts[0]),
               let minute = Int(parts[1]) else { return reservation.estimatedArrivalAt }
         let calendar = Calendar(identifier: .gregorian)
-        let baseDate: Date = if let original = reservation.estimatedArrivalAt,
-                                let parsed = Self.parseISO(original) {
-            parsed
+        let baseDate: Date?
+        if let original = reservation.estimatedArrivalAt, let parsed = Self.parseISO(original) {
+            baseDate = parsed
         } else {
-            Date()
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = calendar
+            formatter.dateFormat = "yyyy-MM-dd"
+            baseDate = reservation.slotDate.flatMap { formatter.date(from: $0) }
         }
+        guard let baseDate else { return nil }
         var components = calendar.dateComponents(
             [.year, .month, .day, .timeZone],
             from: baseDate
@@ -325,7 +335,4 @@ public final class EditSignupFormViewModel {
         return f
     }()
 
-    private static func isoNow() -> String {
-        isoFormatter.string(from: Date())
-    }
 }

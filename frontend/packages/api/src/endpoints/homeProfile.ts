@@ -84,6 +84,7 @@ export async function createHomeIssue(homeId: string, data: {
   title: string;
   description?: string;
   severity?: string;
+  clientRequestId?: string;
 }) {
   return post<{ issue: any }>(`/api/homes/${homeId}/issues`, data);
 }

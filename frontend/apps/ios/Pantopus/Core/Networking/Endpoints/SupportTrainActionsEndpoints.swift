@@ -66,6 +66,19 @@ public enum SupportTrainActionsEndpoints {
         )
     }
 
+    /// Persist an organizer's existing signup edit.
+    public static func editReservation(
+        supportTrainId: String,
+        reservationId: String,
+        body: EditSupportTrainReservationBody
+    ) -> Endpoint {
+        Endpoint(
+            method: .patch,
+            path: SupportTrainsAPI.path(supportTrainId, "/reservations/\(reservationId)"),
+            body: body
+        )
+    }
+
     /// Share the exact delivery address with one helper (or email it to a
     /// guest signup). **Organizer-only** — the handler 403s for anyone
     /// else, so gate the affordance on `viewer_support_train_role`.

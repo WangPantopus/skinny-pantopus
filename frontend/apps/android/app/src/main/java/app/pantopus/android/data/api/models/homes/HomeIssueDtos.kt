@@ -68,6 +68,7 @@ data class CreateHomeIssueRequest(
     val title: String,
     val description: String? = null,
     val severity: String? = null,
+    val clientRequestId: String? = null,
 )
 
 /**

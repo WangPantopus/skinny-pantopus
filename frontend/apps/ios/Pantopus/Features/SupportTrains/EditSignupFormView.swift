@@ -7,9 +7,7 @@
 //  contribution, drop-off time inside the recipient's window, and
 //  organizer-only dietary / accommodation notes. The form prefills
 //  from the seed reservation, validates on every keystroke, and on
-//  Save writes an optimistic patch into
-//  `SupportTrainReservationsStore.shared` so the Review-signups list
-//  reflects the edit when the user pops back.
+//  Save persists the edit before updating the Review-signups list.
 //
 
 import SwiftUI
@@ -20,11 +18,13 @@ public struct EditSignupFormView: View {
     private let onClose: @MainActor () -> Void
 
     public init(
+        supportTrainId: String,
         reservation: SupportTrainReservationDTO,
         onClose: @escaping @MainActor () -> Void,
         onSaved: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: EditSignupFormViewModel(
+            supportTrainId: supportTrainId,
             reservation: reservation,
             onSaved: onSaved
         ))
@@ -46,6 +46,7 @@ public struct EditSignupFormView: View {
                 notesGroup
             }
         )
+        .disabled(viewModel.isSaving)
         .formShakeOnChange(of: viewModel.shakeTrigger)
         .overlay(alignment: .bottom) { toastOverlay }
         .onChange(of: viewModel.shouldDismiss) { _, dismiss in
@@ -193,6 +194,7 @@ public struct EditSignupFormView: View {
 #Preview {
     NavigationStack {
         EditSignupFormView(
+            supportTrainId: "preview",
             reservation: SupportTrainReservationDTO(
                 id: "preview",
                 slotId: "slot-1",
