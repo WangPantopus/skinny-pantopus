@@ -129,7 +129,7 @@ export default function HomeSettingsTab({
         throw new Error('Home settings could not be loaded. Please try again.');
       }
 
-      setHomeName(h.name || home?.name || '');
+      setHomeName(h.name ?? '');
       setHomeType(h.home_type || home?.home_type || 'house');
 
       setDefaultGuestHours(String(prefs.default_guest_pass_hours || h.default_guest_pass_hours || 48));
@@ -157,7 +157,7 @@ export default function HomeSettingsTab({
 
       // Compare the submitted values with this read, including empty fields.
       loadedSettings.current = {
-        name: (h.name || home?.name || '').trim() || null,
+        name: (h.name ?? '').trim() || null,
         home_type: h.home_type || home?.home_type || 'house',
         house_rules: (h.house_rules || '').trim(),
         parking_instructions: (h.parking_instructions || '').trim(),
