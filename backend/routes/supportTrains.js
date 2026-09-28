@@ -3027,9 +3027,9 @@ router.post(
     }
 
     if (reservation.status === 'canceled') {
-      return res
-        .status(409)
-        .json({ error: 'ALREADY_CANCELED', message: 'This reservation is already canceled.' });
+      // The prior cancellation may have committed before its reply was lost.
+      // Keep its original timestamp and avoid repeating notifications.
+      return res.json(reservation);
     }
 
     if (reservation.status !== 'reserved') {
