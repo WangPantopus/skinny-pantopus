@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.SupportTrainActionsApi
 import app.pantopus.android.data.api.services.SupportTrainsApi
+import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,7 +91,13 @@ class SupportTrainsRepository
             body: AddSupportTrainSlotBody,
         ): NetworkResult<Unit> =
             safeApiCall {
-                api.addSlot(supportTrainId, body).close()
+                val saved = api.addSlot(supportTrainId, body)
+                if (saved.id.isBlank() || saved.slotDate != body.slotDate ||
+                    saved.slotLabel != body.slotLabel || saved.supportMode != body.supportMode ||
+                    saved.startTime?.take(5) != body.startTime || saved.endTime?.take(5) != body.endTime ||
+                    saved.capacity != body.capacity
+                ) throw JsonDataException("Date save could not be confirmed.")
+                Unit
             }
 
         /**
@@ -229,7 +236,18 @@ class SupportTrainsRepository
             supportTrainId: String,
             slotId: String,
             body: UpdateSupportTrainSlotBody,
-        ): NetworkResult<Unit> = safeApiCall { actionsApi.updateSlot(supportTrainId, slotId, body).close() }
+        ): NetworkResult<Unit> = safeApiCall {
+            val saved = actionsApi.updateSlot(supportTrainId, slotId, body)
+            if (saved.id != slotId ||
+                (body.slotDate != null && saved.slotDate != body.slotDate) ||
+                (body.slotLabel != null && saved.slotLabel != body.slotLabel) ||
+                (body.supportMode != null && saved.supportMode != body.supportMode) ||
+                (body.startTime != null && saved.startTime?.take(5) != body.startTime) ||
+                (body.endTime != null && saved.endTime?.take(5) != body.endTime) ||
+                (body.status != null && saved.status != body.status)
+            ) throw JsonDataException("Date save could not be confirmed.")
+            Unit
+        }
 
         /** `POST /:id/nudges/draft`. Route `backend/routes/supportTrains.js:2139`. */
         suspend fun draftNudge(supportTrainId: String): NetworkResult<String> =

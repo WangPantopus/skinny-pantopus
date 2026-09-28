@@ -360,7 +360,8 @@ public extension ManageTrainViewModel {
                     )
                 ),
                 success: "Date updated",
-                failure: "Couldn't update that date."
+                failure: "Couldn't update that date.",
+                validatingSlot: editor
             )
         } else {
             saved = await run(
@@ -376,7 +377,8 @@ public extension ManageTrainViewModel {
                     )
                 ),
                 success: "Date added",
-                failure: "Couldn't add that date."
+                failure: "Couldn't add that date.",
+                validatingSlot: editor
             )
         }
         if saved { slotEditor = nil }
@@ -535,13 +537,30 @@ public extension ManageTrainViewModel {
     // MARK: - Plumbing
 
     @discardableResult
-    private func run(_ endpoint: Endpoint, success: String, failure: String) async -> Bool {
+    private func run(
+        _ endpoint: Endpoint,
+        success: String,
+        failure: String,
+        validatingSlot editor: ManageSlotEditorState? = nil
+    ) async -> Bool {
         guard !isSubmitting else { return false }
         actionError = nil
         setSubmitting(true)
         defer { setSubmitting(false) }
         do {
-            _ = try await api.request(endpoint, as: EmptyResponse.self)
+            if let editor {
+                let saved = try await api.request(endpoint, as: SupportTrainSlotDTO.self)
+                guard UUID(uuidString: saved.id) != nil,
+                      editor.slotId == nil || saved.id == editor.slotId,
+                      saved.slotDate == Self.isoDateString(editor.slotDate),
+                      saved.slotLabel == editor.slotLabel,
+                      saved.supportMode == editor.supportMode,
+                      saved.startTime.map({ String($0.prefix(5)) }) == Self.clockString(editor.startTime),
+                      saved.endTime.map({ String($0.prefix(5)) }) == Self.clockString(editor.endTime)
+                else { throw APIError.invalidResponse }
+            } else {
+                _ = try await api.request(endpoint, as: EmptyResponse.self)
+            }
             await load()
             toast = success
             return true
