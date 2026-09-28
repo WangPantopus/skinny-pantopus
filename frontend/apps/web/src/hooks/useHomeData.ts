@@ -306,6 +306,10 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         try {
           const response = await ENTITY_FETCHERS[entity](homeId);
           if (!Array.isArray(response.data)) throw new Error('Invalid collection');
+          if ((entity === 'emergencies' || entity === 'secrets')
+            && response.data.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
+            throw new Error('Invalid record');
+          }
           Object.assign(result, { [entity]: response.data });
         } catch {
           result.entityErrors![entity] = `Current ${ENTITY_ERROR_LABELS[entity] ?? entity} could not be loaded. Retry to check current information.`;
