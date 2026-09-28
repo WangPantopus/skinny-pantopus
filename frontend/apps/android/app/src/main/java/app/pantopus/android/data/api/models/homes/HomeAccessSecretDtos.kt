@@ -4,6 +4,7 @@ package app.pantopus.android.data.api.models.homes
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * Access secret returned by `GET /api/homes/:id/access`. Drives the
@@ -33,7 +34,15 @@ data class HomeAccessSecretDto(
 @JsonClass(generateAdapter = true)
 data class HomeAccessSecretsResponse(
     val secrets: List<HomeAccessSecretDto>,
-)
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<HomeAccessSecretDto?> = secrets
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid access codes response")
+        }
+    }
+}
 
 /** Envelope for `POST` and `PUT` access-secret routes. */
 @JsonClass(generateAdapter = true)
