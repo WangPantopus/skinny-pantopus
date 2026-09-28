@@ -337,15 +337,19 @@ class HomeDashboardViewModel
 
         private fun current(revision: Long): Boolean = visible && revision == generation && authority.isCurrent && accessUnexpired()
 
-        private fun watchExpiry(expiry: Long?, revision: Long) {
+        private fun watchExpiry(
+            expiry: Long?,
+            revision: Long,
+        ) {
             accessExpiresAt = expiry
             if (expiry == null) return
-            expiryJob = viewModelScope.launch {
-                while (System.currentTimeMillis() < expiry) {
-                    delay((expiry - System.currentTimeMillis()).coerceAtLeast(1))
+            expiryJob =
+                viewModelScope.launch {
+                    while (System.currentTimeMillis() < expiry) {
+                        delay((expiry - System.currentTimeMillis()).coerceAtLeast(1))
+                    }
+                    retireAccess(revision)
                 }
-                retireAccess(revision)
-            }
         }
 
         private fun requireCurrent(revision: Long) {
