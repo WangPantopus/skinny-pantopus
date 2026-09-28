@@ -355,6 +355,7 @@ public final class PulseComposeViewModel {
     private var baselineAskCategory: PulseAskCategory = .handyman
     private var baselineRecommendRating: Int = 5
 
+    private let createCommandId = UUID().uuidString
     private let api: APIClient
     private let multipartUploader: MultipartUploader
     private let locationProvider: any LocationProviding
@@ -744,7 +745,8 @@ public final class PulseComposeViewModel {
                 )
                 postId = response.postId
             } else {
-                let request = buildRequest()
+                var request = buildRequest()
+                request.clientRequestId = createCommandId
                 let response: PostCreateResponse = try await api.request(
                     PostsEndpoints.createPost(body: request)
                 )
@@ -759,15 +761,14 @@ public final class PulseComposeViewModel {
                 } catch {
                     toast = ToastMessage(
                         text: isEditing
-                            ? "Saved, but photos couldn't attach."
-                            : "Posted, but photos couldn't attach.",
-                        kind: .neutral
+                            ? "Saved, but photos couldn't attach. Try again."
+                            : "Post saved, but photos couldn't attach. Try again.",
+                        kind: .error
                     )
-                    state = .success(postId: postId)
-                    shouldDismiss = true
+                    state = .error(toast?.text ?? "Photos couldn't attach. Try again.")
                     PulsePostsRefresh.notifyPostsDidChange()
-                    Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .success))
-                    return true
+                    Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
+                    return false
                 }
             }
             state = .success(postId: postId)

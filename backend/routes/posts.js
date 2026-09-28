@@ -200,6 +200,7 @@ function resolvePostVisibilityRadiusMeters(post) {
 }
 
 const createPostSchema = Joi.object({
+  clientRequestId: Joi.string().uuid().optional(),
   content: Joi.string().min(1).max(5000).required(),
   title: Joi.string().max(255).optional(),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10).optional(),
@@ -1449,14 +1450,53 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Compute initial utility_score so the post ranks properly before the background job runs
     postData.utility_score = computeUtilityScore(postData);
 
-    const { data: post, error } = await supabaseAdmin
-      .from('Post')
-      .insert(postData)
-      .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
-      .single();
+    // Reuse the existing Post primary key for retries of one composer command.
+    // GPS is refreshed at submit time; it is authorization evidence, not a new draft.
+    const commandId = req.body.clientRequestId;
+    const postId = commandId ? createHash('sha256')
+      .update(`pantopus:post-create:v1:${userId.toLowerCase()}:${commandId.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const requestBody = { ...req.body };
+    for (const key of ['clientRequestId', 'gpsTimestamp', 'gpsLatitude', 'gpsLongitude']) delete requestBody[key];
+    const requestHash = createHash('sha256').update(JSON.stringify(requestBody, (_key, value) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value
+    )).digest('hex');
+    const selection = `*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`;
+    const readRetry = async () => {
+      const { data, error: readError } = await supabaseAdmin.from('Post')
+        .select(selection).eq('id', postId).maybeSingle();
+      if (readError) throw readError;
+      return data;
+    };
+    const acknowledgeRetry = async (existing) => {
+      if (existing.user_id !== userId || existing.post_metadata?._create_request_hash !== requestHash) {
+        return res.status(409).json({ error: 'This post was already saved. Restore the original draft to retry photos, or edit the saved post.' });
+      }
+      return res.status(201).json({ message: 'Post created successfully', post: await serializePostForViewer({
+        ...existing,
+        media_urls: normalizeMediaUrls(existing.media_urls),
+        media_thumbnails: normalizeAlignedMediaUrls(existing.media_thumbnails),
+        media_live_urls: normalizeAlignedMediaUrls(existing.media_live_urls),
+      }, userId) });
+    };
+    if (postId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+      postData.id = postId;
+      postData.post_metadata = { ...postData.post_metadata, _create_request_hash: requestHash };
+    }
+    const insert = postId
+      ? supabaseAdmin.from('Post').upsert(postData, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('Post').insert(postData);
+    const { data: post, error } = await insert.select(selection).maybeSingle();
+    if (!error && !post && postId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+    }
 
-    if (error) {
-      logger.error('Error creating post', { error: error.message, userId });
+    if (error || !post) {
+      logger.error('Error creating post', { error: error?.message || 'No receipt', userId });
       return res.status(500).json({ error: 'Failed to create post' });
     }
 

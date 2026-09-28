@@ -381,6 +381,7 @@ class PulseComposeViewModel
          * owner dashboard's "Post as this business" FAB; the backend gates it
          * on `profile.edit` (owner / admin / editor).
          */
+        private val createCommandId = java.util.UUID.randomUUID().toString()
         private var businessAuthorId: String? = null
 
         /**
@@ -818,9 +819,9 @@ class PulseComposeViewModel
                 is NetworkResult.Failure ->
                     (
                         if (isEditing) {
-                            "Saved, but photos couldn't attach."
+                            "Saved, but photos couldn't attach. Try again."
                         } else {
-                            "Posted, but photos couldn't attach."
+                            "Post saved, but photos couldn't attach. Try again."
                         }
                     ) to true
             }
@@ -895,12 +896,18 @@ class PulseComposeViewModel
                 if (authorId != null) {
                     businessPosts.createBusinessPost(authorId, request)
                 } else {
-                    repo.createPost(request)
+                    repo.createPost(request.copy(clientRequestId = createCommandId))
                 }
             when (val result = createResult) {
                 is NetworkResult.Success -> {
                     val postId = result.data.post?.id ?: result.data.postId
                     val (toastText, toastError) = uploadPhotosIfNeeded(postId, isEditing = false)
+                    if (toastError) {
+                        _state.value = PulseComposeUiState.Error(toastText)
+                        _toast.value = PulseComposeToast(toastText, isError = true)
+                        postsRefresh.notifyPostsDidChange()
+                        return
+                    }
                     _state.value = PulseComposeUiState.Success(postId = postId)
                     _toast.value = PulseComposeToast(toastText, isError = toastError)
                     _shouldDismiss.value = true
@@ -931,6 +938,12 @@ class PulseComposeViewModel
                 is NetworkResult.Success -> {
                     val resolvedId = result.data.postId ?: postId
                     val (toastText, toastError) = uploadPhotosIfNeeded(resolvedId, isEditing = true)
+                    if (toastError) {
+                        _state.value = PulseComposeUiState.Error(toastText)
+                        _toast.value = PulseComposeToast(toastText, isError = true)
+                        postsRefresh.notifyPostsDidChange()
+                        return
+                    }
                     _state.value = PulseComposeUiState.Success(postId = resolvedId)
                     _toast.value = PulseComposeToast(toastText, isError = toastError)
                     _shouldDismiss.value = true
