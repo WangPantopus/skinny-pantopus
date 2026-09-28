@@ -2951,7 +2951,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
-    const { task, vendor, cost, recurrence, due_date, status, performed_at } = req.body || {};
+    const { task, vendor, cost, recurrence, due_date, status, performed_at, clientRequestId } = req.body || {};
 
     if (!task || typeof task !== 'string' || !task.trim()) {
       return res.status(400).json({ error: 'task is required' });
@@ -2966,27 +2966,60 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
       && (typeof performed_at !== 'string' || !Number.isFinite(Date.parse(performed_at)))) {
       return res.status(400).json({ error: 'Invalid completion date' });
     }
+    if (clientRequestId != null && Joi.string().uuid().validate(clientRequestId).error) {
+      return res.status(400).json({ error: 'Invalid maintenance request' });
+    }
 
-    const { data, error } = await supabaseAdmin
-      .from('HomeMaintenanceLog')
-      .insert({
-        home_id: homeId,
-        task: task.trim(),
-        vendor: vendor || null,
-        cost: cost == null ? null : cost,
-        recurrence: recurrence || 'one_time',
-        due_date: due_date || null,
-        ...(performed_at !== undefined ? { performed_at: new Date(performed_at).toISOString() } : {}),
-        status: status || 'scheduled',
-        created_by: userId,
-      })
-      .select()
-      .single();
+    const logId = clientRequestId == null ? null : crypto.createHash('sha256')
+      .update('pantopus:maintenance-log:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
+      .digest('hex').slice(0, 32);
+    const row = {
+      ...(logId ? { id: logId } : {}),
+      home_id: homeId,
+      task: task.trim(),
+      vendor: vendor || null,
+      cost: cost == null ? null : cost,
+      recurrence: recurrence || 'one_time',
+      due_date: due_date || null,
+      ...(performed_at !== undefined ? { performed_at: new Date(performed_at).toISOString() } : {}),
+      status: status || 'scheduled',
+      created_by: userId,
+    };
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('HomeMaintenanceLog').select('*').eq('id', logId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = (existing) => {
+      if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() || existing.gig_id != null ||
+          existing.task !== row.task || existing.vendor !== row.vendor || existing.recurrence !== row.recurrence ||
+          existing.status !== row.status || (existing.cost == null ? null : Number(existing.cost)) !==
+            (row.cost == null ? null : Number(row.cost)) ||
+          (existing.due_date == null ? null : Date.parse(existing.due_date)) !==
+            (row.due_date == null ? null : Date.parse(row.due_date)) ||
+          (row.performed_at !== undefined && Date.parse(existing.performed_at) !== Date.parse(row.performed_at))) {
+        return res.status(409).json({ error: 'This maintenance request no longer matches the saved entry. Start a new entry for different details.' });
+      }
+      return res.status(201).json({ task: existing });
+    };
+    if (logId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    const insert = logId
+      ? supabaseAdmin.from('HomeMaintenanceLog').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('HomeMaintenanceLog').insert(row);
+    const { data, error } = await insert.select().maybeSingle();
 
     if (error) {
       logger.error('Error creating maintenance task', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create maintenance task' });
     }
+    if (!data && logId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    if (!data) return res.status(500).json({ error: 'Failed to create maintenance task' });
 
     res.status(201).json({ task: data });
   } catch (err) {

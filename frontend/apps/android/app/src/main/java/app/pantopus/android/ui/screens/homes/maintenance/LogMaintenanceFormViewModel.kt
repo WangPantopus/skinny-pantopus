@@ -25,6 +25,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav-arg keys for the Log / Edit / Detail Maintenance routes. */
@@ -137,6 +138,7 @@ class LogMaintenanceFormViewModel
         val event: StateFlow<LogMaintenanceFormEvent?> = _event.asStateFlow()
 
         private var initial: LogMaintenanceFormState = _form.value
+        private var pendingCreate: Pair<CreateMaintenanceRequest, String>? = null
 
         private val _isDirty = MutableStateFlow(false)
         val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
@@ -292,7 +294,10 @@ class LogMaintenanceFormViewModel
                     )
                 val result =
                     when (val m = mode) {
-                        LogMaintenanceFormMode.Create -> repo.createHomeMaintenance(homeId, req)
+                        LogMaintenanceFormMode.Create -> {
+                            if (pendingCreate?.first != req) pendingCreate = req to UUID.randomUUID().toString()
+                            repo.createHomeMaintenance(homeId, req.copy(clientRequestId = pendingCreate?.second))
+                        }
                         is LogMaintenanceFormMode.Edit ->
                             repo.updateHomeMaintenance(
                                 homeId,
@@ -312,6 +317,7 @@ class LogMaintenanceFormViewModel
                     }
                 when (result) {
                     is NetworkResult.Success -> {
+                        pendingCreate = null
                         val taskId = result.data.task.id
                         persistExtras(taskId, current)
                         if (current.nextDueEnabled) {
