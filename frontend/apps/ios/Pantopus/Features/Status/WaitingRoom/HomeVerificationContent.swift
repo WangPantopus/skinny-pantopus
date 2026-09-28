@@ -214,7 +214,7 @@ public extension HomeVerificationContent {
             "You have provisional access with limited features. " +
                 "Verify your address to unlock full home management."
         case .pendingApproval:
-            "A household member needs to approve your request. Pull down to check for updates."
+            "A household member needs to approve your request. Reopen this screen to check for updates."
         case .pendingDoc:
             "Your uploaded documents are being reviewed. This usually takes 1-2 business days."
         case .provisional:
