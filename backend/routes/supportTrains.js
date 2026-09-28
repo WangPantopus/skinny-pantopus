@@ -3151,6 +3151,73 @@ router.post(
   })
 );
 
+// Edit an existing signup without changing its helper, slot or lifecycle state.
+const editReservationSchema = Joi.object({
+  dish_title: Joi.string().max(200).allow('', null).required(),
+  restaurant_name: Joi.string().max(200).allow('', null).required(),
+  estimated_arrival_at: Joi.string().isoDate().allow(null).required(),
+  private_note_to_organizer: Joi.string().max(1000).allow('', null).required(),
+  expected_updated_at: Joi.string().isoDate().required(),
+});
+
+router.patch(
+  '/:id/reservations/:reservationId',
+  verifyToken,
+  supportTrainWriteLimiter,
+  loadSupportTrain,
+  requireSupportTrainRole(['primary', 'co_organizer']),
+  validate(editReservationSchema),
+  asyncHandler(async (req, res) => {
+    const { reservationId } = req.params;
+    const selection = '*, User:user_id (id, username, name, profile_picture_url)';
+    const { data: reservation, error: readError } = await supabaseAdmin
+      .from('SupportTrainReservation')
+      .select(selection)
+      .eq('id', reservationId)
+      .eq('support_train_id', req.supportTrain.id)
+      .maybeSingle();
+    if (readError) {
+      return res.status(500).json({ error: 'INTERNAL', message: 'Could not load this signup.' });
+    }
+    if (!reservation) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Signup not found.' });
+    }
+    if (reservation.status === 'canceled') {
+      return res.status(409).json({ error: 'INVALID_TRANSITION', message: 'This signup was canceled. Reopen the list to refresh it.' });
+    }
+    const body = req.body;
+    const patch = {
+      dish_title: body.dish_title?.trim() || null,
+      restaurant_name: body.restaurant_name?.trim() || null,
+      estimated_arrival_at: body.estimated_arrival_at,
+      private_note_to_organizer: body.private_note_to_organizer?.trim() || null,
+    };
+    const unchanged = Object.entries(patch).every(([key, value]) =>
+      key === 'estimated_arrival_at' && value && reservation[key]
+        ? Date.parse(value) === Date.parse(reservation[key])
+        : value === reservation[key]
+    );
+    // A lost reply may be retried with the original version. Never write it twice.
+    if (unchanged) return res.json(reservation);
+    const { data: updated, error: writeError } = await supabaseAdmin
+      .from('SupportTrainReservation')
+      .update(patch)
+      .eq('id', reservationId)
+      .eq('support_train_id', req.supportTrain.id)
+      .eq('updated_at', body.expected_updated_at)
+      .eq('status', reservation.status)
+      .select(selection)
+      .maybeSingle();
+    if (writeError) {
+      return res.status(500).json({ error: 'INTERNAL', message: 'Could not save this signup. Try again.' });
+    }
+    if (!updated) {
+      return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Reopen it before editing again.' });
+    }
+    res.json(updated);
+  })
+);
+
 // Mark reservation as delivered (helper or organizer for guest reservations)
 router.post(
   '/:id/reservations/:reservationId/deliver',

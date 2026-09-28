@@ -8,25 +8,13 @@
 //  and replays them against its in-memory cache so the row reflects
 //  the change without a re-fetch.
 //
-//  S1 STATUS: the reservation *write* routes that do exist are now
-//  wired for real — reserve / cancel / reveal-address / deliver /
-//  confirm all live in `SupportTrainActionsEndpoints.swift`, and
-//  `ReviewSignupsViewModel.confirm(_:)`'s optimistic flip is paired
-//  with `POST …/reservations/:reservationId/confirm` by the host.
-//  There is still **no** edit route: `backend/routes/supportTrains.js`
-//  declares 39 routes and none of them is a
-//  `PATCH /:id/reservations/:reservationId`
-//  (`grep -nE "^router\.(get|post|patch|put|delete)" backend/routes/
-//  supportTrains.js` — the only reservation-scoped writes are the five
-//  above). So this optimistic store stays the user-facing source of
-//  truth for the Edit Signup form until that route ships; it is not a
-//  stand-in for anything that already exists server-side.
+//  Edit patches contain the acknowledged server response, never an unsaved draft.
 //
 
 import Foundation
 import Observation
 
-/// Process-wide cache of optimistic reservation patches keyed by
+/// Process-wide cache of acknowledged reservation patches keyed by
 /// reservation id. The list screen reads from here on appear; the
 /// edit form writes here on Save.
 @Observable
