@@ -27,9 +27,8 @@ extension ManageTrainViewModel {
         let percent = total > 0 ? Int((Double(filled) / Double(total) * 100).rounded()) : 0
         let days = daysLeft(slots: slots)
         let isActive = ["published", "active", "paused"].contains(dto.status ?? "")
-        // No helper roster in `/:id` — proxy the count from covered slots
-        // (each covered slot is one neighbor's contribution).
-        let helpers = "\(filled)"
+        // The separate organizer reservation read establishes distinct helpers.
+        let helpers = "—"
 
         return ManageTrainContent(
             trainId: dto.id,

@@ -249,8 +249,26 @@ class ManageTrainViewModel
                     is NetworkResult.Success -> result.data
                     is NetworkResult.Failure -> null
                 }
+            val helperIds = reservations.filter { it.status != "canceled" }.map { row ->
+                if (row.status !in listOf("reserved", "delivered", "confirmed")) null
+                else (row.helperUser?.id ?: row.userId)?.takeIf { it.isNotBlank() }?.let { "user:$it" }
+                    ?: row.guestEmail?.trim()?.takeIf { it.isNotEmpty() }?.lowercase()?.let { "guest:$it" }
+            }
+            val helperCount = if (reservationsResult is NetworkResult.Success && helperIds.none { it == null }) {
+                helperIds.filterNotNull().distinct().size.toString()
+            } else "—"
             _state.update {
+                val loaded = (it.state as? ManageTrainState.Loaded)?.content
                 it.copy(
+                    state = loaded?.let { content ->
+                        ManageTrainState.Loaded(content.copy(
+                            helpersValue = helperCount,
+                            audienceChips = content.audienceChips.map { chip ->
+                                if (chip.id == "all") chip.copy(count = helperCount) else chip
+                            },
+                            close = content.close.copy(neighborsHelped = helperCount),
+                        ))
+                    } ?: it.state,
                     helperRows = ManageOrganizerProjection.helperRows(reservations, slots),
                     helpersFailed = reservationsResult is NetworkResult.Failure,
                     deliveredMeals = if (reservationsResult is NetworkResult.Success) reservations.count {
