@@ -59,6 +59,8 @@ public struct GroupedListRow: Identifiable, Sendable, Hashable {
     /// "Push, email, SMS").
     public let subtext: String?
     public let control: RowControl
+    /// Keep the existing toggle visible while its save is pending.
+    public let toggleEnabled: Bool
     /// A14.7 — optional leading icon disc (primary-tinted) before the
     /// label. Used by the Privacy "Your data" action rows. `nil` for
     /// plain settings rows.
@@ -77,7 +79,8 @@ public struct GroupedListRow: Identifiable, Sendable, Hashable {
         control: RowControl,
         leadingIcon: PantopusIcon? = nil,
         accessibilityIdentifier: String? = nil,
-        destructive: Bool = false
+        destructive: Bool = false,
+        toggleEnabled: Bool = true
     ) {
         self.id = id
         self.label = label
@@ -86,6 +89,7 @@ public struct GroupedListRow: Identifiable, Sendable, Hashable {
         self.leadingIcon = leadingIcon
         self.accessibilityIdentifier = accessibilityIdentifier
         self.destructive = destructive
+        self.toggleEnabled = toggleEnabled
     }
 }
 
