@@ -499,6 +499,7 @@ private fun RowItem(
             is RowControl.Toggle ->
                 Switch(
                     checked = control.isOn,
+                    enabled = row.toggleEnabled,
                     onCheckedChange = { newValue ->
                         optimistic[row.id] = RowControl.Toggle(newValue)
                         callbacks.onToggleRow(row.id, newValue)
