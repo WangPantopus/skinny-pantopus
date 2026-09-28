@@ -298,8 +298,9 @@ final class HomeDashboardViewModel {
         guard let expiry else { return }
         expiryTask = Task { [weak self] in
             while Date() < expiry {
-                do { try await Task.sleep(for: .seconds(max(0.001, expiry.timeIntervalSinceNow))) }
-                catch { return }
+                do {
+                    try await Task.sleep(for: .seconds(max(0.001, expiry.timeIntervalSinceNow)))
+                } catch { return }
             }
             guard !Task.isCancelled else { return }
             self?.retireAccess(revision)
