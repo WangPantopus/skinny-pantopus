@@ -32,6 +32,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -283,12 +284,16 @@ class HomeDashboardViewModel
         private var generation = 0L
         private var visible = false
         private var refreshJob: Job? = null
+        private var expiryJob: Job? = null
+        private var accessExpiresAt: Long? = null
         private var canCreateTask = false
 
-        fun can(permission: String): Boolean = visible && authority.isCurrent && accessData?.can(permission) == true
+        private fun accessUnexpired(): Boolean = accessExpiresAt?.let { System.currentTimeMillis() < it } != false
+
+        fun can(permission: String): Boolean = visible && authority.isCurrent && accessUnexpired() && accessData?.can(permission) == true
 
         fun canPerform(action: String): Boolean {
-            if (!visible || !authority.isCurrent) return false
+            if (!visible || !authority.isCurrent || !accessUnexpired()) return false
             if (action == "add_task") return canCreateTask
             if (action == "access_codes") return can("access.view_wifi") || can("access.view_codes")
             val permission =
@@ -312,6 +317,9 @@ class HomeDashboardViewModel
         }
 
         private fun clearPrivateData() {
+            expiryJob?.cancel()
+            expiryJob = null
+            accessExpiresAt = null
             detailData = null
             dashboardData = null
             accessData = null
@@ -327,7 +335,18 @@ class HomeDashboardViewModel
             _state.value = HomeDashboardUiState.Loading
         }
 
-        private fun current(revision: Long): Boolean = visible && revision == generation && authority.isCurrent
+        private fun current(revision: Long): Boolean = visible && revision == generation && authority.isCurrent && accessUnexpired()
+
+        private fun watchExpiry(expiry: Long?, revision: Long) {
+            accessExpiresAt = expiry
+            if (expiry == null) return
+            expiryJob = viewModelScope.launch {
+                while (System.currentTimeMillis() < expiry) {
+                    delay((expiry - System.currentTimeMillis()).coerceAtLeast(1))
+                }
+                retireAccess(revision)
+            }
+        }
 
         private fun requireCurrent(revision: Long) {
             if (!current(revision)) throw CancellationException("Obsolete Home read")
@@ -363,7 +382,7 @@ class HomeDashboardViewModel
         }
 
         /** Expose the home id so the screen can build outbound nav routes. */
-        fun currentHomeId(): String? = homeId.takeIf { visible && authority.isCurrent }
+        fun currentHomeId(): String? = homeId.takeIf { visible && authority.isCurrent && accessUnexpired() }
 
         /**
          * Display name of the loaded home, used as the 2-line top-bar
@@ -417,6 +436,8 @@ class HomeDashboardViewModel
                     _state.value = HomeDashboardUiState.Limited(opening.currentVerificationKind(), collection != null)
                     return
                 }
+                watchExpiry(opening.expiryMillis(), revision)
+                requireCurrent(revision)
                 val (detail, dashboard) =
                     coroutineScope {
                         val detailRead = async { repo.detail(homeId).homeValue().home }

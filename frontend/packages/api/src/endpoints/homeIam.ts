@@ -9,6 +9,7 @@ import { get, post, del } from '../client';
 
 export interface HomeAccess {
   hasAccess: boolean;
+  access_expires_at?: string | null;
   isOwner: boolean;
   role_base: string | null;
   effective_role_base?: string | null;

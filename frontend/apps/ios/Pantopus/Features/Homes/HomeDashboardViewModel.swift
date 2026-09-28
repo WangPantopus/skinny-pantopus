@@ -219,7 +219,13 @@ final class HomeDashboardViewModel {
     private var generation = 0
     private var visible = false
     private var accessFingerprint: Data?
+    private var accessExpiresAt: Date?
+    private var expiryTask: Task<Void, Never>?
     private(set) var canCreateTask = false
+
+    private var accessUnexpired: Bool {
+        accessExpiresAt.map { Date() < $0 } ?? true
+    }
 
     var activationRevision: Int {
         generation
@@ -230,15 +236,15 @@ final class HomeDashboardViewModel {
     }
 
     var canEditChecklist: Bool {
-        visible && isCurrent && access?.can("home.edit") == true
+        visible && isCurrent && accessUnexpired && access?.can("home.edit") == true
     }
 
     func can(_ permission: String) -> Bool {
-        visible && isCurrent && access?.can(permission) == true
+        visible && isCurrent && accessUnexpired && access?.can(permission) == true
     }
 
     func canPerform(_ action: String) -> Bool {
-        guard visible, isCurrent else { return false }
+        guard visible, isCurrent, accessUnexpired else { return false }
         if action == "add_task" { return canCreateTask }
         let permissions = [
             "track_bill": "finance.manage", "track_package": "packages.edit", "log_package": "packages.edit",
@@ -265,6 +271,9 @@ final class HomeDashboardViewModel {
     }
 
     private func clearPrivateData() {
+        expiryTask?.cancel()
+        expiryTask = nil
+        accessExpiresAt = nil
         detailData = nil
         dashboardData = nil
         access = nil
@@ -281,7 +290,20 @@ final class HomeDashboardViewModel {
     }
 
     private func current(_ revision: Int) -> Bool {
-        visible && revision == generation && isCurrent && !Task.isCancelled
+        visible && revision == generation && isCurrent && accessUnexpired && !Task.isCancelled
+    }
+
+    private func watchExpiry(_ expiry: Date?, revision: Int) {
+        accessExpiresAt = expiry
+        guard let expiry else { return }
+        expiryTask = Task { [weak self] in
+            while Date() < expiry {
+                do { try await Task.sleep(for: .seconds(max(0.001, expiry.timeIntervalSinceNow))) }
+                catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            self?.retireAccess(revision)
+        }
     }
 
     private func requireCurrent(_ revision: Int) throws {
@@ -351,6 +373,8 @@ final class HomeDashboardViewModel {
                 ))
                 return
             }
+            watchExpiry(opening.expiresAt, revision: revision)
+            try requireCurrent(revision)
             var detail: HomeDetail?
             var dashboard: HomeDashboardResponse?
             // Typed task groups preserve the prior iOS runtime-crash repair.

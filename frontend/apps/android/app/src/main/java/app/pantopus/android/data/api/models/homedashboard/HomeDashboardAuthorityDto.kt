@@ -12,6 +12,7 @@ data class HomeDashboardAuthorityDto(
     val permissions: List<String>,
     @Json(name = "home_id") val homeId: String,
     @Json(name = "access_revision") val accessRevision: String,
+    @Json(name = "access_expires_at") val accessExpiresAt: String? = null,
     @Json(name = "is_owner") val isOwner: Boolean? = null,
     @Json(name = "role_base") val roleBase: String? = null,
     @Json(name = "verification_required") val verificationRequired: Boolean = false,

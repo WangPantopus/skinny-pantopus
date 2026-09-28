@@ -29,6 +29,7 @@ struct HomeDashboardAuthoritySnapshot {
     let verificationKind: String?
     let verificationStatus: String?
     let fingerprint: Data
+    let expiresAt: Date?
 }
 
 @MainActor
@@ -65,11 +66,21 @@ final class HomeDashboardAccess {
         let fingerprint = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         if response.response.statusCode == 200 {
             guard hasAccess else { throw APIError.invalidResponse }
+            let expiresAt: Date?
+            if let raw = body["access_expires_at"], !(raw is NSNull) {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                guard let value = raw as? String,
+                      let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value),
+                      date > Date() else { throw APIError.invalidResponse }
+                expiresAt = date
+            } else { expiresAt = nil }
             return try HomeDashboardAuthoritySnapshot(
                 access: JSONDecoder().decode(HomeAccessDTO.self, from: response.data),
                 verificationKind: nil,
                 verificationStatus: nil,
-                fingerprint: fingerprint
+                fingerprint: fingerprint,
+                expiresAt: expiresAt
             )
         }
         guard response.response.statusCode == 403, !hasAccess, permissions.isEmpty else { throw APIError.invalidResponse }
@@ -91,7 +102,8 @@ final class HomeDashboardAccess {
             access: nil,
             verificationKind: pending ? kind : nil,
             verificationStatus: pending ? status : nil,
-            fingerprint: fingerprint
+            fingerprint: fingerprint,
+            expiresAt: nil
         )
     }
 }
