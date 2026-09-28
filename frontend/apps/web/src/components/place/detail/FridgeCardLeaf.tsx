@@ -221,11 +221,18 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
   }, [emergencies]);
 
   const issueMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const sections: FridgeCardSection[] = SECTION_DEFS
         .map((def) => ({ key: def.key, items: draft[def.key].filter((i) => i.label.trim() || i.note.trim()) }))
         .filter((s) => s.items.length > 0);
-      return api.fridgeCards.issueFridgeCard(homeId, sections, label.trim() || undefined);
+      const card = await api.fridgeCards.issueFridgeCard(homeId, sections, label.trim() || undefined);
+      if (!card || typeof card !== 'object' || Array.isArray(card)
+        || typeof card.id !== 'string' || !card.id.trim()
+        || card.home_id !== homeId || card.status !== 'active'
+        || typeof card.card_url !== 'string' || !card.card_url.trim()) {
+        throw new Error('Could not confirm the issued card. Refresh the cards before trying again.');
+      }
+      return card;
     },
     onSuccess: async (card) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.fridgeCards(homeId) });
