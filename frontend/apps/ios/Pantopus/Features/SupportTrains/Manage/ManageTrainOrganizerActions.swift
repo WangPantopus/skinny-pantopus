@@ -631,7 +631,7 @@ public extension ManageTrainViewModel {
         guard let value, !value.isEmpty else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: String(value.prefix(10)))
     }
@@ -639,7 +639,7 @@ public extension ManageTrainViewModel {
     internal nonisolated static func isoDateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
@@ -647,7 +647,7 @@ public extension ManageTrainViewModel {
     internal nonisolated static func longDateLabel(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = .current
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: date)
     }
