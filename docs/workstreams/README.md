@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-28T07:57Z (batch95 merged; retained verification continues)
+## CURRENT RESUME POINT — 2026-09-28T08:18Z (batch96 merged; date repair in progress)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,13 @@
 
 
 
+
+> **UPDATE 2026-09-28T08:18Z — batch96 merged; native Train date recovery repair in progress.**
+> - Master `64aeadc7a75f7fa35acc312b06382b744f1b1b88`. Batch96 [#752](https://github.com/WangPantopus/skinny-pantopus/pull/752) exact060400e5521782a53b8788d0b53578d5e27809b3 merged08:13:13Z; S2[#751](https://github.com/WangPantopus/skinny-pantopus/pull/751) exact94dde95c8a9e33a4d9460bafcccd732ab29a78a6 merged08:13:15Z. Exact one-file ancestry/union/blob proof passes; no shared Swift/unit/lint execution or CI gate. Required checks absent live. Reviewed queue empty; held718 and unrelated46/429/430/625 preserved. Attachment751/752 attempts hit app100 limit.
+> - Personally reviewed S2[50-file Lockdown promise evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream2-lockdown-audit-promise-r1/REPORT.md), MANIFEST4a737de40367daf3d623accfd8fc7eff509054ad8dfa8c3ca43ade20b13dc8a5/eight bindings/corrected Chrome screen/351of353 complete hashes equal (only ordinary AuthSession/Security differ). One existing sentence now describes enable/disable audit records; no equivalent native Lockdown command. Eight owned rows/six tables removed by guarded sequential product cleanup, not one SQL transaction. BroaderD07 stays partial; next peer D07 work unreviewed.
+> - S1 actual native Add date loses Lunch/Takeout draft after503 and creates duplicate dates after committedlost201/originalretry. [Active reproduction](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-train-date-recovery-r1/REPRODUCTION.md), unsealed: original iOS40166→40178 duplicate and Android corrected held201→retry; later incorrect-path fault attempts explicitly excluded as normal successful saves. Existing10-file candidatea86faaa9f retains editor, suppresses overlapping input, and reuses actor/Train-scoped command identity in current Slot primary key. No new table/migration/screen/harness/design. After-verification not yet accepted.
+> - Exact owned Trainf312604f/activityf30955d6/chat06110b1b and native-created dates remain for checked cleanup against fresh353counts/18retainedfullhashes. Backend SIGINT restarted to99167/session57361 sourcea86 healthy200; proxy faults/holds0. C2slot1/driver and5558slot2/QEMU56436 S1; heavyS1 serial native app-only builds since08:16:56Z, peers notified/S2 no need/S3 frozen. Separate718 Photos hold preserved.
+> - Next finish installed date-editor failure/retry/cold and relevant edit/discard cases, exact cleanup/seal, then retained organizer/U catalog in existing order. All unchanged prior seals reused. Roughly95% detailed retained bounded repair coverage, not whole30-row/client acceptance or launch readiness. Eight launch cuts excluded, user flags unverified;718 Photos authentication and iOSPost DynamicType presentation approval remain separate.
 
 > **UPDATE 2026-09-28T07:57Z — batch95 merged; organizer removal accepted without an application change.**
 > - Master `eb467657e240637e4d378764a5a016fb8e3b2102`. Batch95 [#750](https://github.com/WangPantopus/skinny-pantopus/pull/750), exact `2d8aac1fb68b6d573d53fe6a8b0629806f7a2c54`, merged07:56:04Z; S2 [#749](https://github.com/WangPantopus/skinny-pantopus/pull/749), exact `f3ffacb39f94bb9f6db9b17fb83b6d0316de410e`, merged07:56:06Z. Exact six-file ancestry/union/all-head-blob proofs pass. No overlapping Swift files, lint/unit execution or CI gate; required checks absent live. Reviewed queue empty; held718 and unrelated46/429/430/625 remain. Attachment attempts749/750 hit the app100 limit; direct links retained.
