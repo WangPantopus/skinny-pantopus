@@ -22,6 +22,7 @@ import Chip from '@/components/archetypes/primitives/Chip';
 import { DetailHeader, DetailSectionLabel, InfoNote } from '@/components/archetypes/place';
 import { toast } from '@/components/ui/toast-store';
 import { queryKeys } from '@/lib/query-keys';
+import ErrorState from '@/components/ui/ErrorState';
 
 const SECTION_DEFS: { key: FridgeCardSectionKey; title: string; icon: typeof Users; placeholder: { label: string; note: string } }[] = [
   { key: 'household', title: 'Household', icon: Users, placeholder: { label: 'Mia (6)', note: 'Peanut allergy — EpiPen in the pantry' } },
@@ -178,7 +179,13 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
 
   const cardsQuery = useQuery({
     queryKey: queryKeys.fridgeCards(homeId),
-    queryFn: () => api.fridgeCards.listFridgeCards(homeId),
+    queryFn: async () => {
+      const cards = await api.fridgeCards.listFridgeCards(homeId);
+      if (!Array.isArray(cards) || cards.some(card => !card || typeof card !== 'object' || Array.isArray(card))) {
+        throw new Error('Could not load cards. Try again.');
+      }
+      return cards;
+    },
   });
 
   // Passive derivation: the home's existing emergency info (gas/water
@@ -282,10 +289,12 @@ export default function FridgeCardLeaf({ homeId, address, onBack }: { homeId: st
           Issuing freezes the card exactly as previewed here — so you always know what a printout says. To change it later, issue a fresh card and revoke the old one; revoking pulls all of its content immediately.
         </InfoNote>
 
-        {(cards.length > 0 || cardsQuery.isLoading) && (
+        {(cards.length > 0 || cardsQuery.isLoading || cardsQuery.isError) && (
           <>
             <DetailSectionLabel>This home&apos;s cards</DetailSectionLabel>
-            {cardsQuery.isLoading ? (
+            {cardsQuery.isError ? (
+              <ErrorState message="Could not load cards. Try again." onRetry={() => void cardsQuery.refetch()} />
+            ) : cardsQuery.isLoading ? (
               <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-[13.5px] text-app-text-muted">Loading cards…</div>
             ) : (
               <div className="flex flex-col gap-2.5">

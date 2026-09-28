@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.place
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.JsonDataException
 
 /**
  * The Fridge Card (Wave 1, #2): the 911-ready household card — the
@@ -79,5 +80,13 @@ data class FridgeCardResponse(
 
 @JsonClass(generateAdapter = true)
 data class FridgeCardsResponse(
-    val cards: List<FridgeCard> = emptyList(),
-)
+    val cards: List<FridgeCard>,
+) {
+    init {
+        // Moshi can decode null array members despite the Kotlin element type.
+        val rows: List<FridgeCard?> = cards
+        if (rows.any { it == null }) {
+            throw JsonDataException("Invalid fridge cards response")
+        }
+    }
+}
