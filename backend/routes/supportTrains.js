@@ -1,4 +1,5 @@
 const express = require('express');
+const { createHash } = require('node:crypto');
 const Joi = require('joi');
 const router = express.Router();
 
@@ -402,6 +403,7 @@ const generateSlotsSchema = Joi.object({
 });
 
 const customSlotSchema = Joi.object({
+  client_request_id: Joi.string().uuid().optional(),
   slot_date: Joi.string().pattern(isoDatePattern).required(),
   slot_label: Joi.string().valid('Breakfast', 'Lunch', 'Dinner', 'Groceries', 'Custom').required(),
   support_mode: Joi.string().valid('meal', 'takeout', 'groceries').required(),
@@ -927,7 +929,34 @@ router.post(
   validate(customSlotSchema),
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
-    const { slot_date, slot_label, support_mode, start_time, end_time, capacity, notes } = req.body;
+    const { slot_date, slot_label, support_mode, start_time, end_time, capacity, notes, client_request_id } = req.body;
+    // One editor keeps its command identity through an uncertain response.
+    // The existing primary key arbitrates concurrent retries, scoped to actor/train.
+    const slotId = client_request_id ? createHash('sha256')
+      .update(`pantopus:train-slot:v1:${st.id.toLowerCase()}:${req.user.id.toLowerCase()}:${client_request_id.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('SupportTrainSlot')
+        .select('*').eq('id', slotId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = (existing) => {
+      if (existing.support_train_id !== st.id || existing.slot_date !== slot_date ||
+          existing.slot_label !== slot_label || existing.support_mode !== support_mode ||
+          (existing.start_time?.slice(0, 5) || null) !== (start_time || null) ||
+          (existing.end_time?.slice(0, 5) || null) !== (end_time || null) ||
+          existing.capacity !== capacity || (existing.notes || null) !== (notes || null) ||
+          existing.status === 'canceled') {
+        return res.status(409).json({ error: 'SLOT_REQUEST_CHANGED',
+          message: 'This date was already saved with different details. Close the editor and review your dates.' });
+      }
+      return res.status(201).json(existing);
+    };
+    if (slotId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
 
     // Determine sort_order: max existing + 1
     const { data: maxRow } = await supabaseAdmin
@@ -940,9 +969,7 @@ router.post(
 
     const sortOrder = (maxRow?.sort_order ?? -1) + 1;
 
-    const { data, error } = await supabaseAdmin
-      .from('SupportTrainSlot')
-      .insert({
+    const row = {
         support_train_id: st.id,
         slot_date,
         slot_label,
@@ -954,9 +981,15 @@ router.post(
         status: 'open',
         notes: notes || null,
         sort_order: sortOrder,
-      })
-      .select('*')
-      .single();
+    };
+    const insert = slotId
+      ? supabaseAdmin.from('SupportTrainSlot').upsert({ ...row, id: slotId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('SupportTrainSlot').insert(row);
+    const { data, error } = await insert.select('*').maybeSingle();
+    if (!error && !data && slotId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
 
     if (error || !data) {
       logger.error('Create custom slot failed', { supportTrainId: st.id, error: error?.message });

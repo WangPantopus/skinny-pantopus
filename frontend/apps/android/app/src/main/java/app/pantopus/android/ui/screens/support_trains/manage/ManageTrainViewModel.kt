@@ -470,6 +470,7 @@ class ManageTrainViewModel
         }
 
         fun dismissSlotEditor() {
+            if (_state.value.isSubmitting) return
             _state.update { it.copy(slotEditor = null) }
         }
 
@@ -478,10 +479,12 @@ class ManageTrainViewModel
          * editing. Times are sent as `HH:mm` per both Joi schemas.
          */
         fun saveSlot(editor: ManageSlotEditorState) {
-            _state.update { it.copy(slotEditor = null) }
+            if (_state.value.isSubmitting) return
+            _state.update { it.copy(slotEditor = editor) }
+            val dismissOnSuccess = { _state.update { it.copy(slotEditor = null) } }
             val slotId = editor.slotId
             if (slotId == null) {
-                runAction("Date added", "Couldn't add that date.") {
+                runAction("Date added", "Couldn't add that date.", onSuccess = dismissOnSuccess) {
                     repo.addSlot(
                         trainId,
                         AddSupportTrainSlotBody(
@@ -490,11 +493,12 @@ class ManageTrainViewModel
                             supportMode = editor.supportMode,
                             startTime = editor.startTime,
                             endTime = editor.endTime,
+                            clientRequestId = editor.clientRequestId,
                         ),
                     )
                 }
             } else {
-                runAction("Date updated", "Couldn't update that date.") {
+                runAction("Date updated", "Couldn't update that date.", onSuccess = dismissOnSuccess) {
                     repo.updateSlot(
                         trainId,
                         slotId,
@@ -644,13 +648,15 @@ class ManageTrainViewModel
         private fun runAction(
             success: String,
             failure: String,
+            onSuccess: () -> Unit = {},
             block: suspend () -> NetworkResult<Unit>,
         ) {
             if (_state.value.isSubmitting) return
-            _state.update { it.copy(isSubmitting = true, pendingConfirm = null) }
+            _state.update { it.copy(isSubmitting = true, pendingConfirm = null, actionError = null) }
             viewModelScope.launch {
                 when (val result = block()) {
                     is NetworkResult.Success -> {
+                        onSuccess()
                         _state.update { it.copy(isSubmitting = false, toast = success) }
                         load()
                     }

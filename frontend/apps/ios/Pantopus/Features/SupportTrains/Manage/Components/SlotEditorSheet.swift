@@ -87,6 +87,7 @@ public struct SlotEditorSheet: View {
                 }
                 .padding(Spacing.s5)
             }
+            .disabled(isSubmitting)
             footer
         }
         .background(Theme.Color.appBg)
@@ -100,6 +101,7 @@ public struct SlotEditorSheet: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
+            .disabled(isSubmitting)
             .accessibilityLabel("Close")
             .accessibilityIdentifier("slotEditorCloseButton")
 

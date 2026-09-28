@@ -198,4 +198,5 @@ data class AddSupportTrainSlotBody(
     @Json(name = "start_time") val startTime: String?,
     @Json(name = "end_time") val endTime: String?,
     val capacity: Int = 1,
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 )
