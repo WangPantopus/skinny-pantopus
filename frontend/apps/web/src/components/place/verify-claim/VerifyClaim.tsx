@@ -153,6 +153,31 @@ export default function VerifyClaim({ initialCode }: { initialCode?: string }) {
     if (initialCode) void check(initialCode);
   }, [initialCode, check]);
 
+  useEffect(() => {
+    if (state.phase !== 'result' || state.result.status !== 'active') return;
+    const expiresAt = Date.parse(state.result.expires_at || '');
+    if (!Number.isFinite(expiresAt)) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expire = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining > 0) {
+        timer = setTimeout(expire, Math.min(2_147_483_647, remaining + 1));
+        return;
+      }
+      setState(current => current === state ? {
+        phase: 'result',
+        result: {
+          valid: true,
+          status: 'expired',
+          issued_at: state.result.issued_at,
+          expires_at: state.result.expires_at,
+        },
+      } : current);
+    };
+    expire();
+    return () => clearTimeout(timer);
+  }, [state]);
+
   return (
     <main className="min-h-screen bg-app-bg">
       <div className="max-w-[480px] mx-auto px-4 sm:px-5 pt-8 pb-16">

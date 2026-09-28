@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -448,15 +448,29 @@ const CLAIM_SCOPES: { scope: ResidencyClaimScope; label: string; hint: string; d
 const CLAIM_DURATIONS: { days: ResidencyClaimExpiryDays; label: string }[] =
   RESIDENCY_CLAIM_EXPIRY_DAYS.map((days) => ({ days, label: days === 1 ? '1 day' : `${days} days` }));
 
-function claimStatusChip(claim: ResidencyClaim) {
-  if (claim.status === 'revoked') return <Chip label="Revoked" variant="warning" />;
-  if (claim.status === 'expired') return <Chip label="Expired" variant="neutral" />;
+function claimStatusChip(status: ResidencyClaim['status']) {
+  if (status === 'revoked') return <Chip label="Revoked" variant="warning" />;
+  if (status === 'expired') return <Chip label="Expired" variant="neutral" />;
   return <Chip label="Active" variant="success" />;
 }
 
 function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: string }) {
   const queryClient = useQueryClient();
-  const inactive = claim.status !== 'active';
+  const [now, setNow] = useState(() => Date.now());
+  const expiresAt = Date.parse(claim.expires_at);
+  const status = claim.status === 'active' && expiresAt <= now ? 'expired' : claim.status;
+  const inactive = status !== 'active';
+
+  useEffect(() => {
+    if (claim.status !== 'active' || !Number.isFinite(expiresAt) || expiresAt <= now) return;
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(2_147_483_647, remaining + 1));
+    return () => window.clearTimeout(timer);
+  }, [claim.status, expiresAt, now]);
 
   const revokeMutation = useMutation({
     mutationFn: () => api.residencyClaims.revokeResidencyClaim(homeId, claim.id),
@@ -468,6 +482,10 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
   });
 
   const onCopy = async () => {
+    if (claim.status !== 'active' || expiresAt <= Date.now()) {
+      setNow(Date.now());
+      return;
+    }
     try {
       await navigator.clipboard.writeText(claim.verify_url);
       toast.success('Verification link copied.');
@@ -480,7 +498,7 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
     <div className={`bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 ${inactive ? 'opacity-75' : ''}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[14px] font-bold text-app-text font-mono tracking-[0.02em]">{claim.claim_code}</span>
-        {claimStatusChip(claim)}
+        {claimStatusChip(status)}
       </div>
       <div className="text-[13.5px] text-app-text-strong leading-[20px] mt-1.5">{claim.statement}</div>
       <div className="flex items-center gap-3 text-[12px] text-app-text-muted mt-1.5">
@@ -499,7 +517,7 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
         >
           <Copy size={15} strokeWidth={2.25} /> Copy link
         </button>
-        {claim.status === 'active' && (
+        {status === 'active' && (
           <button
             type="button"
             onClick={() => revokeMutation.mutate()}
