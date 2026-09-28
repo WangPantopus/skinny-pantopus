@@ -84,6 +84,8 @@ final class PlaceResidencyPassViewModel {
     }
 
     func copyLink(_ claim: ResidencyClaim) {
+        guard claim.status == .active else { return }
+        if let expiry = PlacePresentation.parseISO(claim.expiresAt), expiry <= Date() { return }
         UIPasteboard.general.string = claim.verifyUrl
         toast = ("Verification link copied.", false)
     }
@@ -276,9 +278,17 @@ struct PlaceResidencyPassSection: View {
 private struct PlaceResidencyClaimRow: View {
     let claim: ResidencyClaim
     let vm: PlaceResidencyPassViewModel
+    @State private var now = Date()
+
+    private var status: ResidencyClaimStatus {
+        if claim.status == .active, let expiry = PlacePresentation.parseISO(claim.expiresAt), expiry <= now {
+            return .expired
+        }
+        return claim.status
+    }
 
     private var statusChip: PlaceChipModel {
-        switch claim.status {
+        switch status {
         case .active: PlaceChipModel(tone: .success, text: "Active")
         case .revoked: PlaceChipModel(tone: .warning, text: "Revoked")
         case .expired: PlaceChipModel(tone: .neutral, text: "Expired")
@@ -310,7 +320,7 @@ private struct PlaceResidencyClaimRow: View {
                 Text(viewsLine)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.Color.appTextMuted)
-                if claim.status == .active {
+                if status == .active {
                     HStack(spacing: 8) {
                         Button {
                             vm.copyLink(claim)
@@ -329,6 +339,14 @@ private struct PlaceResidencyClaimRow: View {
                         .buttonStyle(.bordered)
                     }
                 }
+            }
+        }
+        .task(id: claim) {
+            now = Date()
+            guard claim.status == .active, let expiry = PlacePresentation.parseISO(claim.expiresAt) else { return }
+            while expiry > now {
+                do { try await Task.sleep(for: .seconds(max(0, expiry.timeIntervalSinceNow))) } catch { return }
+                now = Date()
             }
         }
     }
