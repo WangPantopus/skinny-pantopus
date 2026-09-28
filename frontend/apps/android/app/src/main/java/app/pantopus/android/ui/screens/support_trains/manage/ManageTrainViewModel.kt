@@ -160,7 +160,7 @@ data class ManageTrainUiState(
      */
     val canSendUpdate: Boolean
         get() =
-            draftMessage.trim().isNotEmpty() &&
+            !isSubmitting && draftMessage.trim().isNotEmpty() &&
                 draftMessage.length <= MAX_MESSAGE_CHARS
 
     companion object {
@@ -194,6 +194,7 @@ class ManageTrainViewModel
 
         private val _state = MutableStateFlow(ManageTrainUiState())
         val state: StateFlow<ManageTrainUiState> = _state.asStateFlow()
+        private var updateRequestId = java.util.UUID.randomUUID().toString()
 
         /**
          * Load the dashboard. With a `seed` (previews / tests) it renders
@@ -302,7 +303,7 @@ class ManageTrainViewModel
 
         /**
          * Send the typed update via `POST /api/support-trains/:id/updates`.
-         * Optimistically clears the draft + flashes the toast; the audience
+         * Keeps the draft until its receipt is confirmed; the audience
          * filter + push-to-phones toggle have no backend field (the endpoint
          * broadcasts to everyone) so they stay client-only.
          */
@@ -314,14 +315,20 @@ class ManageTrainViewModel
             val helperCount =
                 content.audienceChips.firstOrNull { it.id == current.selectedAudienceId }?.count
                     ?: content.helpersValue
-            _state.update {
-                it.copy(
-                    draftMessage = "",
-                    toast = "Update sent · $helperCount helpers",
-                )
-            }
+            _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
-                repo.postUpdate(trainId, SupportTrainUpdateBody(body = body))
+                when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId))) {
+                    is NetworkResult.Success -> {
+                        updateRequestId = java.util.UUID.randomUUID().toString()
+                        _state.update {
+                            it.copy(isSubmitting = false, draftMessage = if (it.draftMessage == body) "" else it.draftMessage,
+                                toast = "Update sent · $helperCount helpers")
+                        }
+                    }
+                    is NetworkResult.Failure -> _state.update {
+                        it.copy(isSubmitting = false, actionError = result.error.displayMessage("Couldn't send that update."))
+                    }
+                }
             }
         }
 

@@ -125,7 +125,11 @@ class SupportTrainsRepository
             body: SupportTrainUpdateBody,
         ): NetworkResult<Unit> =
             safeApiCall {
-                api.postUpdate(supportTrainId, body).close()
+                val saved = api.postUpdate(supportTrainId, body)
+                if (saved.id.isBlank() || saved.body != body.body) {
+                    throw JsonDataException("Update could not be confirmed.")
+                }
+                Unit
             }
 
         /**

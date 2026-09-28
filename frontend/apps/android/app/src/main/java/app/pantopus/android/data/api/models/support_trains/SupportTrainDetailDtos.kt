@@ -168,4 +168,5 @@ data class SupportTrainCoarseLocationDto(
 data class SupportTrainUpdateBody(
     val body: String,
     @Json(name = "media_urls") val mediaUrls: List<String>? = null,
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 )

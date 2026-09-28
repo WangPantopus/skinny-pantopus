@@ -1605,6 +1605,7 @@ router.post(
 // ─── Updates ──────────────────────────────────────────────────────────────
 
 const createUpdateSchema = Joi.object({
+  client_request_id: Joi.string().uuid().optional(),
   body: Joi.string().min(1).max(5000).required(),
   media_urls: Joi.array().items(Joi.string().uri()).max(6).optional(),
 });
@@ -1641,16 +1642,42 @@ router.post(
       });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('SupportTrainUpdate')
-      .insert({
+    const updateId = req.body.client_request_id ? createHash('sha256')
+      .update(`pantopus:train-update:v1:${st.id.toLowerCase()}:${userId.toLowerCase()}:${req.body.client_request_id.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('SupportTrainUpdate')
+        .select('*').eq('id', updateId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = (existing) => {
+      if (existing.support_train_id !== st.id || existing.author_user_id !== userId ||
+          existing.body !== req.body.body ||
+          JSON.stringify(existing.media_urls || []) !== JSON.stringify(req.body.media_urls || [])) {
+        return res.status(409).json({ error: 'UPDATE_REQUEST_CHANGED',
+          message: 'This update was already sent with different text. Review the updates before starting a new message.' });
+      }
+      return res.status(201).json(existing);
+    };
+    if (updateId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    const row = {
         support_train_id: st.id,
         author_user_id: userId,
         body: req.body.body,
         media_urls: req.body.media_urls || null,
-      })
-      .select('*')
-      .single();
+    };
+    const insert = updateId
+      ? supabaseAdmin.from('SupportTrainUpdate').upsert({ ...row, id: updateId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('SupportTrainUpdate').insert(row);
+    const { data, error } = await insert.select('*').maybeSingle();
+    if (!error && !data && updateId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
 
     if (error || !data) {
       logger.error('Create update failed', { supportTrainId: st.id, error: error?.message });
