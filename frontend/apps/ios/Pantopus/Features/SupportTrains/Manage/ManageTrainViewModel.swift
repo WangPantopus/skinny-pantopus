@@ -234,6 +234,8 @@ public final class ManageTrainViewModel {
     /// True when that read failed: the Helpers section says so instead of
     /// "No signups yet".
     public private(set) var helpersFailed = false
+    /// Nil while the existing reservation read cannot establish delivery counts.
+    public private(set) var deliveredMeals: Int?
     /// Slot roster from the detail payload — drives add / edit / remove date.
     public private(set) var slotRows: [ManageSlotRow] = []
     /// Co-organizer roster from `GET /:id/organizers`.
@@ -281,6 +283,7 @@ public final class ManageTrainViewModel {
             return
         }
         if case .loaded = state {} else { state = .loading }
+        deliveredMeals = nil
         do {
             let dto: SupportTrainDetailDTO = try await api.request(
                 SupportTrainsEndpoints.detail(supportTrainId: trainId)
@@ -298,12 +301,14 @@ public final class ManageTrainViewModel {
     func replaceOrganizerSurfaces(
         helpers: [ManageHelperRow]? = nil,
         helpersFailed: Bool? = nil,
+        deliveredMeals: Int? = nil,
         slots: [ManageSlotRow]? = nil,
         organizers: [ManageOrganizerRow]? = nil,
         fund: SupportTrainFundDTO? = nil
     ) {
         if let helpers { helperRows = helpers }
         if let helpersFailed { self.helpersFailed = helpersFailed }
+        self.deliveredMeals = deliveredMeals
         if let slots { slotRows = slots }
         if let organizers { organizerRows = organizers }
         if let fund { self.fund = fund }

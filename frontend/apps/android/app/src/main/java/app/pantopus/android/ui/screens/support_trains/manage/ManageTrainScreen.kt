@@ -129,7 +129,7 @@ fun ManageTrainScreen(
             val content = (state.state as? ManageTrainState.Loaded)?.content
             if (content != null) {
                 CloseSheetOverlay(
-                    content = content.close,
+                    content = content.close.copy(mealsDelivered = state.deliveredMeals?.toString() ?: "—"),
                     thankYouNote = state.thankYouNote,
                     isSubmitting = state.isSubmitting,
                     onUpdateNote = viewModel::updateThankYouNote,
