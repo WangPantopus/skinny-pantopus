@@ -21,6 +21,7 @@ import { RESIDENCY_CLAIM_EXPIRY_DAYS } from '@pantopus/api';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { BadgeCheck, Check, FileText, ScanFace, Mailbox, Download, ChevronRight, LayoutDashboard, ShieldCheck, Ban, Loader2, Fingerprint, Copy, Eye, Clock, MailCheck, TriangleAlert, Info, CircleCheck, CircleX, EyeOff } from 'lucide-react';
 import Chip from '@/components/archetypes/primitives/Chip';
+import ErrorState from '@/components/ui/ErrorState';
 import { LockedCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { toast } from '@/components/ui/toast-store';
 import { failureMessage } from '@/components/home/share/shareFailure';
@@ -606,10 +607,12 @@ function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; addres
             : 'The link shares only the statement you picked — never your street address. Anyone opening it sees a live check against your current verification, every check is logged for you, and you can revoke at any time.'}
         </InfoNote>
 
-        {(claims.length > 0 || claimsQuery.isLoading) && (
+        {(claims.length > 0 || claimsQuery.isLoading || claimsQuery.isError) && (
           <>
             <DetailSectionLabel>Issued claims</DetailSectionLabel>
-            {claimsQuery.isLoading ? (
+            {claimsQuery.isError ? (
+              <ErrorState message="Could not load your claims. Try again." onRetry={() => void claimsQuery.refetch()} />
+            ) : claimsQuery.isLoading ? (
               <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-[13.5px] text-app-text-muted">Loading your claims…</div>
             ) : (
               <div className="flex flex-col gap-2.5">

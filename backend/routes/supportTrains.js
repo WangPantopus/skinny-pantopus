@@ -3199,6 +3199,12 @@ router.post(
       });
     }
 
+    // A committed delivery may already have been confirmed before its reply is retried.
+    // Return the saved state without changing timestamps or emitting another notice.
+    if (reservation.status === 'delivered' || reservation.status === 'confirmed') {
+      return res.json(reservation);
+    }
+
     if (reservation.status !== 'reserved') {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
@@ -3272,6 +3278,11 @@ router.post(
         error: 'FORBIDDEN',
         message: 'Only the recipient or an organizer can confirm delivery.',
       });
+    }
+
+    // A lost success reply must remain recoverable through the same command.
+    if (reservation.status === 'confirmed') {
+      return res.json(reservation);
     }
 
     if (reservation.status !== 'delivered') {
