@@ -64,6 +64,7 @@ public final class WaitingRoomViewModel {
     private let seedState: WaitingRoomState
     private var claimId: String?
     private let api: APIClient
+    private let authority: HomeDashboardAccess
     private let logger = Logger(label: "app.pantopus.ios.WaitingRoom")
 
     init(
@@ -75,6 +76,7 @@ public final class WaitingRoomViewModel {
         self.homeId = homeId
         seedState = state
         self.api = api
+        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.content = content ?? Self.content(for: state)
     }
 
@@ -96,7 +98,7 @@ public final class WaitingRoomViewModel {
             )
             guard let claim = claimsResponse.claims.first(where: { $0.homeId == homeId }) else {
                 claimId = nil
-                await applyVerificationFallback()
+                try await applyVerificationFallback()
                 return
             }
             claimId = claim.id
@@ -132,25 +134,16 @@ public final class WaitingRoomViewModel {
         }
     }
 
-    /// No claim row for this home. RN serves the Verification Center on
-    /// this same route, branching on `verification_status` from
-    /// `GET /api/homes/:id/me` (`src/app/homes/[id]/waiting-room.tsx:26-70`).
-    /// Only when the caller *is* verified (or the call fails) do we fall
-    /// back to the "No claim in review" notice.
-    private func applyVerificationFallback() async {
-        guard let access = try? await api.request(
-            HomeAdminEndpoints.myAccess(homeId: homeId),
-            as: HomeVerificationAccessDTO.self
-        ), access.hasAccess, access.needsVerification else {
+    /// Pending residents have denied Home access with a safe verification context.
+    private func applyVerificationFallback() async throws {
+        let access = try await authority.read()
+        guard access.verificationKind != nil else {
             phase = .notice(.noClaim)
             return
         }
         phase = .verification(
             HomeVerificationContent.make(
-                status: HomeVerificationStatus.from(raw: access.verificationStatus),
-                isInChallengeWindow: access.isInChallengeWindow,
-                challengeWindowEndsAt: access.challengeWindowEndsAt,
-                postcardExpiresAt: access.postcardExpiresAt
+                status: HomeVerificationStatus.from(raw: access.verificationStatus)
             )
         )
     }
