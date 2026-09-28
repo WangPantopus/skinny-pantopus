@@ -2619,7 +2619,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
         // External/shared references do not authorize deleting another object's bytes.
         if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
         const name = url.slice(publicPrefix.length);
-        if (!/^\d+_[a-f0-9]{16}(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
           return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
         }
         const key = prefix + name;
