@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-28T06:48:14Z (batch91 merged; retained verification continues)
+## CURRENT RESUME POINT — 2026-09-28T07:08:28Z (batch92 merged; retained verification continues)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,13 @@
 
 
 
+
+> **UPD2026-09-28T07:08:28ZE AT — batch92 merged; address-sharing real-client verification in progress.**
+> - Master `0591e2bbfe41f7a0f467dce6630da649d35be7c6`; batch92 [#744](https://github.com/WangPantopus/skinny-pantopus/pull/744) exact4aa95357d6f91e331e8e58d2850f717ad6ff42b4 merged07:05:20Z; S2[#743](https://github.com/WangPantopus/skinny-pantopus/pull/743) exact32ff6e05f4736307c7b6ff0b1528fe22818a27ca merged07:05:23Z. Exact5-file ancestry/union/allheadblobs pass; required checks absent live, no sharedSwift/unit/lint execution/CI gate. Reviewed queue empty; held718/unrelated preserved. App100 attachment limit affected743/744; direct links retained.
+> - Personally reviewed S2 [101-file maintenance create retry evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream2-maintenance-create-retry-r1/REPORT.md), MANIFEST57d87133155a92aacbbfbc9dce902a18990aed273e15089898383ccd7828a7c8 and10bindings: actual installed native committed201 timeout/manualretry changes2duplicate rows to1identical row/cold. Both cold PNGs and full receipts inspected. Seven exact guarded productDELETE204s/349 whole fingerprints restored outside4ordinaryauth histories (347actualnon-auth). Supplemental API concurrency/changed409/invalid400/member403/canceled409 qualified; sequential product cleanup is not a singleSQLtransaction. In-memory request identity only; broaderD04 stays partial. S2 retains own next settings investigation; S3 frozen.
+> - S1 next genuinely open existing Train organizer action is Share address. [Active unsealed bundle](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-train-address-sharing-r1) captures actual Android+iOS repeated503/noeffect and committedlost200/pendingduplicate/manualretry, same7 full rowsets after retry; Chrome Bob address visible while Dana absent until independent grant. No demonstrated app defect or code change. Helper native readback/final cold/reload/cleanup/seal pending. Early iOS unsettled-coordinate taps and web reload default-tab capture are driver qualifications, excluded from acceptance.
+> - Current owned Train35542515/activity079a6667/2slots/2reservations/2grants/chatd2eefa09 remain pending guarded cleanup against fresh353counts/18retainedhashes. Runtime4da/backend68302/web18139; Android5558slot4 and C2slot1/driver S1, no heavy build. C2 separate718 Photos hold retained; live leases govern. Prior741/733/730/725/720 and unchanged Posts/Start/account seals reused; do not repeat them solely because master advanced.
+> - Roughly95% detailed retained bounded repair coverage, not30-row acceptance or launch readiness. All8launch cuts excluded/user-managed flags unverified. Separate718 trashedPhotos asset requires local authentication; Post DynamicType presentation approval pending. Continue this address journey then remaining retained organizer/U catalog, without a new tracker or speculative design.
 
 > **UPDATE 2026-09-28T06:48:14Z — batch91 merged; signup edit persistence accepted within its real-client scope.**
 > - Master `2366697622283d908ee800f578c71e62c8543bd6`; batch91 [#742](https://github.com/WangPantopus/skinny-pantopus/pull/742) exact5289ecd4a7f0ed1b208d023a316fd88e526d645b merged06:46:21Z. S2[#740](https://github.com/WangPantopus/skinny-pantopus/pull/740) exacta6d83647b4a9973fc97d25b00fcc5300ba0a7fa1 and S1[#741](https://github.com/WangPantopus/skinny-pantopus/pull/741) exact4da127a792620d4d02818c4fa7962817820082ad merged06:46:23Z. Exact17-file ancestry/union/blobs pass; no shared Swift, unit/lint execution or CI gate; live required checks absent. Reviewed queue empty; held718/unrelated46/429/430/625 preserved. Attachment attempts740–742 hit app100 limit; direct links retained.
