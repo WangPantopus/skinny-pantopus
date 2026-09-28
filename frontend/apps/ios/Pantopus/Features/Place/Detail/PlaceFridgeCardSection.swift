@@ -94,6 +94,7 @@ final class PlaceFridgeCardViewModel {
     }
 
     func issue() async {
+        toast = nil
         isIssuing = true
         defer { isIssuing = false }
         let sections = FridgeCardSectionKey.allCases.compactMap { key -> IssueFridgeCardSection? in
@@ -127,6 +128,7 @@ final class PlaceFridgeCardViewModel {
     }
 
     func revoke(_ cardId: String) async {
+        toast = nil
         do {
             _ = try await api.request(
                 FridgeCardsEndpoints.revoke(homeId: homeId, cardId: cardId)
@@ -176,8 +178,13 @@ struct PlaceFridgeCardSection: View {
                 Text(toast.message)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(toast.isError ? Theme.Color.error : Theme.Color.success)
-                    .task {
-                        try? await Task.sleep(for: .seconds(3))
+                    .task(id: "\(toast.isError):\(toast.message)") {
+                        guard !toast.isError else { return }
+                        do {
+                            try await Task.sleep(for: .seconds(3))
+                        } catch {
+                            return
+                        }
                         vm.clearToast()
                     }
             }

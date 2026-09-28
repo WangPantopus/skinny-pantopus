@@ -329,6 +329,7 @@ class PlaceDetailViewModel
 
         fun issueFridgeCard(body: IssueFridgeCardRequest) {
             viewModelScope.launch {
+                _actionToast.value = null
                 _isIssuingCard.value = true
                 when (val r = repo.issueFridgeCard(homeId, body)) {
                     is NetworkResult.Success -> {
@@ -350,6 +351,7 @@ class PlaceDetailViewModel
 
         fun revokeFridgeCard(cardId: String) {
             viewModelScope.launch {
+                _actionToast.value = null
                 when (val r = repo.revokeFridgeCard(homeId, cardId)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure ->
