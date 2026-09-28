@@ -40,6 +40,7 @@ export default function ManageSupportTrainPage() {
   const [fund, setFund] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Invite form
   const [inviteEmail, setInviteEmail] = useState('');
@@ -66,6 +67,8 @@ export default function ManageSupportTrainPage() {
   }, [id]);
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     if (!getAuthToken()) {
       router.push('/login');
       return;
@@ -86,14 +89,17 @@ export default function ManageSupportTrainPage() {
       if (trainData && (trainData as any).viewer_level !== 'organizer') {
         router.replace(`/app/support-trains/${id}`);
       }
-    } catch {
-      /* empty */
+    } catch (err: any) {
+      setError(err?.statusCode === 404
+        ? 'Support Train not found.'
+        : 'This Support Train could not be loaded. Please try again.');
+    } finally {
+      setLoading(false);
     }
   }, [id, router, fetchReservations]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchAll().finally(() => setLoading(false));
+    void fetchAll();
   }, [fetchAll]);
 
   const handleCopyLink = useCallback(() => {
@@ -163,7 +169,24 @@ export default function ManageSupportTrainPage() {
     );
   }
 
-  if (!data) return null;
+  if (error || !data) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <button
+          onClick={() => router.push(`/app/support-trains/${id}`)}
+          className="text-sm text-app-text-secondary hover:text-app-text mb-6 flex items-center gap-1"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to campaign
+        </button>
+        <ErrorState
+          title="Couldn't load Support Train"
+          message={error || 'This Support Train could not be loaded. Please try again.'}
+          onRetry={fetchAll}
+        />
+      </div>
+    );
+  }
 
   const goalAmount = fund?.goal_amount;
   const totalRaised = fund?.total_amount || 0;
