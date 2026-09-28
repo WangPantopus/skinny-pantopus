@@ -1363,9 +1363,9 @@ private object AuthErrorMapper {
                 val raw = t.response()?.errorBody()?.string().orEmpty()
                 val message = extractMessage(raw) ?: raw
                 when {
+                    status >= 500 -> AuthError.ServerError(message.ifBlank { "Server error $status." })
                     message.contains("password", ignoreCase = true) &&
                         !message.contains("Invalid or expired", ignoreCase = true) -> AuthError.WeakPassword
-                    status >= 500 -> AuthError.ServerError(message.ifBlank { "Server error $status." })
                     else -> AuthError.ServerError(message.ifBlank { "Request failed ($status)." })
                 }
             }

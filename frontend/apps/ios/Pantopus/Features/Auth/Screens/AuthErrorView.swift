@@ -96,7 +96,7 @@ public final class AuthErrorViewModel {
         case .weakPassword:
             AuthErrorCopy(
                 headline: "Pick a stronger password",
-                body: "At least 8 characters, with a mix of letters and numbers."
+                body: "At least 12 characters, with a mix of letters and numbers."
             )
         case .networkError:
             AuthErrorCopy(
