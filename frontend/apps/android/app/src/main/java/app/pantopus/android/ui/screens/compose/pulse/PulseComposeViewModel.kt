@@ -901,6 +901,12 @@ class PulseComposeViewModel
             when (val result = createResult) {
                 is NetworkResult.Success -> {
                     val postId = result.data.post?.id ?: result.data.postId
+                    if (postId.isNullOrBlank()) {
+                        val message = "Post could not be confirmed. Try again."
+                        _state.value = PulseComposeUiState.Error(message)
+                        _toast.value = PulseComposeToast(message, isError = true)
+                        return
+                    }
                     val (toastText, toastError) = uploadPhotosIfNeeded(postId, isEditing = false)
                     if (toastError) {
                         _state.value = PulseComposeUiState.Error(toastText)

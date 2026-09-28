@@ -752,7 +752,13 @@ public final class PulseComposeViewModel {
                 )
                 postId = response.postId
             }
-            if let postId, !photos.isEmpty {
+            guard let postId, !postId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                let message = "Post could not be confirmed. Try again."
+                state = .error(message)
+                toast = ToastMessage(text: message, kind: .error)
+                return false
+            }
+            if !photos.isEmpty {
                 let files = photos.enumerated().map { index, photo in
                     photo.asMultipartFile(index: index)
                 }

@@ -322,11 +322,20 @@ export function useFeedData({
       if (userLng != null) postData.gpsLongitude = userLng;
       const res = await api.posts.createPost(postData);
       const newPost = res.post;
+      if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
+        throw new Error('Post could not be confirmed. Try again.');
+      }
 
       const files = Array.isArray(mediaFiles) ? mediaFiles as File[] : [];
       if (files.length > 0) {
         try {
           const uploadResult = await api.upload.uploadPostMedia(newPost.id, files);
+          if (!Array.isArray(uploadResult?.media_urls) || uploadResult.media_urls.length === 0 ||
+              !uploadResult.media_urls.every((url) => typeof url === 'string' && url.length > 0) ||
+              !Array.isArray(uploadResult.media_types) ||
+              uploadResult.media_types.length !== uploadResult.media_urls.length) {
+            throw new Error('Photos could not be confirmed.');
+          }
           newPost.media_urls = uploadResult.media_urls;
           newPost.media_types = uploadResult.media_types;
           newPost.media_thumbnails = uploadResult.media_thumbnails;
