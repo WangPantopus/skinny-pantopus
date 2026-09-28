@@ -2306,6 +2306,46 @@ router.post(
         .json({ error: 'SLOT_NOT_OPEN', message: 'This slot is no longer open.' });
     }
 
+    // A lost successful reply must acknowledge this helper's unchanged signup
+    // before capacity is checked. Reuse the existing reservation, without
+    // repeating its notification or chat membership side effects.
+    const details = {
+      contribution_mode: body.contribution_mode,
+      dish_title: body.dish_title || null,
+      restaurant_name: body.restaurant_name || null,
+      estimated_arrival_at: body.estimated_arrival_at || null,
+      note_to_recipient: body.note_to_recipient || null,
+      private_note_to_organizer: body.private_note_to_organizer || null,
+    };
+    const readExisting = async () => {
+      const { data, error } = await supabaseAdmin
+        .from('SupportTrainReservation')
+        .select('*')
+        .eq('slot_id', slotId)
+        .eq('support_train_id', st.id)
+        .eq('user_id', userId)
+        .eq('status', 'reserved')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeExisting = (existing) => {
+      const sameDetails = Object.entries(details).every(([key, value]) =>
+        key === 'estimated_arrival_at' && value && existing[key]
+          ? new Date(value).getTime() === new Date(existing[key]).getTime()
+          : (existing[key] || null) === value
+      );
+      if (!sameDetails) {
+        return res.status(409).json({
+          error: 'ALREADY_RESERVED',
+          message: 'You already have a reservation on this slot with different details.',
+        });
+      }
+      return res.status(201).json(existing);
+    };
+    const existing = await readExisting();
+    if (existing) return acknowledgeExisting(existing);
+
     let activeReservationCount;
     try {
       activeReservationCount = await countActiveReservationsForSlot(slotId);
@@ -2318,21 +2358,6 @@ router.post(
       return res.status(409).json({ error: 'SLOT_FULL', message: 'This slot is already full.' });
     }
 
-    // Check if user already has a reserved reservation on this slot
-    const { count: existingCount } = await supabaseAdmin
-      .from('SupportTrainReservation')
-      .select('id', { count: 'exact', head: true })
-      .eq('slot_id', slotId)
-      .eq('user_id', userId)
-      .eq('status', 'reserved');
-
-    if ((existingCount || 0) > 0) {
-      return res.status(409).json({
-        error: 'ALREADY_RESERVED',
-        message: 'You already have a reservation on this slot.',
-      });
-    }
-
     // Insert reservation — the unique partial index
     // (slot_id WHERE status='reserved') prevents duplicate concurrent inserts
     // for capacity-1 slots.
@@ -2343,12 +2368,7 @@ router.post(
         support_train_id: st.id,
         user_id: userId,
         status: 'reserved',
-        contribution_mode: body.contribution_mode,
-        dish_title: body.dish_title || null,
-        restaurant_name: body.restaurant_name || null,
-        estimated_arrival_at: body.estimated_arrival_at || null,
-        note_to_recipient: body.note_to_recipient || null,
-        private_note_to_organizer: body.private_note_to_organizer || null,
+        ...details,
       })
       .select('*')
       .single();
@@ -2356,6 +2376,8 @@ router.post(
     if (resErr) {
       // Unique constraint violation = concurrent race lost
       if (resErr.code === '23505') {
+        const concurrent = await readExisting();
+        if (concurrent) return acknowledgeExisting(concurrent);
         return res
           .status(409)
           .json({ error: 'SLOT_FULL', message: 'This slot was just filled by another helper.' });
@@ -3005,9 +3027,9 @@ router.post(
     }
 
     if (reservation.status === 'canceled') {
-      return res
-        .status(409)
-        .json({ error: 'ALREADY_CANCELED', message: 'This reservation is already canceled.' });
+      // The prior cancellation may have committed before its reply was lost.
+      // Keep its original timestamp and avoid repeating notifications.
+      return res.json(reservation);
     }
 
     if (reservation.status !== 'reserved') {
