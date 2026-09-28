@@ -103,6 +103,8 @@ data class GroupedListRow(
      * accessibilityIdentifier).
      */
     val testTag: String? = null,
+    /** Keep the existing toggle visible while its save is pending. */
+    val toggleEnabled: Boolean = true,
 )
 
 /** One group — a card of rows with optional overline + helper. */

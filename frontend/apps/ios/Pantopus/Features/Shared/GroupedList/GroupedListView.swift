@@ -279,7 +279,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                 }
             }
             Spacer(minLength: Spacing.s0)
-            rightControl(rowId: row.id, control: activeControl)
+            rightControl(rowId: row.id, control: activeControl, toggleEnabled: row.toggleEnabled)
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, 14)
@@ -305,7 +305,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
     }
 
     @ViewBuilder
-    private func rightControl(rowId: String, control: RowControl) -> some View {
+    private func rightControl(rowId: String, control: RowControl, toggleEnabled: Bool) -> some View {
         switch control {
         case .chevron:
             Icon(.chevronRight, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
@@ -315,6 +315,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                 set: { newValue in flipToggle(rowId: rowId, to: newValue, previous: isOn) }
             ))
             .labelsHidden()
+            .disabled(!toggleEnabled)
             .tint(Theme.Color.primary600)
             .accessibilityIdentifier("groupedListToggle_\(rowId)")
         case let .radio(isSelected):

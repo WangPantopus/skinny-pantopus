@@ -44,6 +44,7 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     private let api: APIClient
     private var isPreview = false
     private var saveError: String?
+    private var isSaving = false
 
     /// Source variant for explicit previews and projection fixtures.
     public enum Variant: Sendable, Hashable { case balanced, strict }
@@ -102,12 +103,17 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
     public func setSlider(_: String, index _: Int) async {}
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
-        guard case .loaded = state, let previous = toggles[rowId] else { return }
+        guard case .loaded = state, !isSaving, let previous = toggles[rowId] else { return }
         saveError = nil
         // Optimistic flip.
         toggles[rowId] = isOn
+        isSaving = !isPreview
         state = .loaded(groups())
         guard !isPreview else { return }
+        defer {
+            isSaving = false
+            state = .loaded(groups())
+        }
         do {
             _ = try await api.request(
                 HomePrivacyEndpoints.update(
@@ -120,7 +126,6 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
             toggles[rowId] = previous
             let reason = (error as? APIError)?.errorDescription ?? "Please try again."
             saveError = "Your change wasn't saved. \(reason)"
-            state = .loaded(groups())
         }
     }
 
@@ -147,7 +152,8 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
             id: id,
             label: label,
             subtext: sub,
-            control: .toggle(isOn: toggles[id] ?? false)
+            control: .toggle(isOn: toggles[id] ?? false),
+            toggleEnabled: !isSaving
         )
     }
 

@@ -64,6 +64,7 @@ class HomeSecurityViewModel
         val toggles: Map<String, Boolean> get() = _toggles
 
         private var saveError: String? = null
+        private var isSaving = false
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
@@ -98,18 +99,23 @@ class HomeSecurityViewModel
             rowId: String,
             isOn: Boolean,
         ) {
-            if (_state.value !is GroupedListUiState.Loaded || !_toggles.containsKey(rowId)) return
+            if (_state.value !is GroupedListUiState.Loaded || isSaving || !_toggles.containsKey(rowId)) return
             val previous = _toggles[rowId] ?: return
             saveError = null
             // Optimistic flip.
             _toggles[rowId] = isOn
+            isSaving = true
             _state.value = GroupedListUiState.Loaded(groups())
             viewModelScope.launch {
-                val result = repository.updatePrivacy(homeId, requestFor(rowId, isOn))
-                if (result is NetworkResult.Failure) {
-                    // Roll back the single key.
-                    _toggles[rowId] = previous
-                    saveError = "Your change wasn't saved. ${result.error.displayMessage("Please try again.")}"
+                try {
+                    val result = repository.updatePrivacy(homeId, requestFor(rowId, isOn))
+                    if (result is NetworkResult.Failure) {
+                        // Roll back the single key.
+                        _toggles[rowId] = previous
+                        saveError = "Your change wasn't saved. ${result.error.displayMessage("Please try again.")}"
+                    }
+                } finally {
+                    isSaving = false
                     _state.value = GroupedListUiState.Loaded(groups())
                 }
             }
@@ -174,6 +180,7 @@ class HomeSecurityViewModel
                 label = label,
                 subtext = subtext,
                 control = RowControl.Toggle(_toggles[id] ?: false),
+                toggleEnabled = !isSaving,
             )
     }
 
