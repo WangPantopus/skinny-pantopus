@@ -115,7 +115,9 @@ object ManageTrainProjection {
         val dates = slots.mapNotNull { parseDate(it.slotDate) }
         val min = dates.minByOrNull { it.time } ?: return ""
         val max = dates.maxByOrNull { it.time } ?: return ""
-        return "${format(min)} → ${format(max)} · ${slots.size} days"
+        val dayCount = dates.distinct().size
+        val dayLabel = if (dayCount == 1) "day" else "days"
+        return "${format(min)} → ${format(max)} · $dayCount $dayLabel"
     }
 
     private fun daysLeft(slots: List<SupportTrainSlotDto>): Int {

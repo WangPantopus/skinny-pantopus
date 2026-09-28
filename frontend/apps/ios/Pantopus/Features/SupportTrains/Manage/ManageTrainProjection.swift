@@ -109,7 +109,9 @@ extension ManageTrainViewModel {
     private nonisolated static func dateRangeLabel(slots: [SupportTrainSlotDTO]) -> String {
         let dates = slots.compactMap { parseDate($0.slotDate) }
         guard let earliest = dates.min(), let latest = dates.max() else { return "" }
-        return "\(format(earliest, "MMM d")) → \(format(latest, "MMM d")) · \(slots.count) days"
+        let dayCount = Set(dates).count
+        let dayLabel = dayCount == 1 ? "day" : "days"
+        return "\(format(earliest, "MMM d")) → \(format(latest, "MMM d")) · \(dayCount) \(dayLabel)"
     }
 
     private nonisolated static func daysLeft(slots: [SupportTrainSlotDTO]) -> Int {
