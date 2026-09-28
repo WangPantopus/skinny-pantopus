@@ -767,11 +767,11 @@ public final class PulseComposeViewModel {
                 } catch {
                     toast = ToastMessage(
                         text: isEditing
-                            ? "Saved, but photos couldn't attach. Try again."
-                            : "Post saved, but photos couldn't attach. Try again.",
+                            ? "Saved. Photos could not be confirmed. Try again."
+                            : "Post saved. Photos could not be confirmed. Try again.",
                         kind: .error
                     )
-                    state = .error(toast?.text ?? "Photos couldn't attach. Try again.")
+                    state = .error(toast?.text ?? "Photos could not be confirmed. Try again.")
                     PulsePostsRefresh.notifyPostsDidChange()
                     Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
                     return false

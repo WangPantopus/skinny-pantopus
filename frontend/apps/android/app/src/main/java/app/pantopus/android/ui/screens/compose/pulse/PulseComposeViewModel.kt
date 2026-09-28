@@ -819,9 +819,9 @@ class PulseComposeViewModel
                 is NetworkResult.Failure ->
                     (
                         if (isEditing) {
-                            "Saved, but photos couldn't attach. Try again."
+                            "Saved. Photos could not be confirmed. Try again."
                         } else {
-                            "Post saved, but photos couldn't attach. Try again."
+                            "Post saved. Photos could not be confirmed. Try again."
                         }
                     ) to true
             }

@@ -341,7 +341,7 @@ export function useFeedData({
           newPost.media_thumbnails = uploadResult.media_thumbnails;
           newPost.media_live_urls = uploadResult.media_live_urls;
         } catch {
-          showToast('Post saved, but photos could not attach. Try posting again.');
+          showToast('Post saved. Photos could not be confirmed. Try again.');
           return false;
         }
       }
