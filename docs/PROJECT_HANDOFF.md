@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-28T05:43:20Z (batch89 merged; retained verification continues)
+## CURRENT RESUME POINT — 2026-09-28T06:08:34Z (batch90 merged; retained verification continues)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,12 @@
 
 
 
+
+> **UPDATE 2026-09-28T06:08:34Z — batch90 merged; real signup edit repair in after-verification.**
+> - Master `542eb7b984b4ba493b29168ce6a1369512ea8998`; batch90 [#739](https://github.com/WangPantopus/skinny-pantopus/pull/739) exact9e327aa1f4581361879ca22f78c60e5c84920078 merged06:04:24Z; S2 [#737](https://github.com/WangPantopus/skinny-pantopus/pull/737) exact78c484771e9aca1a2c660804f966de13fc62cc9e and [#738](https://github.com/WangPantopus/skinny-pantopus/pull/738) exactdd708d3beaf655a677df2b7b30f5ba9c3819c0cb merged06:04:26Z. Personal source/seal/binding review and exact two-file ancestry/union/blobs pass; no shared Swift, unit/lint execution or CI gate. Reviewed queue empty; held718/unrelated preserved. Attachment attempts737–739 hit app100 limit.
+> - S2 [69-file calendar retry evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream2-pickup-read-r1/REPORT.md),da2b423d/11bindings: web inert0GET→existing reload1GET/repeatederror/realready; unchanged actual native calendar comparisons1GET each and recovery.349 non-auth whole hashes unchanged, no fixture/write. Portland empty-pickup qualification and8158 saved-schedule reuse explicit. Separate4-filedeaf1aa5 formatting seal has full non-whitespace equality; expiry84ca30 evidence reused. I05 provider/D01 work remains peer-owned/unreviewed.
+> - S1 personally reproduced iOSProfile→Train→Review→Edit Save false success/0writes/full DB row unchanged/cold revert. [Active unsealed reproduction](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-train-profile-route-r1/REPRODUCTION.md). Candidatef3b8227391a9e7e2d9e6fdc835588f1880c152ab extends8existingbackend/iOS files/table, no design/newfile/schema. Fresh app-only build06:04:49Z/installed dylib37b4ad74 matched; original8c343 product preserved. Current actual repeated503 retains draft/no stored effect; lost200 saved once/pending duplicate tap disabled, timeout/recovery/cold afters pending. Web/Android actual organizer entry offers no signup Edit; unchanged accepted Manage journeys reused. No final acceptance/PR yet.
+> - Exact owned Train1a540dcd/activitycbac1027/slot79940e09/Bob reservationa07169d7/chat31582d73 cleanup pending,353counts/18retainedhashes pre-run/16ownedguards captured. Backend16324 sourcef3 healthy/config byte-equal, SIGINT-only restart; C2driver S1, allotherdevices stopped/heavyreleased. Initial initializer build failed and is excluded; fresh committed build succeeded. Separate718 trashed Photos asset awaits local auth/DynamicType approval pending. Roughly95% bounded detailed repair coverage, not30-row closure or launch readiness; all8cuts excluded.
 
 > **UPDATE 2026-09-28T05:43:20Z — batch89 merged; pass expiry review complete.**
 > - Master `6da56f20efb33f6678636b96bcb4746c7a3b2556`; batch89 [#736](https://github.com/WangPantopus/skinny-pantopus/pull/736), exact `42c528c4f6a70024a3ce6bc881d809dd26b09b10`, merged05:42:35Z; S2 [#735](https://github.com/WangPantopus/skinny-pantopus/pull/735), exact `21dfabda7eea48a7faecfbce5bd25cf8a307c38c`, merged05:42:37Z. Personal exact four-file review/16 source bindings/seal and actual UI/persistence receipts pass. Batch ancestry/four-file union/final blobs pass; no shared Swift, unit/lint execution or CI gate. Required checks absent live. Reviewed queue empty; held#718 and unrelated PRs preserved; attachment#736 hit app100 limit.
