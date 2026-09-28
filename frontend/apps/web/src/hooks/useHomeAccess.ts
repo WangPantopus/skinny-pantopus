@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
 
 export interface HomeAccessData {
   hasAccess: boolean;
@@ -85,8 +85,8 @@ export function useHomeAccess(homeId: string | undefined) {
         setLoading(false);
         return;
       }
-      const data = await api.homeIam.getMyHomeAccess(homeId) as unknown as HomeAccessData;
-      setAccess(data);
+      const data = await readCurrentHomeAccess(homeId);
+      setAccess({ ...EMPTY_ACCESS, ...data } as HomeAccessData);
     } catch (err: any) {
       setError(err?.message || 'Failed to load access info');
       setAccess(EMPTY_ACCESS);
