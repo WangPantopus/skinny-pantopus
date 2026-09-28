@@ -3212,7 +3212,7 @@ router.patch(
       return res.status(500).json({ error: 'INTERNAL', message: 'Could not save this signup. Try again.' });
     }
     if (!updated) {
-      return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Reopen it before editing again.' });
+      return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Pull down to refresh the signup list, then edit again.' });
     }
     res.json({ ...updated, slot_date: updated.Slot?.slot_date || null });
   })
