@@ -6,8 +6,8 @@ import SlidePanel from '../SlidePanel';
 
 const LOCKDOWN_EFFECTS = [
   { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately' },
-  { icon: '🔒', text: 'Hides sensitive data from non-admins', detail: 'Access codes, financial data, and documents become hidden' },
-  { icon: '🚫', text: 'Blocks new member invitations', detail: 'No one can be invited until lockdown is lifted' },
+  { icon: '🔒', text: 'Keeps existing member permissions', detail: 'Members keep the access their current permissions allow' },
+  { icon: '🚫', text: 'Keeps member invitations available', detail: 'Authorized members can still create and manage invitations' },
   { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
   { icon: '📋', text: 'Records Lockdown changes', detail: 'Enabling and disabling Lockdown are added to the audit log' },
 ];
@@ -142,8 +142,8 @@ export default function LockdownPanel({
                   Are you sure you want to enable lockdown?
                 </p>
                 <p className="text-xs text-red-600">
-                  This will immediately revoke all guest passes, hide sensitive data from non-admins,
-                  and block new invitations.
+                  This will immediately revoke all guest passes.
+                  Existing member permissions and invitations are unchanged.
                 </p>
                 <div>
                   <label className="block text-[10px] text-red-600 mb-1">Type LOCKDOWN to confirm</label>
