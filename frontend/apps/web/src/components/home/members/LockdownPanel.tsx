@@ -7,6 +7,7 @@ import { failureMessage, shareFailure } from '@/components/home/share/shareFailu
 
 const LOCKDOWN_EFFECTS = [
   { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately', revokesPasses: true },
+  { icon: '👁', text: 'Makes your home private', detail: 'It stays private after Lockdown ends; change it under Visibility in Home Settings' },
   { icon: '🔒', text: 'Keeps existing member permissions', detail: 'Members keep the access their current permissions allow' },
   { icon: '🚫', text: 'Keeps member invitations available', detail: 'Authorized members can still create and manage invitations' },
   { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
@@ -160,7 +161,7 @@ export default function LockdownPanel({
                   Are you sure you want to enable lockdown?
                 </p>
                 <p className="text-xs text-red-600">
-                  This will immediately revoke all guest passes.
+                  This will immediately revoke all guest passes and make your home private.
                   Existing member permissions and invitations are unchanged.
                 </p>
                 <div>
@@ -210,8 +211,8 @@ export default function LockdownPanel({
               {toggling ? 'Disabling...' : 'Disable Lockdown'}
             </button>
             <p className="text-[10px] text-app-text-muted text-center">
-              Disabling lockdown restores normal operations. Previously revoked guest passes
-              will NOT be automatically restored — you&apos;ll need to create new ones.
+              Disabling lockdown ends emergency mode. Your home stays private, and previously revoked
+              guest passes will NOT be automatically restored — you&apos;ll need to create new ones.
             </p>
           </div>
         )}
