@@ -78,7 +78,8 @@ export const senderMessage = (code?: string) => ({
   INVITE_NOT_FOUND: 'This invitation is no longer available.',
   INVITE_FORBIDDEN: 'Current household authority does not allow this invitation action.',
   HOME_FORBIDDEN: 'Current household authority does not allow this invitation action.',
-  INVITE_DUPLICATE: 'A pending invitation already exists for this recipient. Check the invitation list.',
+  INVITE_ALREADY_PENDING: 'A pending invitation already exists for this recipient. Check the invitation list.',
+  MEMBER_ALREADY_EXISTS: 'This person is already a household member. Their existing membership is preserved.',
   MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s earlier household membership has ended. An invitation cannot restore it.',
 } as Record<string,string>)[code || ''] || 'This invitation action could not continue. Acknowledge the result, then review the current invitation and your household authority.';
 export function deliveryMessage(outcome: SenderOutcome): string {
