@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import * as api from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
+import { failureMessage } from '@/components/home/share/shareFailure';
 
 const LOCKDOWN_EFFECTS = [
   { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately' },
@@ -46,7 +47,8 @@ export default function LockdownPanel({
       setShowConfirm(false);
       setConfirmText('');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to enable lockdown');
+      // The API rejects with its own message (e.g. Lockdown is on but passes still need revoking).
+      setError(err instanceof Error ? err.message : failureMessage(err, 'Failed to enable lockdown'));
     }
     setToggling(false);
   };
