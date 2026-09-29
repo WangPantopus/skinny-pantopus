@@ -2,7 +2,38 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 close-out sweep: PR793 merged, 2026-09-29T19:48:35Z
+## LIVE — Stream 3 close-out sweep: native pass, candidate a90eda9aa awaiting heavy, 2026-09-29T20:25Z
+
+- **Native pass (reused builds, no heavy build):** iOS `f1a5fcf2b` (dylib `6eb9fff8…`) and Android `8f6dbc11c` (APK `7531958c…`). Their notification, routing, auth and password sources are byte-identical to master; everything else changed since belongs to S1 or S2.
+- **iOS notification-tap matrix** (S3 sim `0AE16FA0`; slot 2 plus shared driver 19:50:26–20:09:14Z; sim shut down). Payloads mirror the backend APNs builder.
+  - Signed-out tap (stashed, then sign-in 200 → the chat opens): PASS.
+  - Cold-start tap: PASS.
+  - Push for the chat on screen (banner suppressed): PASS.
+  - Background tap: PASS.
+  - Room this account can't open (403, "You don't have permission", no data): PASS.
+  - [Unsealed notes](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-native-push-tap-weak-password-r1/REPRODUCTION.md).
+  - Test-device change: notifications were **denied** on this simulator and Settings refused the switch, so the same build was reinstalled and Allow was chosen on its own prompt. The permission is now authorized; the Keychain Owner hint survived and Owner is signed in again.
+- **Reproduced sign-up defects** (proxy-injected weak-password 400 before upstream, synthetic address, no account created):
+  - (A) iOS shows "Choose a stronger password." in the top banner, which is off screen after the normal scroll to the terms box, so nothing visibly happens.
+  - (B) The iOS sign-up email field autocapitalizes and autocorrects (typed "s3-weakpw-…" became "S3-weakly-…"); the login email field already opts out.
+  - Android has the same banner structure; its afters wait for the candidate build.
+- **Candidate** `a90eda9aa4e35bad18e9b5b952c2b98f39f27509` (branch `claude/stream3-signup-error-visible-email-input`, base `59154879d`), 5 files +54/−8, SwiftLint clean:
+  - iOS `FormShell` gains opt-in `scrollsToTopOnChange` (nil by default; other forms unchanged); sign-up passes its error.
+  - Android sign-up wraps its banner in a `BringIntoViewRequester` (Android FormShell untouched).
+  - The email modifiers go on sign-up plus two S3 crew-tool fields built the same way (business legal info, teammate invite).
+  - Heavy is queued after S2; builds with the kit's app-only helpers from the clean native worktree, then iOS/Android afters.
+- **Design proposal (needs user approval; not implemented):** neither app shows when the OS notification permission is denied (iOS `authorizationStatus` 1; Android `POST_NOTIFICATIONS` user-fixed denied). The in-app Notifications screen lists toggles "on" while nothing can arrive. Proposed: one row or notice on the existing notification settings screens with an "Open Settings" action, shown only when permission is denied.
+- **Excluded harness events:**
+  - One iOS background tap landed before the banner appeared.
+  - Android under host load 43–62: a scroll registered as a tap on "Continue with Apple". The backend returned only the sign-in URL (`GET /api/users/oauth/apple` 200); Chrome stopped at its first-run screen and was backed out. No provider page, credential or account.
+- **Resources:** Android slot 3 20:10:25–20:19:27Z, emulator stopped. Fault rules are empty; synthetic value files deleted. No S3 lease held now.
+- **Decisions taken without asking (UTC):**
+  - 19:50Z: reuse byte-identical builds instead of rebuilding.
+  - 19:58Z: reinstall the same iOS build to reset the simulator's denied permission (a test device; disposable state).
+  - 20:21Z: fix the banner through an opt-in on shared `FormShell` rather than per-screen scroll hacks, and include the two identical S3 crew email fields.
+  - Record the denied-permission UI as a proposal, since it's a visible design change.
+
+## Previous completed milestone — Stream 3 close-out sweep: PR793 merged, 2026-09-29T19:48:35Z
 
 - **Merged (verified independently at 19:48:35Z):** [PR793](https://github.com/WangPantopus/skinny-pantopus/pull/793) exact head `c8ebd750b` merged 19:48:08Z through batch 116 [#795](https://github.com/WangPantopus/skinny-pantopus/pull/795) (19:48:06Z, with Stream 2's #794). Master is `f7a0a4a9d5d6b0f244b20bf95f7fdbe727618ad9`; its `page.tsx` blob `05a952d0fb87` equals the candidate. Stream 1 reviewed the head and verified the seal. Stream 1's CI-repair PR adds a one-line `@Suppress("ReturnCount")` to the Android `TokenAuthenticator` from #655; Stream 3 agreed (annotation only, #655 evidence unaffected).
 - **User direction (2026-09-29, before 19:16Z):** close out every locally feasible Stream 3 item. The user will then provide provider access and run the physical devices personally.
