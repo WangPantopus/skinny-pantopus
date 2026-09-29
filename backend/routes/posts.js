@@ -1,5 +1,5 @@
 const express = require('express');
-const { createHash } = require('node:crypto');
+const { createHash, createHmac } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -1458,10 +1458,13 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       .digest('hex').slice(0, 32) : null;
     const requestBody = { ...req.body };
     for (const key of ['clientRequestId', 'gpsTimestamp', 'gpsLatitude', 'gpsLongitude']) delete requestBody[key];
-    const requestHash = createHash('sha256').update(JSON.stringify(requestBody, (_key, value) =>
-      value && typeof value === 'object' && !Array.isArray(value)
-        ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value
-    )).digest('hex');
+    // Key the stored fingerprint with the client's secret command id: viewers read
+    // post_metadata, so an unkeyed digest would confirm guesses of hidden place fields.
+    const requestHash = commandId ? createHmac('sha256', `pantopus:post-create-request:v1:${commandId.toLowerCase()}`)
+      .update(JSON.stringify(requestBody, (_key, value) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value
+      )).digest('hex') : null;
     const selection = `*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`;
     const readRetry = async () => {
       const { data, error: readError } = await supabaseAdmin.from('Post')
