@@ -442,10 +442,11 @@ export default function NewSupportTrainPage() {
           <textarea
             value={draftStory}
             onChange={(e) => setDraftStory(e.target.value)}
+            aria-label="Story"
             className="w-full p-3 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text resize-y h-24 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           <FieldLabel>Household size</FieldLabel>
-          <TextField value={householdSize} onChange={setHouseholdSize} placeholder="e.g. 4" type="number" />
+          <TextField value={householdSize} onChange={setHouseholdSize} placeholder="e.g. 4" type="number" label="Household size" />
         </Card>
 
         <Card title="Support types" icon={Heart} expanded={expandedCard === 'support'} onToggle={() => toggleCard('support')}>
@@ -606,13 +607,16 @@ function Card({ title, icon: Icon, expanded, onToggle, children }: {
   );
 }
 
-function TextField({ value, onChange, placeholder, maxLength, type = 'text' }: {
+function TextField({ value, onChange, placeholder, maxLength, type = 'text', label }: {
   value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number; type?: string;
+  /** Accessible name when the visible label above isn't tied to the field. */
+  label?: string;
 }) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      aria-label={label}
       placeholder={placeholder}
       maxLength={maxLength}
       type={type}

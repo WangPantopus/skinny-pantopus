@@ -153,10 +153,11 @@ const MAP_FILTERS: { key: string; label: string; icon: LucideIcon }[] = [
 // ─── Custom Leaflet divIcon builders ────────────────────────
 function makePostDivIcon(post: MapMarker, animCls = '') {
   const postType = post.post_type || 'general';
-  const color = getPostTypeConfig(postType).color;
+  const { color, label } = getPostTypeConfig(postType);
   const icon = POST_TYPE_SVG_ICONS[postType] || POST_TYPE_SVG_ICONS.general;
+  // Leaflet makes the marker a keyboard button; the hidden text is its name.
   return L.divIcon({
-    html: `<div style="background:${color};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${icon}</div>`,
+    html: `<div style="background:${color};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${icon}<span class="sr-only">${label} post</span></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     className: animCls,
@@ -165,7 +166,7 @@ function makePostDivIcon(post: MapMarker, animCls = '') {
 
 function makeClusterDivIcon(count: number, animCls = '') {
   return L.divIcon({
-    html: `<div style="background:#1F2937;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${count}</div>`,
+    html: `<div style="background:#1F2937;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${count}<span class="sr-only"> posts</span></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     className: animCls,
@@ -479,6 +480,7 @@ export default function FeedMap({
             <span className="text-xs font-semibold text-app">{clusterPosts.length} posts in this area</span>
             <button
               onClick={() => setClusterPosts([])}
+              aria-label="Close"
               className="p-1 text-app-muted hover:text-app transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>

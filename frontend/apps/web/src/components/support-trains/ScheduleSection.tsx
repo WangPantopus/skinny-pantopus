@@ -96,6 +96,7 @@ export default function ScheduleSection({
             onChange={(e) => {
               if (e.target.value) onRangeStartChange(fromYMD(e.target.value));
             }}
+            aria-label="Start date"
             className="flex-1 px-3 py-2 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:light] dark:[color-scheme:dark]"
           />
           <span className="text-app-text-muted text-sm">–</span>
@@ -105,6 +106,7 @@ export default function ScheduleSection({
             onChange={(e) => {
               if (e.target.value) onRangeEndChange(fromYMD(e.target.value));
             }}
+            aria-label="End date"
             className="flex-1 px-3 py-2 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:light] dark:[color-scheme:dark]"
           />
         </div>
@@ -143,6 +145,7 @@ export default function ScheduleSection({
             type="time"
             value={slotStart}
             onChange={(e) => onSlotStartChange(e.target.value)}
+            aria-label="Slot start time"
             className="flex-1 px-3 py-2 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:light] dark:[color-scheme:dark]"
           />
           <span className="text-app-text-muted text-sm">to</span>
@@ -150,6 +153,7 @@ export default function ScheduleSection({
             type="time"
             value={slotEnd}
             onChange={(e) => onSlotEndChange(e.target.value)}
+            aria-label="Slot end time"
             className="flex-1 px-3 py-2 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:light] dark:[color-scheme:dark]"
           />
         </div>
