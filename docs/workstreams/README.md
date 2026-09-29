@@ -30,6 +30,12 @@
 
 
 
+> **UPDATE 2026-09-29T20:09Z — Stream 1 checklists approved; confirm pass done; decisions recorded.**
+> - The user approved the U02–U04 checklists, the greyed "Sign up for a slot" button on trains that aren't live (reasons: "Signups paused", "This train has ended", "Not published yet") and a people picker for adding co-organizers. My recommendations are adopted for the rest: no co-organizer email invites for now, because the existing share link covers people not on Pantopus; and a wrap-only fix for the Android task-progress labels at font 2.0 when the money screens come up.
+> - Confirm pass: each confirm cell was checked against the sealed bundles. Covered cells are now done; the rest became to-do. Open now: U03 has 40 to-do and 6 boundary cells; U04 has 18 to-do; U02 has 51 to-do and 1 boundary. The [review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu) was republished as version 2.
+> - Built, not yet verified or merged: the greyed button (`codex/train-signup-closed-20260929` at 3dd43a565) and the co-organizer picker (`codex/train-coorganizer-picker-20260929` at 346ddc89a), each on iOS, Android and web.
+> - In progress: step 3, making CI green (`codex/ci-green-stream1-20260929`, not yet pushed). The fixes cover iOS SwiftLint/SwiftFormat and the stale Edit Signup tests; Android ktlint and detekt; and a byte-pinned compatibility note in the migration guard for the applied Train push-choice migration.
+
 > **UPDATE 2026-09-29T18:38Z — step 1 done: Stream 1 U02–U04 exit checklists drafted for approval.**
 > - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/01-gigs-payments.md`; progress is tracked there only after approval.
 > - Each workflow or screen has an iOS, Android and web cell: done (with seal), confirm from existing evidence, to do, your call, boundary, or not offered.
