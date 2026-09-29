@@ -201,7 +201,7 @@ export default function VerifyResidencyPage() {
               onClick={() => setSelectedDoc(doc.id)}
               className={`w-full flex items-center gap-3 p-4 rounded-xl border text-left transition-colors ${
                 selectedDoc === doc.id
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
                   : 'border-app-border bg-app-surface hover:border-app-border'
               }`}
             >
@@ -248,7 +248,7 @@ export default function VerifyResidencyPage() {
               }}
               className={`w-full flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed transition-colors cursor-pointer ${
                 pickedFile
-                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/20'
+                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/20'
                   : 'border-app-border hover:border-app-text-muted hover:bg-app-surface-sunken'
               }`}
             >
