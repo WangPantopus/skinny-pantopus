@@ -6,6 +6,10 @@
 export interface PostTypeConfig {
   label: string;
   color: string;
+  /** Text in `color`'s hue that meets WCAG AA (4.5:1) on `bgLight` and on light tints of `color`. */
+  textColor: string;
+  /** Text in `color`'s hue that meets AA on dark mode's surfaces and on dark tints of `color`. */
+  darkTextColor: string;
   bgLight: string;
   borderColor: string;
   ctaLabel?: string;
@@ -17,6 +21,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   ask_local: {
     label: 'Ask Local',
     color: '#0284C7',
+    textColor: '#0369A1',
+    darkTextColor: '#38BDF8',
     bgLight: '#EFF6FF',
     borderColor: '#BAE6FD',
     ctaLabel: 'Reply',
@@ -25,6 +31,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   recommendation: {
     label: 'Recommendation',
     color: '#F59E0B',
+    textColor: '#B45309',
+    darkTextColor: '#FBBF24',
     bgLight: '#FFFBEB',
     borderColor: '#FDE68A',
     ctaLabel: 'Save',
@@ -33,6 +41,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   event: {
     label: 'Event',
     color: '#8B5CF6',
+    textColor: '#7C3AED',
+    darkTextColor: '#A78BFA',
     bgLight: '#F5F3FF',
     borderColor: '#C4B5FD',
     ctaLabel: 'Interested',
@@ -41,6 +51,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   lost_found: {
     label: 'Lost & Found',
     color: '#EF4444',
+    textColor: '#B91C1C',
+    darkTextColor: '#F87171',
     bgLight: '#FEF2F2',
     borderColor: '#FECACA',
     ctaLabel: 'I Spotted This',
@@ -49,6 +61,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   alert: {
     label: 'Alert',
     color: '#DC2626',
+    textColor: '#B91C1C',
+    darkTextColor: '#F87171',
     bgLight: '#FEF2F2',
     borderColor: '#FECACA',
     ctaLabel: 'Stay Safe',
@@ -57,6 +71,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   deal: {
     label: 'Deal',
     color: '#16A34A',
+    textColor: '#166534',
+    darkTextColor: '#4ADE80',
     bgLight: '#F0FDF4',
     borderColor: '#BBF7D0',
     ctaLabel: 'View Deal',
@@ -65,6 +81,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   local_update: {
     label: 'Update',
     color: '#374151',
+    textColor: '#374151',
+    darkTextColor: '#9CA3AF',
     bgLight: '#F9FAFB',
     borderColor: '#E5E7EB',
     ctaLabel: 'Good to Know',
@@ -73,6 +91,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   neighborhood_win: {
     label: 'Win',
     color: '#059669',
+    textColor: '#047857',
+    darkTextColor: '#34D399',
     bgLight: '#F0FDF4',
     borderColor: '#A7F3D0',
     ctaLabel: 'Celebrate',
@@ -81,6 +101,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   visitor_guide: {
     label: 'Guide',
     color: '#7C3AED',
+    textColor: '#7C3AED',
+    darkTextColor: '#A78BFA',
     bgLight: '#FAF5FF',
     borderColor: '#DDD6FE',
     ctaLabel: 'Save',
@@ -90,18 +112,24 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   general: {
     label: 'Post',
     color: '#6B7280',
+    textColor: '#4B5563',
+    darkTextColor: '#9CA3AF',
     bgLight: '#F9FAFB',
     borderColor: '#E5E7EB',
   },
   personal_update: {
     label: 'Update',
     color: '#6366F1',
+    textColor: '#4F46E5',
+    darkTextColor: '#A5B4FC',
     bgLight: '#EEF2FF',
     borderColor: '#C7D2FE',
   },
   announcement: {
     label: 'Announcement',
     color: '#0D9488',
+    textColor: '#0F766E',
+    darkTextColor: '#2DD4BF',
     bgLight: '#F0FDFA',
     borderColor: '#99F6E4',
     ctaLabel: 'Good to Know',
@@ -110,6 +138,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   service_offer: {
     label: 'Service',
     color: '#7C3AED',
+    textColor: '#7C3AED',
+    darkTextColor: '#A78BFA',
     bgLight: '#FAF5FF',
     borderColor: '#DDD6FE',
     ctaLabel: 'Reach Out',
@@ -118,6 +148,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   resources_howto: {
     label: 'Resource',
     color: '#0891B2',
+    textColor: '#0E7490',
+    darkTextColor: '#22D3EE',
     bgLight: '#ECFEFF',
     borderColor: '#A5F3FC',
     ctaLabel: 'Save',
@@ -126,6 +158,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   progress_wins: {
     label: 'Progress',
     color: '#059669',
+    textColor: '#047857',
+    darkTextColor: '#34D399',
     bgLight: '#F0FDF4',
     borderColor: '#A7F3D0',
     ctaLabel: 'Celebrate',

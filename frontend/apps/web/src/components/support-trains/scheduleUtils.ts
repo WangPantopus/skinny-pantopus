@@ -19,6 +19,8 @@ export const PRESET_CHIPS: Array<{ key: GenerateSlotsPreset; label: string }> = 
 ];
 
 export const WEEKDAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+/** Spoken names for the one-letter weekday buttons (0=Sun … 6=Sat). */
+export const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 export function snapNoon(d: Date): Date {
   const x = new Date(d);

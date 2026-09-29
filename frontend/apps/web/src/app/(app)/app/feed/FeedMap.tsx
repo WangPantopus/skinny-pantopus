@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import * as api from '@pantopus/api';
@@ -10,12 +10,18 @@ import {
   Heart, Home as HomeIcon, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import type { FeedSurface, MapMarker, PostType } from '@pantopus/api';
 import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map/useCluster';
 import type { NearestActivityCenter } from '@/components/map';
+
+// Chip text on the map's own surfaces follows the theme: the palette's `textColor`
+// in light mode and `darkTextColor` in dark mode (inline colors can't reach `dark:`).
+const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[color:var(--post-type-text-dark)]';
+const postTypeTextVars = (config: PostTypeConfig) =>
+  ({ '--post-type-text': config.textColor, '--post-type-text-dark': config.darkTextColor }) as CSSProperties;
 
 // SVG icon strings for Leaflet divIcon HTML (not React components)
 // Keys use canonical PostType values only — no legacy aliases.
@@ -71,10 +77,10 @@ function MapPostPopupCard({
         >
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em]"
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${POST_TYPE_THEMED_TEXT}`}
               style={{
                 background: `${config.color}15`,
-                color: config.color,
+                ...postTypeTextVars(config),
               }}
             >
               <TypeIcon className="h-3 w-3" />
@@ -147,10 +153,11 @@ const MAP_FILTERS: { key: string; label: string; icon: LucideIcon }[] = [
 // ─── Custom Leaflet divIcon builders ────────────────────────
 function makePostDivIcon(post: MapMarker, animCls = '') {
   const postType = post.post_type || 'general';
-  const color = getPostTypeConfig(postType).color;
+  const { color, label } = getPostTypeConfig(postType);
   const icon = POST_TYPE_SVG_ICONS[postType] || POST_TYPE_SVG_ICONS.general;
+  // Leaflet makes the marker a keyboard button; the hidden text is its name.
   return L.divIcon({
-    html: `<div style="background:${color};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${icon}</div>`,
+    html: `<div style="background:${color};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${icon}<span class="sr-only">${label} post</span></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     className: animCls,
@@ -159,7 +166,7 @@ function makePostDivIcon(post: MapMarker, animCls = '') {
 
 function makeClusterDivIcon(count: number, animCls = '') {
   return L.divIcon({
-    html: `<div style="background:#1F2937;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${count}</div>`,
+    html: `<div style="background:#1F2937;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${count}<span class="sr-only"> posts</span></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     className: animCls,
@@ -387,7 +394,7 @@ export default function FeedMap({
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap shadow-md transition ${
                 mapFilter === f.key
                   ? 'bg-primary-600 text-white'
-                  : 'bg-surface/95 backdrop-blur text-app-muted border border-app hover-bg-app'
+                  : 'bg-app-surface/95 backdrop-blur text-app-muted border border-app hover-bg-app'
               }`}
             >
               <f.icon className="w-3.5 h-3.5" />
@@ -400,7 +407,7 @@ export default function FeedMap({
       {/* ─── Overlay: Post count badge (top-right) ─────────── */}
       <button
         onClick={handleFitAll}
-        className="absolute top-3 right-3 z-[500] bg-surface/95 backdrop-blur text-app text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md border border-app hover-bg-app transition"
+        className="absolute top-3 right-3 z-[500] bg-app-surface/95 backdrop-blur text-app text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md border border-app hover-bg-app transition"
       >
         {error && pins.length === 0 ? 'Unavailable' : `${postCount} in view`}
       </button>
@@ -410,7 +417,7 @@ export default function FeedMap({
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500]">
           <button
             onClick={handleSearchArea}
-            className="bg-surface/95 backdrop-blur text-primary-600 dark:text-primary-300 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-primary-200 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition flex items-center gap-1.5"
+            className="bg-app-surface/95 backdrop-blur text-primary-600 dark:text-primary-300 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-primary-200 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -421,7 +428,7 @@ export default function FeedMap({
       )}
 
       {error && !loading && (
-        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-app-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
           <span>Couldn&apos;t load posts.</span>
           <button
             onClick={() => fetchPins(bounds)}
@@ -435,7 +442,7 @@ export default function FeedMap({
       {/* ─── Overlay: Re-center button (bottom-left) ───────── */}
       <button
         onClick={handleRecenter}
-        className="absolute bottom-20 left-3 z-[500] bg-surface/95 backdrop-blur px-3 h-10 rounded-full shadow-lg border border-app flex items-center justify-center gap-1.5 hover-bg-app transition"
+        className="absolute bottom-20 left-3 z-[500] bg-app-surface/95 backdrop-blur px-3 h-10 rounded-full shadow-lg border border-app flex items-center justify-center gap-1.5 hover-bg-app transition"
         title="Re-center on my location"
       >
         <svg className="w-4 h-4 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -447,7 +454,7 @@ export default function FeedMap({
 
       {/* ─── Overlay: Loading spinner ──────────────────────── */}
       {loading && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-app-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
           <div className="w-3.5 h-3.5 border-2 border-app border-t-primary-500 rounded-full animate-spin" />
           Loading posts...
         </div>
@@ -468,11 +475,12 @@ export default function FeedMap({
 
       {/* ─── Overlay: Cluster card list ────────────────────── */}
       {clusterPosts.length > 0 && (
-        <div className="absolute bottom-20 left-3 right-3 z-[500] bg-surface/95/90 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
+        <div className="absolute bottom-20 left-3 right-3 z-[500] bg-app-surface/95 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-app">
             <span className="text-xs font-semibold text-app">{clusterPosts.length} posts in this area</span>
             <button
               onClick={() => setClusterPosts([])}
+              aria-label="Close"
               className="p-1 text-app-muted hover:text-app transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -491,10 +499,10 @@ export default function FeedMap({
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase"
+                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${POST_TYPE_THEMED_TEXT}`}
                       style={{
                         background: `${getPostTypeConfig(pt).color}15`,
-                        color: getPostTypeConfig(pt).color,
+                        ...postTypeTextVars(getPostTypeConfig(pt)),
                       }}
                     >
                       {(() => { const Icon = getTypeReactIcon(pt); return <Icon className="w-3 h-3 inline-block" />; })()} {getPostTypeConfig(pt).label}

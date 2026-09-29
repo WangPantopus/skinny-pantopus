@@ -581,7 +581,7 @@ export default function PostComposer({
           <div className="flex items-center justify-between px-4 py-2.5" style={{ background: activeIntent.bgLight }}>
             <div className="flex items-center gap-2">
               <span>{activeIntent.icon}</span>
-              <span className="text-sm font-semibold" style={{ color: activeIntent.color }}>
+              <span className="text-sm font-semibold" style={{ color: activeIntent.textColor }}>
                 {activeIntent.label === 'Share' ? 'General Post' : activeIntent.label}
               </span>
             </div>
@@ -812,13 +812,13 @@ export default function PostComposer({
                       </button>
                     ))
                   : ([
-                      { purpose: 'ask', label: 'Ask', icon: '❓', bg: '#EFF6FF', color: '#0284C7' },
+                      { purpose: 'ask', label: 'Ask', icon: '❓', bg: '#EFF6FF', color: '#0369A1' },
                       { purpose: 'offer', label: 'Offer', icon: '🤚', bg: '#FAF5FF', color: '#7C3AED' },
-                      { purpose: 'heads_up', label: 'Heads Up', icon: '🚨', bg: '#FEF2F2', color: '#DC2626' },
-                      { purpose: 'recommend', label: 'Recommend', icon: '⭐', bg: '#FFFBEB', color: '#F59E0B' },
+                      { purpose: 'heads_up', label: 'Heads Up', icon: '🚨', bg: '#FEF2F2', color: '#B91C1C' },
+                      { purpose: 'recommend', label: 'Recommend', icon: '⭐', bg: '#FFFBEB', color: '#B45309' },
                       { purpose: 'story', label: 'Story', icon: '💬', bg: '#F9FAFB', color: '#4B5563' },
-                      { purpose: 'event', label: 'Event', icon: '📅', bg: '#F5F3FF', color: '#8B5CF6' },
-                      { purpose: 'deal', label: 'Deal', icon: '🏷️', bg: '#F0FDF4', color: '#16A34A' },
+                      { purpose: 'event', label: 'Event', icon: '📅', bg: '#F5F3FF', color: '#7C3AED' },
+                      { purpose: 'deal', label: 'Deal', icon: '🏷️', bg: '#F0FDF4', color: '#15803D' },
                     ] as const)
                       .filter((item) => {
                         const mappedType = PURPOSE_TO_POST_TYPE[item.purpose] || 'general';
