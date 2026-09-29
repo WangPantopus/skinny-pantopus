@@ -162,14 +162,15 @@ interface SupportTrainActionsApi {
 
     /**
      * `DELETE /:id/organizers/:userId` — **primary only**; the primary
-     * organizer can't be removed (409). Responds 204. Route
-     * `backend/routes/supportTrains.js:1091`.
+     * organizer can't be removed (409). Responds 204 with no body; a `Unit`
+     * return lets Retrofit accept that (a `ResponseBody` return, nullable or
+     * not, throws). Route `backend/routes/supportTrains.js:1091`.
      */
     @DELETE("api/activities/support-trains/{id}/organizers/{userId}")
     suspend fun removeOrganizer(
         @Path("id") supportTrainId: String,
         @Path("userId") userId: String,
-    ): ResponseBody
+    ): Unit
 
     /**
      * `PATCH /:id/slots/:slotId` — label / mode / date / times /
