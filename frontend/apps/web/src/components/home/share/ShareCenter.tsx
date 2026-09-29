@@ -101,7 +101,7 @@ export default function ShareCenter({
   home: _home,
   secrets: _secrets,
   emergencies: _emergencies,
-  can: _can,
+  can,
   onSecretsChange: _onSecretsChange,
 }: {
   homeId: string;
@@ -121,9 +121,17 @@ export default function ShareCenter({
   const [now, setNow] = useState(Date.now);
   // A superseded list read must not replace the current one.
   const generation = useRef(0);
+  // Listing, creating and revoking guest passes all need members.manage on the server.
+  const canManagePasses = can('members.manage');
 
   const loadPasses = useCallback(async () => {
     const request = ++generation.current;
+    if (!canManagePasses) {
+      setPasses([]);
+      setListError('');
+      setLoading(false);
+      return;
+    }
     try {
       const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
       if (request !== generation.current) return;
@@ -141,7 +149,7 @@ export default function ShareCenter({
       setListError(failureMessage(err, 'Guest passes could not be loaded. Retry to check the current links.'));
     }
     if (request === generation.current) setLoading(false);
-  }, [homeId]);
+  }, [homeId, canManagePasses]);
 
   useEffect(() => {
     loadPasses();
@@ -206,14 +214,21 @@ export default function ShareCenter({
           <h2 className="text-lg font-semibold text-app-text">Share & Guest Access</h2>
           <p className="text-xs text-app-text-secondary mt-0.5">Create shareable links for guests, vendors, and visitors</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
-        >
-          + Custom Pass
-        </button>
+        {canManagePasses && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
+          >
+            + Custom Pass
+          </button>
+        )}
       </div>
 
+      {!canManagePasses ? (
+        <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center">
+          <p className="text-xs text-app-text-muted">You don’t have permission to create or view guest passes for this household.</p>
+        </div>
+      ) : (<>
       {/* Quick Share Templates */}
       <div>
         <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-2">Quick Share</h3>
@@ -290,6 +305,7 @@ export default function ShareCenter({
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 }
