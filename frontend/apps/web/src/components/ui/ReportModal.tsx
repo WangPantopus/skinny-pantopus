@@ -86,7 +86,7 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
               <p className="text-sm text-app-text-secondary">Why are you reporting this?</p>
             </div>
           </div>
-          <button onClick={handleClose} className="p-1 text-app-text-muted hover:text-app-text-secondary rounded-lg hover:bg-app-hover">
+          <button onClick={handleClose} aria-label="Close" className="p-1 text-app-text-muted hover:text-app-text-secondary rounded-lg hover:bg-app-hover">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -101,7 +101,8 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
         <select
           value={filter}
           onChange={(e) => handleFilterChange(e.target.value)}
-          className="text-sm border border-app-border rounded-lg px-3 py-1.5 text-app-text-secondary focus:ring-2 focus:ring-emerald-500 outline-none"
+          aria-label="Filter transactions"
+          className="text-sm bg-app-surface border border-app-border rounded-lg px-3 py-1.5 text-app-text-secondary focus:ring-2 focus:ring-emerald-500 outline-none"
         >
           {FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>

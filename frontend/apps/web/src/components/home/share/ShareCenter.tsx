@@ -6,7 +6,7 @@ import type { GuestPass } from '@pantopus/api';
 import CreateGuestPass from './CreateGuestPass';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
-import { failureMessage } from './shareFailure';
+import { failureMessage, shareFailure } from './shareFailure';
 
 const QUICK_TEMPLATES: {
   kind: GuestPass['kind'];
@@ -118,6 +118,8 @@ export default function ShareCenter({
   const [showPastPasses, setShowPastPasses] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [listError, setListError] = useState('');
+  // Lockdown turns guest passes off: a state to explain, not a read to retry.
+  const [lockdownNotice, setLockdownNotice] = useState('');
   const [now, setNow] = useState(Date.now);
   // A superseded list read must not replace the current one.
   const generation = useRef(0);
@@ -129,6 +131,7 @@ export default function ShareCenter({
     if (!canManagePasses) {
       setPasses([]);
       setListError('');
+      setLockdownNotice('');
       setLoading(false);
       return;
     }
@@ -141,12 +144,19 @@ export default function ShareCenter({
       }
       setPasses(res.passes);
       setListError('');
+      setLockdownNotice('');
     } catch (err: unknown) {
       if (request !== generation.current) return;
       // An unavailable list is not an empty list; saying "no passes" here would
       // hide links that are still live for whoever holds them.
       setPasses([]);
-      setListError(failureMessage(err, 'Guest passes could not be loaded. Retry to check the current links.'));
+      if (shareFailure(err).code === 'HOME_LOCKDOWN_ACTIVE') {
+        setListError('');
+        setLockdownNotice(failureMessage(err, 'Guest passes are off while Lockdown is on.'));
+      } else {
+        setLockdownNotice('');
+        setListError(failureMessage(err, 'Guest passes could not be loaded. Retry to check the current links.'));
+      }
     }
     if (request === generation.current) setLoading(false);
   }, [homeId, canManagePasses]);
@@ -214,7 +224,7 @@ export default function ShareCenter({
           <h2 className="text-lg font-semibold text-app-text">Share & Guest Access</h2>
           <p className="text-xs text-app-text-secondary mt-0.5">Create shareable links for guests, vendors, and visitors</p>
         </div>
-        {canManagePasses && (
+        {canManagePasses && !lockdownNotice && (
           <button
             onClick={() => setShowCreate(true)}
             className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
@@ -227,6 +237,10 @@ export default function ShareCenter({
       {!canManagePasses ? (
         <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center">
           <p className="text-xs text-app-text-muted">You don’t have permission to create or view guest passes for this household.</p>
+        </div>
+      ) : lockdownNotice ? (
+        <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center">
+          <p className="text-xs text-app-text-muted">{lockdownNotice}</p>
         </div>
       ) : (<>
       {/* Quick Share Templates */}

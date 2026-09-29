@@ -392,7 +392,7 @@ export default function PostDetailPanel({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span>{typeIcon(post?.post_type || 'general')}</span>
-                <span className="text-sm font-semibold" style={{ color: config.color }}>
+                <span className="text-sm font-semibold" style={{ color: config.textColor }}>
                   {config.label}
                 </span>
                 {post?.state === 'solved' && (

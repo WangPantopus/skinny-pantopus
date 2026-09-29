@@ -17,7 +17,7 @@ export default function PersonalCard({ data }: PersonalCardProps) {
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center"><User className="w-5 h-5" /></div>
           <h3 className="font-semibold text-app-text dark:text-white">Personal</h3>
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300">You</span>
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">You</span>
         </div>
       </div>
 
