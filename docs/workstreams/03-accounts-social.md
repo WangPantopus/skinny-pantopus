@@ -2,8 +2,9 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 close-out sweep: PR793 awaiting Stream 1, 2026-09-29T19:46Z
+## LIVE — Stream 3 close-out sweep: PR793 merged, 2026-09-29T19:48:35Z
 
+- **Merged (verified independently at 19:48:35Z):** [PR793](https://github.com/WangPantopus/skinny-pantopus/pull/793) exact head `c8ebd750b` merged 19:48:08Z through batch 116 [#795](https://github.com/WangPantopus/skinny-pantopus/pull/795) (19:48:06Z, with Stream 2's #794). Master is `f7a0a4a9d5d6b0f244b20bf95f7fdbe727618ad9`; its `page.tsx` blob `05a952d0fb87` equals the candidate. Stream 1 reviewed the head and verified the seal. Stream 1's CI-repair PR adds a one-line `@Suppress("ReturnCount")` to the Android `TokenAuthenticator` from #655; Stream 3 agreed (annotation only, #655 evidence unaffected).
 - **User direction (2026-09-29, before 19:16Z):** close out every locally feasible Stream 3 item. The user will then provide provider access and run the physical devices personally.
 - **[PR793](https://github.com/WangPantopus/skinny-pantopus/pull/793)**, exact head `c8ebd750b1ca20b48cf799d39d29e2cbb7e8dac6`, base `e5612639549a884f2380a45a0640f3e22bfe9b2d`. Master `e454b7a3b` leaves all 12 involved files unchanged, and merge-tree is clean. One existing file, `page.tsx` +35/−13; no test file changed. It repairs two reproduced problems:
   - **Bounce when sign-out fails:** at 19:16:39–19:16:50Z a stale `/` visit with logout failing went `R400 L429`×30 then `R429`, over 62 page loads. A failed logout now expires the JS-readable `pantopus_session` flag in the browser.
@@ -24,7 +25,6 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - No heavy or device slot used.
 - **Decisions taken without asking (UTC):** 19:16Z reproduce the recorded #785 limit first; 19:19Z clear the flag inside the existing `signOutLocally()` and keep `/` as the designed fallback; 19:21Z fold Stream 1's reported test failures into the same PR by fixing the implementation, not the tests; 19:35Z restart Stream 3's own API to renew its expired keys (runtime only).
 - **Next (locally feasible):**
-  - After #793 merges, record the exact master.
   - Then a native pass, once the heavy slot is free (Stream 1 holds it since 19:29:19Z):
     - N01 app-side notification-tap handling on the iOS simulator via `simctl push`: cold start, background, signed-out continuation, and a notification for the other account after switching (earlier evidence covers the foreground banner and routing).
     - #727's native weak-password error screens, which have been source-reviewed only, through a controlled server response.
