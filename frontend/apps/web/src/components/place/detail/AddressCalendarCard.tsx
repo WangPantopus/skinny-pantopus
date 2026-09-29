@@ -157,7 +157,7 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
             setNextDate(calendar.pickup_schedule?.recycling_next_date ?? '');
             setError(null);
             setPicking((p) => !p);
-          }} className="text-[12.5px] font-semibold text-primary-600 hover:text-primary-700">
+          }} className="text-[12.5px] font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
             {picking ? 'Cancel' : 'Pickup schedule'}
           </button>
         ) : null}

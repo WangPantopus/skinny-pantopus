@@ -180,7 +180,7 @@ export default function HomesPage() {
             Add home
           </Link>
         </div>
-        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 underline">Recover a member removal or leave attempt</Link></div>
+        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Recover a member removal or leave attempt</Link></div>
         {loading ? (
           <div className="text-app-text-secondary">Loading…</div>
         ) : error ? (
@@ -275,7 +275,7 @@ export default function HomesPage() {
                           <Link href={destination} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">{action}</Link>
                           {!verification && (privateSetup || residencyRequests.some(r => r.home_id === h.id)) && <Link href={`/app/homes/${h.id}/residency`} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">Residency status</Link>}
                           {(h as { can_delete_home?: boolean }).can_delete_home ? (
-                            <button type="button" onClick={() => remove(h.id)} className="px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 hover:bg-red-50">Delete home</button>
+                            <button type="button" onClick={() => remove(h.id)} className="px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">Delete home</button>
                           ) : h.occupancy?.is_active === true ? (
                             <button type="button" onClick={() => leave(h.id)} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">Leave</button>
                           ) : null}
