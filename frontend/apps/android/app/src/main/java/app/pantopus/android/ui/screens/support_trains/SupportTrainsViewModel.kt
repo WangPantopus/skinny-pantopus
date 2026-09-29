@@ -339,6 +339,9 @@ class SupportTrainsViewModel
                 "full" -> "Slots full" to StatusChipVariant.Neutral
                 "wrapping" -> "Wrapping up" to StatusChipVariant.Warning
                 "complete" -> "Complete" to StatusChipVariant.Neutral
+                "paused" -> "Paused" to StatusChipVariant.Warning
+                "completed" -> "Completed" to StatusChipVariant.Neutral
+                "archived" -> "Archived" to StatusChipVariant.Neutral
                 "invited" -> "Invited" to StatusChipVariant.Business
                 "proposed" -> "Proposed" to StatusChipVariant.Neutral
                 else -> "Active" to StatusChipVariant.Info
