@@ -40,6 +40,9 @@ public struct SupportTrainsSearchView: View {
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityIdentifier("supportTrainsSearch")
         .task { await viewModel.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .supportTrainDeleted)) { _ in
+            Task { await viewModel.load() }
+        }
     }
 }
 
