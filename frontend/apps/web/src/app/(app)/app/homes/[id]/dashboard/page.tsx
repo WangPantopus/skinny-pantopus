@@ -83,10 +83,18 @@ export default function HomeDashboardPage() {
 
   return (
     <HomePermissionsProvider key={homeId} homeId={homeId}>
-      <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations and recovery</Link></div>
+      <InvitationsLink homeId={homeId} />
       <HomeDashboardContent />
     </HomePermissionsProvider>
   );
+}
+
+// The invitations page only manages household invitations, which needs members.manage
+// (the dashboard's other invite entry points are gated the same way).
+function InvitationsLink({ homeId }: { homeId: string }) {
+  const { can } = useHomePermissions();
+  if (!can('members.manage')) return null;
+  return <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations and recovery</Link></div>;
 }
 
 function HomeDashboardContent() {

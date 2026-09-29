@@ -35,7 +35,7 @@ function InviteCoOwnerContent() {
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition">
+        <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-app-text" />
         </button>
         <h1 className="text-xl font-bold text-app-text">Invite Co-Owner</h1>
@@ -64,7 +64,7 @@ function InviteCoOwnerContent() {
             <p className="text-sm font-semibold text-app-text">Fast-track verification</p>
             <p className="text-xs text-app-text-secondary mt-0.5">Skip the challenge window for trusted co-owners</p>
           </div>
-          <button type="button" role="switch" aria-checked={fastTrack} onClick={() => setFastTrack(!fastTrack)}
+          <button type="button" role="switch" aria-checked={fastTrack} aria-label="Fast-track verification" onClick={() => setFastTrack(!fastTrack)}
             className={`relative w-11 h-6 rounded-full transition flex-shrink-0 ${fastTrack ? 'bg-emerald-600' : 'bg-gray-300'}`}>
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${fastTrack ? 'translate-x-5' : ''}`} />
           </button>
