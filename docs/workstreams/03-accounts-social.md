@@ -42,6 +42,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - N05: a daily-briefing delivery policy, and whether Crew Day gets an entry point.
   - S3-22/S3-62: permission for `/b/` reads in the isolated DB. S3-26: an AI provider key, or accepting the gap.
   - N03: Beacon parts are cut; Pulse posting is Stream 1's. N04: moderation processing.
+- **Shared chat picker (Stream 1 batch 123 [#815](https://github.com/WangPantopus/skinny-pantopus/pull/815), master `553b91504`, merged 21:52:13Z):** Manage train reuses the chat new-message picker as "Add co-organizer" (#812) through new optional parameters: iOS `NewMessageView(viewModel:title:emptyHeadline:emptyBody:)`, Android `NewMessageScreen(..., title, emptyHeadline, emptyBody, viewModel)`. Stream 3 reviewed the diff at 2026-09-29T21:53:15Z: the defaults equal chat's current copy ("New message"; nil falls back to the view model's empty text), and chat's own call sites (`InboxTabRoot`, `RootTabScreen`, default `hiltViewModel()`) are unchanged. No chat behavior change, so no re-run. Keep these defaults when editing either file.
 - **Next:** nothing pending. Stream 3 is idle and ready for user-supplied access and devices, a decision on the proposals, or a routed finding. Stream 1's #798 updates S3's old 8-character Auth unit-test samples to the 12-character rule (tests only).
 
 ## Previous milestone — Stream 3 close-out sweep: native pass in progress, candidate a90eda9aa awaiting heavy, 2026-09-29T20:25Z (superseded by the LIVE block above)
