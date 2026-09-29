@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.auth.sign_up
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -147,7 +150,7 @@ fun SignUpScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.s5),
         ) {
             state.topLevelError?.let { error ->
-                ErrorBanner(
+                RevealedErrorBanner(
                     error = error,
                     onDismiss = viewModel::clearTopLevelError,
                     modifier =
@@ -554,6 +557,23 @@ private fun TermsCheckbox(
             plainColor = PantopusColors.appText,
         )
     }
+}
+
+/**
+ * The top-of-form [ErrorBanner], scrolled into view when it appears: Create
+ * account is usually pressed after scrolling down to the terms box, so the
+ * banner would otherwise show up off screen.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RevealedErrorBanner(
+    error: AuthError,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(error) { requester.bringIntoView() }
+    ErrorBanner(error = error, onDismiss = onDismiss, modifier = modifier.bringIntoViewRequester(requester))
 }
 
 @Composable

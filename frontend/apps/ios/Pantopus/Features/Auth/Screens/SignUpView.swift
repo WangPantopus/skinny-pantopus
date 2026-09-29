@@ -41,7 +41,10 @@ struct SignUpView: View {
             isDirty: viewModel.hasInput,
             isSaving: viewModel.isSubmitting,
             onClose: onClose,
-            onCommit: submit
+            onCommit: submit,
+            // The error banner sits at the top; Create account is usually
+            // pressed after scrolling down to the terms box.
+            scrollsToTopOnChange: viewModel.topLevelError.map(AnyHashable.init)
         ) {
             if let error = viewModel.topLevelError {
                 ErrorBanner(error: error) { viewModel.clearTopLevelError() }
@@ -147,6 +150,8 @@ struct SignUpView: View {
             contentType: .emailAddress,
             identifier: "signUpEmailField"
         )
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
         .onChange(of: viewModel.email) { _, _ in viewModel.clearError(for: .email) }
     }
 
