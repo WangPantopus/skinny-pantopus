@@ -314,6 +314,27 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 ## 0. HANDOFF STATE — FINAL, successor session, 2026-09-27 (written 2026-09-27T11:16Z; this section wins over everything below it)
 
+> **UPDATE 2026-09-29T03:31Z — batches112–113 merged: S3 web stale-session single sign-out; native Support Train status chips truthful.**
+> - **Master:** `e3d8ae3eabea149eec693aa71ea214a88260321e`.
+>   - Batch112 [#786](https://github.com/WangPantopus/skinny-pantopus/pull/786), exact `1f7779d023b593fcfbc207c18575950e56bc703e`, merged 03:25:42Z with S3 [#785](https://github.com/WangPantopus/skinny-pantopus/pull/785) `51ae9c05d`. S1 [#783](https://github.com/WangPantopus/skinny-pantopus/pull/783), in master since batch111, now shows merged (03:25:44Z).
+>   - Batch113 [#788](https://github.com/WangPantopus/skinny-pantopus/pull/788), exact `c00e066bea707b13ab362b55eeac664ab3896010`, merged 03:30:27Z with S1 [#787](https://github.com/WangPantopus/skinny-pantopus/pull/787) `f68e77348`.
+>   - Ancestry, union and head-blob proofs pass. lint-batch on #787's two Swift files: SwiftLint and SwiftFormat 0.
+>   - Required checks are absent live. The queue is empty; unrelated #46/#429/#430/#625 are untouched.
+> - **S3 #785 (coordinator-reviewed):** the loop Stream 1 routed was a QueryProvider remount. One file gains a module `signingOut` flag.
+>   - `go` hard-navigates, so the flag can't outlive the sign-out.
+>   - The 52-file seal `799180dc…` verifies. Real Chrome afters: invalid, revoked, valid, transient/Try again, each with exactly one refresh and at most one logout.
+>   - Reusable as web U03/U04 session-lifetime evidence.
+> - **S1 #787 — native status chips:** the "My trains" list and Train search showed paused, completed and archived trains as "Active" on both clients (reproduced with owned fixtures).
+>   - Four existing maps gain three cases, reusing the Train detail labels and existing chip variants; 12+/0-.
+>   - App-only builds: Android `290da0c7…`, iOS `c010998c…`. Actual afters on both lists and both searches show Paused/Completed/Archived/Draft, layout unchanged.
+>   - [Sealed 34-file result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream1-train-status-chips-r1/RESULT.md), MANIFEST `5e9b44cf2b038767dad4cfaddf4ce564f59dd9d0826287360d7e2e6dd9eb7250`.
+>   - Three Trains were product-deleted. All 353 counts and all 19 fingerprints equal the baseline.
+>   - **Decided per the standing instruction:** a truthfulness fix to an existing label, not a redesign.
+> - **Notes:**
+>   - iOS "Gigs → My Support Trains" sheet: the list's search button doesn't respond, but it works from the pushed list. The entry lives in the cut Gigs feed (#4): recorded, not pursued.
+>   - Candidates next: iOS list staleness after a fault-free delete, and a "Sign up for a slot" CTA on paused trains.
+> - **Runtime:** backend 81764, web HMR at `e3d8ae3ea`. Installed native builds equal master's native code. S1 holds C2 (slot 1) and 5558 (slot 4); heavy is free.
+
 > **UPDATE 2026-09-29T03:18Z — batches110–111 merged: S2 re-invite copy; Support Train lifecycle retries acknowledged.**
 > - **Master:** `f0f2030de4eed1bf7ed2df2c3902e9e8f6842ee7`.
 >   - Batch110 [#782](https://github.com/WangPantopus/skinny-pantopus/pull/782), exact `2a62d1051ded62e2f6ea05b1f8f0274432329323`, merged 02:54:16Z. It carries S2 [#781](https://github.com/WangPantopus/skinny-pantopus/pull/781) `1631e6acb` (merged 02:54:18Z).
