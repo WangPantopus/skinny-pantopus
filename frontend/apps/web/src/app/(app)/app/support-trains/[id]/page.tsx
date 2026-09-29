@@ -738,7 +738,7 @@ function SlotCard({ slot, onSelect }: { slot: any; onSelect: () => void }) {
       onClick={onSelect}
       className="w-full flex items-center gap-4 p-4 rounded-xl border border-app-border bg-app-surface text-left hover:border-primary-300 dark:hover:border-primary-700 transition"
     >
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-50 dark:bg-primary-950/30">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-50 dark:bg-primary-900/30">
         <ModeIcon className="w-5 h-5 text-primary-600" />
       </div>
       <div className="flex-1 min-w-0">
@@ -852,7 +852,7 @@ function ReserveSlotModal({
                     onClick={() => onSelectMode(mode.key)}
                     className={`rounded-xl border px-3 py-3 text-left text-sm transition ${
                       selectedMode === mode.key
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-200'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-200'
                         : 'border-app-border text-app-text hover:bg-app-surface-sunken'
                     }`}
                   >
@@ -1154,7 +1154,7 @@ function statusBadgeClasses(status: string): string {
     case 'paused':
       return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200';
     case 'completed':
-      return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
     default:
       return 'bg-slate-100 text-slate-600';
   }

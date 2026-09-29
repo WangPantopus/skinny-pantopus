@@ -225,6 +225,7 @@ export default function ManageSupportTrainPage() {
           <div className="flex gap-2 mb-4">
             <input
               readOnly
+              aria-label="Share link"
               value={buildSupportTrainShareUrl(id)}
               className="flex-1 p-2.5 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text truncate"
             />
@@ -303,7 +304,7 @@ export default function ManageSupportTrainPage() {
                       {inv.User?.name || inv.invitee_email || inv.invitee_user_id}
                     </span>
                     <span
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${inv.status === 'accepted' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}
+                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${inv.status === 'accepted' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
                     >
                       {inv.status}
                     </span>
