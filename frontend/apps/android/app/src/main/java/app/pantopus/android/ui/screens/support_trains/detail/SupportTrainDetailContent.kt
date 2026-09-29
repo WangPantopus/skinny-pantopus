@@ -32,11 +32,13 @@ enum class RecipientIdentityTag { Home, Personal, Business }
 /** Semantic palette swatch for contributor / author discs. */
 enum class ContributorTone { Warning, Primary, Business, Success, Error, Personal }
 
-/** Sticky bottom-dock variant. */
+/** Sticky bottom-dock variant. [Closed] keeps the sign-up button in place, greyed out, with the reason. */
 sealed interface SupportTrainDock {
     data class SignUp(val label: String) : SupportTrainDock
 
     data object SendCardAndBackup : SupportTrainDock
+
+    data class Closed(val reason: String) : SupportTrainDock
 }
 
 /** Slot-row presentation state. */

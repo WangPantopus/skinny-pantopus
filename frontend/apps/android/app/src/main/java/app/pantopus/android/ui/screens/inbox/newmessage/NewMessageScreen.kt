@@ -67,6 +67,10 @@ fun NewMessageScreen(
     onCancel: () -> Unit,
     onSelect: (NewMessageDestination) -> Unit,
     onInvite: () -> Unit = {},
+    // The same picker chooses a co-organizer in Manage train, with its own wording.
+    title: String = "New message",
+    emptyHeadline: String? = null,
+    emptyBody: String? = null,
     viewModel: NewMessageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,7 +93,7 @@ fun NewMessageScreen(
                 .background(PantopusColors.appBg)
                 .testTag("newMessage"),
     ) {
-        TopBar(onCancel = onCancel)
+        TopBar(title = title, onCancel = onCancel)
         SearchBar(
             query = searchText,
             onChange = viewModel::updateSearch,
@@ -100,8 +104,8 @@ fun NewMessageScreen(
                 NewMessageUiState.Loading -> LoadingFrame()
                 NewMessageUiState.Empty ->
                     EmptyFrame(
-                        headline = viewModel.emptyHeadline,
-                        body = viewModel.emptyBody,
+                        headline = emptyHeadline ?: viewModel.emptyHeadline,
+                        body = emptyBody ?: viewModel.emptyBody,
                         hints = viewModel.emptySearchHints,
                         onInvite = onInvite,
                     )
@@ -123,7 +127,10 @@ fun NewMessageScreen(
 // MARK: - Top bar
 
 @Composable
-private fun TopBar(onCancel: () -> Unit) {
+private fun TopBar(
+    title: String,
+    onCancel: () -> Unit,
+) {
     Box(
         modifier =
             Modifier
@@ -152,7 +159,7 @@ private fun TopBar(onCancel: () -> Unit) {
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = "New message",
+                text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,

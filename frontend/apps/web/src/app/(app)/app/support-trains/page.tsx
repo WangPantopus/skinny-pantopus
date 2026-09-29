@@ -22,8 +22,8 @@ function statusBadgeClasses(status: string): string {
     case 'published': return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200';
     case 'active': return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200';
     case 'paused': return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200';
-    case 'completed': return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
-    case 'archived': return 'bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-500';
+    case 'completed': return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+    case 'archived': return 'bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400';
     default: return 'bg-slate-100 text-slate-600';
   }
 }

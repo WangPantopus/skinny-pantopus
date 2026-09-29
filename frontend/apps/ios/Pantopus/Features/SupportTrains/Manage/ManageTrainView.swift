@@ -54,6 +54,10 @@ public struct ManageTrainView: View {
 
     /// Gift-fund goal input, in whole dollars (the API takes cents).
     @State private var fundGoalDollars: String = ""
+    /// The people picker (the chat New message picker) that adds a co-organizer.
+    @State private var showOrganizerPicker = false
+    /// "Invite to Pantopus" in the picker shares the train once the picker closes.
+    @State private var shareAfterPicker = false
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -114,6 +118,25 @@ public struct ManageTrainView: View {
         .onChange(of: viewModel.didDeleteTrain) { _, deleted in
             if deleted { (onDeleted ?? onClose)() }
         }
+    }
+
+    private var organizerPicker: some View {
+        NewMessageView(
+            viewModel: NewMessageViewModel(
+                onSelect: { destination in
+                    showOrganizerPicker = false
+                    Task { await viewModel.addOrganizer(userId: destination.userId) }
+                },
+                onCancel: { showOrganizerPicker = false },
+                onInvite: {
+                    shareAfterPicker = onInviteHelpers != nil
+                    showOrganizerPicker = false
+                }
+            ),
+            title: "Add co-organizer",
+            emptyHeadline: "Find a co-organizer",
+            emptyBody: "Search by name, or invite someone who isn't on Pantopus yet."
+        )
     }
 
     // MARK: - Top bar
@@ -350,8 +373,7 @@ public struct ManageTrainView: View {
             rows: viewModel.organizerRows,
             canEdit: content.viewerRole == .primaryOrganizer,
             isBusy: viewModel.isSubmitting,
-            newOrganizerUserId: $viewModel.newOrganizerUserId,
-            onAdd: { Task { await viewModel.addOrganizer() } },
+            onAdd: { showOrganizerPicker = true },
             onRemove: { row in
                 guard let userId = row.userId else { return }
                 viewModel.requestConfirm(
@@ -363,6 +385,15 @@ public struct ManageTrainView: View {
                     )
                 )
             }
+        )
+        .sheet(
+            isPresented: $showOrganizerPicker,
+            onDismiss: {
+                guard shareAfterPicker else { return }
+                shareAfterPicker = false
+                onInviteHelpers?(viewModel.supportTrainId)
+            },
+            content: { organizerPicker }
         )
 
         ManageNudgeSection(

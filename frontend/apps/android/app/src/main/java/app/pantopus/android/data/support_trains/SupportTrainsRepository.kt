@@ -234,7 +234,7 @@ class SupportTrainsRepository
         suspend fun removeOrganizer(
             supportTrainId: String,
             userId: String,
-        ): NetworkResult<Unit> = safeApiCall { actionsApi.removeOrganizer(supportTrainId, userId).close() }
+        ): NetworkResult<Unit> = safeApiCall { actionsApi.removeOrganizer(supportTrainId, userId) }
 
         /**
          * `PATCH /:id/slots/:slotId` — edit a date, or send
