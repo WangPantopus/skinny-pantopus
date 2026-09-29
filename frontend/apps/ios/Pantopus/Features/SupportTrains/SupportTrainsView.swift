@@ -20,6 +20,9 @@ public struct SupportTrainsView: View {
     public var body: some View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier("supportTrains")
+            .onReceive(NotificationCenter.default.publisher(for: .supportTrainDeleted)) { _ in
+                Task { await viewModel.refresh() }
+            }
     }
 }
 

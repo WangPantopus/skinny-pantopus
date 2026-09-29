@@ -25,6 +25,13 @@ import Foundation
 import Observation
 import SwiftUI
 
+public extension Notification.Name {
+    /// Posted after an organizer deletes a train. Popping past its detail
+    /// and Manage screens at once doesn't re-run a list's `.task`, so the
+    /// lists still on the stack re-read when they hear this.
+    static let supportTrainDeleted = Notification.Name("supportTrainDeleted")
+}
+
 /// Stable tab ids so the view + tests can reference without string
 /// literals.
 public enum SupportTrainsTab {
