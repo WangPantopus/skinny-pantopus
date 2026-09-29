@@ -63,7 +63,7 @@ export function TextButton({ children, onClick, arrow = true, type = 'button', c
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex items-center gap-1 bg-transparent p-0 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors ${className}`}
+      className={`inline-flex items-center gap-1 bg-transparent p-0 text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors ${className}`}
     >
       {children}
       {arrow ? <ArrowRight size={15} strokeWidth={2.25} className="shrink-0" /> : null}

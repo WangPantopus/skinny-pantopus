@@ -270,7 +270,7 @@ function MembersContent() {
         )}
       </div>
 
-      <div className="mb-4"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 underline">Recover a member removal</Link></div>
+      <div className="mb-4"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Recover a member removal</Link></div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void fetchData()} className="rounded-lg border border-app-border px-3 py-2 text-sm">Refresh members</button>

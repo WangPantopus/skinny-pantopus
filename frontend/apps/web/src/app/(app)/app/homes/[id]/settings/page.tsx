@@ -171,11 +171,11 @@ function SettingsContent() {
 
       {/* Danger zone */}
       <section>
-        <h2 className="text-sm font-bold text-red-600 mb-3">Danger Zone</h2>
+        <h2 className="text-sm font-bold text-red-600 dark:text-red-400 mb-3">Danger Zone</h2>
         <div className="bg-app-surface border border-app-border rounded-xl overflow-hidden">
           <button onClick={handleLeave} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition text-left">
             <LogOut className="w-5 h-5 text-red-600" />
-            <span className="text-sm font-medium text-red-600">Leave Home</span>
+            <span className="text-sm font-medium text-red-600 dark:text-red-400">Leave Home</span>
           </button>
         </div>
       </section>
