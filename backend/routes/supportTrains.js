@@ -1426,6 +1426,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
 
+    // A reply can be lost after the authorized unpublish has committed.
+    if (st.status === 'draft') return res.json({ id: st.id, status: 'draft' });
+
     if (st.status !== 'published' && st.status !== 'active') {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
@@ -1479,6 +1482,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
 
+    // A reply can be lost after the authorized pause has committed.
+    if (st.status === 'paused') return res.json({ id: st.id, status: 'paused' });
+
     if (st.status !== 'published' && st.status !== 'active') {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
@@ -1511,6 +1517,9 @@ router.post(
   requireSupportTrainRole(['primary', 'co_organizer']),
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
+
+    // A reply can be lost after the authorized resume has committed.
+    if (st.status === 'active') return res.json({ id: st.id, status: 'active' });
 
     if (st.status !== 'paused') {
       return res.status(409).json({
@@ -1581,6 +1590,9 @@ router.post(
   requireSupportTrainRole(['primary']),
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
+
+    // A reply can be lost after the authorized archive has committed.
+    if (st.status === 'archived') return res.json({ id: st.id, status: 'archived' });
 
     if (st.status !== 'completed') {
       return res.status(409).json({
@@ -4049,11 +4061,21 @@ router.patch(
   })
 );
 
+// A delete reply can be lost after the Support Train was removed; a retry then finds
+// nothing to load. Acknowledge that desired absence instead of a false 404.
+async function acknowledgeDeletedSupportTrain(req, res, next) {
+  const { data, error } = await supabaseAdmin
+    .from('SupportTrain').select('id').eq('id', req.params.id).maybeSingle();
+  if (!error && !data) return res.json({ id: req.params.id, deleted: true });
+  return next();
+}
+
 // Delete a Support Train (primary organizer only, low-risk cases only)
 router.delete(
   '/:id',
   verifyToken,
   supportTrainWriteLimiter,
+  acknowledgeDeletedSupportTrain,
   loadSupportTrain,
   requireSupportTrainRole(['primary']),
   asyncHandler(async (req, res) => {
