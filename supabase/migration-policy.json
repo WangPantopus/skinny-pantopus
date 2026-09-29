@@ -1,6 +1,13 @@
 {
   "mode": "baselined",
   "cliVersion": "2.116.0",
+  "compatibilityNotes": {
+    "supabase/migrations/20260928122200_support_train_update_push_choice.sql": {
+      "backwardsCompatible": "yes",
+      "reason": "Adds SupportTrainUpdate.push_to_phones boolean NOT NULL DEFAULT true. The deployed backend never reads it, and existing and legacy updates keep push on. Apply it before the backend that reads it. PR #778 shipped without the in-file line; applied bytes are immutable.",
+      "sha256": "001fa607d0473e9182b6b84c6190eb4a4c962a3fd77646070c7d908712a4b5ff"
+    }
+  },
   "baselineFiles": {
     "supabase/migrations/20260908234526_application_baseline.sql": "650f396116e8dc58ee7b3272aad9e952da6b22b727d25128cbb020ddc4d8a443",
     "supabase/migrations/20260908234527_reference_baseline.sql": "26555565136eb06afc407ff055630474ab7edb187e63edd08dab91a513db2ded"

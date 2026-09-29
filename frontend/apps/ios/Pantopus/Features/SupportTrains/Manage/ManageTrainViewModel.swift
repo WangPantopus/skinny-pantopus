@@ -308,7 +308,7 @@ public final class ManageTrainViewModel {
         if let helpers { helperRows = helpers }
         if let helpersFailed { self.helpersFailed = helpersFailed }
         self.deliveredMeals = deliveredMeals
-        if case .loaded(var content) = state {
+        if case var .loaded(content) = state {
             let count = helperCount.map(String.init) ?? "—"
             content.helpersValue = count
             content.audienceChips = content.audienceChips.map {

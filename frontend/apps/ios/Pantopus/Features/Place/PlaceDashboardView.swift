@@ -123,9 +123,9 @@ struct PlaceDashboardView: View {
                     viewModel.reloadOnReturn()
                     viewModel.onOpenHubHome()
                 }
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.top, Spacing.s3)
-                    .accessibilityIdentifier("place.homeTools")
+                .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s3)
+                .accessibilityIdentifier("place.homeTools")
 
                 if isClaimed {
                     PlaceVerifyBanner { showVerify = true }

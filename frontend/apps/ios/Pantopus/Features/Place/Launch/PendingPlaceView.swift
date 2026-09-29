@@ -51,7 +51,10 @@ struct PendingPlaceView: View {
                         }
                         ForEach(preview.sections ?? [], id: \.id) { section in
                             PlaceSectionView(
-                                env: section, onOpen: nil, onVerify: nil, onClaim: nil,
+                                env: section,
+                                onOpen: nil,
+                                onVerify: nil,
+                                onClaim: nil,
                                 onRetry: { Task { await viewModel.loadPreview() } },
                                 retrying: viewModel.isLoadingPreview
                             )

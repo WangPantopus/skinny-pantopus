@@ -59,7 +59,8 @@ object ManageTrainProjection {
             close =
                 CloseTrainSheetContent(
                     daysEarlyLabel = "Locks new signups · $days days early",
-                    mealsDelivered = "—", // Delivery is established by the organizer reservation read.
+                    // Delivery is established by the organizer reservation read.
+                    mealsDelivered = "—",
                     neighborsHelped = helpers,
                     coverageDays = "${coverageDays(slots)}d",
                     recipientQuote = dto.story ?: "",

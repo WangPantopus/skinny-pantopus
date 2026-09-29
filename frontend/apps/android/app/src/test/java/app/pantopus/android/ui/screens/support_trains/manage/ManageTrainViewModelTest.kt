@@ -45,7 +45,7 @@ class ManageTrainViewModelTest {
         coEvery { repo.postUpdate(any(), any()) } returns NetworkResult.Success(Unit)
         coEvery { repo.complete(any()) } returns NetworkResult.Success(Unit)
         // S1 — `load()` now fans out to the organizer-only feeds as well.
-        coEvery { repo.reservations(any()) } returns NetworkResult.Success(SupportTrainReservationsResponse())
+        coEvery { repo.reservations(any()) } returns NetworkResult.Success(SupportTrainReservationsResponse(reservations = emptyList()))
         coEvery { repo.organizers(any()) } returns NetworkResult.Success(SupportTrainOrganizersResponse())
         coEvery { repo.fund(any()) } returns NetworkResult.Success(SupportTrainFundDto())
     }

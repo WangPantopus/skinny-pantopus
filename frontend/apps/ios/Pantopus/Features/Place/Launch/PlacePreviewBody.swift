@@ -253,8 +253,12 @@ struct PlacePreviewBody: View {
                 VStack(spacing: 8) {
                     ForEach(items, id: \.id) { env in
                         PlaceSectionView(
-                            env: env, onOpen: nil, onVerify: onCreateAccount, onClaim: onCreateAccount,
-                            onRetry: onRetry, retrying: retrying
+                            env: env,
+                            onOpen: nil,
+                            onVerify: onCreateAccount,
+                            onClaim: onCreateAccount,
+                            onRetry: onRetry,
+                            retrying: retrying
                         )
                     }
                 }

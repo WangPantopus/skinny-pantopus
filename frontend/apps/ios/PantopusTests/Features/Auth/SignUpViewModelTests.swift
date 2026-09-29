@@ -48,23 +48,23 @@ final class SignUpViewModelTests: XCTestCase {
         let vm = SignUpViewModel()
         XCTAssertEqual(vm.validate(.password), "Password is required.")
         vm.password = "short1"
-        XCTAssertEqual(vm.validate(.password), "Password must be at least 8 characters.")
-        vm.password = "12345678"
+        XCTAssertEqual(vm.validate(.password), "Password must be at least 12 characters.")
+        vm.password = "123456789012"
         XCTAssertEqual(vm.validate(.password), "Password must include at least one letter.")
-        vm.password = "abcdefgh"
+        vm.password = "abcdefghijkl"
         XCTAssertEqual(vm.validate(.password), "Password must include at least one number.")
-        vm.password = "strongpass1"
+        vm.password = "strongpass12"
         XCTAssertNil(vm.validate(.password))
     }
 
     func test_confirmPassword_must_match() {
         let vm = SignUpViewModel()
-        vm.password = "strongpass1"
+        vm.password = "strongpass12"
         vm.confirmPassword = ""
         XCTAssertEqual(vm.validate(.confirmPassword), "Confirm your password.")
         vm.confirmPassword = "different1"
         XCTAssertEqual(vm.validate(.confirmPassword), "Passwords don't match.")
-        vm.confirmPassword = "strongpass1"
+        vm.confirmPassword = "strongpass12"
         XCTAssertNil(vm.validate(.confirmPassword))
     }
 
@@ -157,8 +157,8 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertFalse(vm.isValid)
         // The slim form: email + password + terms is a complete sign-up.
         vm.email = "alice@example.com"
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
         vm.agreedToTerms = true
         XCTAssertTrue(vm.isValid)
         vm.agreedToTerms = false
@@ -183,7 +183,7 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertEqual(vm.passwordStrength, 0)
         vm.password = "short"
         XCTAssertEqual(vm.passwordStrength, 1)
-        vm.password = "passw0rd"
+        vm.password = "passw0rdpass"
         XCTAssertEqual(vm.passwordStrength, 2)
         vm.password = "strongerpass1!"
         XCTAssertEqual(vm.passwordStrength, 3)
@@ -262,8 +262,8 @@ final class SignUpViewModelTests: XCTestCase {
         let auth = AuthManager(store: InMemorySecureStore(), apiClient: client)
         let vm = SignUpViewModel()
         vm.email = "a@b.co"
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
         vm.agreedToTerms = true
         await vm.submit(using: auth)
         let captured = SequencedURLProtocol.capturedRequests.last
@@ -316,8 +316,8 @@ final class SignUpViewModelTests: XCTestCase {
     /// Fills every required field with valid data so `isValid` returns true.
     private func fillValid(_ vm: SignUpViewModel) {
         vm.email = "alice@example.com"
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
         vm.username = "alice_21"
         vm.firstName = "Maria"
         vm.lastName = "Kowalski"

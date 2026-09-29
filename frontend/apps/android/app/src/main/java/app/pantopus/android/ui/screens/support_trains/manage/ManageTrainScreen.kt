@@ -156,10 +156,11 @@ fun ManageTrainScreen(
     state.slotEditor?.let { editor ->
         ModalBottomSheet(
             onDismissRequest = { viewModel.dismissSlotEditor() },
-            sheetState = rememberModalBottomSheetState(
-                skipPartiallyExpanded = true,
-                confirmValueChange = { !state.isSubmitting || it != SheetValue.Hidden },
-            ),
+            sheetState =
+                rememberModalBottomSheetState(
+                    skipPartiallyExpanded = true,
+                    confirmValueChange = { !state.isSubmitting || it != SheetValue.Hidden },
+                ),
             containerColor = PantopusColors.appBg,
         ) {
             SlotEditorSheet(

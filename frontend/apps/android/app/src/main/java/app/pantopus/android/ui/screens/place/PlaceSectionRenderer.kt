@@ -18,6 +18,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
  * get a LockedCard routed by band; everything else is a SectionCard
  * driven by [PlacePresentation]. Reused by the dashboard + detail pages.
  */
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun PlaceSectionView(
     env: PlaceSectionEnvelope,
