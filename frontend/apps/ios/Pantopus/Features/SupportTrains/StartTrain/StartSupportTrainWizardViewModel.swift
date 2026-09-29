@@ -51,6 +51,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public var visibility: StartSupportTrainVisibility = .neighbors
     public private(set) var launchError: String?
     public private(set) var publishedTrainId: String?
+    /// A half-built draft a failed launch couldn't delete; the next launch removes it first.
+    private var leftoverTrainId: String?
 
     // MARK: - Constants
 
@@ -406,6 +408,10 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         isSubmittingFlag = true
         launchError = nil
         defer { isSubmittingFlag = false }
+        if let leftover = leftoverTrainId,
+           await deleteDraft(leftover) {
+            leftoverTrainId = nil
+        }
         let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = CreateSupportTrainBody(
             draftPayload: CreateSupportTrainBody.DraftPayload(story: trimmedReason),
@@ -413,13 +419,12 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             recipientUserId: selectedBeneficiary?.userId,
             sharingMode: effectiveSharingMode
         )
+        var createdTrainId: String?
         do {
             let created: CreateSupportTrainResponse = try await api.request(
                 SupportTrainsEndpoints.create(body: body)
             )
-            // Persist the train id immediately — if a follow-up POST
-            // fails we still want to drop the organizer into the new
-            // train's editor rather than losing the draft.
+            createdTrainId = created.id
             publishedTrainId = created.id
             for slot in generatedSlots {
                 let slotBody = AddSupportTrainSlotBody(
@@ -443,8 +448,28 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             )
             step = .success
         } catch {
+            // Launching is several calls. If a later one fails, remove the
+            // half-built draft so trying again makes exactly one train.
+            if let id = createdTrainId {
+                publishedTrainId = nil
+                let deleted = await deleteDraft(id)
+                if !deleted { leftoverTrainId = id }
+            }
             launchError = (error as? APIError)?.errorDescription
                 ?? "Couldn't launch the train. Try again."
+        }
+    }
+
+    /// Deletes a draft this wizard created; false when the delete didn't go through.
+    private func deleteDraft(_ trainId: String) async -> Bool {
+        do {
+            _ = try await api.request(
+                SupportTrainActionsEndpoints.deleteTrain(supportTrainId: trainId),
+                as: EmptyResponse.self
+            )
+            return true
+        } catch {
+            return false
         }
     }
 

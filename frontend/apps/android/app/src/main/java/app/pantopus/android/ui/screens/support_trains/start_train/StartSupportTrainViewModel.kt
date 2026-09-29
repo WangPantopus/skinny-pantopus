@@ -73,6 +73,9 @@ class StartSupportTrainViewModel
         private val _publishedTrainId = MutableStateFlow<String?>(null)
         val publishedTrainId: StateFlow<String?> = _publishedTrainId.asStateFlow()
 
+        /** A half-built draft a failed launch couldn't delete; the next launch removes it first. */
+        private var leftoverTrainId: String? = null
+
         private var searchJob: Job? = null
 
         // ─── Step 1 actions ─────────────────────────────────────────────
@@ -430,6 +433,9 @@ class StartSupportTrainViewModel
                 )
             viewModelScope.launch {
                 try {
+                    leftoverTrainId?.let { leftover ->
+                        if (supportTrains.deleteTrain(leftover) is NetworkResult.Success) leftoverTrainId = null
+                    }
                     val created =
                         when (val result = supportTrains.create(body)) {
                             is NetworkResult.Success -> result.data
@@ -452,6 +458,7 @@ class StartSupportTrainViewModel
                             is NetworkResult.Success -> Unit
                             is NetworkResult.Failure -> {
                                 _launchError.value = "Couldn't add a slot. Try again."
+                                discardDraft(created.id)
                                 return@launch
                             }
                         }
@@ -462,12 +469,22 @@ class StartSupportTrainViewModel
                         }
                         is NetworkResult.Failure -> {
                             _launchError.value = "Couldn't publish the train. Try again."
+                            discardDraft(created.id)
                         }
                     }
                 } finally {
                     _isSubmitting.value = false
                 }
             }
+        }
+
+        /**
+         * Launching is several calls. If a later one fails, remove the half-built
+         * draft so trying again makes exactly one train.
+         */
+        private suspend fun discardDraft(trainId: String) {
+            _publishedTrainId.value = null
+            if (supportTrains.deleteTrain(trainId) !is NetworkResult.Success) leftoverTrainId = trainId
         }
 
         private fun handleSuccessExit() {
