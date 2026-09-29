@@ -48,7 +48,7 @@ function FindContent() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition">
+        <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-app-text" />
         </button>
         <h1 className="text-xl font-bold text-app-text">Find or Add Home</h1>
