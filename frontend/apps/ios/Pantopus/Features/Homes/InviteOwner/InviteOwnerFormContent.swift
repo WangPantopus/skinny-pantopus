@@ -26,6 +26,8 @@ struct InviteOwnerFormContent: View {
                 contentType: .emailAddress,
                 identifier: "inviteOwnerEmailField"
             )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             VStack(alignment: .leading, spacing: Spacing.s1) {
                 PantopusTextField(
                     "Phone (optional)",

@@ -157,6 +157,8 @@ struct InviteMemberWizardView: View {
                 contentType: .emailAddress,
                 identifier: "inviteMember_email"
             )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             Picker("Household role", selection: $model.role) {
                 Text("Member").tag("member")
                 Text("Guest").tag("guest")

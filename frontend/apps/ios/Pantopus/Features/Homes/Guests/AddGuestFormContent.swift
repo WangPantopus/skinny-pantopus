@@ -46,6 +46,8 @@ struct AddGuestFormContent: View {
                     keyboardType: .emailAddress,
                     identifier: "field_guestContact"
                 )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 Text("You'll share the pass link with them next.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
