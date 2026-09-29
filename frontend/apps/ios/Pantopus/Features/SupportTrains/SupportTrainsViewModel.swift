@@ -109,8 +109,9 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     // MARK: - Lifecycle
 
     public func load() async {
-        if loadedOnce { return }
-        state = .loading
+        // After the first load, each appearance re-reads quietly, so a train
+        // deleted or re-statused from its detail or Manage screen doesn't linger.
+        if !loadedOnce { state = .loading }
         await fetchBoth()
     }
 

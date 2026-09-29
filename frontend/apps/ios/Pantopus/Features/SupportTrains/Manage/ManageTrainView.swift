@@ -27,6 +27,9 @@ import SwiftUI
 public struct ManageTrainView: View {
     @State private var viewModel: ManageTrainViewModel
     private let onClose: @MainActor () -> Void
+    /// Runs after a successful delete instead of `onClose`, so a host can
+    /// leave the deleted train's own screens too.
+    private let onDeleted: (@MainActor () -> Void)?
     /// Organize rows. A nil handler hides its row: there is no analytics
     /// backend or native date editor yet, so hosts leave those nil.
     private let onOpenAnalytics: (@MainActor (String) -> Void)?
@@ -36,12 +39,14 @@ public struct ManageTrainView: View {
     public init(
         viewModel: ManageTrainViewModel,
         onClose: @escaping @MainActor () -> Void,
+        onDeleted: (@MainActor () -> Void)? = nil,
         onOpenAnalytics: (@MainActor (String) -> Void)? = nil,
         onEditDates: (@MainActor (String) -> Void)? = nil,
         onInviteHelpers: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onClose = onClose
+        self.onDeleted = onDeleted
         self.onOpenAnalytics = onOpenAnalytics
         self.onEditDates = onEditDates
         self.onInviteHelpers = onInviteHelpers
@@ -107,7 +112,7 @@ public struct ManageTrainView: View {
             Text(viewModel.actionError ?? "")
         }
         .onChange(of: viewModel.didDeleteTrain) { _, deleted in
-            if deleted { onClose() }
+            if deleted { (onDeleted ?? onClose)() }
         }
     }
 

@@ -5696,9 +5696,21 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                             },
                         ),
-                ) {
+                ) { entry ->
+                    val trainId = entry.arguments?.getString(ChildRoutes.MANAGE_TRAIN_ID_KEY).orEmpty()
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
+                        // The deleted train's detail underneath could only show
+                        // "not found", so a delete leaves it too.
+                        onDeleted = {
+                            val below = navController.previousBackStackEntry
+                            navController.popBackStack()
+                            if (below?.destination?.route == ChildRoutes.SUPPORT_TRAIN_DETAIL &&
+                                below.arguments?.getString(ChildRoutes.SUPPORT_TRAIN_DETAIL_ID_KEY) == trainId
+                            ) {
+                                navController.popBackStack()
+                            }
+                        },
                         // Invite shares the train, as the detail's Share does.
                         // Analytics and Edit dates have no backend / native
                         // editor yet, so they aren't wired and their rows are

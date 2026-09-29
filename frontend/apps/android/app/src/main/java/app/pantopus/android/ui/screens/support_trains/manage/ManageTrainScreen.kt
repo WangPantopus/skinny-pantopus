@@ -90,6 +90,9 @@ const val MANAGE_TRAIN_RETRY_TAG: String = "manageTrainRetry"
 @Composable
 fun ManageTrainScreen(
     onBack: () -> Unit,
+    // Runs after a successful delete instead of onBack, so a host can leave
+    // the deleted train's own screens too.
+    onDeleted: () -> Unit = onBack,
     // Organize rows. A null handler hides its row: there is no analytics
     // backend or native date editor yet, so hosts leave those null.
     onOpenAnalytics: ((String) -> Unit)? = null,
@@ -191,7 +194,7 @@ fun ManageTrainScreen(
     }
 
     LaunchedEffect(state.didDeleteTrain) {
-        if (state.didDeleteTrain) onBack()
+        if (state.didDeleteTrain) onDeleted()
     }
 }
 

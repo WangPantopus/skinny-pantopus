@@ -58,8 +58,9 @@ public final class SupportTrainsSearchViewModel {
     // MARK: - Lifecycle
 
     public func load() async {
-        if loadedOnce { return }
-        isLoading = true
+        // After the first load, each appearance re-reads quietly, so a train
+        // deleted from its detail or Manage screen drops out of the results.
+        if !loadedOnce { isLoading = true }
         defer { isLoading = false }
         do {
             let response: SupportTrainsListResponse = try await api.request(
@@ -71,8 +72,9 @@ public final class SupportTrainsSearchViewModel {
             // A failed corpus load degrades to "no matches" — the user can
             // cancel and retry from the list. The list screen owns the
             // first-class error/retry surface; search stays inside the
-            // shell's four-phase contract.
-            corpus = []
+            // shell's four-phase contract. A failed quiet re-read keeps
+            // the results already shown.
+            if !loadedOnce { corpus = [] }
         }
     }
 
