@@ -13,7 +13,7 @@ import LockdownPanel from './LockdownPanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import Image from 'next/image';
 import ErrorState from '@/components/ui/ErrorState';
-import { failureMessage } from '../share/shareFailure';
+import { failureMessage, shareFailure } from '../share/shareFailure';
 
 // ---- Role config (shared with MembersPanel) ----
 
@@ -104,6 +104,8 @@ export default function MembersSecurityTab({
 
   // Guest passes summary
   const [activePasses, setActivePasses] = useState(0);
+  // Set while Lockdown turns guest passes off (the server says so); not an error.
+  const [passesNotice, setPassesNotice] = useState('');
 
   // Audit log
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
@@ -140,6 +142,7 @@ export default function MembersSecurityTab({
     const generation = ++securityGeneration.current;
     setSecurityLoading(true);
     setSecurityErrors({});
+    setPassesNotice('');
     try {
       const [passesRes, settingsRes, secretsRes] = await Promise.allSettled([
         canManagePasses ? api.homeIam.getGuestPasses(homeId) : Promise.resolve({ passes: [] }),
@@ -155,6 +158,8 @@ export default function MembersSecurityTab({
             (!p.end_at || new Date(p.end_at) > new Date())
         );
         setActivePasses(active.length);
+      } else if (shareFailure(passesRes.reason).code === 'HOME_LOCKDOWN_ACTIVE') {
+        setPassesNotice(failureMessage(passesRes.reason, 'Guest passes are off while Lockdown is on.'));
       } else errors.passes = failureMessage(passesRes.reason, 'Guest passes could not be loaded. Please try again.');
       if (settingsRes.status === 'fulfilled') {
         setLockdownEnabled((settingsRes.value as Record<string, any>)?.home?.lockdown_enabled || false);
@@ -367,7 +372,9 @@ export default function MembersSecurityTab({
               <span className="text-lg">🔗</span>
               <span className="text-sm font-semibold text-app-text">Guest Passes</span>
             </div>
-            {securityErrors.passes ? <ErrorState message={securityErrors.passes} onRetry={loadSecurity} /> : <>
+            {securityErrors.passes ? <ErrorState message={securityErrors.passes} onRetry={loadSecurity} /> : passesNotice ? (
+              <p className="text-xs text-app-text-secondary">{passesNotice}</p>
+            ) : <>
               <div className="text-2xl font-bold text-app-text">{activePasses}</div>
               <p className="text-[10px] text-app-text-muted mt-0.5">active pass{activePasses !== 1 ? 'es' : ''}</p>
             </>}

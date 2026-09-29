@@ -352,6 +352,22 @@ function shareFailure(res, error) {
     code: error.code || 'SHARE_UNAVAILABLE',
   });
 }
+// While Lockdown is on the share context denies every actor, the household's own
+// pass managers included. Tell a manager why, instead of the guest-facing denial.
+async function guestPassFailure(res, error, homeId, actorId) {
+  if (error.code === 'SHARE_DENIED') {
+    try {
+      const { data: home } = await supabaseAdmin.from('Home').select('lockdown_enabled').eq('id', homeId).maybeSingle();
+      if (home?.lockdown_enabled === true && (await checkHomePermission(homeId, actorId, 'members.manage')).hasAccess) {
+        return res.status(403).json({
+          error: 'Guest passes are off while Lockdown is on. Disable Lockdown to view or create them.',
+          code: 'HOME_LOCKDOWN_ACTIVE',
+        });
+      }
+    } catch { /* keep the share service's own answer */ }
+  }
+  return shareFailure(res, error);
+}
 for (const [kind, path, envelope] of [
   ['guest', '/:id/guest-passes', 'pass'], ['scoped', '/:id/scoped-grants', 'grant'],
 ]) {
@@ -360,7 +376,9 @@ for (const [kind, path, envelope] of [
       const result = await homeExternalShareService.mutate({ homeId: req.params.id,
         actorId: req.user.id, kind, action: 'create', payload: req.body });
       return res.status(201).json({ [envelope]: result.record, token: result.token });
-    } catch (error) { return shareFailure(res, error); }
+    } catch (error) {
+      return kind === 'guest' ? guestPassFailure(res, error, req.params.id, req.user.id) : shareFailure(res, error);
+    }
   });
   router.delete(`${path}/:shareId`, verifyToken, async (req, res) => {
     try {
@@ -375,7 +393,7 @@ router.get('/:id/guest-passes', verifyToken, async (req, res) => {
     const result = await homeExternalShareService.mutate({ homeId: req.params.id,
       actorId: req.user.id, kind: 'guest', action: 'list', payload: { include_revoked: req.query.include_revoked === 'true' } });
     return res.json({ passes: result.records });
-  } catch (error) { return shareFailure(res, error); }
+  } catch (error) { return guestPassFailure(res, error, req.params.id, req.user.id); }
 });
 
 
