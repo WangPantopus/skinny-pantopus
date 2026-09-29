@@ -105,6 +105,7 @@ public final class PulsePostDetailViewModel {
             if composerText.isEmpty { pendingComment = nil }
         }
     }
+
     private var composerRevision: UInt = 0
     private var pendingComment: PostCommentRequest?
 

@@ -228,7 +228,7 @@ public extension ManageTrainViewModel {
             return "guest:\(email.lowercased())"
         }
         let helperCount: Int? = helperIdentities.flatMap { ids in
-            ids.contains(where: { $0 == nil }) ? nil : Set(ids.compactMap { $0 }).count
+            ids.contains { $0 == nil } ? nil : Set(ids.compactMap { $0 }).count
         }
         replaceOrganizerSurfaces(
             helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows),

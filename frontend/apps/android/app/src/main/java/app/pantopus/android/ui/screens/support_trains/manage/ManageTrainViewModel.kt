@@ -209,8 +209,11 @@ class ManageTrainViewModel
             // Keep an already-loaded dashboard on screen while refreshing
             // (an organizer action re-runs `load()`); mirrors iOS.
             _state.update {
-                if (it.state is ManageTrainState.Loaded) it.copy(deliveredMeals = null)
-                else it.copy(state = ManageTrainState.Loading, deliveredMeals = null)
+                if (it.state is ManageTrainState.Loaded) {
+                    it.copy(deliveredMeals = null)
+                } else {
+                    it.copy(state = ManageTrainState.Loading, deliveredMeals = null)
+                }
             }
             viewModelScope.launch {
                 when (val result = repo.detail(trainId)) {
@@ -230,6 +233,7 @@ class ManageTrainViewModel
          * Fan-out for the organizer-only feeds. Failures degrade to empty
          * sections instead of blowing up the whole screen.
          */
+        @Suppress("CyclomaticComplexMethod")
         private suspend fun loadOrganizerSurfaces(slots: List<ManageSlotRow>) {
             val reservationsResult = repo.reservations(trainId)
             val reservations =
@@ -247,31 +251,47 @@ class ManageTrainViewModel
                     is NetworkResult.Success -> result.data
                     is NetworkResult.Failure -> null
                 }
-            val helperIds = reservations.filter { it.status != "canceled" }.map { row ->
-                if (row.status !in listOf("reserved", "delivered", "confirmed")) null
-                else (row.helperUser?.id ?: row.userId)?.takeIf { it.isNotBlank() }?.let { "user:$it" }
-                    ?: row.guestEmail?.trim()?.takeIf { it.isNotEmpty() }?.lowercase()?.let { "guest:$it" }
-            }
-            val helperCount = if (reservationsResult is NetworkResult.Success && helperIds.none { it == null }) {
-                helperIds.filterNotNull().distinct().size.toString()
-            } else "—"
+            val helperIds =
+                reservations.filter { it.status != "canceled" }.map { row ->
+                    if (row.status !in listOf("reserved", "delivered", "confirmed")) {
+                        null
+                    } else {
+                        (row.helperUser?.id ?: row.userId)?.takeIf { it.isNotBlank() }?.let { "user:$it" }
+                            ?: row.guestEmail?.trim()?.takeIf { it.isNotEmpty() }?.lowercase()?.let { "guest:$it" }
+                    }
+                }
+            val helperCount =
+                if (reservationsResult is NetworkResult.Success && helperIds.none { it == null }) {
+                    helperIds.filterNotNull().distinct().size.toString()
+                } else {
+                    "—"
+                }
             _state.update {
                 val loaded = (it.state as? ManageTrainState.Loaded)?.content
                 it.copy(
-                    state = loaded?.let { content ->
-                        ManageTrainState.Loaded(content.copy(
-                            helpersValue = helperCount,
-                            audienceChips = content.audienceChips.map { chip ->
-                                if (chip.id == "all") chip.copy(count = helperCount) else chip
-                            },
-                            close = content.close.copy(neighborsHelped = helperCount),
-                        ))
-                    } ?: it.state,
+                    state =
+                        loaded?.let { content ->
+                            ManageTrainState.Loaded(
+                                content.copy(
+                                    helpersValue = helperCount,
+                                    audienceChips =
+                                        content.audienceChips.map { chip ->
+                                            if (chip.id == "all") chip.copy(count = helperCount) else chip
+                                        },
+                                    close = content.close.copy(neighborsHelped = helperCount),
+                                ),
+                            )
+                        } ?: it.state,
                     helperRows = ManageOrganizerProjection.helperRows(reservations, slots),
                     helpersFailed = reservationsResult is NetworkResult.Failure,
-                    deliveredMeals = if (reservationsResult is NetworkResult.Success) reservations.count {
-                        it.status in listOf("delivered", "confirmed") && it.contributionMode in listOf("cook", "takeout")
-                    } else null,
+                    deliveredMeals =
+                        if (reservationsResult is NetworkResult.Success) {
+                            reservations.count {
+                                it.status in listOf("delivered", "confirmed") && it.contributionMode in listOf("cook", "takeout")
+                            }
+                        } else {
+                            null
+                        },
                     organizerRows = ManageOrganizerProjection.organizerRows(organizers),
                     fund = fund,
                 )
@@ -338,17 +358,27 @@ class ManageTrainViewModel
                     ?: content.helpersValue
             _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
-                when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId, pushToPhones = current.pushToPhones))) {
+                when (
+                    val result =
+                        repo.postUpdate(
+                            trainId,
+                            SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId, pushToPhones = current.pushToPhones),
+                        )
+                ) {
                     is NetworkResult.Success -> {
                         updateRequestId = java.util.UUID.randomUUID().toString()
                         _state.update {
-                            it.copy(isSubmitting = false, draftMessage = if (it.draftMessage == body) "" else it.draftMessage,
-                                toast = "Update sent · $helperCount helpers")
+                            it.copy(
+                                isSubmitting = false,
+                                draftMessage = if (it.draftMessage == body) "" else it.draftMessage,
+                                toast = "Update sent · $helperCount helpers",
+                            )
                         }
                     }
-                    is NetworkResult.Failure -> _state.update {
-                        it.copy(isSubmitting = false, actionError = result.error.displayMessage("Couldn't send that update."))
-                    }
+                    is NetworkResult.Failure ->
+                        _state.update {
+                            it.copy(isSubmitting = false, actionError = result.error.displayMessage("Couldn't send that update."))
+                        }
                 }
             }
         }
@@ -385,23 +415,38 @@ class ManageTrainViewModel
                     when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))) {
                         is NetworkResult.Success -> Unit
                         is NetworkResult.Failure -> {
-                            _state.update { it.copy(isSubmitting = false,
-                                actionError = result.error.displayMessage("Couldn't send the thank-you note.")) }
+                            _state.update {
+                                it.copy(
+                                    isSubmitting = false,
+                                    actionError = result.error.displayMessage("Couldn't send the thank-you note."),
+                                )
+                            }
                             return@launch
                         }
                     }
                 }
                 when (val result = repo.complete(trainId)) {
-                    is NetworkResult.Success -> _state.update {
-                        it.copy(isSubmitting = false,
-                            state = ManageTrainState.Loaded(content.copy(isActive = false, status = "completed")),
-                            sheetMode = ManageTrainSheetMode.CLOSED,
-                            toast = if (note.isEmpty()) "Train closed" else "Train closed · thanks sent to ${content.helpersValue} helpers")
-                    }
-                    is NetworkResult.Failure -> _state.update {
-                        it.copy(isSubmitting = false,
-                            actionError = result.error.displayMessage("Couldn't close this train."))
-                    }
+                    is NetworkResult.Success ->
+                        _state.update {
+                            it.copy(
+                                isSubmitting = false,
+                                state = ManageTrainState.Loaded(content.copy(isActive = false, status = "completed")),
+                                sheetMode = ManageTrainSheetMode.CLOSED,
+                                toast =
+                                    if (note.isEmpty()) {
+                                        "Train closed"
+                                    } else {
+                                        "Train closed · thanks sent to ${content.helpersValue} helpers"
+                                    },
+                            )
+                        }
+                    is NetworkResult.Failure ->
+                        _state.update {
+                            it.copy(
+                                isSubmitting = false,
+                                actionError = result.error.displayMessage("Couldn't close this train."),
+                            )
+                        }
                 }
             }
         }

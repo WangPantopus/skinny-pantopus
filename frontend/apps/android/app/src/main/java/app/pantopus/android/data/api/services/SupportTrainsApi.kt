@@ -4,13 +4,13 @@ import app.pantopus.android.data.api.models.support_trains.AddSupportTrainSlotBo
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationsResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateBody
+import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
-import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
-import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
-import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET

@@ -5,6 +5,15 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
+// An applied migration that shipped without its compatibility line cannot be
+// edited, so its statement is recorded in the policy instead, pinned to the
+// file's exact bytes.
+function documentedCompatibility(policy, name, bytes) {
+  const note = (policy.compatibilityNotes || {})[name];
+  return Boolean(note && note.backwardsCompatible === 'yes' && typeof note.reason === 'string'
+    && note.reason.trim() && note.sha256 === hash(bytes));
+}
+
 function validate(policy, files) {
   const errors = [];
   if (!['legacy', 'baselined'].includes(policy.mode)) return ['Unknown database adoption mode'];
@@ -40,7 +49,9 @@ function validate(policy, files) {
     if (/^\s*\\/m.test(sql)) errors.push(`psql commands are not supported: ${name}`);
     if (!Object.hasOwn(baselineFiles, name)) {
       if (match[1] <= latestBaseline) errors.push(`Migration precedes the baseline: ${name}`);
-      if (!/backwards compatible:\s*yes/i.test(sql)) errors.push(`Document compatibility with the currently deployed app: ${name}`);
+      if (!/backwards compatible:\s*yes/i.test(sql) && !documentedCompatibility(policy, name, files[name])) {
+        errors.push(`Document compatibility with the currently deployed app: ${name}`);
+      }
       if (!/lock_timeout/i.test(sql)) errors.push(`Set a bounded lock_timeout: ${name}`);
     }
   }
@@ -104,6 +115,9 @@ function check(root, base) {
       }
       for (const name of Object.keys(files).filter(n => n.startsWith('supabase/migrations/') && !names.includes(n))) {
         if (path.basename(name).slice(0, 14) <= newest) errors.push(`New migrations must sort after ${newest}: ${name}`);
+      }
+      for (const name of Object.keys(policy.compatibilityNotes || {})) {
+        if (!names.includes(name)) errors.push(`Compatibility notes are only for applied migrations; write "Backwards compatible: yes" in ${name}`);
       }
     }
   }

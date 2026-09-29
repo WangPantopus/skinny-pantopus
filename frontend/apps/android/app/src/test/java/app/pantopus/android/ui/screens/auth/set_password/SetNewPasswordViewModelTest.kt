@@ -50,27 +50,27 @@ class SetNewPasswordViewModelTest {
         vm.onPasswordChange("weak")
         vm.onConfirmPasswordChange("weak")
         assertFalse(vm.uiState.value.canSubmit)
-        vm.onPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
         vm.onConfirmPasswordChange("different1")
         assertFalse(vm.uiState.value.canSubmit)
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onConfirmPasswordChange("strongpass12")
         assertTrue(vm.uiState.value.canSubmit)
     }
 
     @Test
     fun `canSubmit false when token missing`() {
         val vm = buildVm(token = "")
-        vm.onPasswordChange("strongpass1")
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
+        vm.onConfirmPasswordChange("strongpass12")
         assertFalse(vm.uiState.value.canSubmit)
     }
 
     @Test
     fun `strength hint switches from rule to praise when strong`() {
         val vm = buildVm(token = "tok")
-        assertEquals("Use 8+ characters with a number and a symbol.", vm.uiState.value.strengthHint)
-        vm.onPasswordChange("strongpass1") // 11 chars, no symbol → fair, still the rule
-        assertEquals("Use 8+ characters with a number and a symbol.", vm.uiState.value.strengthHint)
+        assertEquals("Use 12+ characters with a number and a symbol.", vm.uiState.value.strengthHint)
+        vm.onPasswordChange("strongpass12") // 12 chars, no symbol → fair, still the rule
+        assertEquals("Use 12+ characters with a number and a symbol.", vm.uiState.value.strengthHint)
         vm.onPasswordChange("river-otter-92!") // 15 chars + number + symbol → strong
         assertEquals(3, vm.uiState.value.passwordStrength)
         assertEquals("Strong", vm.uiState.value.passwordStrengthLabel)
@@ -80,11 +80,11 @@ class SetNewPasswordViewModelTest {
     @Test
     fun `confirm match state tracks input`() {
         val vm = buildVm(token = "tok")
-        vm.onPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
         assertEquals(SetNewPasswordViewModel.ConfirmMatch.None, vm.uiState.value.confirmMatch)
         vm.onConfirmPasswordChange("strongpas")
         assertEquals(SetNewPasswordViewModel.ConfirmMatch.Mismatch, vm.uiState.value.confirmMatch)
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onConfirmPasswordChange("strongpass12")
         assertEquals(SetNewPasswordViewModel.ConfirmMatch.Match, vm.uiState.value.confirmMatch)
     }
 
@@ -97,15 +97,15 @@ class SetNewPasswordViewModelTest {
             coEvery { repo.resetPassword(capture(tokenSlot), capture(passwordSlot)) } returns Unit
 
             val vm = buildVm(token = "deep-tok", repo = repo)
-            vm.onPasswordChange("strongpass1")
-            vm.onConfirmPasswordChange("strongpass1")
+            vm.onPasswordChange("strongpass12")
+            vm.onConfirmPasswordChange("strongpass12")
             vm.submit()
             advanceUntilIdle()
 
             val state = vm.uiState.value
             assertTrue(state.phase is SetNewPasswordViewModel.Phase.Success)
             assertEquals("deep-tok", tokenSlot.captured)
-            assertEquals("strongpass1", passwordSlot.captured)
+            assertEquals("strongpass12", passwordSlot.captured)
             assertNull(state.errorMessage)
         }
 
@@ -116,8 +116,8 @@ class SetNewPasswordViewModelTest {
             coEvery { repo.resetPassword(any(), any()) } throws AuthError.ServerError("Invalid or expired reset token")
 
             val vm = buildVm(token = "stale", repo = repo)
-            vm.onPasswordChange("strongpass1")
-            vm.onConfirmPasswordChange("strongpass1")
+            vm.onPasswordChange("strongpass12")
+            vm.onConfirmPasswordChange("strongpass12")
             vm.submit()
             advanceUntilIdle()
 

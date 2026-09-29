@@ -89,8 +89,14 @@ final class ManageTrainViewModelTests: XCTestCase {
         XCTAssertEqual(vm.selectedAudienceId, "all", "Unknown ids are dropped")
     }
 
-    func testSendUpdateClearsDraftAndFlashesToast() async {
-        SequencedURLProtocol.sequence = [.status(201, body: "{\"id\":\"u1\"}")]
+    func testSendUpdateClearsDraftAndFlashesToast() async throws {
+        // The draft only clears once the server echoes the saved update (id, body, push choice).
+        let reply = try JSONSerialization.data(withJSONObject: [
+            "id": "5c1d6f0e-2b7a-4c3d-9e8f-1a2b3c4d5e6f",
+            "body": ManageTrainSampleData.active.draftMessage,
+            "push_to_phones": true
+        ])
+        SequencedURLProtocol.sequence = try [.status(201, body: XCTUnwrap(String(bytes: reply, encoding: .utf8)))]
         let vm = makeVM()
         await vm.load()
         XCTAssertNil(vm.toast)
@@ -111,7 +117,10 @@ final class ManageTrainViewModelTests: XCTestCase {
     }
 
     func testConfirmCloseFlipsTrainAndFiresToast() async {
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"id\":\"t\",\"status\":\"completed\"}")]
+        // Close only lands once the server confirms this train is completed.
+        SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"id\":\"\(ManageTrainSampleData.trainId)\",\"status\":\"completed\"}")
+        ]
         let vm = makeVM()
         await vm.load()
         vm.showCloseSheet()

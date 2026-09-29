@@ -92,7 +92,7 @@ class PulsePostDetailViewModelTest {
             userId = "u1",
             title = null,
             content = "Anyone know a good handyman?",
-            postType = "general",
+            postType = "ask_local",
             postFormat = "standard",
             purpose = "ask",
             mediaUrls = emptyList(),

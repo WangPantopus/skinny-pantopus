@@ -70,15 +70,16 @@ class HomeTabHostViewModel
             if (previewJob?.isActive == true) return
             val draft = _arrival.value.draft ?: return
             _arrival.value = _arrival.value.copy(previewError = false, isLoadingPreview = true)
-            previewJob = viewModelScope.launch {
-                val result = placeRepository.publicPreview(draft.label)
-                if (userId != draft.userId || _arrival.value.draft?.id != draft.id) return@launch
-                _arrival.value = _arrival.value.copy(isLoadingPreview = false)
-                when (result) {
-                    is NetworkResult.Success -> _arrival.value = _arrival.value.copy(preview = result.data)
-                    is NetworkResult.Failure -> _arrival.value = _arrival.value.copy(previewError = true)
+            previewJob =
+                viewModelScope.launch {
+                    val result = placeRepository.publicPreview(draft.label)
+                    if (userId != draft.userId || _arrival.value.draft?.id != draft.id) return@launch
+                    _arrival.value = _arrival.value.copy(isLoadingPreview = false)
+                    when (result) {
+                        is NetworkResult.Success -> _arrival.value = _arrival.value.copy(preview = result.data)
+                        is NetworkResult.Failure -> _arrival.value = _arrival.value.copy(previewError = true)
+                    }
                 }
-            }
         }
 
         fun save() {

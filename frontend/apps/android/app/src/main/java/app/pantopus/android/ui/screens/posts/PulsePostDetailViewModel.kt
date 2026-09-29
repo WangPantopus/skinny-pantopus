@@ -394,8 +394,9 @@ class PulsePostDetailViewModel
             val body = _composerText.value.trim()
             if (body.isEmpty() || _isSendingComment.value) return
             val parentId = _replyTarget.value?.commentId
-            val req = pendingComment?.takeIf { it.comment == body && it.parentCommentId == parentId }
-                ?: PostCommentRequest(body, parentId, java.util.UUID.randomUUID().toString())
+            val req =
+                pendingComment?.takeIf { it.comment == body && it.parentCommentId == parentId }
+                    ?: PostCommentRequest(body, parentId, java.util.UUID.randomUUID().toString())
             pendingComment = req
             val submittedRevision = composerRevision
             _isSendingComment.value = true

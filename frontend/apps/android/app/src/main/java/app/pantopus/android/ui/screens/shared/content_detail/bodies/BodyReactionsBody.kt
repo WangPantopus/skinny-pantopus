@@ -9,15 +9,15 @@ package app.pantopus.android.ui.screens.shared.content_detail.bodies
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,17 +43,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
@@ -484,14 +483,15 @@ private fun CommentComposer(
         )
         val canSend = text.trim().isNotEmpty() && !isSending
         val interactionSource = remember { MutableInteractionSource() }
-        val fieldColors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
-            unfocusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
-            focusedContainerColor = PantopusColors.appSurface,
-            unfocusedContainerColor = PantopusColors.appSurface,
-            focusedPlaceholderColor = PantopusColors.appTextSecondary,
-            unfocusedPlaceholderColor = PantopusColors.appTextSecondary,
-        )
+        val fieldColors =
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
+                unfocusedBorderColor = if (isFocusedPresentation) PantopusColors.primary500 else PantopusColors.appBorder,
+                focusedContainerColor = PantopusColors.appSurface,
+                unfocusedContainerColor = PantopusColors.appSurface,
+                focusedPlaceholderColor = PantopusColors.appTextSecondary,
+                unfocusedPlaceholderColor = PantopusColors.appTextSecondary,
+            )
         BasicTextField(
             value = text,
             onValueChange = onTextChange,

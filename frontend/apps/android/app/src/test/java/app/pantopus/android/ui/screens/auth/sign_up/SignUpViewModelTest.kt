@@ -76,33 +76,33 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `password required, 8 chars, letter, digit`() {
+    fun `password required, 12 chars, letter, digit`() {
         val vm = buildVm()
         assertEquals("Password is required.", vm.uiState.value.validate(SignUpField.Password))
         vm.onPasswordChange("short1")
-        assertEquals("Password must be at least 8 characters.", vm.uiState.value.validate(SignUpField.Password))
-        vm.onPasswordChange("12345678")
+        assertEquals("Password must be at least 12 characters.", vm.uiState.value.validate(SignUpField.Password))
+        vm.onPasswordChange("123456789012")
         assertEquals(
             "Password must include at least one letter.",
             vm.uiState.value.validate(SignUpField.Password),
         )
-        vm.onPasswordChange("abcdefgh")
+        vm.onPasswordChange("abcdefghijkl")
         assertEquals(
             "Password must include at least one number.",
             vm.uiState.value.validate(SignUpField.Password),
         )
-        vm.onPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
         assertNull(vm.uiState.value.validate(SignUpField.Password))
     }
 
     @Test
     fun `confirmPassword must match`() {
         val vm = buildVm()
-        vm.onPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
         assertEquals("Confirm your password.", vm.uiState.value.validate(SignUpField.ConfirmPassword))
         vm.onConfirmPasswordChange("different1")
         assertEquals("Passwords don't match.", vm.uiState.value.validate(SignUpField.ConfirmPassword))
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onConfirmPasswordChange("strongpass12")
         assertNull(vm.uiState.value.validate(SignUpField.ConfirmPassword))
     }
 
@@ -179,8 +179,8 @@ class SignUpViewModelTest {
         assertFalse(vm.uiState.value.isValid)
         // The slim form: email + password + terms is a complete sign-up.
         vm.onEmailChange("alice@example.com")
-        vm.onPasswordChange("strongpass1")
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
+        vm.onConfirmPasswordChange("strongpass12")
         vm.onTermsToggle()
         assertTrue(vm.uiState.value.isValid)
         vm.onTermsToggle()
@@ -197,7 +197,7 @@ class SignUpViewModelTest {
         assertEquals(0, vm.uiState.value.passwordStrength)
         vm.onPasswordChange("short")
         assertEquals(1, vm.uiState.value.passwordStrength)
-        vm.onPasswordChange("passw0rd")
+        vm.onPasswordChange("passw0rdpass")
         assertEquals(2, vm.uiState.value.passwordStrength)
         vm.onPasswordChange("strongerpass1!")
         assertEquals(3, vm.uiState.value.passwordStrength)
@@ -337,8 +337,8 @@ class SignUpViewModelTest {
 
     private fun fillValid(vm: SignUpViewModel) {
         vm.onEmailChange("alice@example.com")
-        vm.onPasswordChange("strongpass1")
-        vm.onConfirmPasswordChange("strongpass1")
+        vm.onPasswordChange("strongpass12")
+        vm.onConfirmPasswordChange("strongpass12")
         vm.onUsernameChange("alice_21")
         vm.onFirstNameChange("Maria")
         vm.onLastNameChange("Kowalski")

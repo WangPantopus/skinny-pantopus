@@ -49,7 +49,10 @@ class MaintenanceCostJsonAdapter {
         if (reader.peek() == JsonReader.Token.NULL) reader.nextNull() else decimalAdapter.fromJson(reader)
 
     @ToJson
-    fun toJson(writer: JsonWriter, @MaintenanceCost value: BigDecimal?) = decimalAdapter.toJson(writer, value)
+    fun toJson(
+        writer: JsonWriter,
+        @MaintenanceCost value: BigDecimal?,
+    ) = decimalAdapter.toJson(writer, value)
 }
 
 /** Envelope for `GET /api/homes/:id/maintenance`. */
@@ -94,7 +97,10 @@ data class UpdateMaintenanceRequest(
 /** Preserve omitted fields while sending deliberate clears as JSON null. */
 class UpdateMaintenanceRequestJsonAdapter {
     @ToJson
-    fun toJson(writer: JsonWriter, value: UpdateMaintenanceRequest) {
+    fun toJson(
+        writer: JsonWriter,
+        value: UpdateMaintenanceRequest,
+    ) {
         val previous = writer.serializeNulls
         writer.serializeNulls = true
         try {
@@ -112,6 +118,7 @@ class UpdateMaintenanceRequestJsonAdapter {
         }
     }
 
+    @Suppress("UnusedParameter")
     @FromJson
     fun fromJson(reader: JsonReader): UpdateMaintenanceRequest =
         error("UpdateMaintenanceRequest is request-only; deserialization is not supported.")

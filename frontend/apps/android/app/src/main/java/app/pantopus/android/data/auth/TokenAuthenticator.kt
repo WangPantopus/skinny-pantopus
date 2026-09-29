@@ -42,6 +42,7 @@ class TokenAuthenticator
         private val tokenStorage: TokenStorage,
         private val authRepositoryProvider: dagger.Lazy<AuthRepository>,
     ) : Authenticator {
+        @Suppress("ReturnCount")
         override fun authenticate(
             route: Route?,
             response: Response,
