@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-28T12:47Z (batch108 merged; push choice accepted; tabs verified)
+## CURRENT RESUME POINT — 2026-09-29T02:43Z (batch109 merged; #718 privacy fix accepted; U reconciliation in progress)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -28,6 +28,31 @@
 
 
 
+
+
+> **UPDATE 2026-09-29T02:43Z — batch109 merged: #718 Post photo retries, with a privacy fix found in review; U reconciliation started.**
+> - **Master:** `14ec28c93623b56a7549bf86f33f5df3d5da3e51`.
+>   - Batch109 [#780](https://github.com/WangPantopus/skinny-pantopus/pull/780), exact `ebb4531eb60d4da430979c8cb2aa3960b6887a70`, merged 02:42:06Z. S1 [#718](https://github.com/WangPantopus/skinny-pantopus/pull/718), head `324ca415f9d0098143371f39c8289124841ab7c3`, merged 02:42:08Z.
+>   - The existing build-batch/verify-batch prove ancestry, a 9-file union and every head blob; the tip tree equals the real-app verify tree.
+>   - Required checks are absent live. The queue is empty. Unrelated #46/#429/#430/#625 are untouched.
+> - **#718 privacy fix:** the coordinator's review of held #718 found that its unkeyed create-retry digest in `post_metadata`, which post detail and the feed return to every viewer, confirmed guesses of an approximate-area post's hidden tagged place.
+>   - Reproduced on `8c343dab7`: Bob's normal read matched 1 of 401 guesses to the exact coordinates and address.
+>   - Fix `324ca415f` touches one existing file (8+/5-): HMAC keyed by the author's secret command id. No schema, client or design change.
+>   - Afters: API 0/401 matches; identical retry → one row; changed payload → 409; concurrent sends → one row. Real Chrome, Android 5558 (APK `6ee29d45…`) and iOS C2 (dylib `059d72b3…`): held committed create → client timeout, draft kept → manual retry 201 → exactly one row.
+>   - [Sealed 49-file result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream1-post-create-hash-privacy-r1/RESULT.md), MANIFEST `b916f2863209558c58edf2b0fdab6309adb2bafeb8de7ddd620eb805b137da65`. Photo behavior reuses the 263-file `6535202a…` seal.
+>   - Seven owned Posts cleaned; a checked transaction at 02:38:34Z found 0 owned rows. All 15 full fingerprints equal the baseline; the 353 counts differ only by ordinary login bookkeeping.
+> - **Decided per the standing instruction:** merged #718 while its single trashed synthetic C2 Photos asset (IMG_0007) still awaits a local passcode unlock. That is recorded as an open device-authentication cleanup boundary, not a code blocker. Rejected: indefinite hold, passcode bypass or Photos DB edit, simulator erase.
+> - **Master CI snapshot** [36423610710](https://github.com/WangPantopus/skinny-pantopus/actions/runs/36423610710) on `be05b58dd` (informational):
+>   - Failures are only in iOS SwiftLint, the iOS test-bundle compile (a stale `EditSignupFormView` test call missing `supportTrainId` since #741), Android ktlint, and the migration guard: #778's `20260928122200` migration lacks the required `Backwards compatible: yes` header.
+>   - No application break. Not edited: applied migrations are immutable, and there's no unit/lint work under the current direction.
+>   - Deploy Backend stays skipped while CI fails. That's for the founder or deploy owner. The migration is backwards compatible: it adds a NOT NULL DEFAULT true column; deploy it before the backend.
+> - **Incidental, routed:** a stale saved web session ran a serial refresh→logout loop, 16 cycles in 0.5 s. It exhausted the global unauthenticated write limiter, so the next sign-in got 429 for under a minute. Stream 3 (session owner) took the lead. Stream 1 moved its stale private session caches aside.
+> - **U reconciliation so far:**
+>   - U01 has no Stream 1 cells. Home/unit identity, floating chat and verification wording belong to Stream 2, which confirmed no current work.
+>   - Retained Train organizer lifecycle commands have native (and partly web) callers but no sealed evidence: pause, resume, back to draft, archive, delete, co-organizer add/remove, and nudge draft/send.
+>   - Source shows an already-applied transition answers 409 (or 404 after delete) on a retry after a lost reply. Next: reproduce on real iOS, Android and web before any repair.
+> - **Runtime and devices:** backend 69040, proxy 67857 and web 67944 run `14ec28c93` (runtime worktree d2cb25 on `codex/stream1-runtime-20260929`). S1 holds C2 in slot 1 (also the Photos boundary) and emulator-5558 in slot 4. S2 holds slots 2–3 and heavy.
+> - **Progress estimate:** still roughly 95% detailed retained bounded repair coverage, not 30-row, full-client or launch readiness. All 8 cuts and user-owned flags are excluded; the flag work is uncommitted in its own worktree and not on master yet. iOS Post Dynamic Type presentation approval is still pending.
 
 
 > **UPDATE 2026-09-28T12:47Z — batch108 merged; push choice accepted; web tab lead resolved.**
