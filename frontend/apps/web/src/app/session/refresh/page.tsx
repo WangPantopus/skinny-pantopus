@@ -77,20 +77,33 @@ async function signOutLocally(): Promise<void> {
   try {
     await api.auth.logout();
   } catch {
-    /* backend unreachable or already signed out */
+    // Backend unreachable, rate-limited or already signed out, so the server did
+    // not clear the cookies. Drop the JS-readable session flag here: while it is
+    // set, the middleware sends the next visit (e.g. `/`) straight back to this
+    // page, which refreshes and fails to sign out again, page after page.
+    clearSessionFlag();
   }
   clearAuthToken();
 }
 
-// Set once this page has decided to sign out and leave. Signing out changes the
-// auth session, and QueryProvider remounts the whole tree on every auth change,
-// so a fresh instance of this page mounts before the navigation completes. That
-// instance must not refresh and sign out again: each pass would remount it once
-// more, looping until the backend rate-limits the visitor (and their sign-in).
-let signingOut = false;
+/** Expire the JS-readable `pantopus_session` flag (set host-only on path `/`). */
+function clearSessionFlag(): void {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `pantopus_session=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+}
+
+// The copy of this page that has decided to sign out and leave; it clears this
+// when it unmounts. Signing out changes the auth session, and QueryProvider
+// remounts the whole tree on every auth change, so a fresh copy of this page
+// mounts before the navigation completes. That copy must not refresh and sign
+// out again: each pass would remount it once more, looping until the backend
+// rate-limits the visitor (and their sign-in).
+let signOutOwner: object | null = null;
 
 function SessionRefreshContent() {
-  const [phase, setPhase] = useState<Phase>(() => (signingOut ? 'redirecting' : 'refreshing'));
+  const [instance] = useState(() => ({}));
+  const [handingOff] = useState(() => signOutOwner !== null);
+  const [phase, setPhase] = useState<Phase>(handingOff ? 'redirecting' : 'refreshing');
   const [message, setMessage] = useState('');
   const [{ redirectTo, onFail }] = useState(readParams);
   const startedRef = useRef(false);
@@ -108,7 +121,7 @@ function SessionRefreshContent() {
     // Loop breaker: if we were here for the same target < 15 s ago the
     // refresh "worked" but no access cookie appeared — stop and sign in.
     if (isRefreshLoop(readGuard(), redirectTo, Date.now())) {
-      signingOut = true;
+      signOutOwner = instance;
       clearGuard();
       await signOutLocally();
       go(onFail ?? loginUrlFor(redirectTo));
@@ -132,7 +145,7 @@ function SessionRefreshContent() {
     }
 
     if (result.status === 'invalid') {
-      signingOut = true;
+      signOutOwner = instance;
       clearGuard();
       await signOutLocally();
       go(onFail ?? loginUrlFor(redirectTo));
@@ -143,14 +156,23 @@ function SessionRefreshContent() {
     clearGuard();
     setMessage(result.message || 'We could not reach Pantopus. Check your connection and try again.');
     setPhase('transient');
-  }, [go, onFail, redirectTo]);
+  }, [go, instance, onFail, redirectTo]);
 
   useEffect(() => {
     if (startedRef.current) return; // React strict-mode double invoke guard
     startedRef.current = true;
-    if (signingOut) return; // remounted while this page signs out and leaves
+    if (handingOff) return; // remounted while another copy signs out and leaves
     void attempt();
-  }, [attempt]);
+  }, [attempt, handingOff]);
+
+  // A later mount with no navigation in between (a stopped navigation, or a test
+  // rendering the page again) starts fresh.
+  useEffect(
+    () => () => {
+      if (signOutOwner === instance) signOutOwner = null;
+    },
+    [instance],
+  );
 
   return (
     <div className="min-h-screen bg-app flex items-center justify-center px-4">
