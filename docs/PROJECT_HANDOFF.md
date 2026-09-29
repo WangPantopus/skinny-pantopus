@@ -30,6 +30,21 @@
 
 
 
+> **UPDATE 2026-09-29T18:29Z — user decisions for Stream 1 (recorded; no code change yet).**
+> - **iOS Post large-text layout change: REJECTED.** Keep the current iOS Post body/composer presentation. U02 treats the fixed-size text found on Sep28 (20-file `7cb37839…`) as accepted by user decision, not as pending approval.
+> - **Co-organizer add: people picker APPROVED.** It replaces the raw "User id" field on iOS and Android and reuses the existing `POST /:id/organizers` (no backend change).
+>   - Open question from the user: also invite by email when the person isn't on Pantopus yet.
+>   - Stream 1 recommendation: not in this pass. The existing `SupportTrainInvite` stores an email but sends nothing and carries no role. Co-organizer-by-email would need a schema change, an email sender and an accept flow that grants organizer access, which needs a security review. Non-members get the existing "Invite more helpers" share link today, then the picker once they join. Awaiting the user's answer.
+> - **"Sign up for a slot" on non-live trains:** the user asked what the button is and was shown the Support Train detail screen on a paused train.
+>   - The backend refuses a reservation with 409 "This Support Train is not currently accepting reservations."
+>   - Stream 1 recommendation: keep the button in place but disabled, with a status reason ("Signups paused", "This train has ended", "Not published yet") on all three clients. Awaiting the user's choice.
+> - **Plan agreed (Stream 1 only; the user resumes Streams 2 and 3 separately):**
+>   1. Stream 1 drafts finite U02–U04 checklists for approval.
+>   2. The user finishes and merges the launch flags so U05 can start.
+>   3. Stream 1 makes CI green again.
+>   4. Stream 1 works through the approved checklists.
+> - **U01** has no Stream 1 cells (Stream 2's); it's not in Stream 1's plan.
+
 > **UPDATE 2026-09-29T04:19Z — reconciliation: every retained Train organizer command is now accounted for.**
 > - **Accepted:** pause, resume, back to draft, archive and delete (lost-reply retries, #783). The post-delete landing and list freshness are accepted by #789 (batch114).
 > - **Design boundary (needs explicit approval; not implemented):** co-organizer add is only a raw "User id" text field on iOS and Android, which real organizers can't fill. Web has no roster editor. A people picker would be a design change.
