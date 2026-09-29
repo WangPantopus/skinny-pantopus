@@ -2,7 +2,35 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 web stale-session repair PR785 merged, 2026-09-29T03:26:20Z
+## LIVE — Stream 3 close-out sweep: PR793 awaiting Stream 1, 2026-09-29T19:46Z
+
+- **User direction (2026-09-29, before 19:16Z):** close out every locally feasible Stream 3 item. The user will then provide provider access and run the physical devices personally.
+- **[PR793](https://github.com/WangPantopus/skinny-pantopus/pull/793)**, exact head `c8ebd750b1ca20b48cf799d39d29e2cbb7e8dac6`, base `e5612639549a884f2380a45a0640f3e22bfe9b2d`. Master `e454b7a3b` leaves all 12 involved files unchanged, and merge-tree is clean. One existing file, `page.tsx` +35/−13; no test file changed. It repairs two reproduced problems:
+  - **Bounce when sign-out fails:** at 19:16:39–19:16:50Z a stale `/` visit with logout failing went `R400 L429`×30 then `R429`, over 62 page loads. A failed logout now expires the JS-readable `pantopus_session` flag in the browser.
+  - **#785 broke four existing web tests:** CI run 36520728288 and locally, 4 failed of 21. My #785 acceptance hadn't run that file. The "signing out" marker now names the page copy that owns the sign-out, which clears it on unmount; a remounted copy still reads it, so #785's protection stays.
+- **Actual evidence** (real Chrome, candidate):
+  - B1 stale `/` with logout failing: one `R400` and one `L429`, lands once on `/`, flag cleared.
+  - B2 stale `/app/hub`: `R400 L200` once, then real sign-in 200 and sign-out 200.
+  - B3 `/app/hub` with logout failing: `R400 L429` once, then `/login`.
+  - B4 valid refresh: `R200`, no logout (49×200, 0×401).
+  - B5 injected 503: transient screen, then Try again → `R400 L200` once.
+  - Existing test file 21/21, ESLint clean, typecheck gate 0 errors.
+  - [Private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-session-flag-bounce-r1/RESULT.md): 47 files, seal `15133295553b8638dd22cc4ff2ab7f5dff0beaf12ef00db96f6538d16ca1caf8`; [seal comment](https://github.com/WangPantopus/skinny-pantopus/pull/793#issuecomment-5897411242).
+- **Runtime:**
+  - The Stream 3 API launcher mints its local keys for 48 hours, so they expired at 12:54:19Z. The first sign-in check then got 404 "User profile not found" (PostgREST: JWT expired); that run is excluded.
+  - Restarted Stream 3's own API: SIGINT 57985 → 57616 at 19:35:48Z, same clean `23e518b11`, keys valid to 2026-10-01T19:35:48Z. The DB was unchanged across the idle period.
+  - Web 18131 serves the detached candidate `c8ebd750b`. Proxy 18130 and files 18198 are unchanged. Fault rules are empty, and no helper or private state file is left.
+  - DB diff: only auth history from two real sign-ins, both signed out.
+  - No heavy or device slot used.
+- **Decisions taken without asking (UTC):** 19:16Z reproduce the recorded #785 limit first; 19:19Z clear the flag inside the existing `signOutLocally()` and keep `/` as the designed fallback; 19:21Z fold Stream 1's reported test failures into the same PR by fixing the implementation, not the tests; 19:35Z restart Stream 3's own API to renew its expired keys (runtime only).
+- **Next (locally feasible):**
+  - After #793 merges, record the exact master.
+  - Then a native pass, once the heavy slot is free (Stream 1 holds it since 19:29:19Z):
+    - N01 app-side notification-tap handling on the iOS simulator via `simctl push`: cold start, background, signed-out continuation, and a notification for the other account after switching (earlier evidence covers the foreground banner and routing).
+    - #727's native weak-password error screens, which have been source-reviewed only, through a controlled server response.
+  - Everything else needs the user's access, devices or decisions (listed at the end of the sweep).
+
+## Previous completed milestone — Stream 3 web stale-session repair PR785 merged, 2026-09-29T03:26:20Z
 
 - **Merged (verified independently at 03:26:20Z):** [PR785](https://github.com/WangPantopus/skinny-pantopus/pull/785) exact head `51ae9c05d2f27130b09cf38561d7a7c96e934689` merged 03:25:44Z through batch 112 [#786](https://github.com/WangPantopus/skinny-pantopus/pull/786) (tip `1f7779d02`, merged 03:25:42Z). Master is `bf64e3c0a2e5160232f776e85abe4ad0db91b1d9`. REST merge state, ancestry and master's `page.tsx` blob `f926a63ad3b3` (equal to the candidate) all check out. Stream 1 reviewed the diff and verified the 52-file seal and its batch proofs. No Stream 3 PR, fixture, fault rule or lease remains. Web 18131 keeps serving the merged candidate tree (detached `51ae9c05d`); it has no reason to rebuild.
 - **Lead:** Stream 1 routed an incidental web finding, received after its last recorded 02:23:32Z and acknowledged before 02:33:10Z. On master `be05b58dd` (its proxy seq 44285–44319), one stale-session visit to `/app/hub` sent 16 refresh and 15 logout requests one after another, and the visitor's sign-in then got 429. Stream 1 changed nothing and handed it to Stream 3 (retained A02 sessions).
