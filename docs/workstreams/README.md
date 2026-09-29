@@ -30,6 +30,27 @@
 
 
 
+> **UPDATE 2026-09-29T21:53Z — Stream 1: batches 118–123 merged; the greyed button, the co-organizer picker, an Android crash fix and web Train accessibility are on master `553b91504`.**
+> - **Coordinator merges.**
+>   - Batch 118 (#800 ← S2 #799) at 21:04:11Z.
+>   - Batch 119 (#802 ← S2 #801) at 21:10:09Z.
+>   - Batch 120 (#804 ← S2 #803, the invite-only home link privacy gate) at 21:27:28Z.
+>   - Batch 121 (#808 ← S3 #805, S2 #806/#807) at 21:35:16Z.
+>   - Batch 122 (#810 ← S2 #809) at 21:45:18Z.
+>   - Batch 123 (#815 ← S1 #811–#814) at 21:52:13Z.
+>   - Every head was reviewed and its seal verified. verify-batch passed on each batch; for batch 123, `support-trains/[id]/page.tsx` was also proven blob-equal to the web-verified tree.
+> - **Stream 1 merged in batch 123:**
+>   - #811: greyed "Sign up" with the reason on non-live trains (iOS, Android, web). Seal `eace0926…`, 104 files.
+>   - #812: co-organizer people picker. Seal `4f19de0e…`, 42 files.
+>   - #813: Android crashed on every successful co-organizer removal (a 204 into a non-null Retrofit body); fixed with a `Unit` return. Seal `c9620c7a…`, 19 files.
+>   - #814: web Train accessibility, covering dark-mode selections (`primary-950` isn't in the palette), chip contrast, and calendar and share-link names. Seal `23443d95…`, 107 files.
+>   - Cleanup is exact: 350/353 counts and 19/19 Train fingerprints equal the baseline; only auth history differs.
+> - **CI repair #798** (`663dec6a5`) is still running. Rounds 1–2 fixed lint, detekt, the migration guard and a public-init compile error. Round 3 updated stale tests: iOS ManageTrain confirm-reply stubs, Android ManageTrain DTO, and iOS/Android sign-up and set-password tests for the 12-character rule.
+> - **Needs the user (recommendations recorded):**
+>   - (1) The brand-blue design token: white on primary-600 is 4.09:1 and blue text on grey about 3.9:1. Stream 2 found more (emerald-600 3.77, amber-500 2.15, header badge 3.76). Recommended: darken filled primary to primary-700 and the badge to red-600. It's app-wide.
+>   - (2) Web Manage "Send invite" delivers nothing: email has no sender, and user-id invites on a live train notify no one. Recommended: hide it on web and keep Copy link.
+> - [Checklist page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu) v3. Open now: U03 37, U04 18, U02 47.
+
 > **UPDATE 2026-09-29T20:09Z — Stream 1 checklists approved; confirm pass done; decisions recorded.**
 > - The user approved the U02–U04 checklists, the greyed "Sign up for a slot" button on trains that aren't live (reasons: "Signups paused", "This train has ended", "Not published yet") and a people picker for adding co-organizers. My recommendations are adopted for the rest: no co-organizer email invites for now, because the existing share link covers people not on Pantopus; and a wrap-only fix for the Android task-progress labels at font 2.0 when the money screens come up.
 > - Confirm pass: each confirm cell was checked against the sealed bundles. Covered cells are now done; the rest became to-do. Open now: U03 has 40 to-do and 6 boundary cells; U04 has 18 to-do; U02 has 51 to-do and 1 boundary. The [review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu) was republished as version 2.
