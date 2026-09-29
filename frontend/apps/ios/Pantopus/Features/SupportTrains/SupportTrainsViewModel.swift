@@ -25,6 +25,13 @@ import Foundation
 import Observation
 import SwiftUI
 
+public extension Notification.Name {
+    /// Posted after an organizer deletes a train. Popping past its detail
+    /// and Manage screens at once doesn't re-run a list's `.task`, so the
+    /// lists still on the stack re-read when they hear this.
+    static let supportTrainDeleted = Notification.Name("supportTrainDeleted")
+}
+
 /// Stable tab ids so the view + tests can reference without string
 /// literals.
 public enum SupportTrainsTab {
@@ -109,8 +116,9 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     // MARK: - Lifecycle
 
     public func load() async {
-        if loadedOnce { return }
-        state = .loading
+        // After the first load, each appearance re-reads quietly, so a train
+        // deleted or re-statused from its detail or Manage screen doesn't linger.
+        if !loadedOnce { state = .loading }
         await fetchBoth()
     }
 

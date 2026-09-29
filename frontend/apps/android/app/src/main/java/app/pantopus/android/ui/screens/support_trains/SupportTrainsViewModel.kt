@@ -152,8 +152,9 @@ class SupportTrainsViewModel
         var locationProvider: suspend () -> Pair<Double, Double>? = { null }
 
         fun load() {
-            if (loadedOnce) return
-            reload()
+            // After the first load, each return re-reads quietly, so a train
+            // deleted or re-statused from its detail or Manage screen doesn't linger.
+            reload(showLoading = !loadedOnce)
         }
 
         fun refresh() = reload()
@@ -164,8 +165,8 @@ class SupportTrainsViewModel
             applyState()
         }
 
-        private fun reload() {
-            _state.value = ListOfRowsUiState.Loading
+        private fun reload(showLoading: Boolean = true) {
+            if (showLoading) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
                 val mineDeferred = async { fetchMine() }
                 val nearbyDeferred = async { fetchNearby() }

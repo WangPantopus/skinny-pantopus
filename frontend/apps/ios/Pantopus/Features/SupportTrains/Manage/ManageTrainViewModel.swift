@@ -330,6 +330,7 @@ public final class ManageTrainViewModel {
 
     func markDeleted() {
         didDeleteTrain = true
+        NotificationCenter.default.post(name: .supportTrainDeleted, object: supportTrainId)
     }
 
     /// `id` accessor for the action extension (which lives in a separate

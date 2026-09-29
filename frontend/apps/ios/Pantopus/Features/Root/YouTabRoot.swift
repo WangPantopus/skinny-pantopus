@@ -1783,6 +1783,14 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
+                // The deleted train's detail underneath could only show "not
+                // found", so a delete leaves it too.
+                onDeleted: {
+                    Task { @MainActor in
+                        pop()
+                        if path.last == .supportTrainDetail(supportTrainId: trainId) { pop() }
+                    }
+                },
                 // Invite shares the train, as the detail's Share does.
                 // Analytics and Edit dates have no backend / native editor
                 // yet, so they aren't wired and their rows are hidden.

@@ -54,8 +54,9 @@ class SupportTrainsSearchViewModel
         var onOpenTrain: (String) -> Unit = {}
 
         fun load() {
-            if (loadedOnce) return
-            reload()
+            // After the first load, each return re-reads quietly, so a train
+            // deleted from its detail or Manage screen drops out of the results.
+            reload(showLoading = !loadedOnce)
         }
 
         fun setQuery(value: String) {
@@ -63,8 +64,8 @@ class SupportTrainsSearchViewModel
             recompute()
         }
 
-        private fun reload() {
-            _isLoading.value = true
+        private fun reload(showLoading: Boolean) {
+            if (showLoading) _isLoading.value = true
             viewModelScope.launch {
                 when (val result = repo.mine()) {
                     is NetworkResult.Success -> {
@@ -73,8 +74,9 @@ class SupportTrainsSearchViewModel
                     }
                     // A failed corpus load degrades to "no matches" — the list
                     // screen owns the first-class error/retry surface; search
-                    // stays inside the shell's four-phase contract.
-                    is NetworkResult.Failure -> corpus = emptyList()
+                    // stays inside the shell's four-phase contract. A failed
+                    // quiet re-read keeps the results already shown.
+                    is NetworkResult.Failure -> if (!loadedOnce) corpus = emptyList()
                 }
                 _isLoading.value = false
                 recompute()
