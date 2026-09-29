@@ -246,12 +246,12 @@ export default function EditHomePage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-app-text-strong mb-1.5">Latitude</label>
-                    <input type="number" step="any" value={coordLat} onChange={(e) => setCoordLat(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="45.123456" />
+                    <label htmlFor="home-edit-latitude" className="block text-sm font-medium text-app-text-strong mb-1.5">Latitude</label>
+                    <input id="home-edit-latitude" type="number" step="any" value={coordLat} onChange={(e) => setCoordLat(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="45.123456" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-app-text-strong mb-1.5">Longitude</label>
-                    <input type="number" step="any" value={coordLng} onChange={(e) => setCoordLng(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="-122.654321" />
+                    <label htmlFor="home-edit-longitude" className="block text-sm font-medium text-app-text-strong mb-1.5">Longitude</label>
+                    <input id="home-edit-longitude" type="number" step="any" value={coordLng} onChange={(e) => setCoordLng(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="-122.654321" />
                   </div>
                 </div>
                 <button type="button" onClick={geocodeAddress} disabled={geocoding} className="text-xs text-blue-600 hover:text-blue-800">
@@ -278,43 +278,43 @@ export default function EditHomePage() {
             <h2 className="text-base font-semibold text-app-text mb-4">🏡 Basic Info</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-text-strong mb-1.5">Home nickname (optional)</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., My Camas Home" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" maxLength={120} />
+                <label htmlFor="home-edit-home-nickname-optional" className="block text-sm font-medium text-app-text-strong mb-1.5">Home nickname (optional)</label>
+                <input id="home-edit-home-nickname-optional" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., My Camas Home" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" maxLength={120} />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Home type</label>
-                  <select value={homeType} onChange={(e) => setHomeType(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <label htmlFor="home-edit-home-type" className="block text-sm font-medium text-app-text-strong mb-1.5">Home type</label>
+                  <select id="home-edit-home-type" value={homeType} onChange={(e) => setHomeType(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     {HOME_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Unit / Apt #</label>
-                  <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt 12B" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <label htmlFor="home-edit-unit-apt" className="block text-sm font-medium text-app-text-strong mb-1.5">Unit / Apt #</label>
+                  <input id="home-edit-unit-apt" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt 12B" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Bedrooms</label>
-                  <input type="number" min="0" value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <label htmlFor="home-edit-bedrooms" className="block text-sm font-medium text-app-text-strong mb-1.5">Bedrooms</label>
+                  <input id="home-edit-bedrooms" type="number" min="0" value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Bathrooms</label>
-                  <input type="number" min="0" step="0.5" value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <label htmlFor="home-edit-bathrooms" className="block text-sm font-medium text-app-text-strong mb-1.5">Bathrooms</label>
+                  <input id="home-edit-bathrooms" type="number" min="0" step="0.5" value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Sq ft</label>
-                  <input type="number" min="0" value={sqft} onChange={(e) => setSqft(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <label htmlFor="home-edit-sq-ft" className="block text-sm font-medium text-app-text-strong mb-1.5">Sq ft</label>
+                  <input id="home-edit-sq-ft" type="number" min="0" value={sqft} onChange={(e) => setSqft(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Year built</label>
-                  <input type="number" min="1600" max="2100" value={yearBuilt} onChange={(e) => setYearBuilt(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="2017" />
+                  <label htmlFor="home-edit-year-built" className="block text-sm font-medium text-app-text-strong mb-1.5">Year built</label>
+                  <input id="home-edit-year-built" type="number" min="1600" max="2100" value={yearBuilt} onChange={(e) => setYearBuilt(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="2017" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-app-text-strong mb-1.5">Move-in date</label>
-                  <input type="date" value={moveInDate} onChange={(e) => setMoveInDate(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <label htmlFor="home-edit-move-in-date" className="block text-sm font-medium text-app-text-strong mb-1.5">Move-in date</label>
+                  <input id="home-edit-move-in-date" type="date" value={moveInDate} onChange={(e) => setMoveInDate(e.target.value)} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 </div>
               </div>
               <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -342,8 +342,8 @@ export default function EditHomePage() {
             <h2 className="text-base font-semibold text-app-text mb-4">🚪 Instructions</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-text-strong mb-1.5">Entry instructions</label>
-                <textarea
+                <label htmlFor="home-edit-entry-instructions" className="block text-sm font-medium text-app-text-strong mb-1.5">Entry instructions</label>
+                <textarea id="home-edit-entry-instructions"
                   value={entryInstructions}
                   onChange={(e) => setEntryInstructions(e.target.value)}
                   rows={2}
@@ -353,8 +353,8 @@ export default function EditHomePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-app-text-strong mb-1.5">Parking instructions</label>
-                <textarea
+                <label htmlFor="home-edit-parking-instructions" className="block text-sm font-medium text-app-text-strong mb-1.5">Parking instructions</label>
+                <textarea id="home-edit-parking-instructions"
                   value={parkingInstructions}
                   onChange={(e) => setParkingInstructions(e.target.value)}
                   rows={2}
