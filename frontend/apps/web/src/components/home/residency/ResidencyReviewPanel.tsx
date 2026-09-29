@@ -143,7 +143,7 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
             <option value="approve">Approve residency</option><option value="reject">Reject residency</option>
           </select></div>
         <p className="text-sm">{action === 'approve'
-          ? 'Confirm residency within the existing role, age and access limits. Existing verified memberships keep their current role and restrictions. Ownership and expired or removed access need their own review.'
+          ? 'Confirm residency within the existing role, age and access limits. Existing verified memberships keep their current role and restrictions. Ownership has its own flow, and approving can’t restore access that has ended or expired.'
           : 'Reject this pending residency claim. Existing membership access stays unchanged.'}</p>
         {action === 'approve' ? <div><label htmlFor="residency-role" className="mb-1 block font-medium">Role for an unverified membership</label>
           <select id="residency-role" value={role} onChange={e => { setRole(e.target.value as ResidencyReviewRole); setReviewed(false); }}
