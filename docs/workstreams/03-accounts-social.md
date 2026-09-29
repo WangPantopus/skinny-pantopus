@@ -2,12 +2,14 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 close-out sweep complete: PR805 open, 2026-09-29T21:31Z
+## LIVE — Stream 3 close-out sweep complete: PR805 merged, 2026-09-29T21:39Z
+
+- **Merged (verified independently at 21:35:44Z):** PR805 exact head `a90eda9aa` merged 21:35:18Z (merge commit `1e277e751`) through batch 121 [#808](https://github.com/WangPantopus/skinny-pantopus/pull/808) (21:35:16Z, with #806 and #807). Master is `ca946bbb2b9824bf34129daf4b6d75df2ca0f67e`; the candidate is an ancestor of master and all 5 file blobs on master equal the candidate. Stream 1 reviewed the diff, verified the 76-file seal and ran verify-batch.
+- **CI note:** PR805's red checks all come from other streams' files already on master: SwiftLint (8, Place and Support Trains), ktlint (96, Support Trains, Maintenance, Place and Posts), and the migration safeguard (`20260928122200_support_train_update_push_choice.sql`). Local runs on the 5 files are clean: SwiftLint; SwiftFormat 0.61.1 (0/4 need formatting); ktlint in CI (no SignUpScreen finding); detekt `:app:detekt` at `a90eda9aa` (12 findings, none in SignUpScreen, including TokenAuthenticator ReturnCount that Stream 1's CI repair covers). Heavy slot held 21:36:10–21:38:05Z for that detekt run only; its Gradle daemon (PID 44219) was stopped at 21:38:27Z.
 
 - **[PR805](https://github.com/WangPantopus/skinny-pantopus/pull/805)** "fix(auth): show sign-up errors on screen and keep emails as typed", opened 21:29:43Z.
   - Exact head `a90eda9aa4e35bad18e9b5b952c2b98f39f27509`, base `59154879d`; 5 native files, +54/−8.
-  - Handed to Stream 1 for the merge queue at about 21:30Z; CI had started. Master `e1bee221c` changes none of the 5 files, and merge-tree is clean.
-  - SwiftLint is clean and both app builds compiled; ktlint and detekt are left to CI.
+  - Handed to Stream 1 for the merge queue at about 21:30Z. Master `e1bee221c` changed none of the 5 files, and merge-tree was clean.
   - [Private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-native-push-tap-weak-password-r1/RESULT.md): 76 files, seal `737b208fb5bb29fb4beaecf55f1614bd0c457eb466f0617074ed43d9f4243fc4`; [seal comment](https://github.com/WangPantopus/skinny-pantopus/pull/805#issuecomment-5899321062). The builds are bound to the head's app trees (iOS `a4bb49c16bd1`, Android `4a6731549e74`).
   - **Defect A, verified before and after on both apps:** one sign-up answered 400 weak-password before upstream (no account). The banner was off screen on iOS `f1a5` (20:01:51Z) and Android `8f6dbc11c` (20:50:27Z). On the candidate it is visible without scrolling on Android (20:56:01Z) and iOS (21:19:05Z).
   - **Defect B, iOS:** typed synthetic addresses now stay exact in all three fields. Before, sign-up showed "S3-weakly-…", and Create Business → Basic info and Invite teammate showed a capital first letter with a spell-check underline (21:07:15Z, 21:10:13Z). After: exact matches at 21:11:51Z, 21:13:19Z and 21:18:37Z. Stream 2 independently reproduced this with real on-screen key taps on its own three fields; those fields are in Stream 2's PR.
@@ -40,7 +42,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - N05: a daily-briefing delivery policy, and whether Crew Day gets an entry point.
   - S3-22/S3-62: permission for `/b/` reads in the isolated DB. S3-26: an AI provider key, or accepting the gap.
   - N03: Beacon parts are cut; Pulse posting is Stream 1's. N04: moderation processing.
-- **Next:** record PR805's merge when Stream 1 lands it; otherwise Stream 3 is idle and ready for user-supplied access and devices or a routed finding.
+- **Next:** nothing pending. Stream 3 is idle and ready for user-supplied access and devices, a decision on the proposals, or a routed finding. Stream 1's #798 updates S3's old 8-character Auth unit-test samples to the 12-character rule (tests only).
 
 ## Previous milestone — Stream 3 close-out sweep: native pass in progress, candidate a90eda9aa awaiting heavy, 2026-09-29T20:25Z (superseded by the LIVE block above)
 
