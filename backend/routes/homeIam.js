@@ -424,7 +424,17 @@ router.post('/:id/lockdown', verifyToken, async (req, res) => {
 
     if (revokeErr) {
       logger.error('Error revoking guest passes during lockdown', { error: revokeErr.message });
-      // Continue — lockdown is already enabled
+      // Lockdown stays on (the safe state), but unrevoked passes work again once it is lifted.
+      // Say so, so the owner retries; a retry is idempotent and finishes the revoke.
+      await writeAuditLog(homeId, actorId, 'lockdown_enabled', 'Home', homeId, {
+        guest_passes_revoked: 0,
+        guest_pass_revoke_failed: true,
+      });
+      return res.status(503).json({
+        error: 'Lockdown is on, but existing guest passes could not be revoked. Try again to finish revoking them.',
+        code: 'LOCKDOWN_PASS_REVOKE_FAILED',
+        home,
+      });
     }
 
     const revokedCount = revokedPasses?.length || 0;

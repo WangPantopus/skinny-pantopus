@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import * as api from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
+import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 
 const LOCKDOWN_EFFECTS = [
-  { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately' },
+  { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately', revokesPasses: true },
   { icon: '🔒', text: 'Keeps existing member permissions', detail: 'Members keep the access their current permissions allow' },
   { icon: '🚫', text: 'Keeps member invitations available', detail: 'Authorized members can still create and manage invitations' },
   { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
@@ -30,6 +31,8 @@ export default function LockdownPanel({
   const [confirmText, setConfirmText] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [result, setResult] = useState<{ message: string; passesRevoked?: number } | null>(null);
+  // Lockdown is on but its guest-pass revoke failed; the retry below finishes it.
+  const [revokePending, setRevokePending] = useState(false);
 
   const handleEnable = async () => {
     if (confirmText !== 'LOCKDOWN') return;
@@ -42,11 +45,18 @@ export default function LockdownPanel({
         throw new Error('Lockdown could not be confirmed. Check the current status and try again.');
       }
       onLockdownChange(true);
+      setRevokePending(false);
       setResult({ message: 'Lockdown enabled', passesRevoked: res.guest_passes_revoked });
       setShowConfirm(false);
       setConfirmText('');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to enable lockdown');
+      // The API rejects with its own message (e.g. Lockdown is on but passes still need revoking).
+      const home = (err as { data?: { home?: { id?: unknown; lockdown_enabled?: unknown } } } | null)?.data?.home;
+      if (shareFailure(err).code === 'LOCKDOWN_PASS_REVOKE_FAILED' && home?.id === homeId && home.lockdown_enabled === true) {
+        onLockdownChange(true);
+        setRevokePending(true);
+      }
+      setError(err instanceof Error ? err.message : failureMessage(err, 'Failed to enable lockdown'));
     }
     setToggling(false);
   };
@@ -60,6 +70,7 @@ export default function LockdownPanel({
         throw new Error('Lockdown could not be confirmed. Check the current status and try again.');
       }
       onLockdownChange(false);
+      setRevokePending(false);
       setResult({ message: 'Lockdown disabled' });
       setShowConfirm(false);
     } catch (err: unknown) {
@@ -125,7 +136,7 @@ export default function LockdownPanel({
                   </div>
                   <div className="text-[10px] text-app-text-muted mt-0.5">{effect.detail}</div>
                 </div>
-                {lockdownEnabled && (
+                {lockdownEnabled && !(revokePending && effect.revokesPasses) && (
                   <span className="text-[10px] text-red-500 font-medium flex-shrink-0 mt-0.5">Active</span>
                 )}
               </div>
@@ -182,6 +193,15 @@ export default function LockdownPanel({
           </div>
         ) : (
           <div className="space-y-3">
+            {revokePending && (
+              <button
+                onClick={handleEnable}
+                disabled={toggling}
+                className="w-full py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50 transition"
+              >
+                {toggling ? 'Revoking...' : 'Finish revoking guest passes'}
+              </button>
+            )}
             <button
               onClick={handleDisable}
               disabled={toggling}
