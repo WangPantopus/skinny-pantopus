@@ -57,7 +57,7 @@ public final class EditSignupFormViewModel {
     private let store: SupportTrainReservationsStore
     private let onSaved: @MainActor (SupportTrainReservationDTO) -> Void
 
-    public init(
+    init(
         supportTrainId: String,
         reservation: SupportTrainReservationDTO,
         store: SupportTrainReservationsStore = .shared,
