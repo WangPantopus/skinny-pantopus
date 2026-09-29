@@ -68,7 +68,7 @@ object SupportTrainDetailProjection {
             calendarDays = calendar(slots, reservations),
             sections = sections(slots, reservations),
             hostedBy = hostedBy(primaryName, organizers.firstOrNull()?.user?.id),
-            dock = if (isFull) SupportTrainDock.SendCardAndBackup else SupportTrainDock.SignUp("Sign up for a slot"),
+            dock = dock(dto.status, isFull),
             celebrationBanner =
                 if (isFull) {
                     CelebrationBanner(
@@ -91,6 +91,25 @@ object SupportTrainDetailProjection {
             deliveryInstructions = dto.deliveryInstructions,
         )
     }
+
+    private fun dock(
+        status: String?,
+        isFull: Boolean,
+    ): SupportTrainDock =
+        signupsClosedReason(status)?.let { SupportTrainDock.Closed(it) }
+            ?: if (isFull) SupportTrainDock.SendCardAndBackup else SupportTrainDock.SignUp("Sign up for a slot")
+
+    /**
+     * Reservations only open on a published or active train; the server
+     * refuses the rest, so the dock says why instead of offering a sign-up.
+     */
+    fun signupsClosedReason(status: String?): String? =
+        when (status) {
+            "paused" -> "Signups paused"
+            "completed", "archived" -> "This train has ended"
+            "draft" -> "Not published yet"
+            else -> null
+        }
 
     /**
      * `viewer_level` + `viewer_support_train_role` → the client-side

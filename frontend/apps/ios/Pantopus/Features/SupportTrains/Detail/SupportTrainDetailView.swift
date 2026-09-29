@@ -222,13 +222,13 @@ public struct SupportTrainDetailView: View {
     /// or Join as backup (neither has a backend route yet).
     private func hasDock(_ dock: SupportTrainDock) -> Bool {
         switch dock {
-        case .signUp: true
+        case .signUp, .closed: true
         case .sendCardAndBackup: onSendCard != nil || onJoinAsBackup != nil
         }
     }
 
     private func signUpAction(for row: SlotRowContent) -> (@MainActor () -> Void)? {
-        guard row.state == .open else { return nil }
+        guard row.state == .open, !signupsClosed else { return nil }
         return {
             viewModel.startReserve(slotId: row.slotId)
             onSignUp?()
@@ -374,7 +374,9 @@ public struct SupportTrainDetailView: View {
 
     private func calendarCard(days: [SlotCalendarDay]) -> some View {
         VStack {
-            SlotCalendar(days: days) { _ in viewModel.startReserve() }
+            SlotCalendar(days: days) { _ in
+                if !signupsClosed { viewModel.startReserve() }
+            }
         }
         .padding(Spacing.s3)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -399,6 +401,8 @@ public struct SupportTrainDetailView: View {
                     }
                 case .sendCardAndBackup:
                     SplitCoveredDock(onSendCard: onSendCard, onJoinAsBackup: onJoinAsBackup)
+                case let .closed(reason):
+                    PrimarySignUpCTA(label: reason, isEnabled: false) {}
                 }
             }
             .padding(.horizontal, Spacing.s4)
@@ -431,6 +435,11 @@ public struct SupportTrainDetailView: View {
             cta: EmptyState.CTA(title: "Try again") { await viewModel.refresh() }
         )
         .accessibilityIdentifier("supportTrainDetailError")
+    }
+
+    private var signupsClosed: Bool {
+        guard case let .loaded(content) = viewModel.state, case .closed = content.dock else { return false }
+        return true
     }
 
     private var manageAction: (@MainActor () -> Void)? {
@@ -626,23 +635,31 @@ private struct HostedByRow: View {
 @MainActor
 private struct PrimarySignUpCTA: View {
     let label: String
+    var isEnabled = true
     let onTap: @MainActor () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        let button = Button(action: onTap) {
             HStack(spacing: Spacing.s2) {
-                Icon(.calendar, size: 17, color: Theme.Color.appTextInverse)
+                Icon(.calendar, size: 17, color: isEnabled ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                 Text(label)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
+                    .foregroundStyle(isEnabled ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(Theme.Color.primary600)
+            .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-            .pantopusShadow(.primary)
+            .pantopusShadow(isEnabled ? .primary : .sm)
         }
-        .buttonStyle(.plain)
+        Group {
+            if isEnabled {
+                button.buttonStyle(.plain)
+            } else {
+                // Full strength keeps the reason readable (a dimmed plain button was about 2:1).
+                button.buttonStyle(UndimmedButtonStyle()).disabled(true)
+            }
+        }
         .accessibilityLabel(label)
         .accessibilityIdentifier("supportTrainSignUpCTA")
     }

@@ -327,7 +327,8 @@ extension SupportTrainDetailViewModel {
             calendarDays: calendar(slots: slots, reservations: reservations),
             sections: sections(slots: slots, reservations: reservations),
             hostedBy: hostedBy(primaryName: primaryName, primaryUserId: primary?.user?.id),
-            dock: isFull ? .sendCardAndBackup : .signUp(label: "Sign up for a slot"),
+            dock: signupsClosedReason(status: dto.status).map { .closed(reason: $0) }
+                ?? (isFull ? .sendCardAndBackup : .signUp(label: "Sign up for a slot")),
             celebrationBanner: isFull
                 ? SupportTrainDetailContent.CelebrationBanner(
                     title: "Every slot is covered",
@@ -347,6 +348,17 @@ extension SupportTrainDetailViewModel {
                 : nil,
             deliveryInstructions: dto.deliveryInstructions
         )
+    }
+
+    /// Reservations only open on a published or active train; the server
+    /// refuses the rest, so the dock says why instead of offering a sign-up.
+    nonisolated static func signupsClosedReason(status: String?) -> String? {
+        switch status {
+        case "paused": "Signups paused"
+        case "completed", "archived": "This train has ended"
+        case "draft": "Not published yet"
+        default: nil
+        }
     }
 
     /// `viewer_level` + `viewer_support_train_role` → the client-side

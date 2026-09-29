@@ -233,7 +233,7 @@ private fun Trailing(
                         .testTag("supportTrainSlotRowSignUp-${content.id}")
                         .height(30.dp)
                         .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.primary600)
+                        .background(if (onSignUp != null) PantopusColors.primary600 else PantopusColors.appBorderStrong)
                         .clickable(enabled = onSignUp != null) { onSignUp?.invoke() }
                         .padding(horizontal = Spacing.s3)
                         .semantics {
@@ -244,7 +244,7 @@ private fun Trailing(
             ) {
                 Text(
                     text = "Sign up",
-                    color = PantopusColors.appTextInverse,
+                    color = if (onSignUp != null) PantopusColors.appTextInverse else PantopusColors.appTextSecondary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.5.sp,
                 )
@@ -338,6 +338,7 @@ private fun SlotRowOpenPreview() {
                     title = "Open · dinner for 4",
                     subtitle = "Drop off by 5:30 pm · porch shelf",
                 ),
+            onSignUp = {},
         )
     }
 }

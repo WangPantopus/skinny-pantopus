@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -422,7 +423,8 @@ private fun LoadedBody(
             TypeDatesCard(content.typeDates)
 
             SectionOverline("Slot calendar")
-            CalendarCard(content.calendarDays, onSelectDate = { onSignUp() })
+            val signupsClosed = content.dock is SupportTrainDock.Closed
+            CalendarCard(content.calendarDays, onSelectDate = { if (!signupsClosed) onSignUp() })
 
             content.sections.forEach { section ->
                 SectionOverline(section.overline, actionLabel = section.actionLabel)
@@ -431,7 +433,7 @@ private fun LoadedBody(
                         SlotRow(
                             content = row,
                             onSignUp =
-                                if (row.state == SlotRowState.Open) {
+                                if (row.state == SlotRowState.Open && !signupsClosed) {
                                     { onReserveSlot(row.slotId) }
                                 } else {
                                     null
@@ -817,6 +819,7 @@ private fun Dock(
             when (dock) {
                 is SupportTrainDock.SignUp -> PrimarySignUpCTA(dock.label, onSignUp)
                 SupportTrainDock.SendCardAndBackup -> SplitCoveredDock(onSendCard, onJoinAsBackup)
+                is SupportTrainDock.Closed -> PrimarySignUpCTA(dock.reason, onTap = {}, enabled = false)
             }
         }
     }
@@ -826,6 +829,7 @@ private fun Dock(
 private fun PrimarySignUpCTA(
     label: String,
     onTap: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
     Row(
@@ -834,13 +838,14 @@ private fun PrimarySignUpCTA(
                 .testTag("supportTrainSignUpCTA")
                 .fillMaxWidth()
                 .height(50.dp)
-                .pantopusShadow(PantopusElevations.primary, shape)
+                .then(if (enabled) Modifier.pantopusShadow(PantopusElevations.primary, shape) else Modifier)
                 .clip(shape)
-                .background(PantopusColors.primary600)
-                .clickable { onTap() }
+                .background(if (enabled) PantopusColors.primary600 else PantopusColors.appBorderStrong)
+                .clickable(enabled = enabled) { onTap() }
                 .semantics {
                     role = Role.Button
                     contentDescription = label
+                    if (!enabled) disabled()
                 },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -850,11 +855,11 @@ private fun PrimarySignUpCTA(
             icon = PantopusIcon.Calendar,
             contentDescription = null,
             size = 17.dp,
-            tint = PantopusColors.appTextInverse,
+            tint = if (enabled) PantopusColors.appTextInverse else PantopusColors.appTextSecondary,
         )
         Text(
             text = label,
-            color = PantopusColors.appTextInverse,
+            color = if (enabled) PantopusColors.appTextInverse else PantopusColors.appTextSecondary,
             fontWeight = FontWeight.Bold,
             fontSize = 15.sp,
         )

@@ -138,19 +138,25 @@ public struct SlotRow: View {
     private var trailing: some View {
         switch (content.state, content.mine) {
         case (.open, _):
-            Button(
+            let button = Button(
                 action: { onSignUp?() },
                 label: {
                     Text("Sign up")
                         .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
+                        .foregroundStyle(onSignUp == nil ? Theme.Color.appTextSecondary : Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s3)
                         .frame(height: 30)
-                        .background(Theme.Color.primary600)
+                        .background(onSignUp == nil ? Theme.Color.appBorderStrong : Theme.Color.primary600)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
             )
-            .buttonStyle(.plain)
+            Group {
+                if onSignUp == nil {
+                    button.buttonStyle(UndimmedButtonStyle()).disabled(true)
+                } else {
+                    button.buttonStyle(.plain)
+                }
+            }
             .accessibilityLabel("Sign up for \(content.dayLabel) \(content.dateLabel)")
             .accessibilityIdentifier("supportTrainSlotRowSignUp-\(content.id)")
         case (.covered, true):
@@ -229,6 +235,14 @@ public struct SlotRow: View {
     }
 }
 
+/// Draws the label as is. SwiftUI renders a disabled `.plain` button at half
+/// opacity, which took greyed sign-up text down to about 2:1 contrast.
+struct UndimmedButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
 #Preview("Open") {
     SlotRow(
         content: SlotRowContent(
@@ -239,9 +253,9 @@ public struct SlotRow: View {
             title: "Open · dinner for 4",
             subtitle: "Drop off by 5:30 pm · porch shelf"
         )
-    )
-    .padding(Spacing.s4)
-    .background(Theme.Color.appBg)
+    ) {}
+        .padding(Spacing.s4)
+        .background(Theme.Color.appBg)
 }
 
 #Preview("Covered") {
