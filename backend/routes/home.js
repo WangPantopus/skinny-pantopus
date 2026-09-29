@@ -1667,7 +1667,7 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
 
     const { data: home, error } = await supabaseAdmin
       .from('Home')
-      .select('id, name, address, city, state, zipcode, home_type, visibility, owner_id, description, created_at, created_by_user_id')
+      .select('id, name, address, city, state, zipcode, home_type, visibility, owner_id, description, created_at, created_by_user_id, privacy_mask_level')
       .eq('id', homeId)
       .single();
 
@@ -1682,7 +1682,10 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
     if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
     const isCreator = home.created_by_user_id === userId;
     const reveal = access.hasAccess;
-    let canView = reveal || home.visibility === 'public_preview' || isCreator;
+    // "Invite only" keeps even a public-preview home closed to outsiders who
+    // only have the link; Stealth stays visible by link.
+    const openByLink = home.visibility === 'public_preview' && home.privacy_mask_level !== 'invite_only_discovery';
+    let canView = reveal || openByLink || isCreator;
     if (!canView) {
       const [residencyClaims, ownershipClaims] = await Promise.all([
         supabaseAdmin.from('HomeResidencyClaim').select('id, status').eq('home_id', homeId).eq('user_id', userId).eq('status', 'pending'),
