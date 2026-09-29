@@ -314,6 +314,17 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 
 ## 0. HANDOFF STATE — FINAL, successor session, 2026-09-27 (written 2026-09-27T11:16Z; this section wins over everything below it)
 
+> **UPDATE 2026-09-29T18:38Z — step 1 done: Stream 1 U02–U04 exit checklists drafted for approval.**
+> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/01-gigs-payments.md`; progress is tracked there only after approval.
+> - Each workflow or screen has an iOS, Android and web cell: done (with seal), confirm from existing evidence, to do, your call, boundary, or not offered.
+> - Open now: U03 has 27 to-do and 22 confirm items; U04 has 14 to-do and 4 confirm; U02 has 51 to-do and 2 confirm. Roughly five to eight long working sessions.
+> - **Decisions requested:**
+>   - approve or adjust the checklists;
+>   - the "Sign up for a slot" treatment on non-live trains;
+>   - co-organizer email invite (recommended: not now);
+>   - the Android task-progress label wrap at font 2.0.
+> - Next: step 2 is the user's (launch flags on master), and step 3 is Stream 1 making CI green.
+
 > **UPDATE 2026-09-29T18:29Z — user decisions for Stream 1 (recorded; no code change yet).**
 > - **iOS Post large-text layout change: REJECTED.** Keep the current iOS Post body/composer presentation. U02 treats the fixed-size text found on Sep28 (20-file `7cb37839…`) as accepted by user decision, not as pending approval.
 > - **Co-organizer add: people picker APPROVED.** It replaces the raw "User id" field on iOS and Android and reuses the existing `POST /:id/organizers` (no backend change).

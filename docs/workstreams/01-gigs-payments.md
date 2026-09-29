@@ -35,6 +35,17 @@
 
 
 
+> **UPDATE 2026-09-29T18:38Z — step 1 done: Stream 1 U02–U04 exit checklists drafted for approval.**
+> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/01-gigs-payments.md`; progress is tracked there only after approval.
+> - Each workflow or screen has an iOS, Android and web cell: done (with seal), confirm from existing evidence, to do, your call, boundary, or not offered.
+> - Open now: U03 has 27 to-do and 22 confirm items; U04 has 14 to-do and 4 confirm; U02 has 51 to-do and 2 confirm. Roughly five to eight long working sessions.
+> - **Decisions requested:**
+>   - approve or adjust the checklists;
+>   - the "Sign up for a slot" treatment on non-live trains;
+>   - co-organizer email invite (recommended: not now);
+>   - the Android task-progress label wrap at font 2.0.
+> - Next: step 2 is the user's (launch flags on master), and step 3 is Stream 1 making CI green.
+
 > **UPDATE 2026-09-29T18:29Z — user decisions for Stream 1 (recorded; no code change yet).**
 > - **iOS Post large-text layout change: REJECTED.** Keep the current iOS Post body/composer presentation. U02 treats the fixed-size text found on Sep28 (20-file `7cb37839…`) as accepted by user decision, not as pending approval.
 > - **Co-organizer add: people picker APPROVED.** It replaces the raw "User id" field on iOS and Android and reuses the existing `POST /:id/organizers` (no backend change).
@@ -1053,6 +1064,87 @@ reproduced defect. No extra hardware/provider requirement is imposed on a source
 | U03 | Sep29 #789 (batch114) native Manage → Delete leaves the deleted train's dead detail and lands on a re-read My trains / Train search on actual Android 5558 and iOS C2 (list, search, lost-reply retry: Android manual, iOS automatic), 70-file `0f1bb844…`, 11 Trains exact cleanup. Sep29 #787 (batch113) native My trains/search chips truthful for paused/completed/archived on actual Android 5558/iOS C2, 34-file `5e9b44cf…`, exact cleanup. Sep29 #783 (batch111) Support Train pause/resume/unpublish/archive/delete committed-lost reply → retry now acknowledged on actual Android 5558 (5 commands), iOS C2 (pause, auto-retried delete) and Chrome (delete); API 18/18, 9 Trains cleaned, 19 fingerprints equal; 108-file `a8db546c…`. Co-organizer/nudge unverified. Sep29 #718 (batch109) Post create committed-lost reply → manual retry keeps one Post on actual Chrome, Android 5558 and iOS C2, with changed payload 409 and concurrent sends one row; its create-retry fingerprint is now keyed so viewers cannot confirm hidden tagged places (0/401 guesses). 49-file `b916f286…`; photo cases reuse 263-file `6535202a…`; one trashed C2 Photos asset awaits local authentication. Sep28#778 native per-updatepush301-file7915aa9b: bothnative503/lost201/duplicate/changed-setting409/malformed-choice/recovery;72whole-row checks, exact16scopes0/18hashrestore. No physical/provider claim. Sep28#776 header108-file16d79acc reuses unchanged sealed real native error/Retry/empty;36full-row read equalities/16scopes0/18hashrestore. Sep28#774 native elapsed-coverage repeated503/real Try again/recovery/Cancel accepted278-filea335aabc;83 valid scoped full-row comparisons,16chat placeholders excluded,32scopes0/18hashrestore. Driver/setup limits explicit. Sep28#771 native distinct-helper repeated503/malformed-read/recovery/Cancel accepted within207-filee95cb74f;72 full-row equalities,16 scopes0/18 fingerprints restored. iOS malformed Close and numeric command toast excluded. Sep28#767 native count503/malformed/read recovery and Cancel/no mutation accepted,175-filee864bdd2/26 bindings/72 full-row equalities;16 scopes0/18 hashes restored. No web-equivalent count or unreachable Android Review acceptance. Sep28#765 native Close & thank repeated failures/malformed replies/actual timeouts/original retry/pending duplicate accepted;342-file8094e494/19 bindings/125 full-row checks; Chrome read parity,48 scopes0/18 hashes restored. Exact source/driver/provider limits in seal.  Sep28#762 native Send update repeated503/malformed201/lost201/originalretry/pendingduplicate accepted,206-file735d2c8c/15bindings; Chrome helper readback;16scopes0/18hashrestore. Provider/push/edited-draft cases remain explicit; Close-and-thank accepted separately by#765 within its limits. Sep28#759 native date Add/Edit503/malformed/lost201/originalretry/duplicate/discard/localdate/cold accepted,441-file906a79fb/22bindings; AndroidRemove affected-route503/retry, Chrome read parity. Exact16scopes0/18hashrestore; driver/abandoned-draft/concurrency/timezone/guest/provider limits explicit. Sep28 organizer removal verification-only119-fileaa5e: both native Cancel/503/lost200/retry/pending duplicate/cold, Chrome roster/reload;42fullrow checks,16scopes0/18retainedhashes restored. #747 address-sharing179-fileb9bcc: bothnative repeated503/lost200/retry/pendingduplicate/helpercold/Leave withdrawal; Chrome per-helper privacy/reload/truthful copy. Exact limits in seals. Sep28#741 actual iOS organizer signup edit503/lost200/retry/duplicate/invalid/discard/stale409/refresh/clear/helper403 accepted;156-file0226862e/21bindings,17ownedscopes0/18retainedhashes restored. Web/Android read parity/no Edit affordance; broader scope explicit. Sep28#733 native helper delivery/organizer confirmation repeated503/lost200/manual retry/persistence accepted,123-file5dae628e/49bindings; web read-only parity;16 owned scopes0/18 retained hashes restored. Sequential retry only; guest/concurrent/partial event-slot/provider boundaries remain. #730 main-entry503/404/retry accepted73-file9ce52fb8, no fixture/mutation. Sep28#725 bounded organizer nonempty/read503/recovery/cold accepted on actual Chrome/iOS/Android;104-file446d7678/30bindings, exactTrain/referral cleanup and17pre-run fullhashes restored. No other organizer-command/delivery/provider acceptance. Sep28#720 Train meal signup503/lost201/retry accepted on Chrome/iOS C2/Android5558, native cancellation503/lost200/retry/cold;131-file0ca6a015/16bindings, exact Train/3slots/4reservations/chat/8notices0 and17fullhashes restored. Web has no helper cancel; no delivery/edit/guest/funds/concurrency acceptance. Sep27#699 later-draft/reply-cancel/repeated503/retry accepted across all clients,107-filec9b5f951 and exact15comments/post cleanup. Sep27#691 image deletion/lost-delete and #695 target lifetime accepted in91-file6c65bbad/107-fileec69319a seals. Recorded per-workflow checks; Sep27 #671 plain-text Post comments: actual web/iOS/Android committed-lost-reply recovery, Android overlapping retries/new identical intent, repeated iOS503 and exact cleanup (113-file1bf8a689…) | Apply missing cases to each actual affected client; PR193/196 booking receipt/cancellation failures are now repaired within their recorded scopes. No claim of all-app edge-case coverage. |
 | U04 | Sep29 #789 native lists re-read after a delete (Android on return; iOS via `supportTrainDeleted`); iOS non-delete staleness after a two-level/Search/deep-link return remains open. Sep29 S3 #785 (batch112) web stale session: one refresh and at most one sign-out across invalid/revoked/valid/transient cases, 52-file `799180dc…` (reusable). Sep28#778 bothnative cold read/persisted channel choice, same-command retries preserve single notice;301-file7915aa9b. Web tab19-filedbadacae settled/reload verified without code change,150ms transition qualified. Sep28#776 bothnative cold headers same-date1/different-date2;108-file16d79acc, no clock-change claim. Sep28#774 real native cold reads show correct empty/future/current/finished coverage;278-filea335aabc. No clock-change or early-completed-history claim. Sep28#771 actual native cold reopening preserves distinct helper counts1/2/1/0 after fixture changes;207-filee95cb74f. No command-durability or account-race claim. Sep28#767 actual native cold reopening restores correct delivered count;175-filee864bdd2. Count-only scope, no command durability claim. Sep28#765 actual iOS/Android cold completion and Chrome helper Updates/reload pass;342-file8094e494. No abandoned uncertain-command durability claim.  Sep28#762 cold native sender/detail and Chrome full Updates/reload pass,206-file735d2c8c; no full native update feed or abandoned-draft/account claim. Sep28#759 actual final iOS/Android cold reads preserve saved dates; Chrome calendar/reload parity,441-file906a79fb. No abandoned-editor or process-death command identity promise. Sep28 organizer removal119-fileaa5e preserves canceled roster/open slots across actual native cold restart; address-sharing179-fileb9bcc preserves helper address across cold restart and withdraws after actual Leave. No in-flight account or durable-draft claim. Sep28#741 actual iOS cold saved fields/assigned arrival/cleared note persist, restored Alice after Bob denial;156-file0226862e. No in-flight account-change/durable-draft claim. Sep28#733 iOS helper process-reopen and Android organizer process-reopen preserve completed Train results;123-file5dae628e, no pending-command account/process guarantee. Sep28 #709 whole-post image deletion manual web/Android and automatic iOS lost-reply retry/cold absence accepted119-file214a; all owned5Posts/onecomment/File/21objects0. Broader upload/concurrency limits remain. Sep28 iOS Post unsent draft survives actual Settings background/foreground and size/theme change; cold return discards in-memory text without a Send. [20-file7cb37839 evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-ios-post-accessibility-r1/RESULT.md); no durable-draft promise. Sep28 ordinary Post account isolation accepted on actual Chrome/iOS/Android,46-file3f832a8c, exactPost/3comments0/full retainedhashes equal; no old-subscriber or durable-unsent promise. Sep27#699 preserves later pending drafts on actual web/iOS/Android,107-filec9b5f951; account/process-death unsent retention remains open. Sep27#695 web panel target-generation repair and unchanged native delayed-read/write navigation/cold persistence accepted,107-fileec69319a; account/process-death drafts remain open. Sep27 #671 all-client Post comment persistence after reload/cold reopen (113-file1bf8a689…); successful late old-account Hub200 after real logout/login accepted on Chrome (23-file79e9382e…), full cache/native lifetime remains separate. Accepted Home/account-switch and session lifetimes; Sep27 #667 actual Android deep-linked Post draft survives font/theme recreation, cold/warm new links and Back pass (52-file6d337d63…); #648 native Not-you lifetimes reused unchanged | Remaining multi-client foreground/background/cold-process and concurrent-account journeys; no process-death draft retention promise accepted. Physical-provider receipt is only one separate boundary. |
 | U05 | Existing screen and action catalogs | Final integrated release-build inventory on all three clients after repair integration; keep every unfinished reachable action explicit. **(LAUNCH SCOPE 2026-09-27: exclude the flagged-off screens; see the shared cut table.)** |
+
+## Stream 1 U02–U04 exit checklists — DRAFT for user approval (2026-09-29T18:38Z)
+
+Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is the canonical copy; after approval, progress is tracked here only.
+Legend: ✅ done (sealed evidence) · ❓ confirm from existing evidence before any rerun · ⬜ to do · 🔷 user decision · ⛔ named boundary · – not offered on that client.
+A row closes when every client cell is ✅, –, ⛔ with its named boundary, or 🔷 decided. Anything found broken gets the smallest fix with real-app before/after evidence and exact cleanup; visual changes go to the user first.
+
+**U03 edge cases** — E1 server error; E2 lost reply; E3 double tap; E4 not allowed; E5 changed meanwhile; E6 bad input; R1 read failure; R2 empty.
+
+| Workflow | iOS | Android | Web |
+|---|---|---|---|
+| **Support Trains** | | | |
+| Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>❓ R1 R2 (Sep26/27 native list bundles) | ✅ E5 (#789)<br>❓ R1 R2 (Sep26/27 native list bundles) | ✅ R1 (#662)<br>✅ E5 (#783)<br>❓ R2 |
+| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ⬜ E1 E2 E3 E6 |
+| Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>❓ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>❓ R1 on detail, E4 public page (PR402) |
+| Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>🔷 E4 button on non-live trains | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>🔷 E4 button on non-live trains | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>⬜ E3<br>🔷 E4 button on non-live trains |
+| Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
+| Organizer dates: add, edit, remove | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>⬜ Remove: E1 E2 | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>✅ Remove: E1 (#759)<br>⬜ Remove: E2 | ❓ Calendar looks read-only on web |
+| Send update and push choice | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | ❓ Whether web offers Send update |
+| Signups: edit, remove helper, share address | ✅ Edit: E1-E6 (#741)<br>✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747) | ✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747)<br>– Edit not offered | ✅ Roster and per-helper privacy (#747)<br>– Edit, remove, address are app-only |
+| Pause, resume, back to draft, archive, delete, close | ✅ E2 pause and delete (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 all; E2 resume, back to draft, archive | ✅ E2 all five (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 | ✅ Delete: E2 E5 (#783)<br>⬜ Delete: E1 E3<br>❓ Whether web offers Close<br>– Pause, resume, back to draft, archive not offered |
+| Co-organizers (People picker approved, to build) | ⬜ Build the picker, then E1-E6 | ⬜ Build the picker, then E1-E6 | – No co-organizer editor on web |
+| Remind helpers (Nudge draft and send) | ⛔ Needs an AI provider | ⛔ Needs an AI provider | ⛔ Needs an AI provider |
+| Gift fund: turn on, turn off | ⬜ E1 E2 E3<br>⛔ Contributions move money | ⬜ E1 E2 E3<br>⛔ Contributions move money | ❓ Whether web offers the switch<br>⛔ Contributions move money |
+| **Posts and Pulse** | | | |
+| Pulse feed, My posts, counts | ✅ Comment counts (C-18)<br>❓ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>❓ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>❓ R1 R2 (Sep25 My Pulse pages) |
+| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>❓ E1 (#718 photo cases)<br>⬜ E6 | ✅ E1 E2 E3 (#657, #718)<br>⬜ E6 | ✅ E2 E3 (#718)<br>❓ E1 (#718 photo cases)<br>⬜ E6 |
+| Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>⬜ E2 E5 | ⬜ E1 E2 E5 |
+| Delete a post | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 |
+| Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2 (#671, #699)<br>❓ Delete, pages, photos (Sep27 comment bundles) | ✅ E1 E2 (#671, #699)<br>❓ Delete, pages, photos (Sep27 comment bundles) | ✅ E1 E2 (#671, #699)<br>❓ Delete, pages, photos (Sep27 comment bundles) |
+| Report a post | ✅ E1 (#642)<br>❓ E2 E3 (#642) | ✅ E1 E2 E3 (#642) | ✅ E1 (#642)<br>❓ E2 E3 (#642) |
+| Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ⬜ Public post page: R1, E4 for a private post |
+| **Start and Hub** | | | |
+| Start funnel and Place preview | ✅ R1 (#635) | ✅ R1 (#635) | ✅ R1 (#607) |
+| Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>❓ R1 | ✅ Pills open real screens (C-02)<br>❓ R1 | ✅ Hub posts (Sep25)<br>❓ R1 |
+
+**U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
+
+| Area | iOS | Android | Web |
+|---|---|---|---|
+| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>❓ L4 (Sep26 refresh fix) | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>⬜ L3 |
+| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4 | ✅ L1 L2 L3 (#667, Sep27)<br>❓ L4 (Sep26 session fix) | ✅ L2 L3 L4 (Sep27, #785)<br>⬜ L1 draft kept across tabs |
+| Start and Place preview | ⬜ L2 L3 | ⬜ L2 L3 | ⬜ L2 L3 |
+| Hub (Stream 1 cards) | ❓ L3 (Sep27 Hub account)<br>⬜ L2 | ❓ L3 (Sep27 Hub account)<br>⬜ L2 | ✅ L3 (Sep27 late Hub reply)<br>⬜ L2 |
+
+**U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
+
+| Screen | iOS | Android | Web |
+|---|---|---|---|
+| **Support Trains** | | | |
+| My trains, Nearby, Invitations | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Train search | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ❓ Whether web has search |
+| Train detail and sign-up sheet | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Manage train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ Signups tab: A1 A2 A3 A4 A5 |
+| Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ⬜ A1 A2 A3 A4 A5 |
+| **Posts and Pulse** | | | |
+| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A3 A4 | ✅ A5 comments (Sep27)<br>⬜ A1 A2 A3 A4 |
+| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| My posts | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Report a post | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| **Start and Hub** | | | |
+| Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Hub (Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Today detail | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| **Money screens (viewing only, no payments)** | | | |
+| Tip sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Payment card and refund sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2 (Sep22)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Payments and wallet settings | ⬜ A1 A2 A3 A4 | ❓ A1 A2 (Sep27)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+
+**Outside this plan:** Money journeys: Tips, task payments, refunds, disputes and wallet reuse the accepted P02-P10 evidence. Nothing is rerun, and there is still no capture. Their hosted and provider parts stay with the P rows. Remind helpers: Blocked until an AI provider is available: Send only appears after an AI draft. Crew Day and rebooking a known crew: Not built yet: no screen or route calls it (Stream 3, Sep27). There's nothing to check. Launch cuts: Marketplace, Open Gigs, the business directory, and Hub or Pulse entry points into them stay excluded. The "WINNER" badge note belongs to bids, so it's dropped. U01 and U05: U01 has no Stream 1 cells. U05 starts once your launch flags are on master.
+
+**Decisions requested:** (1) Approve these three checklists, or tell me what to add or drop. (2) Sign up for a slot on paused, completed, archived and draft trains: keep it in place but disabled with a reason (my recommendation), or hide it. (3) Invite co-organizers by email: my recommendation is not now. Organizers use the existing share link and pick the person once they join. (4) Task progress labels break mid-word at Android font 2.0 (paid-task screens): allow a wrap fix (my recommendation) or keep as is.
+
+- U03 items: done 62, confirm from existing evidence 22, to do 27, your call 3, boundary 6, not offered 6
+- U04 items: done 8, confirm from existing evidence 4, to do 14, your call 0, boundary 0, not offered 0
+- U02 items: done 6, confirm from existing evidence 2, to do 51, your call 0, boundary 0, not offered 2
+
+
 
 
 ### Resume without losing or repeating work
