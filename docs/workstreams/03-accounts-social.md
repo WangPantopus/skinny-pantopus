@@ -2,8 +2,9 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 web stale-session repair PR785 awaiting Stream 1 review, 2026-09-29T03:23:08Z
+## LIVE — Stream 3 web stale-session repair PR785 merged, 2026-09-29T03:26:20Z
 
+- **Merged (verified independently at 03:26:20Z):** [PR785](https://github.com/WangPantopus/skinny-pantopus/pull/785) exact head `51ae9c05d2f27130b09cf38561d7a7c96e934689` merged 03:25:44Z through batch 112 [#786](https://github.com/WangPantopus/skinny-pantopus/pull/786) (tip `1f7779d02`, merged 03:25:42Z). Master is `bf64e3c0a2e5160232f776e85abe4ad0db91b1d9`. REST merge state, ancestry and master's `page.tsx` blob `f926a63ad3b3` (equal to the candidate) all check out. Stream 1 reviewed the diff and verified the 52-file seal and its batch proofs. No Stream 3 PR, fixture, fault rule or lease remains. Web 18131 keeps serving the merged candidate tree (detached `51ae9c05d`); it has no reason to rebuild.
 - **Lead:** Stream 1 routed an incidental web finding, received after its last recorded 02:23:32Z and acknowledged before 02:33:10Z. On master `be05b58dd` (its proxy seq 44285–44319), one stale-session visit to `/app/hub` sent 16 refresh and 15 logout requests one after another, and the visitor's sign-in then got 429. Stream 1 changed nothing and handed it to Stream 3 (retained A02 sessions).
 - **Root cause (real contract traced):** `/session/refresh` signs out after an invalid refresh. That sign-out's token change makes `QueryProvider` remount every page: its key is `sessionGeneration`, from Stream 3's own account-retirement change `b414ad6f6` (2026-09-20). The remounted page has a fresh `startedRef` and a cleared loop guard, so it refreshed and signed out again, until a 429 or until a navigation happened to commit.
 - **Reproduced on the Stream 3 runtime** (all involved files byte-identical to master):
@@ -34,7 +35,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Not reproduced: a visitor whose logout keeps failing with `onFail=/` can bounce between documents until a refresh 429. Recorded as an observation, not repaired.
   - Local dev runtime only: no hosted or production build, no other browsers.
   - Excluded harness runs: two CORS-blocked runs (02:38:50Z, 02:40:14Z) and run 1's missing browser event file (credential-helper Origin).
-  - Next: Stream 1 reviews and merges #785; then record the exact master. Earlier Stream 3 boundaries are unchanged: S3-22/26/62, the missing Crew Day caller, physical/provider limits and the launch cuts.
+  - Next: nothing pending for Stream 3. Open new work only for a reproduced in-scope failure or a changed prerequisite. Earlier Stream 3 boundaries are unchanged: S3-22/26/62, the missing Crew Day caller, physical/provider limits and the launch cuts.
 
 ## Previous completed milestone — Stream 3 bounded reconciliation pass, 2026-09-29T02:03:31Z (no new work found)
 
