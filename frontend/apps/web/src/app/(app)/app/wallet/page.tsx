@@ -32,6 +32,7 @@ function WalletContent() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
+            aria-label="Back"
             className="p-1.5 hover:bg-app-hover rounded-lg transition"
           >
             <ArrowLeft className="w-5 h-5 text-app-text" />

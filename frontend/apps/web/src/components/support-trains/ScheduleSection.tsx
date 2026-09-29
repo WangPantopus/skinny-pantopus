@@ -6,6 +6,7 @@ import {
   PRESET_SLOT_DEFAULTS,
   PRESET_CHIPS,
   WEEKDAY_SHORT,
+  WEEKDAY_NAMES,
   weekdaysEnabledForPreset,
   toLocalYMD,
   fromYMD,
@@ -119,6 +120,8 @@ export default function ScheduleSection({
               <button
                 key={dow}
                 onClick={() => toggleWeekday(dow)}
+                aria-label={WEEKDAY_NAMES[dow]}
+                aria-pressed={on}
                 className={`flex-1 aspect-square max-w-[44px] rounded-lg border text-sm font-semibold transition ${
                   on
                     ? 'bg-primary-600 border-primary-600 text-white'

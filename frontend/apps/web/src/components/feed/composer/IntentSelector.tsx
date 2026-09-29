@@ -14,23 +14,25 @@ export interface IntentDef {
   icon: ReactNode;
   placeholder: string;
   color: string;
+  /** Label text in `color`'s hue that meets WCAG AA (4.5:1) on `bgLight`. */
+  textColor: string;
   bgLight: string;
   cta: string;
 }
 
 export const INTENTS: IntentDef[] = [
-  { key: 'ask_local', label: 'Ask', icon: <MessageCircle className="w-4 h-4" />, placeholder: 'What do you want to ask your neighbors?', color: '#0284C7', bgLight: '#EFF6FF', cta: 'Post Question' },
-  { key: 'recommendation', label: 'Recommend', icon: <Star className="w-4 h-4" />, placeholder: 'What place, service, or thing are you recommending?', color: '#F59E0B', bgLight: '#FFFBEB', cta: 'Share Recommendation' },
-  { key: 'event', label: 'Event', icon: <Calendar className="w-4 h-4" />, placeholder: 'Tell neighbors about the event — what, when, where…', color: '#8B5CF6', bgLight: '#F5F3FF', cta: 'Post Event' },
-  { key: 'lost_found', label: 'Lost & Found', icon: <Search className="w-4 h-4" />, placeholder: 'Describe what was lost or found and where…', color: '#CA8A04', bgLight: '#FEFCE8', cta: 'Post Alert' },
-  { key: 'alert', label: 'Safety Alert', icon: <Siren className="w-4 h-4" />, placeholder: 'What should neighbors know?', color: '#DC2626', bgLight: '#FEF2F2', cta: 'Post Alert' },
-  { key: 'deal', label: 'Deal/Promo', icon: <Tag className="w-4 h-4" />, placeholder: 'Describe the deal and where to find it...', color: '#16A34A', bgLight: '#F0FDF4', cta: 'Post Deal' },
-  { key: 'local_update', label: 'Local Update', icon: <Newspaper className="w-4 h-4" />, placeholder: 'Share a local update with your neighbors…', color: '#374151', bgLight: '#F9FAFB', cta: 'Post Update' },
-  { key: 'neighborhood_win', label: 'Neighborhood Win', icon: <Trophy className="w-4 h-4" />, placeholder: 'Celebrate something great in your neighborhood…', color: '#059669', bgLight: '#F0FDF4', cta: 'Share Win' },
-  { key: 'visitor_guide', label: 'Visitor Guide', icon: <Compass className="w-4 h-4" />, placeholder: 'Share tips for visitors to the area…', color: '#7C3AED', bgLight: '#FAF5FF', cta: 'Post Guide' },
-  { key: 'service_offer', label: 'Service', icon: <Wrench className="w-4 h-4" />, placeholder: 'What service are you offering?', color: '#7C3AED', bgLight: '#FAF5FF', cta: 'Post Service' },
-  { key: 'announcement', label: 'Announce', icon: <Megaphone className="w-4 h-4" />, placeholder: 'Share important news with the neighborhood…', color: '#0D9488', bgLight: '#F0FDFA', cta: 'Post Announcement' },
-  { key: 'general', label: 'Share', icon: <PenLine className="w-4 h-4" />, placeholder: 'Share something with your neighborhood…', color: '#6B7280', bgLight: '#F9FAFB', cta: 'Post' },
+  { key: 'ask_local', label: 'Ask', icon: <MessageCircle className="w-4 h-4" />, placeholder: 'What do you want to ask your neighbors?', color: '#0284C7', textColor: '#0369A1', bgLight: '#EFF6FF', cta: 'Post Question' },
+  { key: 'recommendation', label: 'Recommend', icon: <Star className="w-4 h-4" />, placeholder: 'What place, service, or thing are you recommending?', color: '#F59E0B', textColor: '#B45309', bgLight: '#FFFBEB', cta: 'Share Recommendation' },
+  { key: 'event', label: 'Event', icon: <Calendar className="w-4 h-4" />, placeholder: 'Tell neighbors about the event — what, when, where…', color: '#8B5CF6', textColor: '#7C3AED', bgLight: '#F5F3FF', cta: 'Post Event' },
+  { key: 'lost_found', label: 'Lost & Found', icon: <Search className="w-4 h-4" />, placeholder: 'Describe what was lost or found and where…', color: '#CA8A04', textColor: '#A16207', bgLight: '#FEFCE8', cta: 'Post Alert' },
+  { key: 'alert', label: 'Safety Alert', icon: <Siren className="w-4 h-4" />, placeholder: 'What should neighbors know?', color: '#DC2626', textColor: '#B91C1C', bgLight: '#FEF2F2', cta: 'Post Alert' },
+  { key: 'deal', label: 'Deal/Promo', icon: <Tag className="w-4 h-4" />, placeholder: 'Describe the deal and where to find it...', color: '#16A34A', textColor: '#15803D', bgLight: '#F0FDF4', cta: 'Post Deal' },
+  { key: 'local_update', label: 'Local Update', icon: <Newspaper className="w-4 h-4" />, placeholder: 'Share a local update with your neighbors…', color: '#374151', textColor: '#374151', bgLight: '#F9FAFB', cta: 'Post Update' },
+  { key: 'neighborhood_win', label: 'Neighborhood Win', icon: <Trophy className="w-4 h-4" />, placeholder: 'Celebrate something great in your neighborhood…', color: '#059669', textColor: '#047857', bgLight: '#F0FDF4', cta: 'Share Win' },
+  { key: 'visitor_guide', label: 'Visitor Guide', icon: <Compass className="w-4 h-4" />, placeholder: 'Share tips for visitors to the area…', color: '#7C3AED', textColor: '#7C3AED', bgLight: '#FAF5FF', cta: 'Post Guide' },
+  { key: 'service_offer', label: 'Service', icon: <Wrench className="w-4 h-4" />, placeholder: 'What service are you offering?', color: '#7C3AED', textColor: '#7C3AED', bgLight: '#FAF5FF', cta: 'Post Service' },
+  { key: 'announcement', label: 'Announce', icon: <Megaphone className="w-4 h-4" />, placeholder: 'Share important news with the neighborhood…', color: '#0D9488', textColor: '#0F766E', bgLight: '#F0FDFA', cta: 'Post Announcement' },
+  { key: 'general', label: 'Share', icon: <PenLine className="w-4 h-4" />, placeholder: 'Share something with your neighborhood…', color: '#6B7280', textColor: '#6B7280', bgLight: '#F9FAFB', cta: 'Post' },
 ];
 
 interface IntentSelectorProps {
@@ -76,7 +78,7 @@ export default function IntentSelector({ onSelect, user, activeSurface }: Intent
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:scale-[1.04] active:scale-95"
               style={{
                 background: intent.bgLight,
-                color: intent.color,
+                color: intent.textColor,
                 border: `1px solid ${intent.color}20`,
               }}
             >

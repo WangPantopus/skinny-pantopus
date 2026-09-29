@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useState, type ReactNode } from 'react';
+import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, Calendar, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper,
@@ -13,7 +13,7 @@ import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
-import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import type { AudienceProfile, Post } from '@pantopus/types';
@@ -23,6 +23,12 @@ const LUCIDE_MAP: Record<string, LucideIcon> = {
   MessageCircle, Star, CalendarDays, Search, Megaphone, AlertTriangle,
   Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User,
 };
+
+// Text on the card's own surface follows the theme: the palette's `textColor`
+// in light mode and `darkTextColor` in dark mode (inline colors can't reach `dark:`).
+const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[color:var(--post-type-text-dark)]';
+const postTypeTextVars = (config: PostTypeConfig) =>
+  ({ '--post-type-text': config.textColor, '--post-type-text-dark': config.darkTextColor }) as CSSProperties;
 
 function getTypeIcon(type: string): ReactNode {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
@@ -125,7 +131,7 @@ function PostCard({
       <div className="flex items-center gap-2 px-4 pt-3 pb-1 cursor-pointer" onClick={openFullPost}>
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-          style={{ background: config.bgLight, color: config.color }}
+          style={{ background: config.bgLight, color: config.textColor }}
         >
           <span className="flex-shrink-0">{typeIconNode}</span>
           {config.label}
@@ -209,7 +215,9 @@ function PostCard({
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1.5 rounded-lg hover-bg-app transition sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="More actions"
+            aria-expanded={menuOpen}
+            className="p-1.5 rounded-lg hover-bg-app transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
           >
             <svg className="w-4 h-4 text-app-muted" fill="currentColor" viewBox="0 0 20 20">
               <circle cx="10" cy="4" r="1.5" />
@@ -533,11 +541,11 @@ function PostCard({
         {config.ctaLabel && (
           <button
             onClick={() => onComment(post.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:shadow-sm active:scale-95"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:shadow-sm active:scale-95 ${POST_TYPE_THEMED_TEXT}`}
             style={{
               background: `${config.color}10`,
-              color: config.color,
               border: `1px solid ${config.color}25`,
+              ...postTypeTextVars(config),
             }}
           >
             {ctaIconNode && <span className="flex-shrink-0">{ctaIconNode}</span>}

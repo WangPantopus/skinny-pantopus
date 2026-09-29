@@ -440,7 +440,7 @@ export default function PostDetailPage() {
           >
             <span
               className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: `${config.color}15`, color: config.color }}
+              style={{ background: `${config.color}15`, color: config.textColor }}
             >
               <TypeIcon className="w-3.5 h-3.5" />
               {config.label}

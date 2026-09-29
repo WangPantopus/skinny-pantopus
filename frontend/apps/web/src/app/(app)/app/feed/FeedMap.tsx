@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import * as api from '@pantopus/api';
@@ -10,12 +10,18 @@ import {
   Heart, Home as HomeIcon, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import type { FeedSurface, MapMarker, PostType } from '@pantopus/api';
 import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map/useCluster';
 import type { NearestActivityCenter } from '@/components/map';
+
+// Chip text on the map's own surfaces follows the theme: the palette's `textColor`
+// in light mode and `darkTextColor` in dark mode (inline colors can't reach `dark:`).
+const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[color:var(--post-type-text-dark)]';
+const postTypeTextVars = (config: PostTypeConfig) =>
+  ({ '--post-type-text': config.textColor, '--post-type-text-dark': config.darkTextColor }) as CSSProperties;
 
 // SVG icon strings for Leaflet divIcon HTML (not React components)
 // Keys use canonical PostType values only — no legacy aliases.
@@ -71,10 +77,10 @@ function MapPostPopupCard({
         >
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em]"
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${POST_TYPE_THEMED_TEXT}`}
               style={{
                 background: `${config.color}15`,
-                color: config.color,
+                ...postTypeTextVars(config),
               }}
             >
               <TypeIcon className="h-3 w-3" />
@@ -491,10 +497,10 @@ export default function FeedMap({
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase"
+                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${POST_TYPE_THEMED_TEXT}`}
                       style={{
                         background: `${getPostTypeConfig(pt).color}15`,
-                        color: getPostTypeConfig(pt).color,
+                        ...postTypeTextVars(getPostTypeConfig(pt)),
                       }}
                     >
                       {(() => { const Icon = getTypeReactIcon(pt); return <Icon className="w-3 h-3 inline-block" />; })()} {getPostTypeConfig(pt).label}
