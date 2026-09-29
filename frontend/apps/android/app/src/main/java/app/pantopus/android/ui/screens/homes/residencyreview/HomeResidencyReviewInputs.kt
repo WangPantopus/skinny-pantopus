@@ -45,7 +45,7 @@ internal fun HomeResidencyReviewInputs(
         Text(
             "Confirm residency within the existing role, age and access limits. " +
                 "Existing verified memberships keep their role and restrictions. " +
-                "Ownership and expired or removed access need their own review.",
+                "Ownership has its own flow, and approving can’t restore access that has ended or expired.",
             style = MaterialTheme.typography.bodySmall,
         )
         ReviewChoice(
