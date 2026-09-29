@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-29T03:31Z (batches112–113 merged; web single sign-out and native Train status chips accepted)
+## CURRENT RESUME POINT — 2026-09-29T04:16Z (batch114 merged; native Support Train delete returns to a fresh list)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,27 @@
 
 
 
+
+> **UPDATE 2026-09-29T04:16Z — batch114 merged: deleting a Support Train returns organizers to a fresh list on iOS and Android.**
+> - **Master:** `e5612639549a884f2380a45a0640f3e22bfe9b2d`.
+>   - Batch114 [#790](https://github.com/WangPantopus/skinny-pantopus/pull/790), exact `13cc79ba695e478f88bf133fb65c287ca45b7d08`, merged 04:14:15Z with S1 [#789](https://github.com/WangPantopus/skinny-pantopus/pull/789) `8a12c864c` (shows merged).
+>   - Ancestry, 12-file union and head-blob proofs pass; the tip tree equals the PR head.
+>   - lint-batch: SwiftLint `--strict` 0 on the 8 Swift files. SwiftFormat passes 7; the eighth fails only on pre-existing `ManageTrainViewModel.swift:313` (identical on master).
+>   - Required checks are absent live. The queue is empty; unrelated #46/#429/#430/#625 are untouched.
+> - **S1 #789 — Train delete return.** After Manage → Delete, both native apps landed on the deleted train's own detail: a 404 "Couldn't load support train" with a Try again that can never work. Back then reached My trains / Train search still listing it. Reproduced on both clients, for list and search paths.
+>   - The existing Manage screens gain an optional `onDeleted` that falls back to the back action. The iOS Hub/You hosts and the Android nav graph use it to also leave that train's detail.
+>   - My trains and Train search re-read quietly on return.
+>   - iOS adds a `supportTrainDeleted` notification (the existing Pulse/Mailbox idiom). SwiftUI didn't re-run a list's `.task` after the two-level pop, when returning from Search, or on the first return to a deep-link-pushed list.
+>   - Afters on Android `26be4352…` and iOS `ea10f9d8…`: list, search and lost-reply retry deletes (Android manual retry, iOS automatic) land on re-read lists. The Manage back chevron is unchanged.
+>   - Web's delete landing is reused, since its source is unchanged.
+>   - [Sealed 70-file result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream1-train-list-after-delete-r1/RESULT.md), MANIFEST `0f1bb844a1afc53a3a2726257e56f5861bc32be76db3daff574bde6f125a755a`.
+>   - Eleven Trains were deleted through the apps. A locked check found zero owned rows; 19 fingerprints are equal; counts differ only by auth bookkeeping.
+>   - **Decided per the standing instruction:** land on the list the organizer came from, like web. This removes a screen that could only fail, so it's a functional repair, not a navigation redesign.
+> - **Open, recorded and not widened:**
+>   - On iOS, a non-delete change (for example Pause) followed by Back to a deep-link-pushed list or from Search can leave a stale chip until pull-to-refresh.
+>   - The Tasks-tab Manage host sits in the cut Gigs feed (#4) and keeps the old fallback.
+> - **Design proposal (needs explicit approval; not implemented):** hide or disable "Sign up for a slot" on paused, completed, archived and draft trains on all three clients. Today the tap reaches the backend, which refuses with an honest 409.
+> - **Runtime:** backend 81764; web HMR at `e5612639`. Installed native builds equal master's native code. S1 holds C2 (slot 1) and 5558 (slot 4); heavy is free.
 
 > **UPDATE 2026-09-29T03:31Z — batches112–113 merged: S3 web stale-session single sign-out; native Support Train status chips truthful.**
 > - **Master:** `e3d8ae3eabea149eec693aa71ea214a88260321e`.
