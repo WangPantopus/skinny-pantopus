@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, UserPlus, User, ShieldCheck, Shield, ShieldAlert, ArrowLeftRight, Users } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -8,12 +8,14 @@ import type { HomeOwner } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 
-const TIER_META: Record<string, { icon: typeof ShieldCheck; color: string; label: string }> = {
-  legal:    { icon: ShieldCheck, color: '#16a34a', label: 'Legal' },
-  strong:   { icon: ShieldCheck, color: '#0284c7', label: 'Strong' },
-  standard: { icon: Shield,      color: '#f59e0b', label: 'Standard' },
-  weak:     { icon: ShieldAlert,  color: '#6b7280', label: 'Weak' },
+// `dark` is a lighter shade of the same hue, for text on dark mode's dark surfaces.
+const TIER_META: Record<string, { icon: typeof ShieldCheck; color: string; dark: string; label: string }> = {
+  legal:    { icon: ShieldCheck, color: '#16a34a', dark: '#4ade80', label: 'Legal' },
+  strong:   { icon: ShieldCheck, color: '#0284c7', dark: '#38bdf8', label: 'Strong' },
+  standard: { icon: Shield,      color: '#f59e0b', dark: '#fbbf24', label: 'Standard' },
+  weak:     { icon: ShieldAlert,  color: '#6b7280', dark: '#9ca3af', label: 'Weak' },
 };
+const tierAccent = (tier: { color: string; dark: string }) => ({ '--accent': tier.color, '--accent-dark': tier.dark } as CSSProperties);
 
 const STATUS_BADGE: Record<string, { color: string; bg: string; label: string }> = {
   verified: { color: 'text-green-700', bg: 'bg-green-100', label: 'Verified' },
@@ -99,8 +101,8 @@ function OwnersContent() {
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="inline-flex items-center gap-1 text-xs">
-                      <TierIcon className="w-3 h-3" style={{ color: tier.color }} />
-                      <span style={{ color: tier.color }} className="font-medium">{tier.label}</span>
+                      <TierIcon className="w-3 h-3 text-[color:var(--accent)] dark:text-[color:var(--accent-dark)]" style={tierAccent(tier)} />
+                      <span style={tierAccent(tier)} className="font-medium text-[color:var(--accent)] dark:text-[color:var(--accent-dark)]">{tier.label}</span>
                     </span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase ${status.bg} ${status.color}`}>
                       {status.label}
