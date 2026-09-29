@@ -35,6 +35,17 @@
 
 
 
+> **UPDATE 2026-09-29T04:19Z — reconciliation: every retained Train organizer command is now accounted for.**
+> - **Accepted:** pause, resume, back to draft, archive and delete (lost-reply retries, #783). The post-delete landing and list freshness are accepted by #789 (batch114).
+> - **Design boundary (needs explicit approval; not implemented):** co-organizer add is only a raw "User id" text field on iOS and Android, which real organizers can't fill. Web has no roster editor. A people picker would be a design change.
+>   - The backend is already safe on retry: add is an upsert (201) and remove is a delete (204).
+> - **Provider boundary:** "Remind helpers" Send is only reachable after an AI draft. Without the provider, `draftOpenSlotsNudge` returns `AI_UNAVAILABLE` and the clients show an error, with no template fallback.
+>   - Recorded candidate for when a provider exists: `POST /nudges/send` inserts a chat message per call, so a lost-reply retry would post a duplicate.
+> - **Open, recorded:**
+>   - iOS non-delete staleness after a deep-link or Search return.
+>   - The "Sign up for a slot" on non-live trains design proposal.
+>   - The `INVENTORY.md` rows are updated to match.
+
 > **UPDATE 2026-09-29T04:16Z — batch114 merged: deleting a Support Train returns organizers to a fresh list on iOS and Android.**
 > - **Master:** `e5612639549a884f2380a45a0640f3e22bfe9b2d`.
 >   - Batch114 [#790](https://github.com/WangPantopus/skinny-pantopus/pull/790), exact `13cc79ba695e478f88bf133fb65c287ca45b7d08`, merged 04:14:15Z with S1 [#789](https://github.com/WangPantopus/skinny-pantopus/pull/789) `8a12c864c` (shows merged).
