@@ -87,8 +87,12 @@ fun PendingPlaceScreen(
                 }
                 state.preview.sections.orEmpty().forEach {
                     PlaceSectionView(
-                        env = it, onOpen = null, onVerify = null, onClaim = null,
-                        onRetry = onRetryPreview, retrying = state.isLoadingPreview,
+                        env = it,
+                        onOpen = null,
+                        onVerify = null,
+                        onClaim = null,
+                        onRetry = onRetryPreview,
+                        retrying = state.isLoadingPreview,
                     )
                 }
             }

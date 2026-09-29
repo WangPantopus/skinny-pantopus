@@ -75,3 +75,46 @@ test('adopted history enforces append-only SQL and merge ordering even for basel
     assert.match(check(dir, 'HEAD').errors.join(), /Applied migrations are immutable/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+test('an applied migration missing its compatibility line can be documented in the policy, pinned to its bytes', () => {
+  const baseline = 'supabase/migrations/20260906000000_baseline.sql';
+  const sql = 'CREATE TABLE example(id int);';
+  const later = 'supabase/migrations/20260908000000_later.sql';
+  const laterSql = "set local lock_timeout='5s';\nalter table example add column y int;";
+  const active = { ...policy, mode: 'baselined', baselineFiles: { [baseline]: hash(sql) } };
+  const files = { [historical.replace('/migrations/', '/migrations-archive/')]: original, [baseline]: sql, [later]: laterSql };
+  assert.match(validate(active, files).join(), /Document compatibility/);
+  const note = { backwardsCompatible: 'yes', reason: 'Adds a column the deployed app ignores.', sha256: hash(laterSql) };
+  assert.deepEqual(validate({ ...active, compatibilityNotes: { [later]: note } }, files), []);
+  assert.match(validate({ ...active, compatibilityNotes: { [later]: { ...note, sha256: hash('edited') } } }, files).join(), /Document compatibility/);
+  assert.match(validate({ ...active, compatibilityNotes: { [later]: { ...note, reason: ' ' } } }, files).join(), /Document compatibility/);
+});
+test('a new migration cannot use a policy note instead of its own compatibility line', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const os = require('node:os');
+  const { execFileSync } = require('node:child_process');
+  const { check } = require('./check-migrations.cjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migration-note-test-'));
+  const git = args => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const baseline = 'supabase/migrations/20260906000000_baseline.sql';
+  const baselineSql = 'create table example(id int);';
+  const fresh = 'supabase/migrations/20260909000000_fresh.sql';
+  const freshSql = "set local lock_timeout='5s';\nalter table example add column z int;";
+  const put = (name, content) => {
+    fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), content);
+  };
+  const active = { ...policy, mode: 'baselined', baselineFiles: { [baseline]: hash(baselineSql) } };
+  try {
+    put(historical.replace('/migrations/', '/migrations-archive/'), original);
+    put(baseline, baselineSql);
+    put('supabase/tests/contract.sql', 'select 1;');
+    put('supabase/migration-policy.json', JSON.stringify(active));
+    git(['init']); git(['add', '.']);
+    git(['-c', 'user.name=CI', '-c', 'user.email=ci@example.invalid', 'commit', '-m', 'Adopted baseline']);
+    put(fresh, freshSql);
+    const note = { backwardsCompatible: 'yes', reason: 'Adds a column the deployed app ignores.', sha256: hash(freshSql) };
+    put('supabase/migration-policy.json', JSON.stringify({ ...active, compatibilityNotes: { [fresh]: note } }));
+    assert.match(check(dir, 'HEAD').errors.join(), /Compatibility notes are only for applied migrations/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

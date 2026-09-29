@@ -53,7 +53,7 @@ public final class EditSignupFormViewModel {
     // MARK: - Dependencies / callbacks
 
     private let supportTrainId: String
-    private let api = APIClient.shared
+    private let api: APIClient
     private let store: SupportTrainReservationsStore
     private let onSaved: @MainActor (SupportTrainReservationDTO) -> Void
 
@@ -61,11 +61,13 @@ public final class EditSignupFormViewModel {
         supportTrainId: String,
         reservation: SupportTrainReservationDTO,
         store: SupportTrainReservationsStore = .shared,
+        api: APIClient = .shared,
         onSaved: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) {
         self.supportTrainId = supportTrainId
         self.reservation = reservation
         self.store = store
+        self.api = api
         self.onSaved = onSaved
         for field in EditSignupField.allCases {
             fields[field] = FormFieldState(
@@ -334,5 +336,4 @@ public final class EditSignupFormViewModel {
         f.calendar = Calendar(identifier: .gregorian)
         return f
     }()
-
 }

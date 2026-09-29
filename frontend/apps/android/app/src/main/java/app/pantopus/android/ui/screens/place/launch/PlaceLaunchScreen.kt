@@ -742,8 +742,12 @@ private fun PreviewSections(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { env ->
                     PlaceSectionView(
-                        env = env, onOpen = null, onVerify = onCreateAccount, onClaim = onCreateAccount,
-                        onRetry = onRetry, retrying = retrying,
+                        env = env,
+                        onOpen = null,
+                        onVerify = onCreateAccount,
+                        onClaim = onCreateAccount,
+                        onRetry = onRetry,
+                        retrying = retrying,
                     )
                 }
             }

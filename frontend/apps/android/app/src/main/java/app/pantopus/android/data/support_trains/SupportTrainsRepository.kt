@@ -26,6 +26,9 @@ import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Saved slot times come back as `HH:mm:ss`; the request sends `HH:mm`. */
+private const val CLOCK_TIME_LENGTH = 5
+
 /**
  * Wraps `api/activities/support-trains/…` calls in the [NetworkResult]
  * taxonomy. Reads come from [SupportTrainsApi]; the S1 write half
@@ -86,6 +89,7 @@ class SupportTrainsRepository
          * `POST /api/support-trains/:id/slots` — append one custom slot.
          * Route `backend/routes/supportTrains.js:921`. P2.6.
          */
+        @Suppress("ComplexCondition")
         suspend fun addSlot(
             supportTrainId: String,
             body: AddSupportTrainSlotBody,
@@ -94,9 +98,11 @@ class SupportTrainsRepository
                 val saved = api.addSlot(supportTrainId, body)
                 if (saved.id.isBlank() || saved.slotDate != body.slotDate ||
                     saved.slotLabel != body.slotLabel || saved.supportMode != body.supportMode ||
-                    saved.startTime?.take(5) != body.startTime || saved.endTime?.take(5) != body.endTime ||
+                    saved.startTime?.take(CLOCK_TIME_LENGTH) != body.startTime || saved.endTime?.take(CLOCK_TIME_LENGTH) != body.endTime ||
                     saved.capacity != body.capacity
-                ) throw JsonDataException("Date save could not be confirmed.")
+                ) {
+                    throw JsonDataException("Date save could not be confirmed.")
+                }
                 Unit
             }
 
@@ -120,6 +126,7 @@ class SupportTrainsRepository
          * `POST /api/support-trains/:id/updates` — broadcast an update.
          * Route `backend/routes/supportTrains.js:1581`.
          */
+        @Suppress("ComplexCondition")
         suspend fun postUpdate(
             supportTrainId: String,
             body: SupportTrainUpdateBody,
@@ -127,7 +134,8 @@ class SupportTrainsRepository
             safeApiCall {
                 val saved = api.postUpdate(supportTrainId, body)
                 if (saved.id.isBlank() || saved.body != body.body ||
-                    (body.pushToPhones != null && saved.pushToPhones != body.pushToPhones)) {
+                    (body.pushToPhones != null && saved.pushToPhones != body.pushToPhones)
+                ) {
                     throw JsonDataException("Update could not be confirmed.")
                 }
                 Unit
@@ -241,22 +249,26 @@ class SupportTrainsRepository
          * `status = "canceled"` to remove it. Route
          * `backend/routes/supportTrains.js:971`.
          */
+        @Suppress("ComplexCondition")
         suspend fun updateSlot(
             supportTrainId: String,
             slotId: String,
             body: UpdateSupportTrainSlotBody,
-        ): NetworkResult<Unit> = safeApiCall {
-            val saved = actionsApi.updateSlot(supportTrainId, slotId, body)
-            if (saved.id != slotId ||
-                (body.slotDate != null && saved.slotDate != body.slotDate) ||
-                (body.slotLabel != null && saved.slotLabel != body.slotLabel) ||
-                (body.supportMode != null && saved.supportMode != body.supportMode) ||
-                (body.startTime != null && saved.startTime?.take(5) != body.startTime) ||
-                (body.endTime != null && saved.endTime?.take(5) != body.endTime) ||
-                (body.status != null && saved.status != body.status)
-            ) throw JsonDataException("Date save could not be confirmed.")
-            Unit
-        }
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                val saved = actionsApi.updateSlot(supportTrainId, slotId, body)
+                if (saved.id != slotId ||
+                    (body.slotDate != null && saved.slotDate != body.slotDate) ||
+                    (body.slotLabel != null && saved.slotLabel != body.slotLabel) ||
+                    (body.supportMode != null && saved.supportMode != body.supportMode) ||
+                    (body.startTime != null && saved.startTime?.take(CLOCK_TIME_LENGTH) != body.startTime) ||
+                    (body.endTime != null && saved.endTime?.take(CLOCK_TIME_LENGTH) != body.endTime) ||
+                    (body.status != null && saved.status != body.status)
+                ) {
+                    throw JsonDataException("Date save could not be confirmed.")
+                }
+                Unit
+            }
 
         /** `POST /:id/nudges/draft`. Route `backend/routes/supportTrains.js:2139`. */
         suspend fun draftNudge(supportTrainId: String): NetworkResult<String> =

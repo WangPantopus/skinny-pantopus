@@ -10,8 +10,8 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainFundDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainNudgeBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainNudgeDraftResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizersResponse
-import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlotBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
+import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlotBody
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
