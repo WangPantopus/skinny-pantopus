@@ -19,7 +19,7 @@ const MESSAGES = {
   INVITE_POLICY_INVALID: 'Choose a supported role or preset.',
   INVITE_POLICY_CHANGED: 'This invitation’s access policy changed. Request a new invitation.',
   INVITE_SOURCE_CHANGED: 'This access request changed. Request a new invitation.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'This membership needs a new access review before it can be restored.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s earlier household membership has ended. An invitation cannot restore it.',
   PROPOSED_ROLE_FORBIDDEN: 'That role exceeds the permitted authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot grant permissions that you do not hold.',
   OWNERSHIP_FLOW_REQUIRED: 'Use the ownership flow to add an owner.',
