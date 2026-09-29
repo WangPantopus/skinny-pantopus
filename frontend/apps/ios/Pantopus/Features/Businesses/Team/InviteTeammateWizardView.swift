@@ -159,6 +159,8 @@ private struct IdentifyStep: View {
                 contentType: .emailAddress,
                 identifier: "inviteTeammate_email"
             )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             VStack(alignment: .leading, spacing: Spacing.s1) {
                 Text("Note (optional)")
                     .pantopusTextStyle(.caption)

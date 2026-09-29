@@ -56,6 +56,8 @@ struct LegalInfoStep: View {
                 contentType: .emailAddress,
                 identifier: "createBusiness_email"
             )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             PantopusTextField(
                 "Description",
                 text: Binding(
