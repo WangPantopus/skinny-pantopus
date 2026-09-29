@@ -374,7 +374,7 @@ export default function EditHomePage() {
                 <label
                   key={opt.value}
                   className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                    visibility === opt.value ? 'border-blue-500 bg-blue-50' : 'border-app-border hover:border-app-border'
+                    visibility === opt.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-app-border hover:border-app-border'
                   }`}
                 >
                   <input

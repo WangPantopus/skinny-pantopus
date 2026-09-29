@@ -16,6 +16,9 @@ public enum FormShellLeading: Sendable {
     case back
 }
 
+/// Scroll anchor on the top of the form body (see `scrollsToTopOnChange`).
+private let formShellContentTopID = "formShell.contentTop"
+
 /// Scaffold for every Form screen.
 ///
 /// Per the P10 Form archetype: a 44pt top bar with leading X, centered
@@ -44,6 +47,7 @@ public struct FormShell<Content: View>: View {
     private let isSaving: Bool
     private let onClose: () -> Void
     private let onCommit: () -> Void
+    private let scrollsToTopOnChange: AnyHashable?
     private let content: Content
 
     @State private var showsDiscardConfirm = false
@@ -82,6 +86,10 @@ public struct FormShell<Content: View>: View {
     ///     confirms discard on a dirty one.
     ///   - onCommit: Invoked when the user taps the top-right action or
     ///     the bottom CTA.
+    ///   - scrollsToTopOnChange: When this value changes to non-nil, the
+    ///     body scrolls back to the top — e.g. to reveal a top-of-form error
+    ///     banner after the bottom CTA was pressed further down. `nil` (the
+    ///     default) never scrolls.
     ///   - leading: Leading top-bar control — `.close` (X, default) for
     ///     sheet-style forms or `.back` (chevron) for pushed forms.
     ///   - stickyBottom: Optional bespoke sticky bar pinned below the
@@ -102,6 +110,7 @@ public struct FormShell<Content: View>: View {
         isSaving: Bool = false,
         onClose: @escaping () -> Void,
         onCommit: @escaping () -> Void,
+        scrollsToTopOnChange: AnyHashable? = nil,
         @ViewBuilder content: () -> Content,
         stickyBottom: (() -> AnyView)? = nil
     ) {
@@ -118,6 +127,7 @@ public struct FormShell<Content: View>: View {
         self.isSaving = isSaving
         self.onClose = onClose
         self.onCommit = onCommit
+        self.scrollsToTopOnChange = scrollsToTopOnChange
         self.content = content()
     }
 
@@ -135,14 +145,21 @@ public struct FormShell<Content: View>: View {
                 dismissKeyboard()
                 onCommit()
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.s5) {
-                    content
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.s5) {
+                        content
+                    }
+                    .padding(.vertical, Spacing.s4)
+                    .id(formShellContentTopID)
                 }
-                .padding(.vertical, Spacing.s4)
+                .scrollDismissesKeyboard(.interactively)
+                .background(Theme.Color.appBg)
+                .onChange(of: scrollsToTopOnChange) { _, value in
+                    guard value != nil else { return }
+                    withAnimation { proxy.scrollTo(formShellContentTopID, anchor: .top) }
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Theme.Color.appBg)
             if let stickyBottom {
                 stickyBottom()
             } else if let bottomActionLabel {
