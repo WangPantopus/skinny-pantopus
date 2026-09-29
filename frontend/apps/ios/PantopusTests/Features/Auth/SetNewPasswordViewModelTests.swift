@@ -47,17 +47,17 @@ final class SetNewPasswordViewModelTests: XCTestCase {
         vm.password = "weak"
         vm.confirmPassword = "weak"
         XCTAssertFalse(vm.canSubmit, "weak password should fail strength check")
-        vm.password = "strongpass1"
+        vm.password = "strongpass12"
         vm.confirmPassword = "different1"
         XCTAssertFalse(vm.canSubmit, "mismatched confirm should disable submit")
-        vm.confirmPassword = "strongpass1"
+        vm.confirmPassword = "strongpass12"
         XCTAssertTrue(vm.canSubmit)
     }
 
     func test_canSubmit_false_with_empty_token() {
         let vm = SetNewPasswordViewModel(token: "")
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
         XCTAssertFalse(vm.canSubmit, "missing token blocks submission")
     }
 
@@ -65,9 +65,9 @@ final class SetNewPasswordViewModelTests: XCTestCase {
 
     func test_strength_hint_switches_from_rule_to_praise_when_strong() {
         let vm = SetNewPasswordViewModel(token: "tok")
-        XCTAssertEqual(vm.strengthHint, "Use 8+ characters with a number and a symbol.")
-        vm.password = "strongpass1" // 11 chars, no symbol → fair, still the rule
-        XCTAssertEqual(vm.strengthHint, "Use 8+ characters with a number and a symbol.")
+        XCTAssertEqual(vm.strengthHint, "Use 12+ characters with a number and a symbol.")
+        vm.password = "strongpass12" // 12 chars, no symbol → fair, still the rule
+        XCTAssertEqual(vm.strengthHint, "Use 12+ characters with a number and a symbol.")
         vm.password = "river-otter-92!" // 15 chars + number + symbol → strong
         XCTAssertEqual(vm.passwordStrength, 3)
         XCTAssertEqual(vm.passwordStrengthLabel, "Strong")
@@ -76,11 +76,11 @@ final class SetNewPasswordViewModelTests: XCTestCase {
 
     func test_confirm_match_state_tracks_input() {
         let vm = SetNewPasswordViewModel(token: "tok")
-        vm.password = "strongpass1"
+        vm.password = "strongpass12"
         XCTAssertEqual(vm.confirmMatch, .none, "no confirm typed yet")
         vm.confirmPassword = "strongpas"
         XCTAssertEqual(vm.confirmMatch, .mismatch)
-        vm.confirmPassword = "strongpass1"
+        vm.confirmPassword = "strongpass12"
         XCTAssertEqual(vm.confirmMatch, .match)
     }
 
@@ -92,8 +92,8 @@ final class SetNewPasswordViewModelTests: XCTestCase {
         ]
         let auth = makeAuth()
         let vm = SetNewPasswordViewModel(token: "deep-tok")
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
 
         await vm.submit(using: auth)
 
@@ -104,7 +104,7 @@ final class SetNewPasswordViewModelTests: XCTestCase {
         let body = SequencedURLProtocol.capturedRequests.last?.httpBodyData()
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         XCTAssertEqual(body?["token"] as? String, "deep-tok")
-        XCTAssertEqual(body?["newPassword"] as? String, "strongpass1")
+        XCTAssertEqual(body?["newPassword"] as? String, "strongpass12")
     }
 
     // MARK: - Error rollback
@@ -115,8 +115,8 @@ final class SetNewPasswordViewModelTests: XCTestCase {
         ]
         let auth = makeAuth()
         let vm = SetNewPasswordViewModel(token: "stale-tok")
-        vm.password = "strongpass1"
-        vm.confirmPassword = "strongpass1"
+        vm.password = "strongpass12"
+        vm.confirmPassword = "strongpass12"
 
         await vm.submit(using: auth)
 
