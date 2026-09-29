@@ -10,7 +10,7 @@ const MESSAGES = {
   HOME_NOT_FOUND: 'Home not found.', USER_NOT_FOUND: 'User not found.',
   CLAIM_NOT_FOUND: 'Claim not found.', CLAIM_NOT_PENDING: 'This claim has already been reviewed.',
   OWNERSHIP_FLOW_REQUIRED: 'Use the ownership flow to change an owner.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'This membership needs a new access review before it can be restored.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s household membership has ended, so this claim can’t be approved. You can reject it instead.',
   RESIDENCY_ROLE_FORBIDDEN: 'Residency approval cannot grant ownership or management roles.',
   PROPOSED_ROLE_FORBIDDEN: 'That role exceeds the permitted authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot activate permissions that you do not hold.',
