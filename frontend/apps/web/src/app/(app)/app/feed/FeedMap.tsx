@@ -394,7 +394,7 @@ export default function FeedMap({
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap shadow-md transition ${
                 mapFilter === f.key
                   ? 'bg-primary-600 text-white'
-                  : 'bg-surface/95 backdrop-blur text-app-muted border border-app hover-bg-app'
+                  : 'bg-app-surface/95 backdrop-blur text-app-muted border border-app hover-bg-app'
               }`}
             >
               <f.icon className="w-3.5 h-3.5" />
@@ -407,7 +407,7 @@ export default function FeedMap({
       {/* ─── Overlay: Post count badge (top-right) ─────────── */}
       <button
         onClick={handleFitAll}
-        className="absolute top-3 right-3 z-[500] bg-surface/95 backdrop-blur text-app text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md border border-app hover-bg-app transition"
+        className="absolute top-3 right-3 z-[500] bg-app-surface/95 backdrop-blur text-app text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md border border-app hover-bg-app transition"
       >
         {error && pins.length === 0 ? 'Unavailable' : `${postCount} in view`}
       </button>
@@ -417,7 +417,7 @@ export default function FeedMap({
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500]">
           <button
             onClick={handleSearchArea}
-            className="bg-surface/95 backdrop-blur text-primary-600 dark:text-primary-300 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-primary-200 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition flex items-center gap-1.5"
+            className="bg-app-surface/95 backdrop-blur text-primary-600 dark:text-primary-300 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-primary-200 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -428,7 +428,7 @@ export default function FeedMap({
       )}
 
       {error && !loading && (
-        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-app-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
           <span>Couldn&apos;t load posts.</span>
           <button
             onClick={() => fetchPins(bounds)}
@@ -442,7 +442,7 @@ export default function FeedMap({
       {/* ─── Overlay: Re-center button (bottom-left) ───────── */}
       <button
         onClick={handleRecenter}
-        className="absolute bottom-20 left-3 z-[500] bg-surface/95 backdrop-blur px-3 h-10 rounded-full shadow-lg border border-app flex items-center justify-center gap-1.5 hover-bg-app transition"
+        className="absolute bottom-20 left-3 z-[500] bg-app-surface/95 backdrop-blur px-3 h-10 rounded-full shadow-lg border border-app flex items-center justify-center gap-1.5 hover-bg-app transition"
         title="Re-center on my location"
       >
         <svg className="w-4 h-4 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -454,7 +454,7 @@ export default function FeedMap({
 
       {/* ─── Overlay: Loading spinner ──────────────────────── */}
       {loading && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-app-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
           <div className="w-3.5 h-3.5 border-2 border-app border-t-primary-500 rounded-full animate-spin" />
           Loading posts...
         </div>
@@ -475,7 +475,7 @@ export default function FeedMap({
 
       {/* ─── Overlay: Cluster card list ────────────────────── */}
       {clusterPosts.length > 0 && (
-        <div className="absolute bottom-20 left-3 right-3 z-[500] bg-surface/95/90 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
+        <div className="absolute bottom-20 left-3 right-3 z-[500] bg-app-surface/95 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-app">
             <span className="text-xs font-semibold text-app">{clusterPosts.length} posts in this area</span>
             <button

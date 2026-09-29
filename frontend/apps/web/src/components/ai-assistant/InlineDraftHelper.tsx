@@ -41,10 +41,10 @@ export function InlineDraftHelper({
 
   const colorScheme =
     mode === 'listing'
-      ? { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', hover: 'hover:bg-emerald-100', icon: 'text-emerald-500' }
+      ? { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', hover: 'hover:bg-emerald-100', icon: 'text-emerald-500', bare: 'dark:text-emerald-300 dark:hover:bg-emerald-900/30' }
       : mode === 'gig'
-      ? { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', hover: 'hover:bg-violet-100', icon: 'text-violet-500' }
-      : { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', hover: 'hover:bg-blue-100', icon: 'text-blue-500' };
+      ? { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', hover: 'hover:bg-violet-100', icon: 'text-violet-500', bare: 'dark:text-violet-300 dark:hover:bg-violet-900/30' }
+      : { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', hover: 'hover:bg-blue-100', icon: 'text-blue-500', bare: 'dark:text-blue-300 dark:hover:bg-blue-900/30' };
 
   const handleGenerate = useCallback(async () => {
     const userPrompt = prompt.trim() || seed.trim();
@@ -200,7 +200,7 @@ export function InlineDraftHelper({
         type="button"
         onClick={() => setExpanded(true)}
         disabled={loading}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${colorScheme.text} ${colorScheme.hover} transition-colors ${className}`}
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${colorScheme.text} ${colorScheme.hover} ${colorScheme.bare} transition-colors ${className}`}
         title="Draft with AI"
       >
         <Sparkles className={`w-3.5 h-3.5 ${colorScheme.icon}`} />

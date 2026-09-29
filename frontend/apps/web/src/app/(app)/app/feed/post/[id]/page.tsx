@@ -445,9 +445,9 @@ export default function PostDetailPage() {
               <TypeIcon className="w-3.5 h-3.5" />
               {config.label}
             </span>
-            <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
+            <span className="text-[10px] text-app-muted dark:text-slate-600">{timeAgo(post.created_at)}</span>
             {post.is_edited && (
-              <span className="text-[10px] text-app-muted italic">edited</span>
+              <span className="text-[10px] text-app-muted dark:text-slate-600 italic">edited</span>
             )}
             {post.state === 'solved' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
