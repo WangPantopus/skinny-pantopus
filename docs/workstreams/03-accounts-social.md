@@ -2,7 +2,47 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 close-out sweep: native pass, candidate a90eda9aa awaiting heavy, 2026-09-29T20:25Z
+## LIVE — Stream 3 close-out sweep complete: PR805 open, 2026-09-29T21:31Z
+
+- **[PR805](https://github.com/WangPantopus/skinny-pantopus/pull/805)** "fix(auth): show sign-up errors on screen and keep emails as typed", opened 21:29:43Z.
+  - Exact head `a90eda9aa4e35bad18e9b5b952c2b98f39f27509`, base `59154879d`; 5 native files, +54/−8.
+  - Handed to Stream 1 for the merge queue at about 21:30Z; CI had started. Master `e1bee221c` changes none of the 5 files, and merge-tree is clean.
+  - SwiftLint is clean and both app builds compiled; ktlint and detekt are left to CI.
+  - [Private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-native-push-tap-weak-password-r1/RESULT.md): 76 files, seal `737b208fb5bb29fb4beaecf55f1614bd0c457eb466f0617074ed43d9f4243fc4`; [seal comment](https://github.com/WangPantopus/skinny-pantopus/pull/805#issuecomment-5899321062). The builds are bound to the head's app trees (iOS `a4bb49c16bd1`, Android `4a6731549e74`).
+  - **Defect A, verified before and after on both apps:** one sign-up answered 400 weak-password before upstream (no account). The banner was off screen on iOS `f1a5` (20:01:51Z) and Android `8f6dbc11c` (20:50:27Z). On the candidate it is visible without scrolling on Android (20:56:01Z) and iOS (21:19:05Z).
+  - **Defect B, iOS:** typed synthetic addresses now stay exact in all three fields. Before, sign-up showed "S3-weakly-…", and Create Business → Basic info and Invite teammate showed a capital first letter with a spell-check underline (21:07:15Z, 21:10:13Z). After: exact matches at 21:11:51Z, 21:13:19Z and 21:18:37Z. Stream 2 independently reproduced this with real on-screen key taps on its own three fields; those fields are in Stream 2's PR.
+- **Notification-tap routing, no app change:** iOS 5/5 PASS (previous block). Android 3/3 PASS on the candidate APK `6438be6d…`, using the exact tap intent:
+  - Signed out: stays on Log in, then sign-in 200 at 20:59:17Z opens the chat.
+  - Cold start: `COLD`, session restore, chat at 21:01:57Z.
+  - Background: `HOT`, same process, chat at 21:02:47Z.
+- **Earlier today, verification only:** web lost-response account deletion shows no defect ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-delete-lost-response-r1/RESULT.md), 17 files, seal `f9a88ff6138f84df9ad8e97f1463e26c78d76bdde80a1c768d9863d27798c23b`).
+- **Writes/DB:** only refresh, login ×3 and logout ×2 reached the API; register ×4 were injected rejections; device registration and chat writes were refused by the guard. DB windows 19:41:52→20:32:20Z and 20:35:12→21:23:19Z changed only auth/session tables, plus the existing file-access counter from opening a chat image.
+- **Design proposals (need user approval; not implemented):**
+  - A notice on the existing notification settings screens, with "Open Settings", shown only when OS notifications are denied (both apps).
+  - A confirmation after a web account deletion whose response was lost.
+- **Post-launch note, launch cut #1/#2 (not verified or fixed, per the cut):** Stream 1 reports, via Stream 2, that Android `FollowingApi.markSeen(): FollowingSeenResponse?` would throw KotlinNullPointerException if `/api/personas/me/following/:personaId/seen` returns 204. Stream 1 fixed the same Retrofit pattern on `removeOrganizer` with a `Unit` return. Revisit when Beacon/personas return.
+- **Resources:**
+  - Android slot 3 20:46:50–21:03:47Z (emulator stopped 21:03:42Z).
+  - iOS slot 2 21:03:52–21:21:58Z (sim shut down).
+  - Shared iOS driver 21:00:42–21:22:05Z, then handed to Stream 2 (and on to Stream 1).
+  - No heavy slot used. Fault rules empty; synthetic files deleted; Owner signed in on both apps.
+  - API 18134 keys valid to 2026-10-01T19:35:48Z. No S3 lease held.
+- **Decisions taken without asking (UTC):**
+  - ~21:05Z (before the 21:05:15Z boot): capture the crew-field befores on the reused `f1a5` build, so the two crew-field changes rest on a reproduced failure.
+  - ~21:17Z: discard the sign-up after attempt that iOS's "Use Strong Password?" sheet spoiled, and retype. The sheet was closed with X, never Fill.
+  - ~21:24Z: keep the tested head rather than rebase (no overlap with master).
+  - ~21:28Z: leave ktlint/detekt to CI rather than take the heavy slot.
+  - ~21:30Z: log the Following 204 report only (launch cut).
+- **End of sweep: everything locally feasible is closed.** The 10 S3 acceptance rows stay open only at boundaries the user must supply:
+  - N01, N02 and part of A02: physical devices, release builds, push credentials; also secure storage, biometrics and provider revocation on devices.
+  - A01: Apple/Google test sign-in and real email sending.
+  - A03: hosted storage. A04: Smarty activation.
+  - N05: a daily-briefing delivery policy, and whether Crew Day gets an entry point.
+  - S3-22/S3-62: permission for `/b/` reads in the isolated DB. S3-26: an AI provider key, or accepting the gap.
+  - N03: Beacon parts are cut; Pulse posting is Stream 1's. N04: moderation processing.
+- **Next:** record PR805's merge when Stream 1 lands it; otherwise Stream 3 is idle and ready for user-supplied access and devices or a routed finding.
+
+## Previous milestone — Stream 3 close-out sweep: native pass in progress, candidate a90eda9aa awaiting heavy, 2026-09-29T20:25Z (superseded by the LIVE block above)
 
 - **Native pass (reused builds, no heavy build):** iOS `f1a5fcf2b` (dylib `6eb9fff8…`) and Android `8f6dbc11c` (APK `7531958c…`). Their notification, routing, auth and password sources are byte-identical to master; everything else changed since belongs to S1 or S2.
 - **iOS notification-tap matrix** (S3 sim `0AE16FA0`; slot 2 plus shared driver 19:50:26–20:09:14Z; sim shut down). Payloads mirror the backend APNs builder.
