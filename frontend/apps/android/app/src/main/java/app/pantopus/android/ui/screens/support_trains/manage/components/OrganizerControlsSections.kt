@@ -319,8 +319,7 @@ fun ManageOrganizersSection(
     /** Only the primary organizer may edit the roster (`supportTrains.js:1055`). */
     canEdit: Boolean,
     isBusy: Boolean,
-    newOrganizerUserId: String,
-    onUserIdChange: (String) -> Unit,
+    /** Opens the people picker. */
     onAdd: () -> Unit,
     onRemove: (ManageOrganizerRow) -> Unit,
 ) {
@@ -361,22 +360,16 @@ fun ManageOrganizersSection(
         if (canEdit) {
             ManageCard {
                 Text(
-                    text = "Add a co-organizer by user id",
+                    text = "Pick someone you know on Pantopus.",
                     color = PantopusColors.appTextSecondary,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                )
-                ManageTextField(
-                    value = newOrganizerUserId,
-                    placeholder = "User id",
-                    tag = "manageTrainOrganizerIdField",
-                    onValueChange = onUserIdChange,
                 )
                 ManagePillButton(
                     label = "Add co-organizer",
                     icon = PantopusIcon.UserPlus,
                     tag = "manageTrainAddOrganizerButton",
-                    isEnabled = !isBusy && newOrganizerUserId.isNotBlank(),
+                    isEnabled = !isBusy,
                     onClick = onAdd,
                 )
             }

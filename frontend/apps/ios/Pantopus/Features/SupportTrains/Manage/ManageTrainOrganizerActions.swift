@@ -298,10 +298,8 @@ public extension ManageTrainViewModel {
 
     // MARK: Co-organizers
 
-    func addOrganizer() async {
-        let userId = newOrganizerUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+    func addOrganizer(userId: String) async {
         guard !userId.isEmpty else { return }
-        newOrganizerUserId = ""
         await run(
             SupportTrainActionsEndpoints.addOrganizer(
                 supportTrainId: supportTrainId,

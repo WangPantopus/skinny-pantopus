@@ -30,6 +30,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,8 +44,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.screens.support_trains.manage.components.CloseTrainSheet
 import app.pantopus.android.ui.screens.support_trains.manage.components.MANAGE_TRAIN_CLOSE_SHEET_SCRIM_TAG
@@ -416,7 +423,7 @@ private fun LoadedBody(
                 onTapRow = { row -> organizeHandler(row.id)?.invoke(content.trainId) },
             )
 
-            OrganizerControls(content = content, ui = ui, viewModel = viewModel)
+            OrganizerControls(content = content, ui = ui, viewModel = viewModel, onInviteHelpers = onInviteHelpers)
 
             SectionOverline("Wind down")
             WindDownSection(
@@ -479,7 +486,35 @@ private fun OrganizerControls(
     content: ManageTrainContent,
     ui: ManageTrainUiState,
     viewModel: ManageTrainViewModel,
+    onInviteHelpers: ((String) -> Unit)?,
 ) {
+    // The chat New message picker chooses the co-organizer. Each opening gets its own
+    // view model (as chat's picker route does), so connections are read fresh.
+    var showOrganizerPicker by rememberSaveable { mutableStateOf(false) }
+    var pickerSession by rememberSaveable { mutableIntStateOf(0) }
+    if (showOrganizerPicker) {
+        Dialog(
+            onDismissRequest = { showOrganizerPicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            NewMessageScreen(
+                title = "Add co-organizer",
+                emptyHeadline = "Find a co-organizer",
+                emptyBody = "Search by name, or invite someone who isn't on Pantopus yet.",
+                onCancel = { showOrganizerPicker = false },
+                onSelect = { destination ->
+                    showOrganizerPicker = false
+                    viewModel.addOrganizer(destination.userId)
+                },
+                onInvite = {
+                    showOrganizerPicker = false
+                    onInviteHelpers?.invoke(content.trainId)
+                },
+                viewModel = hiltViewModel(key = "coOrganizerPicker-$pickerSession"),
+            )
+        }
+    }
+
     ManageDatesSection(
         rows = ui.slotRows,
         isBusy = ui.isSubmitting,
@@ -520,9 +555,10 @@ private fun OrganizerControls(
         rows = ui.organizerRows,
         canEdit = content.viewerRole == SupportTrainViewerRole.PRIMARY_ORGANIZER,
         isBusy = ui.isSubmitting,
-        newOrganizerUserId = ui.newOrganizerUserId,
-        onUserIdChange = { viewModel.updateNewOrganizerUserId(it) },
-        onAdd = { viewModel.addOrganizer() },
+        onAdd = {
+            pickerSession += 1
+            showOrganizerPicker = true
+        },
         onRemove = { row ->
             val userId = row.userId ?: return@ManageOrganizersSection
             viewModel.requestConfirm(
