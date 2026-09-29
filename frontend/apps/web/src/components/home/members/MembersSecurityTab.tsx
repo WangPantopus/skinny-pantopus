@@ -91,6 +91,10 @@ export default function MembersSecurityTab({
   const { access } = useHomePermissions();
   const isOwner = access?.isOwner === true;
   const canManageMembers = can('members.manage');
+  // The server needs these to read each section; without them it is withheld, not empty.
+  const canViewMembers = can('members.view');
+  const canManagePasses = canManageMembers;
+  const canViewSecrets = can('access.view_wifi') || can('access.view_codes');
 
   // Detail panel
   const [detailMember, setDetailMember] = useState<HomeMember | null>(null);
@@ -138,9 +142,9 @@ export default function MembersSecurityTab({
     setSecurityErrors({});
     try {
       const [passesRes, settingsRes, secretsRes] = await Promise.allSettled([
-        api.homeIam.getGuestPasses(homeId),
+        canManagePasses ? api.homeIam.getGuestPasses(homeId) : Promise.resolve({ passes: [] }),
         api.homeProfile.getHomeSettings(homeId),
-        api.homeProfile.getHomeAccessSecrets(homeId),
+        canViewSecrets ? api.homeProfile.getHomeAccessSecrets(homeId) : Promise.resolve({ secrets: [] }),
       ]);
       if (generation !== securityGeneration.current) return;
       const errors: Partial<Record<'passes' | 'settings' | 'secrets', string>> = {};
@@ -166,7 +170,7 @@ export default function MembersSecurityTab({
     } finally {
       if (generation === securityGeneration.current) setSecurityLoading(false);
     }
-  }, [homeId]);
+  }, [homeId, canManagePasses, canViewSecrets]);
 
   useEffect(() => {
     loadSecurity();
@@ -278,7 +282,7 @@ export default function MembersSecurityTab({
         <div className="px-5 py-4 border-b border-app-border-subtle flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-app-text">Members</h3>
-            <p className="text-xs text-app-text-secondary mt-0.5">{active.length} active member{active.length !== 1 ? 's' : ''}</p>
+            {canViewMembers && <p className="text-xs text-app-text-secondary mt-0.5">{active.length} active member{active.length !== 1 ? 's' : ''}</p>}
           </div>
           {can('members.manage') && (
             <button
@@ -290,6 +294,11 @@ export default function MembersSecurityTab({
           )}
         </div>
 
+        {!canViewMembers ? (
+          <div className="px-5 py-8 text-center text-sm text-app-text-muted">
+            You can’t see this household’s member list.
+          </div>
+        ) : (
         <div className="divide-y divide-app-border-subtle">
           {sortedGroups.map(([roleBase, roleMembers]) => {
             const cfg = ROLE_CONFIG[roleBase] || ROLE_CONFIG.member;
@@ -341,6 +350,7 @@ export default function MembersSecurityTab({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* ===== Section 2: Security Center ===== */}
@@ -351,6 +361,7 @@ export default function MembersSecurityTab({
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Guest Passes Card */}
+          {canManagePasses && (
           <div className="bg-app-surface rounded-xl border border-app-border p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🔗</span>
@@ -361,8 +372,10 @@ export default function MembersSecurityTab({
               <p className="text-[10px] text-app-text-muted mt-0.5">active pass{activePasses !== 1 ? 'es' : ''}</p>
             </>}
           </div>
+          )}
 
           {/* Secret Vault Card */}
+          {canViewSecrets && (
           <div className="bg-app-surface rounded-xl border border-app-border p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🔐</span>
@@ -373,6 +386,7 @@ export default function MembersSecurityTab({
               <p className="text-[10px] text-app-text-muted mt-0.5">access secret{secretsCount !== 1 ? 's' : ''} stored</p>
             </>}
           </div>
+          )}
 
           {/* Lockdown Mode Card */}
           {can('security.manage') && (
