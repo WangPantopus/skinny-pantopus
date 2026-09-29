@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
@@ -138,6 +138,8 @@ export default function NewSupportTrainPage() {
   // UI
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  // A draft left behind by a failed publish whose clean-up also failed; removed before the next try.
+  const leftoverTrainId = useRef<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
 
   // ── Computed: missing essentials ─────────────────────────────
@@ -245,7 +247,16 @@ export default function NewSupportTrainPage() {
       return;
     }
     setPublishing(true);
+    let createdTrainId: string | null = null;
     try {
+      if (leftoverTrainId.current) {
+        try {
+          await api.supportTrains.deleteSupportTrain(leftoverTrainId.current);
+          leftoverTrainId.current = null;
+        } catch {
+          // Still unreachable; keep it for the next attempt.
+        }
+      }
       const delivery_location = toSupportTrainDeliveryLocation(resolvedLocation);
 
       const draftPayload = {
@@ -274,6 +285,7 @@ export default function NewSupportTrainPage() {
       });
 
       const trainId = createResult.support_train_id;
+      createdTrainId = trainId;
 
       await api.supportTrains.upsertRecipientProfile(trainId, {
         household_size: householdSize ? parseInt(householdSize, 10) : null,
@@ -298,6 +310,15 @@ export default function NewSupportTrainPage() {
       await api.supportTrains.publishSupportTrain(trainId);
       router.replace(`/app/support-trains/${trainId}`);
     } catch (err: any) {
+      // Publishing is several calls. If a later one fails, remove the half-built draft so
+      // trying again makes one train, with whatever the organizer changes in between.
+      if (createdTrainId) {
+        try {
+          await api.supportTrains.deleteSupportTrain(createdTrainId);
+        } catch {
+          leftoverTrainId.current = createdTrainId;
+        }
+      }
       setPublishError(err?.message || 'Failed to publish. Please try again.');
     } finally {
       setPublishing(false);
