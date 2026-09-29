@@ -259,6 +259,7 @@ enum HomeInvitationSenderError: LocalizedError {
         case "INVITE_EXPIRED": "This invitation expired. Resending does not extend its expiry or access dates."
         case "INVITE_ALREADY_PENDING": "A pending invitation already exists. Review that invitation to resend it."
         case "MEMBER_ALREADY_EXISTS": "This person is already a member. Their existing membership has not been changed."
+        case "MEMBERSHIP_RENEWAL_REQUIRED": "This person’s earlier household membership has ended. An invitation cannot restore it."
         default: "This action could not continue. Review the current invitation and account before starting again."
         }
     }

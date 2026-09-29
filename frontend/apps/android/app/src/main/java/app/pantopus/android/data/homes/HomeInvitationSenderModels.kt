@@ -94,6 +94,7 @@ fun senderRefusalMessage(code: String?): String =
         "INVITE_SENDER_CHANGED" -> "The invitation or your authority changed. Acknowledge this result, then review current details."
         "INVITE_ALREADY_PENDING" -> "This person already has a pending invitation. Review it in Pending before explicitly resending."
         "MEMBER_ALREADY_EXISTS" -> "This person is already a household member. Their existing membership is preserved."
+        "MEMBERSHIP_RENEWAL_REQUIRED" -> "This person’s earlier household membership has ended. An invitation cannot restore it."
         "INVITE_ALREADY_USED", "INVITE_NOT_PENDING" -> "This invitation is already resolved. Existing membership is preserved."
         "INVITE_EXPIRED" -> "This invitation expired. Resending does not extend its expiry or access dates."
         "INVITE_NOT_FOUND", "HOME_NOT_FOUND" -> "The invitation or household is no longer available for this action."
