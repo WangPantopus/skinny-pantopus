@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { removalLink } from '@/components/home/member-removals/removalModel';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -21,16 +21,19 @@ const ROLE_RANK: Record<string, number> = {
   service_provider: 5, guest: 10, restricted_member: 20, member: 30, lease_resident: 35, manager: 40, admin: 50, owner: 60,
 };
 const DISPLAY_ROLE_ORDER = ['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member', 'guest', 'service_provider'];
-const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; label: string }> = {
-  owner:             { icon: ShieldCheck, color: '#7c3aed', label: 'Owner' },
-  admin:             { icon: Shield,      color: '#0284c7', label: 'Admin' },
-  manager:           { icon: Key,         color: '#0891b2', label: 'Manager' },
-  lease_resident:    { icon: User,        color: '#059669', label: 'Lease member' },
-  member:            { icon: User,        color: '#059669', label: 'Member' },
-  restricted_member: { icon: Lock,        color: '#d97706', label: 'Restricted' },
-  guest:             { icon: Clock,       color: '#6b7280', label: 'Guest' },
-  service_provider:  { icon: Key,         color: '#6b7280', label: 'Service provider' },
+// `dark` is a lighter shade of the same hue, for text on dark mode's dark surfaces.
+const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; dark: string; label: string }> = {
+  owner:             { icon: ShieldCheck, color: '#7c3aed', dark: '#a78bfa', label: 'Owner' },
+  admin:             { icon: Shield,      color: '#0284c7', dark: '#38bdf8', label: 'Admin' },
+  manager:           { icon: Key,         color: '#0891b2', dark: '#22d3ee', label: 'Manager' },
+  lease_resident:    { icon: User,        color: '#059669', dark: '#34d399', label: 'Lease member' },
+  member:            { icon: User,        color: '#059669', dark: '#34d399', label: 'Member' },
+  restricted_member: { icon: Lock,        color: '#d97706', dark: '#fbbf24', label: 'Restricted' },
+  guest:             { icon: Clock,       color: '#6b7280', dark: '#9ca3af', label: 'Guest' },
+  service_provider:  { icon: Key,         color: '#6b7280', dark: '#9ca3af', label: 'Service provider' },
 };
+const ACCENT_TEXT = 'text-[color:var(--accent)] dark:text-[color:var(--accent-dark)]';
+const accentStyle = (meta: { color: string; dark: string }) => ({ '--accent': meta.color, '--accent-dark': meta.dark } as CSSProperties);
 
 /** The roles the viewer may give this member, as mutate_home_member (and the iOS/Android role pickers) allow. */
 function assignableRolesFor(access: any, member: any): string[] {
@@ -301,15 +304,15 @@ function MembersContent() {
             return (
               <div key={role}>
                 <div className="flex items-center gap-2 mb-3">
-                  <RoleIcon className="w-4 h-4" style={{ color: meta.color }} />
-                  <h2 className="text-xs font-bold uppercase tracking-wide flex-1" style={{ color: meta.color }}>{meta.label}s</h2>
+                  <RoleIcon className={`w-4 h-4 ${ACCENT_TEXT}`} style={accentStyle(meta)} />
+                  <h2 className={`text-xs font-bold uppercase tracking-wide flex-1 ${ACCENT_TEXT}`} style={accentStyle(meta)}>{meta.label}s</h2>
                   <span className="text-xs text-app-text-muted bg-app-surface-sunken px-2 py-0.5 rounded-full">{roleMembers.length}</span>
                 </div>
                 <div className="space-y-1.5">
                   {roleMembers.map((member: any) => (
                     <div key={member.id || member.user_id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-3">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: meta.color + '15' }}>
-                        <span className="text-sm font-bold" style={{ color: meta.color }}>
+                        <span className={`text-sm font-bold ${ACCENT_TEXT}`} style={accentStyle(meta)}>
                           {(member.display_name || member.user?.name || member.user?.username || member.username || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
@@ -334,7 +337,7 @@ function MembersContent() {
                                     return (
                                       <button key={r} onClick={() => handleRoleChange(member, r)} role="menuitem"
                                         className="w-full text-left px-3 py-2 text-sm text-app-text hover:bg-app-hover transition-colors focus-visible:outline-none focus-visible:bg-app-hover flex items-center gap-2">
-                                        <ChoiceIcon className="w-4 h-4" style={{ color: ROLE_META[r].color }} /> {ROLE_META[r].label}
+                                        <ChoiceIcon className={`w-4 h-4 ${ACCENT_TEXT}`} style={accentStyle(ROLE_META[r])} /> {ROLE_META[r].label}
                                       </button>
                                     );
                                   })}
