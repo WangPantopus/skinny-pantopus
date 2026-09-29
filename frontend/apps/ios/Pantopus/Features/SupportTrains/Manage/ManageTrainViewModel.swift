@@ -246,8 +246,6 @@ public final class ManageTrainViewModel {
     public private(set) var isSubmitting = false
     /// AI-drafted open-slots nudge, editable before sending.
     public var nudgeDraft: String?
-    /// Text field backing the "add co-organizer" row (a user id).
-    public var newOrganizerUserId: String = ""
     /// Inline failure copy for the last organizer action.
     public var actionError: String?
     /// Presented slot editor (add or edit), or nil.

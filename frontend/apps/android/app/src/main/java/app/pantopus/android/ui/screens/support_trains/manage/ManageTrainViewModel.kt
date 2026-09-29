@@ -139,8 +139,6 @@ data class ManageTrainUiState(
     val isSubmitting: Boolean = false,
     /** AI-drafted open-slots nudge, editable before sending. */
     val nudgeDraft: String? = null,
-    /** Text field backing the "add co-organizer" row (a user id). */
-    val newOrganizerUserId: String = "",
     /** Gift-fund goal input, in whole dollars (the API takes cents). */
     val fundGoalDollars: String = "",
     /** Inline failure copy for the last organizer action. */
@@ -451,15 +449,9 @@ class ManageTrainViewModel
             }
         }
 
-        fun updateNewOrganizerUserId(value: String) {
-            _state.update { it.copy(newOrganizerUserId = value) }
-        }
-
-        /** `POST /:id/organizers` — primary only. */
-        fun addOrganizer() {
-            val userId = _state.value.newOrganizerUserId.trim()
-            if (userId.isEmpty()) return
-            _state.update { it.copy(newOrganizerUserId = "") }
+        /** `POST /:id/organizers` — primary only; [userId] comes from the people picker. */
+        fun addOrganizer(userId: String) {
+            if (userId.isBlank()) return
             runAction("Co-organizer added", "Couldn't add that co-organizer.") {
                 repo.addOrganizer(trainId, AddSupportTrainOrganizerBody(userId = userId))
             }

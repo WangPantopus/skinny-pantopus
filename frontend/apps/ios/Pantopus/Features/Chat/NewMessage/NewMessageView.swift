@@ -15,9 +15,21 @@ import SwiftUI
 public struct NewMessageView: View {
     @State private var viewModel: NewMessageViewModel
     @FocusState private var searchFocused: Bool
+    /// The same picker chooses a co-organizer in Manage train, with its own wording.
+    private let title: String
+    private let emptyHeadline: String?
+    private let emptyBody: String?
 
-    public init(viewModel: NewMessageViewModel) {
+    public init(
+        viewModel: NewMessageViewModel,
+        title: String = "New message",
+        emptyHeadline: String? = nil,
+        emptyBody: String? = nil
+    ) {
         _viewModel = State(initialValue: viewModel)
+        self.title = title
+        self.emptyHeadline = emptyHeadline
+        self.emptyBody = emptyBody
     }
 
     public var body: some View {
@@ -47,7 +59,7 @@ public struct NewMessageView: View {
             .accessibilityLabel("Cancel")
             .accessibilityIdentifier("newMessageCancel")
             Spacer(minLength: Spacing.s0)
-            Text("New message")
+            Text(title)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
@@ -180,13 +192,13 @@ public struct NewMessageView: View {
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
             VStack(spacing: Spacing.s2) {
-                Text(viewModel.emptyHeadline)
+                Text(emptyHeadline ?? viewModel.emptyHeadline)
                     .pantopusTextStyle(.h3)
                     .foregroundStyle(Theme.Color.appText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
                     .accessibilityAddTraits(.isHeader)
-                Text(viewModel.emptyBody)
+                Text(emptyBody ?? viewModel.emptyBody)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)

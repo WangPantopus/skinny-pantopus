@@ -272,7 +272,7 @@ struct ManageOrganizersSection: View {
     /// (`backend/routes/supportTrains.js:1055`).
     let canEdit: Bool
     let isBusy: Bool
-    @Binding var newOrganizerUserId: String
+    /// Opens the people picker.
     let onAdd: @MainActor () -> Void
     let onRemove: @MainActor (ManageOrganizerRow) -> Void
 
@@ -305,24 +305,14 @@ struct ManageOrganizersSection: View {
             }
             if canEdit {
                 OrganizerSectionCard {
-                    Text("Add a co-organizer by user id")
+                    Text("Pick someone you know on Pantopus.")
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                    TextField("User id", text: $newOrganizerUserId)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .padding(Spacing.s2)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
-                        .accessibilityIdentifier("manageTrainOrganizerIdField")
                     ManagePillButton(
                         title: "Add co-organizer",
                         icon: .userPlus,
                         identifier: "manageTrainAddOrganizerButton",
-                        isDisabled: isBusy || newOrganizerUserId.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        ).isEmpty
+                        isDisabled: isBusy
                     ) { onAdd() }
                 }
             }
