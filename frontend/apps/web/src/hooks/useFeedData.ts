@@ -301,7 +301,10 @@ export function useFeedData({
   }, []);
 
   // Post actions
+  const creatingPost = useRef(false);
   const handleCreatePost = useCallback(async (data: PostComposerSubmitData) => {
+    if (creatingPost.current) return false;
+    creatingPost.current = true;
     setIsPosting(true);
     try {
       const { mediaFiles, ...composerData } = data;
@@ -319,21 +322,27 @@ export function useFeedData({
       if (userLng != null) postData.gpsLongitude = userLng;
       const res = await api.posts.createPost(postData);
       const newPost = res.post;
+      if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
+        throw new Error('Post could not be confirmed. Try again.');
+      }
 
       const files = Array.isArray(mediaFiles) ? mediaFiles as File[] : [];
       if (files.length > 0) {
         try {
           const uploadResult = await api.upload.uploadPostMedia(newPost.id, files);
+          if (!Array.isArray(uploadResult?.media_urls) || uploadResult.media_urls.length === 0 ||
+              !uploadResult.media_urls.every((url) => typeof url === 'string' && url.length > 0) ||
+              !Array.isArray(uploadResult.media_types) ||
+              uploadResult.media_types.length !== uploadResult.media_urls.length) {
+            throw new Error('Photos could not be confirmed.');
+          }
           newPost.media_urls = uploadResult.media_urls;
           newPost.media_types = uploadResult.media_types;
-          await api.posts.updatePost(newPost.id, {
-            mediaUrls: uploadResult.media_urls,
-            mediaTypes: uploadResult.media_types,
-          });
+          newPost.media_thumbnails = uploadResult.media_thumbnails;
+          newPost.media_live_urls = uploadResult.media_live_urls;
         } catch {
-          if (!newPost.media_urls || newPost.media_urls.length === 0) {
-            showToast('Post created, but media upload failed');
-          }
+          showToast('Post saved. Photos could not be confirmed. Try again.');
+          return false;
         }
       }
 
@@ -344,6 +353,7 @@ export function useFeedData({
       showToast(err instanceof Error ? err.message : 'Failed to post');
       return false;
     } finally {
+      creatingPost.current = false;
       setIsPosting(false);
     }
   }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, showToast, prependPostToCache]);

@@ -958,28 +958,45 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
       return res.status(403).json({ error: 'Only the post creator can upload media' });
     }
 
-    const existingCount = (postRecord.media_urls || []).length;
-    if (existingCount + files.length > 9) {
+    // Match the accepted comment upload contract: multipart filenames can
+    // change after a lost reply, but sanitized bytes and MIME remain stable.
+    const pending = new Map();
+    for (const file of files) {
+      const category = s3.categorizeFile(file.mimetype);
+      if (category !== 'image' && category !== 'video') {
+        return res.status(400).json({ error: 'Post media only supports images and videos' });
+      }
+      const hash = crypto.createHash('sha256')
+        .update(JSON.stringify(['post-image-v1', postId, userId, file.mimetype]))
+        .update(file.buffer).digest('hex');
+      const key = category === 'image'
+        ? `posts/${postId}/${userId}/media_${hash}.${file.mimetype.split('/')[1].replace(/[^a-z0-9]/g, '')}`
+        : s3.generateS3Key(`posts/${postId}`, file.originalname, userId);
+      pending.set(key, { file, category, url: s3.getPublicUrl(key) });
+    }
+    const existingUrls = new Set(postRecord.media_urls || []);
+    const remaining = [...pending.entries()].filter(([, item]) => !existingUrls.has(item.url));
+    const existingCount = existingUrls.size;
+    if (existingCount + remaining.length > 9) {
       return res.status(400).json({ error: `Maximum 9 media files per post. Currently: ${existingCount}` });
+    }
+
+    if (remaining.length === 0) {
+      return res.json({
+        message: 'Photos already attached',
+        media_urls: postRecord.media_urls || [],
+        media_types: postRecord.media_types || [],
+        media_thumbnails: postRecord.media_thumbnails || [],
+        media_live_urls: postRecord.media_live_urls || [],
+      });
     }
 
     const uploadedUrls = [];
     const uploadedTypes = [];
     const thumbnailUrls = [];
 
-    for (const file of files) {
-      const category = s3.categorizeFile(file.mimetype);
-      if (category !== 'image' && category !== 'video') {
-        return res.status(400).json({ error: 'Post media only supports images and videos' });
-      }
-
-      const { url, key } = await s3.uploadGeneral(
-        file.buffer,
-        file.originalname,
-        userId,
-        `posts/${postId}`,
-        file.mimetype
-      );
+    for (const [key, { file, category }] of remaining) {
+      const { url } = await s3.uploadToS3(file.buffer, key, file.mimetype);
 
       uploadedUrls.push(url);
       uploadedTypes.push(category === 'video' ? 'video' : 'image');

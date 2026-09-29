@@ -12,6 +12,7 @@ import com.squareup.moshi.JsonClass
  */
 @JsonClass(generateAdapter = true)
 data class PostCreateRequest(
+    val clientRequestId: String? = null,
     val content: String,
     val title: String? = null,
     @Json(name = "postType") val postType: String,

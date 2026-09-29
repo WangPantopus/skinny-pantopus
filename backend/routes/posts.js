@@ -1,5 +1,5 @@
 const express = require('express');
-const { createHash } = require('node:crypto');
+const { createHash, createHmac } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -200,6 +200,7 @@ function resolvePostVisibilityRadiusMeters(post) {
 }
 
 const createPostSchema = Joi.object({
+  clientRequestId: Joi.string().uuid().optional(),
   content: Joi.string().min(1).max(5000).required(),
   title: Joi.string().max(255).optional(),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10).optional(),
@@ -1449,14 +1450,56 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Compute initial utility_score so the post ranks properly before the background job runs
     postData.utility_score = computeUtilityScore(postData);
 
-    const { data: post, error } = await supabaseAdmin
-      .from('Post')
-      .insert(postData)
-      .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
-      .single();
+    // Reuse the existing Post primary key for retries of one composer command.
+    // GPS is refreshed at submit time; it is authorization evidence, not a new draft.
+    const commandId = req.body.clientRequestId;
+    const postId = commandId ? createHash('sha256')
+      .update(`pantopus:post-create:v1:${userId.toLowerCase()}:${commandId.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const requestBody = { ...req.body };
+    for (const key of ['clientRequestId', 'gpsTimestamp', 'gpsLatitude', 'gpsLongitude']) delete requestBody[key];
+    // Key the stored fingerprint with the client's secret command id: viewers read
+    // post_metadata, so an unkeyed digest would confirm guesses of hidden place fields.
+    const requestHash = commandId ? createHmac('sha256', `pantopus:post-create-request:v1:${commandId.toLowerCase()}`)
+      .update(JSON.stringify(requestBody, (_key, value) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value
+      )).digest('hex') : null;
+    const selection = `*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`;
+    const readRetry = async () => {
+      const { data, error: readError } = await supabaseAdmin.from('Post')
+        .select(selection).eq('id', postId).maybeSingle();
+      if (readError) throw readError;
+      return data;
+    };
+    const acknowledgeRetry = async (existing) => {
+      if (existing.user_id !== userId || existing.post_metadata?._create_request_hash !== requestHash) {
+        return res.status(409).json({ error: 'This post was already saved. Restore the original draft to retry photos, or edit the saved post.' });
+      }
+      return res.status(201).json({ message: 'Post created successfully', post: await serializePostForViewer({
+        ...existing,
+        media_urls: normalizeMediaUrls(existing.media_urls),
+        media_thumbnails: normalizeAlignedMediaUrls(existing.media_thumbnails),
+        media_live_urls: normalizeAlignedMediaUrls(existing.media_live_urls),
+      }, userId) });
+    };
+    if (postId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+      postData.id = postId;
+      postData.post_metadata = { ...postData.post_metadata, _create_request_hash: requestHash };
+    }
+    const insert = postId
+      ? supabaseAdmin.from('Post').upsert(postData, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('Post').insert(postData);
+    const { data: post, error } = await insert.select(selection).maybeSingle();
+    if (!error && !post && postId) {
+      const existing = await readRetry();
+      if (existing) return await acknowledgeRetry(existing);
+    }
 
-    if (error) {
-      logger.error('Error creating post', { error: error.message, userId });
+    if (error || !post) {
+      logger.error('Error creating post', { error: error?.message || 'No receipt', userId });
       return res.status(500).json({ error: 'Failed to create post' });
     }
 
@@ -2579,7 +2622,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
         // External/shared references do not authorize deleting another object's bytes.
         if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
         const name = url.slice(publicPrefix.length);
-        if (!/^\d+_[a-f0-9]{16}(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
           return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
         }
         const key = prefix + name;
