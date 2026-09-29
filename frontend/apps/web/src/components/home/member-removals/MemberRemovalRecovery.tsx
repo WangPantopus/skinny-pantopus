@@ -68,7 +68,7 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
         : vm.roster.state === 'unavailable' ? <p role="alert" className="text-sm text-amber-800">The current roster could not be checked. Current membership is unknown; your saved removal result is kept.</p>
           : <p role="status" className="text-sm">{vm.roster.state === 'loading' ? 'Checking the current roster…' : 'Current membership has not been checked.'}</p>}
       <button className={button} disabled={vm.busy || vm.roster.state === 'loading'} onClick={() => void vm.checkRoster(currentInput)}>Check current roster</button>
-      <Link href={`/app/homes/${currentInput.home_id}/members`} className="ml-3 inline-block text-sm text-blue-700 underline">Open Members</Link>
+      <Link href={`/app/homes/${currentInput.home_id}/members`} className="ml-3 inline-block text-sm text-blue-700 dark:text-blue-400 underline">Open Members</Link>
     </section>}
     <p className="text-sm text-app-text-secondary">Closing keeps any original removal for this account. Recover it from My Homes.</p>
   </div>;

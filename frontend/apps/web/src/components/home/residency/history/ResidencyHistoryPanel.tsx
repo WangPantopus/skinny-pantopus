@@ -24,9 +24,9 @@ function Decision({ item, detailed = false }: { item: HistoryItem; detailed?: bo
     </div>
     <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm">
       {!detailed && <Link href={historyPath(decision.home_id, decision.id)} prefetch={false}
-        className="inline-flex min-h-11 items-center font-medium text-blue-700 underline">View decision</Link>}
+        className="inline-flex min-h-11 items-center font-medium text-blue-700 dark:text-blue-400 underline">View decision</Link>}
       <Link href={`/app/homes/${decision.home_id}/owners/review-claim/residency?claimId=${encodeURIComponent(decision.claim_id)}`}
-        prefetch={false} className="inline-flex min-h-11 items-center font-medium text-blue-700 underline">Check current request</Link>
+        prefetch={false} className="inline-flex min-h-11 items-center font-medium text-blue-700 dark:text-blue-400 underline">Check current request</Link>
     </div>
   </article>;
 }
@@ -41,7 +41,7 @@ export function ResidencyHistoryPanel({ homeId, receiptId = null }: { homeId: st
     <p className="text-sm text-app-text-secondary">Past decisions you made for this Home. The applicant and request status may have changed since your decision.</p>
     <div className="flex flex-wrap items-center gap-3">
       <Link href={`/app/homes/${homeId}/owners/review-claim/residency`} prefetch={false}
-        className="inline-flex min-h-11 items-center text-sm text-blue-700 underline">Recover an unfinished decision</Link>
+        className="inline-flex min-h-11 items-center text-sm text-blue-700 dark:text-blue-400 underline">Recover an unfinished decision</Link>
       {history.phase === 'ready' && <button className={button} disabled={history.busy} onClick={history.refresh}>Refresh decisions</button>}
     </div>
     {history.phase === 'loading' && <p role="status">Checking current access and your decisions…</p>}

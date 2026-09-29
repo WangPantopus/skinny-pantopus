@@ -83,7 +83,7 @@ export default function HomeDashboardPage() {
 
   return (
     <HomePermissionsProvider key={homeId} homeId={homeId}>
-      <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 underline">Manage invitations and recovery</Link></div>
+      <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations and recovery</Link></div>
       <HomeDashboardContent />
     </HomePermissionsProvider>
   );

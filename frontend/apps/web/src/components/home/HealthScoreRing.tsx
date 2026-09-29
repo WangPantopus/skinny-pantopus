@@ -170,7 +170,7 @@ export default function HealthScoreRing({
           <span className={`text-4xl font-extrabold leading-tight ${textClass}`}>
             {clampedScore}
           </span>
-          <span className="text-xs font-medium -mt-0.5 text-gray-400 dark:text-gray-500">
+          <span className="text-xs font-medium -mt-0.5 text-gray-400">
             /100
           </span>
         </div>
