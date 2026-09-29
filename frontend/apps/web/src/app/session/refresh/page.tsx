@@ -82,8 +82,15 @@ async function signOutLocally(): Promise<void> {
   clearAuthToken();
 }
 
+// Set once this page has decided to sign out and leave. Signing out changes the
+// auth session, and QueryProvider remounts the whole tree on every auth change,
+// so a fresh instance of this page mounts before the navigation completes. That
+// instance must not refresh and sign out again: each pass would remount it once
+// more, looping until the backend rate-limits the visitor (and their sign-in).
+let signingOut = false;
+
 function SessionRefreshContent() {
-  const [phase, setPhase] = useState<Phase>('refreshing');
+  const [phase, setPhase] = useState<Phase>(() => (signingOut ? 'redirecting' : 'refreshing'));
   const [message, setMessage] = useState('');
   const [{ redirectTo, onFail }] = useState(readParams);
   const startedRef = useRef(false);
@@ -101,6 +108,7 @@ function SessionRefreshContent() {
     // Loop breaker: if we were here for the same target < 15 s ago the
     // refresh "worked" but no access cookie appeared — stop and sign in.
     if (isRefreshLoop(readGuard(), redirectTo, Date.now())) {
+      signingOut = true;
       clearGuard();
       await signOutLocally();
       go(onFail ?? loginUrlFor(redirectTo));
@@ -124,6 +132,7 @@ function SessionRefreshContent() {
     }
 
     if (result.status === 'invalid') {
+      signingOut = true;
       clearGuard();
       await signOutLocally();
       go(onFail ?? loginUrlFor(redirectTo));
@@ -139,6 +148,7 @@ function SessionRefreshContent() {
   useEffect(() => {
     if (startedRef.current) return; // React strict-mode double invoke guard
     startedRef.current = true;
+    if (signingOut) return; // remounted while this page signs out and leaves
     void attempt();
   }, [attempt]);
 
