@@ -395,6 +395,10 @@ public enum SessionEndReason: String, Sendable, Hashable, CaseIterable {
     /// Generic `UNAUTHORIZED` or a 401 without a recognised code — the
     /// refresh token simply expired.
     case expired = "UNAUTHORIZED"
+    /// Local only, never sent by the server: the account's DELETE got no
+    /// answer after the server had already signed the account out, so the
+    /// deletion may or may not have finished.
+    case accountDeletionUnconfirmed = "ACCOUNT_DELETION_UNCONFIRMED"
 
     /// Map a wire code; unknown / missing codes read as a plain expiry.
     public init(code: String?) {
@@ -406,14 +410,17 @@ public enum SessionEndReason: String, Sendable, Hashable, CaseIterable {
         switch self {
         case .tokenReuse, .deviceMismatch, .deviceRevoked, .sessionRevoked, .sessionExpiredInactive, .dpopRequired:
             true
-        case .dpopInvalid, .dpopReplay, .resumeGrantInvalid, .expired:
+        case .dpopInvalid, .dpopReplay, .resumeGrantInvalid, .expired, .accountDeletionUnconfirmed:
             false
         }
     }
 
     /// Copy the auth screens show for this reason.
     public var message: String {
-        isSecurity
+        if self == .accountDeletionUnconfirmed {
+            return "We couldn't confirm your account was deleted. If you can still sign in, try again from Settings."
+        }
+        return isSecurity
             ? "You were signed out for security. Sign in again."
             : "Your session has expired. Please sign in again."
     }

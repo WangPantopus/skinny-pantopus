@@ -125,7 +125,10 @@ data class SessionEndReason(
 ) {
     val message: String
         get() =
-            if (isSecurity) {
+            if (code == ACCOUNT_DELETION_UNCONFIRMED) {
+                // Parity with iOS `SessionEndReason.accountDeletionUnconfirmed`.
+                "We couldn't confirm your account was deleted. If you can still sign in, try again from Settings."
+            } else if (isSecurity) {
                 // Pinned by CONTRACT §"Error envelope" — do not reword.
                 "You were signed out for security. Sign in again."
             } else {
@@ -134,6 +137,13 @@ data class SessionEndReason(
             }
 
     companion object {
+        /**
+         * Local only, never sent by the server: the account's DELETE got no
+         * answer after the server had already signed the account out, so the
+         * deletion may or may not have finished.
+         */
+        const val ACCOUNT_DELETION_UNCONFIRMED = "ACCOUNT_DELETION_UNCONFIRMED"
+
         fun expired(code: String? = null): SessionEndReason = SessionEndReason(code, isSecurity = false)
 
         fun fromCode(code: String?): SessionEndReason =
