@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — 2026-09-29T02:43Z (batch109 merged; #718 privacy fix accepted; U reconciliation in progress)
+## CURRENT RESUME POINT — 2026-09-29T03:18Z (batches110–111 merged; Train lifecycle retries accepted; list-chip repair next)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
@@ -29,6 +29,29 @@
 
 
 
+
+> **UPDATE 2026-09-29T03:18Z — batches110–111 merged: S2 re-invite copy; Support Train lifecycle retries acknowledged.**
+> - **Master:** `f0f2030de4eed1bf7ed2df2c3902e9e8f6842ee7`.
+>   - Batch110 [#782](https://github.com/WangPantopus/skinny-pantopus/pull/782), exact `2a62d1051ded62e2f6ea05b1f8f0274432329323`, merged 02:54:16Z. It carries S2 [#781](https://github.com/WangPantopus/skinny-pantopus/pull/781) `1631e6acb` (merged 02:54:18Z).
+>   - Batch111 [#784](https://github.com/WangPantopus/skinny-pantopus/pull/784), exact `e00fb328e530526e7e983d0cf372360cd2296b7a`, merged 03:16:22Z. It carries S1 [#783](https://github.com/WangPantopus/skinny-pantopus/pull/783) `2a3eefa37`, whose head is an ancestor of master.
+>   - Existing ancestry, union and head-blob proofs pass for both; no shared Swift. Required checks are absent live. The queue is empty; unrelated #46/#429/#430/#625 are untouched.
+> - **S2 #781 (coordinator-reviewed):** a 3-line copy case for `MEMBERSHIP_RENEWAL_REQUIRED` on the web/iOS/Android sender maps.
+>   - Personal diff review, and the 179-file seal `d57ca560…` verifies (recorded head, integrity).
+>   - The owner's real Chrome, iOS 6F914A30 and Android 5556 befores and afters show the same 409 with the new truthful sentence and no invite created. Exact cleanup: 349/353 fingerprints restored; only ordinary auth history differs.
+> - **S1 #783 — Support Train lifecycle commands:** pause, resume, unpublish, archive and delete had no sealed evidence.
+>   - After a committed command's lost reply, a retry got a false failure: 409 INVALID_TRANSITION or 404. It left stale or dead Manage screens, and iOS auto-retried DELETE into the false error.
+>   - Reproduced on actual Android 5558 (all five commands), iOS C2 (pause, delete) and Chrome (delete).
+>   - One backend file (22+/0-): acknowledge an already-applied state after the unchanged role checks, as `/complete` already does; treat delete of an absent train as desired absence.
+>   - Afters: API 18/18. Android: five commands, retry 200 with existing toasts and the true state. iOS: pause, and delete via its own auto-retry. Chrome: delete → list.
+>   - [Sealed 108-file result](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream1-train-lifecycle-retry-r1/RESULT.md), MANIFEST `a8db546cae20d6974cf325e0645a39a984d4d2847477435eef4ed3216dd74a55`.
+>   - Nine owned Trains were product-deleted. A checked verification found 0 owned rows, and all 19 full fingerprints equal the baseline.
+>   - Qualified: one Android delete retry hit the product's own 30-writes-per-5-min limiter (429) after my API burst; the retry after the window returned 200. iOS resume/unpublish/archive share the verified generic path and were not separately rerun. Co-organizer and nudge commands are not verified (nudge draft is an AI-provider boundary).
+> - **Decided per the standing instruction:** fix once in the shared route rather than teaching three clients to reinterpret 409/404. Rejected: a command-identity table and client-side status re-reads.
+> - **Next S1 (found during these afters):**
+>   - Both native "My trains" lists, and the matching search maps, show paused, completed and archived Trains as "Active". The chip maps lack those statuses and expect `complete`.
+>   - Plan: reproduce, then the smallest existing-map repair reusing the detail screen's labels, then native builds and afters.
+>   - Also classify the candidate stale iOS list after a fault-free delete.
+> - **Runtime:** backend 81764 at `f0f2030de` (runtime worktree d2cb25 fast-forwarded; served file byte-identical). S1 holds C2 in slot 1 and 5558 in slot 4; heavy is free. S2 holds nothing; S3 has the web stale-session refresh-loop lead.
 
 > **UPDATE 2026-09-29T02:43Z — batch109 merged: #718 Post photo retries, with a privacy fix found in review; U reconciliation started.**
 > - **Master:** `14ec28c93623b56a7549bf86f33f5df3d5da3e51`.
