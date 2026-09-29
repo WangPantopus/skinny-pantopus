@@ -2,7 +2,41 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — Stream 3 bounded reconciliation pass, 2026-09-29T02:03:31Z (no new work found)
+## LIVE — Stream 3 web stale-session repair PR785 awaiting Stream 1 review, 2026-09-29T03:23:08Z
+
+- **Lead:** Stream 1 routed an incidental web finding, received after its last recorded 02:23:32Z and acknowledged before 02:33:10Z. On master `be05b58dd` (its proxy seq 44285–44319), one stale-session visit to `/app/hub` sent 16 refresh and 15 logout requests one after another, and the visitor's sign-in then got 429. Stream 1 changed nothing and handed it to Stream 3 (retained A02 sessions).
+- **Root cause (real contract traced):** `/session/refresh` signs out after an invalid refresh. That sign-out's token change makes `QueryProvider` remount every page: its key is `sessionGeneration`, from Stream 3's own account-retirement change `b414ad6f6` (2026-09-20). The remounted page has a fresh `startedRef` and a cleared loop guard, so it refreshed and signed out again, until a 429 or until a navigation happened to commit.
+- **Reproduced on the Stream 3 runtime** (all involved files byte-identical to master):
+  - Run 1, 02:43:01Z: `R400 L200`×10, `R400 L429`×5, `R429`.
+  - Run 2 on exact master `14ec28c93`, 02:58:51Z: `R400 L200`×10, `R400 L429`×3. The real sign-in then got 200, but the visitor's own sign-out got **429** because the IP's 10 logouts per 15 minutes were spent.
+- **Repair:** [PR785](https://github.com/WangPantopus/skinny-pantopus/pull/785), exact head `51ae9c05d2f27130b09cf38561d7a7c96e934689`, base `14ec28c93`. Master `f0f2030de` leaves all 11 involved files unchanged, and merge-tree is clean.
+  - One existing file, `frontend/apps/web/src/app/session/refresh/page.tsx`, +11/−1. A module-level `signingOut` flag is set before either sign-out branch; a remounted copy shows the existing "Taking you back…" state and sends nothing.
+  - No new file, API, schema, design change or unit test. Native apps are unaffected.
+- **Actual evidence** (real Chrome → Next → no-send proxy → API → DB, on the candidate):
+  - Stale session with logout still exhausted: `R400 L429` once, then `/login`.
+  - Fresh budget: `R400 L200` once, then real sign-in 200 → `/app/hub` → sign-out 200.
+  - Valid refresh: `R200`, back on `/app/hub` with no logout (49×200, 0×401).
+  - Server-revoked refresh (Stream 1's state): `R401 L200` once.
+  - Injected refresh 503: the existing transient screen with no logout, then Try again → `R400 L200` once.
+  - Web typecheck gate: 0 errors.
+  - [Private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-session-refresh-remount-r1/RESULT.md): 52 files, MANIFEST.json seal `799180dcd28f2ed126f55d2f4a99acd90d8b64a54db065e11846d50c622f7aae`, sealed 03:22:06Z; [seal comment](https://github.com/WangPantopus/skinny-pantopus/pull/785#issuecomment-5883011884). CI is informational.
+- **Cleanup and resources:**
+  - All four Owner sessions (one from the master before-run, three from setups) are signed out or revoked. Fault rules are empty, this bundle's private token-bearing state files are deleted, and the credential helpers have exited.
+  - 386-table diff: only truthful auth, session and security history, plus one `PropertyIntelligenceCache` `fallback` row. That row was created at 02:59:27.742Z by the real Hub `GET /api/ai/pulse` during the master before-run; there is no ATTOM or AI key, so no provider was called, and it expires at 2026-09-30T02:59:27Z.
+  - Web 18131 now serves the detached candidate `51ae9c05d` from `/private/tmp/pantopus-stream3-web-chat-names-r1` (previously `704d15e80`; Next dev reloaded itself). API 18134 stays on `23e518b11`; proxy 18130 and files 18198 are unchanged. No heavy or device lease was used.
+- **Decisions taken without asking (UTC):**
+  - Before 02:33:10Z: take the routed lead and trace before any change.
+  - 02:42:52Z (redirect receipt): the middleware redirect lands on `localhost:18131` because Next dev is bound to 127.0.0.1, and that origin is outside the API CORS allowlist. Treat this as a dev-only harness boundary, and correct only main-frame 3xx Location hosts inside the evidence tool.
+  - 02:45:47Z: repair only the page. Keep the `QueryProvider` remount, `signOutLocally`, the limiters and the middleware as they are.
+  - 03:19–03:20Z: retain the fallback cache row as truthful read bookkeeping, and delete this bundle's own revoked state files.
+- **Limits and next:**
+  - The loop-breaker branch is source-reviewed only.
+  - Not reproduced: a visitor whose logout keeps failing with `onFail=/` can bounce between documents until a refresh 429. Recorded as an observation, not repaired.
+  - Local dev runtime only: no hosted or production build, no other browsers.
+  - Excluded harness runs: two CORS-blocked runs (02:38:50Z, 02:40:14Z) and run 1's missing browser event file (credential-helper Origin).
+  - Next: Stream 1 reviews and merges #785; then record the exact master. Earlier Stream 3 boundaries are unchanged: S3-22/26/62, the missing Crew Day caller, physical/provider limits and the launch cuts.
+
+## Previous completed milestone — Stream 3 bounded reconciliation pass, 2026-09-29T02:03:31Z (no new work found)
 
 - **Result:** Stream 3 remains complete for this bounded pass. There is no open Stream 3 PR, changed prerequisite or reproduced in-scope failure. No app was launched or built, and no fixture, device/heavy lease, runtime or product code was touched. All accepted evidence is reused unchanged, including the 94-file password seal `e2248c30…` in the block below.
 - **Git/PR state (checked 01:58–02:03Z):** master `be05b58dd045a62f0afa3a470b37fd64cc50fcf8` (batch108) is 22 first-parent merges (batches 87–108) past the PR727 master `517d3cdf2`. All 17 Stream 3 PRs are MERGED per REST: predecessors 593/594/595/596/597/600/604/605/612/618/623 and takeover 628/634/639/648/655/727. Open PRs are S1 draft #718 (held) and unrelated #46/#429/#430/#625; none is Stream 3.
