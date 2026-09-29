@@ -210,6 +210,7 @@ export async function getMapPosts(params: {
 // ============ POSTS CRUD ============
 
 export async function createPost(data: {
+  clientRequestId?: string;
   content: string;
   title?: string;
   mediaUrls?: string[];

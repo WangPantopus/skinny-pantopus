@@ -14,6 +14,7 @@ import Foundation
 /// Pulse compose flow can submit just the keys relevant to the chosen
 /// intent without sending nulls the backend may reject.
 public struct PostCreateRequest: Encodable, Sendable, Hashable {
+    public var clientRequestId: String?
     public let content: String
     public let title: String?
     public let postType: String
@@ -148,7 +149,7 @@ public struct PostCreateRequest: Encodable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case content, title, postType, visibility, postAs, mediaUrls
+        case clientRequestId, content, title, postType, visibility, postAs, mediaUrls
         case latitude, longitude
         case locationName, locationAddress
         case geocodeProvider, geocodeAccuracy, geocodePlaceId
@@ -168,6 +169,7 @@ public struct PostCreateRequest: Encodable, Sendable, Hashable {
     /// `"foo": null` (which `createPostSchema` rejects for some keys).
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(clientRequestId, forKey: .clientRequestId)
         try container.encode(content, forKey: .content)
         try container.encodeIfPresent(title, forKey: .title)
         try container.encode(postType, forKey: .postType)

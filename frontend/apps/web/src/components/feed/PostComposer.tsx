@@ -71,6 +71,7 @@ const GLOBAL_AUDIENCE_OPTIONS: Record<PersonalPostAs, Array<{ value: Audience; l
 };
 
 export interface PostComposerSubmitData {
+  clientRequestId?: string;
   content: string;
   title?: string;
   postType: PostType;
@@ -172,6 +173,7 @@ export default function PostComposer({
   onLeaveSportsTopic,
 }: PostComposerProps) {
   const { state: f, setField, selectIntent, reset, addMedia, removeMedia, dismissPrecheck } = usePostForm();
+  const createCommand = useRef<string | null>(null);
   const [identities, setIdentities] = useState<PostingIdentity[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState<PostingIdentity | null>(null);
   const [selectedAudience, setSelectedAudience] = useState<Audience>('nearby');
@@ -258,6 +260,7 @@ export default function PostComposer({
     : activeIntent?.placeholder || 'Share something with your neighborhood…';
 
   const resetComposer = useCallback(() => {
+    createCommand.current = null;
     reset();
     setSubmitError(null);
     setShowPurposePicker(false);
@@ -475,7 +478,9 @@ export default function PostComposer({
 
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    createCommand.current ??= crypto.randomUUID();
     const saved = await onPost({
+      clientRequestId: createCommand.current,
       content: f.content.trim(),
       title: f.title.trim() || undefined,
       postType: targetPostType,
