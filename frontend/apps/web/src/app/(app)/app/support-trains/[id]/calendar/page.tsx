@@ -118,13 +118,13 @@ export default function SupportTrainCalendarPage() {
           <h1 className="text-xl font-bold text-app-text">{data?.title || 'Support Train'} — Schedule</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setViewMode('calendar')} className={`p-2 rounded-lg transition ${viewMode === 'calendar' ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600' : 'text-app-text-muted hover:bg-app-surface-sunken'}`}>
+          <button onClick={() => setViewMode('calendar')} aria-label="Calendar view" aria-pressed={viewMode === 'calendar'} className={`p-2 rounded-lg transition ${viewMode === 'calendar' ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600' : 'text-app-text-muted hover:bg-app-surface-sunken'}`}>
             <Calendar className="w-5 h-5" />
           </button>
-          <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition ${viewMode === 'list' ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600' : 'text-app-text-muted hover:bg-app-surface-sunken'}`}>
+          <button onClick={() => setViewMode('list')} aria-label="List view" aria-pressed={viewMode === 'list'} className={`p-2 rounded-lg transition ${viewMode === 'list' ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600' : 'text-app-text-muted hover:bg-app-surface-sunken'}`}>
             <List className="w-5 h-5" />
           </button>
-          <button onClick={() => window.print()} className="p-2 rounded-lg text-app-text-muted hover:bg-app-surface-sunken transition print:hidden">
+          <button onClick={() => window.print()} aria-label="Print schedule" className="p-2 rounded-lg text-app-text-muted hover:bg-app-surface-sunken transition print:hidden">
             <Printer className="w-5 h-5" />
           </button>
         </div>
@@ -144,11 +144,11 @@ export default function SupportTrainCalendarPage() {
       {viewMode === 'calendar' && (
         <>
           <div className="flex items-center justify-between mb-4 print:hidden">
-            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-lg hover:bg-app-surface-sunken">
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} aria-label="Previous month" className="p-2 rounded-lg hover:bg-app-surface-sunken">
               <ChevronLeft className="w-5 h-5 text-app-text-secondary" />
             </button>
             <h2 className="text-lg font-semibold text-app-text">{monthLabel}</h2>
-            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-lg hover:bg-app-surface-sunken">
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} aria-label="Next month" className="p-2 rounded-lg hover:bg-app-surface-sunken">
               <ChevronRight className="w-5 h-5 text-app-text-secondary" />
             </button>
           </div>

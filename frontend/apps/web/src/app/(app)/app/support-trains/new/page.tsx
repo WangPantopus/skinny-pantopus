@@ -531,7 +531,7 @@ export default function NewSupportTrainPage() {
                   onClick={() => setSharingMode(s.key)}
                   className={`w-full text-left p-3 rounded-lg border transition ${
                     active
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                       : 'border-app-border hover:border-primary-300'
                   }`}
                 >
