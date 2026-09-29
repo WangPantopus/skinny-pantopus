@@ -32,10 +32,12 @@ public enum SupportTrainDetailKind: String, Sendable, Hashable {
 }
 
 /// Sticky bottom dock variant. `signUp` is the populated default;
-/// `sendCardAndBackup` is the fully-covered split dock.
+/// `sendCardAndBackup` is the fully-covered split dock; `closed` keeps the
+/// sign-up button in place, greyed out, with the reason signups are shut.
 public enum SupportTrainDock: Sendable, Hashable {
     case signUp(label: String)
     case sendCardAndBackup
+    case closed(reason: String)
 }
 
 /// The recipient block at the top of the screen. The household line is

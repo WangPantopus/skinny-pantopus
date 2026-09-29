@@ -271,6 +271,7 @@ export default function SupportTrainDetailPage() {
   const updates = data.updates || [];
   const viewerLevel = data.viewer_level;
   const isOrganizer = viewerLevel === 'organizer';
+  const closedReason = signupsClosedReason(data.status);
   const ownerSignupRows = buildOwnerSignupRows(slots, reservations);
   const visibleSignupEntries = ownerSignupRows.flatMap((row) => row.entries);
   const signedDateKeys = new Set(ownerSignupRows.map((row) => row.slotDate));
@@ -323,6 +324,7 @@ export default function SupportTrainDetailPage() {
   };
 
   const handleTakeSlot = () => {
+    if (!isOrganizer && closedReason) return;
     if (isOrganizer) {
       setActiveTab('needs');
       scrollToNeeds();
@@ -467,9 +469,10 @@ export default function SupportTrainDetailPage() {
           <div className="space-y-2">
             <button
               onClick={handleTakeSlot}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition"
+              disabled={!isOrganizer && Boolean(closedReason)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition disabled:cursor-not-allowed disabled:bg-app-border-strong disabled:text-app-text-secondary disabled:hover:bg-app-border-strong"
             >
-              {isOrganizer ? 'View signups' : 'Take a slot'}
+              {isOrganizer ? 'View signups' : closedReason ?? 'Take a slot'}
             </button>
             <button
               onClick={handleCopyLink}
@@ -535,6 +538,7 @@ export default function SupportTrainDetailPage() {
                   <SlotCard
                     key={slot.id}
                     slot={slot}
+                    disabled={Boolean(closedReason)}
                     onSelect={() => openReserveFlowForSlot(slot)}
                   />
                 ))
@@ -717,7 +721,7 @@ export default function SupportTrainDetailPage() {
 
 // ─── Sub-components ─────────────────────────────────────────────────────
 
-function SlotCard({ slot, onSelect }: { slot: any; onSelect: () => void }) {
+function SlotCard({ slot, onSelect, disabled = false }: { slot: any; onSelect: () => void; disabled?: boolean }) {
   const date = new Date(slot.slot_date + 'T00:00:00Z');
   const dateStr = date.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -736,7 +740,8 @@ function SlotCard({ slot, onSelect }: { slot: any; onSelect: () => void }) {
     <button
       type="button"
       onClick={onSelect}
-      className="w-full flex items-center gap-4 p-4 rounded-xl border border-app-border bg-app-surface text-left hover:border-primary-300 dark:hover:border-primary-700 transition"
+      disabled={disabled}
+      className="w-full flex items-center gap-4 p-4 rounded-xl border border-app-border bg-app-surface text-left hover:border-primary-300 dark:hover:border-primary-700 transition disabled:cursor-not-allowed disabled:hover:border-app-border"
     >
       <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-50 dark:bg-primary-950/30">
         <ModeIcon className="w-5 h-5 text-primary-600" />
@@ -752,7 +757,11 @@ function SlotCard({ slot, onSelect }: { slot: any; onSelect: () => void }) {
           </p>
         )}
       </div>
-      <span className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg">
+      <span
+        className={`px-3 py-1.5 text-xs font-medium rounded-lg ${
+          disabled ? 'bg-app-border-strong text-app-text-secondary' : 'bg-primary-600 text-white'
+        }`}
+      >
         Sign up
       </span>
     </button>
@@ -1141,6 +1150,21 @@ function StatBox({ label, value }: { label: string; value: number | string }) {
       <p className="text-xs text-app-text-muted mt-0.5">{label}</p>
     </div>
   );
+}
+
+/** Reservations only open on a published or active train; the server refuses the rest. */
+function signupsClosedReason(status?: string | null): string | null {
+  switch (status) {
+    case 'paused':
+      return 'Signups paused';
+    case 'completed':
+    case 'archived':
+      return 'This train has ended';
+    case 'draft':
+      return 'Not published yet';
+    default:
+      return null;
+  }
 }
 
 function statusBadgeClasses(status: string): string {
