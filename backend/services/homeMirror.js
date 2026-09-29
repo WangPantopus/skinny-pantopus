@@ -20,7 +20,7 @@ async function loadHomeMirror({ homeId, userId }) {
 
   const { data: home } = await supabaseAdmin
     .from('Home')
-    .select('id, name, address, city, state, zipcode, home_type, visibility, owner_id, description, created_at')
+    .select('id, name, address, city, state, zipcode, home_type, visibility, owner_id, description, created_at, privacy_mask_level')
     .eq('id', homeId)
     .maybeSingle();
   if (!home) return null;
@@ -41,7 +41,8 @@ async function loadHomeMirror({ homeId, userId }) {
     surface: 'home',
     viewer: 'neighbor',
     viewer_label: VIEWER_LABEL,
-    discoverable: home.visibility === 'public_preview',
+    // Neighbors' search only lists public-preview homes at the Normal level (the column default).
+    discoverable: home.visibility === 'public_preview' && (home.privacy_mask_level || 'normal') === 'normal',
     home: serializeHomeForViewer(home, { reveal: false }),
     owner: serializeOwnerForViewer(ownerUser, { reveal: false }),
     hidden: HIDDEN_FROM_OUTSIDERS,
