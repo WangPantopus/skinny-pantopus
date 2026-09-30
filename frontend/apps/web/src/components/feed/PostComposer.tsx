@@ -47,6 +47,18 @@ const POST_TYPE_TO_API_PURPOSE: Record<PostType, string> = {
   announcement: 'heads_up',
 };
 
+/**
+ * Event and deal times are stored as the wall-clock time the poster picked, labelled UTC (the iOS and
+ * Android composers send them that way too), and shown in UTC. The explicit Z keeps the stored value
+ * from depending on the server's time zone.
+ */
+function asStoredWallClock(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T00:00:00Z`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return `${value}:00Z`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return `${value}Z`;
+  return value;
+}
+
 function apiPurposeForPostType(postType: PostType | null | undefined): string | undefined {
   return postType ? POST_TYPE_TO_API_PURPOSE[postType] : undefined;
 }
@@ -514,12 +526,12 @@ export default function PostComposer({
             gpsLongitude: f.location.gpsLongitude,
           }
         : {}),
-      eventDate: f.selectedIntent === 'event' && f.eventDate ? f.eventDate : undefined,
-      eventEndDate: f.selectedIntent === 'event' && f.eventEndDate ? f.eventEndDate : undefined,
+      eventDate: f.selectedIntent === 'event' && f.eventDate ? asStoredWallClock(f.eventDate) : undefined,
+      eventEndDate: f.selectedIntent === 'event' && f.eventEndDate ? asStoredWallClock(f.eventEndDate) : undefined,
       eventVenue: f.selectedIntent === 'event' && f.eventVenue ? f.eventVenue : undefined,
       safetyAlertKind: f.selectedIntent === 'alert' ? f.safetyKind : undefined,
       behaviorDescription: f.selectedIntent === 'alert' && f.behaviorDesc ? f.behaviorDesc : undefined,
-      dealExpiresAt: f.selectedIntent === 'deal' && f.dealExpires ? f.dealExpires : undefined,
+      dealExpiresAt: f.selectedIntent === 'deal' && f.dealExpires ? asStoredWallClock(f.dealExpires) : undefined,
       businessName: f.selectedIntent === 'deal' && f.dealBusinessName ? f.dealBusinessName : undefined,
       lostFoundType: f.selectedIntent === 'lost_found' ? f.lostFoundType : undefined,
       contactPref: f.selectedIntent === 'lost_found' ? f.contactPref : undefined,
