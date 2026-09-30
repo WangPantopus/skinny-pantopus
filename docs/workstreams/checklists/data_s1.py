@@ -20,7 +20,7 @@ U03 = [
 ]
 
 U04 = [
-    ("Support Trains", "Lists, detail, Manage, signups", {"iOS": [c("done", "L2", "#733-#778"), c("todo", "L1 typed text survives"), c("todo", "L3"), c("todo", "L4")], "Android": [c("done", "L2", "#733-#778"), c("todo", "L1 typed text survives"), c("todo", "L3"), c("todo", "L4")], "Web": [c("done", "L2 reload", "Sep28"), c("done", "L4", "#785"), c("todo", "L3")]}),
+    ("Support Trains", "Lists, detail, Manage, signups", {"iOS": [c("done", "L2", "#733-#778"), c("todo", "L1 typed text survives"), c("todo", "L3"), c("todo", "L4")], "Android": [c("done", "L2", "#733-#778"), c("todo", "L1 typed text survives"), c("todo", "L3"), c("todo", "L4")], "Web": [c("done", "L2 reload", "Sep28"), c("done", "L4", "#785"), c("done", "L3 switch account: nothing from the previous account shows", "20260930 web switch 73f2bc13")]}),
 ]
 
 U02 = [
@@ -30,7 +30,7 @@ U02 = [
         ("Train detail and sign-up sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; dark selection fixed", "#814"), c("decide", "A3 brand-blue token")]}),
         ("Start a train", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Step 1: A1 A2 A3 A4 A5; dark selection fixed", "#814"), c("done", "Later steps: A1 A2 A4 A5; field and weekday names added", "#829"), c("decide", "A3 brand-blue token")]}),
         ("Manage train", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; share-link label added", "#814"), c("decide", "A3 brand-blue token")]}),
-        ("Review signups, edit signup", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("todo", "Signups tab: A1 A2 A3 A4 A5")]}),
+        ("Review signups, edit signup", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Signups tab: A1 A2 A4 A5", "20260930 web a11y 73f2bc13"), c("decide", "Signups tab A3 brand-blue token")]}),
         ("Updates and details tabs, calendar", {"iOS": [c("na", "Web-only screens")], "Android": [c("na", "Web-only screens")], "Web": [c("done", "A1 A2 A4 A5; calendar button names added", "#814"), c("decide", "A3 brand-blue token")]}),
     ]),
 ]

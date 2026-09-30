@@ -89,7 +89,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T04:16Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T06:12Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -118,7 +118,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>⬜ L3 |
+| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>✅ L3 switch account: nothing from the previous account shows (20260930 web switch 73f2bc13) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
@@ -130,7 +130,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Train detail and sign-up sheet | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
 | Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>🔷 A3 brand-blue token |
 | Manage train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
-| Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ Signups tab: A1 A2 A3 A4 A5 |
+| Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
 
 **Outside this plan:** Remind helpers: Blocked until an AI provider is available: Send only appears after an AI draft. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
@@ -138,9 +138,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
 - U03 items: done 52, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
-- U04 items: done 4, confirm from existing evidence 0, to do 7, your call 0, boundary 0, not offered 0
-- U02 items: done 6, confirm from existing evidence 0, to do 13, your call 5, boundary 0, not offered 3
-
+- U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
+- U02 items: done 7, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
 
 ## History
 
