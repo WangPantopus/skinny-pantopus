@@ -5,7 +5,8 @@
 >   - the 40-row inventory, 20 rows each;
 >   - the 24 S2-xx UX items;
 >   - the open work and leads;
->   - the 10 decisions waiting on the user.
+>   - the 10 decisions waiting on the user;
+>   - and, added 2026-09-30T04:36:26Z, the cross-cutting rows the hub's records give the former Stream 2: U01 is Stream 3's alone, and each stream owns its own screens' cells of U02–U05 (see "Cross-cutting rows" below).
 > - The former Stream 2 file is now frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split). In it, "Stream 2" / "S2" means the stream before the split.
 > - The former **Stream 3** (Accounts and Social) is now **Stream 5** ([`05-accounts-social.md`](05-accounts-social.md)). In records dated before 2026-09-30, "Stream 3" / "S3" means Stream 5, not the new Stream 3.
 > - Names that contain `stream2` or `S2-` keep them so nothing breaks: the runtime kit, stage folders, audit bundles, existing branches and UX IDs.
@@ -22,14 +23,15 @@
 - Place and home intelligence: the health score and seasonal checklist, the address calendar, property data, weather/air/alerts/civic, and timeline freshness (I01–I07);
 - home records: issues and emergency info, issue media, maintenance history, and the document/issue/access/share readers (D01, D02, D04, D09);
 - money signals and the bill benchmark (F01, F02, F04, F05);
-- mail, kept only for postcards, welcome cards and the digest (M01).
+- mail, kept only for postcards, welcome cards and the digest (M01);
+- this stream's cells of U02–U05 (U01 is Stream 3's).
 - D03, F03, M03 and M04 are fully cut for launch.
 
 **Launch-scope owner:** Stream 4 checks cut #7 (Household extras) and cut #8 (Mail extras) for the former Stream 2's area. Never verify, test or fix them.
 
 **State at the split.**
 - Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. **Refreshed 2026-09-30T04:25:38Z:** the split's docs PRs #843 and #844 merged at 04:24:12Z (master `15711c8dc`), so Stream 4 has **no open PRs**.
-- **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04).
+- **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04). This stream's U02–U05 cells have their own section and are not in these counts.
 - **One fixture is open in the database (clean it first):** the F02 native re-run in `runtime/f02-native-permission-r1` left:
   - member B's occupancy `7a6417c0` on cohort Home 9d885f71;
   - the `finance.view` override, now `allowed=false`;
@@ -56,7 +58,8 @@
 5. **D04, maintenance history:** one truthful lifecycle across `HomeMaintenanceLog` and `HomeIssue` with competing readers and writers.
 6. **I04, the address calendar:** daylight-saving and holiday edge cases for pickup days. Provider holiday data stays named.
 7. **I05, property data, local parts:** stale cache, absent or wrong property, and verification wording.
-8. **Latent and cut notes:**
+8. **U02–U05, this stream's cells.** Native large text, screen readers and dark mode on the Place, records, money and mail screens, then the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
+9. **Latent and cut notes:**
    - web Mail due dates use `new Date(<SQL date>)`, but no product route writes `Mail.due_date`, and bill blocks in letters are cut;
    - the native Dismiss confirm wording is cut (#8).
 
@@ -128,6 +131,20 @@ State at the split, copied verbatim from the former file's "September 22 exact �
 | S2-22 | Mail list: a failed "load more" replaces the whole list | fixed by #445 |
 | S2-24 | "Property insights coming soon" when there is simply no valuation | fixed by #380 (already on master at the 2026-09-26 check) |
 
+## Cross-cutting rows (`REMAINING_WORK` §10): Stream 4's cells of U02–U05
+
+Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, not in the former Stream 2's file, so the split's first proof (40 rows and 24 S2-xx items) didn't cover them.
+- Stream 1's U02–U04 checklists (`checklists/`) cover only Streams 1 and 2's screens. For U05, each stream inventories its own screens.
+- U01 (Home and unit identity) is Stream 3's.
+- `check-stream2-split.py` now also proves that both files carry U02–U05.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| U02 | **Partial/open — web evidence; not itemized.** The former Stream 2 ran real-Chrome sweeps of its 37 retained web routes, including this stream's web screens: dark-mode contrast ([#809](https://github.com/WangPantopus/skinny-pantopus/pull/809), `20260929-stream2-web-dark-link-contrast-r1`, `db25f76e…`: 12 targeted texts now pass, low-contrast styles 112 → 95), accessible names ([#819](https://github.com/WangPantopus/skinny-pantopus/pull/819), `20260929-stream2-web-a11y-names-r1`, `549cdcdb…`: 19 unnamed controls → 0) and a 390×844 layout sweep for owner and member (same seal: no horizontal overflow). #809 fixed the Place text action, the address-calendar Cancel and the health ring's "/100". | Native large text (Dynamic Type, font 2.0), VoiceOver and TalkBack, native dark mode and keyboard focus on this stream's screens. The remaining low-contrast styles are the brand-colour decision Stream 1 carries. |
+| U03 | **Partial/open — recorded per row; not itemized.** Error, retry, lost-reply, malformed-reply and cold-restart cases are accepted inside D01, D04, D09, I04, I07 and F02 (their bundles are in the checklist above). | Loading, empty, partial, unavailable, offline, slow, cancel, back, double-tap and process-death cases on this stream's screens where no row covers them yet. |
+| U04 | **Partial/open — recorded per row; not itemized.** F02's replies delivered across a logout are accepted on iOS (`edec37f4…`) and Android (`edee4120…`), and the web same-account permission change (`fe2bd74c…`); I07's mounted finite-authority expiry is accepted ([#773](https://github.com/WangPantopus/skinny-pantopus/pull/773), `5dadb5b8…`). | Long-lived sessions, background and foreground, and concurrent device or account changes on this stream's screens beyond those cases; the F02 native permission change (open work item 1). |
+| U05 | **Not started — waits for the launch flags on master.** | This stream's screen and action inventory in the final release build on web, iOS and Android, for the release manifest Stream 1 assembles. |
+
 ## Runtime, devices and kit (shared with Stream 3; lease label `stream4:`)
 
 - **Kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/` ([README](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md)). Tools are in `tools/`, stages in `runtime/`. The audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Names containing `stream2` keep them.
@@ -173,6 +190,8 @@ State at the split, copied verbatim from the former file's "September 22 exact �
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T04:36:26Z — this stream's U02–U05 cells added (split completeness).** These cross-cutting rows sat in the former Stream 1's inventory, so the first split proof missed them. Each of Streams 3 and 4 now carries its own U02–U05 cells, citing the recorded web sweeps and row evidence, and U01 is Stream 3's. `check-stream2-split.py` proves it. Master is `d1ba0b28d`: #846 split the former Stream 1 into Streams 1 and 2, with no change to this stream's rows. Docker still isn't answering, and nothing is held.
 
 - **2026-09-30T04:25:38Z — the split's docs PRs are merged; prompts refreshed.** #843 and #844 merged at 04:24:12Z, so master `15711c8dc` carries the split. No Stream 4 PR is open. The resume prompt now names the new Stream 2's `stream2:` label and the shared-worktree rule. The runtime-lease lock moved to `/private/tmp/pantopus-stream3-stream4-runtime-lease`.
 

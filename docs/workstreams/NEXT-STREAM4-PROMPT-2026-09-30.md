@@ -10,7 +10,8 @@ Written 2026-09-30T04:16:32Z. You are **Stream 4**, one of the user's parallel w
 5. The private kit README: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md`. The path keeps `stream2`. Never print `runtime/accounts.env`.
 
 ## 2. State at the split
-- Master `15711c8dc` (refreshed 2026-09-30T04:25:38Z). Every former Stream 2 PR is merged, including the split's docs PRs #843 and #844 (merged 2026-09-30T04:24:12Z). **Streams 3 and 4 have no open PRs**; check `gh pr list --state open` for anything newer.
+- Master `d1ba0b28d` (refreshed 2026-09-30T04:36:26Z). Every former Stream 2 PR is merged, including the split's docs PRs #843 and #844 (merged 2026-09-30T04:24:12Z). Stream 1's own split (#846) is merged too. **Streams 3 and 4 have no open code PRs**; a docs-only PR that copies the U-row addition below to master may still be in the queue. Check `gh pr list --state open` for anything newer.
+- **Added 2026-09-30T04:36:26Z:** your screens' cells of U02–U05 are yours (U01 went to Stream 3). They sat in the former Stream 1's inventory, so the first split proof missed them. See your file's "Cross-cutting rows" section and open work item 8. `check-stream2-split.py` proves the assignment.
 - Docker Desktop has been down since ~03:30Z (disk full), so the shared runtime is unreachable until the user restarts it. Restarting it is the user's call; the founder's stack runs on it.
 - No runtime lease, device slot, heavy slot or iOS driver is held.
 - First item: the open F02 fixture: finish the iOS part and clean it up exactly (see the file) as soon as Docker is back and you hold the runtime lease.
