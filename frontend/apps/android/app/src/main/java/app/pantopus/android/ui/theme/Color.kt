@@ -28,8 +28,8 @@ object PantopusColors {
     val primary300 = Color(0xFF7DD3FC)
     val primary400 = Color(0xFF38BDF8)
     val primary500 = Color(0xFF0EA5E9)
-    val primary600 = Color(0xFF0284C7)
-    val primary700 = Color(0xFF0369A1)
+    val primary600 = Color(0xFF0369A1)
+    val primary700 = Color(0xFF075985)
     val primary800 = Color(0xFF075985)
     val primary900 = Color(0xFF0C4A6E)
 

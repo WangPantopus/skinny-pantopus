@@ -111,7 +111,7 @@ public struct CompactButton: View {
 
     private var background: Color {
         switch variant {
-        case .primary: Theme.Color.primary600
+        case .primary: Theme.Color.primarySolid
         case .ghost: Theme.Color.appSurface
         case .destructive: Theme.Color.appSurface
         }

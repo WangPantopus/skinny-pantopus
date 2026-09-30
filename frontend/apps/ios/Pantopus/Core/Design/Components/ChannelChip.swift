@@ -108,7 +108,7 @@ public struct ChannelChip: View {
 
     private var fillColor: Color {
         switch state {
-        case .on: Theme.Color.primary600
+        case .on: Theme.Color.primarySolid
         case .off: Theme.Color.appSurface
         case .locked: Theme.Color.primary100
         }

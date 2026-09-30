@@ -178,7 +178,7 @@ private struct PackageStatusCard: View {
     }
 
     private var markerBackground: Color {
-        content.status == .delivered ? Theme.Color.success : Theme.Color.primary600
+        content.status == .delivered ? Theme.Color.successSolid : Theme.Color.primarySolid
     }
 
     private var markerRadius: CGFloat {

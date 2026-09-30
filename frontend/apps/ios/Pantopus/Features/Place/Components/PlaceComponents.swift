@@ -160,7 +160,7 @@ struct PlaceVerifiedAvatar: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Theme.Color.success, Theme.Color.homeDark],
+                        colors: [Theme.Color.successSolid, Theme.Color.homeDark],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
