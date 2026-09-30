@@ -124,7 +124,7 @@ private fun DateColumn(content: SlotRowContent) {
         ) {
             Text(
                 text = content.dayLabel.uppercase(),
-                color = foreground.copy(alpha = 0.8f),
+                color = foreground,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
             )

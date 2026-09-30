@@ -52,7 +52,7 @@ public struct SlotRow: View {
             Text(content.dayLabel)
                 .font(.system(size: 9, weight: .bold))
                 .textCase(.uppercase)
-                .foregroundStyle(dateColumnForeground.opacity(0.8))
+                .foregroundStyle(dateColumnForeground)
             Text(content.dateLabel)
                 .font(.system(size: 16, weight: .heavy))
                 .foregroundStyle(dateColumnForeground)
@@ -206,8 +206,8 @@ public struct SlotRow: View {
 
     private var dateColumnForeground: Color {
         switch (content.state, content.mine) {
-        case (.covered, true): Theme.Color.primary700
-        case (.covered, false): Theme.Color.homeDark
+        case (.covered, true): Theme.Color.primaryInkStrong
+        case (.covered, false): Theme.Color.home
         case (.open, _): Theme.Color.appTextStrong
         }
     }

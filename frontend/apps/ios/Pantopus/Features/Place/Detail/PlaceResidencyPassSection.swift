@@ -271,7 +271,7 @@ struct PlaceResidencyPassSection: View {
                         Task { await vm.load() }
                     }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .buttonStyle(.plain)
                 }
             }

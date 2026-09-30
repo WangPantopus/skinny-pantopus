@@ -15,6 +15,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Open / Closed (or neutral) status chip shown beside the verified chip.
 public struct BizStatusBadge: Hashable, Sendable {
@@ -224,7 +225,7 @@ public struct BizBannerHeader: View {
             dot: nil,
             text: verified ? "\(identity.displayName) · Verified" : identity.displayName,
             background: identity.backgroundColor,
-            foreground: identity.deepColor
+            foreground: identity.chipInk
         )
     }
 
@@ -288,6 +289,17 @@ private extension IdentityPillar {
         case .home: Theme.Color.homeDark
         case .business: Theme.Color.businessDark
         }
+    }
+
+    /// The identity chip's label: the deep stop in light, as before. In dark the deep stop stays dark
+    /// and sinks into the dark tint (Business measured 1.9:1), so the chip takes the pillar's label
+    /// ink, which lightens there.
+    var chipInk: Color {
+        let light = UIColor(deepColor)
+        let dark = UIColor(color)
+        return Color(uiColor: UIColor { traits in
+            (traits.userInterfaceStyle == .dark ? dark : light).resolvedColor(with: traits)
+        })
     }
 
     var displayName: String {
