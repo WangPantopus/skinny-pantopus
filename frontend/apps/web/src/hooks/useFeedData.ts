@@ -113,6 +113,9 @@ export function useFeedData({
   // Place eligibility check
   useEffect(() => {
     if (surface !== 'place' || viewingLat == null || viewingLng == null) return;
+    // Only the latest check decides: the load-time answer (no GPS yet) can land after the
+    // "Use my location" answer and would otherwise hide the composer from an eligible viewer.
+    let latest = true;
     api.posts
       .checkPlaceEligibility({
         latitude: viewingLat,
@@ -122,10 +125,16 @@ export function useFeedData({
         gpsLongitude: userLng == null ? undefined : userLng,
       })
       .then((r) => {
+        if (!latest) return;
         setPlaceEligible(r.eligible);
         setEligibilityReason(r.reason || null);
       })
-      .catch(() => setPlaceEligible(true));
+      .catch(() => {
+        if (latest) setPlaceEligible(true);
+      });
+    return () => {
+      latest = false;
+    };
   }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng]);
 
   // ── Feed data ──────────────────────────────────────────────
