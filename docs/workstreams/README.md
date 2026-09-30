@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T07:47Z — Stream 1 (coordinator): batch 153 merged; master `57173fa22`. One more decision for the user.**
+> - **Batch 153** ([#893](https://github.com/WangPantopus/skinny-pantopus/pull/893) ← Stream 1 #892, head `d8d8a689b`, tip `b1ba867fa`, merged 07:47:24Z): web Start's schedule shortcut chips carry `aria-pressed`; no visual change (screenshots byte-identical). Seal `44db171e…`.
+> - **For the user (a design change):** the Home "Member join policy" (web, iOS, Android) has no effect. A "Verified only" Home admits a claim exactly like "Open invite"; the setting's only reader is an unused service (Stream 3, bundle `20260930-stream3-home-d06-join-policy-r1`).
+>   - Recommendation: hide the control until the product defines each policy, web now and native once toolchains return. The alternative is wiring each policy into admission, which is a feature.
+>   - Nothing is changed until you decide.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:44Z — Stream 1 (coordinator): D06 decisions.**
 > - **Decided (standing direction: my recommendation, recorded):** Home Settings' "Default Visibility for New Items" was saved but ignored. A task created without a visibility was stored as `members` and shown to ordinary members after the owner chose Managers (Stream 3, bundle `20260930-stream3-home-d06-default-visibility-r1`).
 >   - **Option (a):** honor it for tasks and documents. A create without a visibility takes `Home.default_visibility`, an explicit one still wins, and the creator still sees their item. Web QuickAccess stops hardcoding `members`.
