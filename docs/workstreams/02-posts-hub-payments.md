@@ -173,9 +173,17 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-09-30T23:13Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-09-30T23:31Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-09-30T23:13Z): the successor session is active** (started 23:12Z by `date -u`).
+- **Latest (2026-09-30T23:31Z): [#1113](https://github.com/WangPantopus/skinny-pantopus/pull/1113) sent to Stream 1** — web composer: a Place deal needs an end date, and the composer says so before sending (backlog item 1).
+  - Head `b3e4f933a5aa2bbf462713be8ab0a1d99c2f3938`, seal `401fee1636beb71bd2c5f8265755bad4f39878b9a4f825f11c37be8dae8ac246` (bundle `20260930-stream2-posts-web-deal-expiry-r1`, 40 files). Web only, 2 files.
+  - **Reproduced on master in Chrome:** the date field's "Expires (optional)" placeholder never renders on `type=date`, `POST /api/posts` → 400 "Deals must include an expiration date.", and the only feedback was the feed's 3-second bottom toast (no live region).
+  - **Fix:** a Place deal (nearby, neighborhood, saved place, target area) with no end date stops in the composer with the edit path's "A deal needs an expiry date." and sends nothing; the field is `aria-required` there. Connections deals may still omit it.
+  - **Verified in Chrome:** no request without a date and the draft kept; one 201 with a date ("Expires 10/15/2026"); a Connections deal without a date still 201. axe light 0; dark 1 pre-existing chip failure (below). Type-check gate 0, ESLint 0, Jest 122/2343. Cleanup 351/353 (2 = sign-in bookkeeping).
+  - **Decisions** (standing direction): stop before sending with the existing wording (rejected: a native-style prefilled date, or a placeholder-only change that no browser shows); `aria-required`, not `required`. Kept separate: a visible "Deal ends" label; a live region for the feed toast.
+  - **New finding:** in dark mode the composer's "Your location" chip draws the intent accent as text on the dark card (Deal #15803d on #0f1e2b = 3.37:1). Palette is Stream 1's; told it, measuring every intent next.
+  - **Next:** backlog item 2 (native posting-eligibility "last answer wins": check before changing).
+- **Earlier (2026-09-30T23:13Z): the successor session is active** (started 23:12Z by `date -u`).
   - **[#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096) merged** in batch 220 ([#1098](https://github.com/WangPantopus/skinny-pantopus/pull/1098), 2026-09-30T21:37:21Z) at head `c26c706e4`. Master is now `a211e1f48` (batch 223).
   - **Checklist:** U03 "Edit a post → Web" is done (#1096, seal 406c0939). U02 81 done / 2 boundary; U03 55 done / 0 to do / 2 not offered; U04 16 done. The inventory rows for web post edit and the composer date labels are marked fixed.
   - **Review page:** Stream 1 republished it at a new URL, https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2 (23:14Z; the old one can't be updated from its account). The checklist section above is re-rendered with it.
