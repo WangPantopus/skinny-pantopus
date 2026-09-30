@@ -31,6 +31,8 @@ data class HomeDocumentDto(
     @Json(name = "updated_at") val updatedAt: String?,
     @Json(name = "content_url") val contentUrl: String? = null,
     @Json(name = "file_version") val fileVersion: String? = null,
+    /** The uploader's display name; null for a deleted account or an older server. */
+    @Json(name = "uploaded_by_name") val uploadedByName: String? = null,
 )
 
 /** `GET /api/homes/:id/documents` envelope. */

@@ -617,7 +617,10 @@ private fun MetadataGrid(
         if (dto.createdBy == null) {
             "Former member"
         } else {
-            dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() } ?: dto.createdBy.orEmpty()
+            // The server's display name; never the raw user id.
+            dto.uploadedByName?.takeIf { it.isNotEmpty() }
+                ?: dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() }
+                ?: "—"
         }
     val uploadedLabel = projection.uploadedLabel ?: "—"
     val visibility =
