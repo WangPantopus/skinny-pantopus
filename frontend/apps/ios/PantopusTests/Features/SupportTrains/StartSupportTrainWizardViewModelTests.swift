@@ -211,7 +211,10 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
 
     func testLaunchCreatesTrainAddsSlotsPublishesAndEmitsOpenEvent() async {
         let vm = makeVM(routes: [
-            "/api/activities/support-trains": [.status(201, body: "{\"id\":\"train_demo\"}", delay: 0.3)],
+            // The route answers `{ support_train_id, activity_id, status }`.
+            "/api/activities/support-trains": [
+                .status(201, body: "{\"support_train_id\":\"train_demo\",\"status\":\"draft\"}", delay: 0.3)
+            ],
             "/api/activities/support-trains/train_demo/generate-slots": [.status(200, body: "{\"slots\":[],\"count\":7}")],
             "/api/activities/support-trains/train_demo/publish": [.status(200, body: "{}")],
             "/api/mailbox/compose/recipients": [.status(200, body: "{\"recipients\":[]}")]
