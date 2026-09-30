@@ -59,7 +59,7 @@
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
-   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865). The mail-compose recipients leak is Stream 4's (in progress there).
+   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; with the coordinator). The mail-compose recipients leak is Stream 4's.
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
      - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
@@ -209,6 +209,16 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T07:05Z — #865 merged; follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) is with the coordinator.**
+  - **#865:** merged in batch 144 ([#866](https://github.com/WangPantopus/skinny-pantopus/pull/866), tip `ac927ea82`, 07:00:24Z; master `81c414506`). Stream 1 verified the seal (23 files) with an exact-hunk batch proof; the post suites pass 77/77.
+  - **Follow-up:** the coordinator asked to blur non-member coordinates. The repo's `docs/location-privacy-matrix.md` is stricter: no Home coordinates to non-household viewers, and "Home pins are only visible to household members", naming `/api/posts/map`. The coordinator agreed to members only.
+  - **#869:** head `1c6e9747dfae72c083515b8fcad56d73d5b4860b`, base `81c414506`, merge-tree clean against `759a67943`. Bundle `20260930-stream3-home-d06-map-members-only-r1`, 21 files, MANIFEST `141e5fbd2ddad486957a168b61e56d0970b6fd22cff5023816da213bb4b2a62e`.
+    - The layer selects only Homes the viewer owns or actively occupies.
+    - Harness (real handler, real DB, EWKB decoding EMULATED): on master, B got the discoverable fixture at exact coordinates; on the head, B gets none, and the owner still gets both own Homes.
+    - Real API: 200 with no Home before and after, and no query error.
+    - Cleanup exact (4 rows, 351/353). Lease released at 07:04:01Z; the runtime is back on master `81c414506` (PID 38786).
+  - **Next:** D07, the Lockdown race and the failed audit write. Its draft is a local WIP only and hasn't been reproduced.
 
 - **2026-09-30T06:58Z — D06 Explore map homes layer: [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) is with the coordinator** (coordinator-assigned, done ahead of D07). Head `5ef4c2ac9d4410bff3861813ce5e901ee5a5e6a3`, base `68f2daa24`; `git merge-tree` clean against master `eff3f69f5`. Sealed bundle `20260930-stream3-home-d06-map-homes-privacy-r1`, 23 files, MANIFEST `3835ac272eaa4d5c97cccaee0ec24af57a43dcc6fc57a69797e38e1e2c289d95`.
   - **Found by a read-only D06 code inventory:** `GET /api/posts/map?layers=homes`, which the iOS and Android Explore maps request, selects every Home with a location and returns its street and exact coordinates. It checks no visibility, mask, status or membership.
