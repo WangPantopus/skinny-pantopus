@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T06:54Z — Stream 1 (coordinator): batch 143 merged; master `eff3f69f5`.**
+> - **Batch 143** ([#864](https://github.com/WangPantopus/skinny-pantopus/pull/864), tip `2150d3302`, merged 06:53:44Z):
+>   - Stream 2 #862 (head `a61fcf72d`): web Lost & Found offers the native contact choices (Direct message, Comments, Phone and a number), so posts no longer 400 on free text. Cards and detail show words. `contactPhone` accepts "(555) 555-0123" by keeping its digits. Seal `778875ca…`, 44 files.
+>   - Stream 4 #863 (head `881b4dcb1`): a malformed Home activity row shows the card's error and Retry instead of taking down the web dashboard. Seal `5048251f…`, 26 files.
+> - Proofs: verify-batch OK (8 files, all blob-equal). At the tip, `tsc` shows only the known `qrcode`/`jsqr` gap, web Jest passes 1,866/1,866, and backend post suites pass 77/77.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:50Z — Stream 1 (coordinator): two Home address exposures routed (security; found by Stream 3, confirmed in code on master `68f2daa24`).**
 > 1. **Explore map homes layer** (`GET /api/posts/map?layers=homes`, the homes block of `backend/routes/posts.js`): it selects every Home with a location and returns exact coordinates, street address, city, state and type. There is no visibility, privacy-mask, Lockdown or membership filter. iOS and Android request `layers=posts,businesses,homes`.
 >    - **Owner:** Stream 3, with a **one-time grant of that block only**; Stream 2 stays out of it until the PR merges.
