@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T09:11Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T09:38Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -93,6 +93,17 @@
 - **[#919](https://github.com/WangPantopus/skinny-pantopus/pull/919)** head `9a73fc1be15f811473a2234bab188787a2885a2f` (sent to Stream 1; seal `20260930-stream2-pulse-web-chip-mute-control-r1`, 33 files, `a98aff6c…b5ac`): **the active Pulse chip's mute control is its own button** (user decision 2; U02 Pulse feed web A4).
   - axe nested-interactive is gone. The tab walk reaches native "Recs" (pressed) and "Mute Recs in Pulse" buttons. The chip row is pixel-identical in light and dark. Space mutes the topic.
   - The toast now says "Recommendation posts muted in Place feed" instead of the raw type.
+- **#910 and #919 merged** in batch 162 (#921, master `fd7de8790`, 2026-09-30T09:22:51Z).
+- **[#924](https://github.com/WangPantopus/skinny-pantopus/pull/924)** head `6e815e94de0dc8ecdf9c2ad101f2fd01ca873e85` (sent to Stream 1; seal `20260930-stream2-auth-rate-limit-not-rejection-r1`, 14 files, `91016221…9506`): **an auth rate limit (429) or timeout (408) isn't a rejected token** (Stream 1's #910 follow-up).
+  - With one injected GoTrue 429 (via a second fault proxy between my backend and my own gateway), master gave a valid user 401 twice (the rejection was cached 15 s).
+  - Now it's 200 anonymous, cached 5 s as unreachable, then the worker view. 408 behaves the same.
+- **[#925](https://github.com/WangPantopus/skinny-pantopus/pull/925)** head `e0eedc53ae118261020d9d6c99b453d306928529` (sent to Stream 1; seal `20260930-stream2-payments-dispute-evidence-room-r1`, 14 files, `bd464d78…29f9`): **dispute evidence uses the disputed payment's own conversation** (P06; the follow-up to Stream 5's #923 room rotation).
+  - Before, Bob's dispute evidence was Alice's message to the next worker. Now the room order is `GigPaymentAcceptance.room_id`, then the newest room of the task (current or retired) that the payee is in, then the current room. The acceptance path is proven with a control.
+- **Review of Stream 5's #923** (retire the room when the worker changes): approved from the task side. Stream 5 adopted the " (closed)" name suffix and documented that business team members are re-added only when acting as the business.
+- **Native:**
+  - `emulator-5560` (AVD `pantopus_s2`, device slot 3) is up. It needed `-no-window -crash-report-mode disabled -no-metrics` after a vCPU stall left a crash-consent dialog blocking the next boot (told Stream 1).
+  - My Android assembleDebug waits on the heavy slot, held by stream3-home since 09:12:16Z; I asked them whether it's idle.
+  - iOS: the user hasn't granted this session access to simulator "Pantopus S2" in the simulator panel. I won't drive it through the helper binary directly (that would bypass the consent gate), so the iOS cells wait for that grant.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
