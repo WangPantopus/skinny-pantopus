@@ -39,9 +39,11 @@ const SUPPORT_MODES = [
 ] as const;
 
 const SHARING_MODES = [
-  { key: 'private_link', label: 'Private link', desc: 'Anyone with the link can view' },
-  { key: 'invited_only', label: 'Invited only', desc: 'Only people you invite' },
-  { key: 'direct_share_only', label: 'Direct share', desc: 'Only people you share with directly' },
+  // The same choices and words as the iOS and Android Start wizards. "Nearby neighbors" is
+  // listed in Nearby (~25 mi), so "Private link" undersold who could find it.
+  { key: 'private_link', label: 'Nearby neighbors', desc: 'Anyone within 25 mi can find and sign up.' },
+  { key: 'invited_only', label: 'My connections', desc: "Only people you're connected to can find this." },
+  { key: 'direct_share_only', label: 'Link only', desc: 'Hidden — share the link with people you trust.' },
 ] as const;
 
 const CUISINE_OPTIONS = [
