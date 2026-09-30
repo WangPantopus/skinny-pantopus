@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,8 +113,9 @@ fun PulsePostDetailScreen(
     val replyTarget by viewModel.replyTarget.collectAsStateWithLifecycle()
     val nearbyProviders by viewModel.nearbyProviders.collectAsStateWithLifecycle()
 
-    var showsReportReasons by remember { mutableStateOf(false) }
-    var showsDeleteConfirm by remember { mutableStateOf(false) }
+    // Saveable, so an open Report or Delete dialog survives a theme, font-size or rotation change.
+    var showsReportReasons by rememberSaveable { mutableStateOf(false) }
+    var showsDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var commentPendingDelete by remember { mutableStateOf<PostCommentRow?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
