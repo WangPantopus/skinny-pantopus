@@ -210,8 +210,12 @@ const verifyToken = async (req, res, next) => {
       latency_ms: Date.now() - startMs,
     });
 
+    // Per-person write limits run here, once the user is verified: the app-level limiters
+    // before authentication only see the client's IP. app.js supplies them.
+    const userWriteLimits = req.app?.locals?.userWriteLimits;
     // CSRF check runs here — after _authMethod is set, before route handler.
-    csrfProtection(req, res, next);
+    const checkCsrf = () => csrfProtection(req, res, next);
+    return userWriteLimits ? userWriteLimits(req, res, checkCsrf) : checkCsrf();
   } catch (err) {
     logger.error('Token verification error:', err);
     res.status(500).json({ error: 'Token verification failed' });

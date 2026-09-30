@@ -1,76 +1,124 @@
+const net = require('node:net');
 const rateLimit = require('express-rate-limit');
 
-/**
- * Global rate limiter for all write (mutating) endpoints.
- *
- * - POST / PUT / PATCH / DELETE requests only
- * - 60 requests per minute per authenticated user (keyed by user ID)
- * - 30 requests per minute per IP for unauthenticated requests
- *
- * Per-route limiters (auth, uploads, connection requests) are stricter
- * and take precedence — express-rate-limit uses the most restrictive
- * applicable limiter when multiple apply.
- */
-const globalWriteLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  limit: (req) => (req.user ? 60 : 30),
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-  message: { error: 'Too many requests. Please try again shortly.' },
-});
+const isRead = (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
 
 /**
- * Stricter limiter for sensitive financial/payment endpoints.
- * 10 write requests per minute per user.
- * Read-only requests are skipped.
+ * The client's rate-limit key from its IP. An IPv6 client usually holds a whole /64, so
+ * single addresses would let one client rotate past any limit: IPv6 is keyed by its /64.
+ * IPv4 (including IPv4-mapped IPv6) stays per address.
  */
-const financialWriteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 10,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-  message: { error: 'Too many payment requests. Please try again shortly.' },
-});
+function clientIpKey(req) {
+  const ip = String(req.ip || '').split('%')[0].toLowerCase();
+  if (!net.isIPv6(ip)) return ip;
+  if (ip.startsWith('::ffff:') && net.isIPv4(ip.slice(7))) return ip.slice(7);
+  const [head, tail] = ip.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = tail === undefined ? left : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((g) => g.padStart(4, '0')).join(':')}::/64`;
+}
 
 /**
- * Limiter for content creation (posts, comments, listings, reviews).
- * 20 requests per minute per user. GET/HEAD/OPTIONS (reads) are not counted.
+ * Whether the request carries sign-in credentials (the app's bearer token, or the web's
+ * access or refresh cookie, so a session refresh counts as signed in). Checked before
+ * authentication, so it's only a claim: it picks a larger per-IP budget, and the verified
+ * user is then held to their own budget (userWriteLimits).
  */
-const contentCreationLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 20,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-  message: { error: 'Too many submissions. Please slow down.' },
-});
+const hasCredential = (req) => String(req.headers?.authorization || '').startsWith('Bearer ')
+  || Boolean(req.cookies?.pantopus_access || req.cookies?.pantopus_refresh);
 
 /**
- * Limiter for home creation.
- * 5 homes per hour per user — prevents spam home creation.
+ * App-level write limiters run before authentication, so they only see the client's IP. Many
+ * people can share one IP (a household, an office or campus network, a carrier's NAT), so
+ * each limiter has two parts, as large APIs do (per-user quotas once authenticated, per-IP
+ * caps before that):
+ * - here, a per-IP cap (IPv6 by /64): the product's limit for anonymous requests, and ten
+ *   times it for requests that carry credentials, which fail at verifyToken if forged;
+ * - `userWriteLimits`, run by verifyToken once the user is verified: the product's limit per
+ *   person.
+ * Reads (GET/HEAD/OPTIONS) are never counted. Counters are per process (MemoryStore).
  */
-const homeCreationLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 5,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  // Count ONLY the actual home-creation request. This limiter is mounted on
-  // ALL of /api/homes, and the old blocklist-style skip ('/check-address',
-  // then '/:homeId/scheduling/**' when Calendarly hit it) meant every NEW
-  // home-scoped POST silently burned the 5-per-hour home-CREATION budget —
-  // the Wave 1 claim/fridge-card issue AND revoke endpoints 429'd behind
-  // their own dedicated limiters, locking a manager out of revoking a
-  // leaked card. Home creation is exactly `POST /api/homes` (path '/' at
-  // this mount); everything deeper carries its own limiter.
-  skip: (req) => req.method !== 'POST' || (req.path !== '/' && req.path !== ''),
-  message: { error: 'Too many home creation requests. Please try again later.' },
-});
+function perIpWriteCap({ name, limit, windowMs, message, skip = isRead }) {
+  return rateLimit({
+    windowMs,
+    limit: (req) => (hasCredential(req) ? limit * 10 : limit),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `${name}:${hasCredential(req) ? 'signed-in' : 'anonymous'}:${clientIpKey(req)}`,
+    skip,
+    message: { error: message },
+  });
+}
+
+function perUserWriteLimit({ name, limit, windowMs, message }) {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `${name}:${req.user.id}`,
+    skip: (req) => isRead(req) || !req.user?.id,
+    message: { error: message },
+  });
+}
+
+const GLOBAL_WRITES = { name: 'writes', limit: 60, windowMs: 60 * 1000, message: 'Too many requests. Please try again shortly.' };
+const PAYMENT_WRITES = { name: 'payments', limit: 10, windowMs: 60 * 1000, message: 'Too many payment requests. Please try again shortly.' };
+const CONTENT_WRITES = { name: 'content', limit: 20, windowMs: 60 * 1000, message: 'Too many submissions. Please slow down.' };
+const HOME_CREATION = { name: 'home-creation', limit: 5, windowMs: 60 * 60 * 1000, message: 'Too many home creation requests. Please try again later.' };
+
+/**
+ * Global limiter for all write (POST/PUT/PATCH/DELETE) requests: per IP here (30 a minute
+ * anonymous, 300 signed in), and 60 a minute per signed-in person in userWriteLimits.
+ * Per-route limiters are stricter and still apply on their own routes.
+ */
+const globalWriteLimiter = perIpWriteCap({ ...GLOBAL_WRITES, limit: 30 });
+
+/**
+ * Stricter limiter for sensitive financial/payment endpoints: 10 writes a minute per person
+ * (userWriteLimits) and per anonymous IP.
+ */
+const financialWriteLimiter = perIpWriteCap(PAYMENT_WRITES);
+
+/**
+ * Limiter for content creation (posts, comments, listings, reviews): 20 a minute per person
+ * (userWriteLimits) and per anonymous IP.
+ */
+const contentCreationLimiter = perIpWriteCap(CONTENT_WRITES);
+
+// Count ONLY the actual home-creation request. This limiter is mounted on
+// ALL of /api/homes, and the old blocklist-style skip ('/check-address',
+// then '/:homeId/scheduling/**' when Calendarly hit it) meant every NEW
+// home-scoped POST silently burned the 5-per-hour home-CREATION budget —
+// the Wave 1 claim/fridge-card issue AND revoke endpoints 429'd behind
+// their own dedicated limiters, locking a manager out of revoking a
+// leaked card. Home creation is exactly `POST /api/homes` (path '/' at
+// this mount); everything deeper carries its own limiter.
+const isHomeCreation = (req, path = req.path) => req.method === 'POST' && (path === '/' || path === '');
+
+/** Limiter for home creation: 5 homes an hour per person (userWriteLimits) and per anonymous IP. */
+const homeCreationLimiter = perIpWriteCap({ ...HOME_CREATION, skip: (req) => !isHomeCreation(req) });
+
+/**
+ * The per-person half of the app-level write limiters, keyed by the verified user id.
+ * verifyToken runs it (app.js hands it over as `app.locals.userWriteLimits`) once the
+ * user is verified; `done` continues the request.
+ */
+const USER_WRITE_LIMITS = [
+  { applies: () => true, limiter: perUserWriteLimit(GLOBAL_WRITES) },
+  { applies: (path) => /^\/api\/(payments|wallet)(\/|$)/.test(path), limiter: perUserWriteLimit(PAYMENT_WRITES) },
+  { applies: (path) => /^\/api\/(posts|listings|reviews)(\/|$)/.test(path), limiter: perUserWriteLimit(CONTENT_WRITES) },
+  { applies: (path, req) => isHomeCreation(req, path.replace(/^\/api\/homes/, '')), limiter: perUserWriteLimit(HOME_CREATION) },
+];
+
+function userWriteLimits(req, res, done) {
+  if (isRead(req) || !req.user?.id) return done();
+  const path = String(req.originalUrl || '').split('?')[0];
+  const limits = USER_WRITE_LIMITS.filter((entry) => entry.applies(path, req));
+  const run = (i) => (i >= limits.length ? done() : limits[i].limiter(req, res, () => run(i + 1)));
+  return run(0);
+}
 
 /**
  * Limiter for home-scoped endpoints that send email or spend a vendor
@@ -92,7 +140,7 @@ const homeOutboundLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   skip: (req) => req.method !== 'POST',
   message: { error: 'Too many requests. Please try again later.' },
 });
@@ -117,7 +165,7 @@ const ownershipClaimLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many ownership claim requests. Please try again later.' },
 });
 
@@ -153,7 +201,7 @@ const postcardLimiter = rateLimit({
   limit: 3,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many verification code requests. Please try again later.' },
 });
 
@@ -166,7 +214,7 @@ const verificationAttemptLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many verification attempts. Please try again later.' },
 });
 
@@ -179,7 +227,7 @@ const authEndpointLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many requests from this IP. Please try again shortly.' },
 });
 
@@ -210,7 +258,7 @@ const geocodeLimiter = rateLimit({
   limit: (req) => (req.user?.id ? 300 : 60),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many location lookups. Please try again later.' },
 });
 
@@ -219,7 +267,7 @@ const addressValidationLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many address validation requests. Please try again later.' },
 });
 
@@ -232,7 +280,7 @@ const addressClaimLimiter = rateLimit({
   limit: 3,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many address claims. Please try again tomorrow.' },
 });
 
@@ -245,7 +293,7 @@ const landlordLeaseLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many lease management requests. Please try again later.' },
 });
 
@@ -258,7 +306,7 @@ const aiChatLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'AI_RATE_LIMITED', message: 'Too many AI requests. Please try again later.' },
 });
 
@@ -271,7 +319,7 @@ const aiDraftLimiter = rateLimit({
   limit: 30,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'AI_RATE_LIMITED', message: 'Too many AI requests. Please try again later.' },
 });
 
@@ -285,7 +333,7 @@ const previewLimiter = rateLimit({
   limit: 60,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many preview requests. Please try again shortly.' },
 });
 
@@ -298,7 +346,7 @@ const supportTrainWriteLimiter = rateLimit({
   limit: 30,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
   message: { error: 'Too many support train requests. Please try again shortly.' },
 });
@@ -312,7 +360,7 @@ const supportTrainDraftLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'AI_RATE_LIMITED', message: 'Too many draft requests. Please try again shortly.' },
 });
 
@@ -326,7 +374,7 @@ const personaFollowLimiter = rateLimit({
   limit: 15,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many Beacon follow requests. Please try again shortly.' },
 });
 
@@ -340,7 +388,7 @@ const broadcastPublishLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many broadcast messages. Please try again shortly.' },
 });
 
@@ -354,7 +402,7 @@ const residencyLetterIssueLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many letters issued today. Please try again tomorrow.' },
 });
 
@@ -369,7 +417,7 @@ const residencyClaimIssueLimiter = rateLimit({
   limit: 30,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many claims issued today. Please try again tomorrow.' },
 });
 
@@ -384,7 +432,7 @@ const fridgeCardIssueLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   message: { error: 'Too many cards issued today. Please try again tomorrow.' },
 });
 
@@ -398,12 +446,14 @@ const bookingWriteLimiter = rateLimit({
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
   message: { error: 'Too many booking requests. Please try again shortly.' },
 });
 
 module.exports = {
+  clientIpKey,
+  userWriteLimits,
   geocodeLimiter,
   globalWriteLimiter,
   financialWriteLimiter,
