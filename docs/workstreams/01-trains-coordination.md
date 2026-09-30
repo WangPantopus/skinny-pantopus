@@ -9,6 +9,48 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T19:32Z (Stream 1).**
+  - **Merged** (every seal verified against its PR head; build-batch/verify-batch RESULT OK):
+    - **Batch 208** (18:35:23Z, PR #1057): #1036 (Stream 3, Home names at large text) and my #1052 (web hue contrast).
+    - **Batch 209** (18:37:55Z, PR #1059): #1040 (Stream 4, native pickup editors send the version they opened).
+    - **Batch 210** (18:52:46Z, PR #1063): #1060 (Stream 5, an unpublished business stays hidden from outsiders).
+    - **Batch 211** (19:18:22Z, PR #1069):
+      - #1051 (Stream 3): the landlord Notices/Settings tabs are hidden (seal `6df5bff9`).
+      - #1055 (Stream 5): endorse works and only a verified resident can endorse (`43d8bc14`).
+      - #1038 (Stream 2): Today truth and share allowlist (r2 `88bd4642`).
+      - #1047 (Stream 2): posts follow-ups (`a67de577`).
+      - #1038 and #1047 each added only a test fix since the candidate Stream 1 verified on iOS.
+    - **Batch 212** (19:21:59Z, PR #1071):
+      - #1062 (Stream 4): Recent activity reads sentences (`6162da25`, `383cbde5`).
+      - #1066 (Stream 5): the 14-day endorse rule counts from `verified_at`. Its seal `3498c08b` is at `f1afa2cff`; the merged head `42a46ab58` is a patch-identical rebase (range-diff `=`). Re-sealed at the merged head: `77e1fc82`.
+      - My #1056: iOS system dialogs readable in dark mode (`a539f271`).
+    - **Batch 213** (19:29:10Z, PR #1072): #1068 (Stream 5): web chat initials on the 700 steps; dark Assistant row (`d752d68d`).
+    - **Batch 214** (19:30:23Z, PR #1074): #1073 (Stream 2): Recommendation text #92400E (`a0260faa`).
+    - Master is `20e7b4768`. No migrations since `20260930184000`.
+  - **Stream 2's U02 iOS pass is done and sealed:** `20260930-stream1-ios-u02-stream2-r1`, 295 files, `3df1ecfb`. It covers 17 screens × light/dark/AX5, with bindings in `source/SOURCE.txt`.
+    - Pass: the Pulse feed, post detail, composer and Hub; the Report dialog after #1056.
+    - For Stream 2 (taking F1–F3, F7, F8):
+      - F1: the Place preview Back is unlabelled, so VoiceOver can't reach it.
+      - F2: the Start clear ✕, the same.
+      - F3: three fields are named only by their placeholder.
+      - F7: refund "Check status" gives no feedback.
+      - F8: the Reason picker truncates at AX5.
+    - Stream 2 decided F6: the tip sheet gets an opaque surface (the glass put "Not now" at 2.32:1 in dark).
+    - F4 and F5 are in my #1061.
+    - **Boundary:** Payments & payouts and Wallet sit behind the OS device-passcode prompt, which I don't type into.
+    - The fixtures were removed: 350/353 tables equal the baseline, plus auth bookkeeping.
+  - **Open, Stream 1: #1061** (iOS primary text readable in dark; head `7e01e77f2`, master merged in, one Colors.swift conflict kept both tokens).
+    - Commit `6298d81dd`: five white-initial circles move from primary500 (2.77:1) to `primarySolid` (5.93:1).
+    - Commit `4a87a81f7`: 11 multi-line ternary text colours the first pass missed, including the shared ListOfRows tab strip. On the dark card `primary600` is 4.22:1; `primaryInk` is 8.07:1.
+    - The verification build is queued in the heavy slot behind Streams 3 and 4.
+  - **Held for seals:** #1058, #1064 with #1065, #1067 and #1070 (Stream 3).
+  - **Decision recorded (S3-22, Stream 5):** hide the crew page's Directions for home-based businesses; their public point is fuzzed.
+  - **Launch-scope note for the user (Stream 4):** four launch-cut #8 mail screens show invented data if reachable in the release:
+    - My Mail Day's sample fallback;
+    - the Stamps sample wallet;
+    - certified mail's "Postmark verified" with no data;
+    - the mailbox map's fixed "You are here".
+    - Stream 4's fix branches are kept local.
 - **Update 2026-09-30T18:35Z (Stream 1).**
   - **Merged:**
     - **Batch 204** (17:57:47Z, PR #1048): #1043, Stream 5. Business Profiles names each business, not the seat.
