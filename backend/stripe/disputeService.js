@@ -19,6 +19,55 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
 /**
+ * The chat room a payment's conversation happened in. A task's room is retired when its
+ * worker changes, so the task's current room can belong to a later worker: prefer the room
+ * recorded when this payment was accepted, then the newest room of the task that its payee
+ * is in (current or retired), then the task's current room.
+ * Returns { data: { id } | null, error }.
+ */
+async function findPaymentChatRoom(payment) {
+  const { data: acceptance, error: acceptanceError } = await supabaseAdmin
+    .from('GigPaymentAcceptance')
+    .select('room_id')
+    .eq('payment_id', payment.id)
+    .not('room_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (acceptanceError) return { data: null, error: acceptanceError };
+  if (acceptance?.room_id) return { data: { id: acceptance.room_id }, error: null };
+
+  if (payment.payee_id) {
+    const { data: rooms, error: roomsError } = await supabaseAdmin
+      .from('ChatRoom')
+      .select('id')
+      .eq('gig_id', payment.gig_id)
+      .in('type', ['gig', 'group'])
+      .order('created_at', { ascending: false });
+    if (roomsError) return { data: null, error: roomsError };
+    const roomIds = (rooms || []).map((r) => r.id);
+    if (roomIds.length > 0) {
+      const { data: memberships, error: membershipError } = await supabaseAdmin
+        .from('ChatParticipant')
+        .select('room_id')
+        .eq('user_id', payment.payee_id)
+        .in('room_id', roomIds);
+      if (membershipError) return { data: null, error: membershipError };
+      const payeeRooms = new Set((memberships || []).map((m) => m.room_id));
+      const newest = roomIds.find((id) => payeeRooms.has(id));
+      if (newest) return { data: { id: newest }, error: null };
+    }
+  }
+
+  return supabaseAdmin
+    .from('ChatRoom')
+    .select('id')
+    .eq('gig_id', payment.gig_id)
+    .eq('type', 'gig')
+    .maybeSingle();
+}
+
+/**
  * Gather all evidence for a disputed payment.
  *
  * @param {string} paymentId - Payment UUID
@@ -91,15 +140,8 @@ async function gatherEvidence(paymentId) {
           .maybeSingle()
       : { data: null },
 
-    // Chat messages (last 50 between the parties in the gig chat)
-    gigId
-      ? supabaseAdmin
-          .from('ChatRoom')
-          .select('id')
-          .eq('gig_id', gigId)
-          .eq('type', 'gig')
-          .maybeSingle()
-      : { data: null },
+    // Chat messages (last 50 between the parties in this payment's conversation)
+    gigId ? findPaymentChatRoom(payment) : { data: null },
   ]);
 
   for (const [record, result] of Object.entries({
