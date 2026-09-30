@@ -121,7 +121,7 @@ export default function CreatorInboxPage() {
                   {t.unreadCount > 0 ? (
                     <span
                       aria-label={`${t.unreadCount} unread`}
-                      className="rounded-full bg-teal-600 px-2 py-0.5 text-xs font-semibold text-white"
+                      className="rounded-full bg-teal-700 px-2 py-0.5 text-xs font-semibold text-white"
                     >
                       {t.unreadCount}
                     </span>

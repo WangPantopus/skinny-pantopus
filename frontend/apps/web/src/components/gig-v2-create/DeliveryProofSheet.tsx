@@ -134,7 +134,7 @@ export default function DeliveryProofSheet({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full py-4 bg-green-600 text-white rounded-xl font-semibold text-lg hover:bg-green-700 disabled:opacity-60 transition"
+            className="w-full py-4 bg-green-700 text-white rounded-xl font-semibold text-lg hover:bg-green-800 disabled:opacity-60 transition"
           >
             {submitting ? (
               <span className="flex items-center justify-center gap-2">

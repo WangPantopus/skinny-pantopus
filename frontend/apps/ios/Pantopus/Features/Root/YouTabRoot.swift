@@ -1699,8 +1699,10 @@ public struct YouTabRoot: View {
                     onStartTrain: {
                         Task { @MainActor in path.append(.startSupportTrain) }
                     },
+                    // The train's detail, as from Hub: a helper's or a nearby train isn't the
+                    // organizer's to review, and organizers reach Review signups from there.
                     onOpenTrain: { trainId in
-                        Task { @MainActor in path.append(.reviewSignups(supportTrainId: trainId)) }
+                        Task { @MainActor in path.append(.supportTrainDetail(supportTrainId: trainId)) }
                     },
                     onSearch: {
                         Task { @MainActor in path.append(.searchSupportTrains) }
@@ -1720,7 +1722,7 @@ public struct YouTabRoot: View {
             SupportTrainsSearchView(
                 viewModel: SupportTrainsSearchViewModel(
                     onOpenTrain: { trainId in
-                        Task { @MainActor in path.append(.reviewSignups(supportTrainId: trainId)) }
+                        Task { @MainActor in path.append(.supportTrainDetail(supportTrainId: trainId)) }
                     },
                     onCancel: { Task { @MainActor in pop() } }
                 )
@@ -1735,7 +1737,7 @@ public struct YouTabRoot: View {
                 onOpenTrain: { trainId in
                     Task { @MainActor in
                         if !path.isEmpty { path.removeLast() }
-                        path.append(.reviewSignups(supportTrainId: trainId))
+                        path.append(.supportTrainDetail(supportTrainId: trainId))
                     }
                 }
             )

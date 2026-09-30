@@ -147,7 +147,7 @@ export default function BusinessChatListPage() {
                   className={`w-full text-left px-4 py-3 hover-bg-app transition-colors ${unread > 0 ? 'bg-violet-50/30' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-violet-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-violet-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                       {initials}
                     </div>
                     <div className="min-w-0 flex-1">

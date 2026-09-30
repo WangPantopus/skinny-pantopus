@@ -68,8 +68,24 @@ class SupportTrainsRepository
             radiusMeters: Double? = null,
             limit: Int = 40,
         ): NetworkResult<SupportTrainsNearbyResponse> =
-            safeApiCall {
-                api.nearby(latitude = latitude, longitude = longitude, radiusMeters = radiusMeters, limit = limit)
+            when (
+                val result =
+                    safeApiCall {
+                        api.nearby(latitude = latitude, longitude = longitude, radiusMeters = radiusMeters, limit = limit)
+                    }
+            ) {
+                // The Nearby RPC names each row's id `support_train_id`.
+                is NetworkResult.Success ->
+                    NetworkResult.Success(
+                        result.data.copy(
+                            supportTrains =
+                                result.data.supportTrains.mapNotNull { row ->
+                                    row.id.ifEmpty { row.supportTrainId.orEmpty() }.takeIf { it.isNotEmpty() }
+                                        ?.let { row.copy(id = it) }
+                                },
+                        ),
+                    )
+                is NetworkResult.Failure -> result
             }
 
         /**

@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlacePreviewStatus
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ class PlaceLaunchViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
+        authRepository: AuthRepository,
     ) : ViewModel() {
         private val _step = MutableStateFlow<LaunchStep>(LaunchStep.Hero)
         val step: StateFlow<LaunchStep> = _step.asStateFlow()
@@ -47,6 +49,32 @@ class PlaceLaunchViewModel
         val error: StateFlow<String?> = _error.asStateFlow()
         private var lookupJob: Job? = null
         private var autocompleteJob: Job? = null
+
+        init {
+            // This view model outlives the signed-in session (the funnel sits outside the nav graph), so
+            // once someone signs in, the funnel starts over: the preview they carried in is already kept
+            // for their account (PlacePendingStore), and after sign-out the next person on this device
+            // must not see that address or carry it into their own account.
+            viewModelScope.launch {
+                var wasSignedIn: Boolean? = null
+                authRepository.state.collect { state ->
+                    val signedIn = state is AuthRepository.State.SignedIn
+                    if (signedIn && wasSignedIn == false) startOver()
+                    wasSignedIn = signedIn
+                }
+            }
+        }
+
+        private fun startOver() {
+            lookupJob?.cancel()
+            autocompleteJob?.cancel()
+            selected = null
+            _query.value = ""
+            _suggestions.value = emptyList()
+            _error.value = null
+            _loadingPreview.value = false
+            _step.value = LaunchStep.Hero
+        }
 
         fun onQueryChange(value: String) {
             _query.value = value

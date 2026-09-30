@@ -454,7 +454,7 @@ export default function BusinessSettingsLegalPage() {
                         <button
                           onClick={() => handleReview(e.id, 'approved')}
                           disabled={reviewing}
-                          className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 disabled:opacity-50"
                         >
                           Approve
                         </button>

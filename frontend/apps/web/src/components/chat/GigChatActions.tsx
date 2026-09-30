@@ -14,7 +14,7 @@ export default function GigChatActions({ room, currentUserId }: GigChatActionsPr
   const isOwner = room?.gig_poster_id === currentUserId || room?.metadata?.gig_poster_id === currentUserId;
   return (
     <div className="px-3 py-2 bg-app-surface-sunken border-t border-app-border">
-      <Link href={`/app/gigs/${encodeURIComponent(gigId)}#gig-offers`} className="inline-block px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700">
+      <Link href={`/app/gigs/${encodeURIComponent(gigId)}#gig-offers`} className="inline-block px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800">
         {isOwner ? 'Review offers' : 'View gig and your offer'}
       </Link>
     </div>

@@ -255,7 +255,7 @@ export function AudienceComposer({
           onClick={handlePost}
           disabled={submitting || body.trim().length === 0}
           data-testid="audience-composer-submit"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-teal-400"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-teal-400"
         >
           <Send className="h-4 w-4" aria-hidden />
           {submitting ? 'Posting…' : 'Post update'}

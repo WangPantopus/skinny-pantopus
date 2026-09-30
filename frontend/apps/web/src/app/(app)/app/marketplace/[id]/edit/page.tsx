@@ -282,7 +282,7 @@ export default function EditListingPage() {
                   onClick={() => setIsFree(!isFree)}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition ${
                     isFree
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-green-700 text-white'
                       : 'bg-green-50 text-green-700 border border-green-200'
                   }`}
                 >

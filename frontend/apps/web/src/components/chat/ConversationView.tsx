@@ -341,7 +341,7 @@ export default function ConversationView({
               {avatarUrl ? (
                 <Image src={avatarUrl} alt={chatTitle} className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-surface-muted" width={40} height={40} sizes="40px" quality={75} />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                   {getInitials(chatTitle)}
                 </div>
               )}
@@ -484,7 +484,7 @@ export default function ConversationView({
                 {avatarUrl ? (
                   <Image src={avatarUrl} alt={chatTitle} className="w-12 h-12 rounded-full object-cover bg-surface-muted" width={48} height={48} sizes="48px" quality={75} />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold">
+                  <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
                     {getInitials(chatTitle)}
                   </div>
                 )}

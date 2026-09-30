@@ -73,6 +73,32 @@ module.exports = {
         'app-business-solid':  'var(--color-identity-business-solid)',
         'app-business-bg':     'var(--color-identity-business-bg)',
       },
+      // ── WCAG AA accents ─────────────────────────────────────────
+      // Fills that carry white text, and text on the app's surfaces, use the
+      // theme-aware variables in globals.css ("Accent utilities"): one step
+      // darker than the palette, with text flipping light in dark mode. Only
+      // these utilities change; borders, rings and tints keep the palette.
+      backgroundColor: {
+        primary: {
+          600: 'rgb(var(--accent-primary-fill) / <alpha-value>)',
+          700: 'rgb(var(--accent-primary-fill-hover) / <alpha-value>)',
+        },
+        emerald: {
+          600: 'rgb(var(--accent-emerald-fill) / <alpha-value>)',
+          700: 'rgb(var(--accent-emerald-fill-hover) / <alpha-value>)',
+        },
+      },
+      textColor: {
+        primary: {
+          600: 'rgb(var(--accent-primary-text) / <alpha-value>)',
+          700: 'rgb(var(--accent-primary-text-hover) / <alpha-value>)',
+          800: 'rgb(var(--accent-primary-text-strong) / <alpha-value>)',
+        },
+        emerald: {
+          600: 'rgb(var(--accent-emerald-text) / <alpha-value>)',
+          700: 'rgb(var(--accent-emerald-text-hover) / <alpha-value>)',
+        },
+      },
       borderRadius: theme.radii,
       keyframes: {
         fadeInUp: {

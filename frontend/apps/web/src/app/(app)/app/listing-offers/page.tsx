@@ -169,7 +169,7 @@ function ListingOffersContent() {
 
               {isPending && !isActioning && counteringId !== offer.id && (
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleAccept(offer)} className="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition">Accept</button>
+                  <button onClick={() => handleAccept(offer)} className="flex-1 py-2 bg-green-700 text-white rounded-lg text-sm font-semibold hover:bg-green-800 transition">Accept</button>
                   <button onClick={() => { setCounteringId(offer.id); setCounterAmount(offer.amount != null ? String(offer.amount) : ''); }}
                     className="flex-1 py-2 border border-indigo-500 text-indigo-600 rounded-lg text-sm font-semibold hover:bg-indigo-50 transition">Counter</button>
                   <button onClick={() => handleDecline(offer)} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-50 transition">Decline</button>

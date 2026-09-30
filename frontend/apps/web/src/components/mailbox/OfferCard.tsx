@@ -93,7 +93,7 @@ export default function OfferCard({ item, onOpen, isOpening }: OfferCardProps) {
             <button
               type="button"
               onClick={onOpen}
-              className="mt-3 w-full py-2 text-sm font-semibold rounded-md transition-colors bg-primary-500 hover:bg-primary-600 text-white"
+              className="mt-3 w-full py-2 text-sm font-semibold rounded-md transition-colors bg-primary-600 hover:bg-primary-700 text-white"
             >
               Engage Offer
             </button>
@@ -129,7 +129,7 @@ export default function OfferCard({ item, onOpen, isOpening }: OfferCardProps) {
           <button
             type="button"
             onClick={onOpen}
-            className="w-full py-2.5 text-sm font-semibold rounded-md transition-colors bg-amber-500 hover:bg-amber-600 text-white"
+            className="w-full py-2.5 text-sm font-semibold rounded-md transition-colors bg-amber-700 hover:bg-amber-800 text-white"
           >
             Open to Earn +${item.payout_amount.toFixed(2)}
           </button>

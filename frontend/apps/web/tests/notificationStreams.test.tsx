@@ -101,7 +101,7 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
     expect(button).toHaveAttribute('data-mode', 'audience');
     const badge = screen.getByTestId('notification-badge-audience');
     expect(badge).toHaveTextContent('3');
-    expect(badge.className).toMatch(/bg-teal-500/);
+    expect(badge.className).toMatch(/bg-teal-700/);
   });
 
   test('mode=all (legacy) shows the combined count', () => {

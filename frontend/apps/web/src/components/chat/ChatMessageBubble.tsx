@@ -243,7 +243,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
-                        isMine ? 'bg-primary-500 text-blue-100 hover:bg-primary-400' : 'bg-surface-muted text-app-text-strong hover-bg-app'
+                        isMine ? 'bg-primary-600 text-blue-100 hover:bg-primary-700' : 'bg-surface-muted text-app-text-strong hover-bg-app'
                       } transition-colors`}
                     >
                       <span>📄</span>

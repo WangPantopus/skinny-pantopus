@@ -186,7 +186,10 @@ final class SupportTrainsViewModelTests: XCTestCase {
             XCTFail("Expected .empty on Nearby without location, got \(vm.state)")
             return
         }
-        XCTAssertEqual(content.headline, "No trains nearby right now")
+        // Without a location there was nothing to search, so it asks for one
+        // rather than claiming there are no trains.
+        XCTAssertEqual(content.headline, "Turn on location to see trains nearby")
+        XCTAssertEqual(content.ctaTitle, "Use my location")
     }
 
     // MARK: - Row mapping

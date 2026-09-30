@@ -163,13 +163,20 @@ class HomeSettingsViewModel
 
         // MARK: - Inline rename
 
+        /**
+         * The Home's own name ("" when it has none). The identity card shows the
+         * address in that case, but the editor starts from, and compares with,
+         * the real name, so an untouched save never stores the address as a name.
+         */
+        private var currentName = ""
+
         /** Swap the identity card's name for the field. */
         fun beginRenaming() {
             _rename.update { current ->
                 if (!current.canEdit || current.isSaving) {
                     current
                 } else {
-                    current.copy(isRenaming = true, draft = _identity.value.homeName, error = null)
+                    current.copy(isRenaming = true, draft = currentName, error = null)
                 }
             }
         }
@@ -182,20 +189,22 @@ class HomeSettingsViewModel
         /** Discard the draft — RN's close button (`settings/index.tsx:103`). */
         fun cancelRenaming() {
             _rename.update {
-                it.copy(isRenaming = false, draft = _identity.value.homeName, error = null)
+                it.copy(isRenaming = false, draft = currentName, error = null)
             }
         }
 
         /**
          * `PATCH /api/homes/:id` with the trimmed draft, then re-read the
-         * home so every derived caption follows the new name.
+         * home so every derived caption follows the new name. An unchanged
+         * draft saves nothing; an empty one clears the name (the server stores
+         * null and the Home shows its address), as the web Settings tab does.
          */
         fun saveRenaming() {
             val current = _rename.value
             if (!current.canEdit || current.isSaving) return
             val trimmed = current.draft.trim()
-            if (trimmed.isEmpty()) {
-                _rename.update { it.copy(error = "Enter a name for this home.") }
+            if (trimmed == currentName) {
+                _rename.update { it.copy(isRenaming = false, error = null) }
                 return
             }
             if (trimmed.length > HomeRenameState.NAME_MAX_LENGTH) {
@@ -254,6 +263,7 @@ class HomeSettingsViewModel
             val isPending = detail.isPendingOwner || detail.pendingClaimId != null
             frame = if (isPending) HomeSettingsSampleData.Frame.Pending else HomeSettingsSampleData.Frame.Populated
 
+            currentName = detail.name?.trim().orEmpty()
             val homeName =
                 detail.name?.takeIf { it.isNotBlank() }
                     ?: detail.address?.takeIf { it.isNotBlank() }
@@ -286,7 +296,7 @@ class HomeSettingsViewModel
             _rename.update { current ->
                 current.copy(
                     canEdit = canEdit(detail, access),
-                    draft = if (current.isRenaming) current.draft else homeName,
+                    draft = if (current.isRenaming) current.draft else currentName,
                 )
             }
         }

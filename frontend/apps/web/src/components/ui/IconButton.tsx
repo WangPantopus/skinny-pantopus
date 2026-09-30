@@ -18,7 +18,7 @@ export default function IconButton({ icon, label, badge, className = '', ...rest
     >
       {icon}
       {badge != null && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full bg-red-500 text-white flex items-center justify-center">
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full bg-red-600 text-white flex items-center justify-center">
           {badge > 99 ? '99+' : badge}
         </span>
       )}

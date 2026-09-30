@@ -149,7 +149,7 @@ export function PersonaDmThreadView({ personaId, threadId, onMessageSent }: Prop
                   <div
                     className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
                       fromViewer
-                        ? 'bg-teal-600 text-white'
+                        ? 'bg-teal-700 text-white'
                         : 'bg-app/30 text-app'
                     }`}
                   >
@@ -180,7 +180,7 @@ export function PersonaDmThreadView({ personaId, threadId, onMessageSent }: Prop
         <button
           type="submit"
           disabled={sending || body.trim().length === 0}
-          className="rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? 'Sending…' : 'Send'}
         </button>

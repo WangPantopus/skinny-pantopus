@@ -28,7 +28,7 @@ export default function TrustCapsule({
   return (
     <div className="relative bg-app-surface-sunken rounded-lg px-3 py-2">
       {isRecommended && (
-        <span className="absolute -top-2 right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+        <span className="absolute -top-2 right-2 bg-green-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
           Best Match
         </span>
       )}

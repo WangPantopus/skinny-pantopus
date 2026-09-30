@@ -480,7 +480,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           <div className="flex gap-2">
             <button
               onClick={onOpenChat}
-              className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-semibold"
+              className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-800 font-semibold"
             >
               Message Owner
             </button>
@@ -617,7 +617,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               <button
                 onClick={submitCompletion}
                 disabled={submittingCompletion}
-                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm disabled:opacity-50"
+                className="px-5 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium text-sm disabled:opacity-50"
               >
                 {submittingCompletion ? 'Submitting…' : 'Mark Complete'}
               </button>
@@ -746,7 +746,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               <button
                 onClick={submitConfirmation}
                 disabled={submittingConfirm}
-                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm disabled:opacity-50"
+                className="px-5 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium text-sm disabled:opacity-50"
               >
                 {submittingConfirm ? 'Confirming…' : 'Confirm & Approve'}
               </button>

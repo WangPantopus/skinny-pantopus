@@ -511,7 +511,7 @@ function BriefingOptIn() {
           type="button"
           disabled={busy}
           onClick={() => answer(true)}
-          className="text-[13.5px] font-semibold px-3.5 py-2 rounded-lg bg-primary-500 text-white disabled:opacity-60"
+          className="text-[13.5px] font-semibold px-3.5 py-2 rounded-lg bg-primary-600 text-white disabled:opacity-60"
         >
           Turn it on
         </button>

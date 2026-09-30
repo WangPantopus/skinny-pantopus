@@ -43,7 +43,8 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
         return fresh ?? cachedCoordinate()
     }
 
-    private var isAuthorized: Bool {
+    /// Location is allowed, so a fix can be requested without prompting.
+    public var isAuthorized: Bool {
         manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse
     }
 

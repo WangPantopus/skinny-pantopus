@@ -179,7 +179,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
           {isStreaming ? (
             <button
               onClick={abort}
-              className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors"
+              className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-colors"
               title="Stop generating"
             >
               <StopCircle className="w-4 h-4" />

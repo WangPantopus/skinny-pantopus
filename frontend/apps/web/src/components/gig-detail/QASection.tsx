@@ -371,7 +371,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
                           <button
                             onClick={() => handleAnswer(q.id)}
                             disabled={answerSubmitting || uploadingAnswerFiles || !answerText.trim()}
-                            className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 disabled:opacity-50"
+                            className="text-xs bg-green-700 text-white px-3 py-1 rounded-md hover:bg-green-800 disabled:opacity-50"
                           >
                             {answerSubmitting || uploadingAnswerFiles ? 'Posting…' : 'Post Answer'}
                           </button>

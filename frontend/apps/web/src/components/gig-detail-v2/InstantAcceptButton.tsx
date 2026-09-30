@@ -44,7 +44,7 @@ export default function InstantAcceptButton({ gigId, onAccepted }: InstantAccept
 
   if (state === 'success') {
     return (
-      <div className="bg-green-500 text-white text-center py-4 rounded-xl font-bold text-lg animate-pulse">
+      <div className="bg-green-700 text-white text-center py-4 rounded-xl font-bold text-lg animate-pulse">
         &#10003; You&apos;re assigned!
       </div>
     );
@@ -55,7 +55,7 @@ export default function InstantAcceptButton({ gigId, onAccepted }: InstantAccept
       <button
         onClick={handlePress}
         disabled={state === 'loading'}
-        className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 disabled:opacity-60 transition"
+        className="w-full bg-green-700 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-800 disabled:opacity-60 transition"
       >
         {state === 'loading' ? (
           <span className="flex items-center justify-center gap-2">

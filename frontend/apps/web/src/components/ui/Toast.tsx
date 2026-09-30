@@ -8,7 +8,7 @@ import type { ToastItem, ToastVariant } from './toast-store';
 
 const VARIANT_STYLES: Record<ToastVariant, { bg: string; icon: React.ReactNode }> = {
   success: {
-    bg: 'bg-green-600 text-white',
+    bg: 'bg-green-700 text-white',
     icon: <Check className="w-4 h-4" />,
   },
   error: {
