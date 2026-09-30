@@ -47,6 +47,24 @@
 
 
 
+> **UPDATE 2026-09-30T10:13Z — COORDINATOR ASSIGNMENT, launch-critical: in-app account deletion (an App Store requirement).**
+> - **The problem** (Stream 5's finding, bundle `20260930-stream5-delete-home-history-r1`): 19 of the attribution columns the deletion route "sets to NULL" are NOT NULL. Anyone who ever created a Home record, asked a task question, reported an incident or started a refund gets the dry run's 409 (#931) and can't delete their account in the app.
+> - **Fix pattern, every owner:**
+>   - one forward migration making the columns nullable with ON DELETE SET NULL (`Backwards compatible: yes`, `SET LOCAL lock_timeout`);
+>   - null-safe readers on web, iOS and Android, showing "Former member". A non-optional DTO field would break a household's whole list after one member deletes;
+>   - proof through Stream 5's dry run.
+> - **Owners and reserved migration versions** (so no two branches collide again):
+>
+> | Owner | Columns | Version |
+> |---|---|---|
+> | Stream 2 | GigChangeOrder.requested_by, GigIncident.reported_by/.reported_against, GigQuestion.asked_by, Refund.initiated_by | `20260930130000` |
+> | Stream 3 | HomeAccessSecret.created_by | `20260930131000` |
+> | Stream 4 | HomeAsset, HomeBill, HomeCalendarEvent, HomeDevice, HomeDocument, HomeEmergency, HomeMaintenanceTemplate, HomePackage, HomeSubscription, HomeTask, HomeVendor .created_by; HomeIssue.reported_by | `20260930132000` |
+> | Stream 5 | BusinessAuditLog.actor_user_id | `20260930133000` |
+> | Stream 1 | SupportTrain.organizer_user_id (decision 8) | `20260930134000` |
+>
+> - Stream 1's sharing-modes migration is `20260930120000`. Stream 5 keeps the 409 as the safety net until every part lands and reports what the dry run still hits.
+
 > **UPDATE 2026-09-30T10:08Z — Stream 1 (coordinator): batch 167 merged; master `eabe68c1c`.**
 > - **Batch 167** ([#938](https://github.com/WangPantopus/skinny-pantopus/pull/938), 10:07:29Z): 7 files, all blob-equal. No migrations.
 >   - **Stream 5 #935:** a closed task chat refuses edits and reactions (REST and socket).
