@@ -68,4 +68,9 @@ and 2 are each being split in two (Streams 1–4), and the former Stream 3
 into Stream 3 — Home access, residency and security
 (`docs/workstreams/03-home-access-residency.md`) and Stream 4 — Place, records, money
 and mail (`docs/workstreams/04-place-records-money-mail.md`); its history is in
-`docs/workstreams/former-stream2-home-household.md`.
+`docs/workstreams/former-stream2-home-household.md`. The former Stream 1 (gigs,
+payments and coordination) is split into Stream 1 — Support Trains and coordination
+(`docs/workstreams/01-trains-coordination.md`), which runs the merge queue for all
+streams, and Stream 2 — Posts, Hub and payments
+(`docs/workstreams/02-posts-hub-payments.md`); its history is in
+`docs/workstreams/former-stream1-gigs-payments.md`.

@@ -2,6 +2,8 @@
 
 > **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub and the live handoff are `docs/workstreams/README.md` and `docs/PROJECT_HANDOFF.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `docs/workstreams/05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
 
+> **2026-09-30 — the former Stream 1 (gigs, payments and coordination) is split into Streams 1 and 2.** Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](workstreams/01-trains-coordination.md)) owns Support Trains, the merge queue and hub status for all streams, rows G01–G05, O01–O06, L01–L04 and the U05 assembly. Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](workstreams/02-posts-hub-payments.md)) owns Posts and Pulse, Start and Place preview, the Hub cards, money screens, rows P01–P10 and the launch-cut areas #3, #4 and #6. The U02–U04 checklists split 230 = 122 + 108 ([`checklists/`](workstreams/checklists/README.md)); the former file is [`former-stream1-gigs-payments.md`](workstreams/former-stream1-gigs-payments.md). The live copies are on `codex/workstream-coordination`.
+
 > **2026-09-30 — the former Stream 2 (Home and household) is split into Streams 3 and 4.** Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](workstreams/03-home-access-residency.md)) owns rows H01–H08, R01–R06, D05–D08, D10 and M02. Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](workstreams/04-place-records-money-mail.md)) owns rows I01–I07, D01–D04, D09, F01–F05, M01, M03 and M04. That's 20 each; together they are the former 40. The former file is history at [`former-stream2-home-household.md`](workstreams/former-stream2-home-household.md) (moved from `02-home-household.md`). The live copies are on the `codex/workstream-coordination` branch.
 
 
@@ -83,7 +85,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 — payments, gigs and coordinator](workstreams/01-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
+- [Stream1 — payments, gigs and coordinator](workstreams/former-stream1-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
 - [Stream2 — Home and household](workstreams/former-stream2-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
 - [Stream 5 (formerly Stream 3) — accounts, social and notifications](workstreams/05-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
 
@@ -590,7 +592,7 @@ migration filenames, conflicting). PR46 is a separate founder PR. No other PRs o
 **How to resume without duplicating work.**
 1. Read the top of [docs/workstreams/README.md](workstreams/README.md) (newest section
    first) — every review, grant, merge and acceptance since 2026-09-15 is there.
-2. Stream status files: [01-gigs-payments](workstreams/01-gigs-payments.md),
+2. Stream status files: [former-stream1-gigs-payments](workstreams/former-stream1-gigs-payments.md),
    [02-home-household](workstreams/former-stream2-home-household.md),
    [03-accounts-social](workstreams/05-accounts-social.md). Newest section at the top
    (03 appends at the bottom).
@@ -1876,7 +1878,7 @@ Paid **dd0ee04b5** publishes verified question-action repair6a0858690 and master
 without further application changes. PR47 remains draft; new automatic CI scheduling
 pending. Priorc426 fullCI35564679691 passed15 checks/oneSeeder skip, including Android
 and all three iOS checks. Source, real UI/API/SQL evidence and exact cleanup are in
-[Stream1](workstreams/01-gigs-payments.md); durable mirrors now29payment/35Q&A files.
+[Stream1](workstreams/former-stream1-gigs-payments.md); durable mirrors now29payment/35Q&A files.
 No new unit tests or accepted journey repeats. Stream3's persona milestone remains
 separate pending frozen source, final cleanup and draft PR review; its interrupted
 work and already completed race evidence are being adopted. PR34 stays draft,
@@ -1889,7 +1891,7 @@ Local paid **6a0858690** repairs silent question-action failures, a false-succes
 and unreachable existing pinned-question controls. Actual UI/API/SQL recovery and
 permissions pass; eight fixture table counts0, privileges restored, owned services/tabs
 closed. TypeScript/lint/syntax pass; no new unit tests or provider writes. The 34-file
-mirror, source comparison and precise limits are in [Stream1](workstreams/01-gigs-payments.md).
+mirror, source comparison and precise limits are in [Stream1](workstreams/former-stream1-gigs-payments.md).
 
 Published **c426f4729** remains fixed for CI35564679691; all iOS passed, Android build
 pending. Map97/96 merged027afc13a after exact9b CI35564770177; source is already included
@@ -2037,7 +2039,7 @@ Paid **2a05e797e** is clean/pushed, including reviewed masteref7382ea1 through P
 Actual Stripe TEST capture→wallet release→notification return found and repaired
 stale history after the balance refreshed. Two real captures, exact1063c/638c credits,
 concurrent/repeated worker uniqueness, same-filter failure/retry and payer return
-are verified within [Stream1's recorded limits](workstreams/01-gigs-payments.md).
+are verified within [Stream1's recorded limits](workstreams/former-stream1-gigs-payments.md).
 Only two existing wallet files changed; no new unit tests or design changes.
 Fixtures and owned runtimes are cleaned; both test captures refunded. Current combined
 CI35559173441 is pending; earlier03bf9 full CI35556379254 passed. PR34/47 remain draft.
@@ -2091,7 +2093,7 @@ A05 catalog work is read-only until a verified gap receives ownership.
 Paid branch clean/pushed03bf9bd1b includes reviewed masterc1c03a3c6 and two focused
 wallet read/retry repairs, verified in real UI/routes/SQL. Refund session intact-reply
 acceptance and earlier Stripe TEST evidence are preserved. Details, hashes and
-limits in [live Stream1 status](workstreams/01-gigs-payments.md). Current required
+limits in [live Stream1 status](workstreams/former-stream1-gigs-payments.md). Current required
 CI35556379254 runs; prior75f372 run superseded/cancelled, not green. Root fixtures0,
 grantsrestored/runtimesstopped/tabsclosed; no new tests or provider writes in wallet
 phases. Master additionallycontains reviewedPR85 atd2b833049; currentStream3 mutation
@@ -2235,7 +2237,7 @@ and reopening. The combined account-switch check, actual assigned hold releases,
 and partial500c/remaining750c refunds all passed through existing browser/UI/API/SQL.
 Prior9ae full CI35542623560 passed; current8825 CI35545431059 fully passed15
 applicable checks/one Seeder skip, including Android and all three iOS simulators.
-Current source, evidence and precise limits are in [Stream1 status](workstreams/01-gigs-payments.md).
+Current source, evidence and precise limits are in [Stream1 status](workstreams/former-stream1-gigs-payments.md).
 All Stream1 owned rows and runtimes are cleaned/stopped; five Stripe TEST captures
 fully refunded, five unpaid intents cancelled, four owned customers deleted. Provider
 history remains. Native/live/hosted/payout and broader backlog scopes remain open.
@@ -2272,7 +2274,7 @@ only; application bytes unchanged). PR47/PR34 remain draft, PR46 separate. See
 [active sessions](workstreams/README.md#active-sessions-and-runtime-ownership--september-20-2026)
 for all three resumed streams and nonoverlapping runtime/browser ownership.
 
-New bounded [browser tip acceptance and real-provider repair](workstreams/01-gigs-payments.md)
+New bounded [browser tip acceptance and real-provider repair](workstreams/former-stream1-gigs-payments.md)
 uses existing UI/SDK/routes/service and full-schema PostgREST/SQL. Synthetic-provider
 phases verified8 gigs/7 originals/5 successes/2 cancellations with session/concurrency/
 transport failures. Actual Stripe TEST checkout then reproduced captured-but-unrecognized
@@ -2323,7 +2325,7 @@ Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
 The September 15/16 cutoff was resumed by the coordinator/Stream 1 session on September 16
 (the user confirmed the iOS Start Work receipt guard and its test correction are fixes to
 keep). Read the live [coordination guide](workstreams/README.md) and
-[Stream 1 status](workstreams/01-gigs-payments.md#milestone-ios-start-work-candidate-verified-locally-and-installed--september-16-2026)
+[Stream 1 status](workstreams/former-stream1-gigs-payments.md#milestone-ios-start-work-candidate-verified-locally-and-installed--september-16-2026)
 before editing or using resources. The only live coordination location is
 `/Users/yingpengwang/pantopus-coordination`.
 
@@ -2373,7 +2375,7 @@ activation or physical-device change ran.
 ## Superseded cutoff record — September 15/16, 2026
 
 The user requested immediate wrap-up. Stream1/coordination work is handed off;
-read the [exact resume point, failed checks and evidence](workstreams/01-gigs-payments.md#immediate-cutoff-handoff--september-1516-2026)
+read the [exact resume point, failed checks and evidence](workstreams/former-stream1-gigs-payments.md#immediate-cutoff-handoff--september-1516-2026)
 and the live [coordination guide](workstreams/README.md) before editing or using resources.
 The only live coordination location is `/Users/yingpengwang/pantopus-coordination`.
 
