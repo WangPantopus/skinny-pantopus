@@ -3615,7 +3615,7 @@ private struct ChatComposer: View {
 
     private var sendBackground: Color {
         guard canSend else { return Theme.Color.appSurfaceSunken }
-        return isLockedAction ? Theme.Color.warning : Theme.Color.primary600
+        return isLockedAction ? Theme.Color.warningSolid : Theme.Color.primarySolid
     }
 }
 

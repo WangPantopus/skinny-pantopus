@@ -156,7 +156,7 @@ private struct VerdictButton: View {
 
     private var background: Color {
         switch style {
-        case .accept: Theme.Color.success
+        case .accept: Theme.Color.successSolid
         case .challenge: Theme.Color.warningBg
         case .reject: Theme.Color.appSurface
         }

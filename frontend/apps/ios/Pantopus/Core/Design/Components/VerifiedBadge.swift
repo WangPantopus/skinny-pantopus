@@ -19,7 +19,7 @@ public struct VerifiedBadge: View {
     private let size: CGFloat
     private let tint: Color
 
-    public init(size: CGFloat = 16, tint: Color = Theme.Color.success) {
+    public init(size: CGFloat = 16, tint: Color = Theme.Color.successSolid) {
         self.size = size
         self.tint = tint
     }

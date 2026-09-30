@@ -456,9 +456,9 @@ private struct PostcardStageColumn: View {
     }
 
     private var circleFill: Color {
-        if isComplete && !isCurrent { return Theme.Color.success }
+        if isComplete && !isCurrent { return Theme.Color.successSolid }
         if isCurrent && currentIndex < 2 { return Theme.Color.warning }
-        if isCurrent && currentIndex == 2 { return Theme.Color.success }
+        if isCurrent && currentIndex == 2 { return Theme.Color.successSolid }
         return Theme.Color.appSurfaceSunken
     }
 

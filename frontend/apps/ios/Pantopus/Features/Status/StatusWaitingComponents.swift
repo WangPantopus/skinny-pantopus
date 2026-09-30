@@ -292,8 +292,8 @@ private struct TimelineDot: View {
 
     private var fill: Color {
         switch state {
-        case .done: Theme.Color.success
-        case .current: paused ? Theme.Color.warning : Theme.Color.primary600
+        case .done: Theme.Color.successSolid
+        case .current: paused ? Theme.Color.warningSolid : Theme.Color.primarySolid
         case .pending: Theme.Color.appSurface
         }
     }

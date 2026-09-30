@@ -28,9 +28,15 @@ public extension Theme.Color {
     static let primary400 = SwiftUI.Color("Primary/Primary400", bundle: Theme.bundle)
     /// Primary 500 — `#0ea5e9`.
     static let primary500 = SwiftUI.Color("Primary/Primary500", bundle: Theme.bundle)
-    /// Primary 600 — `#0284c7`. The brand primary.
+    /// Primary 600 — `#0369a1` in light, `#0284c7` in dark. The brand primary,
+    /// and its LABEL ink: links, icons and text read on white and on the dark
+    /// page. Fill a control that carries white text with `primarySolid`.
     static let primary600 = SwiftUI.Color("Primary/Primary600", bundle: Theme.bundle)
-    /// Primary 700 — `#0369a1`.
+    /// Fill counterpart of `primary600`: `#0369a1` in both appearances, because
+    /// white text is drawn on it (5.93:1). In dark, `primary600` lightens to
+    /// read on the page and would leave white text at 4.10:1.
+    static let primarySolid = SwiftUI.Color("Primary/PrimarySolid", bundle: Theme.bundle)
+    /// Primary 700 — `#075985` in light, `#0369a1` in dark. The pressed state.
     static let primary700 = SwiftUI.Color("Primary/Primary700", bundle: Theme.bundle)
     /// Primary 800 — `#075985`.
     static let primary800 = SwiftUI.Color("Primary/Primary800", bundle: Theme.bundle)

@@ -76,9 +76,9 @@ public struct PantopusButton: View {
 
     private var background: Color {
         switch kind {
-        case .primary: Theme.Color.primary600
+        case .primary: Theme.Color.primarySolid
         case .ghost: Theme.Color.appSurface
-        case .destructive: Theme.Color.error
+        case .destructive: Theme.Color.errorSolid
         }
     }
 
