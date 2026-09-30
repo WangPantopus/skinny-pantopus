@@ -1408,7 +1408,8 @@ router.post(
 
     const { error: actErr } = await supabaseAdmin
       .from('Activity')
-      .update({ status: 'published', visibility: 'nearby' })
+      // Only a train shared with nearby neighbors is listed; My connections and Link only are not.
+      .update({ status: 'published', visibility: st.sharing_mode === 'private_link' ? 'nearby' : 'private' })
       .eq('id', st.activity_id);
 
     if (actErr) {
@@ -3775,30 +3776,28 @@ router.get(
     // Check viewer access based on sharing_mode. A draft (never published, or moved back
     // to draft) is for its organizers and recipient only: "neighbors stop seeing it".
     if (viewerLevel === 'none' && st.status !== 'draft') {
-      if (st.sharing_mode === 'private_link') {
-        // Private link: anyone with the link can view
+      if (st.sharing_mode === 'private_link' || st.sharing_mode === 'direct_share_only') {
+        // Nearby neighbors and Link only: anyone with the link can view. A Link only
+        // train is simply never listed ("Hidden — share the link with people you trust").
         viewerLevel = 'viewer';
         viewerSupportTrainRole = 'viewer';
       } else if (userId && st.sharing_mode === 'invited_only') {
-        // invited_only: requires an accepted invite
-        const { count: invCount } = await supabaseAdmin
-          .from('SupportTrainInvite')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', supportTrainId)
-          .eq('invitee_user_id', userId)
-          .eq('status', 'accepted');
-        if ((invCount || 0) > 0) {
-          viewerLevel = 'viewer';
-          viewerSupportTrainRole = 'viewer';
-        }
-      } else if (userId && st.sharing_mode === 'direct_share_only') {
-        // direct_share_only: any invite row grants access (V1 simplification)
-        const { count: invCount } = await supabaseAdmin
-          .from('SupportTrainInvite')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', supportTrainId)
-          .eq('invitee_user_id', userId);
-        if ((invCount || 0) > 0) {
+        // My connections ("Only people you're connected to can find this"): the
+        // organizer's accepted connections, and anyone the organizer invited. No route
+        // ever accepts an invite, so any invite row for the viewer counts.
+        const [{ count: invCount }, { count: connCount }] = await Promise.all([
+          supabaseAdmin
+            .from('SupportTrainInvite')
+            .select('id', { count: 'exact', head: true })
+            .eq('support_train_id', supportTrainId)
+            .eq('invitee_user_id', userId),
+          supabaseAdmin
+            .from('Relationship')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'accepted')
+            .or(`and(requester_id.eq.${st.organizer_user_id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${st.organizer_user_id})`),
+        ]);
+        if ((invCount || 0) > 0 || (connCount || 0) > 0) {
           viewerLevel = 'viewer';
           viewerSupportTrainRole = 'viewer';
         }
@@ -4083,6 +4082,15 @@ router.patch(
     if (body.title !== undefined) activityPatch.title = body.title;
     if (body.summary !== undefined) activityPatch.summary = body.summary;
     if (body.activity_visibility !== undefined) activityPatch.visibility = body.activity_visibility;
+    // A train not shared with nearby neighbors is never listed, whatever else is asked; one
+    // switched back to neighbors while live is listed again.
+    const nextSharingMode = body.sharing_mode ?? st.sharing_mode;
+    if (nextSharingMode !== 'private_link') {
+      activityPatch.visibility = 'private';
+    } else if (body.sharing_mode === 'private_link' && st.sharing_mode !== 'private_link'
+      && body.activity_visibility === undefined && ['published', 'active', 'paused'].includes(st.status)) {
+      activityPatch.visibility = 'nearby';
+    }
 
     if (body.story !== undefined) supportTrainPatch.story = body.story;
     if (body.sharing_mode !== undefined) supportTrainPatch.sharing_mode = body.sharing_mode;

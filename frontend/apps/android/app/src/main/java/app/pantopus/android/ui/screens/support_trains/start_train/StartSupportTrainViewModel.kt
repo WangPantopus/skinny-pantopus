@@ -5,8 +5,8 @@ package app.pantopus.android.ui.screens.support_trains.start_train
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
-import app.pantopus.android.data.api.models.support_trains.AddSupportTrainSlotBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
+import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mail_compose.MailComposeRepository
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
@@ -153,12 +153,27 @@ class StartSupportTrainViewModel
             _form.value = _form.value.copy(reason = clamped)
         }
 
+        // Step 1's two switches and the review's Visibility are one setting, so the review shows what launches.
         fun toggleInviteOnly(value: Boolean) {
-            _form.value = _form.value.copy(inviteOnly = value)
+            val current = _form.value
+            val blockVisible = current.blockVisible && !value
+            _form.value =
+                current.copy(
+                    inviteOnly = value,
+                    blockVisible = blockVisible,
+                    visibility = StartSupportTrainVisibility.from(value, blockVisible),
+                )
         }
 
         fun toggleBlockVisible(value: Boolean) {
-            _form.value = _form.value.copy(blockVisible = value)
+            val current = _form.value
+            val inviteOnly = current.inviteOnly && !value
+            _form.value =
+                current.copy(
+                    inviteOnly = inviteOnly,
+                    blockVisible = value,
+                    visibility = StartSupportTrainVisibility.from(inviteOnly, value),
+                )
         }
 
         fun selectInviteMethod(value: StartSupportTrainInviteMethod) {
@@ -196,7 +211,12 @@ class StartSupportTrainViewModel
         }
 
         fun selectVisibility(value: StartSupportTrainVisibility) {
-            _form.value = _form.value.copy(visibility = value)
+            _form.value =
+                _form.value.copy(
+                    visibility = value,
+                    inviteOnly = value == StartSupportTrainVisibility.Connections,
+                    blockVisible = value == StartSupportTrainVisibility.Neighbors,
+                )
         }
 
         // ─── Derived projections ────────────────────────────────────────
@@ -302,7 +322,7 @@ class StartSupportTrainViewModel
                     _form.value = _form.value.copy(step = StartSupportTrainStep.WhoAndWhy)
                 StartSupportTrainStep.ReviewAndLaunch ->
                     _form.value = _form.value.copy(step = StartSupportTrainStep.WhatAndWhen)
-                StartSupportTrainStep.Success -> handleSuccessExit()
+                StartSupportTrainStep.Success -> _pendingEvent.value = StartSupportTrainEvent.Dismiss
             }
         }
 
@@ -328,11 +348,13 @@ class StartSupportTrainViewModel
             }
         }
 
+        /** "Search again" belongs to the recipient step; "Back to trains" returns to the list. */
         override fun onSecondary() {
-            if (isInviteRecipientBranch()) {
+            val step = _form.value.step
+            if (step == StartSupportTrainStep.WhoAndWhy && isInviteRecipientBranch()) {
                 searchAgain()
-            } else if (_form.value.step == StartSupportTrainStep.Success) {
-                handleSuccessExit()
+            } else if (step == StartSupportTrainStep.Success) {
+                _pendingEvent.value = StartSupportTrainEvent.Dismiss
             }
         }
 
@@ -367,7 +389,7 @@ class StartSupportTrainViewModel
                         label = "Back to trains",
                         testTag = "startSupportTrainBackToList",
                     )
-                isInviteRecipientBranch() ->
+                step == StartSupportTrainStep.WhoAndWhy && isInviteRecipientBranch() ->
                     WizardSecondaryCta(
                         label = "Search again",
                         testTag = "startSupportTrainSearchAgain",
@@ -437,7 +459,7 @@ class StartSupportTrainViewModel
                     draftPayload = CreateSupportTrainBody.DraftPayload(story = trimmedReason),
                     title = derivedTitle(),
                     recipientUserId = _selectedBeneficiary.value?.userId,
-                    sharingMode = effectiveSharingMode(current),
+                    sharingMode = current.visibility.sharingModeWire,
                     clientRequestId = requestId,
                 )
             viewModelScope.launch {
@@ -455,16 +477,20 @@ class StartSupportTrainViewModel
                         }
                     createRequestId = null
                     _publishedTrainId.value = created.id
-                    for (slot in generatedSlots()) {
-                        val slotBody =
-                            AddSupportTrainSlotBody(
-                                slotDate = slot.dateKey,
+                    // The whole schedule in one request (a slot on every day of the range): a
+                    // request per slot ran a long train into the write limits partway through.
+                    val slots = generatedSlots()
+                    if (slots.isNotEmpty()) {
+                        val schedule =
+                            GenerateSupportTrainSlotsBody(
+                                startDate = slots.first().dateKey,
+                                endDate = slots.last().dateKey,
+                                startTime = slots.first().startTime,
+                                endTime = slots.first().endTime,
                                 slotLabel = current.kind.defaultSlotLabel,
                                 supportMode = current.kind.supportMode,
-                                startTime = slot.startTime,
-                                endTime = slot.endTime,
                             )
-                        when (supportTrains.addSlot(created.id, slotBody)) {
+                        when (supportTrains.generateSlots(created.id, schedule, slots.size)) {
                             is NetworkResult.Success -> Unit
                             is NetworkResult.Failure -> {
                                 _launchError.value = "Couldn't add a slot. Try again."
@@ -502,13 +528,6 @@ class StartSupportTrainViewModel
             _pendingEvent.value =
                 if (id != null) StartSupportTrainEvent.OpenTrain(id) else StartSupportTrainEvent.Dismiss
         }
-
-        private fun effectiveSharingMode(form: StartSupportTrainFormState): String =
-            when {
-                form.inviteOnly -> StartSupportTrainVisibility.Connections.sharingModeWire
-                form.blockVisible -> StartSupportTrainVisibility.Neighbors.sharingModeWire
-                else -> form.visibility.sharingModeWire
-            }
 
         private fun stripToStartOfDay(millis: Long): Long {
             val cal = java.util.Calendar.getInstance()

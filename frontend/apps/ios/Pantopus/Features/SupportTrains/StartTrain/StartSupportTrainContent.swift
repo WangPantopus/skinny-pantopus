@@ -303,6 +303,22 @@ public enum StartSupportTrainVisibility: String, CaseIterable, Sendable, Identif
         case .linkOnly: "direct_share_only"
         }
     }
+
+    /// Who the success screen says can find the new train.
+    public var audience: String {
+        switch self {
+        case .neighbors: "nearby neighbors"
+        case .connections: "your connections"
+        case .linkOnly: "people you share the link with"
+        }
+    }
+
+    /// Step 1's switches as one choice: "Invite only" is My connections,
+    /// "Block-visible" is Nearby neighbors, and neither is Link only.
+    public static func from(inviteOnly: Bool, blockVisible: Bool) -> StartSupportTrainVisibility {
+        if inviteOnly { return .connections }
+        return blockVisible ? .neighbors : .linkOnly
+    }
 }
 
 /// One generated slot in the preview grid. Render-only — the launch

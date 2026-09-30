@@ -28,17 +28,31 @@ public struct StartSupportTrainWizardView: View {
     }
 
     public var body: some View {
-        WizardShell(model: viewModel, identity: .warm) {
-            stepBody
-            if let error = viewModel.launchError {
-                StartSupportTrainErrorBanner(message: error)
+        ScrollViewReader { proxy in
+            WizardShell(model: viewModel, identity: .warm) {
+                stepBody
+                if let error = viewModel.launchError {
+                    StartSupportTrainErrorBanner(message: error)
+                        .id(launchErrorID)
+                }
             }
+            // The error sits under the review's last section. Bring it into view and read it
+            // out, so a failed launch doesn't look like nothing happened.
+            .onChange(of: viewModel.launchError) { _, error in
+                guard let error else { return }
+                Task { @MainActor in
+                    withAnimation { proxy.scrollTo(launchErrorID, anchor: .bottom) }
+                    AccessibilityNotification.Announcement(error).post()
+                }
+            }
+            .onChange(of: viewModel.pendingEvent) { _, event in
+                handle(event)
+            }
+            .accessibilityIdentifier("startSupportTrainWizard")
         }
-        .onChange(of: viewModel.pendingEvent) { _, event in
-            handle(event)
-        }
-        .accessibilityIdentifier("startSupportTrainWizard")
     }
+
+    private let launchErrorID = "startSupportTrainLaunchError"
 
     @ViewBuilder
     private var stepBody: some View {
@@ -776,7 +790,7 @@ private struct StartSupportTrainSuccessStep: View {
                 .accessibilityAddTraits(.isHeader)
             Text(
                 "\(viewModel.generatedSlots.count) slots are open and visible to " +
-                    "\(viewModel.visibility.title.lowercased()). " +
+                    "\(viewModel.visibility.audience). " +
                     "Review who signs up from the new train's dashboard."
             )
             .font(.system(size: 13))

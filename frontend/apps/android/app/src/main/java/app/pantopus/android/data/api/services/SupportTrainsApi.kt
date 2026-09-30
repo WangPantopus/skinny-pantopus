@@ -3,6 +3,8 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.support_trains.AddSupportTrainSlotBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainResponse
+import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsBody
+import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationsResponse
@@ -90,6 +92,16 @@ interface SupportTrainsApi {
         @Path("id") supportTrainId: String,
         @Body body: AddSupportTrainSlotBody,
     ): SupportTrainSlotDto
+
+    /**
+     * `POST /api/activities/support-trains/:id/generate-slots` — a train's whole schedule in one
+     * request. The Start wizard launches with this. Route `backend/routes/supportTrains.js:903`.
+     */
+    @POST("api/activities/support-trains/{id}/generate-slots")
+    suspend fun generateSlots(
+        @Path("id") supportTrainId: String,
+        @Body body: GenerateSupportTrainSlotsBody,
+    ): GenerateSupportTrainSlotsResponse
 
     /**
      * `POST /api/support-trains/:id/publish` — flip the draft to

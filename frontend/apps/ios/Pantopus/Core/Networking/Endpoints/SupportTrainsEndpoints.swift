@@ -114,6 +114,24 @@ public enum SupportTrainsEndpoints {
         )
     }
 
+    /// Create a train's whole schedule in one request: a slot on every
+    /// day from `start_date` through `end_date`, with the given times,
+    /// label and mode. The Start wizard launches with this rather than a
+    /// request per slot, which ran a long train into the write limits.
+    ///
+    /// Route: `backend/routes/supportTrains.js:903` —
+    /// `POST /api/activities/support-trains/:id/generate-slots`.
+    public static func generateSlots(
+        supportTrainId: String,
+        body: GenerateSupportTrainSlotsBody
+    ) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/activities/support-trains/\(supportTrainId)/generate-slots",
+            body: body
+        )
+    }
+
     /// Flip the draft to `published` so neighbors / connections can
     /// sign up. Fires last in the wizard's launch sequence.
     ///

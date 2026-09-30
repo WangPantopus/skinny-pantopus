@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mail_compose.MailComposeRepository
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,7 +63,7 @@ class StartSupportTrainViewModelTest {
     private fun stubLaunchHappyPath() {
         coEvery { supportTrains.create(any()) } returns
             NetworkResult.Success(CreateSupportTrainResponse(id = "train_demo"))
-        coEvery { supportTrains.addSlot(any(), any()) } returns NetworkResult.Success(Unit)
+        coEvery { supportTrains.generateSlots(any(), any(), any()) } returns NetworkResult.Success(Unit)
         coEvery { supportTrains.publish(any()) } returns NetworkResult.Success(Unit)
     }
 
@@ -268,6 +269,9 @@ class StartSupportTrainViewModelTest {
             assertEquals(StartSupportTrainStep.Success, vm.form.value.step)
             assertEquals("train_demo", vm.publishedTrainId.value)
             assertNull(vm.launchError.value)
+            // The whole schedule goes in one request, not one per slot.
+            coVerify(exactly = 1) { supportTrains.generateSlots("train_demo", any(), any()) }
+            coVerify(exactly = 0) { supportTrains.addSlot(any(), any()) }
             vm.onPrimary()
             assertEquals(StartSupportTrainEvent.OpenTrain("train_demo"), vm.pendingEvent.value)
         }
