@@ -9,6 +9,18 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1001 (six owner-rights views) open; the open-SELECT-policy finding is with Stream 1, 2026-09-30T13:35:18Z
+
+- **Open:** [#1001](https://github.com/WangPantopus/skinny-pantopus/pull/1001) (`680555795`, migration `20260930178000`, seal `561db4f8…`). REVOKE ALL on six views that run with owner rights (they bypass RLS) and that anon could SELECT:
+  - `GigPublic`: all tasks with the worker, creator and origin ids. Stream 2 agreed.
+  - `MailAnalyticsSummary`: every letter's read analytics. Stream 4 agreed.
+  - Four persona/Beacon views: a launch cut, closed at the DB level only (Stream 1's decision).
+  - Anon probes 200 → 401; 67/67 contracts. The only caller, `personas.js`, uses supabaseAdmin.
+- **Also open:** [#1000](https://github.com/WangPantopus/skinny-pantopus/pull/1000), the DEFINER guard.
+- **Finding sent to Stream 1 for a decision:** all-rows SELECT policies readable with the anon key: PostComment, PostLike, TransactionReview, FileThumbnail and ReputationScore; the rest look intended.
+  - The backend's anon client reads PostLike and PostComment (posts.js), so closing them needs Stream 2 to move those reads to supabaseAdmin with visibility checks.
+  - Proposed step 1: revoke SELECT on client-unused tables (FileThumbnail, TransactionReview, ReputationScore).
+
 ## LIVE — security track complete except #1000 (DEFINER guard); #994 and #996 merged, 2026-09-30T13:30:04Z
 
 - **Merged since the last block:**
