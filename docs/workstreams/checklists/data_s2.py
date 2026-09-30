@@ -1,0 +1,45 @@
+# Stream 2: Posts, Hub and payments — its own U02–U04 checklist rows (split from the former Stream 1 on 2026-09-30).
+# Only this stream edits this file. Chips: c(kind, text, ref); kinds done/confirm/todo/block/decide/na.
+from data_common import c, ALL4
+
+U03 = [
+    ("Posts and Pulse", [
+        ("Pulse feed, My posts, counts", "", {"iOS": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Android": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Web": [c("done", "Comment counts", "C-18"), c("done", "R1 R2 on My Pulse", "Sep25"), c("todo", "R1 R2 on the main feed")]}),
+        ("Create a post", "Text, photo, audience, place", {"iOS": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")], "Android": [c("done", "E1 E2 E3", "#657, #718"), c("todo", "E6")], "Web": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")]}),
+        ("Edit a post", "", {"iOS": [c("todo", "E1 E2 E5")], "Android": [c("done", "E1, audience kept", "#657, #659"), c("todo", "E2 E5")], "Web": [c("na", "Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists")]}),
+        ("Delete a post", "", {"iOS": [c("done", "E2", "#709"), c("todo", "E1")], "Android": [c("done", "E2", "#709"), c("todo", "E1")], "Web": [c("done", "E2", "#709"), c("todo", "E1")]}),
+        ("Comments", "Add, reply, delete, pages, photos, drafts", {"iOS": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Android": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Web": [c("done", "E1 E2, delete, pages, photos", "#671, #699, Sep27")]}),
+        ("Report a post", "", {"iOS": [c("done", "E1 E2 E3", "#642 server dedupe")], "Android": [c("done", "E1 E2 E3", "#642")], "Web": [c("done", "E1 E2 E3", "#642 server dedupe")]}),
+        ("Post links", "", {"iOS": [c("done", "Links open the right post", "#472")], "Android": [c("done", "Links open the right post", "#472")], "Web": [c("todo", "Public post page: R1, E4 for a private post")]}),
+    ]),
+    ("Start and Hub", [
+        ("Start funnel and Place preview", "", {"iOS": [c("done", "R1", "#635")], "Android": [c("done", "R1", "#635")], "Web": [c("done", "R1", "#607")]}),
+        ("Hub cards and status pills", "Stream 1 parts only", {"iOS": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Android": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Web": [c("done", "Hub posts", "Sep25"), c("todo", "R1")]}),
+    ]),
+]
+
+U04 = [
+    ("Posts and comments", "", {"iOS": [c("done", "L1 L2 L3", "Sep27-28"), c("todo", "L4")], "Android": [c("done", "L1 L2 L3", "#667, Sep27"), c("todo", "L4")], "Web": [c("done", "L2 L3 L4", "Sep27, #785"), c("todo", "L1 draft kept across tabs")]}),
+    ("Start and Place preview", "", {"iOS": [c("todo", "L2 L3")], "Android": [c("todo", "L2 L3")], "Web": [c("todo", "L2 L3")]}),
+    ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("todo", "L2")]}),
+]
+
+U02 = [
+    ("Posts and Pulse", [
+        ("Pulse feed", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; post-type text, map markers and menus fixed", "#829"), c("decide", "A3 brand-blue token"), c("decide", "A4 filter chip mute control nested in the chip: structural fix proposed")]}),
+        ("Post detail and comments", {"iOS": [c("done", "A1 kept as is", "your decision"), c("todo", "A2 A3 A4")], "Android": [c("done", "A1 A2 comments", "#667"), c("todo", "A3 A4")], "Web": [c("done", "A5 comments", "Sep27"), c("done", "A1 A2 A4; type chip and dark header fixed", "#829"), c("decide", "A3 brand-blue token")]}),
+        ("Post composer", {"iOS": [c("done", "A1 kept as is", "your decision"), c("todo", "A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; intent text and AI button fixed", "#829"), c("decide", "A3 brand-blue token")]}),
+        ("My posts", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
+        ("Report a post", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A3 A4 A5; close button named", "#829")]}),
+    ]),
+    ("Start and Hub", [
+        ("Start funnel and Place preview", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A3 A4 A5 on /start", "U02 web bundle ddbfe77a")]}),
+        ("Hub (the former Stream 1 cards)", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; You badge fixed", "#829"), c("decide", "A3 brand-blue token")]}),
+        ("Today detail", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5", "U02 web bundle ddbfe77a"), c("decide", "A3 brand-blue token")]}),
+    ]),
+    ("Money screens (viewing only, no payments)", [
+        ("Tip sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2, dark title fixed", "PR198"), c("todo", "A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
+        ("Payment card and refund sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2", "Sep22"), c("todo", "A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
+        ("Payments and wallet settings", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2 by accessibility tree", "Sep27"), c("block", "Screenshots blocked (secure screen)"), c("todo", "A3 A4")], "Web": [c("done", "A1 A2 A4 A5; filter and back-button names", "#829"), c("decide", "A3 emerald token")]}),
+    ]),
+]
