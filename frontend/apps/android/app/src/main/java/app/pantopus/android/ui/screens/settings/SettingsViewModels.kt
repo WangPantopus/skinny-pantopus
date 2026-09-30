@@ -575,11 +575,14 @@ class PrivacySettingsViewModel
 
         // ---- Account deletion ----
 
-        /** Best effort: a failed read leaves the organizer paragraph out and never blocks the deletion. */
+        /**
+         * Best effort: a failed read (safeApiCall's NetworkResult) leaves the organizer
+         * paragraph out and never blocks the deletion.
+         */
         private fun loadOrganizedLiveTrainCount() {
             _organizedLiveTrainCount.value = 0
             viewModelScope.launch {
-                val result = runCatching { supportTrains.mine(role = "organizer", limit = 50) }.getOrNull()
+                val result = supportTrains.mine(role = "organizer", limit = 50)
                 if (result is NetworkResult.Success) {
                     _organizedLiveTrainCount.value =
                         result.data.supportTrains.count { it.myRole == "organizer" && it.status in LIVE_TRAIN_STATUSES }
