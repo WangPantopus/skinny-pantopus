@@ -1057,7 +1057,8 @@ private fun PopulatedFrame(
                 val seeded = row.actions.isSeeded
                 PulsePostCard(
                     content = row,
-                    onTap = { onTapPost(row.id) },
+                    // A cold-start tip isn't a post: there's no page to open (its X dismisses it).
+                    onTap = if (seeded) null else ({ onTapPost(row.id) }),
                     onPrimaryReaction = { onTapReaction(row.id) },
                     onRSVP = if (row.attendees == null) null else ({ onTapReaction(row.id) }),
                     onOverflow = if (seeded) null else ({ rowActions.onOverflow(row.id) }),

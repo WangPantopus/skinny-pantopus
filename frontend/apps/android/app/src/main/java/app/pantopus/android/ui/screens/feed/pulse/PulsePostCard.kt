@@ -128,7 +128,8 @@ data class PulseAttendeeStrip(
 @Suppress("LongParameterList")
 fun PulsePostCard(
     content: PulsePostCardContent,
-    onTap: () -> Unit,
+    /** Opens the post. `null` for a cold-start tip, which has no page. */
+    onTap: (() -> Unit)?,
     onPrimaryReaction: () -> Unit,
     onRSVP: (() -> Unit)? = null,
     /** Opens the card's overflow menu. `null` hides the affordance. */
@@ -148,7 +149,7 @@ fun PulsePostCard(
                 .clip(RoundedCornerShape(Radii.xl))
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
-                .clickable(onClick = onTap)
+                .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
                 .padding(Spacing.s3)
                 .semantics(mergeDescendants = true) {
                     contentDescription = buildA11yLabel(content)
@@ -190,12 +191,15 @@ fun PulsePostCard(
         content.attendees?.let { attendees ->
             AttendeeStrip(attendees = attendees, onRSVP = onRSVP, postId = content.id)
         }
-        ReactionStrip(
-            content = content,
-            onPrimary = onPrimaryReaction,
-            onToggleSave = onToggleSave,
-            onToggleRepost = onToggleRepost,
-        )
+        // A tip has nothing to react to: its id isn't a post.
+        if (!content.actions.isSeeded) {
+            ReactionStrip(
+                content = content,
+                onPrimary = onPrimaryReaction,
+                onToggleSave = onToggleSave,
+                onToggleRepost = onToggleRepost,
+            )
+        }
     }
 }
 
