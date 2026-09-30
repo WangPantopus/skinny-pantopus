@@ -18,6 +18,7 @@ import {
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
 import SlotSignupButton from '@/components/public-share/SlotSignupButton';
+import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 
 type OrganizerUser = {
   id?: string | null;
@@ -54,13 +55,6 @@ function supportModeLabel(key: string): string {
   if (key === 'groceries') return 'Groceries';
   if (key === 'gift_funds') return 'Gift funds';
   return key.replace(/_/g, ' ');
-}
-
-function formatWindow(start?: string | null, end?: string | null): string | null {
-  if (start && end) return `${start} - ${end}`;
-  if (start) return `${start}+`;
-  if (end) return `Until ${end}`;
-  return null;
 }
 
 function getOrganizerUser(
@@ -419,7 +413,7 @@ export default async function PublicSupportTrainPage({
                       timeZone: 'UTC',
                     })
                   : 'Upcoming date';
-                const windowLabel = formatWindow(slot?.start_time, slot?.end_time);
+                const windowLabel = formatSlotWindow(slot?.start_time, slot?.end_time);
                 const isOpen =
                   slot?.status === 'open' && (slot?.filled_count ?? 0) < (slot?.capacity ?? 1);
 

@@ -8,6 +8,7 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, Calendar, List, Printer,
   ChefHat, ShoppingCart, Truck,
 } from 'lucide-react';
+import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 
 // ============================================================
 // SUPPORT TRAIN CALENDAR VIEW (Web)
@@ -209,7 +210,7 @@ export default function SupportTrainCalendarPage() {
                         </div>
                         <div className="flex-1">
                           <p className={`text-sm font-medium ${c.text}`}>{s.slot_label} — {dateStr}</p>
-                          {s.start_time && <p className="text-xs text-app-text-muted">{s.start_time}{s.end_time ? ` - ${s.end_time}` : '+'}</p>}
+                          {s.start_time && <p className="text-xs text-app-text-muted">{formatSlotWindow(s.start_time, s.end_time)}</p>}
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text} capitalize`}>{s.status}</span>
                       </div>
