@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
+import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 import {
   Calendar,
   Clock,
@@ -444,10 +445,7 @@ export default function SupportTrainDetailPage() {
             {data.preferred_dropoff_window?.start_time && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                 <Clock className="w-3 h-3" />
-                {data.preferred_dropoff_window.start_time}
-                {data.preferred_dropoff_window.end_time
-                  ? ` - ${data.preferred_dropoff_window.end_time}`
-                  : '+'}
+                {formatSlotWindow(data.preferred_dropoff_window.start_time, data.preferred_dropoff_window.end_time)}
               </span>
             )}
           </div>
@@ -573,7 +571,7 @@ export default function SupportTrainDetailPage() {
               <DetailSection label="Drop-off window">
                 <p className="text-sm text-app-text">
                   {data.preferred_dropoff_window?.start_time
-                    ? `${data.preferred_dropoff_window.start_time}${data.preferred_dropoff_window.end_time ? ' - ' + data.preferred_dropoff_window.end_time : '+'}`
+                    ? formatSlotWindow(data.preferred_dropoff_window.start_time, data.preferred_dropoff_window.end_time)
                     : 'Not specified'}
                 </p>
               </DetailSection>
@@ -752,8 +750,7 @@ function SlotCard({ slot, onSelect, disabled = false }: { slot: any; onSelect: (
         </p>
         {slot.start_time && (
           <p className="text-xs text-app-text-secondary mt-0.5">
-            {slot.start_time}
-            {slot.end_time ? ` - ${slot.end_time}` : '+'}
+            {formatSlotWindow(slot.start_time, slot.end_time)}
           </p>
         )}
       </div>
@@ -835,7 +832,7 @@ function ReserveSlotModal({
             </h2>
             <p className="mt-1 text-sm text-app-text-secondary">
               {slot.slot_label} on {dateStr}
-              {slot.start_time ? `, ${slot.start_time}${slot.end_time ? ` - ${slot.end_time}` : '+'}` : ''}
+              {slot.start_time ? `, ${formatSlotWindow(slot.start_time, slot.end_time)}` : ''}
             </p>
           </div>
           <button
@@ -1072,7 +1069,7 @@ function uniqueSlotSummaries(slots: any[]): string[] {
 function formatSlotSummary(slot: any): string {
   const label = slot?.slot_label || formatContributionMode(slot?.support_mode || 'Support');
   if (!slot?.start_time) return label;
-  return `${label} ${slot.start_time}${slot.end_time ? ` - ${slot.end_time}` : '+'}`;
+  return `${label} ${formatSlotWindow(slot.start_time, slot.end_time)}`;
 }
 
 function formatSignupCount(count: number): string {
