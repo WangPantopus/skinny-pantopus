@@ -3475,7 +3475,7 @@ router.get('/public/:username', async (req, res) => {
     // Get user
     const { data: bizUser, error: userErr } = await supabaseAdmin
       .from('User')
-      .select('id, username, name, email, profile_picture_url, cover_photo_url, bio, tagline, average_rating, review_count, account_type')
+      .select('id, username, name, email, show_email, profile_picture_url, cover_photo_url, bio, tagline, average_rating, review_count, account_type')
       .eq('username', username)
       .eq('account_type', 'business')
       .single();
@@ -3483,11 +3483,14 @@ router.get('/public/:username', async (req, res) => {
     if (userErr || !bizUser) {
       return res.status(404).json({ error: 'Business not found' });
     }
+    // The account email is public only when the business says so; public_email is the contact address.
+    if (!bizUser.show_email) delete bizUser.email;
+    delete bizUser.show_email;
 
     // Get published profile
     const { data: profile } = await supabaseAdmin
       .from('BusinessProfile')
-      .select('business_type, categories, description, logo_file_id, banner_file_id, public_email, public_phone, website, social_links, founded_year, employee_count, service_area, theme, attributes, founding_badge, founding_benefit_expires_at, personal_user_id, active_from, active_until')
+      .select('business_type, categories, description, logo_file_id, banner_file_id, public_email, public_phone, website, social_links, founded_year, employee_count, service_area, theme, attributes, founding_badge, active_from, active_until')
       .eq('business_user_id', bizUser.id)
       .eq('is_published', true)
       .single();
