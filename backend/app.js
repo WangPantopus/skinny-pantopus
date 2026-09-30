@@ -80,7 +80,6 @@ const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 const logger = require('./utils/logger');
 
 // Verify Supabase connection
-const supabase = require('./config/supabase');
 const supabaseAdmin = require('./config/supabaseAdmin');
 
 // Initialize Express app
@@ -276,10 +275,13 @@ app.get('/', (req, res) => {
 
 app.get('/health', async (req, res) => {
   try {
-    // Test Supabase connection
-    const { data, error } = await supabase
+    // Connectivity only: a HEAD request through the service client makes PostgREST run a query
+    // but returns no rows, so the check depends neither on table contents nor on what client roles
+    // may read (their grants keep narrowing). The Supabase JS client has no raw SQL; this is its
+    // "select 1".
+    const { error } = await supabaseAdmin
       .from('User')
-      .select('count')
+      .select('id', { head: true })
       .limit(1);
 
     if (error) throw error;
@@ -294,7 +296,8 @@ app.get('/health', async (req, res) => {
     res.status(503).json({
       status: 'unhealthy',
       database: 'disconnected',
-      error: err.message,
+      // The detail stays in the log; a public endpoint shouldn't echo internal errors.
+      error: 'Database check failed',
       timestamp: new Date().toISOString()
     });
   }
