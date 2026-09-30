@@ -13,6 +13,19 @@ export const SESSION_REFRESH_PATH = '/session/refresh';
 export const SESSION_REFRESH_GUARD_KEY = 'pantopus:session-refresh-attempt';
 
 /**
+ * sessionStorage key that carries the account-deletion outcome to /login as
+ * `deleted:<ms>` (the DELETE succeeded) or `unconfirmed:<ms>` (this session
+ * ended while the DELETE was still pending). The server signs every session
+ * out before it deletes the account, and the deletion can still fail after
+ * that; the client's own sign-out reloads the page, so the outcome has to
+ * outlive that navigation.
+ */
+export const ACCOUNT_DELETED_NOTICE_KEY = 'pantopus:account-deleted';
+
+/** An older account-deleted notice is stale and not shown. */
+export const ACCOUNT_DELETED_NOTICE_MAX_AGE_MS = 120_000;
+
+/**
  * Two hand-offs for the same target within this window mean the refresh
  * "succeeded" but the access cookie still did not appear (misconfigured
  * proxy, cookie domain mismatch, third-party cookie policy…). The page then

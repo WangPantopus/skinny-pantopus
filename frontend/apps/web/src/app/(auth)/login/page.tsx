@@ -1,12 +1,14 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
+import { toast } from '@/components/ui/toast-store';
+import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS } from '@/lib/session-refresh';
 import {
   authPageHref,
   extractApiError,
@@ -31,6 +33,23 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+
+  // An account deletion ends here, often after a reload; the settings page
+  // left its outcome behind (ACCOUNT_DELETED_NOTICE_KEY).
+  useEffect(() => {
+    let notice = '';
+    try {
+      notice = sessionStorage.getItem(ACCOUNT_DELETED_NOTICE_KEY) || '';
+      sessionStorage.removeItem(ACCOUNT_DELETED_NOTICE_KEY);
+    } catch { /* storage disabled */ }
+    const [kind, writtenAt] = notice.split(':');
+    if (!(Date.now() - Number(writtenAt) < ACCOUNT_DELETED_NOTICE_MAX_AGE_MS)) return;
+    if (kind === 'deleted') {
+      toast.success('Account deleted successfully');
+    } else if (kind === 'unconfirmed') {
+      setInfo("We couldn't confirm your account was deleted. If you can still sign in, try again from Settings.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
