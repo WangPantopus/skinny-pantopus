@@ -51,10 +51,11 @@
 2. **D07, members and security.**
    - Racing Lockdown commands (enable and disable in flight together).
    - Audit-write failure: `writeAuditLog` is non-fatal while the panel promises "Records Lockdown changes".
-   - Leads to reproduce first:
-     - scoped share links (`/scoped-grants`) get the same Lockdown denial #827 fixed for guest passes; no UI reproduced yet;
-     - the Invitations page still shows members the sender form when opened by URL (#820 gated only its link);
-     - the standalone Home Settings page (`/app/homes/:id/settings`, URL-only) links everyone to Members & Roles and Access & Codes.
+   - ~~Three web leads~~ (scoped share links during Lockdown; Invitations by URL; the standalone Settings links): all three reproduced and repaired in [#858](https://github.com/WangPantopus/skinny-pantopus/pull/858), with the coordinator (2026-09-30T06:45Z live entry).
+   - New leads (recorded, not reproduced as defects yet):
+     - the Members & Security audit list shows raw action codes (Stream 4; its #854 label table can be reused);
+     - the URL-only Settings page's Notifications switches have no height, keep local state only and name cut features (needs a product call: remove or persist);
+     - a member opening the Members page by URL still sees "Recover a member removal" and "Refresh members".
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
@@ -199,6 +200,22 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T06:45Z — D07 web leads: [#858](https://github.com/WangPantopus/skinny-pantopus/pull/858) is with the coordinator.** Head `309fbb850b63e0da45c9ff8172b91a24091809b1`, base `ed5ea9ec5`. `git merge-tree` is clean against master `c063bb868`, which touches none of its files. Sealed bundle `20260930-stream3-home-d07-web-leads-r1`, 49 files, MANIFEST `7be1dd8e93f3ad6f5f177584c270480ff9d22d14e600490d15e6d29e8dacbc63`.
+  - **Reproduced on master in real Chrome** (own SQL fixture Home: owner, member B as a verified `member`, one metadata-only document):
+    - (a) during Lockdown the owner's dashboard document "Create share link" answered 403 `SHARE_DENIED` with the guest-facing "This share link is no longer available to you.";
+    - (b) member B opening `/invitations` by URL got the full form, a "could not be loaded… Retry" list error, and after Review a generic "could not continue… Acknowledge the result" (both reads 403 `MEMBERS_MANAGE_REQUIRED`);
+    - (c) the URL-only `/settings` page offered B Members & Roles and Access & Codes, which open only refusals.
+  - **Fix:**
+    - (a) backend: a scoped-link create refused in Lockdown answers `HOME_LOCKDOWN_ACTIVE` "Share links are off while Lockdown is on…" to holders of `home.edit`; others keep `SHARE_DENIED`;
+    - (b) web: the list's `MEMBERS_MANAGE_REQUIRED` replaces the form and list with "You don’t have permission to send or manage invitations for this household." (a refused Review says the same; recovery still shows);
+    - (c) web: each Settings entry needs its read's permission, and there's no empty Manage box.
+  - **After:** all three are truthful. Member B in Lockdown still gets `SHARE_DENIED` from the real API. The owner's controls (form and list, four Settings entries, 201 share with Lockdown off) are unchanged.
+  - **Checks:** backend Jest 130/130; web Jest 1890/1890 on the head (only `qrCode` can't load `jsqr` locally).
+  - **Cleanup:** exact (16 run rows, 351/353 equal the 06:26:09Z baseline; login history only).
+  - **Runtime:** the shared worktree and backend are back on master (PID 26797), and the lease was released at 06:41:10Z.
+  - **R06 iOS** stays blocked: no simulator runtime, and no native reinstall is recorded on the hub.
+  - **Next:** D07's racing Lockdown commands and failed audit write. `writeAuditLog` ignores supabase-js's returned `{ error }`, so a failed insert isn't even logged, and enable's three steps aren't atomic.
 
 - **2026-09-30T06:11:21Z — shared runtime rebuilt from master `ed5ea9ec5`** (lease `stream3-home:` taken 06:05:49Z). Stream 4's stack was not started yet and the lease was free, so Stream 3 did it:
   - `supabase start --workdir <kit>/stack-20260930` from master's config and migrations (93 applied), project `pantopus-stream2-native-resume-r2`, API 64553, DB 64554, Inbucket 64558; excluded studio, realtime, imgproxy, edge runtime, logflare, vector, supavisor and analytics, as Streams 1 and 2 did;
