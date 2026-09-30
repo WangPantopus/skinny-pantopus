@@ -5,7 +5,7 @@ from data_common import c, ALL4
 U03 = [
     ("Posts and Pulse", [
         ("Pulse feed, My posts, counts", "", {"iOS": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Android": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Web": [c("done", "Comment counts", "C-18"), c("done", "R1 R2 on My Pulse", "Sep25"), c("done", "R1 R2 on the main feed; failed area read and false Pulse zeros fixed", "#850")]}),
-        ("Create a post", "Text, photo, audience, place", {"iOS": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")], "Android": [c("done", "E1 E2 E3", "#657, #718"), c("todo", "E6")], "Web": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")]}),
+        ("Create a post", "Text, photo, audience, place", {"iOS": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6 on device (the API now accepts the typed phone, #862)")], "Android": [c("done", "E1 E2 E3", "#657, #718"), c("todo", "E6 on device (the API now accepts the typed phone, #862)")], "Web": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("done", "E6: Lost & Found contact fixed; four tags reported truthfully", "#862")]}),
         ("Edit a post", "", {"iOS": [c("todo", "E1 E2 E5")], "Android": [c("done", "E1, audience kept", "#657, #659"), c("todo", "E2 E5")], "Web": [c("na", "Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists")]}),
         ("Delete a post", "", {"iOS": [c("done", "E2", "#709"), c("todo", "E1")], "Android": [c("done", "E2", "#709"), c("todo", "E1")], "Web": [c("done", "E2", "#709"), c("todo", "E1")]}),
         ("Comments", "Add, reply, delete, pages, photos, drafts", {"iOS": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Android": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Web": [c("done", "E1 E2, delete, pages, photos", "#671, #699, Sep27")]}),
@@ -21,7 +21,7 @@ U03 = [
 U04 = [
     ("Posts and comments", "", {"iOS": [c("done", "L1 L2 L3", "Sep27-28"), c("todo", "L4")], "Android": [c("done", "L1 L2 L3", "#667, Sep27"), c("todo", "L4")], "Web": [c("done", "L2 L3 L4", "Sep27, #785"), c("todo", "L1 draft kept across tabs")]}),
     ("Start and Place preview", "", {"iOS": [c("todo", "L2 L3")], "Android": [c("todo", "L2 L3")], "Web": [c("todo", "L2 L3")]}),
-    ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("done", "L3 Today no longer reused across accounts; area change and Refresh re-read", "#856"), c("todo", "L2")]}),
+    ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("done", "L3 Today no longer reused across accounts; area change and Refresh re-read", "#856"), c("done", "L2 cold start shows current state (no change)", "bundle 42571869")]}),
 ]
 
 U02 = [
