@@ -9,6 +9,24 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — new finding: a business RPC leaked permission maps to the anon key; fix #1030 (183000) in draft, stacked on #1028; #1028 approved for batch 197, 2026-09-30T16:03:08Z
+
+- **#1028:** Stream 1 approved it for batch 197, together with Stream 3's #1024. Stream 2 approved too, so all three owning streams have.
+- **#1023:** Stream 1 simulator-verifies it at `e8a85d6c4` and batches it after #1024. The branch must stay unchanged until then.
+- **The finding** (scan of the SECURITY DEFINER functions clients can call through PostgREST RPC, their remaining direct path after #1028):
+  - `business_get_user_permissions` uses whatever `p_user_id` is passed. Reproduced: with only the anon key, a signed-in outsider, staff or the owner, it returned 200 with the member's permission map. #996's scan had it as identity-bound because of its `DEFAULT auth.uid()`.
+  - `apply_business_role_preset` let a team manager skip the API's owner and rank rules.
+  - Neither has a caller.
+- **[#1030](https://github.com/WangPantopus/skinny-pantopus/pull/1030):** migration `20260930183000` (number from Stream 1). Draft, stacked on #1028.
+  - It revokes both functions from clients; service_role keeps them.
+  - check-migrations refuses a client grant on any DEFINER function with an `auth.uid()`-default parameter, unless the function is a reviewed caller-bound helper. Run over every current migration, it flags exactly the leaking function.
+  - New contract `client-rpc-surface.sql`: the client-callable DEFINER surface must be exactly the 12 reviewed helpers.
+  - Evidence (bundle `20260930-stream5-business-rpc-scan-r1`): after the migration, both RPCs refuse every caller (401/403), and the API's own role and preset path, as owner, still returns 200 on all four steps.
+  - Stream 3 approved; Streams 2 and 4 have been told. The RPC surface inventory was sent to Stream 1 for the hub.
+  - Next: CI, then a rebase after batch 197, then ready and handoff.
+- **Runtime:** DB has 181000, 182000 and 183000. The business fixture `ab61…` gets removed after #1030's CI is green.
+- **Open from Stream 5:** #1023, #1028 (batch 197), #1030 (draft).
+
 ## LIVE — #1028 green and sealed, handed to Stream 1 with all five merge conditions met, 2026-09-30T15:49:26Z
 
 - **[#1028](https://github.com/WangPantopus/skinny-pantopus/pull/1028)**, head `3fda3a151`.
