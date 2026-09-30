@@ -30,6 +30,16 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
+  // Opening the form removes the button that had focus, and Cancel removes the form: move focus with them.
+  const requestButtonRef = useRef<HTMLButtonElement | null>(null);
+  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const reasonRef = useRef<HTMLSelectElement | null>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) (firstFieldRef.current ?? reasonRef.current)?.focus();
+    else if (wasEditing.current) requestButtonRef.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
   const [invalidated, setInvalidated] = useState(false);
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState<RefundAttempt['reason']>('requested_by_customer');
@@ -212,7 +222,7 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
         <button type="button" onClick={() => void submit(attempt)} disabled={busy}
           className="block text-sm font-medium text-app-primary disabled:opacity-50">Retry this request</button>
       )}
-      {ready && !attempt && mayRequest && !editing && <button type="button" disabled={busy} onClick={() => setEditing(true)}
+      {ready && !attempt && mayRequest && !editing && <button ref={requestButtonRef} type="button" disabled={busy} onClick={() => setEditing(true)}
         className="text-sm font-medium text-app-primary">{releasing ? 'Release authorization hold' : 'Request a refund'}</button>}
       {ready && !attempt && editing && mayRequest && (
         <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
@@ -220,11 +230,11 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
             ? `Release the ${money(remaining)} hold. No captured charge will be refunded. This does not cancel the task.`
             : `Up to ${money(remaining)} is available to request. This does not cancel the task.`}</p>
           {!releasing && <label className="block text-sm">Amount (USD; leave blank for the remaining amount)
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" disabled={busy}
+            <input ref={firstFieldRef} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" disabled={busy}
               className="mt-1 block w-full rounded-lg border border-app-border bg-app-surface p-2" />
           </label>}
           <label className="block text-sm">Reason
-            <select value={reason} onChange={(e) => setReason(e.target.value as RefundAttempt['reason'])} disabled={busy}
+            <select ref={reasonRef} value={reason} onChange={(e) => setReason(e.target.value as RefundAttempt['reason'])} disabled={busy}
               className="mt-1 block w-full rounded-lg border border-app-border bg-app-surface p-2">
               <option value="requested_by_customer">Requested by me</option>
               <option value="duplicate">Duplicate payment</option>
