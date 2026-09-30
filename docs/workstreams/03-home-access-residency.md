@@ -305,7 +305,7 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
-- **2026-09-30T12:33Z — #970–#973 merged (batch 180); #962 merged (batch 177); R06 iOS done; #974 being revised for the decision-9 trio; D05 native rename reproduced on both apps.**
+- **2026-09-30T12:31Z — #970–#973 merged (batch 180); #962 merged (batch 177); R06 iOS done; #974 being revised for the decision-9 trio; D05 native rename reproduced on both apps.**
   - **Merged in batch 180** ([#975](https://github.com/WangPantopus/skinny-pantopus/pull/975), master `81cf2e959`). Each was sealed, with the iOS unit tests run under the heavy slot on "Pantopus S34" (11:53:34–12:08:30Z):
     - [#970](https://github.com/WangPantopus/skinny-pantopus/pull/970): D06 add-home address checks, `46cd0b548`, MANIFEST `a36aa59a…`. iOS AddHomeWizard 24/24 and DTODecoding 14/14. Three iOS sign-in screenshots were redacted before sealing, because they showed the fixture email.
     - [#971](https://github.com/WangPantopus/skinny-pantopus/pull/971): join-policy native, `edab09b8e`, `3dfdb0ae…`. iOS HomeOwnershipSecurity 6/6 and HomeSettings 9/9.
