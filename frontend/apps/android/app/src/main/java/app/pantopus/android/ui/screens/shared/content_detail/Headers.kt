@@ -17,9 +17,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.EmptyState
@@ -92,7 +94,8 @@ fun HomeHeroHeader(
                     )
                     Text(
                         text = stat.label.uppercase(),
-                        style = PantopusTextStyle.caption,
+                        // A one-word label in a third of the card: past 1.5x it broke mid-word ("PACKAGE / S").
+                        style = PantopusTextStyle.caption.withMaxFontScale(STAT_LABEL_MAX_FONT_SCALE),
                         color = PantopusColors.appTextSecondary,
                     )
                 }
@@ -100,6 +103,20 @@ fun HomeHeroHeader(
             }
         }
     }
+}
+
+private const val STAT_LABEL_MAX_FONT_SCALE = 1.5f
+
+/** This style grows with the system font size up to [max] times, then holds, so a one-word label in a narrow cell stays whole. */
+@Composable
+private fun TextStyle.withMaxFontScale(max: Float): TextStyle {
+    val scale = LocalDensity.current.fontScale
+    if (scale <= max) return this
+    val factor = max / scale
+    return copy(
+        fontSize = if (fontSize.isSp) fontSize * factor else fontSize,
+        lineHeight = if (lineHeight.isSp) lineHeight * factor else lineHeight,
+    )
 }
 
 // MARK: - Stubs

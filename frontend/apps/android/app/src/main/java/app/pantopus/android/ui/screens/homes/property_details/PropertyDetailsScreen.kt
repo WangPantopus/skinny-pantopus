@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -240,7 +241,9 @@ private fun PropertyMapPreview(
             Text(
                 text = "Map unavailable",
                 style = PantopusTextStyle.caption,
-                fontSize = 10.sp,
+                // A caption inside a fixed-size thumbnail: scaled up it could only be clipped ("Map unavail"), so it
+                // keeps its base size; TalkBack reads it whole either way.
+                fontSize = with(LocalDensity.current) { (MAP_PLACEHOLDER_TEXT_SP / fontScale).sp },
                 color = PantopusColors.appTextSecondary,
                 textAlign = TextAlign.Center,
             )
@@ -591,3 +594,5 @@ private fun ErrorBody(
         },
     )
 }
+
+private const val MAP_PLACEHOLDER_TEXT_SP = 10f
