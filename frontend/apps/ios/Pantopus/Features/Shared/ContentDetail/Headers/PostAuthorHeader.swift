@@ -129,7 +129,8 @@ public struct PostAuthorHeader: View {
             }
             Spacer()
             StatusChip(intent.label.uppercased(), variant: intent.chipVariant, icon: intent.icon)
-                .accessibilityLabel("\(intent.label) post")
+                // "Share post" would read like the top bar's Share button.
+                .accessibilityLabel("Post type: \(intent.label)")
         }
         .padding(.horizontal, Spacing.s4)
         .accessibilityElement(children: .contain)
