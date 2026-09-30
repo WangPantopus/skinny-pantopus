@@ -7,9 +7,25 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T16:43Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T17:19Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
-- **Latest (2026-09-30T16:43Z):**
+- **Latest (2026-09-30T17:19Z):**
+  - **[#1038](https://github.com/WangPantopus/skinny-pantopus/pull/1038)** head `3360078326c014e631a14bc4d5a178506917b7b8` (sent): the Hub Today screen tells the truth, and its Share, More and Manage work.
+    - Real sunrise/sunset from the weather feed (the backend adds `weather.sunrise_utc` / `sunset_utc`). The Sun & sky card is left out without them.
+    - Share sends the briefing without the place name, and the share line says so.
+    - Android: More opens the menu and Manage opens Notification settings.
+    - The chip reads "Post type: Share".
+    - Seal `20260930-stream2-hub-today-truth-r1` `44bc9f8b…`. Android after-run done; iOS build and lint clean. iOS runtime is with Stream 1 and needs the branch's backend for real sun times.
+  - **Building:** `claude/stream2-posts-followups` `b47934c50`, three small fixes:
+    1. A post saved without a title (web's default general posts) couldn't be edited in either app. Android reproduced it: "Title is required", 0 writes (`20260930-stream2-post-edit-untitled-r1` before/). Stream 1 found it on iOS.
+    2. iOS offered Try again on a gone (404) or hidden (403) post. Android already hides it.
+    3. Web "Later" on Attach a Home is remembered for a week, per account. Verified in Chrome: snooze key 168 h, hidden after reload, back after expiry. Web tsc, ESLint and Jest (1951) pass.
+  - **Next branch** (after #1038 merges):
+    - the Android Sun & sky caption spacing at font 2.0 (captions touch);
+    - iOS My posts → "Write a post" opens the purpose picker (it always made an Ask post; found by Stream 1). The patch is drafted and lint-clean.
+  - **Stream 1's iOS runs**, all without code changes: Create E6 (`3ee82fc9…`), Edit E1/E2/E5 (`4b8ed58a…`), Posts L4 (`dd4939ee…`). That's 8 of my runtime cells. Left: the comment photo failure, and U02 A1–A4 on a master build.
+  - **Stream 4:** told about sample tracking data on the mailbox package screen. It's launch-cut #7 (package tracking), so they recorded it under that boundary.
+- **Earlier (2026-09-30T16:43Z):**
   - **[#1027](https://github.com/WangPantopus/skinny-pantopus/pull/1027) merged** (batch 198, master `a60e276bb`). Stream 1 verified its seal; lint and CI are green.
   - **[#1034](https://github.com/WangPantopus/skinny-pantopus/pull/1034)** head `7d15b7585984d038193c48755ea2a2590d1d226b` (sent). Android follow-up:
     - Start keeps "Sign in" on one line at font 2.0, and the address field is named;
@@ -325,7 +341,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T16:56Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T17:19Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -338,8 +354,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | **Posts and Pulse** | | | |
 | Pulse feed, My posts, counts | ✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
-| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6: Stream 1 iOS, queued | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
-| Edit a post | ⬜ E1 E2 E5: Stream 1 iOS, queued | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511) | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
+| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: typed (555) 555-0123 stored as digits; the post page shows the contact line (Stream 1 iOS run, no change) (Stream 1 bundle 3ee82fc9)<br>⬜ My posts → Write a post always made an Ask post (skipped the purpose picker): fix drafted for the next branch | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
+| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>⬜ A post saved without a title (web's general posts) couldn't be edited: "Title is required", nothing sent. Fix on claude/stream2-posts-followups, building | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>⬜ A post saved without a title couldn't be edited (reproduced: "Title is required", 0 writes). Fix on claude/stream2-posts-followups, building | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
 | Delete a post | ✅ E2 (#709)<br>✅ E1 My posts says when a delete, archive or restore fails; Delete really deletes (it sent nothing before) (#980, Stream 1 bundle d172244f) | ✅ E2 (#709)<br>✅ E1 post page: keeps the post and says "Couldn't delete the post"; retry deletes (no change) (seal 569a60a4)<br>✅ E1 My posts: says when a delete, archive or restore fails (#980, seal 54995229) | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure: Stream 1 iOS, queued | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the Android comment composer is text-only) | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
@@ -352,7 +368,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4: Stream 1 iOS, queued | ✅ L1 L2 L3 (#667, Sep27)<br>✅ L4: comment and edit replay once after a session refresh (seal d875dafb) | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
+| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>✅ L4: comment and edit replay once after a session refresh (Stream 1 iOS run, no change) (Stream 1 bundle dd4939ee) | ✅ L1 L2 L3 (#667, Sep27)<br>✅ L4: comment and edit replay once after a session refresh (seal d875dafb) | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
 | Start and Place preview | ✅ L2: the preview survives a restart and is offered after sign-in; L3: the next person sees no offer or address (Stream 1 iOS run, no change; sign-out also clears a pending preview) (Stream 1 bundle be19dced) | ✅ L2: the preview survives a cold restart and is offered after sign-in (seal 433cf635)<br>✅ L3: the next person on the device no longer sees or is offered the previous address (#989, seal 433cf635) | ✅ L2 L3: the previewed address survives a browser restart and never moves to another account (no change) (bundle e2c35ebc) |
 | Hub (the former Stream 1 cards) | ✅ L3: account switch shows only the new account; L2: cold restart reads fresh data (Stream 1 iOS run, no change) (Stream 1 bundle 3280a64f) | ✅ L3: account switch shows only the new account (seal ea85ae47)<br>✅ L2: cold restart reads fresh data (seal ea85ae47) | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
 
@@ -379,8 +395,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 46, confirm from existing evidence 0, to do 3, your call 0, boundary 0, not offered 2
-- U04 items: done 15, confirm from existing evidence 0, to do 1, your call 0, boundary 0, not offered 0
+- U03 items: done 48, confirm from existing evidence 0, to do 4, your call 0, boundary 0, not offered 2
+- U04 items: done 16, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 0
 - U02 items: done 47, confirm from existing evidence 0, to do 15, your call 8, boundary 1, not offered 0
 
 ## Inventory and history
