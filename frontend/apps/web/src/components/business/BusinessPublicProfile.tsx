@@ -353,7 +353,8 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
                   isOwner={currentUser?.id === business.id}
                 />
               )}
-              {primaryLocation?.location && (
+              {/* A home-based crew's public point is approximate, so it gets no directions. */}
+              {primaryLocation?.location && !primaryLocation.is_home_based && (
                 <a
                   href={`https://maps.google.com/?q=${primaryLocation.location.latitude},${primaryLocation.location.longitude}`}
                   target="_blank"
@@ -538,7 +539,7 @@ function LocationsHoursTab({ locations, hours }: { locations: BusinessLocation[]
                   <a href={`tel:${loc.phone}`} className="text-sm text-violet-600 hover:underline mt-1 inline-block">{loc.phone}</a>
                 )}
               </div>
-              {loc.location && (
+              {loc.location && !loc.is_home_based && (
                 <a
                   href={`https://maps.google.com/?q=${loc.location.latitude},${loc.location.longitude}`}
                   target="_blank"
