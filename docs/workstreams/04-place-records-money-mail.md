@@ -28,7 +28,7 @@
 **Launch-scope owner:** Stream 4 checks cut #7 (Household extras) and cut #8 (Mail extras) for the former Stream 2's area. Never verify, test or fix them.
 
 **State at the split.**
-- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open.
+- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. **Refreshed 2026-09-30T04:25:38Z:** the split's docs PRs #843 and #844 merged at 04:24:12Z (master `15711c8dc`), so Stream 4 has **no open PRs**.
 - **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04).
 - **One fixture is open in the database (clean it first):** the F02 native re-run in `runtime/f02-native-permission-r1` left:
   - member B's occupancy `7a6417c0` on cohort Home 9d885f71;
@@ -140,6 +140,8 @@ State at the split, copied verbatim from the former file's "September 22 exact �
   - Take it with `zsh tools/runtime-lease.sh acquire '<label>: <purpose>'` before creating or cleaning fixtures, setting fault rules, restarting the backend, switching that worktree's branch, taking a whole-DB baseline or driving the devices below.
   - Release it with `zsh tools/runtime-lease.sh release '<label>'`, and check the holder with `status`.
   - A baseline is valid only inside the lease it was taken in.
+- **Code and the shared worktree:** write code in your own session worktree, on a branch from current master. Check your pushed branch out in the shared worktree above, or edit it, only while holding the runtime lease, and keep its uncommitted `.claude/launch.json`.
+- **Labels:** `stream2:` and `claude/stream2-…` now belong to the new Stream 2 (Posts, Hub and payments). The kit's `stream2` path names are history only.
 - **Devices,** only while holding the runtime lease:
   - emulator-5556 (AVD `Pantopus_Home_Recurrence_Acceptance`) and iOS sim 6F914A30, both through `/private/tmp/pantopus-tools/device-slot.sh`;
   - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
@@ -171,6 +173,8 @@ State at the split, copied verbatim from the former file's "September 22 exact �
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T04:25:38Z — the split's docs PRs are merged; prompts refreshed.** #843 and #844 merged at 04:24:12Z, so master `15711c8dc` carries the split. No Stream 4 PR is open. The resume prompt now names the new Stream 2's `stream2:` label and the shared-worktree rule. The runtime-lease lock moved to `/private/tmp/pantopus-stream3-stream4-runtime-lease`.
 
 - **2026-09-30T04:16:32Z — Stream 4 created by splitting the former Stream 2** (user direction).
   - Rows: I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04.
