@@ -11,6 +11,7 @@
  * hitting Supabase auth on every request.
  */
 
+const { isAuthRetryableFetchError } = require('@supabase/supabase-js');
 const supabase = require('../config/supabase');
 const logger = require('../utils/logger');
 const authSessionService = require('../services/authSessionService');
@@ -36,6 +37,16 @@ function setCache(token, user) {
     _tokenCache.delete(firstKey);
   }
   _tokenCache.set(token, { user, ts: Date.now() });
+}
+
+// A definite "no" from the auth service (an invalid, expired or unknown token), as
+// opposed to the service being unreachable (network, timeout, 5xx), which supabase-js
+// also returns as an error object. Only a rejection may read as "signed out".
+function isRejection(error) {
+  if (!error) return true; // the service answered, with no user
+  if (isAuthRetryableFetchError(error)) return false;
+  const status = Number(error.status);
+  return Number.isInteger(status) && status >= 400 && status < 500;
 }
 
 // ── Middleware ───────────────────────────────────────────────────
@@ -69,6 +80,10 @@ async function optionalAuth(req, _res, next) {
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data?.user) {
+      if (!isRejection(error)) {
+        logger.debug('optionalAuth: auth service unreachable, treating as anonymous', { status: error?.status });
+        return next(); // not cached: the next request verifies again
+      }
       setCache(token, null);
       req.authRejected = true;
       return next();
