@@ -16,11 +16,14 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - the security track: #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002, #1012, #1015;
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
-- **Open (as of 15:49Z):**
-  - **#1028**, the authenticated default-deny (migration `20260930182000`, which also fixes the chat read-policy recursion), head `3fda3a151`. CI is green, it's sealed (`a99b1526…`), and it sits in Stream 1's queue.
-  - **#1023**, the iOS delete sheet. It waits for Stream 3's #1024 (master's SwiftLint), then a branch update, then Stream 1's simulator run.
+- **Open (as of 16:10Z):**
+  - **#1030**, the business RPC revoke (migration `20260930183000`), plus the check-migrations auth.uid()-default rule and the `client-rpc-surface` contract. Head `f21e54fb8`, rebased onto master `a318010a2`. The stacked CI run passed; final CI is running.
   - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
-- **Merged since the first rewrite:** #1022 (anon default-deny, batch 196, master `8099b6516`).
+- **Merged since the first rewrite:**
+  - #1022, the anon default-deny (batch 196);
+  - #1028, the authenticated default-deny with the chat policy fix (batch 197);
+  - #1023, the iOS delete sheet, verified on iOS by Stream 1 (batch 197).
+  - Master is `a318010a2`.
 - **Evidence corrections:** the local "67/67 contracts" claims in the #992, #996, #1001 and #1002 bundles were invalid. The loop recorded basename's exit status, and the local database had crashed. Each bundle now carries CORRECTION.md and was resealed; Stream 1 recorded the new seals.
 
 ## 3. Runtime (Stream 5's own; reserved ports)
@@ -67,8 +70,8 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. After #1028 merges, record it in the status file. The runtime API already runs master; the DB already has 181000 and 182000, with the chat section applied as a delta, so replay the final file if the stack is rebuilt.
-2. #1023: after #1024 merges, bring the branch up to date. Merge only after Stream 1's simulator run passes.
+1. #1030: once final CI is green, seal bundle `20260930-stream5-business-rpc-scan-r1`, hand it to Stream 1, and remove business fixture `ab61…` (`db/fixture-cleanup.sql`). The DB already has 181000–183000 (182000's chat section went in as a delta; replay the final files if the stack is rebuilt).
+2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;
 4. The authenticated SELECT default-deny is #1028; the ChatParticipant recursion is fixed in it.
