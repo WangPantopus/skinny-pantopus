@@ -72,20 +72,24 @@ async function deleteHome(homeId, actorId) {
 // with the person deleting their account. Called by DELETE /api/users/account for
 // each Home they created or occupy, after its dry run and before it nulls their
 // attribution columns (private-setup records are still recognisable as theirs).
+// - Anyone else still has access: nothing changes; their records stay -> 'kept'.
+//   Checked first: a primary owner may delete a Home with members in it, but an
+//   account deletion never takes a Home away from the people who still live there.
 // - Deletable (private setup, or the primary owner as the last member): deleted
 //   exactly like the owner's Delete Home, stored files included -> 'deleted'.
 // - Not deletable and nobody else keeps it: the household records and files are
 //   purged (homeRecordService) and the shell stays, so a later resident never
 //   inherits them -> 'purged'.
-// - Anyone else still has access: nothing changes; their records stay -> 'kept'.
-// Throws on any failure, so the account deletion stops before anything is removed.
+// A Home that no longer exists needs nothing ('kept', HOME_NOT_FOUND). Any other
+// failure throws, so the account deletion stops before anything is removed.
 async function retireHomeForDeletedAccount(homeId, userId) {
+  if (await othersKeepHome(homeId, userId)) return { action: 'kept', reason: 'OTHER_MEMBERS' };
   const eligibility = await deleteEligibility(homeId, userId);
   if (eligibility.allowed) {
     await deleteHome(homeId, userId);
-    return { action: 'deleted', reason: eligibility.mode || null };
+    return { action: 'deleted', reason: eligibility.code || null };
   }
-  if (await othersKeepHome(homeId, userId)) return { action: 'kept', reason: eligibility.code || null };
+  if (eligibility.code === 'HOME_NOT_FOUND') return { action: 'kept', reason: 'HOME_NOT_FOUND' };
   const purge = await require('./homeRecordService').purgeHouseholdRecords(homeId, userId);
   return { action: 'purged', reason: eligibility.code || null, purge };
 }
