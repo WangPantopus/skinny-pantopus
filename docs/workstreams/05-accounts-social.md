@@ -9,7 +9,7 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — HANDOFF: #1080, #1087, #1089, #1090 and #1092 merged (batches 217–219, master `11e2b72f6`); only #1081 (native) is open: CI rerun + Stream 1's device run; next = sweep backlog, 2026-09-30T21:17:01Z
+## LIVE — HANDOFF: #1080, #1087, #1089, #1090 and #1092 merged (batches 217–219, master `11e2b72f6`); #1081 (native) sealed with Stream 1's device results (all 4 checks pass on iOS and Android) and handed to Stream 1; next = sweep backlog, 2026-09-30T21:41:10Z
 
 - **Read [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md) first.** It holds the full state, runtime, rules, backlog and lessons.
 - **Merged since the last block:** #1080, "the profile completion card shows the real percentage", in batch 217 (PR #1084, 20:29:26Z, master `e514e033b`). Stream 1 verified seal `7d730cad…`.
@@ -22,18 +22,21 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - **#1089, "a failed connection action says why":** head `0d8c493ab`, CI 36775674336, seal `95da3278…`. A withdrawn request's Accept gets 404 from the API; master showed nothing, and the fix shows a toast and refreshes the list.
   - **#1090, "the crew dashboard Inbox":** head `a17a7d73b`, CI 36776269108, seal `a63a3c35…`. Rows read "? Unknown" and opened a 403 room on master; the fix shows the name and preview and opens the crew's chat.
   - **#1092, the stale "skills aren't saved" note removed:** head `be13de394`, CI 36776925247, seal `470e0df6…`. On master, skills save through the UI (200/200) and are listed after a reload.
-- **Open, not sealed: #1081** (iOS + Android page editors keep a button's `url`; the Directions chip opens Maps and is hidden for home-based crews), head `7fb117fa7`.
-  - Run 36771770835 has iOS queued. Android lint, test and assemble passed; the instrumented job died on a CI emulator hang (recorded in the bundle).
-  - Rerun it with `gh run rerun 36771770835 --failed` when the run completes.
-  - Stream 1 runs the 4 device checks on iOS and Android with the recipe I sent. After that: seal and hand off.
-  - Stream 1 built #1081 at `7fb117fa7` into its candidate 2 build `f002e2a9e` (heavy slot since 20:58:36Z) and runs the checks after that build.
-  - At handoff I asked Stream 1 to send the results to the next Stream 5 session and post them on PR #1081.
-- **Sweep of Stream 5's web screens** (read-only, 22 candidates, each confirmed before any fix): 5 fixed (above and #1080). The remaining items are in the prompt's section 5, in priority order: crew page placeholder blocks and the contact form; Services/Portfolio dead ends; block Appearance settings; the dead hero upload; checklist dead links; SeatCard keyboard access; preview hard-coding.
+- **#1081 sealed and handed to Stream 1** (iOS + Android page editors keep a button's `url`; the Directions chip opens Maps and is hidden for home-based crews).
+  - Head `7fb117fa7`, seal `e82a960cc0b14f18e02069644f0c51d3535848f0b3d5c07be9f8fb945305095b`, bundle `20260930-stream5-native-crew-links-r1`, base `e631ac2b6` (19 files, 21:39:18Z).
+  - **Devices:** Stream 1's run passed all four checks on iOS and Android at this head (candidate `f002e2a9e`). Its bundle is `20260930-stream1-native-1081-devices-r1`, and I re-verified MANIFEST `a33acbb7…`. Stream 1 also posted the table on PR #1081.
+  - **CI run 36771770835** was partial at the seal:
+    - passed: Android lint, test and assemble; the database job; the safeguards;
+    - Android instrumented: failed on a CI emulator hang (21/61 passed, 0 failed);
+    - iOS jobs still queued.
+  - **Next agent:** once the run completes, `gh run rerun 36771770835 --failed`. If an iOS job fails, fix it and re-seal.
+- **Sweep of Stream 5's web screens** (read-only, 22 candidates, each confirmed before any fix): 5 fixed (above and #1080). The remaining items are in the prompt's section 5, in priority order: crew page placeholder blocks and the contact form; Services/Portfolio dead ends; block Appearance settings; the dead hero upload; checklist dead links; SeatCard keyboard access; preview hard-coding. Stream 1's device run added an iOS page-blocks editor item: unnamed buttons, and chips without a Selected trait (the prompt's item 2).
 - **Decisions recorded:**
   - Reliability shows only from real history.
   - The public routes send the canonical worker counters instead of posted tasks.
   - The duplicate "Address on file" badge was left out; the header already shows verified residency.
   - A failed connection action refreshes the list.
+  - #1081's check 2 ran as a non-member only. I accepted it because the owner's own view follows the same rule and has no privacy stake (recorded in RESULT and the PR).
 - **Runtime:** API 18134 and web 18131 on master `11e2b72f6` (API receipt 21:15:34Z); DB at `20260930184000`; proxy allowances disabled. No fixtures remain from today's runs.
   - One unexplained crew is left alone: "S5 Crew Biz" (`s5_gig_biz_dfa0bf`, created 08:42Z).
 - **Kit:** `tools/stream5-e2e/README.md` and `ci-record.sh` hold today's E2E patterns: the `/b/` substitution, one real write through a read-only page, the WebSocket stub, gradient-aware contrast, and the 60 s profile cache.
