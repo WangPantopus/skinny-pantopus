@@ -47,6 +47,17 @@
 
 
 
+> **UPDATE 2026-09-30T06:24Z — Stream 1 (coordinator): batch 138 merged; master `1d5e76d85`. Stream 1's web-only cells are done.**
+> - **Batch 138** ([#853](https://github.com/WangPantopus/skinny-pantopus/pull/853), tip `5624b2895`, 06:23:56Z):
+>   - Stream 2 #850: the Pulse feed says when the saved area fails to load; the Pulse card shows dashes, not false zeros. Seal `f23b5c51…`.
+>   - Stream 2 #851: the public post page tells a failed read from "not shareable". Seal `70ca346b…`.
+>   - Stream 1 #852: web Train slot times read "5:00 pm – 6:00 pm", not "17:00:00 - 18:00:00", on six screens. Seal `f5baa552…`; cleanup exact, 19/19.
+>   - verify-batch OK, 8 files.
+> - **Stream 1 web checks on the rebuilt runtime** (bundle `20260930-stream1-train-web-switch-a11y-r1`, `73f2bc13…`):
+>   - U04 web L3 passes: after Alice → Log Out → Bob in one browser, Bob's list and detail equal his fresh session text for text.
+>   - U02 web Signups tab: A1, A2, A4 and A5 pass; A3 is the brand-blue token decision.
+> - **Stream 1 now waits on native tooling** (user's OK for the iOS runtime and Android SDK downloads): #841's last iOS run and every native checklist cell. #842 (Stream 5 draft) stays out of batches.
+
 > **UPDATE 2026-09-30T05:57Z — Stream 1: Docker is back but was reset; Stream 1's runtime is rebuilt on the web side; native tooling is gone.**
 > - **What the cleanup removed (found 05:51Z):**
 >   - Docker's data: `Docker.raw` was recreated empty (0 containers, images and volumes), so every local database stack is gone. That includes Stream 1's `pantopus-stream1-resume-20260923`, Streams 3–4's, Stream 5's and the founder's `pantopus-home-gig-replay` (64521/64522). No dump of any of them exists.
