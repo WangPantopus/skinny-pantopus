@@ -363,6 +363,9 @@ class PulseComposeViewModel
          */
         private var baselineIdentity: PulseComposeIdentity = PulseComposeIdentity.Personal
         private var baselineVisibility: PulseComposeVisibility = PulseComposeVisibility.Neighbors
+
+        /** Editing a post saved without a title: the title stays optional instead of blocking the save. */
+        private var titleOptional = false
         private var baselineLostFoundKind: PulseLostFoundKind = PulseLostFoundKind.Lost
         private var baselineLostFoundContactPref: PulseLostFoundContactPref = PulseLostFoundContactPref.Dm
         private var baselineAnnounceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors
@@ -713,7 +716,11 @@ class PulseComposeViewModel
         private fun validator(field: PulseComposeField): FormValidator =
             when (field) {
                 PulseComposeField.Title ->
-                    FormValidator.all(listOf(FormValidator.required("Title"), FormValidator.maxLength(TITLE_MAX)))
+                    if (titleOptional) {
+                        FormValidator.maxLength(TITLE_MAX)
+                    } else {
+                        FormValidator.all(listOf(FormValidator.required("Title"), FormValidator.maxLength(TITLE_MAX)))
+                    }
                 PulseComposeField.Body ->
                     FormValidator.all(
                         listOf(
@@ -1004,6 +1011,8 @@ class PulseComposeViewModel
         private fun applyPrefill(post: PostDetailDto) {
             val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
             _activeIntent.value = intent
+            // Web's default "general" posts have no title and open on the Announcement form.
+            titleOptional = post.title.isNullOrBlank()
             savedAudienceLabel =
                 PulseComposeVisibility.entries.firstOrNull { it.key == post.visibility }?.label
                     ?: PulseAnnounceAudience.entries.firstOrNull { it.backendVisibility == post.visibility }?.label
@@ -1141,7 +1150,7 @@ class PulseComposeViewModel
                 PulseComposeIntent.Ask ->
                     PostUpdateRequest(
                         content = bodyValue,
-                        title = titleValue,
+                        title = titleValue.ifEmpty { null },
                         visibility = editedVisibility,
                         serviceCategory = _askCategory.value.key,
                     )
@@ -1158,7 +1167,7 @@ class PulseComposeViewModel
                     val dateRaw = trimmedValue(PulseComposeField.EventDate)
                     PostUpdateRequest(
                         content = bodyValue,
-                        title = titleValue,
+                        title = titleValue.ifEmpty { null },
                         visibility = editedVisibility,
                         eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
                         eventVenue = venue.ifEmpty { null },
@@ -1175,7 +1184,7 @@ class PulseComposeViewModel
                 PulseComposeIntent.Announce ->
                     PostUpdateRequest(
                         content = bodyValue,
-                        title = titleValue,
+                        title = titleValue.ifEmpty { null },
                         visibility = if (isFlowMode) editedVisibility else _announceAudience.value.backendVisibility,
                     )
             }

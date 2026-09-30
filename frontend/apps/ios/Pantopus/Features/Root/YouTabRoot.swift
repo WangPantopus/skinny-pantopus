@@ -1502,7 +1502,8 @@ public struct YouTabRoot: View {
                         Task { @MainActor in path.append(.pulsePost(postId: dto.id)) }
                     },
                     onCompose: {
-                        Task { @MainActor in path.append(.composePost(intent: PulseComposeIntent.ask.rawValue)) }
+                        // No preset purpose: the composer asks what the post is for.
+                        Task { @MainActor in path.append(.composePost(intent: PulseIntent.all.rawValue)) }
                     },
                     onEditPost: { dto in
                         Task { @MainActor in path.append(.editPost(postId: dto.id)) }

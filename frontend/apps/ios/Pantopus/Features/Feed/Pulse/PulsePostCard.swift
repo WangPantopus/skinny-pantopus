@@ -208,46 +208,57 @@ public struct PulsePostCard: View {
     }
 
     public var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: Spacing.s2) {
-                header
-                if let title = content.title, !title.isEmpty {
-                    Text(title)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                }
-                if !content.body.isEmpty {
-                    Text(content.body)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.Color.appTextStrong)
-                        .lineLimit(content.title?.isEmpty == false ? 2 : 3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if !content.media.isEmpty {
-                    PostMediaGridView(
-                        items: content.media,
-                        style: .compact,
-                        accessibilityID: "pulsePostMedia_\(content.id)"
-                    )
-                }
-                if let attendees = content.attendees {
-                    attendeeStrip(attendees)
-                }
+        if content.actions.isSeeded {
+            // A cold-start tip isn't a post: there's no page to open and nothing to react to (its X dismisses it).
+            card
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("pulsePostCard_\(content.id)")
+        } else {
+            Button(action: onTap) { card }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(a11yLabel)
+                .accessibilityIdentifier("pulsePostCard_\(content.id)")
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            header
+            if let title = content.title, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+            }
+            if !content.body.isEmpty {
+                Text(content.body)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .lineLimit(content.title?.isEmpty == false ? 2 : 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if !content.media.isEmpty {
+                PostMediaGridView(
+                    items: content.media,
+                    style: .compact,
+                    accessibilityID: "pulsePostMedia_\(content.id)"
+                )
+            }
+            if let attendees = content.attendees {
+                attendeeStrip(attendees)
+            }
+            if !content.actions.isSeeded {
                 reactionStrip
             }
-            .padding(Spacing.s3)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityIdentifier("pulsePostCard_\(content.id)")
+        .padding(Spacing.s3)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
     }
 
     private var header: some View {

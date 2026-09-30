@@ -142,9 +142,13 @@ public struct PulsePostDetailView: View {
             LoadingLayout(onBack: onBack)
         case let .loaded(detail):
             loadedLayout(detail)
-        case let .error(message):
-            ErrorLayout(message: message, onBack: onBack) {
-                Task { await viewModel.refresh() }
+        case let .error(message, retryable):
+            if retryable {
+                ErrorLayout(message: message, onBack: onBack) {
+                    Task { await viewModel.refresh() }
+                }
+            } else {
+                ErrorLayout(message: message, onBack: onBack, onRetry: nil)
             }
         }
     }
@@ -356,7 +360,8 @@ private struct LoadingLayout: View {
 private struct ErrorLayout: View {
     let message: String
     let onBack: @MainActor () -> Void
-    let onRetry: @MainActor () -> Void
+    /// Nil when Try again can't help (the post is gone or hidden); Back stays.
+    let onRetry: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -365,7 +370,7 @@ private struct ErrorLayout: View {
                 icon: .alertCircle,
                 headline: "Couldn't load this post",
                 subcopy: message,
-                cta: EmptyState.CTA(title: "Try again") { await MainActor.run { onRetry() } }
+                cta: onRetry == nil ? nil : EmptyState.CTA(title: "Try again") { await MainActor.run { onRetry?() } }
             )
             .frame(maxHeight: .infinity)
         }

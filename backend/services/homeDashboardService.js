@@ -10,6 +10,7 @@ const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const records = require('./homeRecordService');
 const authority = require('./homeAuthorityService');
 const { getHealthScore, canReadHealthScore } = require('./homeHealthService');
+const { describeHomeActivity } = require('../utils/homeActivityLabels');
 
 const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
@@ -238,7 +239,9 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
     counts: { tasks_open: tasks.filter(task => ['open', 'in_progress'].includes(task.status)).length,
       issues_open: openIssues, bills_due: dueBills, packages_expected: expectedPackages, documents: documentCount,
       events_upcoming: upcomingEvents.length, members_active: members.length, pets: petCount },
-    members: enrichedMembers, recent_activity: activity,
+    // Each row carries the same readable sentence as the Home activity timeline
+    // (`description`), so the apps don't have to show audit codes.
+    members: enrichedMembers, recent_activity: activity.map((row) => ({ ...row, description: describeHomeActivity(row) })),
     ...(healthScore !== undefined && { health_score: healthScore }),
   };
 }

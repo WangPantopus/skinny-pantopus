@@ -581,7 +581,7 @@ public struct AppLockOverlay: View {
                     Task { await manager.unlockIfNeeded() }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Theme.Color.primary600)
+                .tint(Theme.Color.primarySolid)
                 .accessibilityIdentifier("appLockRetry")
                 Button("Sign out", role: .destructive) {
                     Task { await onSignOut() }

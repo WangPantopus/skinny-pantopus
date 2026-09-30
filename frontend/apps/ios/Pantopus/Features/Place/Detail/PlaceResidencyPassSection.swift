@@ -175,6 +175,7 @@ struct PlaceResidencyPassSection: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.Color.primarySolid)
                 .disabled(vm.isIssuing)
             }
         }
@@ -330,6 +331,7 @@ private struct PlaceResidencyClaimRow: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(Theme.Color.primarySolid)
                         Button(role: .destructive) {
                             Task { await vm.revoke(claim.id) }
                         } label: {

@@ -133,7 +133,8 @@ public struct RootTabView: View {
             .tag(RootTab.mail)
             .badge(model.messagesBadge)
         }
-        .tint(Theme.Color.primary600)
+        // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
+        .tint(Theme.Color.primaryTint)
         .environment(model)
         .task {
             await chatBadgeStore.start()
@@ -309,6 +310,7 @@ public struct TodayTabRoot: View {
     @State private var generation = 0
     @State private var briefingDeliveryId: String?
     @State private var briefingKind: String?
+    @State private var systemSheet: SystemSheetRequest?
 
     public init() {}
 
@@ -322,7 +324,13 @@ public struct TodayTabRoot: View {
                         viewModel: TodayDetailViewModel(
                             briefingDeliveryId: briefingDeliveryId,
                             requestedKind: briefingKind
-                        )
+                        ),
+                        // Back returns to the address's day; Share sends the briefing's text.
+                        onBack: {
+                            briefingDeliveryId = nil
+                            briefingKind = nil
+                        },
+                        onShare: { text in systemSheet = .share(items: [text]) }
                     )
                 } else {
                     AddressTodayTabView()
@@ -332,6 +340,7 @@ public struct TodayTabRoot: View {
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("todayTabRoot")
         }
+        .sheet(item: $systemSheet) { request in request.makeView() }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }

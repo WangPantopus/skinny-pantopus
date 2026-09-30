@@ -5780,7 +5780,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
-                    TodayDetailScreen(onBack = { navController.popBackStack() })
+                    TodayDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onShare = { text -> appContext.shareText(text, "Share today's briefing") },
+                        // More opens the app menu, as on iOS; Manage opens the briefing and alert settings.
+                        onMore = { navController.navigate(ChildRoutes.MENU) },
+                        onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) },
+                    )
                 }
                 composable(ChildRoutes.WALLET) {
                     // Withdraw + payout setup (Block 3C) are handled inside

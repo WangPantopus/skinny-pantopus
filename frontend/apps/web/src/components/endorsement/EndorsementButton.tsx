@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { CATEGORY_MAP } from '@/components/discover/constants';
+import { toast } from '@/components/ui/toast-store';
 
 interface EndorsementButtonProps {
   /** The business user id to endorse */
@@ -114,9 +115,10 @@ export default function EndorsementButton({
         await api.businesses.endorseBusiness(businessId, { category });
       }
       onCountChange?.(next.length);
-    } catch {
-      // Revert on error
+    } catch (err: unknown) {
+      // Revert, and say why: "You need a verified home address…" is the answer most people get.
       setEndorsedCategories(prev);
+      toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t save your endorsement. Please try again.');
     } finally {
       setToggling(null);
     }

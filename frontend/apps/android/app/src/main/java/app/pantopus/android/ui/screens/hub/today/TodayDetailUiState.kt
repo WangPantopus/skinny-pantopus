@@ -66,6 +66,8 @@ data class TodayAroundItem(
 data class TodayShareCard(
     val title: String,
     val subtitle: String,
+    /** What Share sends, built by [TodayDetailMapper.shareMessage] from shareable fields only. */
+    val message: String = "",
 )
 
 /** Full render payload for the Today detail screen. */
@@ -78,7 +80,8 @@ data class TodayDetailContent(
     val glyph: PantopusIcon,
     val chips: List<TodayHeroChip>,
     val ribbon: TodayAlertRibbon?,
-    val sunSky: TodaySunSky,
+    /** Null when the weather feed has no sun times: the card is left out rather than guessed. */
+    val sunSky: TodaySunSky?,
     val signalsTitle: String,
     val signalsAccent: TodayTone,
     val signals: List<TodaySignal>,

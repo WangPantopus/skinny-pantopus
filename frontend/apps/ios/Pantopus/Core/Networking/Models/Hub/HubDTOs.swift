@@ -241,6 +241,9 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
         public let highF: Double?
         public let lowF: Double?
         public let precipitationNext6h: Bool?
+        /// Today's sunrise and sunset (UTC ISO 8601) from the daily forecast.
+        public let sunriseUtc: String?
+        public let sunsetUtc: String?
 
         private enum CodingKeys: String, CodingKey {
             case currentTempF = "current_temp_f"
@@ -249,6 +252,8 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
             case highF = "high_f"
             case lowF = "low_f"
             case precipitationNext6h = "precipitation_next_6h"
+            case sunriseUtc = "sunrise_utc"
+            case sunsetUtc = "sunset_utc"
         }
     }
 
@@ -278,13 +283,14 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
     }
 
     /// `data` is provider-specific (untyped on the wire) and unused by the
-    /// briefing, so the decoder simply ignores it.
+    /// briefing, so the decoder simply ignores it. So is `action`, a
+    /// `{label, route}` object on bill, task, calendar, pickup, mail, gig and
+    /// local-update signals: declared as a String, it failed the whole payload.
     public struct TodaySignalDTO: Decodable, Sendable, Hashable {
         public let kind: String?
         public let label: String?
         public let detail: String?
         public let urgency: String?
-        public let action: String?
     }
 
     public struct TodaySeasonal: Decodable, Sendable, Hashable {

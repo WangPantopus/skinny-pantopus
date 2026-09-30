@@ -4,7 +4,7 @@ import Image from 'next/image';
 import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, Calendar, CalendarDays, Search, Megaphone,
-  AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper,
+  AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
   Trophy, Compass, User, Heart, Bookmark, Hand, ThumbsUp,
   MapPin, Store, Clock, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share,
 } from 'lucide-react';
@@ -63,6 +63,8 @@ interface PostCardProps {
   onMute?: (target: Parameters<typeof api.posts.muteEntity>[0]) => void;
   onNotHelpful?: (postId: string) => void;
   onSolved?: (postId: string) => void;
+  /** Dismisses a cold-start tip (a seeded fact, not a post). */
+  onDismissSeeded?: (factId: string) => void;
   currentUserId?: string;
   isLiking?: boolean;
   surface?: string;
@@ -81,6 +83,7 @@ function PostCard({
   onMute,
   onNotHelpful,
   onSolved,
+  onDismissSeeded,
   currentUserId,
   isLiking,
   surface,
@@ -121,7 +124,10 @@ function PostCard({
   // were always a User-row leak, gone after P0.3 narrowed the SELECT.
   const locationText = '';
   const homeLabel = post.home?.address || post.home?.city || null;
-  const openFullPost = () => onOpenDetail(post.id);
+  // A cold-start tip isn't a post: there's no page to open, nothing to react to, and its X dismisses it.
+  const seeded = post.is_seeded === true;
+  const tapClass = seeded ? '' : ' cursor-pointer';
+  const openFullPost = () => { if (!seeded) onOpenDetail(post.id); };
 
   return (
     <article
@@ -129,7 +135,7 @@ function PostCard({
       style={{ borderColor: config.borderColor }}
     >
       {/* ─── Type indicator strip ─────────────────────── */}
-      <div className="flex items-center gap-2 px-4 pt-3 pb-1 cursor-pointer" onClick={openFullPost}>
+      <div className={`flex items-center gap-2 px-4 pt-3 pb-1${tapClass}`} onClick={openFullPost}>
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
           style={{ background: config.bgLight, color: config.textColor }}
@@ -212,7 +218,18 @@ function PostCard({
           )}
         </div>
 
-        {/* ─── Overflow menu ───────────────────────────── */}
+        {/* ─── Overflow menu (a tip gets a dismiss X instead) ─── */}
+        {seeded ? (
+          onDismissSeeded && (
+            <button
+              onClick={() => onDismissSeeded(post.id)}
+              aria-label="Dismiss this tip"
+              className="p-1.5 rounded-lg hover-bg-app transition"
+            >
+              <X className="w-4 h-4 text-app-muted" />
+            </button>
+          )
+        ) : (
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -263,11 +280,12 @@ function PostCard({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* ─── Location tag (if post has location) ────── */}
       {(post.location_name || post.latitude) && (
-        <div className="px-4 pb-1 cursor-pointer" onClick={openFullPost}>
+        <div className={`px-4 pb-1${tapClass}`} onClick={openFullPost}>
           <span className="inline-flex items-center gap-1 text-[11px] text-app-muted bg-surface-muted rounded-full px-2 py-0.5">
             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -286,7 +304,7 @@ function PostCard({
       )}
 
       {/* ─── Content ─────────────────────────────────── */}
-      <div className="px-4 pb-2 cursor-pointer" onClick={openFullPost}>
+      <div className={`px-4 pb-2${tapClass}`} onClick={openFullPost}>
         <p
           className="text-sm text-app leading-relaxed whitespace-pre-wrap"
         >
@@ -306,7 +324,7 @@ function PostCard({
 
       {/* ─── Type-specific metadata cards ────────────── */}
       {(post.post_type === 'event') && (post.event_date || post.event_venue) && (
-        <div className="mx-4 mb-2 p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1 cursor-pointer" onClick={openFullPost}>
+        <div className={`mx-4 mb-2 p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1${tapClass}`} onClick={openFullPost}>
           {post.event_date && (
             <div className="flex items-center gap-2 text-xs text-blue-800">
               <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
@@ -326,7 +344,7 @@ function PostCard({
       )}
 
       {post.post_type === 'deal' && (post.deal_business_name || post.deal_expires_at) && (
-        <div className="mx-4 mb-2 p-3 bg-green-50 rounded-xl border-l-4 border-green-400 space-y-1 cursor-pointer" onClick={openFullPost}>
+        <div className={`mx-4 mb-2 p-3 bg-green-50 rounded-xl border-l-4 border-green-400 space-y-1${tapClass}`} onClick={openFullPost}>
           {post.deal_business_name && (
             <div className="flex items-center gap-2 text-xs text-green-800">
               <Store className="w-3.5 h-3.5 flex-shrink-0" />
@@ -343,7 +361,7 @@ function PostCard({
       )}
 
       {post.post_type === 'lost_found' && post.lost_found_type && (
-        <div className="mx-4 mb-2 p-3 bg-yellow-50 rounded-xl border-l-4 border-yellow-400 cursor-pointer" onClick={openFullPost}>
+        <div className={`mx-4 mb-2 p-3 bg-yellow-50 rounded-xl border-l-4 border-yellow-400${tapClass}`} onClick={openFullPost}>
           <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
             {post.lost_found_type === 'lost' ? <Search className="w-3.5 h-3.5 flex-shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />}
             <span className="uppercase">{post.lost_found_type}</span>
@@ -353,7 +371,7 @@ function PostCard({
       )}
 
       {post.post_type === 'service_offer' && post.service_category && (
-        <div className="mx-4 mb-2 p-3 bg-violet-50 rounded-xl border-l-4 border-violet-400 cursor-pointer" onClick={openFullPost}>
+        <div className={`mx-4 mb-2 p-3 bg-violet-50 rounded-xl border-l-4 border-violet-400${tapClass}`} onClick={openFullPost}>
           <div className="flex items-center gap-2 text-xs text-violet-800">
             <Wrench className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{post.service_category}</span>
@@ -379,7 +397,7 @@ function PostCard({
 
       {/* ─── Tags ──────────────────────────────────── */}
       {post.tags && post.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-4 pb-2 cursor-pointer" onClick={openFullPost}>
+        <div className={`flex flex-wrap gap-1.5 px-4 pb-2${tapClass}`} onClick={openFullPost}>
           {post.tags.slice(0, 5).map((tag: string) => (
             <span key={tag} className="px-2 py-0.5 bg-sky-50 text-sky-700 text-[11px] font-medium rounded-full">#{tag}</span>
           ))}
@@ -423,7 +441,8 @@ function PostCard({
         </div>
       )}
 
-      {/* ─── Action bar ──────────────────────────────── */}
+      {/* ─── Action bar (none on a tip) ──────────────── */}
+      {!seeded && (
       <div className="flex items-center gap-1 px-3 py-2 border-t border-app">
         {/* Like */}
         <button
@@ -554,6 +573,7 @@ function PostCard({
           </button>
         )}
       </div>
+      )}
     </article>
   );
 }
@@ -573,5 +593,6 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.onSave === next.onSave
     && prev.onDelete === next.onDelete
     && prev.onHide === next.onHide
-    && prev.onMute === next.onMute;
+    && prev.onMute === next.onMute
+    && prev.onDismissSeeded === next.onDismissSeeded;
 });

@@ -18,6 +18,7 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
+const verificationAge = require('../utils/verificationAge');
 const { VERIFICATION_MULTIPLIERS } = require('../utils/businessConstants');
 const {
   isNewBusiness,
@@ -1067,17 +1068,10 @@ router.post('/:businessId/endorsements', verifyToken, async (req, res) => {
     // Get endorser's active home (verified address, non-guest)
     const { data: occupancy, error: occErr } = await supabaseAdmin
       .from('HomeOccupancy')
-      .select(`
-        home_id,
-        role_base,
-        home:home_id (
-          id,
-          created_at,
-          ownership_status
-        )
-      `)
+      .select('home_id, role_base, verified_at')
       .eq('user_id', userId)
       .eq('is_active', true)
+      .eq('verification_status', 'verified')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -1095,10 +1089,11 @@ router.post('/:businessId/endorsements', verifyToken, async (req, res) => {
       });
     }
 
-    // Home must be at least 14 days old (anti-gaming)
-    const home = occupancy.home;
-    const homeAgeDays = (Date.now() - new Date(home.created_at).getTime()) / (1000 * 60 * 60 * 24);
-    if (homeAgeDays < 14) {
+    // The residency must have been verified at least 14 days ago (anti-gaming), however old the home is.
+    // A verified occupancy without verified_at predates that column, so when it was verified is unknown:
+    // it counts as not yet 14 days until it is verified again.
+    const verifiedDays = verificationAge.ageInDays(occupancy.verified_at);
+    if (verifiedDays === null || verifiedDays < 14) {
       return res.status(403).json({
         error: 'Your home address must be verified for at least 14 days before endorsing',
       });

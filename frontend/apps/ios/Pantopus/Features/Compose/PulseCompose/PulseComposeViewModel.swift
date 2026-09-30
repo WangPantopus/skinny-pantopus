@@ -349,6 +349,8 @@ public final class PulseComposeViewModel {
     /// the post's saved pose, not the create-mode defaults.
     private var baselineIdentity: PulseComposeIdentity = .personal
     private var baselineVisibility: PulseComposeVisibility = .neighbors
+    /// Editing a post saved without a title: the title stays optional instead of blocking the save.
+    private var titleOptional = false
     private var baselineLostFoundKind: PulseLostFoundKind = .lost
     private var baselineLostFoundContactPref: PulseLostFoundContactPref = .dm
     private var baselineAnnounceAudience: PulseAnnounceAudience = .neighbors
@@ -576,7 +578,11 @@ public final class PulseComposeViewModel {
     private func validator(for field: PulseComposeField) -> FormValidator {
         switch field {
         case .title:
-            .all([.required("Title"), .maxLength(FieldLimits.title)])
+            if titleOptional {
+                .maxLength(FieldLimits.title)
+            } else {
+                .all([.required("Title"), .maxLength(FieldLimits.title)])
+            }
         case .body:
             .all([
                 .required("Description"),
@@ -820,6 +826,8 @@ public final class PulseComposeViewModel {
     private func apply(prefill post: PostDetailDTO) {
         let intent = PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
         activeIntent = intent
+        // Web's default "general" posts have no title and open on the Announcement form.
+        titleOptional = (post.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         // Visibility — fall back to neighbors when the wire value is one
         // of the wider backend enum values we don't expose in the form.
@@ -1242,7 +1250,7 @@ public final class PulseComposeViewModel {
         case .ask:
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue,
+                title: titleValue.isEmpty ? nil : titleValue,
                 visibility: visibility.rawValue,
                 serviceCategory: askCategory.rawValue
             )
@@ -1258,7 +1266,7 @@ public final class PulseComposeViewModel {
             let dateRaw = trimmedValue(.eventDate)
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue,
+                title: titleValue.isEmpty ? nil : titleValue,
                 visibility: visibility.rawValue,
                 eventDate: dateRaw.isEmpty ? nil : isoDateTime(from: dateRaw),
                 eventVenue: venue.isEmpty ? nil : venue
@@ -1273,7 +1281,7 @@ public final class PulseComposeViewModel {
         case .announce:
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue,
+                title: titleValue.isEmpty ? nil : titleValue,
                 visibility: announceAudience.backendVisibility
             )
         }
