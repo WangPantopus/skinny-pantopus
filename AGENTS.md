@@ -52,8 +52,16 @@ PR dispositions, paused drafts, inventory sources and the next bounded task.
 
 ## Approved parallel work
 
-When working in one of the user's three streams, read
-[the coordination guide](docs/workstreams/README.md) and your stream status before
-editing. Use its single live coordination location, file ownership and runtime
-reservations. Keep the existing handoff/backlog authoritative and preserve each
-stream's accepted evidence. The coordinator integrates shared status and merges.
+When working in one of the user's parallel workstreams, read the coordination
+guide and your stream status before editing. The live guide is
+`docs/workstreams/README.md` on the `codex/workstream-coordination` branch
+([master's copy](docs/workstreams/README.md) is an older snapshot). Use its single
+live coordination location, file ownership and runtime reservations. Keep the
+existing handoff/backlog authoritative and preserve each stream's accepted
+evidence. The coordinator integrates shared status and merges.
+
+Workstreams were renumbered on 2026-09-30 (user direction): the former Streams 1
+and 2 are each being split in two (Streams 1–4), and the former Stream 3
+(Accounts and Social) is now Stream 5, with its status in
+`docs/workstreams/05-accounts-social.md`. In records dated before 2026-09-30,
+"Stream 3" means today's Stream 5.

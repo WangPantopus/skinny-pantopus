@@ -1,4 +1,7 @@
-# Three-stream coordination
+# Workstream coordination (older snapshot; five streams from 2026-09-30)
+
+> **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub is `docs/workstreams/README.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
+
 
 > **▶ START HERE (handoff, Sep 23 20:50 UTC):** [`HANDOFF-2026-09-23-FINAL.md`](HANDOFF-2026-09-23-FINAL.md) — complete handoff of coordinator session `92cc4526`: what was done (187 PRs merged today; don't redo), exact paused state, prioritized remaining work, founder queue, runbooks. Paused-state detail: [`coordinator-state-2026-09-23/COORDINATOR-RESUME.md`](coordinator-state-2026-09-23/COORDINATOR-RESUME.md).
 
@@ -1175,7 +1178,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream3 current summary](03-accounts-social.md).
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -3936,7 +3939,7 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
 | [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
 | [2. Home/household](02-home-household.md) | Current Home milestone and handoff | Stream 2 |
-| [3. Accounts/social](03-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
+| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
 The coordinator is also Stream 1; there is no fourth implementation stream.
