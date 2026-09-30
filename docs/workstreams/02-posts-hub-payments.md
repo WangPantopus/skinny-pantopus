@@ -9,6 +9,8 @@
 
 ## CURRENT RESUME — HANDOFF 2026-09-30T21:31Z (successor: start here)
 
+> **2026-09-30T23:13Z:** the successor session is active; #1096 merged in batch 220, so step 2 below is done. Live progress is in CURRENT STATE.
+
 The session "Stream 2: Posts, Hub and payments" handed over at the user's request. **Nothing is in progress:** all code is pushed, and one PR (#1096) waits for Stream 1's batch. The next-agent prompt is [`NEXT-STREAM2-PROMPT-2026-09-30-evening.md`](NEXT-STREAM2-PROMPT-2026-09-30-evening.md). Newest dated text wins. **Re-verify every SHA, PR, slot and process live.**
 
 ### 1. Where things stand (checked at 21:27–21:31Z)
@@ -171,9 +173,13 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-09-30T21:31Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T23:13Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-09-30T21:31Z): handed over** at the user's request; start from "CURRENT RESUME — HANDOFF" above.
+- **Latest (2026-09-30T23:13Z): the successor session is active** (started 23:12Z by `date -u`).
+  - **[#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096) merged** in batch 220 ([#1098](https://github.com/WangPantopus/skinny-pantopus/pull/1098), 2026-09-30T21:37:21Z) at head `c26c706e4`. Master is now `a211e1f48` (batch 223).
+  - **Checklist:** U03 "Edit a post → Web" is done (#1096, seal 406c0939). U02 81 done / 2 boundary; U03 55 done / 0 to do / 2 not offered; U04 16 done. The inventory rows for web post edit and the composer date labels are marked fixed.
+  - **No open Stream 2 PRs.** Next: the handoff backlog in order, starting with (1) the web deal expiry copy (reproduce first).
+- **Earlier (2026-09-30T21:31Z): handed over** at the user's request; start from "CURRENT RESUME — HANDOFF" above.
   - **Merged in batch 218** (#1094, master `d0a39aa4e`): [#1075](https://github.com/WangPantopus/skinny-pantopus/pull/1075), [#1085](https://github.com/WangPantopus/skinny-pantopus/pull/1085), [#1086](https://github.com/WangPantopus/skinny-pantopus/pull/1086), [#1088](https://github.com/WangPantopus/skinny-pantopus/pull/1088) and [#1091](https://github.com/WangPantopus/skinny-pantopus/pull/1091). Master is now `11e2b72f6` (batch 219).
   - **[#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096)** head `c26c706e4`, seal `406c0939…`: web can edit your own post (Stream 1's conditions met).
     - Verified in Chrome: an untitled post stays untitled; E1 (a failed save keeps the edit), E2 (a lost reply is retried once and saved once) and E5 (deleted meanwhile says so).
@@ -617,7 +623,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:29Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T23:13Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -631,7 +637,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | **Posts and Pulse** | | | |
 | Pulse feed, My posts, counts | ✅ Cold-start Pantopus tips (seeded facts) opened "We couldn't find this post" (Stream 1): info cards with a dismiss (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8)<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Cold-start tips opened a post that doesn't exist (reproduced, 404): info cards with a working dismiss (#1047 merged (batch 211), seal a67de577)<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Cold-start tips rendered as full posts with no dismiss: info cards with a dismiss X (#1047 merged (batch 211), seal a67de577)<br>✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
 | Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: typed (555) 555-0123 stored as digits; the post page shows the contact line (Stream 1 iOS run, no change) (Stream 1 bundle 3ee82fc9)<br>✅ My posts → Write a post always made an Ask post: the purpose picker shows (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
-| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>✅ A post saved without a title (web's general posts) couldn't be edited: the Headline stays empty, Save sends PATCH 200 (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>✅ A post saved without a title couldn't be edited (reproduced, 0 writes): the title stays null (#1047 merged (batch 211), seal 176cd103) | ⬜ Web had no post edit action; built in #1096 with Stream 1's approval (author-only, the composer in edit mode, only changed fields sent, untitled stays untitled; E1/E2/E5 and axe verified in Chrome; seal 406c0939), waiting to merge |
+| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>✅ A post saved without a title (web's general posts) couldn't be edited: the Headline stays empty, Save sends PATCH 200 (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>✅ A post saved without a title couldn't be edited (reproduced, 0 writes): the title stays null (#1047 merged (batch 211), seal 176cd103) | ✅ Web had no post edit action; built in #1096 with Stream 1's approval (author-only, the composer in edit mode, only changed fields sent, untitled stays untitled; E1/E2/E5 and axe verified in Chrome) (#1096 merged (batch 220), seal 406c0939) |
 | Delete a post | ✅ E2 (#709)<br>✅ E1 My posts says when a delete, archive or restore fails; Delete really deletes (it sent nothing before) (#980, Stream 1 bundle d172244f) | ✅ E2 (#709)<br>✅ E1 post page: keeps the post and says "Couldn't delete the post"; retry deletes (no change) (seal 569a60a4)<br>✅ E1 My posts: says when a delete, archive or restore fails (#980, seal 54995229) | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the iOS comment composer is text-only; web comment photos still display) (Stream 1 bundle e4825b97) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the Android comment composer is text-only) | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
@@ -671,7 +677,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 54, confirm from existing evidence 0, to do 1, your call 0, boundary 0, not offered 2
+- U03 items: done 55, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 2
 - U04 items: done 16, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 0
 - U02 items: done 81, confirm from existing evidence 0, to do 0, your call 0, boundary 2, not offered 0
 
