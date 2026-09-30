@@ -120,7 +120,7 @@ function DocsContent() {
                             View
                           </a>
                         )}
-                        <button onClick={() => handleDelete(doc.id, doc.title || doc.filename)} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
+                        <button onClick={() => handleDelete(doc.id, doc.title || doc.filename)} aria-label={`Delete ${doc.title || doc.filename || 'Untitled'}`} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
