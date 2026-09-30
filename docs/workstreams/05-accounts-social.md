@@ -9,6 +9,22 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — batch 197 merged #1028 and #1023; #1030 rebased onto master and ready, CI running, 2026-09-30T16:09:50Z
+
+- **Batch 197** (PR #1031, 16:07:41Z, master `a318010a2`) merged:
+  - **#1028**, the authenticated default-deny with the chat policy fix;
+  - **#1023**, the iOS delete sheet;
+  - Stream 3's #1024.
+- **#1023 on iOS** (Stream 1, bundle `20260930-stream1-1023-ios-delete-keyboard-r1`, seal `26bcf241…`), at `e8a85d6c4` with DELETE typed and the keyboard up:
+  - the Cancel / Delete My Account row sits fully above the suggestion bar, and the return key reads "done";
+  - tapping the button with the keyboard still up reached `DELETE /api/users/account` 200 and the signed-out start;
+  - on master the bar had covered both buttons.
+- **182000** is on Stream 1's runtime too. Signed-in API reads return 200.
+- **[#1030](https://github.com/WangPantopus/skinny-pantopus/pull/1030)** (business RPC revoke, 183000):
+  - the stacked run passed the database job: 68/68 contracts, including the new `client-rpc-surface`, and baseline 6/6;
+  - rebased onto `a318010a2` as `f21e54fb8` and marked ready. Local checks pass; CI is running on the final head.
+- **Open from Stream 5:** #1030.
+
 ## LIVE — new finding: a business RPC leaked permission maps to the anon key; fix #1030 (183000) in draft, stacked on #1028; #1028 approved for batch 197, 2026-09-30T16:03:08Z
 
 - **#1028:** Stream 1 approved it for batch 197, together with Stream 3's #1024. Stream 2 approved too, so all three owning streams have.
