@@ -1863,6 +1863,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
     const goalAmount = req.body.goal_amount || null;
+    // The train's enable_gift_funds is what the detail and share pages list, and
+    // disable turns it off: set it again whenever the fund ends up on.
+    const showGiftFunds = async () => {
+      if (!st.enable_gift_funds) {
+        await supabaseAdmin.from('SupportTrain').update({ enable_gift_funds: true }).eq('id', st.id);
+      }
+    };
 
     // Check if fund already exists
     const { data: existing } = await supabaseAdmin
@@ -1872,6 +1879,7 @@ router.post(
       .single();
 
     if (existing) {
+      let current = existing;
       // If disabled, re-enable; if already enabled, update goal if provided
       if (existing.status === 'disabled' || goalAmount !== null) {
         const patch = { status: 'enabled' };
@@ -1884,9 +1892,10 @@ router.post(
           .select('*')
           .single();
 
-        return res.json(updated || existing);
+        current = updated || existing;
       }
-      return res.json(existing);
+      if (current.status === 'enabled') await showGiftFunds();
+      return res.json(current);
     }
 
     // Create new fund
@@ -1906,10 +1915,7 @@ router.post(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to enable fund.' });
     }
 
-    // Also set enable_gift_funds on the SupportTrain if not already
-    if (!st.enable_gift_funds) {
-      await supabaseAdmin.from('SupportTrain').update({ enable_gift_funds: true }).eq('id', st.id);
-    }
+    await showGiftFunds();
 
     res.status(201).json(fund);
   })
