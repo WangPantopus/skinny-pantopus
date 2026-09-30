@@ -745,8 +745,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 )
             ),
             // The owner decides who joins the household, so the requester's
-            // whole name shows, as on the Pending tab.
-            titleLineLimit: nil
+            // whole name shows. A line count rather than nil (the Pending
+            // tab's), because nil also fixes the title's height and squeezes
+            // the role chip beside it ("Househol…").
+            titleLineLimit: 6
         )
     }
 
