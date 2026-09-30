@@ -9,6 +9,29 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T17:55Z (Stream 1).**
+  - **Batch 203** (17:50:15Z, PR #1045): **#1042**, Stream 5's N04 report review queue. Master `1bc136f69`.
+    - An admin-only queue at `/api/admin/reports` plus the web page.
+    - Alerts carry only kind, category, id and link. No table.
+    - DM reports are included; neighbor-message flags are view-only; Marketplace listing reports are left out.
+    - Seal `d641c192`.
+  - **Opened #1044 (Stream 1):** web primary/emerald 50/100 tints deepen in dark mode. The Home health ring and Issues badges use theme tokens, with the ring on the iOS/Android bands (75/40).
+    - Measured in the running app: the Owner chip goes 1.34 → 8.80:1 in dark; app text on `bg-emerald-50` goes 1.18 → 12.28.
+    - The token test pins 72 new pairs.
+    - Bundle `20260930-stream1-web-dark-tints-r1`, seal `a00532fb`.
+    - **Next Stream 1 pass:** raw `text-{red,amber,green,blue,violet}-600…800` on dark surfaces (about 1,100 uses), a token-level design like #979's.
+  - **Stream 2's iOS cells:**
+    - The comment photo failure is **not offered on iOS**: the composer is text-only, the same as Android (seal `e4825b97`).
+    - **Found:** tapping a cold-start "Pantopus" tip (`is_seeded`) opens "Couldn't load this post" (404) on iOS. Android and web wire the same tap. Stream 2 owns the fix: the facts become info cards on all three clients with the existing dismiss.
+    - 7 of 8 are done. U02 A1–A4 (11 screens) runs on the next iOS build.
+  - **#1038:** head `71cf7309a`, r2 seal `32cf8dfc`. It carries the share allowlist and a decode fix: an `action` object on a signal made the whole Today screen fail on both apps.
+    - Stream 1's iOS runtime run is set up: the runtime backend is on batch tip `6a8d904e5` (master plus #1038). Alice has a viewing location (Vancouver) and a synthetic time-sensitive notice.
+    - The payload has sunrise 14:07Z / sunset 01:52Z, a `mail` signal carrying an action, and `seasonal` "Smoke season".
+    - The iOS build waits for the heavy slot.
+  - **#1036:** Android lint/test/assemble passes (Paparazzi against #1029's goldens). Its iPhone SE unit job failed one unrelated timing test, `BlockedUsersViewModelTests.testDuplicateTapAndDelayedReadCannotUndoSuccessfulUnblock` (a request timeout). The job was re-run.
+  - **#1040:** Stream 4 fixed the Android 409 loop (`ced76d805`). The r3 seal comes after their device rerun.
+  - **Tooling:** `heavy-slot.sh` now exits a waiting acquire on SIGINT/SIGTERM and removes its ticket. It was deployed by atomic rename, and an orphaned ticketless Stream 5 waiter (6h40m) was stopped.
+    - **Lesson:** never rewrite a running bash script in place. Bash reads scripts incrementally, so write a new file and `mv` it over.
 - **Update 2026-09-30T17:25Z (Stream 1).**
   - **Batch 201** (17:18:42Z, PR #1039): **#1037** (Stream 5, migration `20260930184000`). Master `ed08ad438`.
     - Owners get a seat when they create a business; add-member writes the seat; leaving one business keeps seats at the others; a member of two businesses no longer gets 403.
