@@ -9,6 +9,45 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — takeover session: #1115 (crew page blocks + contact form, web) sealed and handed to Stream 1; #1119 (native page-editor a11y) open, waiting for Stream 1's device run together with item 1b, 2026-09-30T23:46:02Z
+
+- **Session:** "Stream 5 Accounts and Social takeover" [a14d84], started about 23:10Z from [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md).
+  - Stream 1's live queue session is "Stream 1 resume: Support Trains and merge queue".
+- **#1081's iOS signal is still pending.**
+  - Master push run 36780940453 (`c054fe318`) was cancelled at 21:52:51Z (superseded), so it has no iOS verdict.
+  - The first uncancelled master run containing #1081 is 36785030404 on `a211e1f48`. Every non-iOS job is green, Android instrumented included; both iOS jobs were still queued at 23:14Z.
+- **Runtime:** DB at `20260930184000` (master has no newer migration).
+  - API 18134 on master `a211e1f48`: receipt 23:33:38Z, loopback only, no founder services.
+  - Web 18131 on #1115's head `837086838`.
+- **#1115, sweep item 1: crew page placeholder blocks and the dead contact form (web). Sealed and handed to Stream 1.**
+  - Head `8370868386295379cf084455a319a922a9970f80`; CI run 36792079253 success; seal `da24054b9c570e7c658c2b6dcd1e6028f3d8687442555ccfbfd67eecdee72863`; bundle `20260930-stream5-crew-page-blocks-r1`; base `763969f07` (merge-tree clean).
+  - **Reproduced on master:**
+    - the Team block read "Team members will be displayed here." and the Posts block "Posts will appear here when available.";
+    - the Gallery showed 6 grey tiles;
+    - every embed printed "Embedded content: <url>", including a stored `javascript:` address;
+    - the contact form's Name, Email and Message were never read, so Send Message opened an inquiry room with 0 messages.
+  - **Fixed and checked on the real API and web:**
+    - visitors no longer see those three blocks;
+    - a YouTube or Vimeo embed plays (nocookie player, lazy, sandboxed);
+    - any other http(s) embed is a link card, and anything else renders nothing;
+    - the contact form sends the typed text into the inquiry chat (201, 1 message), and the owner sees it in the crew Inbox;
+    - the editor palette no longer offers Gallery, Team or Pulse, and the editor's hints tell the truth;
+    - contrast is clean in light and dark.
+- **#1119, sweep item 2: page-blocks editor accessibility (iOS + Android).** Open at head `8d786a19c3efa032fcdc0ce54aa29181bc835ac4`; not sealed, as Stream 1 asked, until its device run.
+  - iOS names the controls as Android does: Move up, Move down, Delete block, Add block and Remove, plus Back and Preview.
+  - The chosen chip reads as selected: `.isSelected` on iOS, `selectable(RadioButton)` on Android.
+  - Stream 1 will run it with item 1b in one device session (sim A189976E + emulator-5558), starting about 00:30Z.
+- **Next: item 1b (native).**
+  - The iOS and Android page editors still offer Team, Pulse and Gallery, with the old hints.
+  - iOS `BusinessProfileNamedPageSection` renders a named page's blocks to visitors (a link with a slug) through `BusinessPageBlocksPreview`, which prints the same placeholders. Android has no such section.
+- **Decisions recorded** (user's standing direction; also in the PRs):
+  1. Blocks with no real content render nothing for visitors.
+  2. The editors stop offering Gallery, Team and Pulse until a gallery uploader, a public team list or a public posts feed exists. Each of those is a product decision with privacy questions.
+  3. Only YouTube and Vimeo get a player, through their privacy-enhanced domains; other addresses are links.
+  4. The contact form sends into the inquiry chat, with no Name or Email field; a signed-out visitor sees only "Log in to Contact".
+  5. Android chips use the app's selectable-radio pattern, so iOS and Android announce the selected option alike.
+- **Fixtures:** the `s5blocks` crew and its 3 inquiry rooms were deleted by exact id. "S5 Crew Biz" was left alone.
+
 ## LIVE — HANDOFF: every Stream 5 PR merged (#1080, #1087, #1089, #1090, #1092 and #1081; batches 217–221, master `c054fe318`); none open; next = sweep backlog, 2026-09-30T21:42:08Z
 
 - **Read [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md) first.** It holds the full state, runtime, rules, backlog and lessons.
