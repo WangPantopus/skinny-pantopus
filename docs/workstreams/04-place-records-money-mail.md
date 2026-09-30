@@ -55,6 +55,11 @@
   - verify-r2 = `20260930-stream4-verify-actions-r2`, `d8e02bba37f45f4e72bdc6cdbfd893ad3640fa7ff7197b8ff3f1c0661de876d1`;
   - U02 sweep = `20260930-stream4-u02-native-r1`, `9e375256e8e3011184c731bc28ab8b0e44a53fcf45dbc48f521ab003494ea307`;
   - r1 attempt = `…-verify-actions-r1`, `94781d84…`.
+- **Pushed without PRs** (don't open them unless the user turns the feature back on):
+  - the shelved launch-cut #8 fixes, with findings in the 19:02:48Z entry:
+    - `claude/stream4-mailday-no-sample-fallback` `4cd7f9e7d` (iOS My Mail Day shows its error frame instead of a sample day);
+    - `claude/stream4-stamps-no-invented-wallet` `608849fa2` (Stamps shows the collection only, not an invented wallet);
+  - `claude/stream4-fixes-all-build` `a93b3e462`, the 10-branch build merge named in the fixes bundle.
 - **Runtime:** free; the lease was released at 22:11:38Z.
   - The backend is at rest on `00bf2d6ff` (pid 45803, 22:10:51Z), with no patches and no ATTOM key.
   - The proxy has no rules. The shared web worktree shows only its kept `.claude/launch.json`.
