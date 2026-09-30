@@ -19,7 +19,6 @@
   - **PR C (stale change requests):** reproduced on the real route. After a helper change, the next helper could approve the previous helper's requests. The fix is a trigger that withdraws pending requests when the helper changes, and it is verified on my DB. The branch comes after PR B's native build.
   - **Out of launch scope (cut #4, Stream 1's ruling):** native Q&A never shows the asker's name (the DTO decodes name/username; the backend sends displayName/handle).
 - **Earlier (10:32Z):**
-  - Previously (2026-09-30T10:32Z):**
   - **[#933](https://github.com/WangPantopus/skinny-pantopus/pull/933) merged** in batch 166 (master `77dc37f64`): a failed read isn't "not found" for post actions either.
   - **Account deletion is now first in the queue** (Stream 1 assignment: launch-critical, App Store requirement). It goes ahead of the native cells.
   - **[#944](https://github.com/WangPantopus/skinny-pantopus/pull/944)** head `de27f3f64c6258e4bfbb0c568d767687eee5001e` (sent to Stream 1; Stream 5 reviewing): stopping a task no longer blocks deleting the account.
