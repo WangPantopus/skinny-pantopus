@@ -908,7 +908,7 @@ struct RowView: View {
             .contentShape(Rectangle())
             .opacity(row.highlight == .archived || row.highlight == .muted ? 0.78 : 1.0)
 
-        if row.footer == nil {
+        if row.footer == nil && !trailingHasOwnActions {
             // Whole-row tap is the canonical interaction when no inline
             // footer competes for taps.
             Button(action: row.onTap) { card }
@@ -916,6 +916,15 @@ struct RowView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(a11yLabel)
                 .accessibilityAddTraits(.isButton)
+                .rowDestructiveMenu(row.destructiveAction)
+        } else if row.footer == nil {
+            // Inline trailing buttons (a request's Invite / Decline, a copy
+            // button, a kebab) stay their own VoiceOver elements; the rest of
+            // the row is one button element (`rowContent`). Combining the
+            // whole card would leave those buttons unreachable.
+            card
+                .onTapGesture(perform: row.onTap)
+                .accessibilityElement(children: .contain)
                 .rowDestructiveMenu(row.destructiveAction)
         } else {
             // With a footer, tap-the-card still routes to row.onTap, but
@@ -970,8 +979,7 @@ struct RowView: View {
                 LeadingBadge()
             }
             HStack(alignment: .top, spacing: Spacing.s3) {
-                LeadingView(leading: row.leading)
-                contentColumn
+                rowContent
                 Spacer(minLength: Spacing.s2)
                 TrailingView(trailing: row.trailing, onSecondary: row.onSecondary, rowTitle: row.title)
             }
@@ -984,6 +992,36 @@ struct RowView: View {
             }
             if let footer = row.footer {
                 FooterStack(footer: footer)
+            }
+        }
+    }
+
+    /// Trailing controls with their own tap handlers.
+    private var trailingHasOwnActions: Bool {
+        switch row.trailing {
+        case .circularAction, .verticalActions, .iconActions, .pillButton: true
+        case .kebab: row.onSecondary != nil
+        default: false
+        }
+    }
+
+    /// Leading + text. With inline trailing buttons (and no footer) they form
+    /// one VoiceOver button that runs the row's tap; otherwise `Group` keeps
+    /// them flat in the card's `HStack`, exactly as before.
+    @ViewBuilder private var rowContent: some View {
+        if row.footer == nil && trailingHasOwnActions {
+            HStack(alignment: .top, spacing: Spacing.s3) {
+                LeadingView(leading: row.leading)
+                contentColumn
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(a11yLabel)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { row.onTap() }
+        } else {
+            Group {
+                LeadingView(leading: row.leading)
+                contentColumn
             }
         }
     }
