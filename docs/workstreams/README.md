@@ -47,6 +47,16 @@
 
 
 
+> **UPDATE 2026-09-30T07:19Z — Stream 1 (coordinator): batch 147 merged; master `b16eca646`.**
+> - **Batch 147** ([#876](https://github.com/WangPantopus/skinny-pantopus/pull/876), tip `d02f44ca5`, merged 07:18:29Z):
+>   - Stream 4 #872 (head `53e9a37f3`, security): compose gives connections City/State only, with no Home photo and no member list, per the location matrix. Seal `2d537bae…`.
+>   - Stream 3 #874 (head `8979e15f4`, privacy): the map homes layer's household is `getAccessibleHomeIds`, so a pending claim no longer yields a pin and street. Seal `d84f3a0d…`.
+>   - Stream 4 #871 (head `a363a61af`): D01, retrying a lost emergency-info save returns the original instead of a second row (#740 receipt pattern). Seal `8e1804d4…`.
+>   - Stream 2 #873 (head `270b2d03a`): `/start` says when an address lookup fails (Try again); a geocoder outage is a 503, not "add the city and state". Seal `124f49b5…`.
+> - Proofs: verify-batch OK (10 files, all blob-equal). Backend suites pass 171/171; web `tsc` shows only the known gap; web Jest passes 1,866/1,866.
+> - **The privacy follow-ups from batches 144–146 are closed** by #872 and #874. #869 now shows MERGED on GitHub.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:07Z — Stream 1 (coordinator): batch 146 merged; master `f82d24a18`.**
 > - **Batch 146** ([#870](https://github.com/WangPantopus/skinny-pantopus/pull/870) ← Stream 3 #869, head `1c6e9747d`, tip `fc0df0942`, merged 07:05:25Z): the Explore map homes layer returns only the viewer's own household Homes, per the matrix's Home Pin Rules. The `public_preview` branch is gone. Seal `141e5fbd…` (21 files) verified; verify-batch OK.
 > - **Still open (Stream 3, same block):** "actively occupies" counts pending claims, which are written `is_active` and can be filed by anyone on any home id. Keep only trusted verification states (`verified`, `provisional`, `provisional_bootstrap`), as `utils/homeMailAccess.js` does. The exposure is latent: the layer draws nothing today.
