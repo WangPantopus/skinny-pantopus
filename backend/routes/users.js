@@ -4947,7 +4947,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     for (const homeId of homeIds) {
       try {
         const retired = await retireHomeForDeletedAccount(homeId, userId);
-        logger.info('Account deletion: home retired', { userId, homeId, action: retired.action, reason: retired.reason });
+        logger.info('Account deletion: home retired', {
+          userId, homeId, action: retired.action, reason: retired.reason, closed: retired.closed,
+        });
       } catch (err) {
         const status = err.statusCode || err.status;
         logger.warn('Account deletion refused: home could not be retired', { userId, homeId, code: err.code, status });
