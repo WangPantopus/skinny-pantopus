@@ -378,6 +378,8 @@ router.post('/:id/report', verifyToken, validate(reportSchema), async (req, res)
       })
       .eq('id', row.id);
     if (error) throw new Error(error.message);
+    // The reason here is free text, so the alert carries only the kind and the message id.
+    require('../services/adminAlerts').notifyReportToReview({ kind: 'message', reportId: row.id }).catch(() => {});
     return res.json({ success: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });

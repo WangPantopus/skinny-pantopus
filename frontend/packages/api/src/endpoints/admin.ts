@@ -72,3 +72,56 @@ export async function reviewClaim(
 ): Promise<{ message: string }> {
   return post(`/api/admin/claims/${claimId}/review`, data, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
+
+// ── Report review queue ─────────────────────────────────────
+
+export type ReportKind = 'user' | 'post' | 'gig' | 'message';
+export type ReportStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+
+export interface ReportPerson {
+  id: string;
+  username: string | null;
+  name: string | null;
+}
+
+export interface AdminReport {
+  kind: ReportKind;
+  id: string;
+  reason: string;
+  details: string | null;
+  status: ReportStatus;
+  created_at: string;
+  resolved_at: string | null;
+  target_id: string;
+  /** The reported person, or a post or neighbor message ({ title, excerpt, author }) or task ({ title, status, poster }). */
+  target: (ReportPerson & Record<string, unknown>) | {
+    id: string;
+    title: string | null;
+    excerpt?: string;
+    post_type?: string | null;
+    archived?: boolean;
+    status?: string | null;
+    author?: ReportPerson | null;
+    poster?: ReportPerson | null;
+  } | null;
+  reporter: ReportPerson | null;
+  /** False for neighbor-message reports, which have no review status yet. */
+  closable: boolean;
+}
+
+export async function getReports(status: ReportStatus = 'pending'): Promise<{
+  status: ReportStatus;
+  reports: AdminReport[];
+  counts: Record<ReportKind, number>;
+  total: number;
+}> {
+  return get('/api/admin/reports', { status });
+}
+
+export async function resolveReport(
+  kind: ReportKind,
+  reportId: string,
+  outcome: 'resolved' | 'dismissed',
+): Promise<{ report: AdminReport }> {
+  return post(`/api/admin/reports/${kind}/${reportId}/resolve`, { outcome });
+}
