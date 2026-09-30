@@ -243,7 +243,7 @@ All D10 cells come from 0927 home-delete-three-apps. Homes list and Home identit
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Members & Security, Members, invitations, Lockdown, audit log | ✅ A1 A2 (Members, Pending, Requests, audit log; `0930 u02-native-a1a2`); the Requests row's whole name is [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036)<br>⬜ A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ✅ A1 A2 (`0930 u02-native-a1a2`; #1036: the Requests name, chip and Decline at font 2.0)<br>⬜ A3 A4<br>⬜ note: the top-bar title shows as "…" at font 2.0 | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour |
+| Members & Security, Members, invitations, Lockdown, audit log | ✅ A1 A2 (Members, Pending, Requests, audit log; `0930 u02-native-a1a2`); the Requests row's whole name is [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036)<br>⬜ A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ✅ A1 A2 (`0930 u02-native-a1a2`; #1036: the Requests name, chip and Decline at font 2.0)<br>⬜ A3 A4<br>⬜ the top-bar title shows as "…" at font 2.0: fix [#1058](https://github.com/WangPantopus/skinny-pantopus/pull/1058), emulator proof pending | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour |
 | Residency review, verification pages, ownership (owners, claim, transfer, dispute) | ✅ A1 A2: Review claims, residency review, Owners, Transfer (`0930 u02-native-a1a2`; #1036: the Review claims links at xl, the Transfer Home name)<br>✅ A3 dark Approve 1.92:1 → 5.48:1 (#1029, Stream 1)<br>⬜ A1 A2 verification pages<br>⬜ A4<br>✅ the review sheet's Close/Reload: not reproduced, they are separate elements (`0930 u02-navbar-probe`) | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; the residency review is FLAG_SECURE, so it was checked through the accessibility tree; #1036: the Transfer Home name)<br>⬜ A1 A2 verification pages<br>⬜ A3 A4 | ✅ A2 evidence choices (#801), Strong tier (#822)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
 | Settings, privacy mirror, Home editor, Delete home | ✅ A1 A2: Home settings, the rename editor, Privacy, Ownership & Security, My homes and Delete home (`0930 u02-native-a1a2`; #1036: the Homes-list unit label and wrapping chips)<br>⛔ Delete home: at xl the system dialog clips its message (Delete stays reachable)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; #1036: Rename stays at font 2.0, the unit label, wrapping chips)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A2 editor Visibility (#807), Danger Zone and Leave Home (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
 | Share center, add guest | ✅ A1 A2: Guest passes and Add guest (`0930 u02-native-a1a2`)<br>⬜ A3 A4 | ✅ A1 A2 (`0930 u02-native-a1a2`; a pass label truncates at 2 lines at 2×, and the "Dog walker" part stays visible)<br>⬜ A3 A4 | ✅ A2 partial (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5 |
@@ -324,6 +324,18 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T18:37Z — [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036) merged (batch 208, master `746b640ce`); [#1058](https://github.com/WangPantopus/skinny-pantopus/pull/1058) opened for the Android top bar at 2×; [#1051](https://github.com/WangPantopus/skinny-pantopus/pull/1051) waits for its real-Chrome seal.**
+  - **#1036:** merged 18:35:23Z in batch 208 (PR #1057). The coordinator verified seal `732b0e5d…`. The U02 cells citing #1036 are now on master.
+  - **#1058:**
+    - At font 1.3 and above, a labelled top-bar action in the shared Android list screen shows its icon, so the Members title no longer collapses to "…" at 2×. TalkBack still reads the action.
+    - One file. Head `4bb90fa845f0ec0ae11a355d2bba2a126c4a3987`, on #1036's head.
+    - ktlint, detekt, `verifyPaparazziDebug` and `assembleDebug` passed at 18:35:29Z.
+    - The emulator before/after goes in `20260930-stream3-home-u04-lifetimes-r1`. The coordinator holds the merge until then.
+  - **#1051 (landlord tabs):** the before/after runs first in the next lease; the coordinator merges it on the seal.
+  - **Next lease** (Stream 4 holds it; planned in DECISION.md files written before the lease):
+    - `stream3-home-landlord-unbuilt-tabs-r1`: web before/after for #1051.
+    - `stream3-home-u04-lifetimes-r1`: U04 L1, L3 and L4 on iOS and Android, and the #1058 before/after.
 
 - **2026-09-30T17:37Z — U03: the owner's residency review passes E1, E2, E3 and R1 on iOS and Android (no code change); the D10 approved-request lead moved to post-launch.**
   - **Bundle:** `20260930-stream3-home-u03-residency-review-r1`, MANIFEST `24e573216fc5dd0d2013d7f9efe6941d6faeefca40806548ad551213b666f669`, 153 files. Lease 17:15:17–17:35:51Z. Six own Homes with member B's real household claims; exact cleanup, 349/353 equal and the rest auth history.
