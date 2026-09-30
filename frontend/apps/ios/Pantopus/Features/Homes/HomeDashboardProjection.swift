@@ -239,7 +239,9 @@ extension HomeDashboardProjection {
                 initials: initials(from: actorName),
                 tone: index.isMultiple(of: 2) ? .personal : .home,
                 title: actorName.map { "\($0): \(phrase)" } ?? phrase,
-                detail: humanized(entry.targetType) ?? "Home activity",
+                // `target_type` is an internal table name ("HomeInvite"), never a
+                // readable word; the title's sentence already says what happened.
+                detail: "Home activity",
                 time: relativeTime(entry.createdAt) ?? ""
             )
         }
