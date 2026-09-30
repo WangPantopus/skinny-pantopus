@@ -56,8 +56,9 @@ export default function MembersPanel({
   const pending = members.filter((m) => m.is_active === false);
 
   const avatarColors = [
-    'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500',
-    'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
+    // 700 shades: white initials stay at least 5:1 on every colour (the 500s fell to about 2.2:1 on amber).
+    'bg-blue-700', 'bg-emerald-700', 'bg-violet-700', 'bg-amber-700',
+    'bg-rose-700', 'bg-cyan-700', 'bg-indigo-700', 'bg-teal-700',
   ];
 
   const getColor = (m: Record<string, any>) => {
