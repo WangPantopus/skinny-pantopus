@@ -8,14 +8,11 @@
 //  Design contract (myposts-frames.jsx):
 //    - Top bar: back chevron + "My posts" + trailing filter icon
 //    - Two equal-width tabs:
-//        Active (N)   — `archived_at IS NULL` (the wire-state of every
-//                        post the `/user/:id` endpoint returns today)
-//        Archived (N) — post.archivedAt != nil. Populated client-side
-//                        from optimistic archive mutations; the backend
-//                        `/user/:id` endpoint filters archived rows out,
-//                        so the tab is empty on a cold load. Wired to a
-//                        future `GET /api/posts/me?status=archived` route
-//                        without code change.
+//        Active (N)   — `archived_at IS NULL`
+//        Archived (N) — post.archivedAt != nil. `/user/:id` returns the
+//                        owner's archived posts with `include_archived`,
+//                        and optimistic archive/restore overrides win
+//                        until the next load.
 //    - 52pt secondary-create FAB ("pen-line") opens the compose-post flow
 //    - Each row uses Shape C6 (additive shell fields on T5.0):
 //        leading:      none
@@ -323,7 +320,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         let depth = min(max(Self.pageSize, posts.count), Self.maxRefreshDepth)
         do {
             let response: MyPostsResponse = try await api.request(
-                PostsEndpoints.userPosts(userId: userId, limit: depth)
+                PostsEndpoints.userPosts(userId: userId, limit: depth, includeArchived: true)
             )
             guard generation == fetchGeneration else { return }
             posts = response.posts
@@ -353,7 +350,8 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 userId: userId,
                 limit: Self.pageSize,
                 cursorCreatedAt: cursor.createdAt,
-                cursorId: cursor.id
+                cursorId: cursor.id,
+                includeArchived: true
             )
         )
         guard generation == fetchGeneration else { return false }

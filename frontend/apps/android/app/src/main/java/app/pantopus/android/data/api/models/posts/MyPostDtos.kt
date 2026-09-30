@@ -8,9 +8,8 @@ import com.squareup.moshi.JsonClass
  * T5.3.3 — One row in `GET /api/posts/user/:userId` (route
  * `backend/routes/posts.js:3016`). Reuses the feed serializer on the
  * backend, so most fields mirror [app.pantopus.android.data.api.models.feed.FeedPost];
- * we add an optional [archivedAt] so the client can model the Archived-tab
- * state locally even though the current backend filters archived rows out
- * of the `/user/:id` response.
+ * [archivedAt] splits the rows into the Active and Archived tabs (My posts
+ * asks for its archived posts with `include_archived=true`).
  */
 @JsonClass(generateAdapter = true)
 data class MyPostDto(
@@ -27,13 +26,7 @@ data class MyPostDto(
     @Json(name = "event_date") val eventDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
-    /**
-     * Local mirror of `archived_at`. The current backend strips this from
-     * the `/user/:id` response (the SELECT applies `archived_at IS NULL`),
-     * so it always decodes as `null` over the wire today. When the future
-     * `GET /api/posts/me?status=archived` lands, the decoder will start
-     * populating this field automatically.
-     */
+    /** `archived_at`; set on the owner's archived posts (`include_archived=true`). */
     @Json(name = "archived_at") val archivedAt: String? = null,
 )
 
