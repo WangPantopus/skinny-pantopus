@@ -9,6 +9,19 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1037 green, sealed (61fefcd1) and handed to Stream 1; fixtures removed, 2026-09-30T17:13:39Z
+
+- **CI run 36748636022** at head `6135591cd`, all green.
+  - Database job 110001467911 applied `20260930184000` in the replay from empty: 68/68 pgTAP, baseline 6/6.
+  - Backend job 110001253708: 6,286 pass, 0 fail.
+- **Bundle** `20260930-stream5-business-seat-writers-r1`, seal `61fefcd1c6c6f2cdda4f557e8b034b54e4cab9eb79f5cc680eb4d251551bcb33` (62 files). Stream 1's five conditions are mapped in its RESULT "Verification".
+- **Fixtures** removed by exact ids at 17:11:29Z: the three rls1 businesses and the `ab620000-…` pair.
+  - The migration's seats for two pre-existing members of an older business stay; that's the migration's effect.
+  - The runtime DB stays at 184000; API 18134 stays on `6135591cd` until the merge.
+- **Routed to Stream 1:** the scan's other 132 candidates by owning stream (posts/trustState → Streams 1/2; mail → 4; Home access → 3). The rest are cut or dead code.
+- **Stream 5 finding, recorded and not fixed:** the native public crew profile (`GET /api/businesses/public/:username`) never shows a sole proprietor's "verified resident" badge, because its Home query uses nonexistent columns. Fixing it would publish the owner's home county, so it needs a privacy/product call.
+- **Next:** Stream 1's review and merge, then return the runtime to master; then the follow-up backfill for people who already hold a binding, after the API deploys.
+
 ## LIVE — crew seat repair #1037 (20260930184000) open, CI running, 2026-09-30T17:07:43Z
 
 - **Found by** a rebuilt schema-drift scan (the 09-23 scripts were lost in the wipe; the new copy is in the bundle), then reproduced on master `f7373d0cd` through the real API and web on my runtime. All four defects are in crew owner tools (A05), which are in launch scope.

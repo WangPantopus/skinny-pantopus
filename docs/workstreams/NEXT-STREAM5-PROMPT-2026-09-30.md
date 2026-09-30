@@ -17,7 +17,7 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
 - **Open (as of 17:07Z):**
-  - **#1037**, the crew seat repair, migration `20260930184000`: CI running, bundle `20260930-stream5-business-seat-writers-r1` not yet sealed, fixtures still active (the rls1 businesses `s5seat_before/after/final_*` and the `ab620000-…` pair).
+  - **#1037**, the crew seat repair, migration `20260930184000`: CI green, sealed (`61fefcd1…`) and handed to Stream 1; fixtures removed. After it merges, return API 18134 to master and write the follow-up backfill (people who already hold a binding), to apply after the API deploys.
   - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
 - **Merged since the first rewrite:**
   - #1022, the anon default-deny (batch 196);
@@ -71,7 +71,7 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. #1037: after CI is green, seal the bundle, hand off to Stream 1, and remove the fixtures by exact ids. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
+1. #1037 is green, sealed, handed off and its fixtures are removed; wait for Stream 1's merge. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
 2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;
