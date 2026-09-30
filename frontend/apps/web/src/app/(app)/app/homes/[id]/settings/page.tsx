@@ -21,6 +21,9 @@ function SettingsContent() {
   const [nickname, setNickname] = useState('');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -34,6 +37,13 @@ function SettingsContent() {
       const h = (homeRes.value as any)?.home || homeRes.value;
       setHome(h);
       setNickname(h?.nickname || h?.name || '');
+      setLoadError(null);
+      setLoadDenied(false);
+    } else if ((homeRes.reason as { statusCode?: number } | null)?.statusCode === 403) {
+      setLoadDenied(true); setLoadError('You don’t have permission to view this home’s settings.');
+    } else {
+      // Without the Home, the page would show "Unnamed" and a Leave Home for nothing it could name.
+      setLoadDenied(false); setLoadError('Current home settings could not be loaded. Retry to check current information.'); toast.error('Failed to load home settings');
     }
     if (accessRes.status === 'fulfilled') setMyAccess((accessRes.value as any)?.access || accessRes.value);
   }, [homeId]);
@@ -78,12 +88,26 @@ function SettingsContent() {
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
 
+  const header = (
+    <div className="flex items-center gap-3 mb-6">
+      <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+      <h1 className="text-xl font-bold text-app-text">Settings</h1>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      {header}
+      <div className="text-center py-16">
+        <p className="text-sm text-app-text-secondary">{loadError}</p>
+        {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchData().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
-        <h1 className="text-xl font-bold text-app-text">Settings</h1>
-      </div>
+      {header}
 
       {/* Home Info */}
       <section className="mb-6">
