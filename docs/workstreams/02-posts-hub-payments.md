@@ -7,9 +7,21 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T14:46Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T15:31Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
-- **Latest (2026-09-30T14:46Z):**
+- **Latest (2026-09-30T15:31Z):**
+  - **[#1016](https://github.com/WangPantopus/skinny-pantopus/pull/1016) merged** (batch 194, master `ed8f7d539`): archived posts stay in My posts after a reload. iOS verified by Stream 1 (`20260930-stream1-1016-ios-archived-reload-r1`).
+  - **[#1027](https://github.com/WangPantopus/skinny-pantopus/pull/1027)** head `e032d3d5e50016b32fe3ba455f7d25f4878e5a7c` (sent): U02 Android accessibility, verified on the APK of the head. Seal `20260930-stream2-u02-android-a11y-r1` `a966aa19…`.
+    - A4: selected states on Pulse, the composer, the Hub filter and list tabs; "More actions for …" names rows that have no title; the chip tone isn't read; "Heart reaction"; the Description and date rows are named.
+    - A1 at font 2.0: Pulse chips were clipped; composer "Phone" was zero-width, so it couldn't be chosen; Hub captions were losing words.
+  - **A2 verified with #1013:** dialogs and sheets are readable in system dark mode.
+  - **A3:** only the brand blue #0284C7 fails (4.10:1 on white), so the Android A3 cells go to the app-wide token decision. Stream 1 is building "native accents AA".
+  - **Building:** the Start screen follow-up c84be82ce ("Sign in" wrapped letter by letter at font 2.0; the address field had no name). Then a tiny follow-up after #1027 merges: a share post's chip reads "Post type: Share" (not "Share post", the same as the Share button), on iOS and Android.
+  - **Reviews for Stream 5:**
+    - #1018 (my two contracts, service_role positive controls) OK.
+    - #1022 gigs.js `my-bid` via supabaseAdmin with the own-bid filter (the assigned worker's task detail is in scope) OK.
+    - The other gigs.js anon reads are launch cut #4 or unused; they return 500 after the default-deny, which is accepted.
+- **Earlier (2026-09-30T14:46Z):**
   - **Merged in batch 192** (#1014, master `a5f21354a`), together with Stream 1's Android theme fix #1013:
     - [#1005](https://github.com/WangPantopus/skinny-pantopus/pull/1005) native Lost & Found; iOS verified by Stream 1 (`20260930-stream1-1005-ios-lost-found-r1`);
     - [#1011](https://github.com/WangPantopus/skinny-pantopus/pull/1011) the PostLike/PostComment read revoke. **Hosted: deploy #1009's backend before applying 20260930180000.**
@@ -280,7 +292,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T14:46Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T15:31Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -292,7 +304,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed, My posts, counts | ⬜ My posts: archived posts vanish after a reload (fixed in #1016, waiting to merge; iOS runtime by Stream 1)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ⬜ My posts: archived posts vanish after a reload (fixed and verified in #1016, seal b74e23c0; waiting to merge)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
+| Pulse feed, My posts, counts | ✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
 | Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
 | Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511) | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
 | Delete a post | ✅ E2 (#709)<br>✅ E1 My posts says when a delete, archive or restore fails; Delete really deletes (it sent nothing before) (#980, Stream 1 bundle d172244f) | ✅ E2 (#709)<br>✅ E1 post page: keeps the post and says "Couldn't delete the post"; retry deletes (no change) (seal 569a60a4)<br>✅ E1 My posts: says when a delete, archive or restore fails (#980, seal 54995229) | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
@@ -316,14 +328,14 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A4: List/Map, Nearby/Connections and intent chips don't say which is selected; heart reaction named "Count" (fix next)<br>⬜ A2: re-check now that Stream 1's theme fix #1013 merged (dialogs and sheets follow the light theme)<br>⬜ A1 A3 | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
-| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A4: type chip announced with its tone ("LOST & FOUND, error"); comment controls well named (fix next)<br>⬜ A3 | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
-| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A4: Lost/Found and chip choices don't say which is selected; Description field unnamed; date rows read "Tap to pick" (fix next)<br>⬜ A2: re-check with #1013<br>⬜ A1 A3 | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
-| My posts | ⬜ A1 A2 A3 A4 | ⬜ A4: every row's overflow reads "More actions for " with no name; Active/Archived tabs don't say which is selected (fix next)<br>⬜ A2: re-check with #1013 (the delete dialog and options sheet were unreadable in dark mode)<br>⬜ A1 A3 | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
+| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A4 selected states + heart names, A1 chips no longer clipped at font 2.0: fixed and verified in #1027 (seal a966aa19), waiting to merge<br>✅ A2: stays light and readable in system dark mode (#1013 + seal a966aa19)<br>🔷 A3: brand blue #0284C7 is 4.10:1 on white (app-wide token decision) | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
+| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A4: chip tone no longer read (#1027, waiting to merge); share posts' chip to read "Post type: Share" (follow-up)<br>🔷 A3: brand-blue token | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
+| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A4 states and names, A1 contact choices ("Phone" was zero-width at font 2.0): fixed and verified in #1027, waiting to merge<br>✅ A2: readable in system dark mode (#1013)<br>🔷 A3: brand-blue token | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
+| My posts | ⬜ A1 A2 A3 A4 | ⬜ A4 row names + tab states: fixed and verified in #1027, waiting to merge<br>✅ A1: readable at font 2.0 (no change needed) (seal a966aa19)<br>✅ A2: delete dialog and options sheet readable in dark mode (luminance 43 → 225/240) (#1013, seal a966aa19)<br>🔷 A3: brand-blue token | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
 | Report a post | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5; close button named (#829) |
 | **Start and Hub** | | | |
-| Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
-| Hub (the former Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A4: names fine; the Discover nearby filter (Tasks/Businesses/Posts) doesn't say which is selected (fix next)<br>⬜ A2: re-check with #1013<br>⬜ A1 A3 | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
+| Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 "Sign in" wraps letter by letter at font 2.0 and A4 unnamed address field: fix c84be82ce building<br>✅ A4 other controls named (seal a966aa19)<br>⬜ A2<br>🔷 A3: brand-blue token | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
+| Hub (the former Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A4 filter state, A1 tile captions losing words: fixed and verified in #1027, waiting to merge<br>✅ A2: stays light and readable in dark mode (#1013)<br>🔷 A3: brand-blue token | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
 | Today detail | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>🔷 A3 brand-blue token |
 | **Money screens (viewing only, no payments)** | | | |
 | Tip sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>🔷 A2 dark: the sunken surface token equals the card surface, so the $5/$10/$20 presets lose their fill |
@@ -334,9 +346,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 43, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 2
+- U03 items: done 45, confirm from existing evidence 0, to do 4, your call 0, boundary 0, not offered 2
 - U04 items: done 13, confirm from existing evidence 0, to do 4, your call 0, boundary 0, not offered 0
-- U02 items: done 19, confirm from existing evidence 0, to do 31, your call 8, boundary 1, not offered 0
+- U02 items: done 25, confirm from existing evidence 0, to do 23, your call 14, boundary 1, not offered 0
 
 ## Inventory and history
 
