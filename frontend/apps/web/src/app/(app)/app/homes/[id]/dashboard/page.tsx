@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/toast-store';
 import { ShareCenter } from '@/components/home/share';
 import { MembersSecurityTab as MembersSecurityTabComponent } from '@/components/home/members';
 import { HomeSettingsTab } from '@/components/home/settings';
+import type { SettingsDraft } from '@/components/home/settings/HomeSettingsTab';
 
 import TaskSlidePanel from '@/components/home/TaskSlidePanel';
 import { useHomeTaskActions } from '@/components/home/tasks/useHomeTaskActions';
@@ -99,6 +100,8 @@ function InvitationsLink({ homeId }: { homeId: string }) {
 
 // A member's own typed new-issue draft, held above the access re-check that remounts the dashboard.
 type KeptIssueDraft = { homeId: string; userId: string | null; draft: IssueDraft };
+// The same for unsaved edits on the Settings tab.
+type KeptSettingsDraft = { homeId: string; userId: string | null; draft: SettingsDraft };
 
 function HomeDashboardContent() {
   const router = useRouter();
@@ -106,6 +109,7 @@ function HomeDashboardContent() {
   const { access, error: permissionsError, needsVerification, loading: permissionsLoading, reload: reloadPermissions } = useHomePermissions();
   const data = useHomeData(homeId);
   const issueDraft = useRef<KeptIssueDraft | null>(null);
+  const settingsDraft = useRef<KeptSettingsDraft | null>(null);
   const { loading, error } = data;
   const accessError = error || permissionsError || (!loading && !permissionsLoading &&
     (!access || (!access.hasAccess && !access.verification_required) || homeAccessFingerprint(access) !== data.accessFingerprint)
@@ -145,13 +149,14 @@ function HomeDashboardContent() {
   }
 
   // Unmount private panels, deferred summaries and local edits whenever authority retires.
-  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} issueDraft={issueDraft} />;
+  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} issueDraft={issueDraft} settingsDraft={settingsDraft} />;
 }
 
-function HomeDashboardReady({ homeId, data, issueDraft }: {
+function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft }: {
   homeId: string;
   data: UseHomeDataReturn;
   issueDraft: MutableRefObject<KeptIssueDraft | null>;
+  settingsDraft: MutableRefObject<KeptSettingsDraft | null>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -224,6 +229,28 @@ function HomeDashboardReady({ homeId, data, issueDraft }: {
         ? 'dashboard'
         : (['dashboard', 'share', 'security', 'settings'].includes(tabFromUrl) ? tabFromUrl : 'dashboard') as HighLevelTab;
   const tab = effectiveTab;
+
+  // Unsaved Settings edits come back after an access re-check only into the Settings tab, for the same member and the
+  // same Home, while they can still edit it. Leaving the Settings tab drops them, as it always has.
+  const canEditSettings = can('home.edit');
+  const [restoredSettingsDraft, setRestoredSettingsDraft] = useState<SettingsDraft | null>(null);
+  const settingsDraftChecked = useRef(false);
+  useEffect(() => {
+    if (settingsDraftChecked.current) return;
+    settingsDraftChecked.current = true;
+    const kept = settingsDraft.current;
+    settingsDraft.current = null;
+    if (!kept || tab !== 'settings' || kept.homeId !== homeId || kept.userId !== currentUserId || !canEditSettings) return;
+    setRestoredSettingsDraft(kept.draft);
+  }, [settingsDraft, tab, homeId, currentUserId, canEditSettings]);
+  useEffect(() => {
+    if (tab === 'settings') return;
+    settingsDraft.current = null;
+    setRestoredSettingsDraft(null);
+  }, [tab, settingsDraft]);
+  const keepSettingsDraft = useCallback((draft: SettingsDraft) => {
+    settingsDraft.current = { homeId, userId: currentUserId, draft };
+  }, [settingsDraft, homeId, currentUserId]);
 
   // When sidebar links to a card (e.g. ?tab=tasks), expand that card; when Overview, collapse
   useEffect(() => {
@@ -531,6 +558,8 @@ function HomeDashboardReady({ homeId, data, issueDraft }: {
           can={can}
           currentUserId={currentUserId}
           onHomeUpdate={refresh}
+          draft={restoredSettingsDraft}
+          onDraftUnmount={keepSettingsDraft}
         />
       )}
 
