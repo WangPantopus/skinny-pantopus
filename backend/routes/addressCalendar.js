@@ -26,6 +26,10 @@ const addressCalendarService = require('../services/addressCalendarService');
 
 const PICKUP_VERSION = /^(none|[0-9a-f]{32})$/;
 
+// A refused change says why (web, and Android's readable 403 message), so a
+// restricted member doesn't keep retrying a "could not save".
+const PICKUP_DENIED = "You don't have permission to change this household's pickup schedule.";
+
 const pickupSchema = Joi.object({
   weekday: Joi.string().valid('MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU').required(),
   recycling_every_other_week: Joi.boolean().optional(),
@@ -76,6 +80,7 @@ router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), asyn
     if (err.code === 'INVALID_PICKUP') return res.status(400).json({ error: err.message });
     if (err.code === 'PICKUP_SCHEDULE_CHANGED') return sendScheduleChanged(req, res, err);
     logger.error('addressCalendar: set pickup day failed', { homeId: req.params.id, error: err.message });
+    if (err.statusCode === 403) return res.status(403).json({ code: 'HOME_ACCESS_DENIED', error: 'Could not save your pickup day', message: PICKUP_DENIED });
     return res.status(err.statusCode || 500).json({ error: 'Could not save your pickup day' });
   }
 });
@@ -94,6 +99,7 @@ router.delete('/:id/calendar/pickup-day', verifyToken, async (req, res) => {
   } catch (err) {
     if (err.code === 'PICKUP_SCHEDULE_CHANGED') return sendScheduleChanged(req, res, err);
     logger.error('addressCalendar: clear pickup day failed', { homeId: req.params.id, error: err.message });
+    if (err.statusCode === 403) return res.status(403).json({ code: 'HOME_ACCESS_DENIED', error: 'Could not reset your pickup day', message: PICKUP_DENIED });
     return res.status(err.statusCode || 500).json({ error: 'Could not reset your pickup day' });
   }
 });
