@@ -2,12 +2,15 @@
 //  HomeOwnershipSecurityViewModel.swift
 //  Pantopus
 //
-//  A14.2 (policy variant) — "Ownership & Security". Three radio groups
+//  A14.2 (policy variant) — "Ownership & Security". Two radio groups
 //  backed by the per-home security policy:
 //
 //    * Privacy & discoverability → `privacy_mask_level`
 //    * Owner claims             → `owner_claim_policy`
-//    * Member attach policy     → `member_attach_policy`
+//
+//  The member attach policy (`member_attach_policy`) is still decoded but
+//  not shown: nothing reads it and every join goes through household review,
+//  so the choice had no effect (user decision 2026-09-30; post-launch work).
 //
 //  Reads `GET /api/homes/:id/security` and PATCHes a single key per
 //  selection. A multi-owner home answers the owner-claim-policy PATCH
@@ -293,18 +296,6 @@ public final class HomeOwnershipSecurityViewModel: GroupedListDataSource {
                         id: Row.claimPrefix + option.rawValue,
                         label: option.label,
                         control: .radio(isSelected: option == policy.ownerClaimPolicy)
-                    )
-                }
-            ),
-            GroupedListGroup(
-                id: "memberAttach",
-                overline: "Member attach policy",
-                helper: helper(for: "memberAttach", fallback: nil),
-                rows: HomeMemberAttachPolicy.allCases.map { option in
-                    GroupedListRow(
-                        id: Row.attachPrefix + option.rawValue,
-                        label: option.label,
-                        control: .radio(isSelected: option == policy.memberAttachPolicy)
                     )
                 }
             )

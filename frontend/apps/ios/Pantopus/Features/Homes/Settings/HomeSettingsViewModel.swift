@@ -386,7 +386,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
             GroupedListRow(
                 id: "ownershipSecurity",
                 label: "Ownership & Security",
-                subtext: "Discoverability, owner claims, member policy",
+                subtext: "Discoverability and owner claims",
                 control: .chevron
             )
         ]

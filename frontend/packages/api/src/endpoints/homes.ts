@@ -23,7 +23,8 @@ export interface ResidencyAddressSnapshot {
 }
 
 export interface AddressCheckResult {
-  status: 'HOME_NOT_FOUND' | 'HOME_FOUND_UNCLAIMED' | 'HOME_FOUND_CLAIMED';
+  /** HOME_FOUND_PRIVATE: an "Invite only" Home is here; its id and address are not shared. */
+  status: 'HOME_NOT_FOUND' | 'HOME_FOUND_UNCLAIMED' | 'HOME_FOUND_CLAIMED' | 'HOME_FOUND_PRIVATE';
   home_id?: string;
   is_multi_unit?: boolean;
   formatted_address?: string;

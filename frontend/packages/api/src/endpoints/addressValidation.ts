@@ -53,12 +53,6 @@ export type AddressCandidate = {
   confidence: number;
 };
 
-export type ExistingHousehold = {
-  home_id: string;
-  member_count: number;
-  active_roles: string[];
-};
-
 export type AddressVerdict = {
   status: AddressVerdictStatus;
   reasons: string[];
@@ -68,7 +62,6 @@ export type AddressVerdict = {
   classification?: PlaceClassification;
   candidates: AddressCandidate[];
   next_actions: string[];
-  existing_household?: ExistingHousehold;
 };
 
 export type ValidateAddressResponse = {

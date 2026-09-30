@@ -368,7 +368,7 @@ data class CheckAddressRequest(
  *
  * The handler (`backend/routes/home.js:635` / `:661`) returns
  * `{ status, home_id?, is_multi_unit, formatted_address? }` where
- * `status` is `HOME_NOT_FOUND | HOME_FOUND_UNCLAIMED | HOME_FOUND_CLAIMED`.
+ * `status` is `HOME_NOT_FOUND | HOME_FOUND_UNCLAIMED | HOME_FOUND_CLAIMED | HOME_FOUND_PRIVATE`.
  * The older `exists / homeCount / hasVerifiedMembers` triple is kept as a
  * derived convenience so existing call sites keep compiling.
  */
@@ -395,8 +395,15 @@ data class CheckAddressResponse(
     /** `status === 'HOME_FOUND_UNCLAIMED'` — home row with no occupants. */
     val isFoundUnclaimed: Boolean get() = status == STATUS_FOUND_UNCLAIMED
 
+    /**
+     * `status === 'HOME_FOUND_PRIVATE'` — an "Invite only" Home is registered
+     * here. The server sends no id or address for it, so there is nothing to
+     * join or claim from the wizard.
+     */
+    val isPrivateHome: Boolean get() = status == STATUS_FOUND_PRIVATE
+
     val exists: Boolean
-        get() = existsRaw ?: (status == STATUS_FOUND_CLAIMED || status == STATUS_FOUND_UNCLAIMED)
+        get() = existsRaw ?: (status == STATUS_FOUND_CLAIMED || status == STATUS_FOUND_UNCLAIMED || status == STATUS_FOUND_PRIVATE)
 
     val homeCount: Int get() = homeCountRaw ?: if (homeId == null) 0 else 1
 
@@ -406,6 +413,7 @@ data class CheckAddressResponse(
         const val STATUS_NOT_FOUND = "HOME_NOT_FOUND"
         const val STATUS_FOUND_UNCLAIMED = "HOME_FOUND_UNCLAIMED"
         const val STATUS_FOUND_CLAIMED = "HOME_FOUND_CLAIMED"
+        const val STATUS_FOUND_PRIVATE = "HOME_FOUND_PRIVATE"
     }
 }
 

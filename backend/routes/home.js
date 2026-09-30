@@ -59,6 +59,28 @@ function isPendingOwnershipClaimForReadPath(claim) {
     : homeClaimRoutingService.isLegacyStateActive(claim.state);
 }
 
+// A pending residency claim, or a live ownership claim, lets its claimant keep
+// finding a Home that is hidden from everyone else. Not a membership credential.
+async function hasPendingHomeClaim(homeId, userId) {
+  const [residencyClaims, ownershipClaims] = await Promise.all([
+    supabaseAdmin.from('HomeResidencyClaim').select('id, status').eq('home_id', homeId).eq('user_id', userId).eq('status', 'pending'),
+    supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id, expires_at').eq('home_id', homeId).eq('claimant_user_id', userId),
+  ]);
+  if (residencyClaims.error || ownershipClaims.error) throw new Error('Could not check claim status');
+  return (residencyClaims.data || []).length > 0 || (ownershipClaims.data || []).some((claim) =>
+    isPendingOwnershipClaimForReadPath(claim) && (!claim.expires_at || new Date(claim.expires_at).getTime() > Date.now()));
+}
+
+// Whether a viewer already knows an "Invite only" Home: household access or
+// their own onboarding there, its creator, or their pending claim on it.
+// Unreadable access throws, so a lookup failure never reveals the Home.
+async function viewerKnowsHiddenHome(home, userId) {
+  if (home.created_by_user_id === userId) return true;
+  const access = await checkHomePermission(home.id, userId);
+  if (access.hasAccess || access.verificationRequired) return true;
+  return hasPendingHomeClaim(home.id, userId);
+}
+
 // ============ VALIDATION SCHEMAS ============
 
 const HOME_TYPES = ['house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 'mobile_home', 'trailer', 'multi_unit', 'other'];
@@ -503,6 +525,7 @@ const lookupId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}
 const lookupAddress = row => row === null || (row && lookupId(row.id) && typeof row.address_hash === 'string');
 const lookupHomes = rows => Array.isArray(rows) && rows.every(row => row && lookupId(row.id)
   && ['address', 'city', 'state', 'zipcode'].every(key => typeof row[key] === 'string' && row[key].trim()));
+const CHECK_ADDRESS_HOME_COLUMNS = 'id, address, address2, city, state, zipcode, country, name, address_id, address_hash, privacy_mask_level, created_by_user_id';
 
 /**
  * Check if user is owner or occupant
@@ -555,6 +578,8 @@ router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(
  * POST /api/homes/check-address
  * Check if an address already exists and whether it has verified members.
  * Returns status only — never reveals member identities, counts, or roles.
+ * An "Invite only" Home answers HOME_FOUND_PRIVATE, without its id or address,
+ * to anyone who doesn't already know it.
  */
 router.post('/check-address', verifyToken, validate(checkAddressSchema), async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
@@ -595,7 +620,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (existingAddress?.id) {
       const homesByAddressId = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
+        .select(CHECK_ADDRESS_HOME_COLUMNS)
         .eq('address_id', existingAddress.id)
         .eq('home_status', 'active')
         .limit(20), lookupHomes);
@@ -605,7 +630,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     // Search homes by canonical hash
     const homesByHash = await readHomeAddressLookup(supabaseAdmin
       .from('Home')
-      .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
+      .select(CHECK_ADDRESS_HOME_COLUMNS)
       .eq('address_hash', addressHash)
       .eq('home_status', 'active')
       .limit(20), lookupHomes);
@@ -617,7 +642,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (requestedAddressHash !== addressHash) {
       const homesByRequestedHash = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
+        .select(CHECK_ADDRESS_HOME_COLUMNS)
         .eq('address_hash', requestedAddressHash)
         .eq('home_status', 'active')
         .limit(20), lookupHomes);
@@ -627,7 +652,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (matchedHomeMap.size === 0) {
       const nearbyHomes = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
+        .select(CHECK_ADDRESS_HOME_COLUMNS)
         .eq('zipcode', zip_code.trim())
         .eq('home_status', 'active')
         .limit(100), lookupHomes);
@@ -639,13 +664,26 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
       rememberHomes(normalizedMatches);
     }
 
-    const matchedHomes = Array.from(matchedHomeMap.values());
+    const foundHomes = Array.from(matchedHomeMap.values());
 
-    if (matchedHomes.length === 0) {
+    if (foundHomes.length === 0) {
       return res.json({
         status: 'HOME_NOT_FOUND',
         is_multi_unit: isMultiUnitAddress(existingAddress),
       });
+    }
+
+    // "Invite only — completely hidden": someone who doesn't already know the
+    // Home learns only that a private Home is registered here (so they still
+    // can't create a duplicate), never which Home or whether anyone lives there.
+    const matchedHomes = [];
+    for (const home of foundHomes) {
+      if (home.privacy_mask_level !== 'invite_only_discovery' || await viewerKnowsHiddenHome(home, req.user.id)) {
+        matchedHomes.push(home);
+      }
+    }
+    if (matchedHomes.length === 0) {
+      return res.json({ status: 'HOME_FOUND_PRIVATE', is_multi_unit: isMultiUnitAddress(existingAddress) });
     }
 
     // Check if any of these homes have active occupants
@@ -1687,15 +1725,7 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
     // only have the link; Stealth stays visible by link.
     const openByLink = home.visibility === 'public_preview' && home.privacy_mask_level !== 'invite_only_discovery';
     let canView = reveal || openByLink || isCreator;
-    if (!canView) {
-      const [residencyClaims, ownershipClaims] = await Promise.all([
-        supabaseAdmin.from('HomeResidencyClaim').select('id, status').eq('home_id', homeId).eq('user_id', userId).eq('status', 'pending'),
-        supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id, expires_at').eq('home_id', homeId).eq('claimant_user_id', userId),
-      ]);
-      if (residencyClaims.error || ownershipClaims.error) throw new Error('Could not check claim status');
-      canView = (residencyClaims.data || []).length > 0 || (ownershipClaims.data || []).some((claim) =>
-        isPendingOwnershipClaimForReadPath(claim) && (!claim.expires_at || new Date(claim.expires_at).getTime() > Date.now()));
-    }
+    if (!canView) canView = await hasPendingHomeClaim(homeId, userId);
     if (!canView) {
       return res.status(403).json({ error: 'This home is not publicly discoverable' });
     }

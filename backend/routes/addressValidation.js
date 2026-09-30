@@ -81,6 +81,15 @@ function buildOutageVerdict(reason) {
   };
 }
 
+// A CONFLICT verdict carries the existing household (its Home id, member count
+// and roles) for the server's own checks. Clients get the status and reasons:
+// who lives at an address, and how many, is not an outsider's to learn.
+function clientVerdict(verdict) {
+  if (!verdict || !Object.prototype.hasOwnProperty.call(verdict, 'existing_household')) return verdict;
+  const { existing_household: _household, ...rest } = verdict;
+  return rest;
+}
+
 // ============================================================
 // POST /validate — Full address validation pipeline
 // ============================================================
@@ -135,7 +144,7 @@ router.post(
       });
 
       return res.json({
-        verdict: result.verdict,
+        verdict: clientVerdict(result.verdict),
         address_id: result.address_id,
       });
     } catch (err) {
@@ -224,7 +233,7 @@ router.post(
       });
 
       return res.json({
-        verdict: result.verdict,
+        verdict: clientVerdict(result.verdict),
         address_id: result.address_id || address_id,
       });
     } catch (err) {
