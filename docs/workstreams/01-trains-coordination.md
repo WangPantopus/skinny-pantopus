@@ -9,6 +9,23 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T16:20Z (Stream 1).**
+  - **Batch 197** (16:07:41Z, PR #1031): #1024 + #1028 + #1023. Master `a318010a2`.
+    - **#1024** (Stream 3): master's red iOS SwiftLint is fixed.
+    - **#1028** (Stream 5, `20260930182000`): authenticated holds no table or sequence privilege; check-migrations refuses authenticated table grants; the chat read policies stop recursing through the caller-only DEFINER helper `is_active_chat_participant`. CI database job green: 67/67 pgTAP files, baseline 6/6.
+    - **#1023** (Stream 5): iOS Delete My Account is reachable with the keyboard up. Stream 1 ran it on iOS at `e8a85d6c4`; seal `26bcf241`, bundle `20260930-stream1-1023-ios-delete-keyboard-r1`.
+  - **Batch 198** (16:10:38Z, PR #1032): #1027 (Stream 2, U02 a11y for Posts and Hub on Android plus two iOS names; seal `a966aa19`). Master `a60e276bb`.
+  - **Batch 199** (16:18:39Z, PR #1033): #1030 (Stream 5, `20260930183000`). Master `f7373d0cd`.
+    - EXECUTE revoked on `business_get_user_permissions`, which answered for any user, anon included, and `apply_business_role_preset`, a direct path around the API's role rules.
+    - check-migrations refuses client grants of DEFINER functions with an `auth.uid()`-default parameter unless they're reviewed caller-bound helpers.
+    - The new `client-rpc-surface` contract pins the client RPC surface: 12 caller-only RLS helpers (the 9 Home helpers, `home_bill_has_finance_permission`, `gig_creator_has_current_authority`, `is_active_chat_participant`) plus 5 trigger functions PostgREST can't call.
+  - Stream 1's runtime DB now has 181000–183000, and signed-in API reads return 200.
+  - **Open, Stream 1: PR #1029** (native accents AA plus iOS dark-mode fills, head `fb2b71d8c`). Bundle seal `1bdf366a` includes Stream 3's Approve check: 1.92:1 → 5.48:1 on Stream 1's own claim fixture. It waits for its Android CI job (Paparazzi on CI); its iOS lint failure is master's inherited one, cleared since batch 197.
+  - **Follow-ups recorded:**
+    - iOS feature-level `primary600` fills (about 255 sites, for example the Hub filter chips; 4.10:1 in dark);
+    - dark-mode green FABs under white glyphs on Members "Invite member", Owners "Invite owner" and My homes "Add a home" (Stream 3 spotted them);
+    - web tint pairs in dark mode and inline hexes (Stream 4's A3 residuals).
+  - **Next for Stream 1:** merge #1029, then Stream 2's eight iOS runtime cells, then the web tint/inline-hex pass.
 - **Update 2026-09-30T15:45Z (Stream 1).** **Batch 196** (15:25:11Z, PR #1026): #1022 and #1025. Master `8099b65162ba897b3efa3fdc254b51cc56190fd1`.
   - **#1022** (Stream 5, migration `20260930181000`): anon holds no privilege on any public table or sequence. check-migrations now refuses anon/PUBLIC table grants from 181000. my-bid reads the caller's own bid through the service client. CI database job green on `ba22fad27`, including baseline PostgREST 6/6.
     - At Stream 1's review, Stream 5 corrected the migration comment before merge: the anon client is still used by 3 gigs.js routes (launch cut #4 or unused), `routes/offers.js` (its lowercase tables don't exist) and `debug.js` (404 in production).
