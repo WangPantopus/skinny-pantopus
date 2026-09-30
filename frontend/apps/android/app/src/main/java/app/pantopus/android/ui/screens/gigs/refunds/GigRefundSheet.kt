@@ -27,6 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,8 +144,14 @@ private fun RefundForm(
     Text("Reason")
     RefundValidation.reasons.forEach { (code, label) ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = reason == code, onClick = { onReason(code) })
-            TextButton(onClick = { onReason(code) }) { Text(label) }
+            // The radio carries the reason's name for a screen reader; the label beside it is a
+            // larger tap target for the same choice, so it isn't announced a second time.
+            RadioButton(
+                selected = reason == code,
+                onClick = { onReason(code) },
+                modifier = Modifier.semantics { contentDescription = label },
+            )
+            TextButton(onClick = { onReason(code) }, modifier = Modifier.clearAndSetSemantics {}) { Text(label) }
         }
     }
 }

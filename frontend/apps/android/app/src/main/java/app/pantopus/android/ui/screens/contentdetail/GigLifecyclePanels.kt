@@ -42,6 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -986,6 +988,19 @@ private fun GigActiveTaskPanel(
 
 private val PHASE_LABELS = listOf("Assigned", "In progress", "Marked done", "Confirmed")
 
+/** "Marked done, done", "In progress, current step" or "Confirmed, not yet": a screen reader hears each step's state. */
+private fun phaseDescription(
+    label: String,
+    index: Int,
+    activeIndex: Int,
+): String =
+    label + ", " +
+        when {
+            index < activeIndex || (index == activeIndex && index == PHASE_LABELS.lastIndex) -> "done"
+            index == activeIndex -> "current step"
+            else -> "not yet"
+        }
+
 /** At this text scale and above, labels no longer fit a quarter of the row. */
 private const val LARGE_TEXT_SCALE = 1.3f
 
@@ -1002,7 +1017,10 @@ private fun GigPhaseStrip(activeIndex: Int) {
         PHASE_LABELS.forEachIndexed { index, label ->
             val reached = index <= activeIndex
             Column(
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clearAndSetSemantics { contentDescription = phaseDescription(label, index, activeIndex) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Spacing.s1),
             ) {
@@ -1052,7 +1070,11 @@ private fun GigPhaseList(activeIndex: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         PHASE_LABELS.forEachIndexed { index, label ->
             val reached = index <= activeIndex
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Row(
+                modifier = Modifier.clearAndSetSemantics { contentDescription = phaseDescription(label, index, activeIndex) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
                 Box(
                     modifier =
                         Modifier
