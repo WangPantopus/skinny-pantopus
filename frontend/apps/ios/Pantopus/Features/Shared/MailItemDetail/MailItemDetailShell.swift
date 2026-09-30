@@ -229,10 +229,10 @@ public struct MailItemDetailTopBar: View {
         if let onBack = config.onBack {
             Button(action: { onBack() }) {
                 HStack(spacing: Spacing.s0) {
-                    Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                     Text("Mailbox")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s1)
                 .frame(minHeight: 44)
@@ -268,7 +268,7 @@ public struct MailItemDetailTopBar: View {
                     Icon(
                         trailing.icon,
                         size: 18,
-                        color: trailing.isActive ? Theme.Color.primary600 : Theme.Color.appTextStrong
+                        color: trailing.isActive ? Theme.Color.primaryInk : Theme.Color.appTextStrong
                     )
                     .frame(width: 34, height: 34)
                     .background(
@@ -318,7 +318,7 @@ public struct AIElfStripView: View {
             HStack(alignment: .center, spacing: Spacing.s2) {
                 Icon(.sparkles, size: 13, color: Theme.Color.appTextInverse)
                     .frame(width: 24, height: 24)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 Text(content.headline)
                     .font(.system(size: 12, weight: .bold))

@@ -48,9 +48,9 @@ public struct UsageHistoryCard: View {
                 HStack(spacing: Spacing.s1) {
                     Text("See all sends")
                         .font(.system(size: 12, weight: .bold))
-                    Icon(.chevronRight, size: 13, color: Theme.Color.primary600)
+                    Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
                 }
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .overlay(alignment: .top) {

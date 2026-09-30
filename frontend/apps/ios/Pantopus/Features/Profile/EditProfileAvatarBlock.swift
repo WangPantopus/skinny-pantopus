@@ -96,7 +96,7 @@ struct EditProfileAvatarBlock: View {
         } else {
             Text("Change photo")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
     }
 
@@ -124,7 +124,7 @@ struct EditProfileAvatarBlock: View {
             ZStack {
                 Circle().fill(Theme.Color.appSurface)
                 Circle().stroke(Theme.Color.appBg, lineWidth: 2)
-                Icon(.camera, size: 15, color: Theme.Color.primary600)
+                Icon(.camera, size: 15, color: Theme.Color.primaryInk)
             }
             .frame(width: 30, height: 30)
             .pantopusShadow(.sm)

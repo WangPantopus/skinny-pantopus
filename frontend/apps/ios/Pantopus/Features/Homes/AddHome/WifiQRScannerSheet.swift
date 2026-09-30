@@ -66,7 +66,7 @@ struct WifiQRScannerSheet: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s5)
                         .padding(.vertical, Spacing.s3)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                         .padding(.bottom, Spacing.s5)
                         .accessibilityIdentifier("addHome_scanAgain")

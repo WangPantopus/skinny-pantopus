@@ -127,7 +127,7 @@ struct DiscoveryEmptyCard: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: filled ? 44 : 42)
-        .background(filled ? Theme.Color.primary600 : Theme.Color.appSurface)
+        .background(filled ? Theme.Color.primarySolid : Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .strokeBorder(filled ? Color.clear : Theme.Color.appBorder, lineWidth: 1)

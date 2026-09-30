@@ -284,7 +284,7 @@ struct FlowingChipsRow: View {
         } label: {
             HStack(spacing: Spacing.s1) {
                 if isSelected {
-                    Icon(.check, size: 12, strokeWidth: 3, color: Theme.Color.primary600)
+                    Icon(.check, size: 12, strokeWidth: 3, color: Theme.Color.primaryInk)
                 }
                 Text(chip.label)
                     .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
@@ -292,7 +292,7 @@ struct FlowingChipsRow: View {
                 Text(chip.count)
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                    .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, 7)

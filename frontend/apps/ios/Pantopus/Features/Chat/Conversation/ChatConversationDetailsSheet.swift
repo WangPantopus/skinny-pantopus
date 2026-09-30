@@ -298,7 +298,7 @@ struct ChatReportUserSheet: View {
                     selectedReason == code ? .checkCircle : .circle,
                     size: 16,
                     strokeWidth: 2.2,
-                    color: selectedReason == code ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                    color: selectedReason == code ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                 )
                 Text(label)
                     .font(.system(size: 13.5, weight: selectedReason == code ? .semibold : .regular))
@@ -327,7 +327,7 @@ struct ChatReportUserSheet: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(selectedReason == nil ? Theme.Color.appTextMuted : Theme.Color.primary600)
+            .background(selectedReason == nil ? Theme.Color.appTextMuted : Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

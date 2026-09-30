@@ -121,7 +121,7 @@ struct ClaimSummaryTile: View {
                 RoundedRectangle(cornerRadius: Radii.sm)
                     .fill(Theme.Color.primary50)
                     .frame(width: 28, height: 28)
-                Icon(.keyRound, size: 14, color: Theme.Color.primary600)
+                Icon(.keyRound, size: 14, color: Theme.Color.primaryInk)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("Claiming")
@@ -402,7 +402,7 @@ private struct EvidencePreview: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Theme.Color.primary600)
+                    .fill(Theme.Color.primarySolid)
                     .frame(width: 16, height: 5)
                 Spacer(minLength: Spacing.s0)
                 RoundedRectangle(cornerRadius: 1)

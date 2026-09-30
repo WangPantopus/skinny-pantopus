@@ -325,18 +325,18 @@ public struct FeedView: View {
                             tab.toggleIcon,
                             size: 15,
                             strokeWidth: 2.2,
-                            color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                            color: active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                         )
                         Text(tab.toggleLabel)
                             .font(.system(size: 14, weight: active ? .bold : .medium))
-                            .foregroundStyle(active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                            .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
                     .overlay(alignment: .bottom) {
                         Rectangle()
-                            .fill(active ? Theme.Color.primary600 : Color.clear)
+                            .fill(active ? Theme.Color.primaryInk : Color.clear)
                             .frame(height: 2)
                     }
                 }
@@ -376,7 +376,7 @@ public struct FeedView: View {
                     }
                     .padding(.horizontal, 10)
                     .frame(height: 26)
-                    .background(active ? Theme.Color.primary600 : Color.clear)
+                    .background(active ? Theme.Color.primarySolid : Color.clear)
                     .clipShape(Capsule())
                     .contentShape(Capsule())
                 }
@@ -477,7 +477,7 @@ public struct FeedView: View {
     private func emptyFrame(_ content: FeedEmptyContent) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
-            Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -501,7 +501,7 @@ public struct FeedView: View {
                 }
                 .padding(.horizontal, 22)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -640,7 +640,7 @@ public struct FeedView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

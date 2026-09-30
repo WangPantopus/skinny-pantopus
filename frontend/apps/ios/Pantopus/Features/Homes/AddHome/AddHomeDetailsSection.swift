@@ -210,7 +210,7 @@ struct AddHomeDetailsSection: View {
                 .foregroundStyle(isSelected ? Theme.Color.appTextInverse : Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
-                .background(isSelected ? Theme.Color.primary600 : Theme.Color.appSurface)
+                .background(isSelected ? Theme.Color.primarySolid : Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)

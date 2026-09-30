@@ -314,7 +314,7 @@ public struct SupportTrainDetailView: View {
     private func exactAddressCard(_ address: String, instructions: String?) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
-                Icon(.mapPin, size: 15, color: Theme.Color.primary600)
+                Icon(.mapPin, size: 15, color: Theme.Color.primaryInk)
                 Text(address)
                     .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
@@ -360,7 +360,7 @@ public struct SupportTrainDetailView: View {
                 } label: {
                     Text(action)
                         .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(action) \(label)")
@@ -648,7 +648,7 @@ private struct PrimarySignUpCTA: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+            .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .pantopusShadow(isEnabled ? .primary : .sm)
         }
@@ -706,7 +706,7 @@ private struct SplitCoveredDock: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 46)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .pantopusShadow(.primary)
                 }

@@ -204,7 +204,7 @@ private struct CommunityBodyInsightCard: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 Icon(.sparkles, size: 14, color: Theme.Color.appTextInverse)
                     .frame(width: 26, height: 26)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text(rsvp == .going ? "You're going to this" : "Pantopus read this for you")
@@ -424,7 +424,7 @@ private struct CommunityBodyPollCard: View {
                         Icon(
                             selectedOptionId == option.id ? .checkCircle : .circle,
                             size: 16,
-                            color: selectedOptionId == option.id ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                            color: selectedOptionId == option.id ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                         )
                         Text(option.label)
                             .pantopusTextStyle(.small)
@@ -532,7 +532,7 @@ private struct CommunityBodyAttendeesCard: View {
                 Text("See all")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.bold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
@@ -785,7 +785,7 @@ private struct CommunityBodyActions: View {
                     .minimumScaleFactor(0.72)
             }
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(primary ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(primary ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                     .stroke(primary ? Color.clear : Theme.Color.appBorder, lineWidth: 1)

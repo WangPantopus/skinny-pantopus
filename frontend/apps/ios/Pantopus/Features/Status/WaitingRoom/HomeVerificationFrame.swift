@@ -65,7 +65,7 @@ struct HomeVerificationFrame: View {
 
     private func countdownCard(_ countdown: HomeVerificationCountdown) -> some View {
         HStack(spacing: Spacing.s3) {
-            Icon(countdown.icon, size: 20, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(countdown.icon, size: 20, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             VStack(alignment: .leading, spacing: 2) {
                 Text(countdown.label)
                     .font(.system(size: 13))

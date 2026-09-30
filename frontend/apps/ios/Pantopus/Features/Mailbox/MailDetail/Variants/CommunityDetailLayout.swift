@@ -460,10 +460,10 @@ private struct CommunityEventCard: View {
                 }
                 if let distance = event.distanceLabel {
                     HStack(spacing: 3) {
-                        Icon(.arrowRight, size: 11, color: Theme.Color.primary600)
+                        Icon(.arrowRight, size: 11, color: Theme.Color.primaryInk)
                         Text(distance)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Theme.Color.primary600)
+                            .foregroundColor(Theme.Color.primaryInk)
                     }
                     .padding(.top, 2)
                 }
@@ -669,8 +669,8 @@ private struct CommunityAttendeesStrip: View {
                 HStack(spacing: 2) {
                     Text("See all")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Theme.Color.primary600)
-                    Icon(.chevronRight, size: 11, color: Theme.Color.primary600)
+                        .foregroundColor(Theme.Color.primaryInk)
+                    Icon(.chevronRight, size: 11, color: Theme.Color.primaryInk)
                 }
             }
             .padding(.horizontal, Spacing.s3)
@@ -1035,7 +1035,7 @@ struct CommunityRsvpActions: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.s3)
-            .background(isPrimary ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isPrimary ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg)
                     .stroke(isPrimary ? Color.clear : Theme.Color.appBorder, lineWidth: 1)

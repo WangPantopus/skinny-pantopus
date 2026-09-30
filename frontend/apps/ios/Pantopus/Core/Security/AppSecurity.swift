@@ -547,7 +547,7 @@ struct PrivacyCover: View {
         ZStack {
             Theme.Color.appBg.ignoresSafeArea()
             VStack(spacing: Spacing.s4) {
-                Icon(.shield, size: 48, color: Theme.Color.primary600)
+                Icon(.shield, size: 48, color: Theme.Color.primaryInk)
                 Text(headline)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
@@ -569,7 +569,7 @@ public struct AppLockOverlay: View {
         ZStack {
             Theme.Color.appBg.ignoresSafeArea()
             VStack(spacing: Spacing.s4) {
-                Icon(.lock, size: 52, color: Theme.Color.primary600)
+                Icon(.lock, size: 52, color: Theme.Color.primaryInk)
                 Text("Pantopus is locked")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)

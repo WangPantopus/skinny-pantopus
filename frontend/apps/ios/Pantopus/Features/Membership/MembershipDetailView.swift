@@ -139,7 +139,7 @@ public struct MembershipDetailView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -416,7 +416,7 @@ public struct MembershipDetailView: View {
             if let trailingLabel = row.trailingLabel {
                 Text(trailingLabel)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 Icon(.chevronRight, size: 14, color: Theme.Color.appTextMuted)
             }
         }
@@ -507,7 +507,7 @@ public struct MembershipDetailView: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .frame(height: 42)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -572,7 +572,7 @@ public struct MembershipDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

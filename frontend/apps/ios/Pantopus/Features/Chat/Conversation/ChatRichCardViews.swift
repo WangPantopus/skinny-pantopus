@@ -38,13 +38,13 @@ struct ChatLocationCardView: View {
                         .pantopusTextStyle(.caption)
                     Text("Open in Maps")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)
+                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
             }
             .frame(maxWidth: 260, alignment: .leading)
-            .background(isOutgoing ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isOutgoing ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .clipShape(richCardShape)
             .overlay(
                 richCardShape.stroke(isOutgoing ? Theme.Color.primary500 : Theme.Color.appBorder, lineWidth: 1)
@@ -109,13 +109,13 @@ struct ChatGigOfferCardView: View {
                         .pantopusTextStyle(.caption)
                     Text("View Task")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)
+                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
             }
             .frame(maxWidth: 260, alignment: .leading)
-            .background(isOutgoing ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isOutgoing ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .clipShape(richCardShape)
             .overlay(
                 richCardShape.stroke(isOutgoing ? Theme.Color.primary500 : Theme.Color.appBorder, lineWidth: 1)
@@ -204,13 +204,13 @@ struct ChatListingOfferCardView: View {
                         .pantopusTextStyle(.caption)
                     Text("View Listing")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)
+                        .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
             }
             .frame(maxWidth: 260, alignment: .leading)
-            .background(isOutgoing ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isOutgoing ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .clipShape(richCardShape)
             .overlay(
                 richCardShape.stroke(isOutgoing ? Theme.Color.primary500 : Theme.Color.appBorder, lineWidth: 1)

@@ -97,7 +97,7 @@ struct UnreviewedItem: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.22), radius: 6, x: 0, y: 3)
             }

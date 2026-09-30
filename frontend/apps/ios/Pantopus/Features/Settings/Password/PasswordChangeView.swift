@@ -122,10 +122,10 @@ public struct PasswordChangeView: View {
                     action: { viewModel.requestResetLink() },
                     label: {
                         HStack(spacing: Spacing.s1) {
-                            Icon(.mail, size: 12, color: Theme.Color.primary600)
+                            Icon(.mail, size: 12, color: Theme.Color.primaryInk)
                             Text("Email me a reset link instead")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                     }
                 )
@@ -171,7 +171,7 @@ public struct PasswordChangeView: View {
                 Text("Cancel")
                     .font(.system(size: 13, weight: .semibold))
                     .underline()
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(maxWidth: .infinity, minHeight: 38)
             }
             .buttonStyle(.plain)
@@ -202,7 +202,7 @@ public struct PasswordChangeView: View {
                 .frame(maxWidth: .infinity, minHeight: 50)
             }
         )
-        .background(viewModel.isValid ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+        .background(viewModel.isValid ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .disabled(!viewModel.isValid || viewModel.isSaving)
         .accessibilityLabel("Update password")
@@ -211,7 +211,7 @@ public struct PasswordChangeView: View {
 
     private var infoChip: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(.info, size: 13, color: Theme.Color.primary600)
+            Icon(.info, size: 13, color: Theme.Color.primaryInk)
                 .padding(.top, 1)
             Text("You'll be signed out of other devices after updating.")
                 .font(.system(size: 11.5))

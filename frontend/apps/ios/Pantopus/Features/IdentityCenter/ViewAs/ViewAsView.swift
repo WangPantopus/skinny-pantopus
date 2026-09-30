@@ -261,7 +261,7 @@ struct ViewAsProfileHead: View {
                     )
                 if head.verified {
                     ZStack {
-                        Circle().fill(Theme.Color.primary600)
+                        Circle().fill(Theme.Color.primarySolid)
                         Icon(.check, size: 11, strokeWidth: 3.4, color: Theme.Color.appTextInverse)
                     }
                     .frame(width: 22, height: 22)
@@ -382,7 +382,7 @@ struct ViewAsFieldRow: View {
                     field.disclosure.isHidden ? .lock : field.icon,
                     size: 14,
                     strokeWidth: 2.2,
-                    color: field.disclosure.isHidden ? Theme.Color.appTextMuted : Theme.Color.primary600
+                    color: field.disclosure.isHidden ? Theme.Color.appTextMuted : Theme.Color.primaryInk
                 )
             }
             .frame(width: 30, height: 30)
@@ -479,7 +479,7 @@ struct ViewAsPrivacyFooter: View {
     var body: some View {
         Button(action: onManagePrivacy) {
             HStack(alignment: .top, spacing: Spacing.s2) {
-                Icon(.shieldCheck, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+                Icon(.shieldCheck, size: 16, strokeWidth: 2, color: Theme.Color.primaryInk)
                     .padding(.top, 1)
                 (
                     Text("\(text) ")
@@ -487,7 +487,7 @@ struct ViewAsPrivacyFooter: View {
                         .foregroundColor(Theme.Color.appTextSecondary)
                         + Text("Manage privacy")
                         .font(.system(size: 11.5, weight: .bold))
-                        .foregroundColor(Theme.Color.primary600)
+                        .foregroundColor(Theme.Color.primaryInk)
                 )
                 .multilineTextAlignment(.leading)
                 Spacer(minLength: Spacing.s0)

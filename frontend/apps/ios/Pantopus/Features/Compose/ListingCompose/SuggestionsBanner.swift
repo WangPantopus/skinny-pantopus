@@ -491,7 +491,7 @@ private struct PickupDeliveryPanel: View {
                             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                                 .fill(Theme.Color.primary50)
                                 .frame(width: 28, height: 28)
-                            Icon(.mapPin, size: 14, color: Theme.Color.primary600)
+                            Icon(.mapPin, size: 14, color: Theme.Color.primaryInk)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(locationTitle)

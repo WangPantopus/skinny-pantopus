@@ -157,7 +157,7 @@ public struct YourAudienceView: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 30)
-            .background(isSelected ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isSelected ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .clipShape(Capsule())
             .overlay {
                 if !isSelected {
@@ -311,7 +311,7 @@ public struct YourAudienceView: View {
                     }
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 32)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -523,7 +523,7 @@ public struct YourAudienceView: View {
         VStack(spacing: Spacing.s4) {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 76, height: 76)
-                Icon(.usersRound, size: 33, color: Theme.Color.primary600)
+                Icon(.usersRound, size: 33, color: Theme.Color.primaryInk)
             }
             Text("No audience yet")
                 .font(.system(size: 20, weight: .bold))
@@ -544,7 +544,7 @@ public struct YourAudienceView: View {
                     }
                     .padding(.horizontal, Spacing.s6)
                     .frame(height: 46)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -552,7 +552,7 @@ public struct YourAudienceView: View {
             }
 
             HStack(spacing: Spacing.s2) {
-                Icon(.megaphone, size: 13, color: Theme.Color.primary600)
+                Icon(.megaphone, size: 13, color: Theme.Color.primaryInk)
                 Text("Post a broadcast to get discovered nearby")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextSecondary)

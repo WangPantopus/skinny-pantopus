@@ -135,7 +135,7 @@ public struct SlotEditorSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(canSave ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                    .background(canSave ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)

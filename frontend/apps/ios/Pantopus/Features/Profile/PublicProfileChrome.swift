@@ -609,7 +609,7 @@ struct LocalProfileTabStrip: View {
                                 }
                             }
                             Rectangle()
-                                .fill(isActive ? Theme.Color.primary600 : Color.clear)
+                                .fill(isActive ? Theme.Color.primaryInk : Color.clear)
                                 .frame(height: 2)
                         }
                     }

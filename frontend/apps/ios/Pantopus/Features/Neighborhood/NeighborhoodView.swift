@@ -109,7 +109,7 @@ struct NeighborhoodView: View {
             HStack(spacing: Spacing.s3) {
                 Icon(icon, size: 20, color: .white)
                     .frame(width: 44, height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.Color.appText)
@@ -146,7 +146,7 @@ struct NeighborhoodView: View {
                 Task { await viewModel.refresh() }
             }
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
             .accessibilityIdentifier("nearbyRetry")
         }
         .frame(maxWidth: .infinity)
@@ -236,7 +236,7 @@ struct NeighborhoodView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
         }
         .accessibilityIdentifier("nearbyInvite")
@@ -275,11 +275,11 @@ struct NeighborhoodView: View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
             HStack(spacing: Spacing.s2) {
-                Icon(.sparkles, size: 16, color: Theme.Color.primary600)
+                Icon(.sparkles, size: 16, color: Theme.Color.primaryInk)
                 Text("Local marketplace and tasks are open — "
                     + "\(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: Spacing.s3) {

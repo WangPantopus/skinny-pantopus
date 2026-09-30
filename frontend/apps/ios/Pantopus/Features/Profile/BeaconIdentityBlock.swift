@@ -310,7 +310,7 @@ struct BeaconHeaderPrimaryButton: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 36)
-            .background(isProminent ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+            .background(isProminent ? Theme.Color.primarySolid : Theme.Color.appTextSecondary)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .pantopusShadow(isProminent ? .primary : .sm)
         }

@@ -124,7 +124,7 @@ public struct FanInboxView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -233,7 +233,7 @@ public struct FanInboxView: View {
                 }
                 .padding(.horizontal, Spacing.s5)
                 .frame(height: 44)
-                .background(viewModel.canOpen ? Theme.Color.primary600 : Theme.Color.primary200)
+                .background(viewModel.canOpen ? Theme.Color.primarySolid : Theme.Color.primary200)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -277,7 +277,7 @@ public struct FanInboxView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s4)
                         .frame(height: 40)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .buttonStyle(.plain)

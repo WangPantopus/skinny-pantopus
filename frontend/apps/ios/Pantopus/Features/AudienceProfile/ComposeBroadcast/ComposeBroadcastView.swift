@@ -106,7 +106,7 @@ public struct ComposeBroadcastView: View {
                 label: {
                     Text("Save")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(viewModel.isDirty ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                        .foregroundStyle(viewModel.isDirty ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                         .padding(.horizontal, Spacing.s2)
                         .frame(minWidth: 44, minHeight: 44)
                 }
@@ -263,7 +263,7 @@ public struct ComposeBroadcastView: View {
                 Icon(
                     viewModel.scheduledAt == nil ? .send : .calendarClock,
                     size: 15,
-                    color: viewModel.scheduledAt == nil ? Theme.Color.appTextStrong : Theme.Color.primary600
+                    color: viewModel.scheduledAt == nil ? Theme.Color.appTextStrong : Theme.Color.primaryInk
                 )
                 .frame(width: 30, height: 30)
                 .background(viewModel.scheduledAt == nil ? Theme.Color.appSurfaceSunken : Theme.Color.primary50)
@@ -357,7 +357,7 @@ public struct ComposeBroadcastView: View {
                 Button { Task { await viewModel.load() } } label: {
                     Text("Try again")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("composeBroadcastRecentRetry")
@@ -473,7 +473,7 @@ public struct ComposeBroadcastView: View {
 
     private var firstBroadcastCard: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.send, size: 19, color: Theme.Color.primary600)
+            Icon(.send, size: 19, color: Theme.Color.primaryInk)
                 .frame(width: 46, height: 46)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -566,7 +566,7 @@ public struct ComposeBroadcastView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(viewModel.canSend ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                    .background(viewModel.canSend ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
             )
@@ -679,7 +679,7 @@ public struct ComposeBroadcastView: View {
                 }
                 Spacer(minLength: Spacing.s0)
                 if isSelected {
-                    Icon(.check, size: 18, color: Theme.Color.primary600)
+                    Icon(.check, size: 18, color: Theme.Color.primaryInk)
                 }
             }
             .padding(.horizontal, Spacing.s4)
@@ -719,7 +719,7 @@ public struct ComposeBroadcastView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)

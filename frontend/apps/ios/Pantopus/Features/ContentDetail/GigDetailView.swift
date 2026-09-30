@@ -507,7 +507,7 @@ public struct GigDetailView: View {
                         .bookmark,
                         size: 18,
                         strokeWidth: 2,
-                        color: viewModel.isSaved ? Theme.Color.primary600 : Theme.Color.appText
+                        color: viewModel.isSaved ? Theme.Color.primaryInk : Theme.Color.appText
                     )
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
@@ -595,7 +595,7 @@ public struct GigDetailView: View {
 
     private var tipSheet: some View {
         VStack(spacing: Spacing.s4) {
-            Icon(.handCoins, size: 32, color: Theme.Color.primary600)
+            Icon(.handCoins, size: 32, color: Theme.Color.primaryInk)
             Text("Send a tip")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
@@ -608,7 +608,7 @@ public struct GigDetailView: View {
                     Button { selectTip(cents) } label: {
                         Text("$\(cents / 100)")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                             .background(Theme.Color.primary50)
@@ -649,7 +649,7 @@ public struct GigDetailView: View {
                     .foregroundStyle(customTipCents == nil ? Theme.Color.appTextMuted : Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 46)
-                    .background(customTipCents == nil ? Theme.Color.appSurfaceSunken : Theme.Color.primary600)
+                    .background(customTipCents == nil ? Theme.Color.appSurfaceSunken : Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .disabled(customTipCents == nil || (!viewModel.mayChooseTip && !viewModel.mayContinueTip))

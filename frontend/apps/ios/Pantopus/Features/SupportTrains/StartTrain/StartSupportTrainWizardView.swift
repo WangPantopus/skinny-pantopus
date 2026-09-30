@@ -197,7 +197,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                 .foregroundStyle(Theme.Color.appTextMuted)
             Button("Try again") { viewModel.retryBeneficiarySearch() }
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("startSupportTrainRecipientSearchRetry")
         }
     }
@@ -233,7 +233,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     viewModel.selectBeneficiary(recipient)
                 } label: {
                     HStack(spacing: 10) {
-                        Icon(.user, size: 16, color: Theme.Color.primary600)
+                        Icon(.user, size: 16, color: Theme.Color.primaryInk)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recipient.name ?? recipient.username ?? "Recipient")
                                 .font(.system(size: 14, weight: .semibold))
@@ -545,7 +545,7 @@ private struct StartSupportTrainWhatAndWhenStep: View {
                                 )
                                 .padding(.horizontal, Spacing.s3)
                                 .frame(height: 32)
-                                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                                 .overlay(
                                     Capsule().stroke(
                                         isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -657,7 +657,7 @@ private struct StartSupportTrainReviewStep: View {
                 RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
                     .fill(Theme.Color.primary50)
                     .frame(width: 36, height: 36)
-                Icon(.calendar, size: 16, color: Theme.Color.primary600)
+                Icon(.calendar, size: 16, color: Theme.Color.primaryInk)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(slot.dayLabel)
@@ -744,7 +744,7 @@ private struct StartSupportTrainReviewStep: View {
                 Icon(
                     option.icon,
                     size: 16,
-                    color: isSelected ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                    color: isSelected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.title)

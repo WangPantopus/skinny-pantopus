@@ -41,13 +41,13 @@ struct ClaimDocumentTypePicker: View {
                             option.icon,
                             size: 18,
                             strokeWidth: 2,
-                            color: isSelected ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                            color: isSelected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                         )
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isSelected ? Theme.Color.primary600 : Theme.Color.appText)
+                        .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appText)
                     Text(option.detail)
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
@@ -55,7 +55,7 @@ struct ClaimDocumentTypePicker: View {
                 }
                 Spacer(minLength: Spacing.s0)
                 if isSelected {
-                    Icon(.checkCircle, size: 20, strokeWidth: 2, color: Theme.Color.primary600)
+                    Icon(.checkCircle, size: 20, strokeWidth: 2, color: Theme.Color.primaryInk)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

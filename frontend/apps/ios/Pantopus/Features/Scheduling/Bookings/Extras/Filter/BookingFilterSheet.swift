@@ -70,7 +70,7 @@ struct BookingFilterSheet: View {
             Spacer()
             Button("Clear all") { viewModel.clearAll() }
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(viewModel.hasActiveFilters ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                .foregroundStyle(viewModel.hasActiveFilters ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                 .disabled(!viewModel.hasActiveFilters)
                 .buttonStyle(.plain)
         }
@@ -215,7 +215,7 @@ struct BookingFilterSheet: View {
                 .multilineTextAlignment(.center)
             Button("Clear all") { viewModel.clearAll() }
                 .font(.system(size: 12.5, weight: .bold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)

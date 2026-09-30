@@ -518,7 +518,7 @@ public struct PulseComposeContent: View {
                 if !snapshot.value.isEmpty {
                     Button("Clear") { actions.onUpdateField(.eventEndDate, "") }
                         .font(Theme.Font.role(.caption))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .accessibilityIdentifier("composePulseField_eventEndDate_clear")
                 }
             }
@@ -699,7 +699,7 @@ public struct PulseComposeContent: View {
                 if !snapshot.value.isEmpty {
                     Button("Clear") { actions.onUpdateField(.lostLastSeenDate, "") }
                         .font(Theme.Font.role(.caption))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .accessibilityIdentifier("composePulseField_lostLastSeenDate_clear")
                 }
             }
@@ -903,7 +903,7 @@ public struct PulseComposeContent: View {
             // Row body re-opens the picker to swap the tag.
             Button(action: actions.onAddLocation) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.mapPin, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+                    Icon(.mapPin, size: 16, strokeWidth: 2, color: Theme.Color.primaryInk)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tag.name)
                             .font(.system(size: 14, weight: .semibold))
@@ -1052,7 +1052,7 @@ public struct PulseComposeContent: View {
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 30)
-                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                         .stroke(isActive ? .clear : Theme.Color.appBorder, lineWidth: 1)

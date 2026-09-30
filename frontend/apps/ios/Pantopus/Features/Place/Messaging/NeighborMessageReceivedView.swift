@@ -162,7 +162,7 @@ private struct QuickReplyBar: View {
                     Button { onReply(reply.id) } label: {
                         Text(reply.body)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .background(Theme.Color.infoBg)
@@ -223,7 +223,7 @@ private struct ReplySent: View {
                 Spacer(minLength: 0)
                 Button("Change reply", action: onChange)
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .buttonStyle(.plain)
             }
         }

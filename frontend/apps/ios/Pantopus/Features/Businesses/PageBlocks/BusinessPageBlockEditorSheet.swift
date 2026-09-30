@@ -40,7 +40,7 @@ public struct BusinessPageBlockTypePicker: View {
                             onSelect(kind)
                         } label: {
                             VStack(alignment: .leading, spacing: Spacing.s2) {
-                                Icon(entry.icon, size: 24, color: Theme.Color.primary600)
+                                Icon(entry.icon, size: 24, color: Theme.Color.primaryInk)
                                 Text(entry.label)
                                     .pantopusTextStyle(.body)
                                     .foregroundStyle(Theme.Color.appTextStrong)
@@ -134,10 +134,10 @@ public struct BusinessPageBlockEditorSheet: View {
 
     private var typeBadge: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(entry.icon, size: 18, color: Theme.Color.primary600)
+            Icon(entry.icon, size: 18, color: Theme.Color.primaryInk)
             Text(entry.label)
                 .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.s3)
@@ -484,10 +484,10 @@ public struct BusinessPageBlockEditorSheet: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: Spacing.s1) {
-                Icon(.plusCircle, size: 18, color: Theme.Color.primary600)
+                Icon(.plusCircle, size: 18, color: Theme.Color.primaryInk)
                 Text(title)
                     .pantopusTextStyle(.small)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .buttonStyle(.plain)

@@ -76,7 +76,7 @@ struct DateOverridesView: View {
             Button("Done") { dismiss() }
                 .font(Theme.Font.body)
                 .fontWeight(.bold)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
@@ -350,10 +350,10 @@ struct DateOverridesView: View {
                 viewModel.addCustomBlock()
             } label: {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+                    Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                     Text("Add a block")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             .buttonStyle(.plain)
@@ -535,7 +535,7 @@ struct DateOverridesView: View {
                 Icon(
                     isCustom ? .clock : .calendarOff,
                     size: 16,
-                    color: isCustom ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                    color: isCustom ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                 )
             }
             VStack(alignment: .leading, spacing: 2) {

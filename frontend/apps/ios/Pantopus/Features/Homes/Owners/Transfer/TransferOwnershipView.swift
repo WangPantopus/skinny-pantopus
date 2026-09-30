@@ -84,7 +84,7 @@ public struct TransferOwnershipView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .background(viewModel.isReadyToCommit ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+            .background(viewModel.isReadyToCommit ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .shadow(
                 color: viewModel.isReadyToCommit
@@ -297,7 +297,7 @@ private struct TransferLoadError: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Button("Retry", action: onRetry)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("transferOwnershipRetry")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -375,7 +375,7 @@ private struct TransferRecipientCard: View {
             Button(action: onClear) {
                 Text("Change")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .accessibilityIdentifier("recipientClearButton")
         }

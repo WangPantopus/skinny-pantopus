@@ -161,7 +161,7 @@ struct PlaceBlockFoundersSection: View {
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             .accessibilityIdentifier("place.blockFounders.error")

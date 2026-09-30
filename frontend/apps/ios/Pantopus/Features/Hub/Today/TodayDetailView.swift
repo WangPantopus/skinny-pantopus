@@ -236,7 +236,7 @@ private struct TodayHero: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.xl)
                         .fill(Theme.Color.appSurfaceSunken)
-                    Icon(content.glyph, size: 30, color: Theme.Color.primary600)
+                    Icon(content.glyph, size: 30, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 56, height: 56)
                 .accessibilityHidden(true)
@@ -262,7 +262,7 @@ private struct TodayHero: View {
     }
 
     private var kickerColor: Color {
-        content.isAlert ? Theme.Color.error : Theme.Color.primary600
+        content.isAlert ? Theme.Color.error : Theme.Color.primaryInk
     }
 }
 
@@ -364,7 +364,7 @@ private struct TodaySectionCard<Content: View>: View {
                         Text(action.label)
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
                             .contentShape(Rectangle())
                     }
@@ -586,7 +586,7 @@ private struct ShareCardView: View {
         HStack(spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.lg).fill(Theme.Color.primary50)
-                Icon(.share, size: 18, color: Theme.Color.primary600)
+                Icon(.share, size: 18, color: Theme.Color.primaryInk)
             }
             .frame(width: 40, height: 40)
             .accessibilityHidden(true)
@@ -613,7 +613,7 @@ private struct ShareCardView: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)

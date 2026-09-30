@@ -130,7 +130,7 @@ struct StartTrainRecipientCard: View {
         Button(action: onChange) {
             Text("Change")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(minWidth: 44, minHeight: 44)
         }
         .accessibilityLabel("Change recipient")

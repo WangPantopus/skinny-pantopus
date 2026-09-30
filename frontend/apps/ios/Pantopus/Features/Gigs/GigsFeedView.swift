@@ -133,10 +133,10 @@ public struct GigsFeedView: View {
     private func radiusSuggestionBanner(_ suggestion: GigsRadiusSuggestion) -> some View {
         let noun = suggestion.resultCount == 1 ? "task" : "tasks"
         return HStack(spacing: Spacing.s2) {
-            Icon(.mapPin, size: 13, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(.mapPin, size: 13, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             Text("Only \(suggestion.resultCount) \(noun) within \(Self.radiusLabel(suggestion.currentMiles))")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .lineLimit(1)
             Spacer(minLength: Spacing.s1)
             Button {
@@ -144,7 +144,7 @@ public struct GigsFeedView: View {
             } label: {
                 Text("Search \(Self.radiusLabel(suggestion.suggestedMiles))")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 32)
                     .contentShape(Rectangle())
             }
@@ -153,7 +153,7 @@ public struct GigsFeedView: View {
             Button {
                 viewModel.dismissRadiusSuggestion()
             } label: {
-                Icon(.x, size: 13, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.x, size: 13, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
@@ -231,7 +231,7 @@ public struct GigsFeedView: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 34)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
                 .shadow(color: Theme.Color.primary600.opacity(0.30), radius: 6, x: 0, y: 4)
             }
@@ -357,7 +357,7 @@ public struct GigsFeedView: View {
                         .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                         .padding(.horizontal, 14)
                         .frame(height: 32)
-                        .background(active ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                        .background(active ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                         .overlay(
                             RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                                 .stroke(active ? Theme.Color.primary600 : Theme.Color.appBorder, lineWidth: 1)
@@ -383,7 +383,7 @@ public struct GigsFeedView: View {
                     Button(action: onOpenMyTasks) {
                         Text("My Tasks")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(minHeight: 32)
                             .contentShape(Rectangle())
                     }
@@ -399,7 +399,7 @@ public struct GigsFeedView: View {
                     Button(action: onOpenMySupportTrains) {
                         Text("My Support Trains")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(minHeight: 32)
                             .contentShape(Rectangle())
                     }
@@ -510,7 +510,7 @@ public struct GigsFeedView: View {
     private func emptyFrame(_ empty: GigsFeedEmpty) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
-            Icon(.briefcase, size: 32, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(.briefcase, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -542,7 +542,7 @@ public struct GigsFeedView: View {
                 }
                 .padding(.horizontal, 22)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -677,7 +677,7 @@ public struct GigsFeedView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -724,7 +724,7 @@ struct GigRow: View {
             HStack(spacing: 10) {
                 Text(content.price)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 if let bidCount = content.bidCount {
                     if bidCount > 0 {
                         BidPill(count: bidCount)
@@ -762,7 +762,7 @@ struct SupportTrainFeedRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
-            Icon(.heart, size: 22, strokeWidth: 2, color: Theme.Color.primary600)
+            Icon(.heart, size: 22, strokeWidth: 2, color: Theme.Color.primaryInk)
                 .frame(width: 44, height: 44)
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -880,7 +880,7 @@ private struct GigsViewModeToggle: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 32)
-            .background(active ? Theme.Color.primary600 : Color.clear)
+            .background(active ? Theme.Color.primarySolid : Color.clear)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)

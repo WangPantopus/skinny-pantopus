@@ -324,7 +324,7 @@ private struct BookingMgmtHeaderCard: View {
                 } label: {
                     Text("Change photo")
                         .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("bookingPageManagement.changePhoto")
@@ -384,7 +384,7 @@ private struct BookingMgmtServiceRow: View {
                 Icon(
                     row.locationIcon,
                     size: 15,
-                    color: row.isVisible ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                    color: row.isVisible ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                 )
                 .frame(width: 30, height: 30)
                 .background(row.isVisible ? Theme.Color.primary50 : Theme.Color.appSurfaceSunken)

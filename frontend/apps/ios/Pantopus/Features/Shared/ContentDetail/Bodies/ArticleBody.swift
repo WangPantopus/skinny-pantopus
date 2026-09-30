@@ -57,7 +57,7 @@ public struct ArticleBody: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             if let eyebrow = content.eyebrow {
                 Text(eyebrow, style: .overline)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             if let title = content.title {
                 Text(title)

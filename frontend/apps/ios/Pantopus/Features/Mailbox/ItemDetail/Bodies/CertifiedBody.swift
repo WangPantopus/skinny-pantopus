@@ -73,9 +73,9 @@ public struct CertifiedBody: View {
                     HStack(spacing: Spacing.s1) {
                         Text("Show full terms")
                             .font(.system(size: 12, weight: .semibold))
-                        Icon(.chevronDown, size: 13, color: Theme.Color.primary600)
+                        Icon(.chevronDown, size: 13, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 44, alignment: .leading)
                 }
                 .buttonStyle(.plain)

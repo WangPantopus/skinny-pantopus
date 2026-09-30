@@ -44,9 +44,9 @@ public struct SectionHeader: View {
                     HStack(spacing: Spacing.s1) {
                         Text(action.title)
                             .pantopusTextStyle(.small)
-                        Icon(.chevronRight, size: 14, color: Theme.Color.primary600)
+                        Icon(.chevronRight, size: 14, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)

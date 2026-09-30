@@ -378,7 +378,7 @@ public struct NearbyMapView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s4)
                         .frame(height: 38)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -553,7 +553,7 @@ private struct MapClusterDot: View {
 private struct YouAreHereDot: View {
     var body: some View {
         Circle()
-            .fill(Theme.Color.primary600)
+            .fill(Theme.Color.primarySolid)
             .frame(width: 14, height: 14)
             .overlay(
                 Circle().stroke(Color.white, lineWidth: 3)
@@ -598,7 +598,7 @@ private struct NearbyEntityCard: View {
                         if let price = entity.price {
                             Text(price)
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                         if let distance = entity.distanceLabel {
                             Text("· \(distance)")
@@ -677,7 +677,7 @@ private struct NearbyEntityRow: View {
                         if let price = entity.price {
                             Text(price)
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                         if entity.bidCount > 0 {
                             Text("\(entity.bidCount) bids")

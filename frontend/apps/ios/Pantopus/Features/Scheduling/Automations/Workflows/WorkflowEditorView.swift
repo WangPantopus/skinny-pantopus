@@ -227,7 +227,7 @@ struct WorkflowEditorView: View {
                         HStack(spacing: 4) {
                             Icon(.eye, size: 13, color: model.canPreview ? Theme.Color.primary600 : Theme.Color.appTextMuted)
                             Text("Preview").font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(model.canPreview ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                                .foregroundStyle(model.canPreview ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                         }
                     }
                     .disabled(!model.canPreview)

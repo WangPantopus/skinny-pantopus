@@ -97,7 +97,7 @@ struct MailboxEmptyHero: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
             .shadow(color: Theme.Color.primary600.opacity(0.30), radius: 12, x: 0, y: 8)
         }

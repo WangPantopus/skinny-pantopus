@@ -166,7 +166,7 @@ public struct TasksMapView: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(minWidth: 14, minHeight: 14)
-                        .background(Circle().fill(Theme.Color.primary600))
+                        .background(Circle().fill(Theme.Color.primarySolid))
                         .offset(x: 2, y: -2)
                 }
             }
@@ -220,10 +220,10 @@ public struct TasksMapView: View {
     private var searchThisAreaPill: some View {
         Button { Task { await viewModel.searchThisArea() } } label: {
             HStack(spacing: 6) {
-                Icon(.refreshCw, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+                Icon(.refreshCw, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                 Text("Search this area")
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, 14)
             .frame(height: 34)
@@ -269,7 +269,7 @@ public struct TasksMapView: View {
             .padding(.leading, 14)
             .padding(.trailing, 18)
             .frame(height: 48)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
             .shadow(color: Theme.Color.primary600.opacity(0.36), radius: 12, x: 0, y: 10)
         }
@@ -451,7 +451,7 @@ public struct TasksMapView: View {
                         RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                             .stroke(Theme.Color.primary100, lineWidth: 1)
                     )
-                Icon(.mapPinOff, size: 24, color: Theme.Color.primary600)
+                Icon(.mapPinOff, size: 24, color: Theme.Color.primaryInk)
             }
             .frame(width: 56, height: 56)
             .padding(.bottom, Spacing.s3)
@@ -476,7 +476,7 @@ public struct TasksMapView: View {
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 36)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -549,7 +549,7 @@ public struct TasksMapView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 38)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -604,7 +604,7 @@ private struct TaskRailCard: View {
                     HStack(spacing: Spacing.s2) {
                         Text(item.price)
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                         Text("· \(item.distanceLabel)")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Theme.Color.appTextSecondary)

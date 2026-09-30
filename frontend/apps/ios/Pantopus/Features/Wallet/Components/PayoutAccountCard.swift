@@ -103,11 +103,11 @@ struct PayoutAccountCard: View {
                     .externalLink,
                     size: 12,
                     strokeWidth: 2.2,
-                    color: account.warn ? Color.white : Theme.Color.primary600
+                    color: account.warn ? Color.white : Theme.Color.primaryInk
                 )
                 Text(account.actionLabel)
                     .font(.system(size: 11.5, weight: account.warn ? .bold : .semibold))
-                    .foregroundStyle(account.warn ? Color.white : Theme.Color.primary600)
+                    .foregroundStyle(account.warn ? Color.white : Theme.Color.primaryInk)
             }
             .padding(.horizontal, 10)
             .frame(minHeight: 30)

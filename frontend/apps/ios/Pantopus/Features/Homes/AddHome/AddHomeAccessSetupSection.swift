@@ -53,10 +53,10 @@ struct AddHomeAccessSetupSection: View {
                 viewModel.addAccessItem()
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.plusCircle, size: 20, strokeWidth: 2, color: Theme.Color.primary600)
+                    Icon(.plusCircle, size: 20, strokeWidth: 2, color: Theme.Color.primaryInk)
                     Text("Add another network or code")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -100,10 +100,10 @@ private struct AccessItemCard: View {
             if item.accessType == .wifi {
                 Button(action: onScanQR) {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.scanLine, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+                        Icon(.scanLine, size: 16, strokeWidth: 2, color: Theme.Color.primaryInk)
                         Text("Scan WiFi QR")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s2)
@@ -181,7 +181,7 @@ private struct AccessItemCard: View {
                 .foregroundStyle(isSelected ? Theme.Color.appTextInverse : Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s1)
-                .background(isSelected ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(isSelected ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         }
         .buttonStyle(.plain)

@@ -479,7 +479,7 @@ struct AddressCalendarCard: View {
                     picking.toggle()
                 }
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("addressCalendarPickupToggle")
                 .disabled(saving != nil)
             }

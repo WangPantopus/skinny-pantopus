@@ -135,7 +135,7 @@ struct CommunityFeedCard: View {
                         Icon(
                             reaction.icon,
                             size: 13,
-                            color: active ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                            color: active ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                         )
                         Text(count > 0 ? "\(count)" : reaction.label)
                             .font(.system(size: 11, weight: .semibold))

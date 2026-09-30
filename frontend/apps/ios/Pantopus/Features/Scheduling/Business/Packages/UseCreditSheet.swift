@@ -164,7 +164,7 @@ struct UseCreditSheet: View {
             Task { await model.apply(booking) { await onApplied() } }
         } label: {
             HStack(spacing: 11) {
-                Icon(.calendar, size: 16, color: Theme.Color.primary600)
+                Icon(.calendar, size: 16, color: Theme.Color.primaryInk)
                     .frame(width: 36, height: 36)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

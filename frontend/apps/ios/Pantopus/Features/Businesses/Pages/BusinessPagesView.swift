@@ -69,7 +69,7 @@ public struct BusinessPagesView: View {
                 } label: {
                     Text(viewModel.showsAddForm ? "Cancel" : "Add page")
                         .pantopusTextStyle(.small)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .accessibilityIdentifier("businessPages.toggleAdd")
             }
@@ -228,10 +228,10 @@ public struct BusinessPagesView: View {
                         Task { await viewModel.toggleRevisions(for: row) }
                     } label: {
                         HStack(spacing: Spacing.s1) {
-                            Icon(.history, size: 14, color: Theme.Color.primary600)
+                            Icon(.history, size: 14, color: Theme.Color.primaryInk)
                             Text(viewModel.expandedRevisionsPageId == row.id ? "Hide history" : "History")
                                 .pantopusTextStyle(.caption)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                     }
                     .buttonStyle(.plain)
@@ -294,7 +294,7 @@ public struct BusinessPagesView: View {
                             }
                             .padding(.horizontal, Spacing.s3)
                             .padding(.vertical, Spacing.s1)
-                            .background(Theme.Color.primary600)
+                            .background(Theme.Color.primarySolid)
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)

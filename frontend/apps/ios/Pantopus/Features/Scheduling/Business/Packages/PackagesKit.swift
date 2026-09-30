@@ -459,7 +459,7 @@ struct PkgPrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .opacity(enabled && !loading ? 1 : 0.45)
         }
@@ -544,7 +544,7 @@ struct PkgStripeGate: View {
                     }
                     .padding(.horizontal, 22)
                     .frame(height: 40)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)

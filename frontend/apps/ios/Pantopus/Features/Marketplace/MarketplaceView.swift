@@ -133,7 +133,7 @@ public struct MarketplaceView: View {
                             .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                             .padding(.horizontal, 14)
                             .frame(height: 28)
-                            .background(active ? Theme.Color.primary600 : Theme.Color.appSurface)
+                            .background(active ? Theme.Color.primarySolid : Theme.Color.appSurface)
                             .overlay(
                                 RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                                     .stroke(active ? .clear : Theme.Color.appBorder, lineWidth: 1)
@@ -194,7 +194,7 @@ public struct MarketplaceView: View {
     private func emptyFrame(_ empty: MarketplaceEmpty) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
-            Icon(.shoppingBag, size: 32, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(.shoppingBag, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -216,7 +216,7 @@ public struct MarketplaceView: View {
                 }
                 .padding(.horizontal, 22)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -287,7 +287,7 @@ public struct MarketplaceView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -345,7 +345,7 @@ private struct MarketplaceRadiusHint: View {
                         .foregroundStyle(Theme.Color.appTextStrong)
                         + Text(canWiden ? " · tap to widen" : " · max radius")
                         .font(.system(size: 11.5))
-                        .foregroundStyle(canWiden ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                        .foregroundStyle(canWiden ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                 }
             }
             .padding(.horizontal, 14)
@@ -392,7 +392,7 @@ private struct ListingCard: View {
                     .frame(minHeight: 28, alignment: .top)
                 Text(content.price)
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(content.isFree ? Theme.Color.success : Theme.Color.primary600)
+                    .foregroundStyle(content.isFree ? Theme.Color.success : Theme.Color.primaryInk)
                 Text(content.metaLine)
                     .font(.system(size: 9.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)

@@ -175,10 +175,10 @@ struct IntakeQuestionEditGroup: View {
             }
             Button(action: onAddOption) {
                 HStack(spacing: 5) {
-                    Icon(.plus, size: 13, color: Theme.Color.primary600)
+                    Icon(.plus, size: 13, color: Theme.Color.primaryInk)
                     Text("Add option")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             .buttonStyle(.plain)
@@ -212,7 +212,7 @@ struct IntakeQuestionEditGroup: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

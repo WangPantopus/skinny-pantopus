@@ -159,10 +159,10 @@ private struct StampsNav: View {
             HStack(spacing: Spacing.s0) {
                 Button(action: onBack) {
                     HStack(spacing: Spacing.s0) {
-                        Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                        Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                         Text("Mailbox")
                             .font(.system(size: 15))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .padding(.horizontal, Spacing.s1)
                     .frame(minHeight: 44)
@@ -400,7 +400,7 @@ private struct StampsDock: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 8, x: 0, y: 4)
             }
@@ -510,7 +510,7 @@ private struct StampsEmptyBody: View {
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, Spacing.s5)
                 .padding(.vertical, Spacing.s3)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 8, x: 0, y: 4)
             }
@@ -635,7 +635,7 @@ private struct StampsErrorBody: View {
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, Spacing.s5)
                     .padding(.vertical, Spacing.s3)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)

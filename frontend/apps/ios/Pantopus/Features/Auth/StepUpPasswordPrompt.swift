@@ -104,7 +104,7 @@ struct StepUpPasswordSheet: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HStack(spacing: Spacing.s2) {
-                Icon(.lock, size: 20, color: Theme.Color.primary600)
+                Icon(.lock, size: 20, color: Theme.Color.primaryInk)
                 Text("Confirm it's you")
                     .pantopusTextStyle(.h3)
                     .foregroundStyle(Theme.Color.appText)

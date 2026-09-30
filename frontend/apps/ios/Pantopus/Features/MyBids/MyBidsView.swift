@@ -122,7 +122,7 @@ private struct WithdrawBidSheet: View {
                                 .foregroundStyle(Theme.Color.appText)
                             Spacer()
                             if selected == reason {
-                                Icon(.check, size: 18, color: Theme.Color.primary600)
+                                Icon(.check, size: 18, color: Theme.Color.primaryInk)
                             }
                         }
                         .padding(Spacing.s3)

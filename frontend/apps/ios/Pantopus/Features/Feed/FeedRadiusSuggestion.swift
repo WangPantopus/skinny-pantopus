@@ -98,7 +98,7 @@ struct FeedRadiusSuggestionBanner: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(isExpand ? Theme.Color.primary600 : Theme.Color.magic)
+                    .background(isExpand ? Theme.Color.primarySolid : Theme.Color.magic)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

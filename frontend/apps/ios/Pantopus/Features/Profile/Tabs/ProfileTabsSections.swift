@@ -93,10 +93,10 @@ public struct ProfilePortfolioSection: View {
                 viewModel.showAddSheet = true
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.plus, size: 18, color: Theme.Color.primary600)
+                    Icon(.plus, size: 18, color: Theme.Color.primaryInk)
                     Text("Add portfolio item")
                         .font(.system(size: PantopusTextStyle.small.size, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     Spacer(minLength: Spacing.s0)
                 }
                 .padding(Spacing.s3)
@@ -150,7 +150,7 @@ public struct ProfilePortfolioSection: View {
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, 7)
-                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         }
         .buttonStyle(.plain)

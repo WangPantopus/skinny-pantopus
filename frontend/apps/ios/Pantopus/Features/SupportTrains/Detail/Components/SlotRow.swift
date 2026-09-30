@@ -146,7 +146,7 @@ public struct SlotRow: View {
                         .foregroundStyle(onSignUp == nil ? Theme.Color.appTextSecondary : Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s3)
                         .frame(height: 30)
-                        .background(onSignUp == nil ? Theme.Color.appBorderStrong : Theme.Color.primary600)
+                        .background(onSignUp == nil ? Theme.Color.appBorderStrong : Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
             )

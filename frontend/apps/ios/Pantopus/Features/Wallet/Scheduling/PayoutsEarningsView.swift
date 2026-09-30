@@ -151,7 +151,7 @@ extension PayoutsEarningsView {
                 Spacer(minLength: Spacing.s0)
                 Text(action)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("scheduling.payoutsEarnings.seeAll")
             }
         }
@@ -515,7 +515,7 @@ private struct PayoutsWithdrawButton: View {
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
             .pantopusShadow(.primary)
         }

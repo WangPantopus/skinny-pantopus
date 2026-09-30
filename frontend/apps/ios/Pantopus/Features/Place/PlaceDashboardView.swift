@@ -377,7 +377,7 @@ struct PlaceVerifyBanner: View {
                         .fill(Theme.Color.primary100)
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .strokeBorder(Theme.Color.primary200, lineWidth: 1)
-                    Icon(.shieldCheck, size: 20, strokeWidth: 2, color: Theme.Color.primary600)
+                    Icon(.shieldCheck, size: 20, strokeWidth: 2, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 38, height: 38)
                 VStack(alignment: .leading, spacing: 4) {
@@ -390,9 +390,9 @@ struct PlaceVerifyBanner: View {
                     HStack(spacing: 4) {
                         Text("Verify address")
                             .font(.system(size: 13.5, weight: .semibold))
-                        Icon(.arrowRight, size: 14, strokeWidth: 2.5, color: Theme.Color.primary600)
+                        Icon(.arrowRight, size: 14, strokeWidth: 2.5, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Icon(.chevronRight, size: 18, strokeWidth: 2.25, color: Theme.Color.primary300)

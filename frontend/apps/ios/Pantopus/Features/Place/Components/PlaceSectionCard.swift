@@ -79,7 +79,7 @@ struct PlaceSectionCard: View {
                 } else if let actionLabel {
                     Text(actionLabel)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .lineLimit(1)
                 } else if let value {
                     HStack(spacing: 6) {

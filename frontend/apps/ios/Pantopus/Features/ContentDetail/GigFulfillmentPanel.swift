@@ -78,7 +78,7 @@ struct GigFulfillmentPanel: View {
 
     private func etaStrip(_ label: String) -> some View {
         HStack(spacing: 6) {
-            Icon(.navigation, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+            Icon(.navigation, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
             Text(label)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.Color.primary700)
@@ -140,7 +140,7 @@ struct GigFulfillmentPanel: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 40)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)

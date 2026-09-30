@@ -60,8 +60,8 @@ public struct PackageTrackingTimeline: View {
                     HStack(spacing: 3) {
                         Text("View on \(carrierShort(carrier))")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.externalLink, size: 11, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.externalLink, size: 11, color: Theme.Color.primaryInk)
                     }
                 })
                 .buttonStyle(.plain)

@@ -146,14 +146,14 @@ private struct ScheduleStep: View {
                             Icon(
                                 schedule == .oneTime ? .clock : .arrowsRepeat,
                                 size: 18,
-                                color: Theme.Color.primary600
+                                color: Theme.Color.primaryInk
                             )
                             Text(schedule.label)
                                 .pantopusTextStyle(.body)
                                 .foregroundStyle(Theme.Color.appText)
                             Spacer()
                             if viewModel.schedule == schedule {
-                                Icon(.checkCircle, size: 20, color: Theme.Color.primary600)
+                                Icon(.checkCircle, size: 20, color: Theme.Color.primaryInk)
                             } else {
                                 Circle()
                                     .stroke(Theme.Color.appBorder, lineWidth: 1)

@@ -41,7 +41,7 @@ struct HomeClaimReviewTabStrip: View {
                             .font(.system(size: 13, weight: selection == entry.tab ? .semibold : .medium))
                             .foregroundStyle(
                                 selection == entry.tab
-                                    ? Theme.Color.primary600
+                                    ? Theme.Color.primaryInk
                                     : Theme.Color.appTextSecondary
                             )
                         Rectangle()

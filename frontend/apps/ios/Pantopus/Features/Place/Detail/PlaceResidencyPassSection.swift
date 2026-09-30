@@ -248,7 +248,7 @@ struct PlaceResidencyPassSection: View {
                                     lineWidth: 1.5
                                 )
                         )
-                        .foregroundStyle(selected ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                        .foregroundStyle(selected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                 }
                 .buttonStyle(.plain)
             }

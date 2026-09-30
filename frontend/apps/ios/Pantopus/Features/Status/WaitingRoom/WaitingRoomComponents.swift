@@ -100,7 +100,7 @@ struct WaitingRoomNoticeFrame: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: 240)
                     .frame(height: 50)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct WaitingRoomAddressRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.home, size: 13, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(.home, size: 13, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             Text(address)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)

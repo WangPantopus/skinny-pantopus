@@ -295,11 +295,11 @@ private struct LoadedShell: View {
                     if canManage {
                         Button(action: onEdit) {
                             HStack(spacing: Spacing.s2) {
-                                Icon(.pencil, size: 16, color: Theme.Color.primary600)
+                                Icon(.pencil, size: 16, color: Theme.Color.primaryInk)
                                 Text("Edit bill")
                                     .pantopusTextStyle(.small)
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(Theme.Color.primary600)
+                                    .foregroundStyle(Theme.Color.primaryInk)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .background(Theme.Color.primary50)
@@ -456,7 +456,7 @@ private struct SplitsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
-                Icon(.users, size: 16, color: Theme.Color.primary600)
+                Icon(.users, size: 16, color: Theme.Color.primaryInk)
                 Text("Split between")
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)

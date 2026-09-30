@@ -307,7 +307,7 @@ public struct TransactionReviewSheetView: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(canSubmit ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                        .fill(canSubmit ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 )
             }
             .buttonStyle(.plain)
@@ -406,7 +406,7 @@ private struct TxnReviewSubmittedView: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                            .fill(Theme.Color.primary600)
+                            .fill(Theme.Color.primarySolid)
                     )
             }
             .buttonStyle(.plain)

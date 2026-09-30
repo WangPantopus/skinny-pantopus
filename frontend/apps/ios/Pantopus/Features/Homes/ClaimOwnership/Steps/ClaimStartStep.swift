@@ -124,13 +124,13 @@ private struct ClaimMethodPicker: View {
                             icon,
                             size: 20,
                             strokeWidth: 2,
-                            color: isSelected ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                            color: isSelected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                         )
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
                         .pantopusTextStyle(.body)
-                        .foregroundStyle(isSelected ? Theme.Color.primary600 : Theme.Color.appText)
+                        .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                     Text(subcopy)
                         .pantopusTextStyle(.caption)
@@ -252,7 +252,7 @@ private struct WhyWeAskSection: View {
                         .fill(Theme.Color.appSurface)
                         .frame(width: 28, height: 28)
                         .overlay {
-                            Icon(.shieldCheck, size: 15, strokeWidth: 2.2, color: Theme.Color.primary600)
+                            Icon(.shieldCheck, size: 15, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Why we ask")
@@ -266,7 +266,7 @@ private struct WhyWeAskSection: View {
                     Icon(
                         isExpanded ? .chevronUp : .chevronDown,
                         size: 16,
-                        color: Theme.Color.primary600
+                        color: Theme.Color.primaryInk
                     )
                 }
                 .frame(minHeight: 44)

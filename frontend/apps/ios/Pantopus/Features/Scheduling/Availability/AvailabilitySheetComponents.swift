@@ -107,7 +107,7 @@ struct AvailabilityFieldButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s2) {
-                Icon(icon, size: 15, color: Theme.Color.primary600)
+                Icon(icon, size: 15, color: Theme.Color.primaryInk)
                 Text(value)
                     .font(.system(size: 13, weight: .semibold))
                     .monospacedDigit()
@@ -148,7 +148,7 @@ struct AvailabilityTimeRangeButton: View {
         HStack(spacing: Spacing.s2) {
             Button(action: onTap) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.clock, size: 14, color: Theme.Color.primary600)
+                    Icon(.clock, size: 14, color: Theme.Color.primaryInk)
                     Text(label)
                         .font(.system(size: 13, weight: .semibold))
                         .monospacedDigit()

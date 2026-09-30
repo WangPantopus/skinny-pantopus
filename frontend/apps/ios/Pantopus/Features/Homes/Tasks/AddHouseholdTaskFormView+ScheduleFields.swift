@@ -121,7 +121,7 @@ extension AddHouseholdTaskFormView {
         } label: {
             Text(unit.label)
                 .pantopusTextStyle(.small)
-                .foregroundStyle(selected ? Theme.Color.primary600 : Theme.Color.appText)
+                .foregroundStyle(selected ? Theme.Color.primaryInk : Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 44)
                 .background(selected ? Theme.Color.primary50 : Theme.Color.appSurface)
@@ -152,7 +152,7 @@ extension AddHouseholdTaskFormView {
                         viewModel.setDueDate(nil)
                     }
                     .font(Theme.Font.role(.caption))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("field_dueAt_clear")
                 }
             }

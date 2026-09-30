@@ -103,7 +103,7 @@ struct StatusStackButton: View {
             content(textColor: Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 9, x: 0, y: 8)
         case .outline:
@@ -119,7 +119,7 @@ struct StatusStackButton: View {
         case .underline:
             Text(button.label)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .underline()
                 .frame(maxWidth: .infinity)
                 .frame(height: 36)

@@ -464,7 +464,7 @@ struct AddToCalendarSheet: View {
         case .done:
             Icon(.checkCircle2, size: 18, color: Theme.Color.success)
         case .selected:
-            Icon(.check, size: 18, strokeWidth: 2.6, color: Theme.Color.primary600)
+            Icon(.check, size: 18, strokeWidth: 2.6, color: Theme.Color.primaryInk)
         }
     }
 

@@ -83,7 +83,7 @@ public struct FollowingView: View {
             Button { viewModel.exitSelection() } label: {
                 Text("Cancel")
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(height: 40)
             }
             .buttonStyle(.plain)
@@ -235,7 +235,7 @@ public struct FollowingView: View {
             Text(section.header.uppercased())
                 .font(.system(size: 11, weight: .bold))
                 .tracking(0.8)
-                .foregroundStyle(section.isTinted ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                .foregroundStyle(section.isTinted ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
             Text("\u{00B7}")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextMuted)
@@ -307,7 +307,7 @@ public struct FollowingView: View {
         VStack(spacing: Spacing.s3) {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 76, height: 76)
-                Icon(.radioTower, size: 34, strokeWidth: 1.7, color: Theme.Color.primary600)
+                Icon(.radioTower, size: 34, strokeWidth: 1.7, color: Theme.Color.primaryInk)
             }
             Text("You\u{2019}re not following any Beacons yet")
                 .font(.system(size: 20, weight: .bold))
@@ -327,7 +327,7 @@ public struct FollowingView: View {
                 }
                 .padding(.horizontal, Spacing.s6)
                 .frame(height: 46)
-                .background(Capsule().fill(Theme.Color.primary600))
+                .background(Capsule().fill(Theme.Color.primarySolid))
             }
             .buttonStyle(.plain)
             .padding(.top, Spacing.s1)
@@ -358,7 +358,7 @@ public struct FollowingView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Capsule().fill(Theme.Color.primary600))
+                    .background(Capsule().fill(Theme.Color.primarySolid))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("followingError.retry")
@@ -424,7 +424,7 @@ struct FollowingRowView: View {
                 if !isSelecting, let postId = row.latestPostId, let onOpenPost {
                     Button("Read update") { onOpenPost(postId) }
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("followingRead.\(postId)")
                 }
@@ -450,7 +450,7 @@ struct FollowingRowView: View {
         Icon(
             isSelected ? .checkCircle : .circle,
             size: 22,
-            color: isSelected ? Theme.Color.primary600 : Theme.Color.appBorderStrong
+            color: isSelected ? Theme.Color.primaryInk : Theme.Color.appBorderStrong
         )
         .accessibilityLabel(isSelected ? "Selected" : "Not selected")
         .accessibilityIdentifier("followingRow.selectTick")
@@ -500,7 +500,7 @@ struct FollowingRowView: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 if row.verified {
-                    Icon(.badgeCheck, size: 14, color: Theme.Color.primary600)
+                    Icon(.badgeCheck, size: 14, color: Theme.Color.primaryInk)
                 }
                 if let tier = row.tierName {
                     tierPill(tier)
@@ -536,7 +536,7 @@ struct FollowingRowView: View {
                 .frame(minWidth: 20)
                 .padding(.horizontal, 6)
                 .frame(height: 20)
-                .background(Capsule().fill(Theme.Color.primary600))
+                .background(Capsule().fill(Theme.Color.primarySolid))
                 .accessibilityIdentifier("followingRow.unreadBadge")
         case .muted:
             Icon(.bellOff, size: 16, color: Theme.Color.appTextMuted)

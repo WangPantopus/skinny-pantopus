@@ -133,7 +133,7 @@ public struct CeremonialMailWizardView: View {
                     viewModel.selectRecipient(recipient)
                 } label: {
                     HStack(spacing: 10) {
-                        Icon(.user, size: 16, color: Theme.Color.primary600)
+                        Icon(.user, size: 16, color: Theme.Color.primaryInk)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recipient.name ?? recipient.username ?? "Recipient")
                                 .font(.system(size: 14, weight: .semibold))
@@ -208,7 +208,7 @@ public struct CeremonialMailWizardView: View {
                         Circle().fill(Theme.Color.primary600).frame(width: 10, height: 10)
                     }
                 }
-                Icon(intent.icon, size: 16, color: Theme.Color.primary600)
+                Icon(intent.icon, size: 16, color: Theme.Color.primaryInk)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(intent.title)
                         .font(.system(size: 14, weight: .semibold))
@@ -392,7 +392,7 @@ public struct CeremonialMailWizardView: View {
                                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                                 .padding(.horizontal, Spacing.s3)
                                 .frame(height: 32)
-                                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                                 .overlay(
                                     Capsule().stroke(
                                         isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -486,7 +486,7 @@ public struct CeremonialMailWizardView: View {
                 voiceChip(label: message, icon: .alertCircle, accent: false)
                 Button("Try again") { viewModel.clearVoicePostscript() }
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
     }
@@ -500,7 +500,7 @@ public struct CeremonialMailWizardView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 36)
-        .background(accent ? Theme.Color.primary600 : Theme.Color.primary50)
+        .background(accent ? Theme.Color.primarySolid : Theme.Color.primary50)
         .clipShape(Capsule())
     }
 

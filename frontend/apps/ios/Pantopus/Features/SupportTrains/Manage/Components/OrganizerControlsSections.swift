@@ -33,7 +33,7 @@ struct ManageSectionHeader: View {
                 Button(action: onAction) {
                     Text(actionTitle)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(actionIdentifier ?? "manageTrainSectionAction")

@@ -870,7 +870,7 @@ public struct Icon: View {
 #Preview {
     VStack(spacing: 16) {
         Icon(.home)
-        Icon(.bell, size: 28, color: Theme.Color.primary600)
+        Icon(.bell, size: 28, color: Theme.Color.primaryInk)
         Icon(.shieldCheck, size: 32, strokeWidth: 2.5, color: Theme.Color.success)
         Icon(.trash2, size: 20, color: Theme.Color.error, accessibilityLabel: "Delete")
     }

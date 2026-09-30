@@ -288,7 +288,7 @@ private struct EquityCalculator: View {
                             .foregroundStyle(Theme.Color.appTextMuted)
                         Button("Edit") { stage = .form }
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .frame(maxWidth: .infinity)
                 }

@@ -43,8 +43,8 @@ public struct OtherBidsStrip: View {
                 HStack(spacing: 3) {
                     Text("Compare all")
                         .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.primary600)
-                    Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                    Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                 }
                 .frame(minHeight: 44)
             }

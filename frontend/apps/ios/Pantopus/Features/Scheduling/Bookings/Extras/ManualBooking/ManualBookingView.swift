@@ -364,7 +364,7 @@ struct ManualBookingView: View {
     /// glyph. Maps to `Theme.Color.primary50 / primary200 / primary600`.
     private var notOnPantopusBanner: some View {
         HStack(alignment: .center, spacing: Spacing.s2) {
-            Icon(.userPlus, size: 16, color: Theme.Color.primary600)
+            Icon(.userPlus, size: 16, color: Theme.Color.primaryInk)
             Text("Not on Pantopus yet — invite them to book")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextStrong)
