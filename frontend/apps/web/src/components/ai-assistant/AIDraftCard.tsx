@@ -306,15 +306,17 @@ function MailSummaryCard({ summary }: { summary: MailSummary }) {
         {/* Recommended actions */}
         {summary.recommended_actions?.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
+            {/* Suggestions only: the summary carries no mail id to act on, so
+                these read as text rather than buttons that do nothing. */}
             {summary.recommended_actions.map((action, i) => (
-              <button
+              <span
                 key={i}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-xs font-medium text-amber-800 hover:bg-amber-50 transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-xs font-medium text-amber-800"
                 title={action.reason}
               >
                 {actionIcons[action.type] || <CheckCircle className="w-3 h-3" />}
                 {action.title}
-              </button>
+              </span>
             ))}
           </div>
         )}
