@@ -241,6 +241,9 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
         public let highF: Double?
         public let lowF: Double?
         public let precipitationNext6h: Bool?
+        /// Today's sunrise and sunset (UTC ISO 8601) from the daily forecast.
+        public let sunriseUtc: String?
+        public let sunsetUtc: String?
 
         private enum CodingKeys: String, CodingKey {
             case currentTempF = "current_temp_f"
@@ -249,6 +252,8 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
             case highF = "high_f"
             case lowF = "low_f"
             case precipitationNext6h = "precipitation_next_6h"
+            case sunriseUtc = "sunrise_utc"
+            case sunsetUtc = "sunset_utc"
         }
     }
 

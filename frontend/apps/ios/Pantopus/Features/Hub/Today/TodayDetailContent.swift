@@ -159,7 +159,8 @@ public struct TodayDetailContent: Equatable, Sendable {
     public let chips: [TodayHeroChip]
     /// Present only in the alert state — drives the red ribbon + state.
     public let ribbon: TodayAlertRibbon?
-    public let sunSky: TodaySunSky
+    /// Nil when the weather feed has no sun times: the card is left out rather than guessed.
+    public let sunSky: TodaySunSky?
     /// Signals section title, e.g. "Signals · 4 today".
     public let signalsTitle: String
     /// Accent dot tone on the Signals header (primary normally, error on alert).
@@ -184,7 +185,7 @@ public struct TodayDetailContent: Equatable, Sendable {
         glyph: PantopusIcon,
         chips: [TodayHeroChip],
         ribbon: TodayAlertRibbon? = nil,
-        sunSky: TodaySunSky,
+        sunSky: TodaySunSky?,
         signalsTitle: String,
         signalsAccent: TodayTone,
         signals: [TodaySignal],

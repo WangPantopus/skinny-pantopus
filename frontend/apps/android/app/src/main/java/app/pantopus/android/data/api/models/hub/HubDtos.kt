@@ -274,6 +274,8 @@ data class TodayWeatherDto(
     @Json(name = "high_f") val highF: Double? = null,
     @Json(name = "low_f") val lowF: Double? = null,
     @Json(name = "precipitation_next_6h") val precipitationNext6h: Boolean? = null,
+    @Json(name = "sunrise_utc") val sunriseUtc: String? = null,
+    @Json(name = "sunset_utc") val sunsetUtc: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

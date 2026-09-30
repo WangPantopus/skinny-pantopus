@@ -78,7 +78,8 @@ data class TodayDetailContent(
     val glyph: PantopusIcon,
     val chips: List<TodayHeroChip>,
     val ribbon: TodayAlertRibbon?,
-    val sunSky: TodaySunSky,
+    /** Null when the weather feed has no sun times: the card is left out rather than guessed. */
+    val sunSky: TodaySunSky?,
     val signalsTitle: String,
     val signalsAccent: TodayTone,
     val signals: List<TodaySignal>,

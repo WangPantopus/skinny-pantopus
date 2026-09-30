@@ -315,6 +315,10 @@ async function getHubToday(userId, options = {}) {
     condition_label: weather.current.condition_label,
     high_f: weather.daily?.[0]?.high_f ?? null,
     low_f: weather.daily?.[0]?.low_f ?? null,
+    // Today's sunrise/sunset (UTC ISO) from the same daily forecast, for the native
+    // Today screen's "Sun & sky" card.
+    sunrise_utc: weather.daily?.[0]?.sunrise_utc ?? null,
+    sunset_utc: weather.daily?.[0]?.sunset_utc ?? null,
     precipitation_next_6h: hasPrecipNext6h(weather.hourly),
     precipitation_start_at: findPrecipStart(weather.hourly),
     ...(detail ? {
