@@ -69,7 +69,12 @@
      - `/discover` treats `members` visibility like `private`, and native apps have no visibility control;
      - per-Home notification preferences are saved but never read;
      - ~~guest-pass passcodes travel as `?passcode=` and are limited only by the generic 60/min/IP view limiter~~: measured (`20260930-stream3-home-d08-passcode-measure-r1`, `2f0a911c…`) and repaired in [#915](https://github.com/WangPantopus/skinny-pantopus/pull/915): 10 wrong passcodes per 15 minutes per link, the passcode in a header, and new passcodes of at least 6 characters. The same measurement found live guest-pass, share and invitation tokens in the backend log; repaired in [#914](https://github.com/WangPantopus/skinny-pantopus/pull/914) for every known bearer path. Both are with the coordinator;
-     - `POST /check-address` returning a Home id for an invite-only mask is a product question (recorded, not a defect).
+     - `POST /check-address` returns the Home id and claimed status for an exact address, even at "Invite only — completely hidden". **Decided 2026-09-30 under the standing instruction** (queued after the native fixes):
+       - an invite-only Home answers with a neutral "a private Home is registered here, ask the household for an invite" status, with no id and no claimed status;
+       - creating a duplicate Home there stays blocked, so ownership-conflict detection keeps working.
+       - Why not hide it completely: `Home` has no unique address constraint, so a full hide would let a second Home at the same address sidestep the conflict checks.
+       - This needs the backend plus the add-home flows on web (`homes/new`, `AddressAutocomplete`), iOS and Android (`AddHomeWizard`).
+       - Context: Stream 1's #928 closed one id-to-address path; Home ids reaching non-household users are still worth closing.
 5. **R03, leaving and rejoining:** the remaining re-entry and occupancy lifecycle, and the old reviewer-original release. Membership renewal is paused (decision 1 below).
 6. **H07, H08, M02 and D08, local parts:** remaining onboarding combinations, the exact copied link and public rendering, passcodes and scheduled start. Their hosted parts stay named.
 7. **D10 and R04, R05:**
@@ -278,6 +283,18 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T09:53Z — #927 merged; two more native fixes committed locally; check-address decided.**
+  - **#927:** merged in batch 164 ([#929](https://github.com/WangPantopus/skinny-pantopus/pull/929), master `acd904c66`).
+  - **Committed locally, waiting on the heavy slot for iOS builds and on the lease for device checks:**
+    - `aeb8ce319`, iOS: list rows with inline buttons keep those buttons as their own VoiceOver elements. The row's text is one button element. This fixes the recorded Requests-row gap: Invite/Decline were merged into one element with the row.
+    - `f372b8810`, iOS + Android: the Members audit log uses the server's `description` (the web's wording, e.g. "Access code deleted") instead of words derived from the action code.
+    - Both apps' Home dashboard recent-activity card is Stream 4's.
+  - **Review sheet toolbar:** the other recorded iOS gap (Close/Reload merged) uses standard SwiftUI toolbar items. It may be how the driver reads navigation bars rather than VoiceOver, so I'll reproduce it before changing anything.
+  - **Plan:** one iOS session on "Pantopus S34" with one shared fixture (`tools/s3-native-session.py`):
+    - the join-policy build doubles as the "before" for the two other fixes, since it touches neither rows nor audit labels;
+    - after that, each fix's own build.
+  - **check-address:** decided (see D06 leads above).
 
 - **2026-09-30T09:44Z — #914, #915, #916, #917 and #920 merged; [#927](https://github.com/WangPantopus/skinny-pantopus/pull/927) (U01 verification card) is with the coordinator; native join-policy hide half done.**
   - **Merged:** batch 162 ([#921](https://github.com/WangPantopus/skinny-pantopus/pull/921), master `fd7de8790`, 09:22:51Z). The shared runtime moved to `fd7de8790` at 09:41:00Z (backend PID 52324, logged). Coordinator notes:
