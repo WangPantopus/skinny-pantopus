@@ -269,6 +269,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T16:51:21Z — native mailbox package detail shows design-sample tracking: recorded under launch cut #7, not fixed.** Found by Stream 2 at source level.
+  - Android `MailboxItemDetailViewModel.timeline()`/`packageBodyContent()` and iOS `MailboxItemDetailViewModel.swift:1032/1042/1066` + `CategoryBodies.swift:61` fall back to `MailItemSampleData`/`PackageMailItemSampleData` (Sacramento route, fixed May dates, possibly a sample tracking number, URL, photo or contents) whenever the server omits a field.
+  - Package mail items belong to package tracking (the package routing in `mailbox.js` ~1287 creates package records), which is household extras, launch-cut #7.
+  - **Fix shape for when packages return:** show server data only; drop a section or say "not available" when a field is missing; never ship sample fallbacks.
+
 - **2026-09-30T15:37:32Z — native pickup E5 in progress; web A3 re-measured on master's tokens; a screenshot-masking correction.** Lease 15:14:33Z–15:35:16Z.
   - **Native pickup E5** (branch `claude/stream4-native-pickup-changed-meanwhile`, head `c7ecaaa55`; stage `20260930-stream4-native-pickup-e5-r1`, not sealed yet):
     - **iOS before (old build):** a stale editor save silently deleted another device's weekly recycling. The runtime backend and master's pickup backend both give 200.
