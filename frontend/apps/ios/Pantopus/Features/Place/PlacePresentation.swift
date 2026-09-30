@@ -196,7 +196,8 @@ enum PlacePresentation {
         case .sunriseSunset: .init(icon: .sunrise, title: "Sunrise & sunset", inline: true)
         case .goodDayTo: .init(icon: .listChecks, title: "Good day to\u{2026}", inline: true)
         case .addressCalendar: .init(icon: .calendarDays, title: "At this address", inline: true)
-        case .yourHome: .init(icon: .home, title: "Your home", sparkline: true)
+        // No value trend: the section has no value history, so a line here would be invented.
+        case .yourHome: .init(icon: .home, title: "Your home")
         case .homeSystems: .init(icon: .wrench, title: "Systems", inline: true)
         case .flood: .init(icon: .waves, title: "Flood", inline: true)
         case .heatCold: .init(icon: .sun, title: "Heat & cold", inline: true)
