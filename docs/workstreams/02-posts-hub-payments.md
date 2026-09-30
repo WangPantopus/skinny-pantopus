@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T08:28Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T08:54Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -72,6 +72,20 @@
   - Now non-authors get the same keyed blur on the effective pair and no `location`. Authors are unchanged, and web pages are pixel-identical. This is `docs/location-privacy-matrix.md` ("Non-authors never see exact post locations").
 - **Proposal for the user (no written policy, so not changed):** anyone with an assigned task's link, signed out included, can read the worker's identity (`accepted_by`/`acceptedBy`) and the exact start/finish times (`/timeline`, detail). Together with the approximate task area, that shows when a named helper was at someone's place. The web doesn't display the worker to strangers.
   - Recommendation: give non-participants neither the worker's identity nor exact lifecycle times (dates only), like #900's payment rule.
+- **User decisions (2026-09-30, this session):** "go with what you recommend for the best user experience and safety, security practice", followed by a standing direction to decide for UX, safety, retention and the best app, record it, and keep working. Memory: `user-decisions-stream2-2026-09-30`.
+  1. Design tokens (AA brand blue and emerald, dark `--app-surface-sunken`): now **owned by Stream 1** (one editor app-wide; the user delegated it to Stream 1 as well). My measured pairs were sent to Stream 1, and my 8 token cells close from its evidence.
+  2. Pulse filter chip split (mute control out of the chip button, same look): Stream 2, in progress.
+  3. One-time removal of leftover gig-room memberships: approved. Stream 5 implements it after its read-side rule (#908), as a reviewed forward migration.
+  4. Assigned-task privacy: done in #910 (below).
+- **[#910](https://github.com/WangPantopus/skinny-pantopus/pull/910)** head `afb199ab27bde3f3fa2918707fdf6a0bf8bfe3ad` (sent to Stream 1; seal `20260930-stream2-tasks-identity-timing-privacy-r1`, 51 files, `ca1e3b05…ce4a`): **people outside an assigned task no longer see who, when, or its private details.**
+  - Before, `GET /api/gigs/:id` gave signed-out and stranger readers the access note ("side gate code…"), exact pickup/dropoff addresses and notes, care details, the remote meeting link, the worker's acknowledgement, delivery proof, the worker, and exact lifecycle times; `/timeline` gave the times too.
+  - Now non-participants get none of the private fields. Once a worker is assigned: `accepted_by: "assigned"` (so installed clients keep the task taken), `acceptedBy: null`, day-only times (the Pacific date as 19:00Z, so the stepper stays truthful).
+  - A rejected token, or the web session flag without its access cookie, now gets a 401, so clients refresh instead of showing the worker a stranger's view. `optionalAuth` has an additive `req.authRejected` flag.
+  - Web pages are text-identical, and the recovery journey is proven (401 → refresh → 200, worker controls shown).
+  - Decisions: day precision rather than null; the `"assigned"` placeholder; open tasks keep their public posting details.
+- **Review of Stream 5's #908** (gig-room access rule, read-only):
+  - Finding 1, privacy: `worker_release` and `reopen_bidding` set `accepted_by=NULL`, which reopens the room's owner–worker history to leftover members and to new Send Message joiners, and a later worker reads the earlier one's conversation. Suggested: rotate the room on release/reopen. Stream 5 decides; I offered a task-side join guard.
+  - Finding 2: #899's route admits `gigs.manage` only, while #908 also admits `gigs.post`. I'll align the route to the shared helper after #908 merges.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
