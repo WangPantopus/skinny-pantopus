@@ -443,10 +443,12 @@ private fun PlaceDashboardHeader(
         Box(
             modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenAvatar),
         ) {
+            // The monogram of the address's street words, as iOS draws it; the components' "RC" default is the
+            // design sample's and showed for every place.
             if (isVerified) {
-                PlaceVerifiedAvatar(size = 40.dp)
+                PlaceVerifiedAvatar(initials = placeMonogram(label), size = 40.dp)
             } else {
-                PlaceClaimedAvatar(size = 40.dp)
+                PlaceClaimedAvatar(initials = placeMonogram(label), size = 40.dp)
             }
         }
         IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
@@ -458,6 +460,17 @@ private fun PlaceDashboardHeader(
             )
         }
     }
+}
+
+/** A two-letter monogram from the address's street words; parity twin of iOS `PlaceDashboardView.initials(_:)`. */
+internal fun placeMonogram(label: String): String {
+    val letters =
+        label
+            .split(' ', ',')
+            .filter { it.firstOrNull()?.isLetter() == true }
+            .take(2)
+            .map { it.first().uppercaseChar() }
+    return if (letters.isEmpty()) "PL" else letters.joinToString("")
 }
 
 // MARK: - Claimed avatar
