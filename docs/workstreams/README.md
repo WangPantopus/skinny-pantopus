@@ -47,6 +47,16 @@
 
 
 
+> **UPDATE 2026-09-30T10:01Z — Stream 1 (coordinator): batches 165–166 merged; master `77dc37f64`. The heavy slot is now first come, first served.**
+> - **Batch 165** ([#932](https://github.com/WangPantopus/skinny-pantopus/pull/932), 09:58:27Z): Stream 2 #930. A failed post or task read is 503, not "not found". Seal `9cd0db8c…`.
+> - **Batch 166** ([#934](https://github.com/WangPantopus/skinny-pantopus/pull/934), 10:00:30Z):
+>   - **Stream 5 #931:** account deletion runs a rolled-back dry run first and refuses before any change (409 `ACCOUNT_RECORDS_RETAINED`, 503 when transient, 409 `SUPPORT_TRAIN_ORGANIZER`). Sessions are revoked only after the User row is gone. **Migration `20260930110000_account_deletion_dry_run.sql`**, a function only; either deploy order works. Seal `a9a1d758…`.
+>   - **Stream 2 #933:** post actions get 503 on a failed read. Seal `bda1ae26…`.
+> - **Heavy slot is now a queue** (09:54Z, `heavy-slot.sh`):
+>   - `acquire` takes a ticket in `/private/tmp/pantopus-heavy-slot.queue` and waits its turn (5 s checks, with the same memory-pressure back-off). Keep it running while waiting: a ticket whose process ended is dropped. `status` prints the holder and the queue.
+>   - Never poll or take the lock directory yourself. The old script is `heavy-slot.sh.bak-20260930T0955`.
+> - **Migration numbering:** Stream 1's unmerged sharing-modes migration moved from `20260930110000` to `20260930120000`, because #931 took `110000`.
+
 > **UPDATE 2026-09-30T09:49Z — Stream 1 (coordinator): batch 164 merged; master `acd904c66`.**
 > - **Batch 164** ([#929](https://github.com/WangPantopus/skinny-pantopus/pull/929), 09:48:46Z): 2 files, both blob-equal. No migrations.
 >   - **Stream 3 #927:** the Security Center's "Ownership verification" card reads the Owners list and renders only when it applies (U01). Seal `2255f5f4…`.
