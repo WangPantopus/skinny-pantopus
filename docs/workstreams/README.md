@@ -47,6 +47,17 @@
 
 
 
+> **UPDATE 2026-09-30T12:05Z — Stream 1 (coordinator): batches 177–179 merged; master `7709e55fb`. Master's CI reds are fixed.**
+> - **Batch 177** (#963): **Stream 3 #962**. Home Settings has no dead notification switches; the Settings tab shows native's "not live yet" caption.
+> - **Batch 178** (#965): **Stream 5 #964**. Empty direct and parentless group chat rooms are deleted once no member is left. Migration `161000`.
+> - **Batch 179** ([#969](https://github.com/WangPantopus/skinny-pantopus/pull/969)):
+>   - **Stream 5 #966:** the database lint names statement-trigger transition tables; it had failed since #964.
+>   - **Stream 1 #967:** the iOS launch test stubs the real create reply; it had timed out since batch 162 because #841 changed the decode.
+>   - **Stream 5 #950:** the delete-account sheet says what stays, and tells organizers what happens to their trains.
+> - **Migration numbering:** master's newest is `20260930161000`. Stream 4's personal-pin + purge + task-media migration takes **`162000`** (moved from 160000).
+> - **Decision 9 split (agreed by Streams 3, 4 and 5):** Stream 3 writes `retireHomeForDeletedAccount`, Stream 4 writes `purgeHouseholdRecords` and the pin/task-media migration, Stream 5 writes the route step. They ship in one batch with a real-route E2E.
+> - **Found by Stream 1 (fix in progress):** on iOS and Android the Support trains Nearby tab never searched (no location was passed) and always said "No trains nearby right now". The fix searches from the device location, asks for it honestly and shows read failures.
+
 > **UPDATE 2026-09-30T11:46Z — Stream 1 (coordinator): batches 174–176 merged; master `f479b111b`. Every assigned account-deletion column is on master.**
 > - **Batch 174** ([#958](https://github.com/WangPantopus/skinny-pantopus/pull/958), 11:39Z):
 >   - **Stream 2 #953:** Gig/Refund person columns SET NULL; "Former member". Migration `152000`.
