@@ -72,8 +72,13 @@ struct PlaceTodayDetailContent: View {
 
             if let alerts = vm.section(.alerts, in: intel) {
                 PlaceDetailSectionLabel(text: "Alerts")
-                AlertsCard(active: alerts.alerts?.active ?? [])
-                PlaceSourceNote(name: "National Weather Service", asOf: "live")
+                // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
+                if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
+                    AlertsCard(active: data.active)
+                    PlaceSourceNote(name: "National Weather Service", asOf: "live")
+                } else {
+                    vm.fallbackCard(alerts)
+                }
             }
 
             if let sun = vm.section(.sunriseSunset, in: intel) {

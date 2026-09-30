@@ -95,8 +95,14 @@ fun PlaceTodayDetailContent(
     }
     intel.section(PlaceSectionId.ALERTS)?.let { env ->
         PlaceDetailSectionLabel("Alerts")
-        AlertsCard(env.alerts?.active.orEmpty())
-        PlaceSourceNote("National Weather Service", "live")
+        // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
+        val data = env.alerts
+        if (data != null && env.isLive()) {
+            AlertsCard(data.active)
+            PlaceSourceNote("National Weather Service", "live")
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
     }
     intel.section(PlaceSectionId.SUNRISE_SUNSET)?.let { env ->
         PlaceDetailSectionLabel("Sun")
