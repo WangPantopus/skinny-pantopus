@@ -8,6 +8,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
+import { getPostTypeConfig } from '@pantopus/ui-utils';
 import { getAuthToken } from '@pantopus/api';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import type { AudienceProfile, User } from '@pantopus/types';
@@ -481,7 +482,7 @@ export function useFeedData({
       await api.posts.muteTopicOnSurface({ postType, surface: 'place' });
       setFilter('all');
       await loadFeed(true);
-      showToast(`${postType} posts muted in Place feed`);
+      showToast(`${getPostTypeConfig(postType).label} posts muted in Place feed`);
     } catch {
       showToast('Failed to mute topic');
     }
