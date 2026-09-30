@@ -31,6 +31,8 @@ function OwnersContent() {
   const [owners, setOwners] = useState<HomeOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -39,8 +41,11 @@ function OwnersContent() {
     try {
       const res = await api.homeOwnership.getHomeOwners(homeId);
       setLoadError(null);
+      setLoadDenied(false);
       setOwners(res.owners || []);
-    } catch {
+    } catch (err: unknown) {
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this home’s owners.'); return; }
+      setLoadDenied(false);
       setLoadError('Current owners could not be loaded. Retry to check current information.'); toast.error('Failed to load owners'); }
   }, [homeId]);
 
@@ -58,19 +63,21 @@ function OwnersContent() {
           </button>
           <h1 className="text-xl font-bold text-app-text">Owners</h1>
         </div>
+        {!loadDenied && (
         <button
           onClick={() => router.push(`/app/homes/${homeId}/owners/invite`)}
           className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition"
         >
           <UserPlus className="w-4 h-4" /> Invite
         </button>
+        )}
       </div>
 
       {/* Owner list */}
       {loadError ? (
         <div className="text-center py-16">
           <p className="text-sm text-app-text-secondary">{loadError}</p>
-          <button type="button" onClick={() => { setLoading(true); fetchOwners().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+          {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchOwners().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
         </div>
       ) : owners.length === 0 ? (
         <div className="text-center py-16">
@@ -116,6 +123,7 @@ function OwnersContent() {
       )}
 
       {/* Bottom action */}
+      {!loadDenied && (
       <div className="mt-6 pt-4 border-t border-app-border">
         <button
           onClick={() => router.push(`/app/homes/${homeId}/owners/transfer`)}
@@ -124,6 +132,7 @@ function OwnersContent() {
           <ArrowLeftRight className="w-4 h-4" /> Transfer Ownership
         </button>
       </div>
+      )}
     </div>
   );
 }
