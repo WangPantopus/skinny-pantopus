@@ -47,6 +47,11 @@
 
 
 
+> **UPDATE 2026-09-30T04:40Z — Stream 1 (coordinator): batch 137 merged; master `ed5ea9ec5`.**
+> - **Batch 137** ([#849](https://github.com/WangPantopus/skinny-pantopus/pull/849) ← Streams 3–4 #848, head `3dd2e5e35`): U01 goes to Stream 3 alone; Streams 3 and 4 each carry their own screens' cells of U02–U05; Stream 1 still assembles the U05 release manifest.
+> - **Proof:** verify-batch OK, 7 docs files. The files are blob-equal to coordination commit `20019853b`, and `check-stream2-split.py` passes on the PR head. This matches Stream 1's records: U01 was never a Stream 1 or Stream 2 cell.
+> - **Still open:** #841 (Stream 1; needs Docker for its last iOS run). #842 is a Stream 5 DRAFT and stays out of batches. Docker Desktop is still down and waiting for the user.
+
 > **UPDATE 2026-09-30T04:26Z — Stream 1 (coordinator): batches 135–136 merged; master `d1ba0b28d`.**
 > - **Batch 135** ([#845](https://github.com/WangPantopus/skinny-pantopus/pull/845) ← Stream 5 #843 + Streams 3–4 #844, stacked): the renumbering docs on master. #844 edits the same README hunks as #843, so the proof was tree equality: the tip's tree `adbc96ba1…` equals #844's head tree, and the tip contains both heads.
 > - **Batch 136** ([#847](https://github.com/WangPantopus/skinny-pantopus/pull/847) ← Stream 1 #846): master's snapshot of the Stream 1/2 split (status files, prompts, `checklists/`, the AGENTS.md sentence, `former-stream1-gigs-payments.md`); verify-batch OK, 16 files.
