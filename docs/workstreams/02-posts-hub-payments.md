@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T07:57Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T08:21Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -57,12 +57,20 @@
   - Checks: backend Jest 341 suites. Native not run: no native model references the removed fields.
   - Decisions: the fee receipt was folded into the same PR (same leak class and routes); failure code/message are hidden from the payee; managers keep the full view.
   - Stream 1's review note (not blocking): `GET /api/payments/:paymentId` compares `payer_id === userId` while the list uses `String()`. Both are strings today; keep them consistent if either is touched again.
+- **Bounded privacy check of money reads** (one synthetic paid task, 12 reads × signed out/stranger/payee/payer; seal `20260930-stream2-payments-money-reads-privacy-r1`, 44 files, `33058403…a1d8`):
+  - Participant-only as intended: the payment, refund, tip, cancellation-preview and change-order reads. Wallet income rows store no provider ids.
+  - Public by design (note, not changed): the task timeline and the task detail.
+  - Found and fixed:
+    - **[#900](https://github.com/WangPantopus/skinny-pantopus/pull/900)** head `aa8dc567c1be65be4e556dde80ed31ef9d58362e` (sent to Stream 1): `GET /api/gigs/:id` gave signed-out and stranger readers `payment_id`, `payment_status` and `cancellation_fee`. The web badge showed a stranger "Payment Held" or "Auth Failed" (the payer's card declined). Now these fields go only to the owner/managers and the worker, like `GET /:gigId/payment`; strangers get the unpaid-task layout.
+    - **[#899](https://github.com/WangPantopus/skinny-pantopus/pull/899)** head `4eabfd2333a82a81f58214d1ec77188290da3a9c` (sent to Stream 1; seal `20260930-stream2-tasks-chat-room-privacy-r1`, 42 files, `96ededab…4b91`): **a stranger could join an assigned task's chat.** `GET /api/gigs/:gigId/chat-room` (web "Send Message", shown to every viewer) added any signed-in caller to the poster–worker task room. Reproduced: Dana read Bob's note to Alice. Now a non-participant on an assigned task gets their own direct room with the poster, and the task room stays Alice and Bob's (Dana's read returns 403).
+  - **Needs the user (and Stream 5, told 08:20Z):** people already in a task room keep reading it (earlier joins; pre-bid askers of cut #4). The chat messages read checks only that a membership row exists. Options: (a) a one-time removal of those memberships from production chat data, or (b) gig-room reads/sends/socket joins require the owner, a manager or the worker once assigned (Stream 5's routes). I recommend (b).
+  - The stranger's tip-preview refusal says "The original tip needs to be checked before continuing." It returns no data, but the copy is misleading (note).
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
 - **Next:**
   - Every Stream 2 web checklist cell is now done or waiting on the user's decisions (brand-blue, emerald and sunken tokens; the Pulse chip structure). The remaining to-do cells are native (iOS/Android) and start once Stream 1 reports the toolchains are back.
-  - Until then: a bounded privacy check of the other money reads a payee or a stranger can reach (tips, refunds, wallet, earnings, task detail, Hub). Only reproduced leaks get a repair.
+  - The bounded money-read privacy check is done (#899, #900 above). Next web/API work: the Hub money cards and the rebook rail reads for the same leak class, then the native cells once the toolchains are back.
 
 ## STATE AT THE SPLIT — 2026-09-30T04:18Z
 
