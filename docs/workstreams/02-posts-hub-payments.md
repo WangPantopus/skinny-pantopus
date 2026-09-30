@@ -98,16 +98,17 @@ The session "Stream 2: Posts, Hub and payments" handed over at the user's reques
   - `a11ycap.mjs` (axe; **no eval step, it's silently ignored**; `A11Y_BASE=http://localhost:18169 A11Y_STATE_SUFFIX=-localhost`), `a11ycap-geo.mjs` (Vancouver GPS fix), `modalcap.mjs`.
   - Android: `aui.py dump|tap|has|shot`, `a11y-tree.py`, `native-build-iosu02.sh`, `android-build-iosu02.sh`.
   - **Never copy** `run-node.sh`, `api.py`, `webcap.mjs` or `android-switch.py` into bundles, or webcap network logs. Redact token, password and session paths in any runner copy.
-- **Devices:**
-  - Slot 3 lease "stream2: pantopus_s2 emulator-5560 U03/U04 native cells" (since 09:19:53Z). `emulator-5560` is up with the APK of `35a9f5f1c` (#1085's head), Alice signed in.
-  - If it's restarted: `-no-window -crash-report-mode disabled -no-metrics`, and never consent to a crash dialog.
-  - Release it with `zsh device-slot.sh release "stream2:"` after shutting the device down.
+- **Devices** (resources released 2026-09-30T22:42Z):
+  - `emulator-5560` (AVD `pantopus_s2`) is **stopped**, and device slot 3 is **released**. The AVD and its app data are kept (Alice was signed in).
+  - To use it again: `zsh /private/tmp/pantopus-tools/device-slot.sh acquire "stream2: pantopus_s2 emulator-5560 <purpose>"`, then boot headless with `-port 5560 -no-window -no-snapshot -crash-report-mode disabled -no-metrics` (about 23 s). Never consent to a crash dialog.
+  - Kept APK: `$R/apk/app-debug-35a9f5f1c.apk` (#1085's head). Build a fresh one from master for new work.
+  - Deleted as regenerable: `$R/ios-derived-data` (12 GB), the older APKs (about 1.2 GB), and the worktree's `frontend/apps/android/app/build` (1.5 GB).
   - No iOS simulator access in this session; Stream 1 runs Stream 2's iOS cells.
   - Heavy slot: nothing of Stream 2's is held or queued (Stream 4 held it at 21:19Z).
 - **Teardown** (only when Stream 2's runtime is ended):
   1. Stop Next, proxy and backend by PID.
   2. `docker stop` the 7 `*_pantopus-stream2-posts-20260930` containers, and never any other.
-  3. Shut the emulator down and release slot 3.
+  3. The emulator is already stopped and slot 3 released (22:42Z).
 
 ### 5. Decisions recorded this session (per the user's standing direction)
 

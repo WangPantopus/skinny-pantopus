@@ -58,7 +58,7 @@ Newest dated text wins. **Re-verify every SHA, PR, slot and process live before 
    - `curl http://127.0.0.1:18160/health` and `:18168/health` should both return 200;
    - `lsof -nP -iTCP:18169 -sTCP:LISTEN` should show Next;
    - the 7 `*_pantopus-stream2-posts-20260930` containers should be up;
-   - `adb -s emulator-5560 get-state` should say `device`.
+   - `emulator-5560` was stopped and device slot 3 released at 22:42Z to free resources. For native work, acquire a slot and boot it (handoff §4).
 
    The backend and Next serve the worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-2-posts-hub-payments-76db95`. To serve your own worktree, restart them with `WT=<your worktree>` as §4 describes.
 3. **When Stream 1 merges #1096:**
