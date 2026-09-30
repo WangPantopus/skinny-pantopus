@@ -54,6 +54,8 @@ The previous session stopped here at the user's request, at a clean boundary.
   - Stages are in `runtime/`; audits are in `../audits/`.
   - The saved builds are `apks-s3/7d9a15105-app-debug.apk` and `apps-s3/7d9a15105/Pantopus.app` (master `5fded9767`
     plus #1067), and `apks-s3/4bb90fa84-app-debug.apk` (#1058).
+  - **Cleaned up at the handoff:** older builds, the iOS DerivedData `ios-dd-s3-native` (9.1 GB) and the worktree's Android
+    `app/build` are deleted to free disk space. The next iOS build is a full one, about 5–10 minutes in the heavy slot.
 
 ### 2. Today's results, in the checklists below (each cell cites its bundle)
 
