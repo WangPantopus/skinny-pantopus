@@ -595,9 +595,10 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     }
 
     /// Optimistically delete the post. Hits the real DELETE endpoint;
-    /// rolls back if it fails.
-    public func confirmDelete() async {
-        guard let target = deleteTarget else { return }
+    /// rolls back if it fails. The alert passes the target it presented:
+    /// its dismissal clears `deleteTarget` before this runs.
+    public func confirmDelete(_ presented: MyPostsDeleteTarget? = nil) async {
+        guard let target = presented ?? deleteTarget else { return }
         deleteTarget = nil
         let previousPosts = posts
         let previousOverrides = localArchiveOverrides

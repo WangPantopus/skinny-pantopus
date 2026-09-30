@@ -75,9 +75,9 @@ public struct MyPostsView: View {
                     set: { newValue in if !newValue { bindable.deleteTarget = nil } }
                 ),
                 presenting: bindable.deleteTarget
-            ) { _ in
+            ) { target in
                 Button("Delete", role: .destructive) {
-                    Task { await viewModel.confirmDelete() }
+                    Task { await viewModel.confirmDelete(target) }
                 }
                 .accessibilityIdentifier("delete-confirm")
                 Button("Cancel", role: .cancel) {
