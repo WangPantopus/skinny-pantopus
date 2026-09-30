@@ -3879,7 +3879,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (error || !gig) {
+    // No row, or an id that isn't a UUID, is "not found"; a failed read is not.
+    if (error && !['PGRST116', '22P02'].includes(error.code)) {
+      logger.warn('Gig read failed', { gigId: id, code: error.code });
+      return res.status(503).json({ error: 'This task could not be loaded. Please try again.' });
+    }
+    if (!gig) {
       return res.status(404).json({ error: 'Gig not found' });
     }
 
