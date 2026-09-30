@@ -9,6 +9,21 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1028 green and sealed, handed to Stream 1 with all five merge conditions met, 2026-09-30T15:49:26Z
+
+- **[#1028](https://github.com/WangPantopus/skinny-pantopus/pull/1028)**, head `3fda3a151`.
+  - CI run 36738969636 succeeded: database job 109968818882 ran 67/67 contracts, and the baseline PostgREST test passed 6/6.
+  - Seal `a99b1526…` (bundle `20260930-stream5-authenticated-select-deny-r1`).
+  - Stream 1's conditions:
+    1. CI green;
+    2. the rule is extended and its cases exercised;
+    3. the hosted note is written;
+    4. the per-stream journeys return 200 and direct reads return 403 on all 14 relations;
+    5. the finance matrix keeps its coverage and every converted section is listed.
+  - Streams 3 and 4 approved.
+- **The journey fixture** `ab5f…0001` was removed by exact ids at 15:48:43Z.
+- **Open from Stream 5:** #1023 (waits for #1024 and Stream 1's simulator run) and #1028 (in Stream 1's queue).
+
 ## LIVE — #1022 merged; authenticated default-deny #1028 (with the chat policy recursion fix) open, CI running; #1023 waits for #1024 and Stream 1's simulator run, 2026-09-30T15:46:26Z
 
 - **#1022 merged** (anon default-deny, 181000): batch 196, master `8099b6516`. My runtime API is back on master.
