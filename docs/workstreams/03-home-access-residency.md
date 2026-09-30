@@ -307,6 +307,17 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T13:42Z — U01: three of its four items now closed on current builds, with no code change.**
+  - **Personal residency cards: closed.** Bundle `20260930-stream3-home-u01-residency-cards-r1` (`d67413b1…`); exact cleanup at 13:40:47Z.
+    - Member B filed two requests through the real API, at "208 Synthetic Card Street, Unit A" and "… Unit B" (both `household_review`).
+    - All three clients show two distinct cards, each titled with B's own submitted address and unit, with "Request pending" and a status action: web Chrome at 390×844, iOS S34 (`c8498a3d3`), and Android (`6e6a577f3`, whose My Homes code equals master).
+  - **Narrow-screen chat-button overlap: closed for web** (`e36c0888…`, recorded above).
+  - **Verified member's separate unverified-property label: closed.**
+    - Web: fixed by #927.
+    - Native (code check): the Home settings chip comes from the viewer's own `ownership_status` / `residency_status` (`homeDetailService.js:138`), so a verified member sees "Verified". No native card reads the unset `home.verified`.
+  - **Left open: long native activity identities.** A real test needs account names long enough to truncate. The runtime has two shared fixture accounts, and I won't rename accounts other streams use.
+  - Lease held 13:30:39–13:40:54Z, then returned to Stream 4. No device slot held.
+
 - **2026-09-30T13:29Z — #974, #982 and #983 merged; D08 scheduled passes is PR #999; U01's web chat-button overlap closed.**
   - **Merged:**
     - [#974](https://github.com/WangPantopus/skinny-pantopus/pull/974) in batch 182 (inside #976 with #968, PR #986, 13:03:26Z);
