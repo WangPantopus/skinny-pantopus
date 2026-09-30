@@ -3822,24 +3822,51 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'can_manage_home');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
 
-    const { type, label, location, details } = req.body;
+    const { type, label, location, details, clientRequestId } = req.body;
 
     if (!type || !label) {
       return res.status(400).json({ error: 'type and label are required' });
     }
+    if (clientRequestId != null && Joi.string().uuid().validate(clientRequestId).error) {
+      return res.status(400).json({ error: 'Invalid emergency info request' });
+    }
 
-    const { data, error } = await supabaseAdmin
-      .from('HomeEmergency')
-      .insert({
-        home_id: homeId,
-        type,
-        label,
-        location: location || null,
-        details: details || {},
-        created_by: userId,
-      })
-      .select()
-      .single();
+    // One unchanged actor/Home command reuses the same primary key (as issue reports do),
+    // so a retry after a lost reply returns the original entry instead of a second one.
+    const emergencyId = clientRequestId == null ? null : crypto.createHash('sha256')
+      .update('pantopus:home-emergency:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
+      .digest('hex').slice(0, 32);
+    const row = {
+      ...(emergencyId ? { id: emergencyId } : {}),
+      home_id: homeId,
+      type,
+      label,
+      location: location || null,
+      details: details || {},
+      created_by: userId,
+    };
+    const created = (entry) => res.status(201).json({ emergency: { ...entry, info_type: entry.type, location_in_home: entry.location } });
+    const readRetry = async () => {
+      const { data, error } = await supabaseAdmin.from('HomeEmergency').select('*').eq('id', emergencyId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const acknowledgeRetry = (existing) => {
+      const { isDeepStrictEqual } = require('node:util');
+      if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() || existing.type !== row.type
+          || existing.label !== row.label || existing.location !== row.location || !isDeepStrictEqual(existing.details, row.details)) {
+        return res.status(409).json({ error: 'This emergency info request no longer matches the original. Start a new entry for different details.' });
+      }
+      return created(existing);
+    };
+    if (emergencyId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    const insert = emergencyId
+      ? supabaseAdmin.from('HomeEmergency').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('HomeEmergency').insert(row);
+    const { data, error } = await insert.select().maybeSingle();
 
     if (error) {
       // HomeEmergency_type_chk refuses a type outside the HomeEmergencyType
@@ -3850,8 +3877,13 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
       logger.error('Error creating home emergency', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create emergency info' });
     }
+    if (!data && emergencyId) {
+      const existing = await readRetry();
+      if (existing) return acknowledgeRetry(existing);
+    }
+    if (!data) return res.status(500).json({ error: 'Failed to create emergency info' });
 
-    res.status(201).json({ emergency: { ...data, info_type: data.type, location_in_home: data.location } });
+    created(data);
   } catch (err) {
     logger.error('Emergency creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create emergency info' });

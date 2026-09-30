@@ -302,7 +302,7 @@ export async function getHomeEmergencies(homeId: string) {
 // jsonb object the native forms already write (phone, notes, detail keys).
 export async function createHomeEmergency(
   homeId: string,
-  data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string> },
+  data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string>; clientRequestId?: string },
 ) {
   return post<{ emergency: any }>(`/api/homes/${homeId}/emergencies`, data);
 }

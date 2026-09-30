@@ -38,6 +38,8 @@ function EmergencyContent() {
   const [newDetails, setNewDetails] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [creating, setCreating] = useState(false);
+  // One id per unchanged draft: a retry after a lost reply returns the saved entry instead of adding it again.
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // A superseded list read must never replace a newer one.
   const generation = useRef(0);
@@ -79,13 +81,13 @@ function EmergencyContent() {
     if (newPhone.trim()) details.phone = newPhone.trim();
     if (newDetails.trim()) details.notes = newDetails.trim();
     try {
-      const res = await api.homeProfile.createHomeEmergency(homeId, {
-        type: CATEGORY_CREATE_TYPE[newCategory],
-        label: newTitle.trim(),
-        details,
-      });
+      const payload = { type: CATEGORY_CREATE_TYPE[newCategory], label: newTitle.trim(), details };
+      const draft = JSON.stringify(payload);
+      if (pendingCreate.current?.draft !== draft) pendingCreate.current = { draft, id: crypto.randomUUID() };
+      const res = await api.homeProfile.createHomeEmergency(homeId, { ...payload, clientRequestId: pendingCreate.current.id });
       const created = res?.emergency as HomeEmergency | undefined;
       if (!created?.id) throw new Error('Malformed create response');
+      pendingCreate.current = null;
       setItems((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
       setNewTitle(''); setNewDetails(''); setNewPhone(''); setShowCreate(false);
       toast.success('Emergency info added');
