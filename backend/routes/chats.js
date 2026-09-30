@@ -20,6 +20,14 @@ const {
 const { hasPermission } = require('../utils/businessPermissions');
 const s3Service = require('../services/s3Service');
 const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
+const {
+  getGigOwnerMessagingContext,
+  closedGigRoomIds,
+  closedGigRoomIdsByRoomId,
+  isGigRoomClosedTo,
+  hiddenGigRoomMembers,
+  gigRoomRecipients,
+} = require('../services/chatGigRoomAccess');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
@@ -174,31 +182,6 @@ const reactToMessageSchema = Joi.object({
   reaction: Joi.string().max(8).required(),
 });
 
-async function getGigOwnerMessagingContext(gigOwnerUserId, actorUserId) {
-  if (String(gigOwnerUserId) === String(actorUserId)) {
-    return { isOwnerActor: true, messageSenderUserId: actorUserId };
-  }
-
-  const { data: owner } = await supabaseAdmin
-    .from('User')
-    .select('id, account_type')
-    .eq('id', gigOwnerUserId)
-    .maybeSingle();
-
-  if (!owner || owner.account_type !== 'business') {
-    return { isOwnerActor: false, messageSenderUserId: actorUserId };
-  }
-
-  const canManage = await hasPermission(gigOwnerUserId, actorUserId, 'gigs.manage');
-  const canPost = canManage ? true : await hasPermission(gigOwnerUserId, actorUserId, 'gigs.post');
-  if (!canPost) {
-    return { isOwnerActor: false, messageSenderUserId: actorUserId };
-  }
-
-  // For business-owned gig chats, authorized team members post as the business.
-  return { isOwnerActor: true, messageSenderUserId: gigOwnerUserId };
-}
-
 async function isBusinessAccount(userId) {
   const { data: user } = await supabaseAdmin
     .from('User')
@@ -215,6 +198,17 @@ async function canActAsBusiness(businessUserId, actorUserId) {
   const canManage = await hasPermission(businessUserId, actorUserId, 'gigs.manage');
   if (canManage) return true;
   return hasPermission(businessUserId, actorUserId, 'gigs.post');
+}
+
+// The business identity an actor may act as here, or none (their own id always counts).
+async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
+  if (!asBusinessUserId) return [];
+  return (await canActAsBusiness(asBusinessUserId, actorUserId)) ? [String(asBusinessUserId)] : [];
+}
+
+// Whether an assigned task's gig room is closed to this actor (services/chatGigRoomAccess).
+async function gigRoomClosed(roomId, actorUserId, asBusinessUserId) {
+  return isGigRoomClosedTo(roomId, actorUserId, await verifiedBusinessIdentity(asBusinessUserId, actorUserId));
 }
 
 async function getBusinessMessagingMemberIds(businessUserId) {
@@ -565,8 +559,10 @@ router.get('/rooms', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch chat rooms' });
     }
 
-    // Build room list
-    const roomList = (participantRows || []).filter(p => p.room);
+    // Build room list. A leftover member of an assigned task's gig room doesn't see it.
+    const joinedRooms = (participantRows || []).filter(p => p.room);
+    const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
+    const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
     // Batch-fetch other participants and last messages for all rooms (2 queries instead of 2N)
     const allRoomIds = roomList.map(p => p.room.id);
@@ -581,9 +577,14 @@ router.get('/rooms', verifyToken, async (req, res) => {
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allRoomIds }),
     ]);
 
-    // Pick first (active-preferred) participant per room
+    // Pick first (active-preferred) participant per room, never a leftover member of an assigned task's gig room
+    const hiddenMembers = await hiddenGigRoomMembers(
+      roomList.map((p) => p.room),
+      (allOtherParts || []).map((p) => ({ room_id: p.room_id, user_id: p.user?.id }))
+    );
     const partByRoom = {};
     for (const p of allOtherParts || []) {
+      if (p.user && hiddenMembers.has(`${p.room_id}:${p.user.id}`)) continue;
       if (!partByRoom[p.room_id] && p.user) partByRoom[p.room_id] = p.user;
     }
     const identityByUserId = await loadLocalIdentityMapForUsers(Object.values(partByRoom));
@@ -702,7 +703,9 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch business chat rooms' });
     }
 
-    const roomList = (participantRows || []).filter((p) => p.room);
+    const joinedRooms = (participantRows || []).filter((p) => p.room);
+    const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), actorUserId, [businessUserId]);
+    const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
     // NOTE: We intentionally do NOT auto-upsert the actor as a participant
     // across all business rooms on inbox load. That was too aggressive — it
@@ -723,11 +726,15 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allBizRoomIds }),
     ]);
 
-    // Group participants by room
+    // Group participants by room, leaving out leftover members of assigned task gig rooms
+    const hiddenBizMembers = await hiddenGigRoomMembers(
+      roomList.map((p) => p.room),
+      (allBizParts || []).map((p) => ({ room_id: p.room_id, user_id: p.user?.id }))
+    );
     const bizPartsByRoom = {};
     for (const p of allBizParts || []) {
       if (!bizPartsByRoom[p.room_id]) bizPartsByRoom[p.room_id] = [];
-      if (p.user) bizPartsByRoom[p.room_id].push(p.user);
+      if (p.user && !hiddenBizMembers.has(`${p.room_id}:${p.user.id}`)) bizPartsByRoom[p.room_id].push(p.user);
     }
     const bizIdentityByUserId = await loadLocalIdentityMapForUsers(
       Object.values(bizPartsByRoom).flat()
@@ -827,6 +834,10 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       if (!participant) return res.status(403).json({ error: 'Access denied' });
     }
     
+    if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     // Get room details
     const { data: room, error } = await supabaseAdmin
       .from('ChatRoom')
@@ -856,6 +867,16 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Room not found' });
     }
 
+    // The owner and the worker don't see leftover members listed in an assigned task's room.
+    if (Array.isArray(room.participants) && room.participants.length > 0) {
+      const hiddenMembers = await hiddenGigRoomMembers(
+        [room],
+        room.participants.map((p) => ({ room_id: room.id, user_id: p.user_id }))
+      );
+      if (hiddenMembers.size > 0) {
+        room.participants = room.participants.filter((p) => !hiddenMembers.has(`${room.id}:${p.user_id}`));
+      }
+    }
     res.json({ room: serializeChatRoomForViewer(room) });
     
   } catch (err) {
@@ -1210,9 +1231,12 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     }
 
     const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const sharedRoomIds = (otherRows || [])
+    const candidateRoomIds = (otherRows || [])
       .map((r) => String(r.room_id))
       .filter((rid) => myRoomSet.has(rid));
+    // An assigned task's gig room isn't merged in for a leftover member.
+    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
+    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
 
     if (sharedRoomIds.length === 0) {
       return res.json({ messages: [], hasMore: false, roomIds: [] });
@@ -1317,9 +1341,12 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     }
 
     const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const sharedRoomIds = (otherRows || [])
+    const candidateRoomIds = (otherRows || [])
       .map((r) => String(r.room_id))
       .filter((rid) => myRoomSet.has(rid));
+    // An assigned task's gig room isn't merged in for a leftover member.
+    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
+    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
 
     if (sharedRoomIds.length === 0) {
       return res.json({ unreadCount: 0, updatedRooms: 0 });
@@ -1386,6 +1413,10 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       if (!participant) return res.status(403).json({ error: 'Access denied' });
     }
     
+    if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
     const runQuery = async ({ senderKey }) => {
@@ -1485,6 +1516,10 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         .single();
       participant = refreshed.data || null;
       if (!participant) return res.status(403).json({ error: 'Not a participant' });
+    }
+
+    if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Not a participant' });
     }
 
     // ─── Pre-bid message limit for gig chats ───
@@ -1829,7 +1864,14 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
     // Exclude both the acting user and the message identity user.
     const excludedUserIds = new Set([String(userId), String(senderUserId)]);
-    const recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
+    let recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
+    try {
+      // Leftover members of an assigned task's gig room get no badge or push for it.
+      recipientUserIds = await gigRoomRecipients(room, recipientUserIds);
+    } catch (recipientErr) {
+      logger.warn('gig_room_recipients_unavailable', { requestId, roomId, error: recipientErr.message });
+      recipientUserIds = [];
+    }
     if (recipientUserIds.length > 0) {
       badgeService.emitBadgeUpdateToMany(recipientUserIds);
     }
@@ -1897,6 +1939,9 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     if (!message || message.user_id !== userId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    if (await isGigRoomClosedTo(message.room_id, userId)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
 
     const { data: updated, error } = await supabaseAdmin
       .from('ChatMessage')
@@ -1952,6 +1997,9 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
       return res.status(404).json({ error: 'Message not found' });
     }
     if (String(message.user_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    if (await isGigRoomClosedTo(message.room_id, userId)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     if (message.deleted) {
@@ -2012,6 +2060,10 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       readTargetUserId = asBusinessUserId;
     }
     
+    if (await gigRoomClosed(roomIdStr, userId, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     // Update participant's read state directly
     const { data, error } = await supabaseAdmin
       .from('ChatParticipant')
@@ -2203,7 +2255,7 @@ router.get('/stats', verifyToken, async (req, res) => {
     // Lightweight query: sum unread_count from all rooms the user participates in
     const { data: participants, error } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id, unread_count, room:room_id(type)')
+      .select('room_id, unread_count, room:room_id(type, gig_id)')
       .eq('user_id', userId)
       .eq('is_active', true);
 
@@ -2212,7 +2264,12 @@ router.get('/stats', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch stats' });
     }
 
-    const rows = participants || [];
+    // A leftover member of an assigned task's gig room doesn't count it.
+    const closedRoomIds = await closedGigRoomIds(
+      (participants || []).map((p) => ({ id: p.room_id, type: p.room?.type, gig_id: p.room?.gig_id })),
+      userId
+    );
+    const rows = (participants || []).filter((p) => !closedRoomIds.has(String(p.room_id)));
     const roomIds = rows.map((p) => String(p.room_id)).filter(Boolean);
     let totalUnread = 0;
     let directChats = 0;
@@ -2293,7 +2350,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch conversations' });
     }
 
-    const roomList = (myParticipants || []).filter(p => p.room);
+    // A leftover member of an assigned task's gig room doesn't see it.
+    const joinedRooms = (myParticipants || []).filter(p => p.room);
+    const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
+    const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
     // Separate group/home rooms (not mergeable) from direct/gig rooms (mergeable by person)
     const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
@@ -2315,6 +2375,9 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         .eq('is_active', true);
       allOtherParticipants = otherParts || [];
     }
+    // Leftover members of an assigned task's gig room don't stand in for its counterpart.
+    const hiddenMembers = await hiddenGigRoomMembers(mergeableParticipants.map((p) => p.room), allOtherParticipants);
+    allOtherParticipants = allOtherParticipants.filter((op) => !hiddenMembers.has(`${op.room_id}:${op.user_id}`));
     const identityByUserId = await loadLocalIdentityMapForUsers(
       allOtherParticipants.map((participant) => participant.user)
     );
@@ -2644,6 +2707,9 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
     if (!participant) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (await isGigRoomClosedTo(message.room_id, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Toggle: check if reaction already exists
     const { data: existing } = await supabaseAdmin
@@ -2717,6 +2783,9 @@ router.get('/messages/:messageId/reactions', verifyToken, async (req, res) => {
     if (!participant) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (await isGigRoomClosedTo(message.room_id, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const summaryMap = await buildReactionSummary([messageId], userId);
     const reactions = summaryMap.get(messageId) || [];
@@ -2777,6 +2846,9 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .maybeSingle();
 
     if (!participant) {
+      return res.status(403).json({ error: 'Not authorized to access this file' });
+    }
+    if (await isGigRoomClosedTo(roomId, userId)) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
 

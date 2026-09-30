@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const { isBlocked } = require('../services/blockService');
+const { closedGigRoomIds, isGigRoomClosedTo } = require('../services/chatGigRoomAccess');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -315,8 +316,17 @@ module.exports = (io) => {
 
         if (!error && rooms) {
           const roomIds = userRooms.get(userId) || new Set();
+          // A leftover member of an assigned task's gig room doesn't join it or get its preview.
+          let closedRoomIds;
+          try {
+            closedRoomIds = await closedGigRoomIds(rooms, userId);
+          } catch (accessErr) {
+            logger.warn('gig_room_access_unavailable_on_connect', { sessionId, userId, error: accessErr.message });
+            closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
+          }
+          const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
 
-          for (const room of rooms) {
+          for (const room of openRooms) {
             // get_user_chat_rooms returns the room id as `id`.
             const roomId = room.id;
             socket.join(roomId);
@@ -328,7 +338,7 @@ module.exports = (io) => {
           userRooms.set(userId, roomIds);
 
           // Send initial room list
-          socket.emit('rooms:list', rooms);
+          socket.emit('rooms:list', openRooms);
         }
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
@@ -378,6 +388,9 @@ module.exports = (io) => {
           .single();
         
         if (!participant) {
+          return callback({ error: 'Access denied' });
+        }
+        if (await isGigRoomClosedTo(roomId, userId)) {
           return callback({ error: 'Access denied' });
         }
         
@@ -580,6 +593,9 @@ module.exports = (io) => {
           .maybeSingle();
 
         if (!participant) {
+          return callback({ error: 'Not authorized' });
+        }
+        if (await isGigRoomClosedTo(message.room_id, userId)) {
           return callback({ error: 'Not authorized' });
         }
 
