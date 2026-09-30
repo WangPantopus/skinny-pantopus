@@ -440,7 +440,6 @@ export default function EditProfilePage() {
               ))}
             </div>
 
-            <p className="text-xs text-app-secondary mt-3">Skills aren&apos;t saved yet (backend doesn&apos;t accept them yet).</p>
           </div>
 
           {/* Social */}
