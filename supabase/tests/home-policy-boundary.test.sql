@@ -60,6 +60,9 @@ DO $$ BEGIN
   IF public.home_is_active_member('ddd00000-0000-4000-8000-000000000010') THEN
     RAISE EXCEPTION 'Nonmember creator counts as an active member of an established private home';
   END IF;
+  IF NOT has_function_privilege('authenticated','public.home_is_active_member(uuid,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'The Home read policy''s helper must stay executable by authenticated';
+  END IF;
 END $$;
 
 SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000002', true);

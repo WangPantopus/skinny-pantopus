@@ -15,6 +15,13 @@ DO $$ BEGIN
     OR NOT has_function_privilege('service_role', 'public.home_effective_access(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Effective resolver must remain service-only';
   END IF;
+  -- The read policies (defense in depth since 20260930182000) and the checks below call these
+  -- SECURITY DEFINER helpers as the signed-in role, so they must stay executable by it.
+  IF NOT has_function_privilege('authenticated','public.home_is_active_member(uuid,uuid)','EXECUTE')
+    OR NOT has_function_privilege('authenticated','public.home_has_permission(uuid,public.home_permission,uuid)','EXECUTE')
+    OR NOT has_function_privilege('authenticated','public.home_can_see_visibility(uuid,public.home_record_visibility,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'Home read-policy helpers must stay executable by authenticated';
+  END IF;
 END $$;
 
 INSERT INTO auth.users (id, email)
