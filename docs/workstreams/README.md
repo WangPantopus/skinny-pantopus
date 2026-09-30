@@ -5626,7 +5626,7 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | [3. Home access, residency and security](03-home-access-residency.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 3 |
 | [4. Place, records, money and mail](04-place-records-money-mail.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 4 |
 | [Former Stream 2 history](former-stream2-home-household.md) | Frozen history of the former Stream 2 (Home and household) up to the 2026-09-30 split | none |
-| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
+| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 5 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
 The coordinator is also Stream 1. Streams 3 and 4 (split from the former Stream 2 on 2026-09-30) and Stream 5
