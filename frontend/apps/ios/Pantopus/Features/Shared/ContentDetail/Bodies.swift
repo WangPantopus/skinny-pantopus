@@ -185,7 +185,7 @@ public struct GridTabsBody<Overview: View>: View {
                                     .pantopusTextStyle(.small)
                                     .foregroundStyle(
                                         selectedTab == tab.id
-                                            ? Theme.Color.primary600
+                                            ? Theme.Color.primaryInk
                                             : Theme.Color.appTextSecondary
                                     )
                                 Rectangle()

@@ -2975,7 +2975,7 @@ private struct ChatBubbleRow: View {
                         Text("\(reaction.count)")
                             .font(.system(size: 9.5, weight: .bold))
                             .foregroundStyle(
-                                reaction.reactedByMe ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                                reaction.reactedByMe ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                             )
                     }
                     .padding(.horizontal, 6)

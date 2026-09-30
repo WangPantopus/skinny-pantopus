@@ -96,7 +96,7 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(
                                     action.isEnabled
-                                        ? Theme.Color.primary600
+                                        ? Theme.Color.primaryInk
                                         : Theme.Color.appTextMuted
                                 )
                         } else {
@@ -208,7 +208,7 @@ private struct TabStrip: View {
                                     .pantopusTextStyle(.small)
                                     .foregroundStyle(
                                         selected == tab.id
-                                            ? Theme.Color.primary600
+                                            ? Theme.Color.primaryInk
                                             : Theme.Color.appTextSecondary
                                     )
                                 if let count = tab.count {
@@ -216,7 +216,7 @@ private struct TabStrip: View {
                                         .pantopusTextStyle(.caption)
                                         .foregroundStyle(
                                             selected == tab.id
-                                                ? Theme.Color.primary600
+                                                ? Theme.Color.primaryInk
                                                 : Theme.Color.appTextMuted
                                         )
                                 }

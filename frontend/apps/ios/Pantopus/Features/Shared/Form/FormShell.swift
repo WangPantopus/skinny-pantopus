@@ -252,7 +252,7 @@ private struct FormTopBar: View {
                             Text(rightActionLabel)
                                 .pantopusTextStyle(.body)
                                 .foregroundStyle(
-                                    rightActionEnabled ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                                    rightActionEnabled ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                                 )
                                 .frame(minWidth: 60, minHeight: 44)
                         }

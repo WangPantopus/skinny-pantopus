@@ -54,7 +54,7 @@ public struct TimelineBlock: View {
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(
                             index == currentIndex
-                                ? Theme.Color.primary600
+                                ? Theme.Color.primaryInk
                                 : Theme.Color.appTextSecondary
                         )
                         .frame(maxWidth: .infinity, alignment: alignment(for: index))

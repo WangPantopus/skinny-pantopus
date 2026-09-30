@@ -113,7 +113,7 @@ public struct ConversationRow: View {
                 .font(.system(size: 14, weight: content.unread > 0 ? .semibold : .regular))
                 .foregroundStyle(
                     isAIRow
-                        ? Theme.Color.primary600
+                        ? Theme.Color.primaryInk
                         : (content.unread > 0 ? Theme.Color.appTextStrong : Theme.Color.appTextSecondary)
                 )
                 .lineLimit(1)
