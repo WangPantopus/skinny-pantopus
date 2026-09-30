@@ -20,12 +20,13 @@ function clientIpKey(req) {
 }
 
 /**
- * Whether the request carries sign-in credentials (the app's bearer token or the web's
- * access cookie). Checked before authentication, so it's only a claim: it picks a larger
- * per-IP budget, and the verified user is then held to their own budget (userWriteLimits).
+ * Whether the request carries sign-in credentials (the app's bearer token, or the web's
+ * access or refresh cookie, so a session refresh counts as signed in). Checked before
+ * authentication, so it's only a claim: it picks a larger per-IP budget, and the verified
+ * user is then held to their own budget (userWriteLimits).
  */
 const hasCredential = (req) => String(req.headers?.authorization || '').startsWith('Bearer ')
-  || Boolean(req.cookies?.pantopus_access);
+  || Boolean(req.cookies?.pantopus_access || req.cookies?.pantopus_refresh);
 
 /**
  * App-level write limiters run before authentication, so they only see the client's IP. Many
