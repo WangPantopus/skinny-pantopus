@@ -151,6 +151,16 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
   - "Back to trains" and the success screen's back chevron return to the list; before, they opened the train like "Open train".
   - A failed launch scrolls its error into view.
 
+- (8) **Account deletion and Support Trains (decided 09:44Z; Stream 5 found it).**
+  - The problem: `SupportTrain.organizer_user_id` is RESTRICT and NOT NULL; every other SupportTrain* FK to User cascades or sets null. So a primary organizer can't delete their account, and Manage's Delete only works until a train has helpers or gift funds.
+  - Interim: Stream 5's accounts route answers an honest 409 (`SUPPORT_TRAIN_ORGANIZER`) before revoking sessions.
+  - Stream 1's repair, next after the Start-wizard pair:
+    - drafts go with the account;
+    - a live train passes to its longest-standing co-organizer, or is closed if there is none;
+    - a migration makes `organizer_user_id` nullable with SET NULL, so the closed history stays for helpers and the recipient, shown as "Former member".
+- **Lead (not yet checked end to end):** create accepts `recipient_home_id` without checking that the organizer is connected to that Home. The train is then placed Nearby at that Home, and the detail may resolve its address.
+  - To verify: who can see the resolved address. The fix is to require the organizer's trusted occupancy (`getAccessibleHomeIds`), as the location privacy matrix requires.
+
 - U03 items: done 55, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
 - U02 items: done 8, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
