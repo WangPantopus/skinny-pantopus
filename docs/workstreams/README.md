@@ -47,6 +47,26 @@
 
 
 
+> **UPDATE 2026-09-30T09:23Z — Stream 1 (coordinator): batch 162 merged; master `fd7de8790`.**
+> - **Batch 162** ([#921](https://github.com/WangPantopus/skinny-pantopus/pull/921), 09:22:51Z): nine PRs merged unchanged on master `4a681a48d`. verify-batch: OK, 27 files (25 blob-equal, 2 exact hunk proofs). No migrations.
+>   - **Stream 1 #841:** native Start a train now finishes, and a failed, retried or double-tapped launch ends with one train. The final iOS run used the merge result `b7958bda2` on "Pantopus S1", with exact cleanup. Seal `f98672ab…`.
+>   - **Stream 2 #910** (amended): only a definite rejection reads as signed out; an auth outage is anonymous and cached for 5 s. Seal `9f1217ef…`.
+>   - **Stream 2 #919:** the Pulse chip mute control is its own button. Seal `a98aff6c…`.
+>   - **Stream 3 #914:** bearer-link tokens stay out of logs. Seal `d8978eab…`.
+>   - **Stream 3 #915:** passcodes: 10 wrong tries per link per 15 min, sent in a header, at least 6 characters. Seal `2553126c…`.
+>   - **Stream 3 #916:** Lockdown wording: the fridge card keeps working. Seal `d8cf9fb5…`.
+>   - **Stream 3 #917:** web hides Member Join Policy. Seal `8c65ee69…`.
+>   - **Stream 3 #920:** role labels in words. Seal `fbc4d49c…`.
+>   - **Stream 4 #918:** a typed new issue survives the access re-check. Seal `56ca55c7…`.
+> - **Deploy order:** deploy the backend before, or with, the web. #915's web sends the passcode only in the header.
+> - **Routed follow-up (non-blocking), to Stream 2:** `optionalAuth.isRejection` should treat an auth-service 408 or 429 as unreachable, not as a rejection.
+> - **Stream 1 next.** #841's final iOS run found defects in the native Start a train wizard (iOS; Android shares the visibility logic):
+>   - a "Search again" button on steps 2–3 silently erases the recipient;
+>   - "Back to trains" opens the train instead;
+>   - a failed launch's error renders below the fold;
+>   - step 1's "Invite only" silently overrides the review's visibility choice, so an invited-only train is announced as "visible to nearby neighbors".
+>   - Stream 1's sharing-modes fix (`f954452c6`: My connections and Link only trains are no longer listed Nearby, with a data migration) ships with or after the wizard fix. The decision is in `01-trains-coordination.md`.
+
 > **UPDATE 2026-09-30T08:56Z — Stream 1 (coordinator): batches 159–161 merged; master `4a681a48d`.**
 > - **Batch 159** ([#909](https://github.com/WangPantopus/skinny-pantopus/pull/909), 08:51:57Z, master `add968868`): Stream 4 #906 (an Edit Issue save sends only changed fields, so it can't undo another device's dismissal; seal `0acf0d98…`) and #907 (Maintenance issue rows are keyboard-reachable; seal `e0fddb66…`).
 > - **Batch 160** ([#911](https://github.com/WangPantopus/skinny-pantopus/pull/911), 08:53:30Z, master `fdfc9f231`): Stream 5 #908, the gig-room chat privacy fix after #899.
