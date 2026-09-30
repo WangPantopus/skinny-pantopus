@@ -47,6 +47,12 @@
 
 
 
+> **UPDATE 2026-09-30T10:58Z — Stream 1 (coordinator): batch 172 merged; master `af4e76f0c`.**
+> - **Batch 172** ([#951](https://github.com/WangPantopus/skinny-pantopus/pull/951), 10:56:52Z): **Stream 5 #949**. `BusinessAuditLog.actor_user_id` is nullable with ON DELETE SET NULL, and the web shows "Former member". **Migration `20260930151000`**. 4 files, blob-equal; seal `9b9499e8…`.
+> - **Migration numbering now:** master's newest is `20260930151000`. Reserved, merged in this order: Stream 2 PR B → `20260930152000`, Stream 4 (Home created_by) → `20260930153000`, Stream 1 sharing modes → `20260930154000`. Renumber with `git mv` before queueing.
+> - **Account-deletion columns still open:** Stream 2 PR B and Stream 4. Streams 1, 3 and 5 are done.
+> - **Queued for review:** Stream 5 #950 (delete-sheet disclosures, including Stream 1's organizer paragraph). Its merge waits for Stream 5's native build results.
+
 > **UPDATE 2026-09-30T10:40Z — Stream 1 (coordinator): batch 171 merged; master `1f6743f6b`. Support Train organizers can delete their accounts end to end.**
 > - **Batch 171** ([#948](https://github.com/WangPantopus/skinny-pantopus/pull/948), 10:39:07Z):
 >   - **Stream 3 #943:** `HomeAccessSecret.created_by` is SET NULL. **Migration `20260930141000`**.
