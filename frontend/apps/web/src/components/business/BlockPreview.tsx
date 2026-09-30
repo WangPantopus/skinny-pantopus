@@ -258,7 +258,7 @@ function ContactFormPreview({ data }: { data: Record<string, any> }) {
         <div className="h-8 bg-app-surface-sunken rounded border border-app-border" />
         <div className="h-8 bg-app-surface-sunken rounded border border-app-border" />
         <div className="h-16 bg-app-surface-sunken rounded border border-app-border" />
-        <div className="w-24 h-8 bg-violet-200 rounded text-center text-xs leading-8 text-violet-700 font-medium">Send</div>
+        <div className="w-24 h-8 bg-violet-200 dark:bg-violet-900 rounded text-center text-xs leading-8 text-violet-700 font-medium">Send</div>
       </div>
     </div>
   );
