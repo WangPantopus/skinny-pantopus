@@ -19,11 +19,30 @@ interface HealthScoreRingProps {
 
 // -- Score -> color mapping ------------------------------------------------
 
-function scoreColor(score: number): { textClass: string; hex: string } {
-  if (score >= 75) return { textClass: 'text-emerald-500', hex: '#10b981' };
-  if (score >= 50) return { textClass: 'text-amber-500', hex: '#f59e0b' };
-  if (score >= 25) return { textClass: 'text-orange-600', hex: '#ea580c' };
-  return { textClass: 'text-red-500', hex: '#ef4444' };
+// The same bands and semantic tokens as the iOS and Android health ring
+// (HomeIntelligenceComponents), so a score reads the same colour everywhere.
+// Each label clears AA on its tint and on the app surface in both schemes;
+// the raw hexes used before read 2.0 to 3.8:1 on white and on their chip tint.
+function scoreTone(score: number): { text: string; stroke: string; chip: string } {
+  if (score >= 75) {
+    return {
+      text: 'text-app-success',
+      stroke: 'stroke-app-success',
+      chip: 'text-app-success bg-app-success-bg border-app-success-light',
+    };
+  }
+  if (score >= 40) {
+    return {
+      text: 'text-app-warning',
+      stroke: 'stroke-app-warning',
+      chip: 'text-app-warning bg-app-warning-bg border-app-warning-light',
+    };
+  }
+  return {
+    text: 'text-app-error',
+    stroke: 'stroke-app-error',
+    chip: 'text-app-error bg-app-error-bg border-app-error-light',
+  };
 }
 
 // -- Ring constants --------------------------------------------------------
@@ -46,9 +65,7 @@ export default function HealthScoreRing({
 }: HealthScoreRingProps) {
   const clampedScore = Math.min(Math.max(score, 0), 100);
   const offset = CIRCUMFERENCE - (clampedScore / 100) * CIRCUMFERENCE;
-  const { textClass, hex } = isNewHome
-    ? { textClass: 'text-blue-600', hex: '#2563eb' }
-    : scoreColor(clampedScore);
+  const tone = scoreTone(clampedScore);
 
   // -- Loading skeleton ----------------------------------------------------
 
@@ -155,22 +172,21 @@ export default function HealthScoreRing({
             cy={CENTER}
             r={RADIUS}
             fill="none"
-            stroke={hex}
             strokeWidth={STROKE_WIDTH}
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={offset}
             strokeLinecap="round"
             transform={`rotate(-90 ${CENTER} ${CENTER})`}
-            className="transition-all duration-700"
+            className={`transition-all duration-700 ${tone.stroke}`}
           />
         </svg>
 
         {/* Center label */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-4xl font-extrabold leading-tight ${textClass}`}>
+          <span className={`text-4xl font-extrabold leading-tight ${tone.text}`}>
             {clampedScore}
           </span>
-          <span className="text-xs font-medium -mt-0.5 text-gray-400">
+          <span className="text-xs font-medium -mt-0.5 text-app-text-muted">
             /100
           </span>
         </div>
@@ -188,12 +204,7 @@ export default function HealthScoreRing({
         <button
           type="button"
           onClick={() => onActionPress(topAction.route)}
-          className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-80"
-          style={{
-            color: hex,
-            backgroundColor: `${hex}18`,
-            borderColor: `${hex}40`,
-          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-80 ${tone.chip}`}
         >
           {topAction.label}
           <ArrowRight size={12} />

@@ -187,5 +187,16 @@ for (const [name, palette] of Object.entries({
         );
       });
     }
+    // The 50/100 tints carry accent text and app text in both schemes.
+    for (const tint of accents.filter((k) => k.includes('-tint'))) {
+      test.each([...accents.filter((k) => k.includes('-text')), ...inks])(
+        `%s clears AA on ${tint}`,
+        (ink) => {
+          expect(contrast(palette[ink], palette[tint])).toBeGreaterThanOrEqual(
+            4.5,
+          );
+        },
+      );
+    }
   });
 }
