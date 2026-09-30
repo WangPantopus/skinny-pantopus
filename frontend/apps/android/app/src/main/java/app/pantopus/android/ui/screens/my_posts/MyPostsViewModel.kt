@@ -198,6 +198,14 @@ class MyPostsViewModel
         private val _deleteTarget = MutableStateFlow<MyPostsDeleteTarget?>(null)
         val deleteTarget: StateFlow<MyPostsDeleteTarget?> = _deleteTarget.asStateFlow()
 
+        /** A failed archive, restore or delete puts the row back and says so, like the post page. */
+        private val _toastMessage = MutableStateFlow<String?>(null)
+        val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
+
+        fun dismissToast() {
+            _toastMessage.value = null
+        }
+
         /** Wire navigation callbacks before [load]. Same shape as MyBids. */
         fun bindCallbacks(
             onOpenPost: (MyPostDto) -> Unit,
@@ -470,6 +478,7 @@ class MyPostsViewModel
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
+                        _toastMessage.value = "Couldn't archive the post"
                     }
                 }
             }
@@ -488,6 +497,7 @@ class MyPostsViewModel
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
+                        _toastMessage.value = "Couldn't restore the post"
                     }
                 }
             }
@@ -508,6 +518,7 @@ class MyPostsViewModel
                         posts = previousPosts
                         localArchiveOverrides = previousOverrides.toMutableMap()
                         applyState()
+                        _toastMessage.value = "Couldn't delete the post"
                     }
                 }
             }
