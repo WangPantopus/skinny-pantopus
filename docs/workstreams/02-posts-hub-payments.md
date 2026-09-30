@@ -7,9 +7,22 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T17:37Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T17:57Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
-- **Latest (2026-09-30T17:37Z):**
+- **Latest (2026-09-30T17:57Z):**
+  - **[#1038](https://github.com/WangPantopus/skinny-pantopus/pull/1038)** head `71cf7309a7ebc3aefd585158bbca98ed52af869b`, re-sent to Stream 1.
+    - Share sends only place-level information: weather, public alert, allowlisted signal kinds. Never the viewer's bills, tasks, calendar, mail or gigs, a summary line, or the place name.
+    - The Today screen loads when a signal carries an action object. Before, it showed "Couldn't load today" for anyone with pickup days or a task today.
+    - Verified on Android with a "Gig today" fixture. Seals r1 `44bc9f8b…`, r2 `32cf8dfc…`.
+  - **[#1047](https://github.com/WangPantopus/skinny-pantopus/pull/1047)** head `d0470cd8c` (sent). Five follow-ups:
+    1. Cold-start "Pantopus" tips are info cards with a working dismiss on all three clients (they opened "We couldn't find this post").
+    2. Untitled posts (web's default) can be edited in both apps; the title stays null.
+    3. Web "Later" on Attach a Home is remembered.
+    4. iOS gives no Try again on a gone post.
+    5. iOS My posts → Write a post shows the purpose picker.
+    - Android and web verified. Seals `9e667fe9…` and `176cd103…`.
+  - **Next:** the Android Sun & sky caption spacing at font 2.0, after #1038 merges.
+- **Earlier (2026-09-30T17:37Z):**
   - **[#1034](https://github.com/WangPantopus/skinny-pantopus/pull/1034) merged** (batch 201, `cb72a43cd`).
   - **#1038 is held by Stream 1 for share privacy and fixed on the branch** (building, head `71cf7309a`):
     - Today's signals include the viewer's own bills, tasks, calendar, mail and gigs, and the summary line is composed from them. The share text joined them all.
@@ -318,10 +331,10 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
    - U04: Posts L4 (iOS, Android) and web L1 (draft kept across tabs); Start and Place preview L2/L3 (all three); Hub L2/L3 (iOS, Android) and L2 (web).
    - U02: native accessibility for the Pulse feed, post detail, composer, My posts, Report, Start/Place preview, Hub, Today and the money screens; web My posts, tip sheet and payment sheets.
 2. **Open inventory rows** (carried into Stream 2's inventory, below):
-   - Web Hub Attach Home card: "Later" isn't remembered across loads (component state only; weak).
+   - ~~Web Hub Attach Home card: "Later" isn't remembered across loads~~: remembered for a week per account in #1047 (verified in Chrome).
    - Web `/api/location/resolve` ignores a stale unpinned area while native keeps it (parity note, not a defect).
    - Backend post-save toggle returns 500 when two toggles race (every client now guards double taps; a server fix would need a forward migration, not justified).
-   - iOS post detail: the 404 state offers Try again, which can't help (low).
+   - ~~iOS post detail: the 404 state offers Try again, which can't help~~: removed for 404 and 403 in #1047 (Android parity; iOS runtime with Stream 1).
    - iOS `ChatConversationView(…, onUseAIDraft:)` trailing closure binds to `onBack` (works today; note).
 3. **Done:** Android task-progress labels no longer break mid-word at font 2.0. At large text the strip becomes a one-step-per-line list, which e7b1b3a96 (2026-09-22) had already shipped. It was checked on the emulator on 2026-09-30 (`20260930-stream2-task-progress-large-text-r1`, seal `e8811724…`, fixture removed, 353/353 tables equal).
 4. **Proposal:** the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it; the fix splits it into two controls that look the same (structural, so confirm with the user first).
@@ -350,7 +363,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T17:37Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T17:57Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -362,9 +375,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed, My posts, counts | ⬜ Cold-start Pantopus tips (seeded facts) open "We couldn't find this post" when tapped; reactions hit the API with a fact id (Stream 1). Fix planned on all three clients<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ⬜ Cold-start tips: tap opens a post that doesn't exist; the heart calls the API with a fact id (same code as iOS). Fix planned<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ⬜ Cold-start tips render as full posts: open a 404, Report/Hide/Mute/like/save call the API with a fact id, no dismiss. Fix planned<br>✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
-| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: typed (555) 555-0123 stored as digits; the post page shows the contact line (Stream 1 iOS run, no change) (Stream 1 bundle 3ee82fc9)<br>⬜ My posts → Write a post always made an Ask post (skipped the purpose picker): fix drafted for the next branch | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
-| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>⬜ A post saved without a title (web's general posts) couldn't be edited: "Title is required", nothing sent. Fix on claude/stream2-posts-followups, building | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>⬜ A post saved without a title couldn't be edited (reproduced: "Title is required", 0 writes). Fix on claude/stream2-posts-followups, building | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
+| Pulse feed, My posts, counts | ⬜ Cold-start Pantopus tips (seeded facts) opened "We couldn't find this post" (Stream 1): info cards with a dismiss in #1047 (build; Stream 1 iOS run next)<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ⬜ Cold-start tips opened a post that doesn't exist (reproduced, 404): info cards with a working dismiss, fixed and verified in #1047 (seal 9e667fe9), waiting to merge<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ⬜ Cold-start tips rendered as full posts with no dismiss: info cards with a dismiss X, fixed and verified in #1047 (seal 9e667fe9), waiting to merge<br>✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
+| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: typed (555) 555-0123 stored as digits; the post page shows the contact line (Stream 1 iOS run, no change) (Stream 1 bundle 3ee82fc9)<br>⬜ My posts → Write a post always made an Ask post: the purpose picker shows, fixed in #1047 (build; Stream 1 iOS run next) | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
+| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>⬜ A post saved without a title (web's general posts) couldn't be edited: fixed in #1047 (build; Stream 1 iOS run next) | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>⬜ A post saved without a title couldn't be edited (reproduced, 0 writes): fixed and verified in #1047 (seal 176cd103, title stays null), waiting to merge | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
 | Delete a post | ✅ E2 (#709)<br>✅ E1 My posts says when a delete, archive or restore fails; Delete really deletes (it sent nothing before) (#980, Stream 1 bundle d172244f) | ✅ E2 (#709)<br>✅ E1 post page: keeps the post and says "Couldn't delete the post"; retry deletes (no change) (seal 569a60a4)<br>✅ E1 My posts: says when a delete, archive or restore fails (#980, seal 54995229) | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the iOS comment composer is text-only; web comment photos still display) (Stream 1 bundle e4825b97) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the Android comment composer is text-only) | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
