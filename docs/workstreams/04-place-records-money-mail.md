@@ -269,6 +269,12 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T14:25:05Z — iOS Mail tasks "Post as Task": recorded under the launch cut, not fixed.** Stream 1's alert scan found the dismissal-clears pattern here.
+  - `MailTaskListView`'s confirmationDialog clears `convertTarget` on dismiss before `Task { await confirmConvert() }` reads it, so no request is sent (same shape as #980).
+  - The action is open public task posting ("posted as a neighbor task"), launch-cut #4. On master, `POST /api/mailbox/v2/p3/tasks/:id/to-gig` always answers 409 HOME_TASK_GIG_FLOW_REQUIRED, so it can't complete even with the dialog fixed.
+  - **Fix shape, for if open posting returns:** `presenting: viewModel.convertTarget` and `confirmConvert(row)`, verified by the proxy seeing the request.
+  - Also: Stream 5 removed the unused `config/supabase` import from `backend/routes/mailbox.js` in #1015, agreed with Stream 4.
+
 - **2026-09-30T14:12:21Z (committed) — correction to the 14:10:47Z fridge a11y entry.** The sweep ran on the shared runtime at `00bf2d6ff`, which predates Stream 1's #979 (AA tokens, batch 184).
   - My "fridge code identical to master" check covered the fridge files but **not the shared design tokens** (`tailwind.config.js`, `globals.css`).
   - The two failing pairs (4.09:1 and 3.82:1) are the old `primary-600`. Master maps `bg-`/`text-primary-600` to `#0369A1`: 5.93:1 white-on-fill and 5.53:1 on `#f6f7f9`, computed, not yet measured.
