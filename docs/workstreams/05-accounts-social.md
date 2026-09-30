@@ -9,6 +9,18 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — security track fully merged: every Stream 5 PR from today is in master (`a5f21354a`), 2026-09-30T14:17:54Z
+
+- **Correction to the blocks below:** "open" there is out of date. Merged:
+  - #1000 (DEFINER guard): batch 188, 13:50:27Z;
+  - #1001 (owner-rights views) and #1002 (step 1 read revoke): batch 189, 13:51:14Z;
+  - #1012 (availability checks): batch 192, 14:16:43Z, together with Stream 2's #1011 (step 2, PostLike/PostComment).
+- **Today's security track, all merged:** #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002 and #1012, plus Stream 2's #1009 and #1011.
+- **The end state Stream 1 proposed:** once gigs.js (Stream 2; Open Gigs is launch-cut) and mailbox.js (Stream 4; an unused import) confirm no data reads, a small PR moves app.js /health's count to the service client. Then an anon SELECT default-deny becomes possible. I offered to take the /health PR.
+- **Native pass:** Stream 1 started (a) account deletion with a private-setup Home and (c) the portfolio delete at 14:17Z.
+- **Runtime:** my stack mirrors master. The DB has master's migrations through `180000`; API 18134 runs master `a5f21354a` (from 14:17:30Z).
+- **Nothing open from Stream 5.**
+
 ## LIVE — #1012 fixes blind username/phone/email checks; Stream 2's #1011 reviewed, 2026-09-30T14:05:57Z
 
 - **New open:** [#1012](https://github.com/WangPantopus/skinny-pantopus/pull/1012) (`50e55104f`, seal `02f2c233…`, no migration). users.js's `isUsernameAvailable`, `isPhoneAvailable` and `isEmailAvailable` read User through the anon client, which sees no rows under RLS, so every check said "available".
