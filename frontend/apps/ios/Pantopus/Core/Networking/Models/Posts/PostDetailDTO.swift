@@ -204,6 +204,9 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let eventVenue: String?
     /// `lost` / `found` — populated for `lost_found` posts.
     public let lostFoundType: String?
+    /// How the owner asked to be contacted: `dm`, `comment`, `phone` or
+    /// `phone|<digits>` — populated for `lost_found` posts.
+    public let lostFoundContactPref: String?
     /// Service category — populated for `ask_local` posts.
     public let serviceCategory: String?
     /// Recommended business name — populated for `recommendation` posts.
@@ -237,6 +240,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case eventDate = "event_date"
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
+        case lostFoundContactPref = "lost_found_contact_pref"
         case serviceCategory = "service_category"
         case dealBusinessName = "deal_business_name"
         case locationName = "location_name"
@@ -272,6 +276,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         eventDate = try c.decodeIfPresent(String.self, forKey: .eventDate)
         eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
         lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
+        lostFoundContactPref = try c.decodeIfPresent(String.self, forKey: .lostFoundContactPref)
         serviceCategory = try c.decodeIfPresent(String.self, forKey: .serviceCategory)
         dealBusinessName = try c.decodeIfPresent(String.self, forKey: .dealBusinessName)
         locationName = try c.decodeIfPresent(String.self, forKey: .locationName)

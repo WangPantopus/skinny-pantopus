@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
@@ -124,6 +125,8 @@ fun BodyReactionsBody(
     onShowMoreReplies: (() -> Unit)? = null,
     onCommentAvatarTap: (String) -> Unit = {},
     mediaLocationBadge: String? = null,
+    /** One line of details under the text, such as a Lost & Found post's contact; null for none. */
+    detailLine: String? = null,
     selectedReactionEmoji: String? = null,
     onEmojiSelected: ((String) -> Unit)? = null,
     reactionEmojis: List<String> = emptyList(),
@@ -151,6 +154,21 @@ fun BodyReactionsBody(
                 lineHeight = 22.sp,
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
+        }
+        detailLine?.let { line ->
+            // Selectable, so a phone number can be copied.
+            SelectionContainer {
+                Text(
+                    text = line,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextSecondary,
+                    modifier =
+                        Modifier
+                            .padding(horizontal = Spacing.s4)
+                            .testTag("pulsePostDetail-detailLine"),
+                )
+            }
         }
         if (media.isNotEmpty()) {
             PostMediaGridWithViewer(
