@@ -107,6 +107,21 @@
     - the web conflict card drops "N members currently registered";
     - clients show "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation." and stop.
   - **#943:** `HomeAccessSecret.created_by` becomes nullable with ON DELETE SET NULL (Stream 1's assignment). No "Former member" text is needed, because no screen names a code's creator.
+  - **Add-home address checks (#970, merged in batch 180):** as above.
+  - **Settings dead switches (#962, merged in batch 177):** the standalone Home Settings page's five Notifications switches, which saved nothing, are removed. The Settings tab's switches say that per-Home routing isn't live yet.
+  - **D05 native rename (commit `9c132e20c`, PR after the device runs):**
+    - the editor starts from the Home's own name, not its address;
+    - an untouched Save sends nothing;
+    - an empty name clears it, as on the web, and `PATCH /:id` stores a blank name as null.
+  - **Account deletion and Homes (decision 9: #974 with #968 and #976), 2026-09-30:**
+    - **Who keeps a Home** is one rule, shared by `othersKeepHome` and #968's `HOME_PURGE_HOUSEHOLD_PRESENT` and computed with the same `home_effective_access`. It is kept if there is:
+      - any other verified owner (a person or a business);
+      - another occupant who still has access;
+      - a legacy `Home.owner_id` owner with access.
+
+      Pending, provisional and unverified occupants have no access, so they don't keep it.
+    - **LIF-02** (Stream 5's route): only a current verified occupant blocks an owner's account deletion. Pending people have nobody to be handed to, the "remove the other residents" message pointed at people the owner can't see, and App Store 5.1.1(v) forbids needless obstacles to deleting an account.
+    - **After a 'purged' Home**, `retireHomeForDeletedAccount` closes the remaining pending standing with the existing lifecycle transitions and notices, so nobody waits forever in a Home with no owner: non-verified occupancies, pending residency and ownership claims, and household access requests. #968 stays records-only.
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
 2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
 3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
@@ -289,6 +304,32 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T12:33Z — #970–#973 merged (batch 180); #962 merged (batch 177); R06 iOS done; #974 being revised for the decision-9 trio; D05 native rename reproduced on both apps.**
+  - **Merged in batch 180** ([#975](https://github.com/WangPantopus/skinny-pantopus/pull/975), master `81cf2e959`). Each was sealed, with the iOS unit tests run under the heavy slot on "Pantopus S34" (11:53:34–12:08:30Z):
+    - [#970](https://github.com/WangPantopus/skinny-pantopus/pull/970): D06 add-home address checks, `46cd0b548`, MANIFEST `a36aa59a…`. iOS AddHomeWizard 24/24 and DTODecoding 14/14. Three iOS sign-in screenshots were redacted before sealing, because they showed the fixture email.
+    - [#971](https://github.com/WangPantopus/skinny-pantopus/pull/971): join-policy native, `edab09b8e`, `3dfdb0ae…`. iOS HomeOwnershipSecurity 6/6 and HomeSettings 9/9.
+    - [#972](https://github.com/WangPantopus/skinny-pantopus/pull/972): native audit labels, `f372b8810`, `2f30a389…`. iOS MembersList 44/44 and DTODecoding 14/14.
+    - [#973](https://github.com/WangPantopus/skinny-pantopus/pull/973): iOS row inline buttons with VoiceOver, `aeb8ce319`, `2bb5f2fc…`. ListOfRowsRender 27/27 and ListOfRowsViewModel 5/5.
+    - Shared device fixture: `20260930-stream3-home-native-session-r1` (`81502e40…`), with exact cleanup at 11:36:48Z.
+  - **Earlier today, not yet recorded here:**
+    - [#962](https://github.com/WangPantopus/skinny-pantopus/pull/962) (Settings dead switches) merged in batch 177 (master `ea4d9bd40`).
+    - **R06 iOS restart** is sealed as `20260930-stream3-home-r06-ios-restart-r1` (`badb1a99…`), with no code change. The proxy held the pass-issue reply and the app was killed. After a cold restart there was one committed pass, one request and no resend. This was the last local R06 item. Named boundaries: device clock, full-day expiry, hosted issuer.
+  - **[#974](https://github.com/WangPantopus/skinny-pantopus/pull/974) (decision 9, `retireHomeForDeletedAccount`)**
+    - **r1:** `5d4a6cce6`, `20260930-stream3-home-d10-retire-home-r1`, MANIFEST `9e9764b3…`.
+    - **Stream 5's route E2E** (`20260930-stream5-retire-homes-r1`, `a9b574bf…`): deleted, kept, purged and 503 all behave as designed through the real `DELETE /api/users/account`.
+    - **The coordinator is holding the trio (#968, #974, #976)** for a revision: one "who keeps a Home" rule shared with #968's guard (the legacy `owner_id` owner was missed), and closing pending standing after a purge. The decisions are above; the r2 stage is `runtime/stream3-home-d10-retire-home-r2`.
+    - **Stream 4's rolled-back proofs** ran in my lease window at 11:53:51Z, 12:01:27Z, 12:05:51Z and 12:25:58Z. None changed any data.
+  - **D05 native rename** (`9c132e20c`, bundle stage `runtime/stream3-home-d05-native-clear-name-r1`, fixture Home with no name). Before, on master-equivalent builds (`f372b8810`):
+    - on both apps, the rename field opens with the street address;
+    - an untouched Save sent a PATCH (iOS 9616, Android 9812) that stored the address as the Home's name;
+    - clearing the field gives "Enter a name for this home." and sends no request.
+
+    After-builds are under the heavy slot since 12:24:09Z. Android HomeSettingsViewModelTest passes 15/15, and ktlint/detekt are clean.
+  - **Runtime:**
+    - lease held since 11:32:27Z;
+    - device slot 4 is now `pantopus_s34` (swapped from S34 at 12:20:00Z);
+    - backend on master `00bf2d6ff`; no proxy rules.
 
 - **2026-09-30T11:23Z — native session done on both apps; four PRs wait only on iOS unit tests and my last cleanup.**
   - **D06 add-home address checks (`46cd0b548`)**, native round (own fixture, cleaned 11:19:22Z). Address validation was EMULATED by fault-proxy rule `s3-validate` using the real route's body from the in-process harness; `check-address` was real.
