@@ -123,7 +123,9 @@ class SupportTrainDetailViewModelTest {
             assertFalse(content.isFullyCovered)
             assertEquals(28, content.calendarDays.size)
             assertEquals("Diane K.", content.hostedBy.organizerDisplayName)
-            assertEquals(listOf("mine", "open", "covered"), content.sections.map { it.id })
+            // s2 is covered only by the viewer's own signup, so it isn't repeated
+            // under "Already on the train".
+            assertEquals(listOf("mine", "open"), content.sections.map { it.id })
             assertTrue(content.dock is SupportTrainDock.SignUp)
         }
 

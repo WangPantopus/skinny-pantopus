@@ -240,8 +240,9 @@ final class SupportTrainDetailViewModelTests: XCTestCase {
         XCTAssertEqual(content.recipient.householdName, "Meals for the Reyes family")
         XCTAssertTrue(content.recipient.quote.contains("Baby"))
         XCTAssertEqual(content.hostedBy.organizerDisplayName, "Diane K.")
-        // Sections: my commitment + open + covered.
-        XCTAssertEqual(content.sections.map(\.id), ["mine", "open", "covered"])
+        // Sections: my commitment + open. s2 is covered only by the viewer's own
+        // signup, so it isn't repeated under "Already on the train".
+        XCTAssertEqual(content.sections.map(\.id), ["mine", "open"])
         if case .signUp = content.dock {} else {
             XCTFail("Partially-covered train shows the sign-up dock")
         }
