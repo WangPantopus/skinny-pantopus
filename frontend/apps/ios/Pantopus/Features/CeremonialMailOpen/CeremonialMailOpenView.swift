@@ -835,7 +835,7 @@ private struct ReadingFrame: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
                 .shadow(color: Theme.Color.primary600.opacity(0.30), radius: 8, y: 4)
             }
@@ -947,7 +947,7 @@ private struct ReplyHandoffFrame: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, Spacing.s3)
                     .frame(height: 30)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

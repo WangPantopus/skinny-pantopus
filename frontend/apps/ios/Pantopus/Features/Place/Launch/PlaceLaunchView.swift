@@ -105,7 +105,7 @@ struct PlaceLaunchView: View {
                 Spacer()
                 Button("Sign in", action: onSignIn)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("placeLaunchSignIn")
             }
             .padding(.horizontal, 20)

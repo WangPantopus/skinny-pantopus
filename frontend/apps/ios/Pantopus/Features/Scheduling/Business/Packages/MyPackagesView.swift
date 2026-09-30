@@ -188,7 +188,7 @@ private struct CreditCard: View {
             Button(action: onBuyAgain) {
                 Text("Buy again")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
                     .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))

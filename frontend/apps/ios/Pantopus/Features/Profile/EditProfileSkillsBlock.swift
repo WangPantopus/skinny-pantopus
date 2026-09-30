@@ -37,7 +37,7 @@ struct EditProfileSkillsBlock: View {
                 .onSubmit { onAdd() }
                 Button("Add") { onAdd() }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(canAdd ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                    .foregroundStyle(canAdd ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                     .frame(minWidth: 56, minHeight: 44)
                     .disabled(!canAdd)
                     .accessibilityIdentifier("editProfileAddSkillButton")

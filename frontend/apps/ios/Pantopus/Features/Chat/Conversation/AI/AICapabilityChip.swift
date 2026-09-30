@@ -24,7 +24,7 @@ public struct AICapabilityChip: View {
         Button(action: onTap) {
             HStack(spacing: 6) {
                 // A15.3 `.aw-cap` — capability icon in the primary accent.
-                Icon(chip.icon, size: 13, strokeWidth: 2, color: Theme.Color.primary600)
+                Icon(chip.icon, size: 13, strokeWidth: 2, color: Theme.Color.primaryInk)
                 Text(chip.label)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextStrong)

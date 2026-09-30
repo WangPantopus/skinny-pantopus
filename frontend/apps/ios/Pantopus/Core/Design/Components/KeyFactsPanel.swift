@@ -74,7 +74,7 @@ private struct KeyFactRowView: View {
                         justCopied = false
                     }
                 } label: {
-                    Icon(justCopied ? .check : .copy, size: 16, color: Theme.Color.primary600)
+                    Icon(justCopied ? .check : .copy, size: 16, color: Theme.Color.primaryInk)
                 }
                 .frame(minWidth: 44, minHeight: 44)
                 .accessibilityLabel(justCopied ? "Copied" : "Copy \(row.label)")

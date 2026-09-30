@@ -129,10 +129,10 @@ struct DisambiguateMailFormView: View {
             viewModel.toast = ToastMessage(text: "Add a new person — coming up.", kind: .success)
         } label: {
             HStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 13, color: Theme.Color.primary600)
+                Icon(.plus, size: 13, color: Theme.Color.primaryInk)
                 Text("None of these — add new person")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .frame(minHeight: 44)
         }

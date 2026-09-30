@@ -134,7 +134,7 @@ struct EventTypeListView: View {
                 Spacer()
                 if viewModel.canReorder, !viewModel.isReordering {
                     Button { viewModel.startReordering() } label: {
-                        Icon(.move, size: 19, strokeWidth: 2.2, color: Theme.Color.primary600)
+                        Icon(.move, size: 19, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                             .frame(width: 32, height: 32)
                     }
                     .accessibilityLabel("Reorder event types")
@@ -145,7 +145,7 @@ struct EventTypeListView: View {
                         .plus,
                         size: 21,
                         strokeWidth: 2.4,
-                        color: viewModel.canEdit ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                        color: viewModel.canEdit ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                     )
                     .frame(width: 32, height: 32)
                 }
@@ -337,7 +337,7 @@ struct EventTypeListView: View {
                 .multilineTextAlignment(.center)
             Button("Retry") { Task { await viewModel.refresh() } }
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .padding(.top, Spacing.s1)
         }
         .padding(.horizontal, Spacing.s8)
@@ -575,7 +575,7 @@ private struct EventTypesEmptyTemplates: View {
                         )
                     )
                     .frame(width: 84, height: 84)
-                Icon(.calendarPlus, size: 36, strokeWidth: 1.7, color: Theme.Color.primary600)
+                Icon(.calendarPlus, size: 36, strokeWidth: 1.7, color: Theme.Color.primaryInk)
             }
             .padding(.bottom, Spacing.s4)
             Text("You don't have any event types yet")
@@ -598,7 +598,7 @@ private struct EventTypesEmptyTemplates: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 11)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
                 .pantopusShadow(.primary)
             }
@@ -614,7 +614,7 @@ private struct EventTypesEmptyTemplates: View {
                 ForEach([15, 30, 60], id: \.self) { mins in
                     Button { onTemplate(mins) } label: {
                         HStack(spacing: 5) {
-                            Icon(.clock, size: 12, color: Theme.Color.primary600)
+                            Icon(.clock, size: 12, color: Theme.Color.primaryInk)
                             Text("\(mins) min")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Theme.Color.appTextStrong)
@@ -793,7 +793,7 @@ private struct EventTypeOverflowMenu: View {
                     item.icon,
                     size: 15,
                     strokeWidth: 2,
-                    color: item.isDanger ? Theme.Color.error : (isFirst ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                    color: item.isDanger ? Theme.Color.error : (isFirst ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                 )
                 Text(item.label)
                     .font(.system(size: 12.5, weight: isFirst ? .bold : .medium))

@@ -199,10 +199,10 @@ struct PolicyBlockedView: View {
     private var cancelInsteadLink: some View {
         Button { confirmCancel = true } label: {
             HStack(spacing: Spacing.s1) {
-                Icon(.xCircle, size: 14, strokeWidth: 2.3, color: Theme.Color.primary600)
+                Icon(.xCircle, size: 14, strokeWidth: 2.3, color: Theme.Color.primaryInk)
                 Text("Cancel instead")
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .frame(maxWidth: .infinity)
         }
@@ -260,10 +260,10 @@ struct PolicyBlockedView: View {
     private func hostGhostButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Spacing.s2) {
-                Icon(.messageCircle, size: 16, color: Theme.Color.primary600)
+                Icon(.messageCircle, size: 16, color: Theme.Color.primaryInk)
                 Text(title)
                     .font(.system(size: 13.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(Theme.Color.appSurface)

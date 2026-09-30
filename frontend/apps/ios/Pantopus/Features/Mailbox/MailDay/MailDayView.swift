@@ -315,7 +315,7 @@ public struct MailDayView: View {
         MailDaySettingsCard(title: "Delivery time") {
             HStack(spacing: Spacing.s2) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.clock, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                    Icon(.clock, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     Text(form.deliveryTime)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
@@ -452,7 +452,7 @@ public struct MailDayView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -580,7 +580,7 @@ struct FinishDayBar: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .shadow(
                     color: isEnabled ? Theme.Color.primary600.opacity(0.28) : .clear,

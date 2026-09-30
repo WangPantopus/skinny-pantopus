@@ -159,7 +159,7 @@ private struct PickerSheetScaffold<Content: View>: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 9, x: 0, y: 4)
         }
@@ -252,7 +252,7 @@ private struct GigDeadlineSheet: View {
                 Spacer(minLength: Spacing.s0)
                 Text(specificTime ? "6:00 PM" : "Any time")
                     .font(.system(size: 13.5, weight: .bold))
-                    .foregroundStyle(specificTime ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                    .foregroundStyle(specificTime ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
             }
             .padding(Spacing.s3)
             .frame(maxWidth: .infinity)
@@ -765,7 +765,7 @@ private struct TagChip: View {
         .padding(.leading, Spacing.s3 - 1)
         .padding(.trailing, removable ? Spacing.s2 : Spacing.s3 - 1)
         .padding(.vertical, Spacing.s1 + 2)
-        .background(Theme.Color.primary600)
+        .background(Theme.Color.primarySolid)
         .clipShape(Capsule())
         .accessibilityIdentifier("gigPicker.tagChip")
     }
@@ -786,7 +786,7 @@ private struct SuggestionChip: View {
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s1 + 3)
-            .background(isChosen ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isChosen ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .clipShape(Capsule())
             .overlay(
                 Capsule().stroke(isChosen ? Color.clear : Theme.Color.appBorderStrong, lineWidth: 1)
@@ -883,7 +883,7 @@ private struct PickerChip: View {
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                 .padding(.horizontal, Spacing.s3 + 1)
                 .padding(.vertical, Spacing.s1 + 3)
-                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(isActive ? Color.clear : Theme.Color.appBorder, lineWidth: 1)
@@ -1143,7 +1143,7 @@ private struct GigEffortSheet: View {
             onClose: viewModel.dismissPicker
         ) {
             HStack(spacing: Spacing.s3) {
-                Icon(.timer, size: 18, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.timer, size: 18, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     .frame(width: 36, height: 36)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))

@@ -507,11 +507,11 @@ private extension PaymentsView {
                     RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
                         .fill(Theme.Color.primary50)
                         .frame(width: 38, height: 26)
-                    Icon(.plus, size: 16, strokeWidth: 2.5, color: Theme.Color.primary600)
+                    Icon(.plus, size: 16, strokeWidth: 2.5, color: Theme.Color.primaryInk)
                 }
                 Text(viewModel.addMethodLabel)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 Spacer(minLength: Spacing.s0)
             }
             .padding(.horizontal, Spacing.s4)
@@ -622,7 +622,7 @@ private extension PaymentsView {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

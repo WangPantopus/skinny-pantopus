@@ -295,7 +295,7 @@ struct MailPartyView: View {
 
     private func openingCard(_ session: MailPartyLiveSession) -> some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.partyPopper, size: 28, color: Theme.Color.primary600)
+            Icon(.partyPopper, size: 28, color: Theme.Color.primaryInk)
                 .accessibilityHidden(true)
             Text(session.title)
                 .font(.system(size: 18, weight: .bold))

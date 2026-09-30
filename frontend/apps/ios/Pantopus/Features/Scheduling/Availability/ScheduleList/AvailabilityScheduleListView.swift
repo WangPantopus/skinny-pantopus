@@ -32,7 +32,7 @@ struct AvailabilityScheduleListView: View {
                     Button {
                         Task { await viewModel.createSchedule() }
                     } label: {
-                        Icon(.plus, size: 21, strokeWidth: 2.2, color: Theme.Color.primary600)
+                        Icon(.plus, size: 21, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     }
                     .accessibilityLabel("New schedule")
                     .accessibilityIdentifier("listOfRowsTopBarAction")
@@ -246,7 +246,7 @@ private struct ScheduleCard: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: 11) {
-                Icon(.calendarClock, size: 18, color: Theme.Color.primary600)
+                Icon(.calendarClock, size: 18, color: Theme.Color.primaryInk)
                     .frame(width: 36, height: 36)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -323,7 +323,7 @@ private struct DefaultPill: View {
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, 2)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
     }
 }

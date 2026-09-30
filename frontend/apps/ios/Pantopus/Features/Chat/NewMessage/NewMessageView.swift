@@ -51,7 +51,7 @@ public struct NewMessageView: View {
             Button { viewModel.tapCancel() } label: {
                 Text("Cancel")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .padding(.horizontal, Spacing.s2)
                     .frame(height: 36)
             }
@@ -187,7 +187,7 @@ public struct NewMessageView: View {
     private var emptyFrame: some View {
         VStack(spacing: 18) {
             Spacer()
-            Icon(.search, size: 32, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(.search, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -270,7 +270,7 @@ public struct NewMessageView: View {
     /// from the full empty frame so the search bar stays addressable.
     private var searchEmptyState: some View {
         VStack(spacing: Spacing.s3) {
-            Icon(.search, size: 28, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(.search, size: 28, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 56, height: 56)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -350,7 +350,7 @@ extension NewMessageView {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

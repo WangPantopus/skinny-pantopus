@@ -85,9 +85,9 @@ private struct UnlistedBrokerCard: View {
                         HStack(spacing: 6) {
                             Text("Open their opt-out page")
                                 .font(.system(size: 13, weight: .semibold))
-                            Icon(.externalLink, size: 13, strokeWidth: 2, color: Theme.Color.primary600)
+                            Icon(.externalLink, size: 13, strokeWidth: 2, color: Theme.Color.primaryInk)
                         }
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .accessibilityIdentifier("place.unlisted.broker.\(broker.id).optOut")
                 }
@@ -186,7 +186,7 @@ private struct UnlistedStatusControl: View {
                             lineWidth: 1.5
                         )
                 )
-                .foregroundStyle(selected ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                .foregroundStyle(selected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
         }
         .buttonStyle(.plain)
         .disabled(vm.savingBrokerId == broker.id)

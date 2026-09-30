@@ -178,7 +178,7 @@ struct SchedulingPackagesListView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     }
                 )

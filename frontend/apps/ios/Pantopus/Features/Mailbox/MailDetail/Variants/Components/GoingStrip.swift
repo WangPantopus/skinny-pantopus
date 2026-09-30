@@ -50,9 +50,9 @@ struct GoingStrip: View {
             HStack(spacing: 2) {
                 Text("See all")
                     .font(.system(size: 11, weight: .bold))
-                Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
             }
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)

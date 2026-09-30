@@ -220,7 +220,7 @@ public struct ManageTrainView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -462,7 +462,7 @@ public struct ManageTrainView: View {
             .frame(maxWidth: .infinity, minHeight: 46)
             .background(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                    .fill(viewModel.canSendUpdate ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                    .fill(viewModel.canSendUpdate ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
             )
         }
         .buttonStyle(.plain)

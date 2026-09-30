@@ -265,7 +265,7 @@ private struct AddressClaimedModal: View {
                     .fill(Theme.Color.personalBg)
                     .frame(width: 56, height: 56)
                     .overlay {
-                        Icon(.shieldCheck, size: 28, color: Theme.Color.primary600)
+                        Icon(.shieldCheck, size: 28, color: Theme.Color.primaryInk)
                     }
                 Text("This address has an existing Home")
                     .pantopusTextStyle(.h3)
@@ -306,7 +306,7 @@ private struct AddressClaimedModal: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)

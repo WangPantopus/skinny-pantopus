@@ -171,7 +171,7 @@ struct BlockOffTimeView: View {
     /// Mirrors AvailabilityFieldButton's chrome but wraps a Menu label.
     private var repeatsFieldButtonLabel: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.arrowsRepeat, size: 15, color: Theme.Color.primary600)
+            Icon(.arrowsRepeat, size: 15, color: Theme.Color.primaryInk)
             Text(viewModel.repeats.label)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)

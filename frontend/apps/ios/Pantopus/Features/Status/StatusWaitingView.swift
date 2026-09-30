@@ -100,7 +100,7 @@ public struct StatusWaitingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                         .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 9, x: 0, y: 8)
                     }
@@ -198,7 +198,7 @@ public struct StatusWaitingBodyView: View {
 
     private func addressChip(_ text: String) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.home, size: 13, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(.home, size: 13, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             Text(text)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
@@ -252,7 +252,7 @@ public struct StatusWaitingBodyView: View {
         HStack(spacing: Spacing.s3) {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 36, height: 36)
-                Icon(card.icon, size: 18, color: Theme.Color.primary600)
+                Icon(card.icon, size: 18, color: Theme.Color.primaryInk)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)

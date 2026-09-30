@@ -262,7 +262,7 @@ public struct CertifiedStamp: View {
 
     public var body: some View {
         Text("Certified", style: .overline)
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s1)
             .overlay(
@@ -290,9 +290,9 @@ public struct AIElfCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s1) {
-                Icon(.info, size: 14, color: Theme.Color.primary600)
+                Icon(.info, size: 14, color: Theme.Color.primaryInk)
                 Text("AI elf", style: .overline)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             Text(content.suggestion)
                 .pantopusTextStyle(.body)

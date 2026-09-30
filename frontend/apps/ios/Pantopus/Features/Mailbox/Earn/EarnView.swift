@@ -252,7 +252,7 @@ public struct EarnView: View {
                     Button(action: onAction) {
                         Text(action)
                             .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("earnSectionAction-\(overline)")
@@ -383,7 +383,7 @@ private struct CashOutCTA: View {
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg + 2, style: .continuous))
             .pantopusShadow(.primary)
         }
@@ -408,7 +408,7 @@ private struct BrowseCTA: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg + 2, style: .continuous))
                 .pantopusShadow(.primary)
             }

@@ -116,10 +116,10 @@ struct StartPollFormView: View {
                         viewModel.addOption()
                     } label: {
                         HStack(spacing: Spacing.s2) {
-                            Icon(.plus, size: 14, color: Theme.Color.primary600)
+                            Icon(.plus, size: 14, color: Theme.Color.primaryInk)
                             Text("Add option")
                                 .pantopusTextStyle(.body)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                             Spacer()
                         }
                         .frame(minHeight: 44)
@@ -243,14 +243,14 @@ private struct KindRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.s3) {
-                Icon(kind.icon, size: 18, color: Theme.Color.primary600)
+                Icon(kind.icon, size: 18, color: Theme.Color.primaryInk)
                     .frame(width: 28, height: 28)
                 Text(kind.label)
                     .pantopusTextStyle(.body)
                     .foregroundStyle(Theme.Color.appText)
                 Spacer()
                 if isSelected {
-                    Icon(.checkCircle, size: 20, color: Theme.Color.primary600)
+                    Icon(.checkCircle, size: 20, color: Theme.Color.primaryInk)
                 } else {
                     Circle()
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
@@ -354,7 +354,7 @@ private struct AudienceRow: View {
                 }
                 Spacer()
                 if isSelected {
-                    Icon(.checkCircle, size: 20, color: Theme.Color.primary600)
+                    Icon(.checkCircle, size: 20, color: Theme.Color.primaryInk)
                 } else {
                     Circle()
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
@@ -395,7 +395,7 @@ private struct MemberToggleRow: View {
                     .foregroundStyle(Theme.Color.appText)
                 Spacer()
                 if isOn {
-                    Icon(.checkCircle, size: 20, color: Theme.Color.primary600)
+                    Icon(.checkCircle, size: 20, color: Theme.Color.primaryInk)
                 } else {
                     Circle()
                         .stroke(Theme.Color.appBorder, lineWidth: 1)

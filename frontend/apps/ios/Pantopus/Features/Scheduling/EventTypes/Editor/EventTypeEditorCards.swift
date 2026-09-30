@@ -46,7 +46,7 @@ struct StripeConnectCard: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
                 .frame(maxWidth: .infinity, minHeight: 38)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

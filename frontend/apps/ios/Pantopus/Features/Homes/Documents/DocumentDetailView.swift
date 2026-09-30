@@ -633,10 +633,10 @@ private struct UnsupportedPreview: View {
                 .padding(.horizontal, Spacing.s5)
             Button(action: onOpenExternally) {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.externalLink, size: 14, color: Theme.Color.primary600)
+                    Icon(.externalLink, size: 14, color: Theme.Color.primaryInk)
                     Text("Open externally")
                         .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)

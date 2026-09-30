@@ -137,7 +137,7 @@ struct BookingLandingView: View {
 
     private var openInAppBanner: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.smartphone, size: 16, color: Theme.Color.primary600)
+            Icon(.smartphone, size: 16, color: Theme.Color.primaryInk)
                 .frame(width: 30, height: 30)
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -153,7 +153,7 @@ struct BookingLandingView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s2)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -197,7 +197,7 @@ struct BookingLandingView: View {
 
     private func inlineNote(_ text: String) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.arrowRightCircle, size: 14, color: Theme.Color.primary600)
+            Icon(.arrowRightCircle, size: 14, color: Theme.Color.primaryInk)
             Text(text)
                 .pantopusTextStyle(.caption)
                 .fontWeight(.semibold)
@@ -244,8 +244,8 @@ struct BookingLandingView: View {
                         Text("View \(firstName)'s profile")
                             .pantopusTextStyle(.caption)
                             .fontWeight(.bold)
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.arrowUpRight, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.arrowUpRight, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -309,7 +309,7 @@ struct BookingLandingView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 240)
             Button { Task { await viewModel.refresh() } } label: {
-                Text("Try again").pantopusTextStyle(.small).fontWeight(.bold).foregroundStyle(Theme.Color.primary600)
+                Text("Try again").pantopusTextStyle(.small).fontWeight(.bold).foregroundStyle(Theme.Color.primaryInk)
             }
             .buttonStyle(.plain)
             .padding(.top, Spacing.s2)

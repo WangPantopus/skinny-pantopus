@@ -209,7 +209,7 @@ public struct StatsTabsBody: View {
                     .font(.system(size: PantopusTextStyle.small.size, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity, minHeight: 42)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
             }
             .buttonStyle(.plain)

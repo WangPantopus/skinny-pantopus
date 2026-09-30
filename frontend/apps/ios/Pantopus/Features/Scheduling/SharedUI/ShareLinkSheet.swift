@@ -210,7 +210,7 @@ public struct ShareLinkSheet: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(copied ? Theme.Color.successSolid : Theme.Color.primary600)
+                .background(copied ? Theme.Color.successSolid : Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .pantopusShadow(PantopusShadow.md)
             }
@@ -250,7 +250,7 @@ public struct ShareLinkSheet: View {
                         )
                         .frame(width: 52, height: 52)
                         .pantopusShadow(PantopusShadow.sm)
-                    Icon(icon, size: 21, strokeWidth: 2, color: Theme.Color.primary600)
+                    Icon(icon, size: 21, strokeWidth: 2, color: Theme.Color.primaryInk)
                 }
                 Text(label)
                     .font(.system(size: 10.5, weight: .semibold))
@@ -389,7 +389,7 @@ public struct ShareLinkSheet: View {
                 Spacer()
                 Button("Done") { showQR = false }
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)

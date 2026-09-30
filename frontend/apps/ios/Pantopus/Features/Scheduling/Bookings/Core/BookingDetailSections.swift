@@ -58,7 +58,7 @@ extension BookingDetailView {
             .map(String.init)
         let subject = first.flatMap { $0.isEmpty ? nil : $0 } ?? "them"
         return HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(.sparkles, size: 16, color: Theme.Color.primary600)
+            Icon(.sparkles, size: 16, color: Theme.Color.primaryInk)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Send a follow-up")
@@ -126,7 +126,7 @@ extension BookingDetailView {
                 // icon button in the brand blue. Routes to the (deferred) message
                 // handler.
                 Button { viewModel.message() } label: {
-                    Icon(.messageCircle, size: 17, color: Theme.Color.primary600)
+                    Icon(.messageCircle, size: 17, color: Theme.Color.primaryInk)
                         .frame(width: 36, height: 36)
                         .background(Theme.Color.appSurface)
                         .overlay(

@@ -63,10 +63,10 @@ public struct PackageGigView: View {
         HStack(spacing: Spacing.s1) {
             Button(action: { viewModel.tapBack() }, label: {
                 HStack(spacing: Spacing.s0) {
-                    Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                     Text("Mailbox")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(minHeight: 44)
             })

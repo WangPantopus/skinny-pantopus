@@ -116,7 +116,7 @@ struct SignUpView: View {
     /// (`pantopus/frontend/apps/mobile/src/app/(auth)/register.tsx:174`).
     private var invitedNote: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.userPlus, size: 16, color: Theme.Color.primary600)
+            Icon(.userPlus, size: 16, color: Theme.Color.primaryInk)
             Text("You've been invited to join Pantopus!")
                 .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appText)

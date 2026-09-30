@@ -192,10 +192,10 @@ private struct EventDetailsCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 HStack(spacing: 3) {
-                    Icon(.navigation, size: 11, color: Theme.Color.primary600)
+                    Icon(.navigation, size: 11, color: Theme.Color.primaryInk)
                     Text(party.event.walkLabel)
                         .font(.system(size: 10.5, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             .padding(.horizontal, Spacing.s3)

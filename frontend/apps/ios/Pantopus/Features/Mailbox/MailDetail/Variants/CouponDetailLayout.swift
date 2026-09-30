@@ -328,7 +328,7 @@ private struct CouponActionsRow: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .opacity(redeemInFlight ? 0.6 : 1)
         }

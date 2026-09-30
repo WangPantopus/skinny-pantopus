@@ -688,7 +688,7 @@ private struct DetectedCategoryRow: View {
             Button(action: onChange) {
                 Text("Change")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("gigCompose.detected.change")
@@ -817,14 +817,14 @@ private struct EngagementModeControl: View {
                                 option.icon,
                                 size: 16,
                                 strokeWidth: 2.2,
-                                color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                                color: active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                             )
                             Text(option.label)
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(active ? Theme.Color.primary700 : Theme.Color.appText)
                             Text(option.subcopy)
                                 .font(.system(size: 10))
-                                .foregroundStyle(active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                                .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.s2)

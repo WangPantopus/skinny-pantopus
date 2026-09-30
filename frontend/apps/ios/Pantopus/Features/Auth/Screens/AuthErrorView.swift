@@ -144,7 +144,7 @@ struct AuthPrimaryButtonStyle: ButtonStyle {
             .tracking(PantopusTextStyle.body.tracking)
             .foregroundStyle(Theme.Color.appTextInverse)
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .opacity(configuration.isPressed ? 0.85 : 1)
     }

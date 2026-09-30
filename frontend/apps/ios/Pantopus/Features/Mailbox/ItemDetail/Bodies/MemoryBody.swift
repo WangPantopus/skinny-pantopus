@@ -248,7 +248,7 @@ private struct MemoryFactsCard: View {
                 if showHint, let hint = fact.linkHint {
                     Text(hint)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             Spacer(minLength: Spacing.s0)

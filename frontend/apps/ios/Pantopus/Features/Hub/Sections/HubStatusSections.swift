@@ -150,10 +150,10 @@ struct HubNeighborDensitySection: View {
             if showsMilestone, let milestone = content.milestone {
                 Button { dismiss() } label: {
                     HStack(spacing: Spacing.s2) {
-                        Icon(.partyPopper, size: 16, color: Theme.Color.primary600)
+                        Icon(.partyPopper, size: 16, color: Theme.Color.primaryInk)
                         Text(milestone)
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .lineLimit(2)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Icon(.x, size: 16, color: Theme.Color.appTextMuted)

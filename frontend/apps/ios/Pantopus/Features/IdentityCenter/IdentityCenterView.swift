@@ -291,7 +291,7 @@ public struct IdentityCenterView: View {
 
     private func firstRunHintCard(remaining: Int) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.info, size: 14, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(.info, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             Text(remaining == 1 ? "One more profile to go" : "\(remaining) more profiles to go")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.Color.primary700)
@@ -315,7 +315,7 @@ public struct IdentityCenterView: View {
                     onOpenRow(row)
                 } label: {
                     HStack(spacing: Spacing.s3) {
-                        Icon(row.icon, size: 18, color: Theme.Color.primary600)
+                        Icon(row.icon, size: 18, color: Theme.Color.primaryInk)
                             .frame(width: 24, height: 24)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.label)
@@ -387,7 +387,7 @@ public struct IdentityCenterView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

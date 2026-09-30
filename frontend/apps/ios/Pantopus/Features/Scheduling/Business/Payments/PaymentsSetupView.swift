@@ -264,15 +264,15 @@ extension PaymentsSetupView {
                     if model.connecting {
                         ProgressView().tint(Theme.Color.primary600)
                     } else {
-                        Icon(connectIcon, size: 16, color: Theme.Color.primary600)
+                        Icon(connectIcon, size: 16, color: Theme.Color.primaryInk)
                     }
                 }
                 .frame(width: 32, height: 32)
                 Text(connectLabel)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 Spacer(minLength: Spacing.s2)
-                Icon(.chevronRight, size: 16, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 16, color: Theme.Color.primaryInk)
                     .opacity(0.6)
             }
             .padding(.vertical, 11)

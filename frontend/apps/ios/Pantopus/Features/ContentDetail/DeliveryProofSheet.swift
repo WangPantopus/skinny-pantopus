@@ -338,7 +338,7 @@ public struct DeliveryProofSheetView: View {
             .frame(height: 50)
             .background(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(canSubmit ? Theme.Color.primary600 : Theme.Color.primary200)
+                    .fill(canSubmit ? Theme.Color.primarySolid : Theme.Color.primary200)
             )
         }
         .buttonStyle(.plain)
@@ -392,7 +392,7 @@ extension DeliveryProofSheetView {
                 .frame(height: 50)
                 .background(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(Theme.Color.primary600)
+                        .fill(Theme.Color.primarySolid)
                 )
             }
             .buttonStyle(.plain)

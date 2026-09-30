@@ -102,7 +102,7 @@ public struct MonthlyReceiptCard: View {
     private var header: some View {
         Button { isExpanded.toggle() } label: {
             HStack(spacing: Spacing.s2) {
-                Icon(.barChart3, size: 18, color: Theme.Color.primary600)
+                Icon(.barChart3, size: 18, color: Theme.Color.primaryInk)
                 Text("\(receipt.period.label) Summary")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
@@ -236,10 +236,10 @@ public struct MonthlyReceiptCard: View {
     private var shareButton: some View {
         Button(action: onShare) {
             HStack(spacing: Spacing.s2) {
-                Icon(.share, size: 16, color: Theme.Color.primary600)
+                Icon(.share, size: 16, color: Theme.Color.primaryInk)
                 Text("Share your month")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.s3)
@@ -400,7 +400,7 @@ public struct InviteProgressCard: View {
             .padding(.vertical, Spacing.s3)
             .background(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.primary600)
+                    .fill(Theme.Color.primarySolid)
             )
             .contentShape(Rectangle())
         }

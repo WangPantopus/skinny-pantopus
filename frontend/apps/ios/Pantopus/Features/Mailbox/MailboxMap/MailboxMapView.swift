@@ -473,7 +473,7 @@ public struct MailboxMapView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 38)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -666,7 +666,7 @@ public struct MailboxMapView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .shadow(color: Theme.Color.primary600.opacity(0.32), radius: 8, x: 0, y: 6)
             }
@@ -965,7 +965,7 @@ private struct MailboxSpotCard: View {
                 Button(action: onDirections) {
                     Icon(.navigation, size: 16, strokeWidth: 2.2, color: active ? Theme.Color.appTextInverse : Theme.Color.primary700)
                         .frame(width: 36, height: 36)
-                        .background(active ? Theme.Color.primary600 : Theme.Color.primary50)
+                        .background(active ? Theme.Color.primarySolid : Theme.Color.primary50)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(active ? Color.clear : Theme.Color.primary200, lineWidth: 1)

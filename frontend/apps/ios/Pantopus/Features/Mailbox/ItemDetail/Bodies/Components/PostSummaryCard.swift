@@ -49,10 +49,10 @@ public struct PostSummaryCard: View {
             GigSectionLabel(text: "YOUR GIG")
             Spacer()
             HStack(spacing: 3) {
-                Icon(.externalLink, size: 11, color: Theme.Color.primary600)
+                Icon(.externalLink, size: 11, color: Theme.Color.primaryInk)
                 Text("Open gig")
                     .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .padding(.horizontal, Spacing.s3)

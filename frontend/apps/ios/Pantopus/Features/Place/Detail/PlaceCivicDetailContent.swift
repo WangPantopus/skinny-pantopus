@@ -127,7 +127,7 @@ private struct RepRow: View {
 
     private func contactButton(_ icon: PantopusIcon, url: URL) -> some View {
         Link(destination: url) {
-            Icon(icon, size: 15, strokeWidth: 2, color: Theme.Color.primary600)
+            Icon(icon, size: 15, strokeWidth: 2, color: Theme.Color.primaryInk)
                 .frame(width: 30, height: 30)
                 .background(Theme.Color.primary100)
                 .clipShape(Circle())

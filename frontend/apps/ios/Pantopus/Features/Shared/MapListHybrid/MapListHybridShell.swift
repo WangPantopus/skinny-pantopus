@@ -478,7 +478,7 @@ struct MapListHybridClusterDot: View {
             .font(.system(size: 12, weight: .bold))
             .foregroundStyle(Theme.Color.appTextInverse)
             .frame(width: 28, height: 28)
-            .background(Circle().fill(Theme.Color.primary600))
+            .background(Circle().fill(Theme.Color.primarySolid))
             .overlay(Circle().stroke(Color.white, lineWidth: 2))
             .shadow(color: .black.opacity(0.30), radius: 4, x: 0, y: 2)
     }

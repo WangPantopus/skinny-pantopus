@@ -199,10 +199,10 @@ struct PlaceTextButton: View {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                 if arrow {
-                    Icon(.arrowRight, size: 15, strokeWidth: 2.25, color: Theme.Color.primary600)
+                    Icon(.arrowRight, size: 15, strokeWidth: 2.25, color: Theme.Color.primaryInk)
                 }
             }
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
         }
         .buttonStyle(.plain)
     }

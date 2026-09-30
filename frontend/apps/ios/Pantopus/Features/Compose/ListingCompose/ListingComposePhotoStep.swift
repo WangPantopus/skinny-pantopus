@@ -159,7 +159,7 @@ private struct SnapCoachingBanner: View {
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.sparkles, size: 14, color: Theme.Color.primary600)
+            Icon(.sparkles, size: 14, color: Theme.Color.primaryInk)
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
@@ -410,7 +410,7 @@ private struct HeroChip: View {
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s1)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
     }
 }

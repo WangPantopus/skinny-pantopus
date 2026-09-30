@@ -142,7 +142,7 @@ public struct UniversalSearchView: View {
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                 .padding(.horizontal, 14)
                 .frame(height: 28)
-                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                         .stroke(isActive ? .clear : Theme.Color.appBorder, lineWidth: 1)

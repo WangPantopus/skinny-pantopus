@@ -102,7 +102,7 @@ private struct DayCopyPopover: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 34)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -231,10 +231,10 @@ struct WeekdayHoursRow: View {
     private var addBlockButton: some View {
         Button(action: onAddRange) {
             HStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+                Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                 Text("Add a block")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .buttonStyle(.plain)
@@ -346,7 +346,7 @@ struct WeeklyHoursEmptyHero: View {
     var body: some View {
         AvailabilityCard {
             VStack(spacing: Spacing.s3) {
-                Icon(.calendarClock, size: 26, strokeWidth: 1.9, color: Theme.Color.primary600)
+                Icon(.calendarClock, size: 26, strokeWidth: 1.9, color: Theme.Color.primaryInk)
                     .frame(width: 54, height: 54)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))

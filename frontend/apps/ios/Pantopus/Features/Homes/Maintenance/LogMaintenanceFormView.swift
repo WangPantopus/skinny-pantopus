@@ -546,10 +546,10 @@ private struct ReceiptGroup: View {
                 } else {
                     Button(action: onPick) {
                         HStack(spacing: Spacing.s2) {
-                            Icon(.paperclip, size: 18, color: Theme.Color.primary600)
+                            Icon(.paperclip, size: 18, color: Theme.Color.primaryInk)
                             Text("Attach receipt (PDF or image)")
                                 .pantopusTextStyle(.body)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                             Spacer()
                         }
                         .padding(Spacing.s3)

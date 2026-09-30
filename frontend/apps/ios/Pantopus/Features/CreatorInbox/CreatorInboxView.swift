@@ -165,7 +165,7 @@ public struct CreatorInboxView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -181,7 +181,7 @@ public struct CreatorInboxView: View {
 
     private func countsBanner(_ counts: CreatorInboxCounts) -> some View {
         HStack(spacing: 14) {
-            Icon(.inbox, size: 15, color: Theme.Color.primary600)
+            Icon(.inbox, size: 15, color: Theme.Color.primaryInk)
             HStack(spacing: Spacing.s0) {
                 Text("\(counts.total)")
                     .font(.system(size: 12.5, weight: .bold))
@@ -207,8 +207,8 @@ public struct CreatorInboxView: View {
                 HStack(spacing: 2) {
                     Text("Settings")
                         .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
-                    Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                    Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                 }
             }
             .buttonStyle(.plain)
@@ -261,7 +261,7 @@ public struct CreatorInboxView: View {
             .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
-            .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .overlay(
                 Capsule().stroke(
                     isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -348,7 +348,7 @@ public struct CreatorInboxView: View {
                 Circle()
                     .fill(Theme.Color.primary50)
                     .frame(width: 88, height: 88)
-                Icon(.inbox, size: 38, strokeWidth: 1.7, color: Theme.Color.primary600)
+                Icon(.inbox, size: 38, strokeWidth: 1.7, color: Theme.Color.primaryInk)
             }
             VStack(spacing: Spacing.s2) {
                 Text("No DM threads yet")
@@ -412,7 +412,7 @@ public struct CreatorInboxView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                         .fill(Theme.Color.primary50)
-                    Icon(prompt.icon, size: 16, color: Theme.Color.primary600)
+                    Icon(prompt.icon, size: 16, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 1) {
@@ -428,8 +428,8 @@ public struct CreatorInboxView: View {
                 HStack(spacing: 2) {
                     Text(prompt.cta)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
-                    Icon(.arrowRight, size: 11, color: Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                    Icon(.arrowRight, size: 11, color: Theme.Color.primaryInk)
                 }
             }
             .padding(.horizontal, 14)
@@ -449,7 +449,7 @@ public struct CreatorInboxView: View {
 
     private var emptyFootnote: some View {
         HStack(spacing: 6) {
-            Icon(.shieldCheck, size: 12, color: Theme.Color.primary600)
+            Icon(.shieldCheck, size: 12, color: Theme.Color.primaryInk)
             // The real gate: a membership on a tier that includes messages.
             Text("Only members on a tier with messaging can message you.")
                 .font(.system(size: 11))
@@ -513,7 +513,7 @@ public struct CreatorInboxView: View {
             if row.verifiedLocal {
                 Icon(.check, size: 8, strokeWidth: 4, color: Theme.Color.appTextInverse)
                     .frame(width: 16, height: 16)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 1, y: 1)
@@ -543,7 +543,7 @@ public struct CreatorInboxView: View {
                 Spacer(minLength: Spacing.s0)
                 Text(row.timeAgo)
                     .font(.system(size: 10.5, weight: row.unread ? .bold : .medium))
-                    .foregroundStyle(row.unread ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                    .foregroundStyle(row.unread ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                     .lineLimit(1)
             }
             Text(row.preview)

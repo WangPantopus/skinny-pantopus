@@ -145,7 +145,7 @@ struct FeedMapView: View {
             }
             .padding(.horizontal, Spacing.s4)
             .frame(height: 38)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
             .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 4)
         }
@@ -242,7 +242,7 @@ struct FeedMapView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 40)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -263,7 +263,7 @@ struct FeedMapView: View {
 
     private func emptyCard(hasHint: Bool) -> some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.mapPinOff, size: 22, color: Theme.Color.primary600)
+            Icon(.mapPinOff, size: 22, color: Theme.Color.primaryInk)
             Text("No posts in this area")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
@@ -284,7 +284,7 @@ struct FeedMapView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s5)
                         .frame(height: 40)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

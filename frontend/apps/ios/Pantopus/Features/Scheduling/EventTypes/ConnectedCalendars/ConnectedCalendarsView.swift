@@ -160,7 +160,7 @@ struct ConnectedCalendarsView: View {
                 RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                     .fill(Theme.Color.primary50)
                     .frame(width: 54, height: 54)
-                Icon(.calendarSync, size: 26, strokeWidth: 1.9, color: Theme.Color.primary600)
+                Icon(.calendarSync, size: 26, strokeWidth: 1.9, color: Theme.Color.primaryInk)
             }
             Text("Calendar sync is coming soon")
                 .pantopusTextStyle(.h3)
@@ -226,7 +226,7 @@ struct ConnectedCalendarsView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .frame(height: 32)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -466,7 +466,7 @@ struct ConnectedCalendarsView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 38)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -533,10 +533,10 @@ struct ConnectedCalendarsView: View {
                         }
                     } label: {
                         HStack(spacing: Spacing.s1) {
-                            Icon(.settings, size: 13, color: Theme.Color.primary600)
+                            Icon(.settings, size: 13, color: Theme.Color.primaryInk)
                             Text("Open Settings")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                     }
                     .buttonStyle(.plain)

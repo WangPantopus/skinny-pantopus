@@ -254,7 +254,7 @@ public struct FindHomeView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -268,10 +268,10 @@ public struct FindHomeView: View {
     private var addMissingLink: some View {
         Button { viewModel.addMissingHome() } label: {
             HStack(spacing: Spacing.s2) {
-                Icon(.plusCircle, size: 16, color: Theme.Color.primary600)
+                Icon(.plusCircle, size: 16, color: Theme.Color.primaryInk)
                 Text("Add missing address")
                     .pantopusTextStyle(.body)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s4)
             .frame(height: 44)
@@ -290,15 +290,15 @@ public struct FindHomeView: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Button { viewModel.toggleInviteSection() } label: {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.scanLine, size: 18, color: Theme.Color.primary600)
+                    Icon(.scanLine, size: 18, color: Theme.Color.primaryInk)
                     Text("Have an invite code?")
                         .pantopusTextStyle(.body)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     Spacer(minLength: Spacing.s0)
                     Icon(
                         viewModel.isInviteSectionExpanded ? .chevronUp : .chevronDown,
                         size: 16,
-                        color: Theme.Color.primary600
+                        color: Theme.Color.primaryInk
                     )
                 }
                 .frame(minHeight: 44)

@@ -104,7 +104,7 @@ public struct MapListHybridPreviewHost: View {
                         .foregroundStyle(stop == detent ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                         .padding(.horizontal, Spacing.s3)
                         .frame(height: 28)
-                        .background(stop == detent ? Theme.Color.primary600 : Theme.Color.appSurface)
+                        .background(stop == detent ? Theme.Color.primarySolid : Theme.Color.appSurface)
                         .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
                         .clipShape(Capsule())
                 }
@@ -336,7 +336,7 @@ private struct PreviewCard: View {
                     .multilineTextAlignment(.leading)
                 Text("$60 · 0.2 mi")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .padding(Spacing.s3)
@@ -371,7 +371,7 @@ private struct PreviewRow: View {
                     .lineLimit(2)
                 Text("$60 · 0.2 mi")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             Spacer(minLength: Spacing.s0)
         }

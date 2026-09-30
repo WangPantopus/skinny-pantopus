@@ -377,7 +377,7 @@ struct WizardTimezoneChip: View {
                 Text("AUTO")
                     .font(.system(size: 9.5, weight: .bold))
                     .tracking(0.4)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(Theme.Color.appSurface)

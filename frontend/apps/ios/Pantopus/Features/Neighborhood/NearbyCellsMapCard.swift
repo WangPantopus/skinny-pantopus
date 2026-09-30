@@ -23,7 +23,7 @@ struct NearbyCellsMapCard: View {
                     ForEach(cells.cells) { cell in
                         if let coordinates = corners(of: cell) {
                             MapPolygon(coordinates: coordinates)
-                                .foregroundStyle(Theme.Color.primary600.opacity(neighborhoodCellFillAlpha(cell.bucket)))
+                                .foregroundStyle(Theme.Color.primaryInk.opacity(neighborhoodCellFillAlpha(cell.bucket)))
                                 .stroke(
                                     cell.isHome ? Theme.Color.appText : Theme.Color.primary600.opacity(0.6),
                                     lineWidth: cell.isHome ? 2.5 : 1

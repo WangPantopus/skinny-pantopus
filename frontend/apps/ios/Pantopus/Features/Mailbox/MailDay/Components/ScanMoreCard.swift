@@ -32,7 +32,7 @@ struct ScanMoreCard: View {
                         .foregroundStyle(Theme.Color.primary700.opacity(0.75))
                 }
                 Spacer(minLength: Spacing.s0)
-                Icon(.camera, size: 18, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.camera, size: 18, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, Spacing.s3)

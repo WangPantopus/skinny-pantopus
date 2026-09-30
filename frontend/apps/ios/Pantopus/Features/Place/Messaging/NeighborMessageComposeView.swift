@@ -121,7 +121,7 @@ private struct ComposeRecipientCard: View {
             Spacer(minLength: 0)
             Button("Change", action: onChange)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .buttonStyle(.plain)
         }
         .padding(14)
@@ -145,7 +145,7 @@ private struct ChooseNeighborCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Back to your block", action: onBack)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .buttonStyle(.plain)
                     .padding(.top, 4)
             }
@@ -408,7 +408,7 @@ private struct SendBar: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(enabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                .background(enabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -457,7 +457,7 @@ private struct SentConfirmation: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, 20)
                         .frame(height: 44)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)

@@ -216,7 +216,7 @@ struct BuyPackageView: View {
             (
                 Text("We'll send your receipt and credits here. ")
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                    + Text("Sign in").foregroundStyle(Theme.Color.primary600).fontWeight(.bold)
+                    + Text("Sign in").foregroundStyle(Theme.Color.primaryInk).fontWeight(.bold)
             )
             .font(.system(size: 10.5))
             .frame(maxWidth: .infinity, alignment: .leading)

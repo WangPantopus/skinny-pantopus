@@ -355,7 +355,7 @@ public struct ChatConversationView: View {
                 HStack(spacing: 10) {
                     Icon(.hammer, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
                         .frame(width: 28, height: 28)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(context.title)
@@ -1132,7 +1132,7 @@ extension ChatConversationView {
                     isSelected ? .checkCircle : .circle,
                     size: 20,
                     strokeWidth: 2,
-                    color: isSelected ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                    color: isSelected ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                 )
                 .frame(width: 28, height: 28)
                 .opacity(selectable ? 1 : 0)
@@ -1204,7 +1204,7 @@ extension ChatConversationView {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -1264,10 +1264,10 @@ private struct FanMembershipStripe: View {
             Button(action: onManage) {
                 HStack(spacing: 3) {
                     Text("Manage")
-                    Icon(.chevronRight, size: 11, strokeWidth: 2.5, color: Theme.Color.primary600)
+                    Icon(.chevronRight, size: 11, strokeWidth: 2.5, color: Theme.Color.primaryInk)
                 }
                 .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -1315,10 +1315,10 @@ private struct FanQuotaGate: View {
             Button(action: onUpgrade) {
                 HStack(spacing: 3) {
                     Text("Upgrade")
-                    Icon(.arrowUpRight, size: 11, strokeWidth: 2.5, color: Theme.Color.primary600)
+                    Icon(.arrowUpRight, size: 11, strokeWidth: 2.5, color: Theme.Color.primaryInk)
                 }
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -1356,7 +1356,7 @@ private struct FanQuotaHero: View {
                 .foregroundStyle(Theme.Color.primary300)
             Text(entitlement.resetCopy)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, 6)
@@ -1453,7 +1453,7 @@ struct FanTierUpgradePromptSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HStack(spacing: Spacing.s3) {
-                Icon(.lock, size: 20, color: Theme.Color.primary600)
+                Icon(.lock, size: 20, color: Theme.Color.primaryInk)
                     .frame(width: 44, height: 44)
                     .background(Theme.Color.primary50)
                     .clipShape(Circle())
@@ -1479,7 +1479,7 @@ struct FanTierUpgradePromptSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -1499,7 +1499,7 @@ private struct FanUpgradeBenefit: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Icon(icon, size: 14, color: Theme.Color.primary600)
+            Icon(icon, size: 14, color: Theme.Color.primaryInk)
                 .frame(width: 28, height: 28)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -2226,7 +2226,7 @@ private struct ChatSelectionTopBar: View {
             Button(action: onCancel) {
                 Text("Cancel")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -2624,7 +2624,7 @@ private struct ChatBubbleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(reply.senderName)
                     .font(.system(size: 10.5, weight: .bold))
-                    .foregroundStyle(content.side == .outgoing ? Theme.Color.appTextInverse.opacity(0.9) : Theme.Color.primary600)
+                    .foregroundStyle(content.side == .outgoing ? Theme.Color.appTextInverse.opacity(0.9) : Theme.Color.primaryInk)
                 Text(reply.text)
                     .font(.system(size: 11))
                     .lineLimit(2)
@@ -2865,7 +2865,7 @@ private struct ChatBubbleRow: View {
 
     private func attachmentFileRow(filename: String, sizeLabel: String?) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.file, size: 18, color: Theme.Color.primary600)
+            Icon(.file, size: 18, color: Theme.Color.primaryInk)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
                     .font(.system(size: 13, weight: .semibold))
@@ -2916,10 +2916,10 @@ private struct ChatBubbleRow: View {
             Spacer(minLength: Spacing.s3)
             Button(action: onLockedAction) {
                 HStack(spacing: 6) {
-                    Icon(.lock, size: 12, strokeWidth: 2.6, color: Theme.Color.primary600)
+                    Icon(.lock, size: 12, strokeWidth: 2.6, color: Theme.Color.primaryInk)
                     Text("Upgrade to read")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     Text(tier)
                         .font(.system(size: 10.5, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
@@ -3027,11 +3027,11 @@ private struct ChatBubbleRow: View {
     /// uppercase, primary600 on primary50.
     private var aiTag: some View {
         HStack(spacing: Spacing.s1) {
-            Icon(.sparkles, size: 9, strokeWidth: 3, color: Theme.Color.primary600)
+            Icon(.sparkles, size: 9, strokeWidth: 3, color: Theme.Color.primaryInk)
             Text("PANTOPUS AI")
                 .font(.system(size: 9.5, weight: .bold))
                 .tracking(0.5)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 1)
@@ -3334,7 +3334,7 @@ private struct ChatAIThinkingRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Icon(.sparkles, size: 14, color: Theme.Color.primary600)
+            Icon(.sparkles, size: 14, color: Theme.Color.primaryInk)
                 .opacity(pulsing ? 1 : 0.55)
                 .scaleEffect(pulsing ? 1.12 : 1)
                 .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulsing)
@@ -3469,7 +3469,7 @@ private struct AttachmentTile: View {
                 .accessibilityLabel("Queued image \(attachment.filename)")
         case .document:
             VStack(spacing: 3) {
-                Icon(.fileText, size: 22, color: Theme.Color.primary600)
+                Icon(.fileText, size: 22, color: Theme.Color.primaryInk)
                 Text(attachment.filename)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextStrong)
@@ -3702,7 +3702,7 @@ private struct ChatTopicStrip: View {
                 Icon(icon, size: 12, strokeWidth: 2.4, color: selected ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
                 Text(title)
                     .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                    .foregroundStyle(selected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)

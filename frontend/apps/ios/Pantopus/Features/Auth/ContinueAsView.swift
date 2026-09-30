@@ -103,7 +103,7 @@ struct ContinueAsView: View {
         VStack(spacing: Spacing.s2) {
             PantopusLockup(size: 36)
             Text("Welcome back", style: .overline)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .tracking(1.2)
         }
     }
@@ -189,7 +189,7 @@ struct ContinueAsView: View {
                 Text("Use a different account")
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)

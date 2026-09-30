@@ -25,7 +25,7 @@ struct FilterChipGroupControl: View {
                 } label: {
                     Text(option.label)
                         .font(.system(size: 14, weight: isOn ? .semibold : .regular))
-                        .foregroundStyle(isOn ? Theme.Color.primary600 : Theme.Color.appText)
+                        .foregroundStyle(isOn ? Theme.Color.primaryInk : Theme.Color.appText)
                         .padding(.horizontal, Spacing.s3)
                         .frame(minHeight: 36)
                         .background(isOn ? Theme.Color.primary50 : Theme.Color.appSurface)
@@ -66,7 +66,7 @@ struct FilterSingleChipControl: View {
                 } label: {
                     Text(option.label)
                         .font(.system(size: 14, weight: isOn ? .semibold : .regular))
-                        .foregroundStyle(isOn ? Theme.Color.primary600 : Theme.Color.appText)
+                        .foregroundStyle(isOn ? Theme.Color.primaryInk : Theme.Color.appText)
                         .padding(.horizontal, Spacing.s3)
                         .frame(minHeight: 36)
                         .background(isOn ? Theme.Color.primary50 : Theme.Color.appSurface)
@@ -294,7 +294,7 @@ struct FilterStepSliderControl: View {
                 Spacer()
                 Text(currentStop?.label ?? "")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("filterStepSliderValue_\(sectionId)")
                 Spacer()
                 Text(stops.last?.label ?? "")

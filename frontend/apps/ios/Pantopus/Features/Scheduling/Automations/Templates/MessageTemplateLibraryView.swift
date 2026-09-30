@@ -32,7 +32,7 @@ struct MessageTemplateLibraryView: View {
                 onLeading: { dismiss() },
                 trailing: AnyView(
                     Button { withAnimation { model.searchActive.toggle() } } label: {
-                        Icon(.search, size: 18, color: Theme.Color.primary600)
+                        Icon(.search, size: 18, color: Theme.Color.primaryInk)
                     }
                     .accessibilityLabel("Search templates")
                 )

@@ -38,7 +38,7 @@ public struct FABCreateCTA: View {
         Button { sheetVisible = true } label: {
             Icon(.plusCircle, size: 26, color: Theme.Color.appTextInverse)
                 .frame(width: 56, height: 56)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Circle())
                 .pantopusShadow(.primary)
         }
@@ -68,7 +68,7 @@ private struct FABSheet: View {
             ForEach(actions) { action in
                 Button { onSelect(action.id) } label: {
                     HStack(spacing: Spacing.s3) {
-                        Icon(action.icon, size: 20, color: Theme.Color.primary600)
+                        Icon(action.icon, size: 20, color: Theme.Color.primaryInk)
                             .frame(width: 36, height: 36)
                             .background(Theme.Color.primary100)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.sm))

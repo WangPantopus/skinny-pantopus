@@ -54,7 +54,7 @@ struct GigOwnerBidsPanel: View {
                     }
                     Button(isRefreshing ? "Retrying…" : "Retry", action: onRetry)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .disabled(isRefreshing)
                         .accessibilityIdentifier("gigDetail.bids.retry")
                 }
@@ -136,7 +136,7 @@ struct GigOwnerBidsPanel: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                     if bid.bidder?.resolvedVerified == true {
-                        Icon(.shieldCheck, size: 12, strokeWidth: 2.4, color: Theme.Color.primary600)
+                        Icon(.shieldCheck, size: 12, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                     }
                 }
                 if let age = Self.relativeAge(bid.createdAt) {
@@ -165,7 +165,7 @@ struct GigOwnerBidsPanel: View {
             }
             Text(Self.amountLabel(bid.bidAmount ?? bid.amount ?? 0))
                 .font(.system(size: 15, weight: .heavy).monospacedDigit())
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
     }
 
@@ -606,7 +606,7 @@ struct GigActiveTaskPanel: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 40)
-            .background(onCooldown ? Theme.Color.appSurfaceSunken : Theme.Color.primary600)
+            .background(onCooldown ? Theme.Color.appSurfaceSunken : Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -629,7 +629,7 @@ struct GigActiveTaskPanel: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 40)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -669,7 +669,7 @@ struct GigReviewSection: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -904,10 +904,10 @@ struct GigCancelSheet: View {
                 if preview?.canReschedule == true, let onReschedule {
                     Button(action: onReschedule) {
                         HStack(spacing: 6) {
-                            Icon(.calendar, size: 14, strokeWidth: 2.2, color: Theme.Color.primary600)
+                            Icon(.calendar, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                             Text("Reschedule instead")
                                 .font(.system(size: 13.5, weight: .bold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
@@ -1305,7 +1305,7 @@ struct GigChangesCard: View {
                 if let delta = Self.deltaLabel(order) {
                     Text(delta)
                         .font(.system(size: 13, weight: .heavy).monospacedDigit())
-                        .foregroundStyle((order.amountChange ?? 0) < 0 ? Theme.Color.success : Theme.Color.primary600)
+                        .foregroundStyle((order.amountChange ?? 0) < 0 ? Theme.Color.success : Theme.Color.primaryInk)
                 }
                 Spacer()
                 statusChip(status)
@@ -1377,10 +1377,10 @@ struct GigChangesCard: View {
     private var proposeButton: some View {
         Button(action: onPropose) {
             HStack(spacing: 6) {
-                Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primary600)
+                Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                 Text("Propose a change")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 40)
@@ -1615,7 +1615,7 @@ struct GigChangeOrderSheet: View {
                 Button { amountIsDecrease.toggle() } label: {
                     Text(amountIsDecrease ? "−" : "+")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(amountIsDecrease ? Theme.Color.success : Theme.Color.primary600)
+                        .foregroundStyle(amountIsDecrease ? Theme.Color.success : Theme.Color.primaryInk)
                         .frame(width: 44, height: 48)
                         .background(Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -1795,7 +1795,7 @@ private struct RadioRow: View {
                     .foregroundStyle(Theme.Color.appText)
                 Spacer()
                 if selected {
-                    Icon(.check, size: 18, color: Theme.Color.primary600)
+                    Icon(.check, size: 18, color: Theme.Color.primaryInk)
                 }
             }
             .padding(Spacing.s3)

@@ -143,7 +143,7 @@ public struct FeedChipRow: View {
                         .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(active ? Theme.Color.primary600 : Theme.Color.appSurface)
+                        .background(active ? Theme.Color.primarySolid : Theme.Color.appSurface)
                         .overlay(
                             RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                                 .stroke(active ? .clear : Theme.Color.appBorder, lineWidth: 1)
@@ -178,7 +178,7 @@ public struct FeedComposeFAB: View {
         Button(action: action) {
             Icon(.pencil, size: 20, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
                 .frame(width: 52, height: 52)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Circle())
                 .shadow(color: Theme.Color.primary600.opacity(0.36), radius: 12, x: 0, y: 8)
         }

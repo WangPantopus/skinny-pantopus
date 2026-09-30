@@ -218,7 +218,7 @@ public struct SavePlaceSheet: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.primary600))
+            .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.primarySolid))
         }
         .buttonStyle(.plain)
         .padding(.top, Spacing.s1)

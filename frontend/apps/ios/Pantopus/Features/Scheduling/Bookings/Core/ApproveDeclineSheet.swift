@@ -175,10 +175,10 @@ struct ApproveDeclineSheet: View {
             if let onProposeTime {
                 Button(action: onProposeTime) {
                     HStack(spacing: Spacing.s2) {
-                        Icon(.calendarPlus, size: 15, color: Theme.Color.primary600)
+                        Icon(.calendarPlus, size: 15, color: Theme.Color.primaryInk)
                         Text("Propose another time")
                             .font(.system(size: 12.5, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)

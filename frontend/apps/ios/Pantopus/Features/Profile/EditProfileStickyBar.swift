@@ -142,7 +142,7 @@ struct EditProfileStickyBar: View {
             .frame(minWidth: 86, minHeight: 42)
         }
         .buttonStyle(.plain)
-        .background(saveUsesPrimaryPose ? Theme.Color.primary600 : Theme.Color.appBorder)
+        .background(saveUsesPrimaryPose ? Theme.Color.primarySolid : Theme.Color.appBorder)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .disabled(!canSave)
         .accessibilityLabel("Save")

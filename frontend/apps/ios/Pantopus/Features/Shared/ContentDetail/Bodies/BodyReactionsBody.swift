@@ -309,7 +309,7 @@ public struct BodyReactionsBody: View {
                         } label: {
                             Text("View \(hiddenReplyCount) more \(hiddenReplyCount == 1 ? "reply" : "replies")")
                                 .font(.system(size: PantopusTextStyle.small.size, weight: .semibold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                                 .frame(minHeight: 44)
                         }
                         .buttonStyle(.plain)

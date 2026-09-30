@@ -216,7 +216,7 @@ public struct LeaveReviewSheetView: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(canSubmit ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                        .fill(canSubmit ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 )
             }
             .buttonStyle(.plain)

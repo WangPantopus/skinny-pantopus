@@ -125,9 +125,9 @@ public struct CertifiedTermsSummaryCard: View {
                     HStack(spacing: Spacing.s1) {
                         Text("Review full terms")
                             .font(.system(size: 12, weight: .semibold))
-                        Icon(.chevronRight, size: 13, color: Theme.Color.primary600)
+                        Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 44, alignment: .leading)
                 }
                 .buttonStyle(.plain)

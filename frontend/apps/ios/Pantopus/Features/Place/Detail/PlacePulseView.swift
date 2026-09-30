@@ -167,7 +167,7 @@ private struct SignalCard: View {
                     if let action = signal.actions?.first {
                         Text(action.label)
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .padding(.top, 2)
                     }
                 }

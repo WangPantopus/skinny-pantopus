@@ -33,7 +33,7 @@ struct WorkflowsListView: View {
                 onLeading: { dismiss() },
                 trailing: AnyView(
                     Button { model.createWorkflow() } label: {
-                        Icon(.plus, size: 19, strokeWidth: 2.2, color: Theme.Color.primary600)
+                        Icon(.plus, size: 19, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     }
                     .accessibilityLabel("New workflow")
                 )
@@ -115,7 +115,7 @@ struct WorkflowsListView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(height: 38)
                         .padding(.horizontal, 18)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)

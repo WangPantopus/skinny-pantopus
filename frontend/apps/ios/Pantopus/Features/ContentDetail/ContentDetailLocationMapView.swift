@@ -121,7 +121,7 @@ struct ContentDetailLocationMapView: View {
         let coordinate = CLLocationCoordinate2D(latitude: map.latitude, longitude: map.longitude)
         if map.isApproximate {
             MapCircle(center: coordinate, radius: 500)
-                .foregroundStyle(Theme.Color.primary600.opacity(0.14))
+                .foregroundStyle(Theme.Color.primaryInk.opacity(0.14))
                 .stroke(Theme.Color.primary600.opacity(0.85), lineWidth: 2)
         } else {
             Annotation("", coordinate: coordinate, anchor: .center) {

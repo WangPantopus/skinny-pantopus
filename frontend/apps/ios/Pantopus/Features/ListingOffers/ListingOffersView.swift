@@ -175,7 +175,7 @@ private struct CounterOfferSheet: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: Radii.md)
-                                .fill(canSend ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                                .fill(canSend ? Theme.Color.primarySolid : Theme.Color.appTextMuted)
                         )
                 }
                 .buttonStyle(.plain)

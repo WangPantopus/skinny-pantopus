@@ -184,7 +184,7 @@ private struct TopBarActionBadge: View {
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s1)
             .frame(minWidth: 16, minHeight: 16)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
             .accessibilityHidden(true)
             .accessibilityIdentifier("listOfRowsTopBarActionBadge")
@@ -525,8 +525,8 @@ private struct LoadedList: View {
                     HStack(spacing: Spacing.s1) {
                         Text("See all")
                             .pantopusTextStyle(.caption)
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -688,7 +688,7 @@ private struct ListingContextHeader: View {
                                     .pencil,
                                     size: 14,
                                     strokeWidth: 2.0,
-                                    color: Theme.Color.primary600
+                                    color: Theme.Color.primaryInk
                                 )
                                 .frame(width: 28, height: 28)
                                 .background(Theme.Color.primary50)
@@ -1776,12 +1776,12 @@ private struct EngagementStrip: View {
                     Button(action: cta.handler) {
                         HStack(spacing: Spacing.s1) {
                             if let icon = cta.icon {
-                                Icon(icon, size: 12, color: Theme.Color.primary600)
+                                Icon(icon, size: 12, color: Theme.Color.primaryInk)
                             }
                             Text(cta.label)
                                 .pantopusTextStyle(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                     }
                     .buttonStyle(.plain)

@@ -270,9 +270,9 @@ struct SetupSectionHeader: View {
                 Button(action: action) {
                     HStack(spacing: 2) {
                         Text(actionTitle).font(.system(size: 12, weight: .semibold)).tracking(-0.05)
-                        Icon(.chevronRight, size: 13, color: Theme.Color.primary600)
+                        Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
         }
