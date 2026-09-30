@@ -2,6 +2,11 @@
 
 > ## 🔢 WORKSTREAM RENUMBERING — 2026-09-30 (user direction; read first)
 > - The user is splitting the former **Stream 1** (gigs and payments) and **Stream 2** (Home and household) into **two workstreams each**; those four are Streams 1–4. Their new names, files and ownership are recorded by those streams.
+> - **The former Stream 2 (Home and household) is split into Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](03-home-access-residency.md)) and Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)).**
+>   - Stream 3 owns rows H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02. Stream 4 owns rows I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04. That's 20 each; together they are the former 40, with nothing shared or dropped. The 24 S2-xx UX items and the 10 open decisions are split the same way.
+>   - The former file is frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split).
+>   - Both streams share the former Stream 2 runtime kit under an exclusive runtime lease (`tools/runtime-lease.sh`). Their labels are `stream3-home:` and `stream4:`, their branches `claude/stream3-home-…` and `claude/stream4-…`.
+>   - Prompts: [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md) and [`NEXT-STREAM4-PROMPT-2026-09-30.md`](NEXT-STREAM4-PROMPT-2026-09-30.md).
 > - The former **Stream 3 (Accounts and Social) is now Stream 5.** Its scope, accepted evidence, decisions, kit and runtime are unchanged. Its status file moved from `03-accounts-social.md` to [`05-accounts-social.md`](05-accounts-social.md), which frees `03-` for a new stream; its resume prompt is [`NEXT-STREAM5-PROMPT-2026-09-30.md`](NEXT-STREAM5-PROMPT-2026-09-30.md).
 > - Entries dated before 2026-09-30 keep the old numbering: read "Stream 3" / "S3" there as today's Stream 5, and "three streams" as the streams at that time.
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
@@ -26,7 +31,7 @@
 >
 > **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
 > - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
-> - **Stream 2:** #7 Household extras, #8 Mail extras.
+> - **Stream 4 (from the former Stream 2):** #7 Household extras, #8 Mail extras. Stream 3 (also from the former Stream 2) applies them wherever its rows touch a cut area.
 > - **Stream 5 (formerly Stream 3):** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
 > - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
 
@@ -837,7 +842,7 @@
   - Slots 1, 3 and 4 are free. Stream 1 stopped emulator-5558 and released slot 3 at 22:12:14Z.
   - Stream 2 keeps emulator-5556 (slot 2).
 - **Stream 2** continues in its own session; its user asked it to keep going.
-  - Its fallback handoff is [docs/workstreams/02-home-household.md](02-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
+  - Its fallback handoff is [docs/workstreams/02-home-household.md](former-stream2-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
   - Open: #535, #538 (decision 2a done).
   - Next: (2b) native Add guest "What they can see" sections sent as `included_sections`. It needs heavy and the iOS driver; Stream 2 will ask.
 - **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](05-accounts-social.md) → CURRENT RESUME.
@@ -2844,7 +2849,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -5604,16 +5609,21 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | [Remaining work](../REMAINING_WORK_2026-09-11.md) | Authoritative requirements and acceptance rows | Coordinator, using stream evidence |
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
 | [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
-| [2. Home/household](02-home-household.md) | Current Home milestone and handoff | Stream 2 |
+| [3. Home access, residency and security](03-home-access-residency.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 3 |
+| [4. Place, records, money and mail](04-place-records-money-mail.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 4 |
+| [Former Stream 2 history](former-stream2-home-household.md) | Frozen history of the former Stream 2 (Home and household) up to the 2026-09-30 split | none |
 | [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
-The coordinator is also Stream 1; there is no fourth implementation stream.
+The coordinator is also Stream 1. Streams 3 and 4 (split from the former Stream 2 on 2026-09-30) and Stream 5
+(formerly Stream 3) are implementation streams too.
 Each stream owns the affected backend, database contract and clients for its
 milestone. Platform boundaries do not split ownership of one user journey.
 
-Backlog ownership: Stream 1 handles P (gigs/payments); Stream 2 handles H/R/I/D/F/M
-(Home, residency, intelligence, records, bills, mail/guests); Stream 3 handles N/A
+Backlog ownership: Stream 1 handles P (gigs/payments). The former Stream 2's H/R/I/D/F/M rows are split:
+Stream 3 handles H, R, D05–D08, D10 and M02 (access, residency, settings, privacy, members/security, guest
+passes, home deletion); Stream 4 handles I, D01–D04, D09, F and M01/M03/M04 (Place intelligence, records,
+maintenance, readers, money signals, mail). Stream 5 (formerly Stream 3) handles N/A
 (social, notifications, accounts/providers). A03 shared storage changes require
 explicit ownership, and A05 routes each feature-specific finding to its domain
 owner. U (UI/accessibility/lifetime) checks accompany each affected journey; G/O/L
@@ -5639,8 +5649,8 @@ the gigs worktree is retired after this transfer; do not update status there.
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
-| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; PR53 merged into master `4cc9d3787`; branch re-based on master |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
+| 3, 4 | `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a` (shared; the isolated runtime's web server serves its checked-out branch, so switch it only while holding the runtime lease) | new branches from master: `claude/stream3-home-…` (Stream 3), `claude/stream4-…` (Stream 4); the former Stream 2's `/private/tmp/pantopus-workstream-home` is retired |
+| 5 (formerly 3) | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are

@@ -1,3 +1,11 @@
+# FORMER STREAM 2 — Home and household (frozen history; split on 2026-09-30 into Streams 3 and 4)
+
+> **Split (user direction, 2026-09-30).** This file moved from `02-home-household.md`, which frees `02-` for Stream 1's split. It is now **frozen history**: its status blocks, evidence links and decisions stay as they were at 2026-09-30T04:16:32Z. Live status, checklists and new entries are in:
+> - **Stream 3 — Home access, residency and security:** [`03-home-access-residency.md`](03-home-access-residency.md), rows H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02 and UX items S2-01, S2-05, S2-06, S2-10, S2-17, S2-23.
+> - **Stream 4 — Place, records, money and mail:** [`04-place-records-money-mail.md`](04-place-records-money-mail.md), rows I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04 and UX items S2-02, S2-03, S2-04, S2-07, S2-08, S2-09, S2-11, S2-12, S2-13, S2-14, S2-15, S2-16, S2-18, S2-19, S2-20, S2-21, S2-22, S2-24.
+> - The 40-row inventory below is the state at the split. Each row is now updated only in its owner's file.
+> - "Stream 2" / "S2" below means the stream before the split. "Stream 3" / "S3" in entries dated before 2026-09-30 means today's Stream 5 (Accounts and Social, [`05-accounts-social.md`](05-accounts-social.md)).
+
 # Stream 2 — Home, residency, Place, intelligence, records, bills, Mail/guests
 
 ## CURRENT RESUME — Stream 2 handoff, 2026-09-27 (read this first; it supersedes every block below)

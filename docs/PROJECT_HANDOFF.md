@@ -2,6 +2,11 @@
 
 > ## 🔢 WORKSTREAM RENUMBERING — 2026-09-30 (user direction; read first)
 > - The user is splitting the former **Stream 1** (gigs and payments) and **Stream 2** (Home and household) into **two workstreams each**; those four are Streams 1–4. Their new names, files and ownership are recorded by those streams.
+> - **The former Stream 2 (Home and household) is split into Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](workstreams/03-home-access-residency.md)) and Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](workstreams/04-place-records-money-mail.md)).**
+>   - Stream 3 owns rows H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02. Stream 4 owns rows I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04. That's 20 each; together they are the former 40, with nothing shared or dropped. The 24 S2-xx UX items and the 10 open decisions are split the same way.
+>   - The former file is frozen history at [`former-stream2-home-household.md`](workstreams/former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split).
+>   - Both streams share the former Stream 2 runtime kit under an exclusive runtime lease (`tools/runtime-lease.sh`). Their labels are `stream3-home:` and `stream4:`, their branches `claude/stream3-home-…` and `claude/stream4-…`.
+>   - Prompts: [`NEXT-STREAM3-PROMPT-2026-09-30.md`](workstreams/NEXT-STREAM3-PROMPT-2026-09-30.md) and [`NEXT-STREAM4-PROMPT-2026-09-30.md`](workstreams/NEXT-STREAM4-PROMPT-2026-09-30.md).
 > - The former **Stream 3 (Accounts and Social) is now Stream 5.** Its scope, accepted evidence, decisions, kit and runtime are unchanged. Its status file moved from `03-accounts-social.md` to [`05-accounts-social.md`](workstreams/05-accounts-social.md), which frees `03-` for a new stream; its resume prompt is [`NEXT-STREAM5-PROMPT-2026-09-30.md`](workstreams/NEXT-STREAM5-PROMPT-2026-09-30.md).
 > - Entries dated before 2026-09-30 keep the old numbering: read "Stream 3" / "S3" there as today's Stream 5, and "three streams" as the streams at that time.
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
@@ -26,7 +31,7 @@
 >
 > **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
 > - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
-> - **Stream 2:** #7 Household extras, #8 Mail extras.
+> - **Stream 4 (from the former Stream 2):** #7 Household extras, #8 Mail extras. Stream 3 (also from the former Stream 2) applies them wherever its rows touch a cut area.
 > - **Stream 5 (formerly Stream 3):** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
 > - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
 
@@ -737,7 +742,7 @@
   - Slots 1, 3 and 4 are free. Stream 1 stopped emulator-5558 and released slot 3 at 22:12:14Z.
   - Stream 2 keeps emulator-5556 (slot 2).
 - **Stream 2** continues in its own session; its user asked it to keep going.
-  - Its fallback handoff is [docs/workstreams/02-home-household.md](workstreams/02-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
+  - Its fallback handoff is [docs/workstreams/02-home-household.md](workstreams/former-stream2-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
   - Open: #535, #538 (decision 2a done).
   - Next: (2b) native Add guest "What they can see" sections sent as `included_sections`. It needs heavy and the iOS driver; Stream 2 will ask.
 - **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](workstreams/05-accounts-social.md) → CURRENT RESUME.
@@ -765,7 +770,7 @@
   - `20260926-stream1-accept-counter-r1` (`45e240d9…`; fixtures removed at 18:51Z).
 - **Runtime:** the Stream 1 runtime tree equals master `448ee8b4a` (clean); the isolated DB is at master's 92 migrations.
 - **Slots:** heavy, the iOS driver and slot 1 are free. Stream 1 keeps emulator-5558 (slot 3, alice); Stream 3 keeps emulator-5554 (slot 4); Stream 2 keeps emulator-5556 (slot 2).
-- **Stream 2 handoff (2026-09-26T22:00Z):** the full state is in [docs/workstreams/02-home-household.md](workstreams/02-home-household.md) → CURRENT RESUME, along with the runtime kit and bundles.
+- **Stream 2 handoff (2026-09-26T22:00Z):** the full state is in [docs/workstreams/02-home-household.md](workstreams/former-stream2-home-household.md) → CURRENT RESUME, along with the runtime kit and bundles.
   - Open S2 PR: #535 (native Add guest truth fixes; CI running).
   - **User-approved next S2 work:** (2a) guest-letter security fix, Proposal A: a guest or service-provider role ends residency in `verifyByCode` and `isStillVerifiedResident`; (2b) native Add guest "What they can see" sections sent as `included_sections`.
 - **Open product notes:**
@@ -1338,7 +1343,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 Read the current summary at the top of each existing status file:
 
 - [Stream1 — payments, gigs and coordinator](workstreams/01-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
-- [Stream2 — Home and household](workstreams/02-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
+- [Stream2 — Home and household](workstreams/former-stream2-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
 - [Stream 5 (formerly Stream 3) — accounts, social and notifications](workstreams/05-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
 
 **Acceptance count remains9 closed /71 partial-open out of80.** Closed: H01–H06,R01–R02,G02. P01 is a completed bounded tip-reservation milestone and is not counted as a whole closed row. The existing [80-row backlog](REMAINING_WORK_2026-09-11.md) remains authoritative; PRs, checks and partial journeys are different units, so there is no defensible percentage of total functionality inferred from them. This documentation pass closes no acceptance row.
@@ -1845,7 +1850,7 @@ migration filenames, conflicting). PR46 is a separate founder PR. No other PRs o
 1. Read the top of [docs/workstreams/README.md](workstreams/README.md) (newest section
    first) — every review, grant, merge and acceptance since 2026-09-15 is there.
 2. Stream status files: [01-gigs-payments](workstreams/01-gigs-payments.md),
-   [02-home-household](workstreams/02-home-household.md),
+   [02-home-household](workstreams/former-stream2-home-household.md),
    [03-accounts-social](workstreams/05-accounts-social.md). Newest section at the top
    (03 appends at the bottom).
 3. Durable evidence bundles with hash manifests live in the main checkout under

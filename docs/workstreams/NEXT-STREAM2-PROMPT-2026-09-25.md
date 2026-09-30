@@ -1,3 +1,5 @@
+> **Superseded 2026-09-30:** the former Stream 2 is split into Stream 3 ([NEXT-STREAM3-PROMPT-2026-09-30.md](NEXT-STREAM3-PROMPT-2026-09-30.md)) and Stream 4 ([NEXT-STREAM4-PROMPT-2026-09-30.md](NEXT-STREAM4-PROMPT-2026-09-30.md)). Its file is now [former-stream2-home-household.md](former-stream2-home-household.md).
+
 # Message to send to the independent Stream 2 agent
 
 You are **Stream 2**, a peer of Stream 1 and Stream 3, not anyone's subagent. Own Home, residency, Place, intelligence, records, bills, Mail/guests, related Support-train UX and the remaining Stream2 original inventory. Work directly with the user and peers in parallel; Stream1 holds only the technical serial integration queue, not authority over your implementation choices. Report PR/evidence directly to Stream1 and the user; do not merge or start a competing queue.
