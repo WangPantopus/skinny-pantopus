@@ -89,7 +89,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:47Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:48Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -102,7 +102,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | **Support Trains** | | | |
 | Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
-| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3: fix in PR #841; E1 E2 verified, the final-build run (E3 included) and the seal are pending | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3: fix in PR #841, verified (publish 503 retry, lost create reply and double tap each end with one train); seal pending | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ U02: schedule shortcuts expose their chosen state (#892)<br>✅ E2 lost create reply reaches the same draft (#836) |
+| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3: fix in PR #841; E1 E2 verified, the final-build run (E3 included) and the seal are pending | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3: fix in PR #841, verified (publish 503 retry, lost create reply and double tap each end with one train); seal pending | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836) |
 | Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>⬜ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
 | Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
 | Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
@@ -128,7 +128,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | My trains, Nearby, Invitations | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
 | Train search | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – No Train search on web |
 | Train detail and sign-up sheet | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
-| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>🔷 A3 brand-blue token |
+| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>🔷 A3 brand-blue token |
 | Manage train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
 | Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
@@ -137,9 +137,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 56, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
+- U03 items: done 55, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
-- U02 items: done 7, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
+- U02 items: done 8, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
 
 ## History
 
