@@ -1,4 +1,5 @@
 const db = require('../config/supabaseAdmin');
+const { currentOccupancy } = require('../utils/homeAccessPolicy');
 
 const MESSAGES = {
   MEMBERS_MANAGE_REQUIRED: 'You do not have permission to manage members.',
@@ -67,6 +68,44 @@ async function deleteHome(homeId, actorId) {
   throw fail();
 }
 
+// Account deletion (decision 9, 2026-09-30): a Home that nobody else keeps goes
+// with the person deleting their account. Called by DELETE /api/users/account for
+// each Home they created or occupy, after its dry run and before it nulls their
+// attribution columns (private-setup records are still recognisable as theirs).
+// - Deletable (private setup, or the primary owner as the last member): deleted
+//   exactly like the owner's Delete Home, stored files included -> 'deleted'.
+// - Not deletable and nobody else keeps it: the household records and files are
+//   purged (homeRecordService) and the shell stays, so a later resident never
+//   inherits them -> 'purged'.
+// - Anyone else still has access: nothing changes; their records stay -> 'kept'.
+// Throws on any failure, so the account deletion stops before anything is removed.
+async function retireHomeForDeletedAccount(homeId, userId) {
+  const eligibility = await deleteEligibility(homeId, userId);
+  if (eligibility.allowed) {
+    await deleteHome(homeId, userId);
+    return { action: 'deleted', reason: eligibility.mode || null };
+  }
+  if (await othersKeepHome(homeId, userId)) return { action: 'kept', reason: eligibility.code || null };
+  const purge = await require('./homeRecordService').purgeHouseholdRecords(homeId, userId);
+  return { action: 'purged', reason: eligibility.code || null, purge };
+}
+
+// Anyone besides the departing person with a current verified occupancy, or any
+// other verified owner (a person or a business), keeps the Home and its records.
+async function othersKeepHome(homeId, userId) {
+  let occupancies; let owners;
+  try {
+    [occupancies, owners] = await Promise.all([
+      db.from('HomeOccupancy').select('user_id, is_active, verification_status, start_at, end_at, access_start_at, access_end_at')
+        .eq('home_id', homeId).neq('user_id', userId),
+      db.from('HomeOwner').select('subject_type, subject_id').eq('home_id', homeId).eq('owner_status', 'verified'),
+    ]);
+  } catch (_) { throw fail(); }
+  if (occupancies?.error || owners?.error || !Array.isArray(occupancies?.data) || !Array.isArray(owners?.data)) throw fail();
+  return occupancies.data.some(row => currentOccupancy(row) && row.verification_status === 'verified')
+    || owners.data.some(row => row.subject_type !== 'user' || row.subject_id !== userId);
+}
+
 function throwDeleteResult(result) {
   if (result.allowed !== false || typeof result.code !== 'string') throw fail();
   const status = result.code === 'HOME_NOT_FOUND' ? 404
@@ -75,4 +114,4 @@ function throwDeleteResult(result) {
   throw fail(result.code, status);
 }
 
-module.exports = { mutateMember, deleteEligibility, deleteHome };
+module.exports = { mutateMember, deleteEligibility, deleteHome, retireHomeForDeletedAccount };
