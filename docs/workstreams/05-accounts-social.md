@@ -9,6 +9,27 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — crew seat repair #1037 (20260930184000) open, CI running, 2026-09-30T17:07:43Z
+
+- **Found by** a rebuilt schema-drift scan (the 09-23 scripts were lost in the wipe; the new copy is in the bundle), then reproduced on master `f7373d0cd` through the real API and web on my runtime. All four defects are in crew owner tools (A05), which are in launch scope.
+  1. **No owner seat on creation.** A new business's owner gets 403 "No active seat at this business" on the dashboard Team tab and on seat invites, and Profiles & Privacy → Business Profiles says "No businesses yet".
+  2. **Add-member's seat write never worked:** nonexistent `email` column, null display_name, `'iam_add'` not in the enum, and a select of `SeatBinding.id`.
+  3. **removeMember unbound the person at every business.**
+  4. **getSeatForUser `.maybeSingle()`:** anyone with two bindings got 403 everywhere.
+- **PR [#1037](https://github.com/WangPantopus/skinny-pantopus/pull/1037)**, head `6135591cd`, migration number from Stream 1.
+  - The API gets `ensureSeat()`, owner seats on both creation routes, a business-scoped removeMember and a list-based seat lookup.
+  - The migration adds `'iam_add'` and backfills only people with no binding at all, so it's safe in either deploy order. It has a read-only preview (my stack: `1 | 4 | 0` → `0 | 0 | 0`); a rerun inserts 0.
+  - People who already hold a binding somewhere and lack one elsewhere get a follow-up migration once the API is deployed.
+- **Evidence:** bundle `20260930-stream5-business-seat-writers-r1`, not yet sealed.
+  - Owner Team tab 403 → 200; add-member writes the seat.
+  - Leaving A deletes only A's binding (8 → 7).
+  - A two-business owner gets 200.
+  - Web: Team tab "Active (2)"; Business Profiles populated.
+- **Decision recorded:** the backfill is restricted to people with no binding. An unrestricted backfill would break the one seat that works today for people who'd get a second binding under the deployed API. A follow-up covers them.
+- **Harness:** the runtime proxy's local-profile allowlist gained rls1, whose LocalProfile row already existed (count stays 1).
+- **Runtime:** DB at `20260930184000`; API 18134 runs `6135591cd` (16:59:16Z). Fixtures: three businesses by rls1 plus the `ab620000-…` pair, to be removed by exact ids before the seal.
+- **Next:** CI database job, then seal, hand off to Stream 1 and remove the fixtures. Then the follow-up backfill once the API is deployed, plus a possible UX follow-up: Business Profiles shows seat names ("Owner"), not business names.
+
 ## LIVE — #1030 merged; the security track is complete and nothing is open from Stream 5, 2026-09-30T16:20:51Z
 
 - **#1030 merged** in batch 199 (PR #1033, 16:18:39Z, master `f7373d0cd`). Stream 1 verified the seal and applied 183000 to its runtime; signed-in reads return 200.
