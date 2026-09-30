@@ -16,22 +16,21 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - the security track: #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002, #1012, #1015;
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
-- **Open (as of 16:13Z):**
-  - **#1030**, the business RPC revoke (migration `20260930183000`), plus the check-migrations auth.uid()-default rule and the `client-rpc-surface` contract. Head `f21e54fb8`, rebased onto master `a318010a2`. Final CI is green, it's sealed (`894d9c97…`), and it sits in Stream 1's queue.
-  - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
+- **Open (as of 16:20Z):** nothing from Stream 5, except the old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
 - **Merged since the first rewrite:**
   - #1022, the anon default-deny (batch 196);
   - #1028, the authenticated default-deny with the chat policy fix (batch 197);
-  - #1023, the iOS delete sheet, verified on iOS by Stream 1 (batch 197).
-  - Master is `a318010a2`.
+  - #1023, the iOS delete sheet, verified on iOS by Stream 1 (batch 197);
+  - #1030, the business RPC revoke with the auth.uid()-default rule and the `client-rpc-surface` contract (batch 199).
+  - Master is `f7373d0cd`.
 - **Evidence corrections:** the local "67/67 contracts" claims in the #992, #996, #1001 and #1002 bundles were invalid. The loop recorded basename's exit status, and the local database had crashed. Each bundle now carries CORRECTION.md and was resealed; Stream 1 recorded the new seals.
 
 ## 3. Runtime (Stream 5's own; reserved ports)
-- **Stack:** `pantopus-stream3-block-r1`, Kong 64531, DB 64532. It has master's migrations (through `20260930181000`) plus `20260930182000`; that migration's chat-policy section went in as a delta. Apply new ones with `supabase migration up --local` from `/private/tmp/pantopus-stream5-db-r1`, after copying the file into its `supabase/migrations`.
+- **Stack:** `pantopus-stream3-block-r1`, Kong 64531, DB 64532. It has master's migrations through `20260930183000`; 182000's chat-policy section went in as a delta. Apply new ones with `supabase migration up --local` from `/private/tmp/pantopus-stream5-db-r1`, after copying the file into its `supabase/migrations`.
 - **API 18134:**
   1. Point the source checkout `/private/tmp/pantopus-stream3-chat-realtime-r1` at the wanted commit (detached, clean backend).
   2. From `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`, run `S3_SRC=<checkout> S3_BACKEND_TREE_OF=<sha> S3_LOCAL_STORAGE=1 nohup python3 api-launch-private.py`. The receipt is `api-start-isolation-safe.json`.
-  3. It currently runs master `8099b6516` (started 15:41:51Z).
+  3. It currently runs master `f7373d0cd` (started 16:19:22Z).
   4. About 10 logins per API process trip the rate limiter; restart before a new journey.
 - **Proxy and web:** proxy 18130 (deletion check disabled), web 18131.
 - **Fixture accounts still present:** solo2, hs2b, hs4b, hs6, hs9b, hs11b, hs12, hs12b, hs13b, hs15b, rls1, rls2. Earlier deletion journeys removed the rest (dm*, hs1–5, org1 and others).
@@ -70,7 +69,7 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. #1030 is sealed and handed off, and its fixture is removed. After it merges, record it in the status file. The DB already has 181000–183000 (182000's chat section went in as a delta; replay the final files if the stack is rebuilt).
+1. Nothing is pending. The runtime DB is at 183000 (182000's chat section went in as a delta; replay the final files if the stack is rebuilt), and API 18134 runs master `f7373d0cd`.
 2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;

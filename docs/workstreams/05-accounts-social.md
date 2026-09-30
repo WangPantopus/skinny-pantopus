@@ -9,6 +9,19 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1030 merged; the security track is complete and nothing is open from Stream 5, 2026-09-30T16:20:51Z
+
+- **#1030 merged** in batch 199 (PR #1033, 16:18:39Z, master `f7373d0cd`). Stream 1 verified the seal and applied 183000 to its runtime; signed-in reads return 200.
+- **The day's end state** (all merged):
+  - no client role holds a privilege on public tables: writes since #992, anon since #1022, authenticated since #1028;
+  - RLS is on everywhere except PostGIS's `spatial_ref_sys`;
+  - caller-trusting DEFINER RPCs are revoked (#996, #1030);
+  - the client-callable DEFINER surface is exactly 12 reviewed caller-bound helpers (plus 5 trigger functions PostgREST can't call). It's pinned by the `client-rpc-surface` contract, with Stream 1 keeping the inventory in the hub;
+  - check-migrations guards new tables (RLS), new DEFINER functions (revoke), grants to anon, authenticated or PUBLIC, and client grants on auth.uid()-default DEFINER functions.
+- **Runtime:** DB at `20260930183000`, which equals master. API 18134 runs master `f7373d0cd` (16:19:22Z). No fixtures are active from today's journeys.
+- **Housekeeping:** all 18 of Stream 5's merged, clean worktrees under `/private/tmp` were removed (about 7 GB; the disk is at 97%).
+- **Open from Stream 5:** nothing. The remaining rows wait for the user's devices, keys or decisions (see the resume prompt §5), including deletion for accounts with payment history, a money and legal call.
+
 ## LIVE — #1030 (business RPC revoke, 183000) green, sealed and handed to Stream 1, 2026-09-30T16:13:41Z
 
 - **[#1030](https://github.com/WangPantopus/skinny-pantopus/pull/1030)**, head `f21e54fb8` on master `a318010a2`.
