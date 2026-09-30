@@ -196,7 +196,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Emergency info (add, delete) | ✅ R1 (#698)<br>❓ add and delete E cases | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>❓ E2 | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 (#871)<br>✅ E1 E3, no change (0930 emergency-access-denied)<br>✅ E4: a permission sentence, no Retry or Add (#904) |
 | Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>❓ E3<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>❓ E3 E6<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>❓ E3 |
 | Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>❓ R2<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>❓ E3 R2<br>⛔ E4 E6 API only | – no manual-log screen on web |
-| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>⬜ delete E1 E2 E3 |
+| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
 | Home activity | – no timeline screen (the native recent-activity card still shows raw codes: ⬜ native item) | – (same) | ✅ R1 (0928 home-timeline-pagination)<br>✅ labels and actor (#854)<br>✅ malformed rows (#863)<br>✅ concurrent insert (#854 bundle)<br>✅ follows on-page saves (#860)<br>✅ live updates from other devices: decided, re-read on focus/visibility/reload for launch ("Decided by Stream 4" item 4) |
 | Mail: printed postcards, welcome cards, street digest (M01) | 🔷 not built (decision 2) | 🔷 | 🔷 (compose routes are live: security repairs #867/#872 through the API; the compose UI is cut, #8) |
 
@@ -214,7 +214,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 |---|---|---|---|
 | Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
 | Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>🔷 A3 |
-| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 partial (#809)<br>🔷 A3 |
+| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>🔷 A3 |
 | Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 (not swept) |
 | Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
@@ -268,6 +268,17 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T12:59Z — [#984](https://github.com/WangPantopus/skinny-pantopus/pull/984) is with the coordinator: the web Documents delete button now has a screen-reader name, and web Documents delete E1–E3 are verified with no change.** Head `b443db73f422b0636fb703eb435fc58fa50cb9a5`. Bundle `20260930-stream4-docs-delete-r1`, 29 files, MANIFEST `bdef747f4889083425738795a89cd5f4438983e5ea0acb418dda43c9f0ca83bb`. Lease 12:52:23Z–12:58:32Z.
+  - **U02 A4:** the icon-only trash button had no accessible name (axe button-name ×3 with three documents; the 09-30 sweep's seed had none). It now reads "Delete <title>", like Tasks and Emergency. Axe after: 0 violations; the fix was patched into the shared worktree and reverted exactly.
+  - **U03 web Documents delete:**
+    - E1: an honest error, and the retry deletes.
+    - E2: after a lost reply the row stays until the retry, and the retry is idempotent (200); two requests, no duplicate.
+    - E3: a double tap on the trash cancels the confirm (backdrop), and a double click on Delete sends exactly 1 request.
+  - Exact cleanup: 351/353 tables equal (auth history only).
+- **2026-09-30T12:59Z — decision-9 trio:**
+  - #968 was renumbered to `20260930172000` (content unchanged; head `33a43a5693efe04cac78f2a11200b9ca3de8738e`, seal r3 `35917c31efe045ba6e18e2723909e8f12303a6e2f22da33bdbd6b976a8ae573e`).
+  - Stream 5's final-heads rerun passed and verified the renumbered head is identical. The trio (#968 + #974 at 28f92e4e0 + #976) waits only on the coordinator's batch.
 
 - **2026-09-30T12:27Z — [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) revised after Stream 5's combined E2E review; the new head and seal are with the coordinator for the decision-9 trio** (#968 + Stream 3's #974 + Stream 5's #976). Head `ab0a5b09745682febc14ee27de5efb3fcd4ee18e` on master `81cf2e959`. Bundle `20260930-stream4-household-data-r2`, 20 files, MANIFEST `e1498d364dc70894f02d1879e7ca75312b57a86b2e4a3d483da4899aabf5d948`; it supersedes r1 `b759067e…`.
   - **Stream 5's real-route E2E on `b410aae70` passed** (their bundle `20260930-stream5-retire-homes-r1`):
