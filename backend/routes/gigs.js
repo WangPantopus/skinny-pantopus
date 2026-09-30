@@ -441,8 +441,9 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
   if (!gig) return null;
   const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
   if (!canViewPrivateWork) {
+    // Payment details stay with the poster, their managers and the worker, as on GET /:gigId/payment.
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
-      'owner_confirmation_note', 'owner_satisfaction']) delete safe[key];
+      'owner_confirmation_note', 'owner_satisfaction', 'payment_id', 'payment_status', 'cancellation_fee']) delete safe[key];
   }
   return {
     ...safe,
