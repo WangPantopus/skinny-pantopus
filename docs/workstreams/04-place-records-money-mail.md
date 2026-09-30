@@ -269,6 +269,20 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T20:41:10Z — Two more honesty fixes in my Place rows, found by reading code against my U02 frames; both committed on branches for device before/after in my next window.**
+  - **Place Today Alerts: a failed alerts check read as an all-clear** (safety). Branch `claude/stream4-alerts-no-false-all-clear`, `74f494001`, backend only.
+    - When the alerts fetch fails, `providerOrchestrator.getHubToday` returns `alerts: []` with `'alerts'` in `meta.partial_failures`. Its empty result (no location, or an unexpected error) returns `alerts: []` without asking any provider.
+    - `placeIntelligenceService.composeToday` passed both on as a real empty list, so the section read "No active alerts — Nothing to watch for on your block right now" ("National Weather Service · live" on web).
+    - My U02 frames show this on both apps, on a runtime where no provider can be reached.
+    - Fix: alerts count only when they were checked; otherwise the section is `unavailable`, as weather and air already are. Backend Jest suites that touch Place intelligence pass.
+    - **Recorded, not changed:** with nothing known, the native Pulse hero still says "All clear on your block today." There's no neutral hero variant, so that needs a design decision later.
+  - **Place Civic: "No upcoming election" promised a polling place and a plain-language ballot** (web, iOS, Android). Branch `claude/stream4-civic-no-ballot-promise`, `589f46637`, copy only.
+    - The `civic_election` section always sends `polling_place: null` and `ballot: []` ("lands with the ballot wave").
+    - The sentence now promises only the date. Web Jest 2,343/2,343, `tsc` and ESLint pass.
+  - **Decision (standing instruction):** truth over promise, as with the Your home trend.
+  - Stream 2 is taking the Place preview's three matching claims (radon; civic "deadlines…" and "ballot deadline…") in one PR.
+  - **Builds:** the 8-branch build is next in the heavy queue. A 9-branch build (adds Civic) follows Stream 1's next build, and its outputs are the ones I'll use for after-captures. The alerts fix needs no client build: the runtime backend gets the patch in my next window (`git apply --check` passes).
+
 - **2026-09-30T20:31:32Z — Sent to Stream 2 (owner of the Start and Place preview rows): the preview's radon card promises a reminder that doesn't exist.**
   - `placePreviewService.js` `lead_radon` `follow_up`, :311 and :320 on master `20e7b4768`: "Claim it and we'll remind you when a test kit is due."
   - The founder's 09-26 launch-boundary amendment A3 removes it. Its interim line is "The EPA recommends testing every home, whatever the zone."
