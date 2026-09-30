@@ -65,6 +65,7 @@ public struct BusinessPageBlocksView: View {
                 Button { onBack() } label: {
                     Icon(.arrowLeft, size: 20, color: Theme.Color.appText)
                 }
+                .accessibilityLabel("Back")
                 .accessibilityIdentifier("businessPageBlocks.back")
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -75,6 +76,7 @@ public struct BusinessPageBlocksView: View {
                         color: viewModel.isPreviewing ? Theme.Color.business : Theme.Color.appText
                     )
                 }
+                .accessibilityLabel(viewModel.isPreviewing ? "Exit preview" : "Preview")
                 .accessibilityIdentifier("businessPageBlocks.previewToggle")
             }
         }
@@ -282,6 +284,7 @@ public struct BusinessPageBlocksView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(index == 0)
+                .accessibilityLabel("Move up")
                 .accessibilityIdentifier("businessPageBlocks.moveUp.\(index)")
 
                 Button { viewModel.moveDown(index) } label: {
@@ -295,6 +298,7 @@ public struct BusinessPageBlocksView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(index == viewModel.blocks.count - 1)
+                .accessibilityLabel("Move down")
                 .accessibilityIdentifier("businessPageBlocks.moveDown.\(index)")
 
                 Spacer()
@@ -303,6 +307,7 @@ public struct BusinessPageBlocksView: View {
                     Icon(.trash2, size: 16, color: Theme.Color.error)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Delete block")
                 .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
             }
             .padding(.horizontal, Spacing.s3)
@@ -332,6 +337,7 @@ public struct BusinessPageBlocksView: View {
                     }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Add block")
             .accessibilityIdentifier("businessPageBlocks.addBlock")
 
             GhostButton(
