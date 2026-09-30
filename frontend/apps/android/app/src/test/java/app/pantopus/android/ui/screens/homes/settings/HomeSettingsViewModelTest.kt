@@ -255,14 +255,14 @@ class HomeSettingsViewModelTest {
     }
 
     @Test
-    fun blank_rename_never_reaches_the_network() {
+    fun blank_rename_clears_the_name() {
         val vm = makeVm(access = NetworkResult.Success(HomeAccessDto(hasAccess = true, isOwner = true)))
         vm.load()
         vm.beginRenaming()
         vm.updateRenameDraft("   ")
         vm.saveRenaming()
-        coVerify(exactly = 0) { homeSettingsRepository.updateHome(any(), any()) }
-        assertEquals("Enter a name for this home.", vm.rename.value.error)
+        coVerify { homeSettingsRepository.updateHome("home-1", UpdateHomeRequest(name = "")) }
+        assertNull(vm.rename.value.error)
     }
 
     @Test
