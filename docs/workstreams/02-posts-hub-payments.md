@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T09:38Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T09:53Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -104,6 +104,11 @@
   - `emulator-5560` (AVD `pantopus_s2`, device slot 3) is up. It needed `-no-window -crash-report-mode disabled -no-metrics` after a vCPU stall left a crash-consent dialog blocking the next boot (told Stream 1).
   - My Android assembleDebug waits on the heavy slot, held by stream3-home since 09:12:16Z; I asked them whether it's idle.
   - iOS: the user hasn't granted this session access to simulator "Pantopus S2" in the simulator panel. I won't drive it through the helper binary directly (that would bypass the consent gate), so the iOS cells wait for that grant.
+- **#924 and #925 merged** in batch 163 (#926, master `c1634c693`, 2026-09-30T09:40:01Z), with Stream 4's #922 and Stream 5's #923.
+- **[#930](https://github.com/WangPantopus/skinny-pantopus/pull/930)** head `e9ece760077dcb24324abe27c0084ae00597d398` (sent to Stream 1; seal `20260930-stream2-posts-read-failure-not-404-r1`, 49 files, `9cd0db8c…d8ef1`): **a failed read isn't "not found"** (post and task detail; closes the inventory candidate on `GET /api/posts/:id`).
+  - Before: with a sustained PostgREST 503, injected through the auth-side proxy in front of my own gateway, an existing post or task came back 404. The web said "may have been deleted" / "may have been removed", with no retry.
+  - Now it's 503, and the web's existing error states show Try Again. The recovery journey is proven.
+- **Native queue:** my Android build waits for the heavy slot (stream3-home, stream4 and stream5 held it in turn). The wait now checks every 2 s, and I asked Stream 1 to treat Stream 2 as next.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
