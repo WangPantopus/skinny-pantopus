@@ -1,5 +1,7 @@
 # Stream 1 — Gigs, payments and coordination
 
+> **2026-09-30 — frozen (older snapshot on master).** The former Stream 1 is split into Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](01-trains-coordination.md)) and Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](02-posts-hub-payments.md)). This file (moved from `01-gigs-payments.md`) is history; the live files are on `codex/workstream-coordination`.
+
 ## CURRENT STREAM 1 STATE — September 23, 2026, 02:10 UTC
 
 The live queue, merges and cross-stream decisions are in the [coordination summary](README.md). The accounting table below is still authoritative; new evidence for each row:
@@ -4370,7 +4372,7 @@ failed attempt. Repository responses and identity are mocked in these JVM tests;
 - Accepted web Start Work component, SDK and regression source is unchanged from
   `c9cb69825`; reuse its [browser evidence with the original synthetic HTTP/auth
   limits](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
-- The [prior Start Work record](https://github.com/WangPantopus/skinny-pantopus/blob/82025bc092d09fd288a9a462ca48d5ebbc67fd3f/docs/workstreams/01-gigs-payments.md)
+- The [prior Start Work record](https://github.com/WangPantopus/skinny-pantopus/blob/82025bc092d09fd288a9a462ca48d5ebbc67fd3f/docs/workstreams/former-stream1-gigs-payments.md)
   retains the original `f437dfd20` paid/free evidence and old schema/provider
   limits. Its native acceptance and same-worker-race conclusions are superseded
   above. Prior private artifacts that were not available in this resumed session

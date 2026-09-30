@@ -2,6 +2,8 @@
 
 > **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub is `docs/workstreams/README.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
 
+> **2026-09-30 — the former Stream 1 (gigs, payments and coordination) is split into Streams 1 and 2.** Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](01-trains-coordination.md)) owns Support Trains, the merge queue and hub status for all streams, rows G01–G05, O01–O06, L01–L04 and the U05 assembly. Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](02-posts-hub-payments.md)) owns Posts and Pulse, Start and Place preview, the Hub cards, money screens, rows P01–P10 and the launch-cut areas #3, #4 and #6. The U02–U04 checklists split 230 = 122 + 108 ([`checklists/`](checklists/README.md)); the former file is [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md). The live copies are on `codex/workstream-coordination`.
+
 > **2026-09-30 — the former Stream 2 (Home and household) is split into Streams 3 and 4.** Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](03-home-access-residency.md)) owns rows H01–H08, R01–R06, D05–D08, D10 and M02. Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)) owns rows I01–I07, D01–D04, D09, F01–F05, M01, M03 and M04. That's 20 each; together they are the former 40. The former file is history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`). The live copies are on the `codex/workstream-coordination` branch.
 
 
@@ -1180,7 +1182,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
+- [Stream1 current summary](former-stream1-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -1926,7 +1928,7 @@ succeeded (fully refunded) and canceled intents by customer list with the −24h
 window, recorded refunded_full/canceled receipts, zero provider writes; injected
 provider failure, lost committed reply, duplicate tap, stale retry, reload and
 worker-permission 403 all behaved as designed. Details/limits in
-[Stream1](01-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
+[Stream1](former-stream1-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
 (22 files, MANIFEST 8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039).
 No app edit/new test. P02 stays open only for hosted/L01 provider boundaries.
 
@@ -1986,7 +1988,7 @@ source/runtime limits; no guest/member/Settings journey replay.
 
 Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI
 pending. No further paid/master adoption until that run completes; ongoing peer
-work remains separate. Detailed current state/cleanup is in [Stream1](01-gigs-payments.md).
+work remains separate. Detailed current state/cleanup is in [Stream1](former-stream1-gigs-payments.md).
 
 A02 first browser creation timed out beforeauth;697 artifacts/fullEvanstate equality/
 authHTTP[] reviewed. One clean retry within the existing exactEvan/two-browser grant
@@ -3939,11 +3941,13 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | [Project handoff](../PROJECT_HANDOFF.md) | Current integrated state and next decisions | Coordinator |
 | [Remaining work](../REMAINING_WORK_2026-09-11.md) | Authoritative requirements and acceptance rows | Coordinator, using stream evidence |
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
-| [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
+| [1. Support Trains and coordination](01-trains-coordination.md) | Current milestone, checklist and handoff (split from the former Stream 1); merge queue for all streams | Stream 1 |
+| [2. Posts, Hub and payments](02-posts-hub-payments.md) | Current milestone, checklist and handoff (split from the former Stream 1) | Stream 2 |
+| [Former Stream 1 history](former-stream1-gigs-payments.md) | Frozen history of the former Stream 1 up to the 2026-09-30 split | none |
 | [3. Home access, residency and security](03-home-access-residency.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 3 |
 | [4. Place, records, money and mail](04-place-records-money-mail.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 4 |
 | [Former Stream 2 history](former-stream2-home-household.md) | Frozen history of the former Stream 2 (Home and household) up to the 2026-09-30 split | none |
-| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
+| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 5 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
 The coordinator is also Stream 1. Streams 3 and 4 (split from the former Stream 2 on 2026-09-30) and Stream 5
