@@ -32,7 +32,7 @@ const {
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
 const { escapeIlike } = require('../utils/escapeIlike');
-const { publicPayment, publicGigFee } = require('../stripe/gigPaymentProof');
+const { publicPayment, payeePayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
@@ -7970,23 +7970,13 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Your permission to view this payment changed.' });
     }
 
-    // Don't expose sensitive fields to the worker
-    if (isWorker && !isPoster && payment) {
-      delete payment.stripe_payment_intent_id;
-      delete payment.stripe_setup_intent_id;
-      delete payment.stripe_customer_id;
-      delete payment.stripe_charge_id;
-      if (payment.metadata?.gig_fee) {
-        const { gig_fee: _feeReceipt, ...metadata } = payment.metadata;
-        payment.metadata = metadata;
-      }
-    }
-
     const stateInfo = payment?.payment_status
       ? getPaymentStateInfo(payment.payment_status)
       : null;
 
-    res.json({ payment: publicPayment(payment) || null, stateInfo });
+    // Don't expose the payer's instrument, provider ids, risk review or fee receipt to the worker
+    const workerView = isWorker && !isPoster;
+    res.json({ payment: (workerView ? payeePayment(payment) : publicPayment(payment)) || null, stateInfo });
   } catch (err) {
     logger.error('Get gig payment error', { error: err.message });
     res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to get payment details' });

@@ -51,6 +51,23 @@ function publicPayment(payment) {
   const { gig_completion_original: _original, ...visible } = payment;
   return visible;
 }
+// The payer's instrument, provider identities and risk review belong to the payer (and anyone
+// acting for them). The payee reads the same payment without them, and without the fee
+// receipt (metadata.gig_fee: the fee's provider charge and request ids); publicGigFee is
+// the payee's fee contract.
+const PAYER_PRIVATE_FIELDS = ['stripe_customer_id', 'stripe_payment_intent_id', 'stripe_setup_intent_id',
+  'stripe_charge_id', 'stripe_payment_method_id', 'tip_payment_intent_id', 'payment_method_brand',
+  'payment_method_last4', 'risk_band', 'failure_code', 'failure_message'];
+function payeePayment(payment) {
+  const visible = publicPayment(payment);
+  if (!visible) return visible;
+  for (const field of PAYER_PRIVATE_FIELDS) delete visible[field];
+  if (visible.metadata?.gig_fee) {
+    const { gig_fee: _feeReceipt, ...metadata } = visible.metadata;
+    visible.metadata = metadata;
+  }
+  return visible;
+}
 // A poster-fault fee captured from the hold (metadata.gig_fee, recorded only by
 // the fee transactions). Settlement credits the worker share of the fee alone.
 function capturedFeeCents(p) {
@@ -74,5 +91,5 @@ function paymentRowAmounts(p) {
   if (fee) return { payerCents: fee.fee_cents, payeeCents: fee.worker_share_cents };
   return { payerCents: Number(p?.amount_total || 0) || 0, payeeCents: Number(p?.amount_to_payee ?? p?.amount_total ?? 0) || 0 };
 }
-module.exports = { publicPayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent,
+module.exports = { publicPayment, payeePayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent,
   capturedFeeCents, feeWorkerShare, publicGigFee, paymentRowAmounts };
