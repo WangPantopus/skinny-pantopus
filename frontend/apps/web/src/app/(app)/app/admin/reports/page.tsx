@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, Flag, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Flag, RefreshCw, ShieldAlert } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
@@ -67,6 +67,8 @@ export default function AdminReportsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  // Opened from the alert email's link, "back" could leave the app, so a non-admin sees a message here.
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -77,13 +79,12 @@ export default function AdminReportsPage() {
       setTotal(result.total || 0);
     } catch (err: any) {
       if (err?.statusCode === 403 || err?.status === 403) {
-        toast.error('You do not have admin access.');
-        router.back();
+        setDenied(true);
         return;
       }
       toast.error('Failed to load reports');
     }
-  }, [router, status]);
+  }, [status]);
 
   useEffect(() => {
     setLoading(true);
@@ -112,7 +113,7 @@ export default function AdminReportsPage() {
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-surface">
         <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition" aria-label="Back"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
         <h1 className="text-xl font-bold text-app-text flex-1">Reports</h1>
-        {status === 'pending' && (
+        {status === 'pending' && !denied && (
           <span className="bg-violet-600 text-white text-xs font-bold px-2.5 py-1 rounded-full min-w-[24px] text-center" data-testid="admin-reports-count">{total}</span>
         )}
         <button onClick={() => { setLoading(true); fetchReports().finally(() => setLoading(false)); }} className="p-1.5 hover:bg-app-hover rounded-lg transition" aria-label="Refresh">
@@ -121,7 +122,7 @@ export default function AdminReportsPage() {
       </div>
 
       <div className="max-w-3xl mx-auto p-4">
-        <div className="flex gap-2 mb-4" role="tablist">
+        <div className={`flex gap-2 mb-4 ${denied ? 'hidden' : ''}`} role="tablist">
           {TABS.map((tab) => (
             <button
               key={tab.status}
@@ -135,7 +136,16 @@ export default function AdminReportsPage() {
           ))}
         </div>
 
-        {loading ? (
+        {denied ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center" data-testid="admin-reports-denied">
+            <ShieldAlert className="w-14 h-14 text-app-text-muted mb-4" />
+            <p className="text-lg font-semibold text-app-text">Admins only</p>
+            <p className="text-sm text-app-text-secondary mt-1">You do not have admin access.</p>
+            <Link href="/app" className="mt-4 px-4 py-2 rounded-lg text-sm font-medium border border-app-border text-app-text hover:bg-app-hover transition">
+              Back to Pantopus
+            </Link>
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center py-24"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
         ) : reports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24">
