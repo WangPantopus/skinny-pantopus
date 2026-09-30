@@ -1,7 +1,6 @@
 package app.pantopus.android.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -130,14 +129,17 @@ private val PantopusDarkColorScheme: ColorScheme =
  * Feature composables MUST be nested inside this — reading
  * `PantopusTheme.tokens` or a token defined outside the theme scope throws.
  *
- * @param darkTheme Honour the system dark-mode setting. Shell neutrals
- *     (`background`, `surface`, text, borders) switch to the dark palette;
- *     accent/category tokens stay shared with light for now.
+ * @param darkTheme Use the dark shell palette. Off by default: the screens
+ *     draw with the light `PantopusColors` tokens, so following the system
+ *     into dark mode turned only Material's own surfaces (dialogs, sheets,
+ *     menus) dark behind light-theme text, and the status-bar icons light on
+ *     a light screen. Pass `isSystemInDarkTheme()` again once the screens
+ *     read the dark tokens.
  * @param content Composable content.
  */
 @Composable
 fun PantopusTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) PantopusDarkColorScheme else PantopusLightColorScheme

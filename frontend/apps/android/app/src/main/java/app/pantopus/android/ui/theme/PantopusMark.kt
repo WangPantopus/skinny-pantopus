@@ -3,11 +3,11 @@
 package app.pantopus.android.ui.theme
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,7 +41,7 @@ import androidx.compose.ui.unit.sp
  * ground even with a white check: the ground reads through the window.
  */
 enum class MarkVariant {
-    /** Follows [isSystemInDarkTheme]. */
+    /** Follows the theme: the dark build only on a dark theme background. */
     Auto,
 
     /** Forced light build — sky body on a light ground. */
@@ -128,7 +129,7 @@ fun PantopusMark(
 ) {
     val bodyColor =
         when (variant) {
-            MarkVariant.Auto -> if (isSystemInDarkTheme()) PantopusColors.primary400 else PantopusColors.primary600
+            MarkVariant.Auto -> if (themeIsDark()) PantopusColors.primary400 else PantopusColors.primary600
             MarkVariant.Light -> PantopusColors.primary600
             MarkVariant.Dark -> PantopusColors.primary400
             MarkVariant.Reverse -> PantopusColors.appTextInverse
@@ -175,7 +176,7 @@ fun PantopusLockup(
 ) {
     val resolvedWordmark =
         wordmarkColor ?: when (variant) {
-            MarkVariant.Auto -> if (isSystemInDarkTheme()) PantopusColors.appTextInverse else PantopusColors.appText
+            MarkVariant.Auto -> if (themeIsDark()) PantopusColors.appTextInverse else PantopusColors.appText
             MarkVariant.Light -> PantopusColors.appText
             MarkVariant.Dark, MarkVariant.Reverse -> PantopusColors.appTextInverse
         }
@@ -198,10 +199,21 @@ fun PantopusLockup(
 }
 
 /**
+ * The theme, not the system setting: Android screens use the light tokens even in
+ * system dark mode, so a mark that followed the system would turn light-on-light.
+ */
+@Composable
+private fun themeIsDark(): Boolean = MaterialTheme.colorScheme.background.luminance() < DARK_BACKGROUND_LUMINANCE
+
+/** Below this relative luminance a theme background counts as dark. */
+private const val DARK_BACKGROUND_LUMINANCE = 0.5f
+
+/**
  * The stamp body with the eight perforations and the window subtracted out.
  * Difference — not an overdraw in the background colour — so the knockouts are
  * genuinely transparent and whatever sits behind the mark shows through.
  */
+
 private fun stencilPath(scale: Float): Path {
     val body =
         Path().apply {
