@@ -46,15 +46,16 @@ RESET ROLE;
 SET LOCAL ROLE service_role;
 INSERT INTO public."User"(id,email,username,name,stripe_customer_id) VALUES
  ('eef10000-0000-4000-8000-000000000003','card-contract-3@example.invalid','card_contract_3','New card profile',NULL);
+UPDATE public."User" SET name='Updated card profile' WHERE id='eef10000-0000-4000-8000-000000000003';
 RESET ROLE;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003' AND name='Updated card profile') THEN
+ RAISE EXCEPTION 'Owner cannot read the API''s profile insertion/update'; END IF;
  BEGIN
-  UPDATE public."User" SET name='Updated card profile' WHERE id='eef10000-0000-4000-8000-000000000003';
+  UPDATE public."User" SET name='Client-forged profile' WHERE id='eef10000-0000-4000-8000-000000000003';
   RAISE EXCEPTION 'Client edited its own profile directly';
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
- IF NOT EXISTS(SELECT FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003' AND name='New card profile') THEN
- RAISE EXCEPTION 'Own profile unreadable or changed by a refused write'; END IF;
  BEGIN
   UPDATE public."User" SET stripe_customer_id='cus_stolen' WHERE id='eef10000-0000-4000-8000-000000000003';
   RAISE EXCEPTION 'Client assigned its own provider customer';

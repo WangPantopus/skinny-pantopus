@@ -136,10 +136,15 @@ RESET ROLE;
 -- Real unprivileged roles retain involved reads but cannot manufacture proof.
 -- They hold no write grant on public tables (20260930174000): even ordinary
 -- gig edits go through the API, which writes as service_role.
+SET LOCAL ROLE service_role;
+UPDATE public."Gig" SET description='Owner retains ordinary content edits' WHERE id='aae10000-0000-4000-8000-000000000101';
+RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
  IF (SELECT count(*) FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101')<>2 THEN RAISE EXCEPTION 'Payer lost financial reads'; END IF;
+ IF (SELECT description FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101') IS DISTINCT FROM 'Owner retains ordinary content edits' THEN
+  RAISE EXCEPTION 'Owner cannot read the API''s content edit'; END IF;
  BEGIN UPDATE public."Payment" SET payment_status='authorized' WHERE id='aae10000-0000-4000-8000-000000000302';
  RAISE EXCEPTION 'Payer forged status'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN DELETE FROM public."Payment" WHERE id='aae10000-0000-4000-8000-000000000302';
@@ -278,6 +283,10 @@ DO $$ BEGIN
   RAISE EXCEPTION 'Active creator edited the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+-- The API records the active creator's edit as service_role.
+SET LOCAL ROLE service_role;
+UPDATE public."Gig" SET completion_note='Authorized creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
+RESET ROLE;
 UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
@@ -304,6 +313,8 @@ SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
   RAISE EXCEPTION 'Current managing creator lost existing read'; END IF;
+ IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Authorized creator edit' THEN
+  RAISE EXCEPTION 'Current managing creator cannot read the API''s edit'; END IF;
 END $$;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000004',true);
 DO $$ BEGIN
@@ -332,7 +343,7 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 DO $$ BEGIN
- IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Private business completion' THEN
+ IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Authorized creator edit' THEN
   RAISE EXCEPTION 'Refused writes changed stored proof'; END IF;
 END $$;
 
@@ -523,7 +534,7 @@ INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount,status)
 DO $$
 DECLARE g public."Gig"; owner_id uuid:='aaf40000-0000-4000-8000-000000000001'; worker uuid:='aaf40000-0000-4000-8000-000000000002';
  r jsonb; terms jsonb; proof jsonb:='{"completion_note":"private completion note","completion_photos":[],"completion_checklist":[]}';
- n public."Notification"; event jsonb; lease uuid; old_lease uuid; original_hash text; rec record;
+ n public."Notification"; event jsonb; lease uuid; old_lease uuid; original_hash text; rec record; delivery_before jsonb;
 BEGIN
  -- Retire only earlier synthetic notices created by this contract so its queue
  -- assertions do not consume unrelated database work. The whole contract rolls back.
@@ -570,6 +581,18 @@ BEGIN
  BEGIN UPDATE public."Notification" SET metadata=metadata-'gig_completion_delivery_v1' WHERE id=n.id;
   RAISE EXCEPTION 'Recipient erased delivery contract'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  RESET ROLE;
+ -- The API changes the recipient's read state as service_role without touching
+ -- the delivery contract, and the recipient reads the change.
+ SELECT metadata->'gig_completion_delivery_v1' INTO delivery_before FROM public."Notification" WHERE id=n.id;
+ SET LOCAL ROLE service_role;
+ UPDATE public."Notification" SET is_read=false WHERE id=n.id;
+ RESET ROLE;
+ SET LOCAL ROLE authenticated;
+ IF (SELECT is_read FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM false THEN
+  RAISE EXCEPTION 'Recipient cannot read the API''s read-state change'; END IF;
+ RESET ROLE;
+ IF (SELECT metadata->'gig_completion_delivery_v1' FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM delivery_before THEN
+  RAISE EXCEPTION 'Read-state change touched the delivery contract'; END IF;
  -- Owner confirmation makes the earlier review request obsolete and queues
  -- both the worker confirmation and the already-closed standby bid notice.
  SELECT * INTO g FROM public."Gig" WHERE id=g.id;
