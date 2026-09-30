@@ -9,6 +9,20 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1030 (business RPC revoke, 183000) green, sealed and handed to Stream 1, 2026-09-30T16:13:41Z
+
+- **[#1030](https://github.com/WangPantopus/skinny-pantopus/pull/1030)**, head `f21e54fb8` on master `a318010a2`.
+  - CI run 36742096018 succeeded: database job 109979052117 ran 68/68 contracts, including the new `client-rpc-surface`, and the baseline test passed 6/6.
+  - Seal `894d9c97…` (bundle `20260930-stream5-business-rpc-scan-r1`).
+  - Stream 1's five conditions:
+    1. CI green;
+    2. the 4-caller probes went from 200/400 to 401/403;
+    3. the API's role path returns 200 before and after;
+    4. the rule's cases and the migration audit pass;
+    5. the hosted note is written.
+- **The business fixture** was removed by exact ids at 16:11:58Z.
+- **Open from Stream 5:** #1030 (in Stream 1's queue).
+
 ## LIVE — batch 197 merged #1028 and #1023; #1030 rebased onto master and ready, CI running, 2026-09-30T16:09:50Z
 
 - **Batch 197** (PR #1031, 16:07:41Z, master `a318010a2`) merged:
