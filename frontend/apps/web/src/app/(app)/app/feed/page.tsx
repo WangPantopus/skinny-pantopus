@@ -12,7 +12,7 @@ import {
 import type { ReactNode } from 'react';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import {
-  PostComposer, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
+  PostComposer, EditPostDialog, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
   NeighborhoodPulse, EmptyFeed, SparseFeedSummary, PostSkeleton,
   TopicChipRow, SportsEventModule,
 } from '@/components/feed';
@@ -50,6 +50,7 @@ export default function FeedPage() {
   const [chatTarget, setChatTarget] = useState<{ id: string; name: string } | null>(null);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
   const handleReport = useCallback((postId: string) => setReportPostId(postId), []);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -535,6 +536,7 @@ export default function FeedPage() {
                               onLike={feed.handleLike}
                               onSave={feed.handleSave}
                               onDelete={feed.handleDelete}
+                              onEdit={setEditingPost}
                               onComment={handleOpenDetail}
                               onOpenDetail={handleOpenDetail}
                               onReport={handleReport}
@@ -696,6 +698,25 @@ export default function FeedPage() {
         initialPost={detailPostId ? feed.posts.find((post) => post.id === detailPostId) || null : null}
         onPostChange={feed.patchPost}
       />
+
+      {/* Edit one of your own posts */}
+      {editingPost && (
+        <EditPostDialog
+          post={editingPost}
+          user={feed.user}
+          onClose={() => setEditingPost(null)}
+          onSaved={(postId, changes) => {
+            feed.patchPost(postId, changes);
+            setEditingPost(null);
+            showToast('Post updated');
+          }}
+          onGone={(postId) => {
+            feed.forgetPost(postId);
+            setEditingPost(null);
+            showToast('This post was deleted, so it can’t be edited.');
+          }}
+        />
+      )}
 
       {/* Report Modal */}
       <ReportModal

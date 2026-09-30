@@ -6,7 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
-import { PostCard, PostDetailPanel } from '@/components/feed';
+import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -30,6 +30,8 @@ export default function MyPulsePage() {
   // append to the list that replaced it.
   const loadGeneration = useRef(0);
   const [userId, setUserId] = useState<string | null>(null);
+  const [me, setMe] = useState<Awaited<ReturnType<typeof api.users.getMyProfile>> | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
@@ -42,6 +44,7 @@ export default function MyPulsePage() {
       try {
         const u = await api.users.getMyProfile();
         setUserId(u.id);
+        setMe(u);
       } catch {
         router.push('/login');
       }
@@ -194,6 +197,7 @@ export default function MyPulsePage() {
               onOpenDetail={(id) => setDetailPostId(id)}
               onSave={handleSave}
               onDelete={handleDelete}
+              onEdit={setEditingPost}
               onReport={(id) => setReportPostId(id)}
               currentUserId={userId || undefined}
               isLiking={likingIds.has(post.id)}
@@ -255,6 +259,25 @@ export default function MyPulsePage() {
         onClose={() => setDetailPostId(null)}
         currentUserId={userId || undefined}
       />
+
+      {/* ── Edit one of your posts ──────────────────────────── */}
+      {editingPost && (
+        <EditPostDialog
+          post={editingPost}
+          user={me}
+          onClose={() => setEditingPost(null)}
+          onSaved={(postId, changes) => {
+            setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
+            setEditingPost(null);
+            toast.success('Post updated');
+          }}
+          onGone={(postId) => {
+            setPosts((prev) => prev.filter((p) => p.id !== postId));
+            setEditingPost(null);
+            toast.info('This post was deleted, so it can’t be edited.');
+          }}
+        />
+      )}
 
       {/* ── Report modal ────────────────────────────────────── */}
       <ReportModal
