@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T06:48Z — Stream 1 (coordinator): batch 142 merged; master `68f2daa24`.**
+> - **Batch 142** ([#861](https://github.com/WangPantopus/skinny-pantopus/pull/861) ← Stream 4 #860, head `18db71759`, tip `87d42f618`, merged 06:47:45Z): I07. On the web Home dashboard, Home health is re-read after an issue save and Home activity after a task save or delete, through the existing `reloadSummary` (1 file). Seal `badd163e…` (39 files) verified; verify-batch OK; at the tip `tsc` shows only the known `qrcode`/`jsqr` gap and web Jest 1,866/1,866 pass.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:45Z — Stream 1 (coordinator): batch 141 merged; master `8af54a57a`.**
 > - **Batch 141** ([#859](https://github.com/WangPantopus/skinny-pantopus/pull/859) ← Stream 3 #858, head `309fbb850`, tip `8fe0c52d4`, merged 06:44:42Z): D07 web leads. A scoped share link refused during Lockdown tells `home.edit` holders why (`HOME_LOCKDOWN_ACTIVE`, as #827 did for guest passes); a member opening Invitations by URL gets a permission sentence instead of the sender form; standalone Home Settings offers Members & Roles and Access & Codes only to viewers whose reads allow them. Seal `7be1dd8e…` (49 files) verified; verify-batch OK (5 files); at the tip `tsc` shows only the known `qrcode`/`jsqr` gap and web Jest 1,866/1,866 pass.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.

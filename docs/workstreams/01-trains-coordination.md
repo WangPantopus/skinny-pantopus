@@ -9,10 +9,10 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
-- **Master** `8af54a57a` (batch 141, 2026-09-30T06:44Z: Stream 3's #858). The queue is empty apart from the items below.
+- **Master** `68f2daa24` (batch 142, 2026-09-30T06:47Z: Stream 4's #860). The queue is empty apart from the items below.
 - **Docker is back but was reset (2026-09-30T05:57Z):** every local stack, the founder's included, was lost with Docker's data; the Android SDK, all AVDs, `~/.gradle` and every iOS simulator runtime and device were deleted too. Stream 1's stack is rebuilt on the same ports with fresh fixtures (Alice/Bob/Dana, original ids and password); backend and web work. Native checks, including #841's last iOS run, wait for the iOS runtime and Android SDK downloads (needs the user's OK).
 - **Open PR #841** (`codex/train-native-start-retry-20260929`, head `7ef7d3010`): native Start a train finishes, and a failed or retried launch leaves one train; plus "Household of ?" removed. Android is fully verified; left: one iOS run on the final build (dylib `fd5a402a`: launch, publish-503 retry, double tap), then seal bundle `20260929-stream1-train-native-start-retry-r1` (its `RESULT.md` is drafted with two placeholders; product-delete round-2 train `e5121131` and rediff against the 01:44:29Z baseline) and batch it.
-- **Queue:** #843 and #844 merged in batch 135, #846 in batch 136, #848 in batch 137, #850/#851/#852 in batch 138, #854 in batch 139, #856 in batch 140, #858 in batch 141. Open: #841 (waits for native tooling). Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
+- **Queue:** #843 and #844 merged in batch 135, #846 in batch 136, #848 in batch 137, #850/#851/#852 in batch 138, #854 in batch 139, #856 in batch 140, #858 in batch 141, #860 in batch 142. Open: #841 (waits for native tooling). Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
 - **Parked launch-cut branches** (pushed 2026-09-30 so nothing is lost; no PR by design) belong to Stream 2's cut areas; they are listed in Stream 2's file.
 
 ## Scope
