@@ -7,6 +7,8 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResp
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
@@ -29,6 +31,14 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SupportTrainsViewModelTest {
     private val repo: SupportTrainsRepository = mockk()
+
+    // No device location in unit tests; each test sets `locationProvider` itself.
+    private val noLocation =
+        object : LocationProvider {
+            override fun cachedCoordinate(): UserCoordinate? = null
+
+            override suspend fun requestCurrent(timeoutMillis: Long): UserCoordinate? = null
+        }
 
     @Before
     fun setUp() {
@@ -88,7 +98,7 @@ class SupportTrainsViewModelTest {
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "filling"))))
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
             val state = vm.state.value
@@ -102,7 +112,7 @@ class SupportTrainsViewModelTest {
         runTest {
             coEvery { repo.mine(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
             val state = vm.state.value
@@ -119,7 +129,7 @@ class SupportTrainsViewModelTest {
                 NetworkResult.Failure(NetworkError.Server(500, null))
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
@@ -142,7 +152,7 @@ class SupportTrainsViewModelTest {
                 )
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
             vm.selectTab(SupportTrainsTab.INVITATIONS)
@@ -155,13 +165,16 @@ class SupportTrainsViewModelTest {
         runTest {
             coEvery { repo.mine(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
             vm.selectTab(SupportTrainsTab.NEARBY)
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Empty)
-            assertEquals("No trains nearby right now", (state as ListOfRowsUiState.Empty).headline)
+            // Without a location there was nothing to search, so it asks for one
+            // rather than claiming there are no trains.
+            assertEquals("Turn on location to see trains nearby", (state as ListOfRowsUiState.Empty).headline)
+            assertEquals("Use my location", state.ctaTitle)
         }
 
     // MARK: - Row mapping
@@ -173,7 +186,7 @@ class SupportTrainsViewModelTest {
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "active"))))
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
             val state = vm.state.value as ListOfRowsUiState.Loaded
@@ -193,7 +206,7 @@ class SupportTrainsViewModelTest {
                         supportTrains = listOf(nearbyRow("n1", "meal_support", 12, 18, "For the Chen family")),
                     ),
                 )
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
             vm.selectTab(SupportTrainsTab.NEARBY)
@@ -227,7 +240,7 @@ class SupportTrainsViewModelTest {
                             ),
                     ),
                 )
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
             vm.selectTab(SupportTrainsTab.NEARBY)
@@ -242,7 +255,7 @@ class SupportTrainsViewModelTest {
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st42", "active"))))
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             var captured: String? = null
             vm.onOpenTrain = { captured = it }
             vm.locationProvider = { null }
@@ -259,7 +272,7 @@ class SupportTrainsViewModelTest {
                 NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
             coEvery { repo.nearby(any(), any(), any(), any()) } returns
                 NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
-            val vm = SupportTrainsViewModel(repo)
+            val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
             // load() does not pass a role filter; verifies the contract.
