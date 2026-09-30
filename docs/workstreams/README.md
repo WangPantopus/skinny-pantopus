@@ -47,6 +47,14 @@
 
 
 
+> **UPDATE 2026-09-30T06:50Z — Stream 1 (coordinator): two Home address exposures routed (security; found by Stream 3, confirmed in code on master `68f2daa24`).**
+> 1. **Explore map homes layer** (`GET /api/posts/map?layers=homes`, the homes block of `backend/routes/posts.js`): it selects every Home with a location and returns exact coordinates, street address, city, state and type. There is no visibility, privacy-mask, Lockdown or membership filter. iOS and Android request `layers=posts,businesses,homes`.
+>    - **Owner:** Stream 3, with a **one-time grant of that block only**; Stream 2 stays out of it until the PR merges.
+>    - Reproduce first. The raw `location` likely arrives as EWKB hex, which the parser skips, so the exposure may be latent. Restrict the query either way.
+> 2. **Mail compose recipients** (`GET /api/mailbox/compose/recipients?homeId=`, `backend/routes/mailCompose.js`): any signed-in user who knows a home id gets its active occupants whose name matches a 2+ letter query, plus the Home's street address and photo URL. There is no membership check.
+>    - **Owner:** Stream 4 (Mail). It's a security fix on a live route even if compose sits partly under launch cut #8; prove it through the API only.
+> - Both are reported to the user as security items. Per the standing direction, fixes proceed and get recorded.
+
 > **UPDATE 2026-09-30T06:48Z — Stream 1 (coordinator): batch 142 merged; master `68f2daa24`.**
 > - **Batch 142** ([#861](https://github.com/WangPantopus/skinny-pantopus/pull/861) ← Stream 4 #860, head `18db71759`, tip `87d42f618`, merged 06:47:45Z): I07. On the web Home dashboard, Home health is re-read after an issue save and Home activity after a task save or delete, through the existing `reloadSummary` (1 file). Seal `badd163e…` (39 files) verified; verify-batch OK; at the tip `tsc` shows only the known `qrcode`/`jsqr` gap and web Jest 1,866/1,866 pass.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
