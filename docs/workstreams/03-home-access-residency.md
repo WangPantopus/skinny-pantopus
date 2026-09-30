@@ -60,16 +60,16 @@
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
    - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (merged, batch 147, master `b16eca646`): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
-   - **Reproduced 2026-09-30:** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). **Coordinator decision (a):** honor it for tasks and documents (explicit visibility wins; the creator keeps sight; bills untouched). **Repaired in [#898](https://github.com/WangPantopus/skinny-pantopus/pull/898), with the coordinator** (head `38c4d48c5`, bundle `20260930-stream3-home-d06-default-visibility-fix-r1`, MANIFEST `c998dcda…`): tasks through the thin wrapper migration `20260930080000`, documents in the upload route; only Managers and Sensitive defaults apply (narrow only). After it merges, apply `20260930080000` to the shared runtime with `supabase migration up`. Native gap: iOS/Android document uploads send an explicit visibility (the picker defaults to all members), so they don't follow the default until the pickers start from it (needs native toolchains). Lead: the access-code editor could start from the Home default the same way (access codes were left out of #898).
-   - **Reproduced 2026-09-30:** the "Member join policy" has no effect. With "Verified only", a residency claim routes exactly as under "Open invite" (`household_review`, pending). Bundle `20260930-stream3-home-d06-join-policy-r1` (`5d920d44…`). **Waiting on the user** (a design change): the coordinator's and my recommendation is to hide it on web now and record native as a gap. Don't implement the hide before approval.
+   - **Reproduced 2026-09-30:** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). **Coordinator decision (a):** honor it for tasks and documents (explicit visibility wins; the creator keeps sight; bills untouched). **Repaired in [#898](https://github.com/WangPantopus/skinny-pantopus/pull/898), merged in batch 156** ([#901](https://github.com/WangPantopus/skinny-pantopus/pull/901), master `b7eb7a7eb`; bundle `20260930-stream3-home-d06-default-visibility-fix-r1`, MANIFEST `c998dcda…`): tasks through the thin wrapper migration `20260930080000`, documents in the upload route; only Managers and Sensitive defaults apply (narrow only). `20260930080000` was applied to the shared runtime at 08:27:22Z (`supabase migration up`, ledger 95). Native gap: iOS/Android document uploads send an explicit visibility (the picker defaults to all members), so they don't follow the default until the pickers start from it (needs native toolchains). Lead: the access-code editor could start from the Home default the same way (access codes were left out of #898).
+   - **Reproduced 2026-09-30:** the "Member join policy" has no effect. With "Verified only", a residency claim routes exactly as under "Open invite" (`household_review`, pending). Bundle `20260930-stream3-home-d06-join-policy-r1` (`5d920d44…`). **User decision 2026-09-30: hide it** and keep the column and API field. Web: [#917](https://github.com/WangPantopus/skinny-pantopus/pull/917), with the coordinator (bundle `20260930-stream3-home-d06-hide-join-policy-r1`, `8c65ee69…`). iOS and Android show it on their Ownership & security screens; that PR is next. The three-level policy is post-launch work (see "Post-launch work" below).
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
      - 8 of the 9 `HomePrivacy` toggles have no reader (no UI either); the address-precision toggle affects only the members-only Place header;
-     - the public fridge-card link is not covered by Lockdown although the panel says existing share links stop working (unsure whether it counts as a share link);
+     - ~~the public fridge-card link is not covered by Lockdown although the panel says existing share links stop working~~: **user decision 2026-09-30:** the fridge card keeps working; the panel wording is fixed in [#916](https://github.com/WangPantopus/skinny-pantopus/pull/916) (web; native has no Lockdown panel);
      - `/discover` treats `members` visibility like `private`, and native apps have no visibility control;
      - per-Home notification preferences are saved but never read;
-     - guest-pass passcodes travel as `?passcode=` and are limited only by the generic 60/min/IP view limiter (to measure: logging and guessing);
-     - `POST /check-address` returning a Home id for an invite-only mask, and the 911 fridge card staying live during Lockdown, are product questions (recorded, not defects).
+     - ~~guest-pass passcodes travel as `?passcode=` and are limited only by the generic 60/min/IP view limiter~~: measured (`20260930-stream3-home-d08-passcode-measure-r1`, `2f0a911c…`) and repaired in [#915](https://github.com/WangPantopus/skinny-pantopus/pull/915): 10 wrong passcodes per 15 minutes per link, the passcode in a header, and new passcodes of at least 6 characters. The same measurement found live guest-pass, share and invitation tokens in the backend log; repaired in [#914](https://github.com/WangPantopus/skinny-pantopus/pull/914) for every known bearer path. Both are with the coordinator;
+     - `POST /check-address` returning a Home id for an invite-only mask is a product question (recorded, not a defect).
 5. **R03, leaving and rejoining:** the remaining re-entry and occupancy lifecycle, and the old reviewer-original release. Membership renewal is paused (decision 1 below).
 6. **H07, H08, M02 and D08, local parts:** remaining onboarding combinations, the exact copied link and public rendering, passcodes and scheduled start. Their hosted parts stay named.
 7. **D10 and R04, R05:**
@@ -85,11 +85,17 @@
    Sources: `docs/REMAINING_WORK_2026-09-11.md` §10 and `docs/home-dashboard-current-summary-2026-09-11.md`. Keep the designs; propose any layout change.
 9. **U02–U05, this stream's cells.** Start with the two recorded VoiceOver gaps: the iOS residency review sheet's Close/Reload and the Members top bar are each one merged accessibility group. Then do native large text, screen readers and dark mode, and the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
 10. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
-11. **Cross-cutting lead (sent to the coordinator 2026-09-30; their call):** `globalWriteLimiter` is mounted at `app.use('/api')` before any auth (`backend/app.js:320`), so `req.user` is never set there. It always keys by IP at the 30/min anonymous limit, and every signed-in member of a household behind one IP shares 30 writes a minute.
+11. **Cross-cutting (handed over):** `globalWriteLimiter` is mounted at `app.use('/api')` before any auth (`backend/app.js:320`), so `req.user` is never set there. It always keys by IP at the 30/min anonymous limit, and every signed-in member of a household behind one IP shares 30 writes a minute. The user decided on 2026-09-30 to fix it following industry practice; Stream 1 owns it. In the harness, pace writes about 2.2 s apart.
 
 **Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
-- **New 2026-09-30 (via the coordinator):** the member join policy has no effect. Hide it (recommended), relabel it, or define and wire each policy? Evidence: `20260930-stream3-home-d06-join-policy-r1`.
-- **New 2026-09-30 (via the coordinator):** should Lockdown also switch off the public 911 fridge card? It keeps emergency info reachable, but the panel says "Existing share links stop working".
+- **Decided 2026-09-30.** The user decided these (relayed by the coordinator), then gave a standing instruction to decide for the best UX, safety and retention, record it and keep going:
+  - **Member join policy:** hide it (#917 web; native next). The three-level policy is post-launch.
+  - **Fridge card during Lockdown:** it keeps working, and the panel wording is fixed (#916).
+  - **Passcodes:** new ones need at least 6 characters (#915).
+  - **Global write limiter:** fix it following industry practice (Stream 1).
+- **Decided by me under the standing instruction** (each also in its PR):
+  - **#915:** only wrong passcodes that were actually sent count toward the per-link limit; the header is percent-encoded, since HTTP headers can't carry non-Latin text; Create stays disabled while a passcode is 1–5 characters.
+  - **#898:** only Managers/Sensitive defaults apply (a `public` default keeps members), and the default is read under the Home lock. The coordinator confirmed both.
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
 2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
 3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
@@ -212,6 +218,13 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 **U05** — not started; it waits for the launch flags on master (this stream's screen and action inventory for Stream 1's release manifest).
 
+## Post-launch work (recorded 2026-09-30)
+
+- **Member join policy, three levels.** The ownership plan defines open_invite / admin_approval / verified_only.
+  - Only the unused `occupancyAttachService` implements them. Today every join goes through household review whatever the setting, so the control is hidden (#917, native next).
+  - After launch: wire the policy into the live admission paths (residency submissions, invitations, join requests), prove each level on all three apps, then show the control again.
+  - The `member_attach_policy` column and the API field are kept for this.
+
 ## Runtime, devices and kit (shared with Stream 4; lease label `stream3-home:`)
 
 - **Kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/` ([README](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md)). Tools are in `tools/`, stages in `runtime/`. The audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Names containing `stream2` keep them.
@@ -265,6 +278,21 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T09:00Z — #898 merged and on the runtime; D08 measured; four more PRs with the coordinator; U02–U04 itemized.**
+  - **#898:** merged in batch 156 (master `b7eb7a7eb`). `20260930080000` was applied to the shared runtime at 08:27:22Z (ledger 95, logged).
+  - **D08 measurement** (`20260930-stream3-home-d08-passcode-measure-r1`, 17 files, `2f0a911c…`, no code change):
+    - wrong passcodes were never counted or locked; only 60/min per IP applied;
+    - the passcode travelled as `?passcode=`;
+    - the backend log held the live guest-pass token on every view (103/103), and the invitation and share paths did the same.
+  - **With the coordinator** (one lease, 08:50:09–08:57:50Z; befores on master `88149d747`, afters per candidate, real API and Chrome; exact shared cleanup 351/353):
+    - [#914](https://github.com/WangPantopus/skinny-pantopus/pull/914) bearer-link tokens redacted from logs on every known path (`74ba94955`, `d8978eab…`);
+    - [#915](https://github.com/WangPantopus/skinny-pantopus/pull/915) passcode guard (`0283969bf`, `2553126c…`);
+    - [#916](https://github.com/WangPantopus/skinny-pantopus/pull/916) Lockdown panel fridge-card wording (`579ce1f5d`, `d8cf9fb5…`);
+    - [#917](https://github.com/WangPantopus/skinny-pantopus/pull/917) Member Join Policy hidden on web (`a6ec78426`, `8c65ee69…`).
+  - **User decisions and mine** under the standing instruction are recorded in CURRENT RESUME → "Decided 2026-09-30".
+  - **U02–U04:** itemized (section "Stream 3 exit checklists"). Every ✅ was re-checked against its bundle, and one map claim was corrected (native has a landlord wizard).
+  - **Next:** the native join-policy hide on iOS and Android (toolchains ready), then U01 on web and the recorded native accessibility gaps.
 
 - **2026-09-30T08:17Z — D06 default visibility: [#898](https://github.com/WangPantopus/skinny-pantopus/pull/898) is with the coordinator.** Head `38c4d48c5e744cce43aa7821a89f5fd7fbe09e33`, base master `66d57bcfe`. Bundle `20260930-stream3-home-d06-default-visibility-fix-r1`, 35 files, MANIFEST `c998dcda3309ab1cab87ba5df4d0d28a676ea2c5ade6c4c99dc804ceca823e50`.
   - **Rule (the coordinator's option (a)):** a new task or document that names no visibility takes a Managers or Sensitive Home default in full when its creator can see that level. Otherwise it gets the most restrictive level the creator (and a task's assignee and viewers) can see. An explicit visibility wins; any other default keeps `members`, so it only narrows.
