@@ -270,7 +270,7 @@ export default function ChangeOrdersSection({
                           <button
                             onClick={() => handleApprove(o.id)}
                             disabled={approvingId === o.id || declining}
-                            className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
+                            className="text-xs bg-green-700 text-white px-3 py-1 rounded-md hover:bg-green-800 font-medium disabled:opacity-50"
                           >
                             Approve
                           </button>

@@ -598,7 +598,7 @@ function BidCard({
         {bid.status === 'accepted' && gigStatus === 'in_progress' && (
           <button
             onClick={onMarkCompleted}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm"
+            className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium text-sm"
           >
             <CheckSquare className="w-4 h-4" /> Mark Complete
           </button>

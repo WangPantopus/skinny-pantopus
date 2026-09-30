@@ -78,7 +78,7 @@ export default function OfferCardV2({ offer, onAccept, onDecline, gig }: OfferCa
           {canAccept && (
             <button
               onClick={() => onAccept(offer.id)}
-              className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
+              className="px-5 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition"
             >
               Accept
             </button>

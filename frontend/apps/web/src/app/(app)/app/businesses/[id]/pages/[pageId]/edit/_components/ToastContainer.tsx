@@ -10,7 +10,7 @@ export function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismi
           key={t.id}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium transition-all animate-in slide-in-from-right ${
             t.type === 'success'
-              ? 'bg-green-600 text-white'
+              ? 'bg-green-700 text-white'
               : t.type === 'error'
               ? 'bg-red-600 text-white'
               : 'bg-gray-800 text-white'

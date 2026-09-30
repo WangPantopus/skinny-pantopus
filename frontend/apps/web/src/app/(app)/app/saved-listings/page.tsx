@@ -159,7 +159,7 @@ function SavedListingCard({
         {/* Price badge - bottom left */}
         <div className="absolute bottom-2 left-2">
           {item.is_free ? (
-            <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-bold rounded-md">
+            <span className="px-2 py-0.5 bg-green-700 text-white text-xs font-bold rounded-md">
               FREE
             </span>
           ) : item.price != null ? (

@@ -140,7 +140,7 @@ export default function FanInboxPage() {
               type="button"
               onClick={openThreadFromComposer}
               disabled={opening || draft.trim().length === 0}
-              className="mt-3 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {opening ? 'Sending…' : 'Send'}
             </button>

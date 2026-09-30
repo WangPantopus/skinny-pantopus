@@ -17,7 +17,7 @@ export default function CounterBanner({ counter, onClick }: CounterBannerProps) 
       className="w-full flex items-center gap-3 px-3 py-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-left"
     >
       {/* Counter circle */}
-      <span className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center">
+      <span className="flex-shrink-0 w-8 h-8 rounded-full bg-red-600 text-white text-sm font-bold flex items-center justify-center">
         {counter.total > 99 ? '99+' : counter.total}
       </span>
 

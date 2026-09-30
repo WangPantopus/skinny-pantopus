@@ -365,7 +365,7 @@ function ScopedOffersPanel({
                         </button>
                         <button
                           onClick={() => handleAcceptBid(o.id)}
-                          className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-semibold text-sm"
+                          className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-800 font-semibold text-sm"
                         >
                           Accept Bid
                         </button>

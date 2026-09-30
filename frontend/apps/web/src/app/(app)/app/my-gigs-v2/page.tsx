@@ -386,7 +386,7 @@ function GigCardV2({
         {(gig.status === 'in_progress' || awaitingConfirmation(gig)) && (
           <button
             onClick={gig.status === 'completed' ? onComplete : onView}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+            className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium"
           >
             {gig.status === 'completed' ? 'Confirm completion' : 'View task'}
           </button>
@@ -491,7 +491,7 @@ function BidsModal({
                       <div className="flex gap-2">
                         <button
                           onClick={() => onAccept(bid.id)}
-                          className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                          className="flex-1 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium"
                         >
                           Accept Bid
                         </button>

@@ -8,23 +8,23 @@ type FeedSurface = 'place' | 'personas' | 'connections';
 
 const PLACE_FILTERS: { key: PostType | 'all'; label: string; icon: ReactNode; color: string }[] = [
   { key: 'all', label: 'All', icon: <Home className="w-4 h-4" />, color: '#6B7280' },
-  { key: 'ask_local', label: 'Ask Local', icon: <MessageCircle className="w-4 h-4" />, color: '#3B82F6' },
-  { key: 'recommendation', label: 'Recs', icon: <Star className="w-4 h-4" />, color: '#F59E0B' },
-  { key: 'event', label: 'Events', icon: <Calendar className="w-4 h-4" />, color: '#8B5CF6' },
-  { key: 'lost_found', label: 'Lost & Found', icon: <Search className="w-4 h-4" />, color: '#EF4444' },
+  { key: 'ask_local', label: 'Ask Local', icon: <MessageCircle className="w-4 h-4" />, color: '#2563EB' },
+  { key: 'recommendation', label: 'Recs', icon: <Star className="w-4 h-4" />, color: '#B45309' },
+  { key: 'event', label: 'Events', icon: <Calendar className="w-4 h-4" />, color: '#7C3AED' },
+  { key: 'lost_found', label: 'Lost & Found', icon: <Search className="w-4 h-4" />, color: '#DC2626' },
   { key: 'alert', label: 'Alerts', icon: <AlertTriangle className="w-4 h-4" />, color: '#DC2626' },
-  { key: 'deal', label: 'Deals', icon: <Tag className="w-4 h-4" />, color: '#059669' },
-  { key: 'local_update', label: 'Updates', icon: <Newspaper className="w-4 h-4" />, color: '#0D9488' },
-  { key: 'neighborhood_win', label: 'Wins', icon: <Trophy className="w-4 h-4" />, color: '#D97706' },
+  { key: 'deal', label: 'Deals', icon: <Tag className="w-4 h-4" />, color: '#047857' },
+  { key: 'local_update', label: 'Updates', icon: <Newspaper className="w-4 h-4" />, color: '#0F766E' },
+  { key: 'neighborhood_win', label: 'Wins', icon: <Trophy className="w-4 h-4" />, color: '#B45309' },
 ];
 
 const NETWORK_FILTERS: { key: PostType | 'all'; label: string; icon: ReactNode; color: string }[] = [
   { key: 'all', label: 'All', icon: <Home className="w-4 h-4" />, color: '#6B7280' },
-  { key: 'personal_update', label: 'Updates', icon: <User className="w-4 h-4" />, color: '#6366F1' },
-  { key: 'ask_local', label: 'Questions', icon: <MessageCircle className="w-4 h-4" />, color: '#3B82F6' },
-  { key: 'recommendation', label: 'Recs', icon: <Star className="w-4 h-4" />, color: '#F59E0B' },
-  { key: 'event', label: 'Events', icon: <Calendar className="w-4 h-4" />, color: '#8B5CF6' },
-  { key: 'announcement', label: 'Announce', icon: <Megaphone className="w-4 h-4" />, color: '#0D9488' },
+  { key: 'personal_update', label: 'Updates', icon: <User className="w-4 h-4" />, color: '#4F46E5' },
+  { key: 'ask_local', label: 'Questions', icon: <MessageCircle className="w-4 h-4" />, color: '#2563EB' },
+  { key: 'recommendation', label: 'Recs', icon: <Star className="w-4 h-4" />, color: '#B45309' },
+  { key: 'event', label: 'Events', icon: <Calendar className="w-4 h-4" />, color: '#7C3AED' },
+  { key: 'announcement', label: 'Announce', icon: <Megaphone className="w-4 h-4" />, color: '#0F766E' },
 ];
 
 interface FeedFiltersProps {

@@ -219,7 +219,7 @@ export default function VerifyResidencyPage() {
                 <p className="text-xs text-app-text-secondary mt-0.5">{doc.desc}</p>
               </div>
               {selectedDoc === doc.id && (
-                <span className="w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs">✓</span>
+                <span className="w-5 h-5 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs">✓</span>
               )}
             </button>
           ))}

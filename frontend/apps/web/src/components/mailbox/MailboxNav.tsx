@@ -243,8 +243,8 @@ function NavItem({
           aria-hidden="true"
           className={`min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0 ${
             pulse
-              ? 'bg-amber-500 text-white animate-pulse'
-              : 'bg-red-500 text-white'
+              ? 'bg-amber-700 text-white animate-pulse'
+              : 'bg-red-600 text-white'
           }`}
         >
           {count > 99 ? '99+' : count}

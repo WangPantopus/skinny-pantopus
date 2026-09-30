@@ -64,7 +64,7 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
               profile?.is_published
                 ? 'border border-amber-300 text-amber-700 hover:bg-amber-50'
-                : 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-green-700 text-white hover:bg-green-800'
             }`}
           >
             {publishing ? '…' : profile?.is_published ? 'Unpublish' : 'Publish'}

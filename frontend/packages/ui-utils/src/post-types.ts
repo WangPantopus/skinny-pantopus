@@ -5,6 +5,7 @@
 
 export interface PostTypeConfig {
   label: string;
+  /** Fill that white text sits on (avatar initials, the composer's submit, active chips, map pins): AA (4.5:1) with white. */
   color: string;
   /** Text in `color`'s hue that meets WCAG AA (4.5:1) on `bgLight` and on light tints of `color`. */
   textColor: string;
@@ -20,7 +21,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   // ── Place types ──
   ask_local: {
     label: 'Ask Local',
-    color: '#0284C7',
+    color: '#0369A1',
     textColor: '#0369A1',
     darkTextColor: '#38BDF8',
     bgLight: '#EFF6FF',
@@ -30,7 +31,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   recommendation: {
     label: 'Recommendation',
-    color: '#F59E0B',
+    color: '#B45309',
     textColor: '#B45309',
     darkTextColor: '#FBBF24',
     bgLight: '#FFFBEB',
@@ -40,7 +41,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   event: {
     label: 'Event',
-    color: '#8B5CF6',
+    color: '#7C3AED',
     textColor: '#7C3AED',
     darkTextColor: '#A78BFA',
     bgLight: '#F5F3FF',
@@ -50,7 +51,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   lost_found: {
     label: 'Lost & Found',
-    color: '#EF4444',
+    color: '#DC2626',
     textColor: '#B91C1C',
     darkTextColor: '#F87171',
     bgLight: '#FEF2F2',
@@ -70,7 +71,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   deal: {
     label: 'Deal',
-    color: '#16A34A',
+    color: '#15803D',
     textColor: '#166534',
     darkTextColor: '#4ADE80',
     bgLight: '#F0FDF4',
@@ -90,7 +91,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   neighborhood_win: {
     label: 'Win',
-    color: '#059669',
+    color: '#047857',
     textColor: '#047857',
     darkTextColor: '#34D399',
     bgLight: '#F0FDF4',
@@ -119,7 +120,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   personal_update: {
     label: 'Update',
-    color: '#6366F1',
+    color: '#4F46E5',
     textColor: '#4F46E5',
     darkTextColor: '#A5B4FC',
     bgLight: '#EEF2FF',
@@ -127,7 +128,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   announcement: {
     label: 'Announcement',
-    color: '#0D9488',
+    color: '#0F766E',
     textColor: '#0F766E',
     darkTextColor: '#2DD4BF',
     bgLight: '#F0FDFA',
@@ -147,7 +148,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   resources_howto: {
     label: 'Resource',
-    color: '#0891B2',
+    color: '#0E7490',
     textColor: '#0E7490',
     darkTextColor: '#22D3EE',
     bgLight: '#ECFEFF',
@@ -157,7 +158,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   },
   progress_wins: {
     label: 'Progress',
-    color: '#059669',
+    color: '#047857',
     textColor: '#047857',
     darkTextColor: '#34D399',
     bgLight: '#F0FDF4',

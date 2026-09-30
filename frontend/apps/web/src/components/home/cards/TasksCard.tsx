@@ -234,7 +234,7 @@ export default function TasksCard({
                 }}
                 className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
                   task.status === 'done'
-                    ? 'bg-green-500 border-green-500 text-white'
+                    ? 'bg-green-700 border-green-500 text-white'
                     : task.status === 'in_progress'
                     ? 'bg-amber-400 border-amber-400 text-white'
                     : 'border-app-border hover:border-gray-400'

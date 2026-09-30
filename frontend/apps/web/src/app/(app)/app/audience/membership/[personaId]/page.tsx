@@ -177,7 +177,7 @@ export default function FanMembershipPage() {
           </p>
           <Link
             href={`/app/audience/membership/${personaId}/inbox`}
-            className="mt-3 inline-flex rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+            className="mt-3 inline-flex rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
           >
             Open inbox
           </Link>
@@ -302,7 +302,7 @@ function ConfirmModal({
             <button
               type="button"
               onClick={onConfirm}
-              className="rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+              className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
               {confirmLabel}
             </button>

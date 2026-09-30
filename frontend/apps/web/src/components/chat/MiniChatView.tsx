@@ -125,7 +125,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
         {avatar ? (
           <img src={avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
         ) : (
-          <div className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
             {name?.charAt(0)?.toUpperCase() || '?'}
           </div>
         )}

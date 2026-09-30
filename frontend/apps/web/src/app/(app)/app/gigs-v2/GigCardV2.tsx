@@ -113,7 +113,7 @@ function GigCardV2({
           <button
             onClick={(e) => { e.stopPropagation(); onInstantAccept(gig.id); }}
             disabled={isAccepting}
-            className="flex-1 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60 transition"
+            className="flex-1 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 disabled:opacity-60 transition"
           >
             {isAccepting ? 'Accepting...' : 'I Can Help!'}
           </button>

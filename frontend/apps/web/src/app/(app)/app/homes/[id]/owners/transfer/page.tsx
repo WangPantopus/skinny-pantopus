@@ -72,7 +72,7 @@ function TransferContent() {
         </label>
 
         <button onClick={handleTransfer} disabled={submitting || !buyerEmail.trim()}
-          className="w-full flex items-center justify-center gap-2 py-3.5 bg-amber-500 text-white rounded-xl font-bold text-base hover:bg-amber-600 disabled:opacity-50 transition mt-2">
+          className="w-full flex items-center justify-center gap-2 py-3.5 bg-amber-700 text-white rounded-xl font-bold text-base hover:bg-amber-800 disabled:opacity-50 transition mt-2">
           {submitting ? 'Processing...' : <><ArrowLeftRight className="w-4 h-4" /> Initiate Transfer</>}
         </button>
       </div>

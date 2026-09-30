@@ -214,7 +214,7 @@ export default function CouponPipeline({
       <div className="relative w-full h-full md:h-auto md:max-h-[90vh] md:max-w-lg md:mx-4 bg-app-surface md:rounded-xl md:shadow-2xl flex flex-col overflow-hidden">
         {/* ── Coupon banner (persistent, cannot be dismissed) ── */}
         <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex-shrink-0">
-          <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded">
+          <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-700 text-white rounded">
             {formatDiscountBadge(discountType, discountValue)}
           </span>
           <span className="text-xs text-amber-800 dark:text-amber-300 truncate flex-1">
@@ -244,7 +244,7 @@ export default function CouponPipeline({
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
                     done
-                      ? 'bg-green-500 text-white'
+                      ? 'bg-green-700 text-white'
                       : active
                         ? 'bg-primary-600 text-white'
                         : 'bg-app-surface-sunken text-app-text-muted'

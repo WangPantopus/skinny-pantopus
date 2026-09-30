@@ -162,7 +162,7 @@ export default function AudienceDashboardPage() {
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/app/audience/setup"
-              className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
+              className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
               Create a Beacon
             </Link>

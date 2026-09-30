@@ -107,14 +107,14 @@ export default React.memo(function ListingCard({ item, onSave, onClick, saveDisa
 
         {/* ── FREE badge — dominant, top-center ── */}
         {item.is_free && !item.is_wanted && (
-          <span className="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-green-500 text-white text-sm font-bold rounded-lg shadow-md uppercase tracking-wide">
+          <span className="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-green-700 text-white text-sm font-bold rounded-lg shadow-md uppercase tracking-wide">
             FREE
           </span>
         )}
 
         {/* Wanted badge - top left */}
         {item.is_wanted && (
-          <span className="absolute top-2 left-2 px-2.5 py-1 bg-amber-500 text-white text-[11px] font-bold rounded-lg uppercase shadow-sm">
+          <span className="absolute top-2 left-2 px-2.5 py-1 bg-amber-700 text-white text-[11px] font-bold rounded-lg uppercase shadow-sm">
             Wanted
           </span>
         )}

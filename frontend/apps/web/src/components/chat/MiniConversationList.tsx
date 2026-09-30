@@ -169,7 +169,7 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0"
               />
             ) : (
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-blue-500 text-white">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-blue-600 text-white">
                 {getInitials(title)}
               </div>
             )}

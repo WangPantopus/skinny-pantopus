@@ -149,7 +149,7 @@ export default function LeaveReviewModal({
                 <button
                   type="button"
                   onClick={() => onRemoveMedia(idx)}
-                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition"
+                  className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 transition"
                 >
                   <X className="w-3 h-3" />
                 </button>
