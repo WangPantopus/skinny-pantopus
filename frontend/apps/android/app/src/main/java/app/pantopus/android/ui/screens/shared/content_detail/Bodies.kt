@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -102,11 +103,19 @@ fun GridTabsBody(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        Row(
+        // At large text, five tiles in a row break their one-word labels mid-word ("Task / s"); three per row
+        // keep every label whole. Below that the tiles stay in one row, as before.
+        val perRow = if (LocalDensity.current.fontScale >= LARGE_TEXT_SCALE) LARGE_TEXT_TILES_PER_ROW else maxOf(quickActions.size, 1)
+        Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            quickActions.forEach { action -> QuickActionTileView(action, onQuickAction, modifier = Modifier.weight(1f)) }
+            quickActions.chunked(perRow).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                    row.forEach { action -> QuickActionTileView(action, onQuickAction, modifier = Modifier.weight(1f)) }
+                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
         }
         Row(
             modifier =
@@ -160,6 +169,10 @@ fun GridTabsBody(
         }
     }
 }
+
+/** The system font scale from which the quick-action tiles reflow, and how many then share a row. */
+private const val LARGE_TEXT_SCALE = 1.5f
+private const val LARGE_TEXT_TILES_PER_ROW = 3
 
 @Composable
 private fun QuickActionTileView(

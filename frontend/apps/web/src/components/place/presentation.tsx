@@ -228,7 +228,7 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
   your_home: {
     icon: House,
     title: 'Your home',
-    sparkline: true,
+    // No value trend: the section has no value history, so a line here would be invented.
     asOf: (env) => fmtMonthYear(env.as_of),
     format: (data) => {
       const d = data as PlaceYourHomeData;

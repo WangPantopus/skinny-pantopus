@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +67,46 @@ fun PlaceSectionCard(
 
     if (inline && (state == PlaceSectionCardState.LOADED || state == PlaceSectionCardState.STALE)) {
         // ── INLINE: compact single-line reading ──
+        // From font scale 1.5 the title left the reading too little width and it broke mid-word ("Rec / ycli / ng"),
+        // so there the reading sits under the title. Below that the row is unchanged.
+        val stacked = LocalDensity.current.fontScale >= INLINE_STACK_FONT_SCALE
+        val titleText: @Composable () -> Unit = {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.15).sp,
+                color = PantopusColors.appText,
+            )
+        }
+        val reading: @Composable () -> Unit = {
+            when {
+                chip != null -> PlaceChip(chip)
+                actionLabel != null ->
+                    Text(
+                        text = actionLabel,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.primary600,
+                        maxLines = 1,
+                    )
+                value != null ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        statusDot?.let { PlaceStatusDot(it) }
+                        Text(
+                            text = value,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 19.sp,
+                            color = PantopusColors.appText,
+                            textAlign = if (stacked) TextAlign.Start else TextAlign.End,
+                        )
+                    }
+            }
+        }
         Row(
             modifier =
                 tappable
@@ -76,43 +117,19 @@ fun PlaceSectionCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlaceIconTile(icon = icon, tone = tileTone, size = 32.dp)
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.15).sp,
-                color = PantopusColors.appText,
-            )
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when {
-                    chip != null -> PlaceChip(chip)
-                    actionLabel != null ->
-                        Text(
-                            text = actionLabel,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = PantopusColors.primary600,
-                            maxLines = 1,
-                        )
-                    value != null ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            statusDot?.let { PlaceStatusDot(it) }
-                            Text(
-                                text = value,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                lineHeight = 19.sp,
-                                color = PantopusColors.appText,
-                                textAlign = TextAlign.End,
-                            )
-                        }
+            if (stacked) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    titleText()
+                    reading()
+                }
+            } else {
+                titleText()
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    reading()
                 }
             }
             PlaceChevron()
@@ -288,3 +305,5 @@ fun PlaceSectionCard(
         }
     }
 }
+
+private const val INLINE_STACK_FONT_SCALE = 1.5f

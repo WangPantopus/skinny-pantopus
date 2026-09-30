@@ -218,14 +218,24 @@ class MaintenanceListViewModel
             val active = loaded.filter { passes(it, tab, now) }
             if (active.isEmpty()) {
                 _banner.value = null
+                // "No maintenance logged yet" only when the whole log is empty; an empty tab next to logged
+                // entries says which tab is empty, so the entries under the other tab aren't hidden behind it.
+                val logEmpty = loaded.none { passes(it, MaintenanceTab.All, now) }
+                val (headline, subcopy) =
+                    when {
+                        logEmpty ->
+                            "No maintenance logged yet" to
+                                "Track HVAC tune-ups, gutter cleans, filter swaps and " +
+                                "inspections. Build a service history that protects warranties " +
+                                "and resale value."
+                        tab == MaintenanceTab.Completed -> "Nothing completed yet" to "Scheduled maintenance moves here once it's done."
+                        else -> "Nothing scheduled" to "Your logged maintenance is under Completed."
+                    }
                 _state.value =
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Hammer,
-                        headline = "No maintenance logged yet",
-                        subcopy =
-                            "Track HVAC tune-ups, gutter cleans, filter swaps and " +
-                                "inspections. Build a service history that protects warranties " +
-                                "and resale value.",
+                        headline = headline,
+                        subcopy = subcopy,
                         ctaTitle = "Log maintenance",
                         onCta = { onAddTask() },
                     )

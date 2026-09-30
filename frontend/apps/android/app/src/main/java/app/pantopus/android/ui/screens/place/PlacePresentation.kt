@@ -177,7 +177,8 @@ object PlacePresentation {
                 PlaceSectionDisplayConfig(PantopusIcon.Sunrise, "Sunrise & sunset", inline = true)
             PlaceSectionId.GOOD_DAY_TO ->
                 PlaceSectionDisplayConfig(PantopusIcon.ListChecks, "Good day to\u2026", inline = true)
-            PlaceSectionId.YOUR_HOME -> PlaceSectionDisplayConfig(PantopusIcon.Home, "Your home", sparkline = true)
+            // No value trend: the section has no value history, so a line here would be invented.
+            PlaceSectionId.YOUR_HOME -> PlaceSectionDisplayConfig(PantopusIcon.Home, "Your home")
             PlaceSectionId.HOME_SYSTEMS -> PlaceSectionDisplayConfig(PantopusIcon.Wrench, "Systems", inline = true)
             PlaceSectionId.FLOOD -> PlaceSectionDisplayConfig(PantopusIcon.Waves, "Flood", inline = true)
             PlaceSectionId.HEAT_COLD ->

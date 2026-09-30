@@ -2,9 +2,11 @@ package app.pantopus.android.ui.screens.place.detail
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
@@ -21,6 +23,10 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -212,12 +218,19 @@ private fun FridgeItemRow(
             singleLine = true,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            "✕",
-            fontSize = 14.sp,
-            color = PantopusColors.appTextMuted,
-            modifier = Modifier.clickable(onClick = onRemove),
-        )
+        // TalkBack read the bare "✕"; the row's remove control now says what it removes, and the tappable
+        // area is larger than the glyph.
+        val removeLabel = if (item.label.isEmpty()) "Remove this row" else "Remove ${item.label}"
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clickable(onClickLabel = removeLabel, role = Role.Button, onClick = onRemove)
+                    .semantics { contentDescription = removeLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("✕", fontSize = 14.sp, color = PantopusColors.appTextMuted, modifier = Modifier.clearAndSetSemantics {})
+        }
     }
 }
 

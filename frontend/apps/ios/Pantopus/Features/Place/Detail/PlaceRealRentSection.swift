@@ -238,7 +238,7 @@ struct PlaceRealRentSection: View {
                 title: "What your block actually pays",
                 reason: PlacePresentation.lockReason(env),
                 cta: "Verify address",
-                onTap: nil
+                onTap: detail.verifyAction
             )
         case let .unavailable(reason, retry):
             RealRentUnavailableCard(reason: reason, retry: retry, detail: detail)

@@ -13,6 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,6 +31,8 @@ import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.PlaceSectionReading
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCard
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCardState
+import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
+import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
 import app.pantopus.android.ui.theme.PantopusColors
 
 /**
@@ -38,10 +43,14 @@ import app.pantopus.android.ui.theme.PantopusColors
 @Composable
 fun PlaceDetailScreen(
     onBack: () -> Unit,
+    onStartVerify: ((PlaceVerifyMethod) -> Unit)? = null,
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
+    // A locked section's "Verify address" opens the same verify sheet as the dashboard.
+    var showVerify by remember { mutableStateOf(false) }
+    val verify: (() -> Unit)? = onStartVerify?.let { { showVerify = true } }
 
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         PlaceDetailHeader(
@@ -60,12 +69,22 @@ fun PlaceDetailScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp),
                 ) {
-                    CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
+                    CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh, LocalPlaceDetailVerify provides verify) {
                         GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel)
                     }
                     Spacer(modifier = Modifier.height(40.dp))
                 }
         }
+    }
+    if (showVerify && onStartVerify != null) {
+        PlaceVerifySheet(
+            address = (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.label.orEmpty(),
+            onStart = { method ->
+                showVerify = false
+                onStartVerify(method)
+            },
+            onDismiss = { showVerify = false },
+        )
     }
 }
 
@@ -100,6 +119,9 @@ private fun PlaceDetailSkeleton() {
 
 /** The detail page's re-read, the default "Try again" for its fallback cards. */
 val LocalPlaceDetailRetry = staticCompositionLocalOf<(() -> Unit)?> { null }
+
+/** Opens the verify sheet: the tap for a locked section's "Verify address" (null where no flow is wired). */
+val LocalPlaceDetailVerify = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * Fallback card for a section with no bespoke layout.

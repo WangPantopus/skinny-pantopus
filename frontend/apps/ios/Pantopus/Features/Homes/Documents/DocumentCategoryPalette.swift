@@ -101,8 +101,8 @@ public enum DocumentCategory: String, CaseIterable, Sendable {
             // CSS 0f766e
             Color(red: 0x0F / 255.0, green: 0x76 / 255.0, blue: 0x6E / 255.0)
         case .warranty:
-            // CSS a16207
-            Color(red: 0xA1 / 255.0, green: 0x62 / 255.0, blue: 0x07 / 255.0)
+            // CSS 854d0e (yellow-800): yellow-700 a16207 was 4.42:1 on the fef3c7 tint, under AA's 4.5:1 for small text.
+            Color(red: 0x85 / 255.0, green: 0x4D / 255.0, blue: 0x0E / 255.0)
         case .tax:
             // CSS 4338ca
             Color(red: 0x43 / 255.0, green: 0x38 / 255.0, blue: 0xCA / 255.0)

@@ -32,6 +32,8 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let updatedAt: String?
     public let contentURL: String?
     public let fileVersion: String?
+    /// The uploader's display name (`uploaded_by_name`); nil for a deleted account or an older server.
+    public let uploadedByName: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -50,6 +52,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         case updatedAt = "updated_at"
         case contentURL = "content_url"
         case fileVersion = "file_version"
+        case uploadedByName = "uploaded_by_name"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -70,6 +73,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         contentURL = try container.decodeIfPresent(String.self, forKey: .contentURL)
         fileVersion = try container.decodeIfPresent(String.self, forKey: .fileVersion)
+        uploadedByName = try container.decodeIfPresent(String.self, forKey: .uploadedByName)
     }
 
     public init(
@@ -88,7 +92,8 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         contentURL: String? = nil,
-        fileVersion: String? = nil
+        fileVersion: String? = nil,
+        uploadedByName: String? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -106,6 +111,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.contentURL = contentURL
         self.fileVersion = fileVersion
+        self.uploadedByName = uploadedByName
     }
 }
 

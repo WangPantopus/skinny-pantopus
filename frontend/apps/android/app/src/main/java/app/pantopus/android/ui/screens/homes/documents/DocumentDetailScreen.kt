@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -490,11 +491,15 @@ private fun PreviewPane(
     onOpenExternally: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val rendersFile =
+        bytes != null && fileType in setOf(DocumentFileType.Pdf, DocumentFileType.Scan, DocumentFileType.Image)
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(260.dp)
+                // A rendered file fills a fixed frame. The "Preview not supported" fallback may grow past it at large
+                // text sizes, where a fixed frame cut off its Open externally label.
+                .then(if (rendersFile) Modifier.height(260.dp) else Modifier.heightIn(min = 260.dp))
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
@@ -617,7 +622,10 @@ private fun MetadataGrid(
         if (dto.createdBy == null) {
             "Former member"
         } else {
-            dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() } ?: dto.createdBy.orEmpty()
+            // The server's display name; never the raw user id.
+            dto.uploadedByName?.takeIf { it.isNotEmpty() }
+                ?: dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() }
+                ?: "—"
         }
     val uploadedLabel = projection.uploadedLabel ?: "—"
     val visibility =
