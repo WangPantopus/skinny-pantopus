@@ -9,6 +9,37 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #992 broke four SQL contracts (master's database job red since 13:15Z); fix #1018 green and handed to Stream 1; four evidence bundles corrected, 2026-09-30T14:54:13Z
+
+- **What happened:** #992 (API-only writes) revoked client write grants.
+  - Four contracts still expected some direct client writes to succeed: payment-method-preferences, home-finance-rls, home-effective-permissions and paid-gig-acceptance.
+  - master's database job failed on every run from #992's merge (run 36720355505 at `dd8090e17`) through `ba5ee672c`.
+- **My evidence was wrong.** The "67/67 contracts pass" lines in the #992, #996, #1001 and #1002 bundles are invalid.
+  - The local loop wrote `echo "$(basename $f) exit $?"`, which records basename's exit status, not psql's.
+  - In each run, 43 to 55 of the 67 files never connected, because the local arm64 Postgres was crashed or recovering.
+  - Stream 1 caught the red job. It approved fixing the contracts rather than reverting #992.
+- **Fix:** [#1018](https://github.com/WangPantopus/skinny-pantopus/pull/1018), head `54fe24992`. No migration.
+  - Every denial is kept, and each former client-write positive control is now refused.
+  - The API's path is proven instead: service_role writes, and the client reads the result back.
+  - Streams 2, 3 and 4 were told before the PR, and all three reviewed it.
+  - CI database job success: [run 36731856487, job 109943586281](https://github.com/WangPantopus/skinny-pantopus/actions/runs/36731856487/job/109943586281), 67/67 contracts and baseline PostgREST 6/6.
+  - Evidence: bundle `20260930-stream5-contracts-api-only-r1`, seal `b1d5c737…`. With Stream 1's queue.
+- **Corrections:** each of the four bundles has CORRECTION.md plus its run's stderr. The contract-claim lines are marked invalid, and the old files are kept under `superseded/`. Resealed:
+  - #992: `28040cc7…` → `806af1c9…`;
+  - #996: `ac9b751b…` → `b7d2cb7d…`;
+  - #1001: `561db4f8…` → `184fbe4f…`;
+  - #1002: `d2b72eee…` → `0ea52d29…`.
+  - Stream 1 will add hub correction lines for batches 185/187/189.
+- **Also merged:** #1015 (/health uses the service client; mailbox.js's unused anon import dropped), 14:27:00Z, `965c69091`.
+- **Stream 1's native pass for Stream 5 work** (its bundles):
+  - account deletion with a private-setup Home: Android PASS, iOS next;
+  - #950 delete-sheet copy: verified on iOS and Android;
+  - portfolio delete: iOS fixed by Stream 1's #1019, merged.
+- **Next:**
+  - the anon SELECT default-deny evaluation, after Stream 2 confirms gigs.js. Inventory started: 253 of 367 public relations are anon-readable by grant. Only public business pages, reference tables, HomePublicData, SeededBusiness and SubscriptionPlan have policies that admit anon rows. I'll ask Stream 1 for a migration number before any file;
+  - fixture cleanup by exact ids.
+- **Open from Stream 5:** #1018.
+
 ## LIVE — security track fully merged: every Stream 5 PR from today is in master (`a5f21354a`), 2026-09-30T14:17:54Z
 
 - **Correction to the blocks below:** "open" there is out of date. Merged:
