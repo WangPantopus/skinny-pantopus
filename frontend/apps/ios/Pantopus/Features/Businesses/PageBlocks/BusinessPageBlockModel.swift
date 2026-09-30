@@ -411,13 +411,16 @@ public struct BusinessPageBlock: Sendable, Hashable, Identifiable {
         int("max_items") ?? 8
     }
 
-    /// `[{ label, action }]` used by hero (`cta`) and CTA (`buttons`).
+    /// `[{ label, action, url? }]` used by hero (`cta`) and CTA (`buttons`). A button with only an address is a
+    /// Link, as on the web.
     public func buttonList(key: String) -> [BusinessPageBlockButton] {
         (data[key]?.arrayValue ?? []).map { value in
             let dict = value.dictValue ?? [:]
+            let url = dict["url"]?.stringValue
             return BusinessPageBlockButton(
                 label: dict["label"]?.stringValue ?? "",
-                action: dict["action"]?.stringValue ?? "message"
+                action: dict["action"]?.stringValue ?? ((url?.isEmpty == false) ? "link" : "message"),
+                url: url
             )
         }
     }
@@ -486,18 +489,31 @@ public struct BusinessPageBlock: Sendable, Hashable, Identifiable {
     }
 }
 
-/// A CTA / hero button pair.
+/// A CTA / hero button: its label, action and, for a Link, the web address it opens.
 public struct BusinessPageBlockButton: Sendable, Hashable {
     public var label: String
     public var action: String
+    public var url: String?
 
-    public init(label: String, action: String) {
+    public init(label: String, action: String, url: String? = nil) {
         self.label = label
         self.action = action
+        self.url = url
     }
 
+    /// The address as saved; kept whenever present so editing here never drops a link set elsewhere.
     public var json: JSONValue {
-        .object(["label": .string(label), "action": .string(action)])
+        var object: [String: JSONValue] = ["label": .string(label), "action": .string(action)]
+        if let url, !url.isEmpty { object["url"] = .string(url) }
+        return .object(object)
+    }
+
+    /// Whether `url` is a web address the crew page will open (http or https with a host).
+    public var hasWebAddress: Bool {
+        guard let url, let parsed = URL(string: url.trimmingCharacters(in: .whitespaces)),
+              let scheme = parsed.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              parsed.host?.isEmpty == false else { return false }
+        return true
     }
 }
 

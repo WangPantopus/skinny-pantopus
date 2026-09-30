@@ -613,7 +613,8 @@ extension BusinessProfileViewModel {
             detail: detail,
             serviceArea: serviceAreaText,
             latitude: location.location?.lat,
-            longitude: location.location?.lng
+            longitude: location.location?.lng,
+            isApproximate: location.isApproximateHome
         )
     }
 

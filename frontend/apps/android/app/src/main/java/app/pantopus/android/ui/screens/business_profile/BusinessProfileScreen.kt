@@ -43,7 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -659,28 +661,37 @@ private fun ServiceAreaCard(area: BusinessServiceArea) {
                     }
                 }
             }
-            Row(
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.businessBg)
-                        .padding(horizontal = 11.dp, vertical = 7.dp)
-                        .semantics { contentDescription = "Directions" },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Navigation,
-                    contentDescription = null,
-                    size = 13.dp,
-                    tint = PantopusColors.business,
-                )
-                Text(
-                    text = "Directions",
-                    color = PantopusColors.business,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            // Google Maps directions to the crew's exact point; none for a home-based crew's approximate one.
+            if (area.offersDirections) {
+                val uriHandler = LocalUriHandler.current
+                val directionsUrl = "https://www.google.com/maps/dir/?api=1&destination=${area.latitude},${area.longitude}"
+                Row(
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.businessBg)
+                            .clickable(role = Role.Button, onClickLabel = "Open Maps") {
+                                runCatching { uriHandler.openUri(directionsUrl) }
+                            }
+                            .padding(horizontal = 11.dp, vertical = 7.dp)
+                            .testTag("businessProfile.directions")
+                            .semantics { contentDescription = "Directions" },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Navigation,
+                        contentDescription = null,
+                        size = 13.dp,
+                        tint = PantopusColors.business,
+                    )
+                    Text(
+                        text = "Directions",
+                        color = PantopusColors.business,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }

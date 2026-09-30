@@ -153,7 +153,19 @@ data class BusinessLocationDto(
     val phone: String? = null,
     val email: String? = null,
     val timezone: String? = null,
-)
+    /** Set on the public view of a home-based business's location, whose point is approximate. */
+    @Json(name = "is_home_based") val isHomeBased: Boolean? = null,
+    /** The team's own rows carry the type and exact-location switch instead. */
+    @Json(name = "location_type") val locationType: String? = null,
+    @Json(name = "show_exact_location") val showExactLocation: Boolean? = null,
+) {
+    /**
+     * A home-based business's location that the public sees only approximately (the API's rule:
+     * `home_based_private` without "show exact location"), so it gets no directions.
+     */
+    val isApproximateHome: Boolean
+        get() = isHomeBased == true || (locationType == "home_based_private" && showExactLocation != true)
+}
 
 /**
  * Full `BusinessProfile` row returned by `GET /api/businesses/:businessId`

@@ -77,9 +77,15 @@ data class BusinessServiceArea(
     val serviceArea: String?,
     val latitude: Double?,
     val longitude: Double?,
+    /** The point is a home-based business's approximate one. */
+    val isApproximate: Boolean = false,
 ) {
     val hasCoordinates: Boolean
         get() = latitude != null && longitude != null
+
+    /** Directions go to an exact point only, never to the area around someone's home. */
+    val offersDirections: Boolean
+        get() = hasCoordinates && !isApproximate
 }
 
 /** One priced service offering. */

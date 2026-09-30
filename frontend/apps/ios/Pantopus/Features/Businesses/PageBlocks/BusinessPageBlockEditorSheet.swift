@@ -335,7 +335,7 @@ public struct BusinessPageBlockEditorSheet: View {
                                 get: { button.label },
                                 set: { newValue in
                                     var next = buttons
-                                    next[index] = BusinessPageBlockButton(label: newValue, action: button.action)
+                                    next[index] = BusinessPageBlockButton(label: newValue, action: button.action, url: button.url)
                                     setButtons(key, next)
                                 }
                             ),
@@ -353,8 +353,35 @@ public struct BusinessPageBlockEditorSheet: View {
                         selected: button.action
                     ) { action in
                         var next = buttons
-                        next[index] = BusinessPageBlockButton(label: button.label, action: action)
+                        // Only a Link keeps an address, so a hidden, stale one can't block saving.
+                        next[index] = BusinessPageBlockButton(
+                            label: button.label,
+                            action: action,
+                            url: action == "link" ? button.url : nil
+                        )
                         setButtons(key, next)
+                    }
+                    if button.action == "link" {
+                        PantopusTextField(
+                            "Link address",
+                            text: Binding(
+                                get: { button.url ?? "" },
+                                set: { newValue in
+                                    var next = buttons
+                                    next[index] = BusinessPageBlockButton(label: button.label, action: button.action, url: newValue)
+                                    setButtons(key, next)
+                                }
+                            ),
+                            placeholder: "https://example.com",
+                            keyboardType: .URL,
+                            contentType: .URL,
+                            identifier: "businessPageBlocks.buttonUrl.\(index)"
+                        )
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        if !button.hasWebAddress {
+                            hint("Enter a web address starting with https://")
+                        }
                     }
                 }
                 .padding(Spacing.s3)
