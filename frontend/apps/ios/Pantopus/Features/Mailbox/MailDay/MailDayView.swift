@@ -610,13 +610,13 @@ struct FinishDayBar: View {
 #if DEBUG
 #Preview("Populated") {
     NavigationStack {
-        MailDayView(viewModel: MailDayViewModel(variant: .populated))
+        MailDayView(viewModel: MailDayViewModel(variant: .populated, content: MailDaySampleData.populated))
     }
 }
 
 #Preview("Empty") {
     NavigationStack {
-        MailDayView(viewModel: MailDayViewModel(variant: .empty))
+        MailDayView(viewModel: MailDayViewModel(variant: .empty, content: MailDaySampleData.empty))
     }
 }
 #endif
