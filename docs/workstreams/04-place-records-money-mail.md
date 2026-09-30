@@ -52,14 +52,21 @@
    - Then run the exact cleanup: adapt `tools/cleanup-f02-home-dashboard.py`; its PropertyIntelligenceCache read-side refresh rule applies. Seal Android + iOS and hand the result to the coordinator.
    - If iOS can't run in the first lease, clean the fixture exactly first and recreate it later (one SQL row plus two UI toggles).
    - Remaining after this: the hosted and provider boundaries. Web Home-dashboard consumer evidence is sealed as `20260930-stream2-f02-home-dashboard-bills-r1` (`12a3a6bd…`).
-2. **I07, freshness:** mounted-view and cache invalidation without navigation, semantic labels, concurrent pagination and time zones.
-3. **D09, readers:** the remaining malformed-success readers and a complete cross-client pass. The share and access reader files are Stream 3's area; coordinate any change to them.
-4. **D01, records:** remaining create/edit/delete coverage for issues and emergency info. Its guest-pass record part touches Stream 3's D08/M02; coordinate.
+2. **I07, freshness:** done on web 2026-09-30: #854 labels, #860 saves on the page, #863 malformed rows, and a concurrent-insert check. Remaining: native labels (queue), live updates from other devices (none on web), `created_at` ties (not reproduced) and time zones.
+3. **D09, readers:** 2026-09-30, #863 (the Home activity reader). Remaining: other malformed-success readers and a complete cross-client pass (native is blocked). The share and access reader files are Stream 3's area; coordinate any change to them.
+4. **D01, records:** 2026-09-30, #871 (the web emergency-info create receipt). Remaining: native emergency create (queue), web emergency E1/E3/E4 confirmation (❓ in the checklist) and issue E5 on screen. Its guest-pass record part touches Stream 3's D08/M02; coordinate.
 5. **D04, maintenance history:** one truthful lifecycle across `HomeMaintenanceLog` and `HomeIssue` with competing readers and writers.
 6. **I04, the address calendar:** daylight-saving and holiday edge cases for pickup days. Provider holiday data stays named.
 7. **I05, property data, local parts:** stale cache, absent or wrong property, and verification wording.
 8. **U02–U05, this stream's cells.** Native large text, screen readers and dark mode on the Place, records, money and mail screens, then the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
-9. **Latent and cut notes:**
+9. **Native queue (blocked until the machine-wide native reinstall; the user's OK).** From today's web work:
+   - F02 native permission re-run (item 1);
+   - I07: the native Home recent-activity card still humanizes raw audit codes and target types (#854 fixed web only);
+   - D01: iOS and Android emergency-info create send no request id, so a lost-reply retry duplicates (#871 fixed web);
+   - I06: iOS parses dates with `ISO8601DateFormatter(.withInternetDateTime)`, which rejects the date-only election day (#875 fixed web; Android is correct);
+   - D04: maintenance history is app-only;
+   - U02: native A1–A4 cells.
+10. **Latent and cut notes:**
    - web Mail due dates use `new Date(<SQL date>)`, but no product route writes `Mail.due_date`, and bill blocks in letters are cut;
    - the native Dismiss confirm wording is cut (#8).
 
