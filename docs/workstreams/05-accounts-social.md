@@ -9,6 +9,33 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — S3-22 #1076 merged (batch 215); #1077 (light cards) and #1080 (profile completion truth) sealed; #1081 (native crew links + Directions) waiting on CI and Stream 1's device run, 2026-09-30T20:20:10Z
+
+- **Merged:** #1076, S3-22 crew page buttons with http(s)-only links and no Directions to a home, in batch 215 (PR #1079, master `daeb2e26d`), seal `952d6a9d…`. **The S3-22 row is closed.**
+- **#1077, "light cards and initials are readable in both schemes"** (web): head `225a9ef80`, retargeted to master, CI 36770042506 success, sealed `adcb284e…`.
+  - A gradient-aware re-check found light gradients left light in dark mode under light text:
+    - the Founding banner on the crew dashboard, a #1052 regression (1.07–1.47:1);
+    - the crew CTA block (1.00–2.29:1);
+    - the profile completion card (1.14–2.69:1).
+  - It also found the banner's Dismiss and Claim buttons, and large initials on light stops. 12 failures → 0.
+  - Stream 1 took the other light gradients: the AI assistant cards and Stream 2's feed card.
+- **#1080, "the profile completion card shows the real percentage"** (web), stacked on #1077: head `57b493578`, CI 36770818510 success, sealed `a139de2d…`.
+  - The card read a hard-coded 65%.
+  - Its photo item checked `avatar_url`, which the API always returns as null.
+  - Its portfolio row could never be completed.
+  - The page logged the whole profile (email, phone, address, date of birth) to the console.
+  - **Decision:** count what Edit Profile fills in (photo, bio, skills), hide the card at 100%, and drop the portfolio row. Recorded in the PR.
+- **#1081, "crew page links survive a phone edit; Directions opens Maps, never to a home"** (iOS and Android; Stream 1 assigned it): head `7fb117fa7`, CI running.
+  - The editors keep `url` and get a Link address field.
+  - The Directions chip becomes a Maps button, hidden for home-based crews: `is_home_based` for outsiders, `location_type`/`show_exact_location` for the team.
+  - API inputs are verified on my stack. **Devices are unverified:** Stream 1 runs iOS, with 4 checks listed in the PR.
+- **Drift re-run** on master `20e7b4768`: the routes scan matches the known set; the schema scan has 0 new candidates and 5 fewer (fixed by #1046 and #1055).
+- **Next:**
+  1. #1080's retarget and handoff once #1077 merges.
+  2. #1081's seal after CI and the device run.
+  3. Then new work only for reproduced gaps.
+- **Runtime:** API 18134 and web 18131 on master `20e7b4768`; DB at `20260930184000`. No fixtures remain; rls1's profile is restored.
+
 ## LIVE — #1055/#1066/#1068 merged (batches 211–213); S3-22 #1076 open (crew page buttons + http(s)-only links + no directions to a home), CI running, 2026-09-30T19:44:13Z
 
 - **Merged:**
