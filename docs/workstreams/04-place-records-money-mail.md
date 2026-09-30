@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918) (the typed new-issue draft survives the dashboard's access re-check; with the coordinator since 2026-09-30T09:07Z). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** [#922](https://github.com/WangPantopus/skinny-pantopus/pull/922) (iOS election date; with the coordinator). In progress: branch `claude/stream4-emergency-server-writes` `8f5d49117` (iOS Emergency Info edit/delete reach the server; creates carry a request id on iOS and Android), builds queued. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -94,7 +94,7 @@
      - **(b):** 60 s re-reads of the summary cards through `reloadSummary`.
      - **(c):** a `home:<id>` socket room carrying payload-free "changed" events. The existing gig rooms join without a membership check, so they are not a model for private Home data.
      - All options keep the accepted 2026-09-11 access retirement (d681da444).
-5. **Typed text in Home dashboard panels when the tab is hidden (U04 L1): option (b), built and verified in [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918)** (bundle `20260930-stream4-issue-draft-restore-r1`, `56ca55c7…`).
+5. **Typed text in Home dashboard panels when the tab is hidden (U04 L1): option (b), built, verified and merged in [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918) (batch 162)** (bundle `20260930-stream4-issue-draft-restore-r1`, `56ca55c7…`).
    - Keep only the member's own typed new-issue draft, which is not private Home data, across the hide-time re-check. Put it back into a reopened Report Issue panel only when the re-check confirms the same account and the same Home; otherwise drop it.
    - Private content still unmounts, and no old panel reappears on its own.
    - **Why:** losing typed text on every tab switch is a real annoyance that costs reports, and this keeps the security design intact.
@@ -204,7 +204,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>✅ L3 (0930 home-account-switch: form sign-out/in, 0 private markers in 7 captures)<br>✅ L4 (0930 home-l1-l4: 401 → refresh → the same save once)<br>✅ L1 Emergency Info form kept (0930 home-l1-l4, emulated hide)<br>✅ L1 dashboard Report Issue draft kept across the re-check (#918, with the coordinator; "Decided by Stream 4" item 5) |
+| Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>✅ L3 (0930 home-account-switch: form sign-out/in, 0 private markers in 7 captures)<br>✅ L4 (0930 home-l1-l4: 401 → refresh → the same save once)<br>✅ L1 Emergency Info form kept (0930 home-l1-l4, emulated hide)<br>✅ L1 dashboard Report Issue draft kept across the re-check (#918, merged in batch 162; "Decided by Stream 4" item 5) |
 | Place (dashboard, sections, Money) | ✅ L2 (#638, f02-member-finance)<br>✅ L3 (0927 f02-ios-held-account, 0929 f02-ios-retry-late-delivery)<br>⬜ L1<br>⬜ L4 | ✅ L2 (#638)<br>✅ L3 (0927 f02-android-held-account)<br>⬜ L1<br>⬜ L4 | ✅ L2 reload<br>✅ L3 (0927 f02-web-held-account, 0930 home-account-switch; honest refusal #896)<br>✅ L1 (0930 home-l1-l4, emulated hide: same screen, no re-read)<br>⬜ L4 (Place's own actions not run; the shared refresh path passed on the dashboard) |
 | Address calendar | ✅ L2 restart (place-pickup)<br>⬜ L1 L3 L4 | ✅ L2 cold (0928 pickup-weekly)<br>⬜ L1 L3 L4 | ✅ L2 reload (pickup-weekly)<br>⬜ L1 L3 L4 |
 
@@ -268,6 +268,17 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T09:30Z — native work: #922 (iOS election date) is with the coordinator; iOS Emergency Info edit and delete were never saved (reproduced); the repair is building.**
+  - **#918 merged** in batch 162 (master `fd7de8790`). Coordinator review note, not blocking: the panel's unmount cleanup also runs when `onDraftUnmount` changes identity. That cleanup runs with the old closure, so the kept draft carries the old user id and the restore drops it. Revisit if the file is touched again.
+  - **#922.** Head `4da4de22da9cac8e9ec1883829ed6defabca2e62`. Bundle `20260930-stream4-ios-civic-date-r1`, MANIFEST `750ef739dce313bcef95e290472f85da537dd68da04b1c0e16f502a4367fa604`.
+    - Setup: real app on "Pantopus S34", owner signed in through the form, the election reply EMULATED via proxy rule s4-civic.
+    - Master's date tile was empty; the branch shows "NOV 3".
+  - **iOS Emergency Info, reproduced in the same bundle.** Edit showed "Saved." and delete promised "Anyone with access will no longer see it", but neither sent a request. The DB was unchanged, the list reverted on its next read, and "Last updated" showed the current time.
+    - The backend's PUT/DELETE (home.js:3896/:3943) exist, and Android and web use them.
+    - Repair: branch `claude/stream4-emergency-server-writes` `8f5d49117`. Adds the iOS PUT (keeping the stored type, location and other clients' detail keys) and DELETE (already gone counts as deleted), the microsecond date parse, and `clientRequestId` on create for iOS and Android. The two iOS unit tests that pinned local-only behaviour were updated.
+    - The builds are queued behind Stream 3 on the heavy slot. Runtime proof follows on S34 and pantopus_s34.
+  - **Lease:** 09:12:42Z–09:24:32Z. I restarted the backend at 09:13:32Z (PID 24029, logged) because the login limiter was at 429 again.
 
 - **2026-09-30T09:07Z — [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918) (decision 5) is with the coordinator.** Head `3ce02567e057b691014a47a27d13d5806a4ef425`. Bundle `20260930-stream4-issue-draft-restore-r1`, MANIFEST `56ca55c746cb90d7e1b1b2afb833fda6e63375e2203bd43df2dfd4ce75a5277a`. Lease 09:02:45Z–09:06:31Z.
   - Master lost the typed Report Issue text on hide/return. The branch restores it for the same member and Home.
