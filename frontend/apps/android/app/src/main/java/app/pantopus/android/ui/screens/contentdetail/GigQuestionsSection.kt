@@ -615,7 +615,8 @@ private fun OwnerAnswerControls(
 }
 
 private fun askerDisplayName(user: GigQuestionUser?): String {
-    if (user == null) return "Neighbor"
+    // No asker means the person has deleted their account; their question stays.
+    if (user == null) return "Former member"
     user.name?.takeIf { it.isNotEmpty() }?.let { return it }
     val parts = listOfNotNull(user.firstName, user.lastName).filter { it.isNotEmpty() }
     if (parts.isNotEmpty()) return parts.joinToString(" ")

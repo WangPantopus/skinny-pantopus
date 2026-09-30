@@ -6426,8 +6426,8 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
       }
     }
 
-    // Notify the requester
-    createNotification({
+    // Notify the requester (none once they have deleted their account)
+    if (order.requested_by) createNotification({
       userId: order.requested_by,
       type: 'change_order_approved',
       title: `Change request approved`,
@@ -6509,7 +6509,7 @@ router.post('/:gigId/change-orders/:orderId/reject', verifyToken, async (req, re
       return res.status(500).json({ error: 'Failed to reject change order' });
     }
 
-    createNotification({
+    if (order.requested_by) createNotification({
       userId: order.requested_by,
       type: 'change_order_rejected',
       title: `Change request declined`,
