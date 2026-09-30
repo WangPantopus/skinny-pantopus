@@ -836,50 +836,42 @@ router.post(
         .json({ error: 'INTERNAL', message: 'Failed to create organizer record.' });
     }
 
-    // 4. Insert RecipientProfile if draft_payload has profile fields
+    // 4. Insert the RecipientProfile. Publishing requires one, and a client that collects
+    // no recipient details (the native Start wizards) would otherwise never be able to
+    // publish; the web fills in the details with its own upsert right after create.
     const dp = draft_payload;
-    const hasProfileData =
-      dp.household_size ||
-      dp.dietary_restrictions ||
-      dp.dietary_preferences ||
-      dp.preferred_dropoff_window ||
-      dp.contactless_preferred ||
-      dp.special_instructions;
+    const profileRow = {
+      support_train_id: supportTrain.id,
+      household_size: dp.household_size || null,
+      contactless_preferred: dp.contactless_preferred || false,
+      delivery_instructions: null,
+      special_instructions: dp.special_instructions || null,
+    };
 
-    if (hasProfileData) {
-      const profileRow = {
-        support_train_id: supportTrain.id,
-        household_size: dp.household_size || null,
-        contactless_preferred: dp.contactless_preferred || false,
-        delivery_instructions: null,
-        special_instructions: dp.special_instructions || null,
-      };
+    // Map dietary arrays to JSONB
+    if (dp.dietary_restrictions && dp.dietary_restrictions.length > 0) {
+      profileRow.allergies = { items: dp.dietary_restrictions };
+    }
+    if (dp.dietary_preferences && dp.dietary_preferences.length > 0) {
+      profileRow.dietary_styles = { items: dp.dietary_preferences };
+    }
 
-      // Map dietary arrays to JSONB
-      if (dp.dietary_restrictions && dp.dietary_restrictions.length > 0) {
-        profileRow.allergies = { items: dp.dietary_restrictions };
-      }
-      if (dp.dietary_preferences && dp.dietary_preferences.length > 0) {
-        profileRow.dietary_styles = { items: dp.dietary_preferences };
-      }
+    // Map dropoff window
+    if (dp.preferred_dropoff_window) {
+      profileRow.preferred_dropoff_start_time = dp.preferred_dropoff_window.start_time || null;
+      profileRow.preferred_dropoff_end_time = dp.preferred_dropoff_window.end_time || null;
+    }
 
-      // Map dropoff window
-      if (dp.preferred_dropoff_window) {
-        profileRow.preferred_dropoff_start_time = dp.preferred_dropoff_window.start_time || null;
-        profileRow.preferred_dropoff_end_time = dp.preferred_dropoff_window.end_time || null;
-      }
+    const { error: profErr } = await supabaseAdmin
+      .from('SupportTrainRecipientProfile')
+      .insert(profileRow);
 
-      const { error: profErr } = await supabaseAdmin
-        .from('SupportTrainRecipientProfile')
-        .insert(profileRow);
-
-      if (profErr) {
-        // Non-fatal: log but don't fail the whole creation
-        logger.warn('Create SupportTrainRecipientProfile failed', {
-          supportTrainId: supportTrain.id,
-          error: profErr.message,
-        });
-      }
+    if (profErr) {
+      // Non-fatal: log but don't fail the whole creation
+      logger.warn('Create SupportTrainRecipientProfile failed', {
+        supportTrainId: supportTrain.id,
+        error: profErr.message,
+      });
     }
 
     res.status(201).json({
