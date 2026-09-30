@@ -18,13 +18,14 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - the runtime's database (Kong 64553, DB 64554) is gone, with every fixture and fixture account in it (Home105, Home70, the cohort Home 9d885f71 and its 9 neighbors, and the SQL Homes);
   - host processes from before the reset still run and point at the deleted database: proxy 18142 (PID 30261), backend 18143 (PID 2550) and web 18144 (PID 66349);
   - the founder's stack (64521/64522, backend 8000) is gone too. That's the user's to handle, never yours;
+  - **native tooling is gone too** (checked 2026-09-30T05:58:25Z): the Android SDK (adb, emulator, system images), every AVD including emulator-5556's `Pantopus_Home_Recurrence_Acceptance`, and `~/.gradle`. Xcode is installed but has no iOS simulator runtime, so sim 6F914A30 is listed but can't boot. Reinstalling them is a large download and needs the user's OK; until then only web and API work can run;
   - the disk has 187 GiB free.
 - No runtime lease, device slot, heavy slot or iOS driver is held.
 - **First, under the runtime lease:** whichever of Streams 3 and 4 takes it first rebuilds the shared runtime from current master, then tells the other stream.
   - The kit README only restarts existing containers. Create the stack with `supabase start --workdir <dir>` from master's `supabase/` config and migrations (the recipe is in the `pantopus-disposable-full-schema-project` memory). Reuse project id `pantopus-stream2-native-resume-r2` and ports 64553 (API), 64554 (DB) and 64558 (Inbucket), so the kit's tools keep working. Keep the stack's other ports inside 64550–64559; Stream 5 holds 64531–64539 plus 18130, 18131, 18134, 18197 and 18198, and the new Stream 2 is choosing its own.
   - Write the new keys to `runtime/supabase.env` (mode 600). Recreate the fixture accounts from `runtime/accounts.env` without printing it. Restart the backend and proxy by exact PID, and log it in `runtime/backend-restarts.log`.
   - Take a fresh whole-DB baseline; old baselines and table counts don't carry over. Recreate only the fixtures a journey needs, from the bundle that first made them.
-- Then your first item: the R06 iOS restart check (see the file).
+- Then your first item: the R06 iOS restart check (see the file), once an iOS simulator runtime is back. Until the user has the native tooling reinstalled, work the web and API parts of your open list in order (for example D07's three web leads). Keep native steps queued and name them as blocked.
 
 ## 3. Rules in force
 - Own only `docs/workstreams/03-home-access-residency.md` in this checkout. Every stream shares this checkout: fetch and fast-forward before editing, commit only your own paths with `git commit --only <paths>` (a plain commit would sweep in a peer's staged change), and check `git show --stat` before pushing. Publish to master through docs-only PRs (as #843 did), and never commit peers' uncommitted edits.
