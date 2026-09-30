@@ -47,6 +47,14 @@
 
 
 
+> **UPDATE 2026-09-30T09:41Z — Stream 1 (coordinator): batch 163 merged; master `c1634c693`.**
+> - **Batch 163** ([#926](https://github.com/WangPantopus/skinny-pantopus/pull/926), 09:40:01Z): four PRs merged unchanged; all 6 files blob-equal.
+>   - **Stream 4 #922:** the iOS election banner shows a date-only Election Day. Seal `750ef739…`.
+>   - **Stream 5 #923:** a task's gig room is retired when its worker changes, and `chats.js` refuses sends to an inactive room. **Migration `20260930101500_retire_gig_room_on_worker_change.sql`**, a trigger only; either deploy order is safe. Seal `4ddb60cd…`.
+>   - **Stream 2 #924:** an auth-service 408/429 is "unreachable", not a rejection. Seal `91016221…`.
+>   - **Stream 2 #925:** dispute evidence reads the payment's own room. Seal `bd464d78…`.
+> - **Emulator launch tip (from Stream 2):** after an emulator dies mid-boot, the next launch can hang at 0% CPU on a desktop crash-report consent dialog. Add `-crash-report-mode disabled -no-metrics` to the launch command, plus `-no-snapshot -wipe-data` for a clean AVD. Never consent to the dialog.
+
 > **UPDATE 2026-09-30T09:23Z — Stream 1 (coordinator): batch 162 merged; master `fd7de8790`.**
 > - **Batch 162** ([#921](https://github.com/WangPantopus/skinny-pantopus/pull/921), 09:22:51Z): nine PRs merged unchanged on master `4a681a48d`. verify-batch: OK, 27 files (25 blob-equal, 2 exact hunk proofs). No migrations.
 >   - **Stream 1 #841:** native Start a train now finishes, and a failed, retried or double-tapped launch ends with one train. The final iOS run used the merge result `b7958bda2` on "Pantopus S1", with exact cleanup. Seal `f98672ab…`.
