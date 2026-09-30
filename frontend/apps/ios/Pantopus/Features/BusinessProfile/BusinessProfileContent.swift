@@ -173,23 +173,32 @@ public struct BusinessServiceArea: Sendable, Hashable {
     public let serviceArea: String?
     public let latitude: Double?
     public let longitude: Double?
+    /// The point is a home-based business's approximate one.
+    public let isApproximate: Bool
 
     public init(
         title: String,
         detail: String?,
         serviceArea: String?,
         latitude: Double?,
-        longitude: Double?
+        longitude: Double?,
+        isApproximate: Bool = false
     ) {
         self.title = title
         self.detail = detail
         self.serviceArea = serviceArea
         self.latitude = latitude
         self.longitude = longitude
+        self.isApproximate = isApproximate
     }
 
     public var hasCoordinates: Bool {
         latitude != nil && longitude != nil
+    }
+
+    /// Directions go to an exact point only, never to the area around someone's home.
+    public var offersDirections: Bool {
+        hasCoordinates && !isApproximate
     }
 }
 

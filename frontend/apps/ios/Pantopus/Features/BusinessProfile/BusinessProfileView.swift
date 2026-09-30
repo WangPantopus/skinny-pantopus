@@ -620,6 +620,13 @@ private struct JustOpenedNote: View {
 @MainActor
 private struct ServiceAreaCard: View {
     let area: BusinessServiceArea
+    @Environment(\.openURL) private var openURL
+
+    /// Apple Maps directions to the crew's exact point; none for a home-based crew's approximate one.
+    private var directionsURL: URL? {
+        guard area.offersDirections, let latitude = area.latitude, let longitude = area.longitude else { return nil }
+        return URL(string: "https://maps.apple.com/?daddr=\(latitude),\(longitude)")
+    }
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -650,7 +657,12 @@ private struct ServiceAreaCard: View {
                     }
                 }
                 Spacer(minLength: Spacing.s0)
-                directionsButton
+                if let directionsURL {
+                    Button { openURL(directionsURL) } label: { directionsButton }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens Maps")
+                        .accessibilityIdentifier("businessProfile.directions")
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)

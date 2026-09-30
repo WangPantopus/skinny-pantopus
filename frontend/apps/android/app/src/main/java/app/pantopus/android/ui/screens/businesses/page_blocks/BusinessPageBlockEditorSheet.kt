@@ -370,7 +370,24 @@ private fun ButtonListEditor(
                     }
                 }
                 ChipRow("Action", BusinessPageBlockOptions.ctaActions, button.action) { action ->
-                    write(buttons.toMutableList().also { it[index] = button.copy(action = action) })
+                    // Only a Link keeps an address, so a hidden, stale one can't block saving.
+                    val url = if (action == "link") button.url else null
+                    write(buttons.toMutableList().also { it[index] = button.copy(action = action, url = url) })
+                }
+                if (button.action == "link") {
+                    PantopusTextField(
+                        label = "Link address",
+                        value = button.url.orEmpty(),
+                        onValueChange = { value ->
+                            write(buttons.toMutableList().also { it[index] = button.copy(url = value) })
+                        },
+                        placeholder = "https://example.com",
+                        keyboardType = KeyboardType.Uri,
+                        fieldTestTag = "businessPageBlocks.buttonUrl.$index",
+                    )
+                    if (!button.hasWebAddress) {
+                        Hint("Enter a web address starting with https://")
+                    }
                 }
             }
         }

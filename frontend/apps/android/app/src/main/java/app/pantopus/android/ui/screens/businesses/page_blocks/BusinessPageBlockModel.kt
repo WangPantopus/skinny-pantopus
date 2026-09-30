@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.page_blocks
 import app.pantopus.android.data.api.models.business_pages.BusinessPageBlockDto
 import app.pantopus.android.data.api.models.business_pages.SaveBusinessPageBlockRequest
 import app.pantopus.android.ui.theme.PantopusIcon
+import java.net.URI
 import java.util.UUID
 
 /**
@@ -313,12 +314,27 @@ sealed interface BusinessPageBlockForm {
     }
 }
 
-/** A CTA / hero button pair. */
+/** A CTA / hero button: its label, action and, for a Link, the web address it opens. */
 data class BusinessPageBlockButton(
     val label: String,
     val action: String,
+    val url: String? = null,
 ) {
-    fun toMap(): Map<String, Any?> = mapOf("label" to label, "action" to action)
+    /** Includes the address whenever it is set, so editing a button here never drops a link set on the web. */
+    fun toMap(): Map<String, Any?> =
+        buildMap {
+            put("label", label)
+            put("action", action)
+            if (!url.isNullOrEmpty()) put("url", url)
+        }
+
+    /** Whether [url] is a web address the crew page will open (http or https with a host). */
+    val hasWebAddress: Boolean
+        get() =
+            runCatching { URI(url.orEmpty().trim()) }.getOrNull()?.let { uri ->
+                (uri.scheme.equals("https", ignoreCase = true) || uri.scheme.equals("http", ignoreCase = true)) &&
+                    !uri.host.isNullOrEmpty()
+            } ?: false
 }
 
 /** One FAQ question/answer pair. */
@@ -365,13 +381,15 @@ data class BusinessPageBlock(
     val imageCount: Int get() = int("image_count") ?: DEFAULT_IMAGE_COUNT
     val maxItems: Int get() = int("max_items") ?: DEFAULT_MAX_ITEMS
 
-    /** `[{ label, action }]` used by hero (`cta`) and CTA (`buttons`). */
+    /** `[{ label, action, url? }]` used by hero (`cta`) and CTA (`buttons`). A button with only an address is a Link, as on the web. */
     fun buttonList(key: String): List<BusinessPageBlockButton> =
         (data[key] as? List<*>).orEmpty().mapNotNull { element ->
             val map = element as? Map<*, *> ?: return@mapNotNull null
+            val url = map["url"] as? String
             BusinessPageBlockButton(
                 label = map["label"] as? String ?: "",
-                action = map["action"] as? String ?: "message",
+                action = map["action"] as? String ?: if (!url.isNullOrEmpty()) "link" else "message",
+                url = url,
             )
         }
 
