@@ -350,6 +350,6 @@ struct ReviewClaimNoteCaptureSheet: View {
     }
 
     private var primaryBackground: Color {
-        primaryRole == .destructive ? Theme.Color.error : Theme.Color.primary600
+        primaryRole == .destructive ? Theme.Color.errorSolid : Theme.Color.primarySolid
     }
 }

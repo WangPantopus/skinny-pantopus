@@ -214,7 +214,7 @@ private struct HomeStrip: View {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Theme.Color.success, Theme.Color.homeDark],
+                            colors: [Theme.Color.successSolid, Theme.Color.homeDark],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

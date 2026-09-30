@@ -24,8 +24,8 @@ final class ColorTokenTests: XCTestCase {
         assertColor(Theme.Color.primary300, hex: "#7dd3fc")
         assertColor(Theme.Color.primary400, hex: "#38bdf8")
         assertColor(Theme.Color.primary500, hex: "#0ea5e9")
-        assertColor(Theme.Color.primary600, hex: "#0284c7")
-        assertColor(Theme.Color.primary700, hex: "#0369a1")
+        assertColor(Theme.Color.primary600, hex: "#0369a1")
+        assertColor(Theme.Color.primary700, hex: "#075985")
         assertColor(Theme.Color.primary800, hex: "#075985")
         assertColor(Theme.Color.primary900, hex: "#0c4a6e")
     }

@@ -562,7 +562,7 @@ private struct LeaseParseStatusRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Circle()
-                .fill(hasError ? Theme.Color.warning : Theme.Color.success)
+                .fill(hasError ? Theme.Color.warningSolid : Theme.Color.successSolid)
                 .frame(width: 16, height: 16)
                 .overlay {
                     Icon(

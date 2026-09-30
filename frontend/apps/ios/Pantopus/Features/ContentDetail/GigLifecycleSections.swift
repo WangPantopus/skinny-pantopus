@@ -1855,8 +1855,8 @@ private struct SheetButton: View {
         guard enabled else { return Theme.Color.appSurfaceSunken }
         return switch style {
         case .ghost: Color.clear
-        case .primary: Theme.Color.primary600
-        case .destructive: Theme.Color.error
+        case .primary: Theme.Color.primarySolid
+        case .destructive: Theme.Color.errorSolid
         }
     }
 }

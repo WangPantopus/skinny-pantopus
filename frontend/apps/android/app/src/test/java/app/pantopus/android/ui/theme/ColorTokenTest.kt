@@ -23,8 +23,8 @@ class ColorTokenTest {
         assertHex(0xFF7DD3FC, PantopusColors.primary300)
         assertHex(0xFF38BDF8, PantopusColors.primary400)
         assertHex(0xFF0EA5E9, PantopusColors.primary500)
-        assertHex(0xFF0284C7, PantopusColors.primary600)
-        assertHex(0xFF0369A1, PantopusColors.primary700)
+        assertHex(0xFF0369A1, PantopusColors.primary600)
+        assertHex(0xFF075985, PantopusColors.primary700)
         assertHex(0xFF075985, PantopusColors.primary800)
         assertHex(0xFF0C4A6E, PantopusColors.primary900)
     }

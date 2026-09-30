@@ -138,7 +138,7 @@ public struct ChipPicker: View {
 
     private func backgroundColor(selected: Bool) -> Color {
         guard selected else { return Theme.Color.appSurface }
-        return style == .tinted ? Theme.Color.primary50 : Theme.Color.primary600
+        return style == .tinted ? Theme.Color.primary50 : Theme.Color.primarySolid
     }
 
     private func borderColor(selected: Bool) -> Color {

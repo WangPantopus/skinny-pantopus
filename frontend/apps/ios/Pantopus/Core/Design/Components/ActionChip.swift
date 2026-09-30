@@ -63,7 +63,7 @@ public struct ActionChip: View {
     }
 
     private var background: Color {
-        isActive ? Theme.Color.primary600 : Theme.Color.appSurface
+        isActive ? Theme.Color.primarySolid : Theme.Color.appSurface
     }
 }
 

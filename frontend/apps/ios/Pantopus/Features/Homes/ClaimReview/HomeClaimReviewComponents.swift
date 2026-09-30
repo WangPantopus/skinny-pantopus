@@ -183,7 +183,7 @@ struct HomeClaimActionButton: View {
 
     private var background: Color {
         switch tone {
-        case .accept: Theme.Color.success
+        case .accept: Theme.Color.successSolid
         case .reject: Theme.Color.errorBg
         case .neutral: Theme.Color.appSurface
         case .flag: Theme.Color.warningBg
