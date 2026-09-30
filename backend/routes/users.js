@@ -25,7 +25,6 @@ const authPolicy = require('../config/authPolicy');
 const { verifyDpop } = require('../middleware/dpop');
 const { requireStepUp, mintStepUpToken } = require('../middleware/stepUp');
 const authDeviceService = require('../services/authDeviceService');
-const { retireHomeForDeletedAccount } = require('../services/homeAuthorityService');
 const authSessionService = require('../services/authSessionService');
 
 async function getOrCreateMailPreferences(userId) {
@@ -4937,6 +4936,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       ...(createdHomes.data || []).map((h) => h.id),
       ...(occupiedHomes.data || []).map((o) => o.home_id),
     ])];
+    const { retireHomeForDeletedAccount } = require('../services/homeAuthorityService');
     for (const homeId of homeIds) {
       try {
         const retired = await retireHomeForDeletedAccount(homeId, userId);
