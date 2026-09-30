@@ -244,6 +244,8 @@ public struct HomeAuditLogEntryDTO: Decodable, Sendable, Hashable, Identifiable 
     public let targetType: String?
     public let targetId: String?
     public let createdAt: String?
+    /// The readable sentence for `action` ("Access code added"); nil from older servers.
+    public let description: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -252,6 +254,7 @@ public struct HomeAuditLogEntryDTO: Decodable, Sendable, Hashable, Identifiable 
         case targetType = "target_type"
         case targetId = "target_id"
         case createdAt = "created_at"
+        case description
     }
 }
 

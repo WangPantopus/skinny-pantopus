@@ -136,6 +136,8 @@ data class HomeAuditLogEntryDto(
     @Json(name = "target_type") val targetType: String? = null,
     @Json(name = "target_id") val targetId: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
+    /** The readable sentence for [action] ("Access code added"); null from older servers. */
+    val description: String? = null,
 )
 
 // ── Health score ────────────────────────────────────────────────────
