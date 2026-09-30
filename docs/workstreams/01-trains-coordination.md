@@ -9,6 +9,55 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **HANDOFF 2026-09-30T21:55Z (Stream 1). Start here.** The resume prompt is [`NEXT-STREAM1-PROMPT-2026-09-30-evening.md`](NEXT-STREAM1-PROMPT-2026-09-30-evening.md).
+  - **Queue:** empty. No Stream 1 PR is open, and every sealed peer PR is merged. Master is **`979a83b96`** (batch 222, 21:52:53Z). No migrations since `20260930184000`.
+  - **Merged this session:**
+
+    | Batch | PR | Time | Contents |
+    |---|---|---|---|
+    | 218 | #1094 | 21:10Z | #1061 (iOS primaryInk/primarySolid), #1093 (Trains U02), #1075, #1085, #1086, #1088, #1091 (Stream 2), #1087, #1089, #1090 (Stream 5) |
+    | 219 | #1095 | | #1092 (Stream 5) |
+    | 220 | #1098 | 21:37Z | #1058, #1064, #1065, #1067, #1070 (Stream 3); #1096 web post edit (Stream 2); #1097 (iOS primaryInkStrong sweep) |
+    | 221 | #1100 | 21:40Z | #1081 (Stream 5 native crew links/Directions; Stream 1 ran the four device checks) |
+    | 222 | #1101 | 21:52Z | #1099 (Trains T7/T8 tiles and status, banner identity chip, Manage chip shade, #1067's Try again ink) |
+
+    - Every head was checked against its seal. build-batch/verify-batch passed for each batch. The stacked #1093 was proved in two steps: master → #1061, then the rest.
+  - **Evidence** (all under `.pantopus-recovery/audits/`):
+
+    | Bundle | MANIFEST | Covers |
+    |---|---|---|
+    | `20260930-stream1-ios-primary-ink-r1` | `3be31394` | #1061 |
+    | `-ios-u02-trains-r1` | `819b1c4f` | #1093 and the fixture cleanup |
+    | `-ios-u02-stream2-r1` | `e3137445` | #1085 after-checks F1–F8 |
+    | `-native-1081-devices-r1` | `a33acbb7` | |
+    | `-ios-primary-ink-strong-r1` | `1210fded` | |
+    | `-ios-slot-tile-ink-r1` | `087226fa` | |
+  - **Checklist:** Stream 1's U02 iOS Trains rows are flipped in `checklists/data_s1.py` (U02 done 6 → 13), and the review page is republished (v10).
+    - Android U02 A1–A4 for Trains is still to do. Only T1/T2 were verified on Android.
+  - **Runtime** (all Stream 1's):
+    - DB `supabase_db_pantopus-stream1-resume-20260923` (64562).
+    - Backend :18132 on master `979a83b96`, pid 42250 at handoff, log `logs/backend-979a83b96-215319.log` (see `logs/backend-current-log.txt`). The Stripe guard is active.
+    - Fault proxy :18138, with no rules.
+    - Next dev :18139, served from worktree `stream1-peer-takeover-d2cb25`, now detached at `979a83b96`.
+    - Device slots 1 (`emulator-5558`) and 2 (simulator `A189976E`) are held by `stream1:`. The simulator has candidate `1d6e40d3d` installed, and the emulator its APK.
+    - Heavy slot: free.
+  - **Fixtures:** none live. The Trains, money and crew fixtures were all removed by exact ids; 350/353 tables equal the 19:33:34Z baseline, and the rest is sign-in bookkeeping.
+  - **Peers:**
+    - Streams 2, 3 and 5 handed off this evening. Their successors will message the queue owner with sealed heads.
+    - Stream 4 is still active (8–9 local fix branches waiting for device before/after runs).
+  - **Next for Stream 1:**
+    - Batch whatever the peers send.
+    - Recorded follow-ups:
+      - **T9:** the viewer's own reservation is listed again under "Already on the train" as "a neighbor" (iOS and Android).
+      - About 311 switch-returned `primary600` sites.
+      - Android Trains U02 A1–A4 at TalkBack level.
+      - Android HOME chip 4.42.
+      - The Surgery wizard default.
+      - The celebration banner copy.
+      - The unscheduled SQL twin `auto_archive_expired_posts()`.
+      - Stream 4's launch-cut #8 invented-data findings, for the user's flag decisions.
+    - **For Stream 5's backlog:** in the iOS page-blocks editor, the controls are unnamed and the action chips have no Selected trait.
+
 - **Update 2026-09-30T20:33Z (Stream 1).**
   - **Merged:**
     - **Batch 215** (20:10:38Z, PR #1079), **security**: #1076 (Stream 5).
@@ -297,7 +346,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:48Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:39Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -333,55 +382,21 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Support Trains** | | | |
-| My trains, Nearby, Invitations | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
-| Train search | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – No Train search on web |
-| Train detail and sign-up sheet | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
-| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>🔷 A3 brand-blue token |
-| Manage train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
-| Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
+| My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
+| Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | – No Train search on web |
+| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>⬜ A3 covered slot date tile (T7) and A4 card status (T8): draft PR #1099, device check pending | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
+| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>🔷 A3 brand-blue token |
+| Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
+| Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
 
 **Outside this plan:** Remind helpers: Blocked until an AI provider is available: Send only appears after an AI draft. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-**Decisions 2026-09-30.** Items (3) and (4) are answered by the user; the rest were decided by Stream 1 under the standing direction, which is to choose the best for user experience, safety and retention and record it.
-- (3) **Accent colours (user):** use the recommended AA values. Stream 1 implements them app-wide.
-  - **Plan (measured on 2026-09-30 with the WCAG formula; implementation after the native Nearby fix):**
-    - **Web.** Tailwind compiles `bg-/text-primary-600` from `packages/theme/tailwind.cjs` hex, not from CSS variables. Emerald and amber are Tailwind built-ins. So split the palettes (`theme.extend.backgroundColor` vs `textColor`), backed by CSS variables, with no class churn in ~380 files:
-      - fills: `bg-primary-600` → #0369a1 in both themes (white on it 5.93; today 4.10); `bg-primary-700` (hover) → #075985; `bg-emerald-600` → #047857 (5.48; today 3.77).
-      - text: `text-primary-600` → #0369a1 in light (5.39–5.68 on the greys; today 3.72–3.92) and #38bdf8 in dark (6.83–9.42; #0369a1 would be 2.47–3.40 there). `text-emerald-600` → #047857 light and #34d399 dark.
-      - per use: amber-500 fills with white text (9 lines) → amber-700 (5.02); the header badge `bg-red-500` → red-600 (4.83); the audience badge `bg-teal-500`. Post-type colours in `POST_TYPE_CONFIG`, the composer's `IntentSelector` list and `FeedFilters` go to one step darker where white text fails (each ≥4.5; amber, emerald and teal need 700).
-    - **iOS.** Colours come from asset colorsets. Primary600's light value → #0369A1; dark stays #0284C7 (a light value can't serve both white-text fills and dark-surface text; a text/solid split is the later step). Avatar initials and post map pins on primary500 (2.77) get a darker fill. iOS "snapshot" tests only check that a PNG renders; `ColorTokenTests.swift` pins values and gets updated.
-    - **Android.** `Color.kt` primary600 → #0369A1 (light values only). `ColorTokenTest.kt` gets updated; Paparazzi snapshots are compared in CI, so they're re-recorded (`recordPaparazziDebug`, heavy slot).
-    - **Evidence:** before/after contrast tables plus real-browser and device screenshots of the U02 A3 screens.
-- (4) **Web "Send invite" (user: hide only if that's the better experience):** hidden, since it delivered nothing. Copy link stays. Shipped in #956 (batch 175).
-- (5) **Native Start a train visibility (decided).**
-  - The problem: step 1's "Invite only" / "Block-visible" switches and the review step's Visibility choice are one setting, but "Invite only" (on by default) silently overrode the review choice (shown as "Nearby neighbors"). The success screen then said "visible to nearby neighbors" for an invited-only train.
-  - Keep what native already launches by default, "Invite only" = My connections. It is the privacy-safer default for someone going through something hard, and it's what step 1 shows.
-  - Keep the controls in sync, so the review shows the real choice, and make the success copy say who can find the train. No layout change.
-  - Web keeps its visible default, "Nearby neighbors". Aligning the default across platforms is a product question for later.
-- (6) **Ship together (decided; shipped 11:42Z in batch 175: #959 native wizard + #956 sharing modes):** the sharing-modes repair, which unlists My connections and Link only trains from Nearby and makes existing ones private, ships with or after the native wizard repair, so the native copy never contradicts the server.
-- (7) **Native wizard footer (decided):**
-  - "Search again" appears only on the "Who is this for" step, where its search lives. On later steps it silently erased the recipient.
-  - "Back to trains" and the success screen's back chevron return to the list; before, they opened the train like "Open train".
-  - A failed launch scrolls its error into view.
-
-- (9) **Account deletion: Homes of the last member (decided 11:45Z, coordinator).** When the deleting person created a private-setup Home, or is the last member of an established Home, that Home goes with the account, through the product's own delete-my-Home path, before the route's null-out step. If eligibility refuses, the shell stays but its household records are deleted, so a future resident never inherits them. Personal map pins are deleted by the User BEFORE DELETE trigger. The reasons: nobody left can use the records; they are the person's household data, so erasure is the expected default; and a member-less Home could be claimed by the next resident. Stream 4 and Stream 5 decide who writes which part, and prove it with a real-route E2E. Revisit only for a concrete product reason to carry home history to the next owner.
-- (8) **Account deletion and Support Trains (decided 09:44Z; revised and shipped 10:22Z in #941, batch 169).** The shipped version: a published train with a co-organizer passes to its longest-standing co-organizer; drafts and trains with no co-organizer go with the account (`organizer_user_id` ON DELETE CASCADE, matching the Activity creator cascade). The earlier text below was written before the Activity cascade was found.
-- (8, original) **Account deletion and Support Trains (decided 09:44Z; Stream 5 found it).**
-  - The problem: `SupportTrain.organizer_user_id` is RESTRICT and NOT NULL; every other SupportTrain* FK to User cascades or sets null. So a primary organizer can't delete their account, and Manage's Delete only works until a train has helpers or gift funds.
-  - Interim: Stream 5's accounts route answers an honest 409 (`SUPPORT_TRAIN_ORGANIZER`) before revoking sessions.
-  - Stream 1's repair, next after the Start-wizard pair:
-    - drafts go with the account;
-    - a live train passes to its longest-standing co-organizer, or is closed if there is none;
-    - a migration makes `organizer_user_id` nullable with SET NULL, so the closed history stays for helpers and the recipient, shown as "Former member".
-- **Fixed (#928, batch 164):** create accepted `recipient_home_id` without checking that the organizer is connected to that Home. The train is then placed Nearby at that Home, and the detail may resolve its address.
-  - To verify: who can see the resolved address. The fix is to require the organizer's trusted occupancy (`getAccessibleHomeIds`), as the location privacy matrix requires.
-
 - U03 items: done 55, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
-- U02 items: done 8, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
+- U02 items: done 13, confirm from existing evidence 0, to do 7, your call 6, boundary 0, not offered 4
 
 ## History
 

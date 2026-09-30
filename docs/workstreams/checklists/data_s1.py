@@ -25,12 +25,12 @@ U04 = [
 
 U02 = [
     ("Support Trains", [
-        ("My trains, Nearby, Invitations", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; chip contrast fixed", "#814"), c("decide", "A3 brand-blue token")]}),
-        ("Train search", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("na", "No Train search on web")]}),
-        ("Train detail and sign-up sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; dark selection fixed", "#814"), c("decide", "A3 brand-blue token")]}),
-        ("Start a train", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Step 1: A1 A2 A3 A4 A5; dark selection fixed", "#814"), c("done", "Later steps: A1 A2 A4 A5; field and weekday names added", "#829"), c("done", "Schedule shortcuts expose their chosen state (A2)", "#892"), c("decide", "A3 brand-blue token")]}),
-        ("Manage train", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; share-link label added", "#814"), c("decide", "A3 brand-blue token")]}),
-        ("Review signups, edit signup", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Signups tab: A1 A2 A4 A5", "20260930 web a11y 73f2bc13"), c("decide", "Signups tab A3 brand-blue token")]}),
+        ("My trains, Nearby, Invitations", {"iOS": [c("done", "A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061)", "#1061, #1093, 054245b5")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; chip contrast fixed", "#814"), c("decide", "A3 brand-blue token")]}),
+        ("Train search", {"iOS": [c("done", "A1 A2 A3; A4 search field named", "#1093, 054245b5")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("na", "No Train search on web")]}),
+        ("Train detail and sign-up sheet", {"iOS": [c("done", "A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful", "#1093, 054245b5"), c("todo", "A3 covered slot date tile (T7) and A4 card status (T8): draft PR #1099, device check pending")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; dark selection fixed", "#814"), c("decide", "A3 brand-blue token")]}),
+        ("Start a train", {"iOS": [c("done", "A1 A2 A3; A4 recipient and short note named", "#1093, 054245b5")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Step 1: A1 A2 A3 A4 A5; dark selection fixed", "#814"), c("done", "Later steps: A1 A2 A4 A5; field and weekday names added", "#829"), c("done", "Schedule shortcuts expose their chosen state (A2)", "#892"), c("decide", "A3 brand-blue token")]}),
+        ("Manage train", {"iOS": [c("done", "A1 A4; A2 A3 chip and date line fixed in dark; times formatted", "#1093, 054245b5")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; share-link label added", "#814"), c("decide", "A3 brand-blue token")]}),
+        ("Review signups, edit signup", {"iOS": [c("na", "Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there)")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "Signups tab: A1 A2 A4 A5", "20260930 web a11y 73f2bc13"), c("decide", "Signups tab A3 brand-blue token")]}),
         ("Updates and details tabs, calendar", {"iOS": [c("na", "Web-only screens")], "Android": [c("na", "Web-only screens")], "Web": [c("done", "A1 A2 A4 A5; calendar button names added", "#814"), c("decide", "A3 brand-blue token")]}),
     ]),
 ]

@@ -47,6 +47,11 @@
 
 
 
+> **UPDATE 2026-09-30T21:55Z — Stream 1 (coordinator): HANDOFF. Batches through 222 merged; master `979a83b96`; the queue is empty.**
+> - Every sealed PR from Streams 2, 3 and 5 is merged. Batches 218–222 ran 21:10–21:52Z; the full list is in [`01-trains-coordination.md`](01-trains-coordination.md), top entry.
+> - **Queue owner:** the next Stream 1 session is the merge-queue owner. Its prompt is [`NEXT-STREAM1-PROMPT-2026-09-30-evening.md`](NEXT-STREAM1-PROMPT-2026-09-30-evening.md).
+> - **Peers:** send it sealed exact heads, and it will introduce itself. The batch numbers continue at 223.
+
 > **UPDATE 2026-09-30T12:17Z — Stream 1 (coordinator): batch 180 merged; master `81cf2e959`.**
 > - **Batch 180** ([#975](https://github.com/WangPantopus/skinny-pantopus/pull/975), 12:16:11Z), Stream 3:
 >   - #970: add-home address checks stop revealing private households; `HOME_FOUND_PRIVATE`, fail-closed.
