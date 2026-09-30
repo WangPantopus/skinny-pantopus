@@ -31,12 +31,15 @@ import javax.inject.Inject
 const val HOME_OWNERSHIP_SECURITY_HOME_ID_KEY = "homeId"
 
 /**
- * A14.2 (policy variant) — "Ownership & Security". Three radio groups
+ * A14.2 (policy variant) — "Ownership & Security". Two radio groups
  * backed by the per-home security policy:
  *
  *  - Privacy & discoverability -> `privacy_mask_level`
  *  - Owner claims              -> `owner_claim_policy`
- *  - Member attach policy      -> `member_attach_policy`
+ *
+ * The member attach policy (`member_attach_policy`) is still decoded but not
+ * shown: nothing reads it and every join goes through household review, so
+ * the choice had no effect (user decision 2026-09-30; post-launch work).
  *
  * Reads `GET /api/homes/:id/security` and PATCHes a single key per
  * selection. A multi-owner home answers the owner-claim-policy PATCH
@@ -258,22 +261,6 @@ class HomeOwnershipSecurityViewModel
                                 control =
                                     RowControl.Radio(
                                         value == (dto.ownerClaimPolicy ?: OWNER_CLAIM_DEFAULT),
-                                    ),
-                            )
-                        },
-                ),
-                GroupedListGroup(
-                    id = GROUP_ATTACH,
-                    overline = "Member attach policy",
-                    helper = helperFor(GROUP_ATTACH, null),
-                    rows =
-                        MEMBER_ATTACH_OPTIONS.map { (value, label) ->
-                            GroupedListRow(
-                                id = ATTACH_PREFIX + value,
-                                label = label,
-                                control =
-                                    RowControl.Radio(
-                                        value == (dto.memberAttachPolicy ?: MEMBER_ATTACH_DEFAULT),
                                     ),
                             )
                         },

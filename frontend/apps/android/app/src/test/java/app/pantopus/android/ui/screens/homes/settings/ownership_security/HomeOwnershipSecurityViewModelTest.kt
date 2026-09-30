@@ -88,14 +88,13 @@ class HomeOwnershipSecurityViewModelTest {
             val vm = makeVm()
             vm.load()
             val projected = groups(vm)
-            assertEquals(listOf("privacyMask", "ownerClaim", "memberAttach"), projected.map { it.id })
+            assertEquals(listOf("privacyMask", "ownerClaim"), projected.map { it.id })
             assertEquals(3, projected[0].rows.size)
             assertEquals(2, projected[1].rows.size)
-            assertEquals(3, projected[2].rows.size)
             val selected =
                 projected.flatMap { it.rows }.filter { (it.control as? RowControl.Radio)?.isSelected == true }
             assertEquals(
-                listOf("privacyMask.normal", "ownerClaim.open", "memberAttach.open_invite"),
+                listOf("privacyMask.normal", "ownerClaim.open"),
                 selected.map { it.id },
             )
             assertEquals("2 verified owners", vm.footerCaption.value)
