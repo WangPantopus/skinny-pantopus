@@ -85,34 +85,36 @@ export default function InboxTab({ businessId }: Props) {
         ) : (
           <div className="space-y-2">
             {rooms.map((room: any) => {
-              const other = room.participants?.find((p: any) => p.user_id !== businessId)?.user;
-              const lastMsg = room.last_message;
+              // GET /api/chat/business/:id/rooms sends the other party and the last message as flat fields.
+              const title = room.other_participant_name || room.other_participant_username || room.room_name || 'Chat';
+              const avatarUrl = room.other_participant_identity?.avatarUrl || null;
               const unread = room.unread_count > 0;
 
               return (
-                <button key={room.id} onClick={() => router.push(`/app/chat/${room.id}`)}
+                // The team member isn't a participant of the crew's rooms, so they open in the crew's own chat.
+                <button key={room.id} onClick={() => router.push(`/app/businesses/${businessId}/chat/${room.id}`)}
                   className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition hover:bg-app-hover ${
                     unread ? 'bg-violet-50 border-violet-200' : 'bg-app-surface border-app-border'
                   }`}>
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-                    {other?.profile_picture_url ? (
+                    {avatarUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={other.profile_picture_url} alt="" className="w-10 h-10 rounded-full" />
+                      <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full" />
                     ) : (
-                      <span className="text-sm font-bold text-violet-600">{(other?.name || room.name || '?')[0]?.toUpperCase()}</span>
+                      <span className="text-sm font-bold text-violet-600">{title[0]?.toUpperCase()}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className={`text-sm truncate ${unread ? 'font-bold text-app-text' : 'font-medium text-app-text'}`}>
-                        {other?.name || room.name || 'Unknown'}
+                        {title}
                       </span>
-                      {lastMsg?.created_at && <span className="text-xs text-app-text-muted flex-shrink-0 ml-2">{formatTimeAgo(lastMsg.created_at)}</span>}
+                      {room.last_message_at && <span className="text-xs text-app-text-muted flex-shrink-0 ml-2">{formatTimeAgo(room.last_message_at)}</span>}
                     </div>
-                    {lastMsg?.content && (
+                    {room.last_message_preview && (
                       <p className={`text-xs truncate mt-0.5 ${unread ? 'text-app-text font-medium' : 'text-app-text-secondary'}`}>
-                        {lastMsg.content}
+                        {room.last_message_preview}
                       </p>
                     )}
                   </div>
@@ -137,7 +139,7 @@ export default function InboxTab({ businessId }: Props) {
             {matchedPosts.map((post: any) => {
               const creator = post.creator || {};
               return (
-                <button key={post.id} onClick={() => router.push(`/app/feed?post=${post.id}`)}
+                <button key={post.id} onClick={() => router.push(`/app/feed/post/${post.id}`)}
                   className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-app-surface border border-app-border text-left transition hover:bg-app-hover">
                   <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
                     {creator.profile_picture_url ? (
