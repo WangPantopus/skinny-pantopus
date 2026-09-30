@@ -115,6 +115,8 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
                     .foregroundStyle(Theme.Color.appText)
                     .submitLabel(.search)
                     .focused($fieldFocused)
+                    // The placeholder disappears once a query is typed; keep it as the field's name.
+                    .accessibilityLabel(placeholder)
                     .accessibilityIdentifier("searchListField")
                 if !query.isEmpty {
                     Button {

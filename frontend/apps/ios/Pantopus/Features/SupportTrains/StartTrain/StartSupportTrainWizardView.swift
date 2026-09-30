@@ -211,6 +211,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
             ))
             .font(Theme.Font.small)
             .focused($isQueryFocused)
+            .accessibilityLabel("Recipient")
             .accessibilityIdentifier("startSupportTrainBeneficiaryField")
             if viewModel.isSearchingBeneficiary {
                 ProgressView().scaleEffect(0.7)
@@ -287,6 +288,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     ))
                     .frame(minHeight: 96)
                     .scrollContentBackground(.hidden)
+                    .accessibilityLabel("Short note")
                     .accessibilityIdentifier("startSupportTrainReasonField")
                 }
                 HStack(spacing: Spacing.s1) {

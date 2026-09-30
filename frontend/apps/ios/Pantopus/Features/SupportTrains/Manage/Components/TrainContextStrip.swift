@@ -120,8 +120,9 @@ public struct TrainContextStrip: View {
         )
     }
 
+    /// Label ink, not `warmAmber`: the fixed amber is 3.4:1 on the strip's dark-mode tint.
     private var dateRangeColor: Color {
-        isActive ? Theme.Color.warmAmber : Theme.Color.appTextSecondary
+        isActive ? Theme.Color.warning : Theme.Color.appTextSecondary
     }
 }
 
