@@ -23,7 +23,8 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - #882 (D09 health/checklist readers);
   - #885 (compose: a pending claim is not a member).
 
-  Then [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`) merged in batch 155 (master `66d57bcfe`, 08:02Z). No Stream 4 PR is open.
+  Then [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`) merged in batch 155 (master `66d57bcfe`, 08:02Z).
+  Open since 08:28Z: [#904](https://github.com/WangPantopus/skinny-pantopus/pull/904) (web Emergency Info 403 wording; seal `…-emergency-access-denied-r1` `76bb6524…`). Check `gh pr view 904` before relying on this.
 - **Verification-only seals:**
   - I04 DST: `20260930-stream4-address-calendar-dst-r1`;
   - I05 local parts: `…-property-local-r1`;
@@ -36,7 +37,8 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   Secret scans must fail hard before sealing.
 - **Next:**
   1. Native queue (open work item 9), once the user OKs the machine-wide reinstall.
-  2. The remaining web ❓/⬜ cells in the itemized checklist (e.g. web U04 L1/L4 on the Home dashboard, issues E5 on screen). Web L3 is done (`20260930-stream4-home-account-switch-r1`).
+  2. The remaining web ❓/⬜ cells in the itemized checklist (e.g. issues E5 on screen, documents delete, address calendar E4/E5, the fridge card's U02 sweep). Web U04 L3, L4 and L1 are done (`…-home-account-switch-r1`, `…-home-l1-l4-r1`); the dashboard's L1 panel reset is "Waiting on the user" item 5.
+  - Screenshots: mask the signed-in account label at capture (`mask: [page.getByText(env.OWNER_EMAIL, { exact: true })]`), and run `tools/s4-secret-scan.py` before every seal. It exits 1 on any hit. Headless Chrome never hides a tab, so emulate hide/return (`tools/web-l1-emulated.cjs`).
   3. The I07 live-updates question: web has no live updates, and adding them is architecture, so propose it rather than build it.
 
 ## 2. State at the split
