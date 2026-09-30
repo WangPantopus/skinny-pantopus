@@ -52,6 +52,8 @@ export interface AuditEntry {
   home_id: string;
   actor_user_id: string;
   action: string;
+  /** Readable sentence for `action` (the Home activity timeline's label). */
+  description?: string;
   target_type: string | null;
   target_id: string | null;
   metadata: Record<string, any>;
