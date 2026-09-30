@@ -117,21 +117,30 @@ private fun Hero(
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             PantopusLockup(size = 22.dp, variant = MarkVariant.Light)
             // Demoted to the top bar so the address field is the first control.
+            // Takes the space up to "Sign in" and gives way at large text sizes, so "Sign in" stays on one line.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 10.dp),
+                modifier = Modifier.padding(start = 10.dp).weight(1f),
             ) {
                 Text("🇺🇸", fontSize = 11.sp)
-                Text("United States", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
+                Text(
+                    "United States",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.appTextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Spacer(modifier = Modifier.weight(1f))
             Text(
                 "Sign in",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.primary600,
-                modifier = Modifier.clickable(onClick = onSignIn),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(start = 8.dp).clickable(onClick = onSignIn),
             )
         }
 
@@ -322,15 +331,19 @@ private fun AddressField(
     ) {
         PantopusIconImage(PantopusIcon.MapPin, null, size = 18.dp, strokeWidth = 2f, tint = PantopusColors.appTextMuted)
         Box(modifier = Modifier.weight(1f)) {
-            if (query.isEmpty()) {
-                Text("Type your home address", fontSize = 16.sp, color = PantopusColors.appTextMuted)
-            }
             BasicTextField(
                 value = query,
                 onValueChange = onChange,
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 16.sp, color = PantopusColors.appText),
                 modifier = Modifier.fillMaxWidth(),
+                // The placeholder sits inside the field, so a screen reader reads it as the field's name.
+                decorationBox = { inner ->
+                    if (query.isEmpty()) {
+                        Text("Type your home address", fontSize = 16.sp, color = PantopusColors.appTextMuted)
+                    }
+                    inner()
+                },
             )
         }
         if (query.isNotEmpty()) {
