@@ -59,17 +59,20 @@ public struct StampsView: View {
                 onRetry: { Task { await viewModel.fetchThemes() } }
             )
         } else {
-            switch viewModel.state {
-            case .loading:
-                StampsLoadingBody()
-            case let .loaded(content):
-                StampsPopulatedBody(content: content, collection: viewModel.collection) {
-                    viewModel.buyMore()
+            // The live collection only. The postage-wallet stack (book, sheet, wallet rail, usage, issuer and the
+            // "Buy more stamps" dock) has no backend: every figure was sample data and "Buy" changed only local
+            // state, so it stays in the design frames (`StampsPopulatedFrame` / `StampsEmptyFrame`), not here.
+            if case let .error(message) = viewModel.collection {
+                StampsErrorBody(message: message) { Task { await viewModel.fetchCollection() } }
+            } else {
+                ScrollView {
+                    StampCollectionSection(state: viewModel.collection)
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s3)
+                        .padding(.bottom, Spacing.s4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            case let .empty(content):
-                StampsEmptyBody(content: content) { viewModel.purchaseStarterBook() }
-            case let .error(message):
-                StampsErrorBody(message: message) { Task { await viewModel.refresh() } }
+                .background(Theme.Color.appBg)
             }
         }
     }
@@ -589,27 +592,6 @@ private struct StarterBookCard: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("stampsStarterBook")
-    }
-}
-
-// MARK: - Loading body
-
-/// Shimmer skeleton mirroring the loaded geometry — never a spinner.
-private struct StampsLoadingBody: View {
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Shimmer(width: 160, height: 22, cornerRadius: Radii.pill)
-                Shimmer(height: 160, cornerRadius: Radii.xl)
-                Shimmer(height: 120, cornerRadius: Radii.xl)
-                Shimmer(height: 220, cornerRadius: Radii.xl)
-                Shimmer(height: 150, cornerRadius: Radii.xl)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.top, Spacing.s3)
-        }
-        .background(Theme.Color.appBg)
-        .accessibilityIdentifier("stampsLoading")
     }
 }
 

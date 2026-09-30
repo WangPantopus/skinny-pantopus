@@ -134,18 +134,23 @@ fun StampsScreen(
                         onRetry = { viewModel.fetchThemes() },
                     )
                 } else {
-                    when (val current = state) {
-                        is StampsUiState.Loading -> StampsLoadingBody()
-                        is StampsUiState.Loaded ->
-                            StampsPopulatedBody(
-                                content = current.content,
-                                collection = collection,
-                                onBuyMore = { viewModel.buyMore() },
-                            )
-                        is StampsUiState.Empty ->
-                            StampsEmptyBody(content = current.content, onBuy = { viewModel.purchaseStarterBook() })
-                        is StampsUiState.Error ->
-                            StampsErrorBody(message = current.message, onRetry = { viewModel.refresh() })
+                    // The live collection only. The postage-wallet stack (book, sheet, wallet rail, usage, issuer and the
+                    // "Buy more stamps" dock) has no backend: every figure was sample data and "Buy" changed only local
+                    // state, so it stays in the design frames (StampsPopulatedFrame / StampsEmptyFrame), not here.
+                    when (val current = collection) {
+                        is StampCollectionUiState.Error ->
+                            StampsErrorBody(message = current.message, onRetry = { viewModel.fetchCollection() })
+                        else ->
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = Spacing.s4)
+                                        .padding(top = Spacing.s3, bottom = Spacing.s4),
+                            ) {
+                                StampCollectionSection(state = current)
+                            }
                     }
                 }
             }
@@ -749,28 +754,6 @@ private fun HowItWorks(
             Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
             Text(text = body, fontSize = 11.5.sp, color = PantopusColors.appTextSecondary, lineHeight = 17.sp)
         }
-    }
-}
-
-// MARK: - Loading body
-
-@Composable
-private fun StampsLoadingBody() {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.s4)
-                .padding(top = Spacing.s3)
-                .testTag("stampsLoading"),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Shimmer(width = 160.dp, height = 22.dp, cornerRadius = Radii.pill)
-        Shimmer(width = 360.dp, height = 160.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 120.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 220.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 150.dp, cornerRadius = Radii.xl)
     }
 }
 
