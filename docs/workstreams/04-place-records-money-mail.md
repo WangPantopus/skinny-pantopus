@@ -140,10 +140,54 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 
 | Row | Current disposition and bounded evidence | Remaining boundary before row closure |
 |---|---|---|
-| U02 | **Partial/open — web evidence; not itemized.** The former Stream 2 ran real-Chrome sweeps of its 37 retained web routes, including this stream's web screens: dark-mode contrast ([#809](https://github.com/WangPantopus/skinny-pantopus/pull/809), `20260929-stream2-web-dark-link-contrast-r1`, `db25f76e…`: 12 targeted texts now pass, low-contrast styles 112 → 95), accessible names ([#819](https://github.com/WangPantopus/skinny-pantopus/pull/819), `20260929-stream2-web-a11y-names-r1`, `549cdcdb…`: 19 unnamed controls → 0) and a 390×844 layout sweep for owner and member (same seal: no horizontal overflow). #809 fixed the Place text action, the address-calendar Cancel and the health ring's "/100". | Native large text (Dynamic Type, font 2.0), VoiceOver and TalkBack, native dark mode and keyboard focus on this stream's screens. The remaining low-contrast styles are the brand-colour decision Stream 1 carries. |
-| U03 | **Partial/open — recorded per row; not itemized.** Error, retry, lost-reply, malformed-reply and cold-restart cases are accepted inside D01, D04, D09, I04, I07 and F02 (their bundles are in the checklist above). | Loading, empty, partial, unavailable, offline, slow, cancel, back, double-tap and process-death cases on this stream's screens where no row covers them yet. |
-| U04 | **Partial/open — recorded per row; not itemized.** F02's replies delivered across a logout are accepted on iOS (`edec37f4…`) and Android (`edee4120…`), and the web same-account permission change (`fe2bd74c…`); I07's mounted finite-authority expiry is accepted ([#773](https://github.com/WangPantopus/skinny-pantopus/pull/773), `5dadb5b8…`). | Long-lived sessions, background and foreground, and concurrent device or account changes on this stream's screens beyond those cases; the F02 native permission change (open work item 1). |
+| U02 | **Partial/open — itemized 2026-09-30 (section "Stream 4 exit checklists" below); web evidence.** The former Stream 2 ran real-Chrome sweeps of its 37 retained web routes, including this stream's web screens: dark-mode contrast ([#809](https://github.com/WangPantopus/skinny-pantopus/pull/809), `20260929-stream2-web-dark-link-contrast-r1`, `db25f76e…`: 12 targeted texts now pass, low-contrast styles 112 → 95), accessible names ([#819](https://github.com/WangPantopus/skinny-pantopus/pull/819), `20260929-stream2-web-a11y-names-r1`, `549cdcdb…`: 19 unnamed controls → 0) and a 390×844 layout sweep for owner and member (same seal: no horizontal overflow). #809 fixed the Place text action, the address-calendar Cancel and the health ring's "/100". | Native large text (Dynamic Type, font 2.0), VoiceOver and TalkBack, native dark mode and keyboard focus on this stream's screens. The remaining low-contrast styles are the brand-colour decision Stream 1 carries. |
+| U03 | **Partial/open — itemized 2026-09-30 (below); recorded per row.** Error, retry, lost-reply, malformed-reply and cold-restart cases are accepted inside D01, D04, D09, I04, I07 and F02 (their bundles are in the checklist above). | Loading, empty, partial, unavailable, offline, slow, cancel, back, double-tap and process-death cases on this stream's screens where no row covers them yet. |
+| U04 | **Partial/open — itemized 2026-09-30 (below); recorded per row.** F02's replies delivered across a logout are accepted on iOS (`edec37f4…`) and Android (`edee4120…`), and the web same-account permission change (`fe2bd74c…`); I07's mounted finite-authority expiry is accepted ([#773](https://github.com/WangPantopus/skinny-pantopus/pull/773), `5dadb5b8…`). | Long-lived sessions, background and foreground, and concurrent device or account changes on this stream's screens beyond those cases; the F02 native permission change (open work item 1). |
 | U05 | **Not started — waits for the launch flags on master.** | This stream's screen and action inventory in the final release build on web, iOS and Android, for the release manifest Stream 1 assembles. |
+
+## Stream 4 exit checklists (U02–U04), itemized 2026-09-30
+
+Itemized from this stream's sealed evidence (bundle names are in the audit store; `MMDD name` = `2026MMDD-stream2-name-r1`, or `-stream4-` from 2026-09-30), using Stream 1's case names (`checklists/data.py`). This is a static list: Stream 1's generator isn't used, and the first read of the evidence was gathered read-only.
+- **Legend:** ✅ done (sealed evidence) · ❓ confirm from existing evidence before any rerun · ⬜ to do · 🔷 user decision · ⛔ named boundary · – not offered on that client.
+- **Row closure:** a row closes when every cell is ✅, –, ⛔ with its boundary, or 🔷 decided.
+- **Native:** native cells can't run until the machine-wide native reinstall (the user's OK).
+
+**U03 edge cases** — E1 server error; E2 lost reply; E3 double tap; E4 not allowed; E5 changed meanwhile; E6 bad input; R1 read failure; R2 empty.
+
+| Workflow | iOS | Android | Web |
+|---|---|---|---|
+| Home health and seasonal checklist (complete, skip, carryover) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 (no typed input) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661)<br>✅ R2 (#587)<br>✅ health follows on-page saves (#860)<br>❓ E1 (#578) E3 (API race only, #587)<br>⬜ E4 E5<br>– E6 |
+| Bill benchmark: Home opt-in and Place Money signals | ✅ E1 R1 (#619, 0927 f02-member-finance, 0929 f02-ios-retry-late-delivery)<br>✅ E4 (f02-member-finance)<br>⬜ E5 permission change (open work item 1)<br>❓ R2, and whether native offers the opt-in | ✅ E1 R1 (#619)<br>✅ E4 (f02-member-finance)<br>⬜ E5 (item 1; the 09-30 capture is unsealed)<br>❓ R2 | ✅ E1 R1 (#602)<br>✅ E4 (f02-member-finance, 0930 f02-home-dashboard-bills)<br>✅ E5 (0929 f02-same-account-permission, 0927 f04-withdrawal)<br>✅ R2 (0927 f01-bill-cohort, f04-withdrawal)<br>❓ E2 E3 on the opt-in save |
+| Place dashboard and section details (weather, air, alerts, civic, property; read-only) | ✅ R1 (#619, #638)<br>✅ R2 stale sun label (0927 sun-day-label)<br>✅ E4 (f02-member-finance)<br>⬜ election date parsing (iOS rejects date-only; #875 limits)<br>– write cases | ✅ R1 (#619, #638)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>– write cases | ✅ R1 (#602)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>✅ election day shown as that day (#875)<br>– write cases |
+| Address calendar: pickup day (set, change, clear) | ✅ E1 E2 E3 E6 (0927 place-pickup)<br>✅ E4, generic wording (place-pickup)<br>✅ R1 (#737)<br>❓ R2<br>⬜ E5 | ✅ E1 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>❓ E2 E4 R2<br>⬜ E5 | ✅ E1 E2 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>❓ E4 R2<br>⬜ E5 |
+| Home issues (report, edit, status, dismiss) | ✅ E1 malformed replies (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen (API 409 only)<br>– cost edit | ✅ E1 (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen<br>– cost edit | ✅ E1 (#654, #769)<br>✅ E2 (#740, #654)<br>✅ E3 E6 (#654)<br>✅ E4 (#482, #654, #835)<br>✅ R1 (#680, 0929 web-false-empty-sweep-r2)<br>✅ R2 (#529)<br>⬜ E5 on screen |
+| Emergency info (add, delete) | ✅ R1 (#698)<br>❓ add and delete E cases | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>❓ E2 | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 in #871 (with the coordinator)<br>❓ E1 E3 E4 |
+| Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>❓ E3<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>❓ E3 E6<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>❓ E3 |
+| Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>❓ R2<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>❓ E3 R2<br>⛔ E4 E6 API only | – no manual-log screen on web |
+| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, #701)<br>❓ R2<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>⬜ delete E1 E2 E3 |
+| Home activity | – no timeline screen (the native recent-activity card still shows raw codes: ⬜ native item) | – (same) | ✅ R1 (0928 home-timeline-pagination)<br>✅ labels and actor (#854)<br>✅ malformed rows (#863)<br>✅ concurrent insert (#854 bundle)<br>✅ follows on-page saves (#860)<br>⛔ live updates from other devices (none on web) |
+| Mail: printed postcards, welcome cards, street digest (M01) | 🔷 not built (decision 2) | 🔷 | 🔷 (compose routes are live: security repairs #867/#872 through the API; the compose UI is cut, #8) |
+
+**U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
+
+| Area | iOS | Android | Web |
+|---|---|---|---|
+| Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>⬜ L1<br>⬜ L3<br>⬜ L4 |
+| Place (dashboard, sections, Money) | ✅ L2 (#638, f02-member-finance)<br>✅ L3 (0927 f02-ios-held-account, 0929 f02-ios-retry-late-delivery)<br>⬜ L1<br>⬜ L4 | ✅ L2 (#638)<br>✅ L3 (0927 f02-android-held-account)<br>⬜ L1<br>⬜ L4 | ✅ L2 reload<br>✅ L3 (0927 f02-web-held-account)<br>⬜ L1<br>⬜ L4 |
+| Address calendar | ✅ L2 restart (place-pickup)<br>⬜ L1 L3 L4 | ✅ L2 cold (0928 pickup-weekly)<br>⬜ L1 L3 L4 | ✅ L2 reload (pickup-weekly)<br>⬜ L1 L3 L4 |
+
+**U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
+
+| Screen | iOS | Android | Web |
+|---|---|---|---|
+| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 health ring "/100" (#809)<br>✅ A4 accessible names (#819)<br>❓ A1 (a 390 px sweep, not 200% zoom)<br>🔷 A3 brand-colour token<br>⬜ A5 |
+| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 Place text action and calendar Cancel (#809)<br>✅ A4 (#819)<br>❓ A1<br>🔷 A3<br>⬜ A5 |
+| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 partial (#809)<br>✅ A4 (#819)<br>❓ A1<br>🔷 A3<br>⬜ A5 |
+| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 (not swept) |
+| Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
+| Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
+
+**U05** — not started; it waits for the launch flags on master (this stream's screen and action inventory for Stream 1's release manifest).
 
 ## Runtime, devices and kit (shared with Stream 3; lease label `stream4:`)
 
