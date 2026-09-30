@@ -9,6 +9,15 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — step 1 of closing all-rows read policies is open as #1002; step 2 sent to Stream 2, 2026-09-30T13:39:30Z
+
+- **Open:** [#1002](https://github.com/WangPantopus/skinny-pantopus/pull/1002) (`ea6d913e9`, migration `20260930179000`, seal `d2b72eee…`). REVOKE SELECT on FileThumbnail, TransactionReview and ReputationScore from client roles.
+  - Probes: anon 200 → 401, and a signed-in stranger 200 → 403.
+  - All callers use supabaseAdmin. The Marketplace flows are code review only (launch cut). 67/67 contracts.
+- **Step 2 (Stream 2):** move posts.js:2875/2903 (PostLike/PostComment reads) from the anon client to supabaseAdmin with explicit visibility checks, then revoke. Stream 1 tracks it on the hub.
+- **End state (Stream 1, recorded):** no backend code reads through the anon client; then anon SELECT is default-denied like #992. Not started; it follows step 2 and a full inventory.
+- **Open from Stream 5:** #1000 (DEFINER guard), #1001 (owner-rights views), #1002. All wait for Stream 1's review after its iOS run.
+
 ## LIVE — #1001 (six owner-rights views) open; the open-SELECT-policy finding is with Stream 1, 2026-09-30T13:35:18Z
 
 - **Open:** [#1001](https://github.com/WangPantopus/skinny-pantopus/pull/1001) (`680555795`, migration `20260930178000`, seal `561db4f8…`). REVOKE ALL on six views that run with owner rights (they bypass RLS) and that anon could SELECT:
