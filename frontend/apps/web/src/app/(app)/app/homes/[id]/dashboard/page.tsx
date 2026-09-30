@@ -157,6 +157,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
   const { reload: reloadPermissions } = useHomePermissions();
   const reloadAccess = useCallback(() => { void Promise.all([refresh(), reloadPermissions()]); }, [refresh, reloadPermissions]);
   const intelligence = useHomeIntelligence(homeId, can, reloadAccess);
+  const { reloadSummary } = intelligence;
   const [selectedBillType, setSelectedBillType] = useState<string | null>(null);
 
   // Show toast when the season transitions
@@ -221,10 +222,12 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   // ── Task handlers ──
 
+  // Task saves and deletions are Home activity entries.
   const handleTaskSaved = useCallback((saved: import('@/components/home/tasks/homeTaskModel').HomeTask) => {
     setTasks(previous => previous.some(task => task.id === saved.id)
       ? previous.map(task => task.id === saved.id ? { ...task, ...saved } : task) : [saved, ...previous]);
-  }, [setTasks]);
+    void reloadSummary('timeline');
+  }, [setTasks, reloadSummary]);
 
   const handleTaskStatusChange = useCallback(async (taskId: string, newStatus: string) => {
     if (taskActionBusy.current) return;
@@ -250,11 +253,14 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
       if (currentTaskAction() !== client) return;
       await client.delete(taskId);
       client.requireCurrent(revision);
-      if (currentTaskAction() === client) setTasks(previous => previous.filter(task => task.id !== taskId));
+      if (currentTaskAction() === client) {
+        setTasks(previous => previous.filter(task => task.id !== taskId));
+        void reloadSummary('timeline');
+      }
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : 'Task deletion was not confirmed. Reload before retrying.');
     } finally { taskActionBusy.current = false; }
-  }, [currentTaskAction, setTasks]);
+  }, [currentTaskAction, setTasks, reloadSummary]);
 
   // ── Issue handler ──
 
@@ -267,8 +273,10 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         const result = await api.homeProfile.createHomeIssue(homeId, data);
         setIssues((prev) => [result.issue, ...prev]);
       }
+      // Open issues are part of Home health.
+      void reloadSummary('health');
     },
-    [homeId, issuePanel.issue, setIssues]
+    [homeId, issuePanel.issue, setIssues, reloadSummary]
   );
 
   // ── Bill handlers ──
