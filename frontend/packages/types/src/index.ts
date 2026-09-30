@@ -671,8 +671,9 @@ export interface User {
 export interface GigIncident {
   id: string;
   gig_id: string;
-  reported_by: string;
-  reported_against: string;
+  /** Either is null once that person has deleted their account. */
+  reported_by: string | null;
+  reported_against: string | null;
   type: 'no_show_worker' | 'no_show_poster' | 'dispute' | 'safety';
   description?: string;
   evidence_urls?: string[];

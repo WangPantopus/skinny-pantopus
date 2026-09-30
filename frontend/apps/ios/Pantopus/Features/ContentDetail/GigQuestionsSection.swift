@@ -459,7 +459,8 @@ struct GigQuestionsSection: View {
 }
 
 private func askerDisplayName(_ user: GigQuestionUser?) -> String {
-    guard let user else { return "Neighbor" }
+    // No asker means the person has deleted their account; their question stays.
+    guard let user else { return "Former member" }
     if let name = user.name, !name.isEmpty { return name }
     let parts = [user.firstName, user.lastName].compactMap { $0 }.filter { !$0.isEmpty }
     if !parts.isEmpty { return parts.joined(separator: " ") }

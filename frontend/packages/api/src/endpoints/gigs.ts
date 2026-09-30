@@ -946,6 +946,7 @@ export interface GigQuestion {
   status: 'open' | 'answered';
   created_at: string;
   updated_at: string;
+  /** Null once the person who asked has deleted their account. */
   asker?: {
     id: string;
     username?: string;
@@ -953,7 +954,7 @@ export interface GigQuestion {
     last_name?: string;
     name?: string;
     profile_picture_url?: string;
-  };
+  } | null;
   answerer?: { id: string; username?: string; name?: string } | null;
   answerer_display_name?: string | null;
   answerer_display_id?: string | null;
@@ -1028,7 +1029,8 @@ export async function deleteGigQuestion(
 export interface ChangeOrder {
   id: string;
   gig_id: string;
-  requested_by: string;
+  /** Null once the person who asked for the change has deleted their account. */
+  requested_by: string | null;
   type:
     | 'price_increase'
     | 'price_decrease'
@@ -1045,7 +1047,7 @@ export interface ChangeOrder {
   rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
-  requester?: { id: string; username?: string; name?: string };
+  requester?: { id: string; username?: string; name?: string } | null;
   reviewer?: { id: string; username?: string; name?: string } | null;
 }
 

@@ -262,7 +262,8 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
         <div className="space-y-3">
 	          {otherQuestions.map((q) => {
 	            const asker = (q.asker || {}) as NonNullable<GigQuestion['asker']>;
-            const askerName = asker.displayName || asker.handle || 'Anonymous';
+            // No asker means the person has deleted their account; their question stays.
+            const askerName = q.asker ? asker.displayName || asker.handle || 'Anonymous' : 'Former member';
             const askerUsername = typeof asker.handle === 'string' && asker.handle &&
               !asker.handle.startsWith('/') && asker.href === `/${asker.handle}` ? asker.handle : null;
             const answerer = q.answerer;
