@@ -261,10 +261,19 @@ struct PlaceResidencyPassSection: View {
         case .loading:
             EmptyView()
         case let .error(message):
+            // A failed read offers its retry in place, as the rate watch does.
             PlaceDetailCard {
-                Text(message)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.Color.appTextMuted)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(message)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                    Button("Try again") {
+                        Task { await vm.load() }
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primary600)
+                    .buttonStyle(.plain)
+                }
             }
         case let .loaded(claims):
             ForEach(claims) { claim in
