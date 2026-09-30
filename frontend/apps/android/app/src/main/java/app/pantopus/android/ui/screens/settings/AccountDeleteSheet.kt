@@ -39,6 +39,25 @@ import app.pantopus.android.ui.theme.Spacing
 /** The literal a user must type to arm the CTA — RN uses the same word. */
 const val ACCOUNT_DELETE_CONFIRM_WORD = "DELETE"
 
+/** Records other people rely on stay with them, without the person's name. */
+internal const val ACCOUNT_DELETE_RETAINED_NOTE =
+    "Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name."
+
+/**
+ * What happens to the Support Trains the person organizes (migration 20260930134000):
+ * each one with a co-organizer passes to them; the others are removed.
+ */
+internal fun accountDeleteOrganizerNotice(count: Int): String =
+    if (count == 1) {
+        "You organize an active Support Train. If it has a co-organizer, it passes to them. " +
+            "If not, it's removed with your account, along with its schedule and signups. " +
+            "To keep it going, add a co-organizer first."
+    } else {
+        "You organize $count active Support Trains. Each one with a co-organizer passes to them. " +
+            "The others are removed with your account, along with their schedules and signups. " +
+            "To keep a train going, add a co-organizer first."
+    }
+
 /** RN's bullet list, verbatim (`AccountDeleteSheet.tsx:64-68`). */
 private val ACCOUNT_DELETE_BULLETS =
     listOf(
@@ -68,6 +87,7 @@ fun AccountDeleteSheet(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
+    organizedLiveTrainCount: Int = 0,
 ) {
     var confirmText by rememberSaveable { mutableStateOf("") }
     val isConfirmed = remember(confirmText) { confirmText.trim().uppercase() == ACCOUNT_DELETE_CONFIRM_WORD }
@@ -102,6 +122,22 @@ fun AccountDeleteSheet(
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             ACCOUNT_DELETE_BULLETS.forEach { item -> BulletRow(item) }
+        }
+        Text(
+            text = ACCOUNT_DELETE_RETAINED_NOTE,
+            style = PantopusTextStyle.body,
+            color = PantopusColors.appTextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = Spacing.s3),
+        )
+        if (organizedLiveTrainCount > 0) {
+            Text(
+                text = accountDeleteOrganizerNotice(organizedLiveTrainCount),
+                style = PantopusTextStyle.body,
+                color = PantopusColors.appTextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = Spacing.s3),
+            )
         }
         Text(
             text = "This action cannot be undone.",

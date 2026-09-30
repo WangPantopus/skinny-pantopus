@@ -23,6 +23,7 @@ public struct AccountDeleteSheet: View {
 
     private let isDeleting: Bool
     private let errorMessage: String?
+    private let organizedLiveTrainCount: Int
     private let onCancel: @MainActor () -> Void
     private let onConfirm: @MainActor () async -> Void
 
@@ -31,11 +32,13 @@ public struct AccountDeleteSheet: View {
     public init(
         isDeleting: Bool,
         errorMessage: String?,
+        organizedLiveTrainCount: Int = 0,
         onCancel: @escaping @MainActor () -> Void,
         onConfirm: @escaping @MainActor () async -> Void
     ) {
         self.isDeleting = isDeleting
         self.errorMessage = errorMessage
+        self.organizedLiveTrainCount = organizedLiveTrainCount
         self.onCancel = onCancel
         self.onConfirm = onConfirm
     }
@@ -61,6 +64,18 @@ public struct AccountDeleteSheet: View {
                     .padding(.top, Spacing.s2)
                 bullets
                     .padding(.top, Spacing.s3)
+                Text(Self.retainedNote)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, Spacing.s3)
+                if organizedLiveTrainCount > 0 {
+                    Text(Self.organizerNotice(count: organizedLiveTrainCount))
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, Spacing.s3)
+                }
                 Text("This action cannot be undone.")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.error)
@@ -155,6 +170,24 @@ public struct AccountDeleteSheet: View {
             }
             .accessibilityIdentifier("accountDeleteConfirm")
         }
+    }
+
+    /// Records other people rely on stay with them, without the person's name
+    /// (the deletion route and each owning table null the attribution).
+    static let retainedNote =
+        "Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name."
+
+    /// What happens to the Support Trains the person organizes (migration 20260930134000):
+    /// each one with a co-organizer passes to them; the others are removed.
+    static func organizerNotice(count: Int) -> String {
+        if count == 1 {
+            return "You organize an active Support Train. If it has a co-organizer, it passes to them. "
+                + "If not, it's removed with your account, along with its schedule and signups. "
+                + "To keep it going, add a co-organizer first."
+        }
+        return "You organize \(count) active Support Trains. Each one with a co-organizer passes to them. "
+            + "The others are removed with your account, along with their schedules and signups. "
+            + "To keep a train going, add a co-organizer first."
     }
 
     /// RN's bullet list, verbatim (`AccountDeleteSheet.tsx:64-68`).

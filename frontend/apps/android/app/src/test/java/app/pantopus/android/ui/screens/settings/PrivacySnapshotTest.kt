@@ -93,7 +93,15 @@ class PrivacySnapshotTest {
             io.mockk.mockk<app.pantopus.android.data.account.AccountDeletionRepository>(relaxed = true)
         val stepUp = io.mockk.mockk<app.pantopus.android.core.security.StepUpCoordinator>(relaxed = true)
         val account = io.mockk.mockk<app.pantopus.android.data.account.AccountRepository>(relaxed = true)
-        return PrivacySettingsViewModel(appLock, auth, privacy, accountDeletion, stepUp, account)
+        return PrivacySettingsViewModel(
+            appLock,
+            auth,
+            privacy,
+            accountDeletion,
+            stepUp,
+            account,
+            io.mockk.mockk(relaxed = true),
+        )
     }
 
     @Composable

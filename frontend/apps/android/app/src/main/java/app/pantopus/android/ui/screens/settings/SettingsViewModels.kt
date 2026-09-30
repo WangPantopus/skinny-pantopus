@@ -17,6 +17,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
@@ -364,6 +365,7 @@ class PrivacySettingsViewModel
         private val accountDeletion: AccountDeletionRepository,
         private val stepUp: StepUpCoordinator,
         private val account: AccountRepository,
+        private val supportTrains: SupportTrainsRepository,
     ) : ViewModel() {
         enum class Variant { Populated, Stealth }
 
@@ -400,6 +402,11 @@ class PrivacySettingsViewModel
 
         private val _deleteAccountError = MutableStateFlow<String?>(null)
         val deleteAccountError: StateFlow<String?> = _deleteAccountError.asStateFlow()
+
+        // Live Support Trains the person is the primary organizer of. The delete sheet
+        // says what happens to them (support train organizer migration 20260930134000).
+        private val _organizedLiveTrainCount = MutableStateFlow(0)
+        val organizedLiveTrainCount: StateFlow<Int> = _organizedLiveTrainCount.asStateFlow()
 
         /** Emitted once the account is gone and the session is cleared, so
          *  the host can pop back to the auth root. */
@@ -487,6 +494,7 @@ class PrivacySettingsViewModel
             if (rowId == ROW_DELETE_ACCOUNT) {
                 _deleteAccountError.value = null
                 _deleteSheetVisible.value = true
+                loadOrganizedLiveTrainCount()
             }
             if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
         }
@@ -566,6 +574,18 @@ class PrivacySettingsViewModel
         }
 
         // ---- Account deletion ----
+
+        /** Best effort: a failed read leaves the organizer paragraph out and never blocks the deletion. */
+        private fun loadOrganizedLiveTrainCount() {
+            _organizedLiveTrainCount.value = 0
+            viewModelScope.launch {
+                val result = runCatching { supportTrains.mine(role = "organizer", limit = 50) }.getOrNull()
+                if (result is NetworkResult.Success) {
+                    _organizedLiveTrainCount.value =
+                        result.data.supportTrains.count { it.myRole == "organizer" && it.status in LIVE_TRAIN_STATUSES }
+                }
+            }
+        }
 
         fun dismissDeleteSheet() {
             if (_deletingAccount.value) return
@@ -855,6 +875,9 @@ internal const val PASSWORDLESS_DELETE_HELP =
     "Biometric verification isn't set up on this device. Sign in again with Google or Apple, then try again."
 private const val ROW_FINDABLE_BY_NAME = "findableByName"
 private const val ROW_DELETE_ACCOUNT = "deleteAccount"
+
+/** Support Train statuses that count as live for the delete sheet's organizer paragraph. */
+private val LIVE_TRAIN_STATUSES: Set<String?> = setOf("published", "active", "paused")
 private const val ROW_SEARCH_PRIVACY_RETRY = "searchPrivacyRetry"
 
 /**

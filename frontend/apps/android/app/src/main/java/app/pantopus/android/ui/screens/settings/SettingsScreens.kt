@@ -195,6 +195,7 @@ fun PrivacySettingsScreen(
     val deleteSheetVisible by viewModel.deleteSheetVisible.collectAsStateWithLifecycle()
     val deletingAccount by viewModel.deletingAccount.collectAsStateWithLifecycle()
     val deleteAccountError by viewModel.deleteAccountError.collectAsStateWithLifecycle()
+    val organizedLiveTrainCount by viewModel.organizedLiveTrainCount.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context.findFragmentActivity()
     val toastController = remember { ToastController() }
@@ -219,6 +220,7 @@ fun PrivacySettingsScreen(
                 errorMessage = deleteAccountError,
                 onCancel = { viewModel.dismissDeleteSheet() },
                 onConfirm = { viewModel.confirmDeleteAccount(activity) },
+                organizedLiveTrainCount = organizedLiveTrainCount,
             )
         }
     }
