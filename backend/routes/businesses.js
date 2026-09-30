@@ -63,7 +63,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
-const { validateBusinessAddress } = require('../services/businessAddressService');
+const { validateBusinessAddress, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const rateLimit = require('express-rate-limit');
 const {
@@ -987,8 +987,27 @@ router.get('/discover', verifyToken, async (req, res) => {
 });
 
 
+// What anyone outside a business may see of its account row and profile (GET /:businessId). The account
+// row's email and phone appear only when its own show_email / show_phone say so.
+const PUBLIC_BUSINESS_USER_FIELDS = ['id', 'username', 'name', 'profile_picture_url', 'cover_photo_url', 'bio',
+  'tagline', 'social_links', 'account_type', 'verified', 'city', 'state', 'average_rating', 'review_count',
+  'followers_count', 'gigs_completed', 'created_at'];
+const PRIVATE_PROFILE_FIELDS = ['personal_user_id', 'mailing_address_id', 'fee_override_pct', 'verified_by',
+  'reminder_count', 'avg_response_calc_at', 'founding_benefit_expires_at'];
+
+function publicBusinessUser(user) {
+  const out = {};
+  for (const field of PUBLIC_BUSINESS_USER_FIELDS) if (user[field] !== undefined) out[field] = user[field];
+  if (user.show_email) out.email = user.email;
+  if (user.show_phone) out.phone_number = user.phone_number;
+  return out;
+}
+
 /**
  * GET /:businessId — Get business details (admin or public)
+ *
+ * Team members get the full rows. Anyone else gets the public view in the same shape, because the apps
+ * render a crew page from it.
  */
 router.get('/:businessId', verifyToken, async (req, res) => {
   try {
@@ -1024,6 +1043,24 @@ router.get('/:businessId', verifyToken, async (req, res) => {
       .eq('business_user_id', businessId)
       .eq('is_active', true)
       .order('sort_order');
+
+    if (!access.hasAccess) {
+      // Never the account's private columns (date of birth, address, Stripe id, security settings), the
+      // owner's personal-account link, internal fees, or a home-based business's exact point and street.
+      const publicLocations = (locations || []).map(toPublicBusinessLocation);
+      let publicProfile = null;
+      if (profile) {
+        publicProfile = { ...profile };
+        for (const field of PRIVATE_PROFILE_FIELDS) delete publicProfile[field];
+        publicProfile.primary_location = publicLocations.find((l) => l.is_primary) || publicLocations[0] || null;
+      }
+      return res.json({
+        business: publicBusinessUser(bizUser),
+        profile: publicProfile,
+        locations: publicLocations,
+        access: { hasAccess: false, isOwner: false, role_base: null },
+      });
+    }
 
     // Parse PostGIS points
     for (const loc of (locations || [])) {
@@ -3459,34 +3496,14 @@ router.get('/public/:username', async (req, res) => {
       return res.status(404).json({ error: 'Business profile not published' });
     }
 
-    // Get active locations
-    const { data: locations } = await supabaseAdmin
+    // Get active locations, as anyone outside the business may see them
+    const { data: locationRows } = await supabaseAdmin
       .from('BusinessLocation')
-      .select('id, label, is_primary, address, address2, city, state, zipcode, country, location, display_location, location_type, show_exact_location, timezone, phone, email')
+      .select(PUBLIC_LOCATION_COLUMNS)
       .eq('business_user_id', bizUser.id)
       .eq('is_active', true)
       .order('sort_order');
-
-    for (const loc of (locations || [])) {
-      // For home_based_private: use display_location for map, hide exact address
-      if (loc.location_type === 'home_based_private' && !loc.show_exact_location) {
-        if (loc.display_location) {
-          loc.location = parsePostGISPoint(loc.display_location);
-        } else if (loc.location) {
-          loc.location = parsePostGISPoint(loc.location);
-        }
-        // Strip exact street address — only show city/area
-        loc.address = null;
-        loc.address2 = null;
-        loc.is_home_based = true;
-      } else {
-        if (loc.location) loc.location = parsePostGISPoint(loc.location);
-      }
-      // Clean internal fields from public response
-      delete loc.display_location;
-      delete loc.location_type;
-      delete loc.show_exact_location;
-    }
+    const locations = (locationRows || []).map(toPublicBusinessLocation);
 
     // Get hours for all locations
     const locationIds = (locations || []).map(l => l.id);
