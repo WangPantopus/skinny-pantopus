@@ -305,6 +305,27 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T12:55Z — #974 final for the decision-9 trio; D05 native rename is PR #982; lease released.**
+  - **[#974](https://github.com/WangPantopus/skinny-pantopus/pull/974), final head `28f92e4e0`,** r2 bundle `20260930-stream3-home-d10-retire-home-r2`, MANIFEST `348bc8e6…`. The coordinator batches it with #968 and #976 after Stream 5's rerun.
+    - **One keeper rule, shared with #968's guard** (`home_effective_access`). The legacy `owner_id`-only Home went from 'purged' (r1) to 'kept'. An unverified occupant is not a keeper.
+    - **After 'purged':** pending household-review claims and access requests are rejected with the reviewers' own notice types, and occupancies are kept. A retry is idempotent.
+    - **Through the real API:** once the owner leaves, the applicant re-submits and gets 201 `external_postcard` / `address_verification`.
+    - **Proof caveat:** #968's purge was stubbed, because it isn't on the runtime.
+    - **Checks:** backend Home, account and users unit suites 47/859; privacy and select gates OK; exact cleanup at 12:45:30Z.
+  - **[#982](https://github.com/WangPantopus/skinny-pantopus/pull/982), D05 native rename,** `9c132e20c`, bundle `20260930-stream3-home-d05-native-clear-name-r1`, MANIFEST `8ec5a132…`.
+    - **Before, on both apps:** the field held the address; an untouched Save stored the address as the name (PATCH 9616 / 9812); clearing was refused.
+    - **After:** the field starts empty; an untouched Save sends nothing; setting a name works (9962 / 10140); clearing stores null (10003 / 10183).
+    - **Tests:** Android 15/15, ktlint/detekt clean; iOS 9/9.
+    - **Cleanup:** exact at 12:52:04Z.
+  - **Runtime:**
+    - lease released at 12:52:17Z (Stream 4 took it at 12:52:23Z);
+    - backend and shared worktree back on `00bf2d6ff`; no proxy rules;
+    - device slot released (emulator down at 12:52:21Z).
+  - **Leads from D10:**
+    - an approved access request whose pending invite the purge deleted stays 'approved';
+    - 'deleted' Homes, like the owner's own Delete Home, send applicants no notice.
+  - **Next, from the open list:** U01 (the chat-button overlap with a long member list; long native activity identities), D08 scheduled start, the local parts of R04/R05/H07/H08, the `homeListService.checked()` logging gap, and the two D10 leads.
+
 - **2026-09-30T12:31Z — #970–#973 merged (batch 180); #962 merged (batch 177); R06 iOS done; #974 being revised for the decision-9 trio; D05 native rename reproduced on both apps.**
   - **Merged in batch 180** ([#975](https://github.com/WangPantopus/skinny-pantopus/pull/975), master `81cf2e959`). Each was sealed, with the iOS unit tests run under the heavy slot on "Pantopus S34" (11:53:34–12:08:30Z):
     - [#970](https://github.com/WangPantopus/skinny-pantopus/pull/970): D06 add-home address checks, `46cd0b548`, MANIFEST `a36aa59a…`. iOS AddHomeWizard 24/24 and DTODecoding 14/14. Three iOS sign-in screenshots were redacted before sealing, because they showed the fixture email.
