@@ -357,7 +357,18 @@ private fun ResidencyLetterSection(
                 if (current.letters.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { current.letters.forEach { LetterRow(it, viewModel) } }
                 }
-            is ResidencyLetterUiState.Error -> Text(current.message, fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
+            // A failed read offers its retry in place, as the rate watch does.
+            is ResidencyLetterUiState.Error ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(current.message, fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
+                    Text(
+                        "Try again",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.primary600,
+                        modifier = Modifier.clickable { viewModel.loadLetters() },
+                    )
+                }
         }
     }
 }

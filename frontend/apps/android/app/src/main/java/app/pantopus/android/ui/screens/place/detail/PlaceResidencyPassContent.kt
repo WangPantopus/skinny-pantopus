@@ -96,8 +96,20 @@ fun PlaceResidencyPassSection(
         PlaceActionToastLine(viewModel)
         when (val current = state) {
             is ResidencyClaimsUiState.Loading -> Unit
+            // A failed read offers its retry in place, as the rate watch does.
             is ResidencyClaimsUiState.Error ->
-                PlaceDetailCard { Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted) }
+                PlaceDetailCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted)
+                        Text(
+                            "Try again",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PantopusColors.primary600,
+                            modifier = Modifier.clickable { viewModel.loadClaims() },
+                        )
+                    }
+                }
             is ResidencyClaimsUiState.Loaded ->
                 current.claims.forEach { ResidencyClaimRow(it, viewModel) }
         }
