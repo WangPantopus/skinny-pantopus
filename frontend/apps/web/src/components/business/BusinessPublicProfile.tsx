@@ -259,7 +259,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
                   quality={75}
                 />
               ) : (
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-400 via-purple-500 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold border-2 border-app-border">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold border-2 border-app-border">
                   {(business.name || 'B')[0].toUpperCase()}
                 </div>
               )}

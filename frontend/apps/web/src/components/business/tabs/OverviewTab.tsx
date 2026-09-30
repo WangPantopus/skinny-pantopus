@@ -128,13 +128,13 @@ export default function OverviewTab({
     <div className="space-y-6">
       {/* Founding Business Banner */}
       {showFoundingBanner && (
-        <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 p-5 relative">
+        <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/40 p-5 relative">
           <button
             onClick={() => {
               setFoundingDismissed(true);
               try { localStorage.setItem(`pantopus_founding_dismissed_${businessId}`, 'true'); } catch {}
             }}
-            className="absolute top-3 left-3 text-amber-600/80 hover:text-amber-800 text-sm font-medium"
+            className="absolute top-3 left-3 text-amber-700 hover:text-amber-800 text-sm font-medium"
             aria-label="Dismiss founding business banner"
           >
             Dismiss
@@ -151,7 +151,7 @@ export default function OverviewTab({
             <button
               onClick={claimFoundingSlot}
               disabled={claimingSlot}
-              className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 transition whitespace-nowrap"
+              className="px-4 py-2 rounded-lg bg-amber-700 text-white text-sm font-semibold hover:bg-amber-800 disabled:opacity-50 transition whitespace-nowrap"
             >
               {claimingSlot ? 'Claiming…' : 'Claim your spot'}
             </button>
