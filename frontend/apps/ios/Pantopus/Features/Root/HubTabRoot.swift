@@ -2292,7 +2292,8 @@ public struct HubTabRoot: View {
                         Task { @MainActor in push(.pulsePost(postId: dto.id)) }
                     },
                     onCompose: {
-                        Task { @MainActor in push(.composePost(intent: PulseComposeIntent.ask.rawValue)) }
+                        // No preset purpose: the composer asks what the post is for.
+                        Task { @MainActor in push(.composePost(intent: PulseIntent.all.rawValue)) }
                     },
                     onEditPost: { dto in
                         Task { @MainActor in push(.editPost(postId: dto.id)) }

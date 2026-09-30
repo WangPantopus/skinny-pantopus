@@ -18,7 +18,8 @@ import Observation
 public enum PulsePostDetailState: Sendable, Equatable {
     case loading
     case loaded(PulsePostDetailContent)
-    case error(message: String)
+    /// `retryable` is false when the post is gone or hidden: Try again can't help.
+    case error(message: String, retryable: Bool)
 }
 
 /// Hydrated content for the Pulse post detail. Built in the VM from the
@@ -445,10 +446,10 @@ public final class PulsePostDetailViewModel {
             state = .loaded(rebuildContent(from: response.post))
         } catch let error as APIError {
             logger.warning("Post detail load failed: \(error)")
-            state = .error(message: friendlyMessage(for: error))
+            state = .error(message: friendlyMessage(for: error), retryable: isRetryable(error))
         } catch {
             logger.warning("Post detail load failed: \(error)")
-            state = .error(message: "Something went wrong")
+            state = .error(message: "Something went wrong", retryable: true)
         }
     }
 
@@ -636,6 +637,14 @@ public final class PulsePostDetailViewModel {
         case .forbidden: "You don't have access to this post."
         case .transport: "Check your connection and try again."
         default: "Something went wrong. Try again."
+        }
+    }
+
+    /// A post that's gone or hidden stays that way, so its error offers no Try again (as on Android).
+    private func isRetryable(_ error: APIError) -> Bool {
+        switch error {
+        case .notFound, .forbidden: false
+        default: true
         }
     }
 }
