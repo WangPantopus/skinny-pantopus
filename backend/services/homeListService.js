@@ -1,4 +1,5 @@
 const db = require('../config/supabaseAdmin');
+const logger = require('../utils/logger');
 const { getUserAccess } = require('../utils/homePermissions');
 const { currentOccupancy, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const { deleteEligibility } = require('./homeAuthorityService');
@@ -15,15 +16,21 @@ const OWNER_STATUSES = ['pending', 'verified', 'disputed', 'revoked'];
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const permissionsKey = value => JSON.stringify([...value].sort());
-function failure(changed = false) {
+function failure(changed = false, cause = null) {
   return Object.assign(new Error(changed ? 'Home access changed while loading. Please retry.' : 'Could not load your Homes. Please retry.'), {
-    code: changed ? 'HOME_LIST_ACCESS_CHANGED' : 'HOME_LIST_UNAVAILABLE', statusCode: 503,
+    code: changed ? 'HOME_LIST_ACCESS_CHANGED' : 'HOME_LIST_UNAVAILABLE', statusCode: 503, cause,
   });
 }
+// What went wrong, for the log line only (never sent to clients). The logger
+// redacts keys named "code", so the error's own code travels as errorCode.
+const causeOf = error => ({
+  errorName: error?.name || null, errorCode: error?.code || null,
+  errorMessage: typeof error?.message === 'string' ? error.message.slice(0, 160) : null,
+});
 async function checked(query) {
   let result;
-  try { result = await query; } catch (_) { throw failure(); }
-  if (!result || result.error) throw failure();
+  try { result = await query; } catch (err) { throw failure(false, causeOf(err)); }
+  if (!result || result.error) throw failure(false, result ? causeOf(result.error) : { errorName: 'NoResult' });
   return result.data;
 }
 async function rows(query) {
@@ -150,8 +157,14 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   };
   return { homes: entries.map(entry => entry.card) };
 }
+// Every failed list request leaves one log line with its cause; an unexpected
+// exception (a bug) is logged as itself rather than hidden behind the 503.
 function sendError(res, error) {
-  const safe = ['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(error?.code) ? error : failure();
+  const known = ['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(error?.code);
+  const safe = known ? error : failure();
+  logger[safe.code === 'HOME_LIST_ACCESS_CHANGED' ? 'warn' : 'error']('Home list request failed', {
+    listFailure: safe.code, cause: known ? error.cause || null : { unexpected: true, ...causeOf(error) },
+  });
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
 module.exports = { read, readAccessState: state, sendError };
