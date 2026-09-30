@@ -1,3 +1,10 @@
+# STREAM 5 — Accounts and Social (formerly Stream 3; renumbered 2026-09-30)
+
+> **Renumbering (user direction, 2026-09-30):** the former Streams 1 and 2 are each being split in two (Streams 1–4), so this stream, formerly **Stream 3**, is now **Stream 5**. Its scope, accepted evidence, decisions, kit and runtime are unchanged. This file moved from `03-accounts-social.md`.
+> - Everything below dated before 2026-09-30 keeps the old name ("Stream 3", "S3"); read it as Stream 5.
+> - Paths, branches, audit bundles and UX-inventory IDs that contain `stream3` or `S3-` keep their names.
+> - Stream 5 owns this file in the coordination checkout. Its resume prompt is [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md).
+
 # CURRENT STREAM 3 STATUS — 2026-09-25/26 peer session (supersedes the 2026-09-22 summary below)
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.

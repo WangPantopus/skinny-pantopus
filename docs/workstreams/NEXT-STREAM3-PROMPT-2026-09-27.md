@@ -1,3 +1,5 @@
+> **Superseded 2026-09-30:** Stream 3 is now **Stream 5** (user renumbering). Its status file moved to [`05-accounts-social.md`](05-accounts-social.md). Use [`NEXT-STREAM5-PROMPT-2026-09-30.md`](NEXT-STREAM5-PROMPT-2026-09-30.md) instead of this prompt.
+
 # Takeover prompt for the next Stream 3 agent (written 2026-09-27T10:21:47Z; updated 2026-09-27T11:17:35Z after every Stream 3 PR merged, 2026-09-27T11:40:27Z for the launch scope in §0, and 2026-09-27T12:40:26Z for the end-to-end verification requirements)
 
 Copy everything below the line into the new session.

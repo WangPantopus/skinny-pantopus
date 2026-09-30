@@ -1,8 +1,15 @@
 # Pantopus project handoff
 
+> ## 🔢 WORKSTREAM RENUMBERING — 2026-09-30 (user direction; read first)
+> - The user is splitting the former **Stream 1** (gigs and payments) and **Stream 2** (Home and household) into **two workstreams each**; those four are Streams 1–4. Their new names, files and ownership are recorded by those streams.
+> - The former **Stream 3 (Accounts and Social) is now Stream 5.** Its scope, accepted evidence, decisions, kit and runtime are unchanged. Its status file moved from `03-accounts-social.md` to [`05-accounts-social.md`](workstreams/05-accounts-social.md), which frees `03-` for a new stream; its resume prompt is [`NEXT-STREAM5-PROMPT-2026-09-30.md`](workstreams/NEXT-STREAM5-PROMPT-2026-09-30.md).
+> - Entries dated before 2026-09-30 keep the old numbering: read "Stream 3" / "S3" there as today's Stream 5, and "three streams" as the streams at that time.
+> - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
+
+
 ## CURRENT RESUME POINT — 2026-09-29T04:16Z (batch114 merged; native Support Train delete returns to a fresh list)
 
-> ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
+> ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
 > **Do not verify, end-to-end test or fix anything related to them.** Remove them from every checklist, inventory, acceptance row and handoff plan going forward. Work already done on them stays as future-ready work (they may be flagged back on later).
 >
@@ -20,7 +27,7 @@
 > **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
 > - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
 > - **Stream 2:** #7 Household extras, #8 Mail extras.
-> - **Stream 3:** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
+> - **Stream 5 (formerly Stream 3):** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
 > - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
 
 
@@ -733,7 +740,7 @@
   - Its fallback handoff is [docs/workstreams/02-home-household.md](workstreams/02-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
   - Open: #535, #538 (decision 2a done).
   - Next: (2b) native Add guest "What they can see" sections sent as `included_sections`. It needs heavy and the iOS driver; Stream 2 will ask.
-- **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](workstreams/03-accounts-social.md) → CURRENT RESUME.
+- **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](workstreams/05-accounts-social.md) → CURRENT RESUME.
   - The takeover prompt is `docs/workstreams/NEXT-STREAM3-PROMPT-2026-09-26.md`, and the private runtime kit is `.pantopus-recovery/stream3-runtime-kit/`.
   - Open S3 PR: #536 (realtime after a token refresh; Android reactions patched in place; seal `13cf585e…`; CI started 21:59Z), for batch 32.
   - Remaining S3 inventory rows: S3-22, 26, 37, 59, 62, 64 and 69. S3-35 and S3-46 need user money decisions; the questions for the user are listed there.
@@ -1332,7 +1339,7 @@ Read the current summary at the top of each existing status file:
 
 - [Stream1 — payments, gigs and coordinator](workstreams/01-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
 - [Stream2 — Home and household](workstreams/02-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
-- [Stream3 — accounts, social and notifications](workstreams/03-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
+- [Stream 5 (formerly Stream 3) — accounts, social and notifications](workstreams/05-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
 
 **Acceptance count remains9 closed /71 partial-open out of80.** Closed: H01–H06,R01–R02,G02. P01 is a completed bounded tip-reservation milestone and is not counted as a whole closed row. The existing [80-row backlog](REMAINING_WORK_2026-09-11.md) remains authoritative; PRs, checks and partial journeys are different units, so there is no defensible percentage of total functionality inferred from them. This documentation pass closes no acceptance row.
 
@@ -1839,7 +1846,7 @@ migration filenames, conflicting). PR46 is a separate founder PR. No other PRs o
    first) — every review, grant, merge and acceptance since 2026-09-15 is there.
 2. Stream status files: [01-gigs-payments](workstreams/01-gigs-payments.md),
    [02-home-household](workstreams/02-home-household.md),
-   [03-accounts-social](workstreams/03-accounts-social.md). Newest section at the top
+   [03-accounts-social](workstreams/05-accounts-social.md). Newest section at the top
    (03 appends at the bottom).
 3. Durable evidence bundles with hash manifests live in the main checkout under
    `.pantopus-recovery/audits/<date>-<stream>-<slug>-rN/`; each has a `result.md`.

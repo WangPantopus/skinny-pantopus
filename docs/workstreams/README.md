@@ -1,8 +1,15 @@
-# Three-stream coordination
+# Workstream coordination (five streams from 2026-09-30)
+
+> ## 🔢 WORKSTREAM RENUMBERING — 2026-09-30 (user direction; read first)
+> - The user is splitting the former **Stream 1** (gigs and payments) and **Stream 2** (Home and household) into **two workstreams each**; those four are Streams 1–4. Their new names, files and ownership are recorded by those streams.
+> - The former **Stream 3 (Accounts and Social) is now Stream 5.** Its scope, accepted evidence, decisions, kit and runtime are unchanged. Its status file moved from `03-accounts-social.md` to [`05-accounts-social.md`](05-accounts-social.md), which frees `03-` for a new stream; its resume prompt is [`NEXT-STREAM5-PROMPT-2026-09-30.md`](NEXT-STREAM5-PROMPT-2026-09-30.md).
+> - Entries dated before 2026-09-30 keep the old numbering: read "Stream 3" / "S3" there as today's Stream 5, and "three streams" as the streams at that time.
+> - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
+
 
 ## CURRENT RESUME POINT — 2026-09-29T04:16Z (batch114 merged; native Support Train delete returns to a fresh list)
 
-> ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all three streams; read before planning any verification)
+> ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all streams; read before planning any verification)
 > For the first launch, the features below are **hidden behind feature flags**. Their code is **not deleted**, and the user handles the flagging elsewhere.
 > **Do not verify, end-to-end test or fix anything related to them.** Remove them from every checklist, inventory, acceptance row and handoff plan going forward. Work already done on them stays as future-ready work (they may be flagged back on later).
 >
@@ -20,7 +27,7 @@
 > **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
 > - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
 > - **Stream 2:** #7 Household extras, #8 Mail extras.
-> - **Stream 3:** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
+> - **Stream 5 (formerly Stream 3):** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
 > - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
 
 
@@ -833,7 +840,7 @@
   - Its fallback handoff is [docs/workstreams/02-home-household.md](02-home-household.md) → CURRENT RESUME, with the runtime kit and bundles.
   - Open: #535, #538 (decision 2a done).
   - Next: (2b) native Add guest "What they can see" sections sent as `included_sections`. It needs heavy and the iOS driver; Stream 2 will ask.
-- **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](03-accounts-social.md) → CURRENT RESUME.
+- **Stream 3 handoff (2026-09-26T22:15Z):** the full state is in [docs/workstreams/03-accounts-social.md](05-accounts-social.md) → CURRENT RESUME.
   - The takeover prompt is [NEXT-STREAM3-PROMPT-2026-09-26.md](NEXT-STREAM3-PROMPT-2026-09-26.md), and the private runtime kit is `.pantopus-recovery/stream3-runtime-kit/`.
   - Open S3 PR: #536 (realtime after a token refresh; Android reactions patched in place; seal `13cf585e…`; CI started 21:59Z), for batch 32.
   - Remaining S3 inventory rows: S3-22, 26, 37, 59, 62, 64 and 69. S3-35 and S3-46 need user money decisions; the questions for the user are listed there.
@@ -2837,7 +2844,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream3 current summary](03-accounts-social.md).
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -5598,7 +5605,7 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
 | [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
 | [2. Home/household](02-home-household.md) | Current Home milestone and handoff | Stream 2 |
-| [3. Accounts/social](03-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
+| [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
 The coordinator is also Stream 1; there is no fourth implementation stream.
