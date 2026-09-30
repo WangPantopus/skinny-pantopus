@@ -283,13 +283,14 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
     }
 
     /// `data` is provider-specific (untyped on the wire) and unused by the
-    /// briefing, so the decoder simply ignores it.
+    /// briefing, so the decoder simply ignores it. So is `action`, a
+    /// `{label, route}` object on bill, task, calendar, pickup, mail, gig and
+    /// local-update signals: declared as a String, it failed the whole payload.
     public struct TodaySignalDTO: Decodable, Sendable, Hashable {
         public let kind: String?
         public let label: String?
         public let detail: String?
         public let urgency: String?
-        public let action: String?
     }
 
     public struct TodaySeasonal: Decodable, Sendable, Hashable {
