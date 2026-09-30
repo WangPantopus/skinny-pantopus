@@ -54,15 +54,14 @@ final class HomeOwnershipSecurityViewModelTests: XCTestCase {
             XCTFail("Expected .loaded, got \(vm.state)")
             return
         }
-        XCTAssertEqual(groups.map(\.id), ["privacyMask", "ownerClaim", "memberAttach"])
+        XCTAssertEqual(groups.map(\.id), ["privacyMask", "ownerClaim"])
         XCTAssertEqual(groups[0].rows.count, 3)
         XCTAssertEqual(groups[1].rows.count, 2)
-        XCTAssertEqual(groups[2].rows.count, 3)
         let selected = groups.flatMap(\.rows).filter {
             if case let .radio(isSelected) = $0.control { return isSelected }
             return false
         }
-        XCTAssertEqual(selected.map(\.id), ["privacyMask.normal", "ownerClaim.open", "memberAttach.open_invite"])
+        XCTAssertEqual(selected.map(\.id), ["privacyMask.normal", "ownerClaim.open"])
         XCTAssertEqual(vm.footerCaption, "2 verified owners")
     }
 

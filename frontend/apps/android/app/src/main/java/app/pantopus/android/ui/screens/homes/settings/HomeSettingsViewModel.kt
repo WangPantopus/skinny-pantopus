@@ -390,7 +390,7 @@ class HomeSettingsViewModel
                         GroupedListRow(
                             "ownershipSecurity",
                             "Ownership & Security",
-                            subtext = "Discoverability, owner claims, member policy",
+                            subtext = "Discoverability and owner claims",
                             control = RowControl.Chevron,
                         ),
                     ),
