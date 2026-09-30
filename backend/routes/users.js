@@ -4885,6 +4885,22 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       });
     }
 
+    // A stop request the person made that hasn't completed (waiting on its payment
+    // step, or in review) is replayed with its original actor, so it has to finish
+    // before the account can go (Stream 2's rule for its stop receipts).
+    const { count: openStops, error: openStopsError } = await supabaseAdmin
+      .from('GigStopRequest')
+      .select('id', { count: 'exact', head: true })
+      .eq('actor_id', userId)
+      .neq('state', 'completed');
+    if (openStopsError) throw openStopsError;
+    if (openStops > 0) {
+      return res.status(409).json({
+        error: "A task you stopped is still being processed. Try again once it finishes, or contact support if it doesn't.",
+        code: 'TASK_STOP_IN_PROGRESS',
+      });
+    }
+
     // ── 1b. Dry run: would the delete below succeed? ────────────
     // A row the steps below don't clear (a stop request, a stop receipt on one
     // of the person's tasks, a record kept for someone else) makes the User
