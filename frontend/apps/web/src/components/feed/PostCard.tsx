@@ -59,6 +59,8 @@ interface PostCardProps {
   onReport?: (postId: string) => void;
   onSave?: (postId: string) => void;
   onDelete?: (postId: string) => void;
+  /** Opens the edit form for one of the viewer's own posts. */
+  onEdit?: (post: Post) => void;
   onHide?: (postId: string) => void;
   onMute?: (target: Parameters<typeof api.posts.muteEntity>[0]) => void;
   onNotHelpful?: (postId: string) => void;
@@ -79,6 +81,7 @@ function PostCard({
   onReport,
   onSave,
   onDelete,
+  onEdit,
   onHide,
   onMute,
   onNotHelpful,
@@ -245,6 +248,14 @@ function PostCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-full mt-1 w-40 bg-surface rounded-xl shadow-xl border border-app py-1 z-20">
+              {isOwn && onEdit && (
+                <button
+                  onClick={() => { onEdit(post); setMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
+                >
+                  Edit Post
+                </button>
+              )}
               {isOwn && onDelete && (
                 <button
                   onClick={async () => { const yes = await confirmStore.open({ title: 'Delete this post?', confirmLabel: 'Delete', variant: 'destructive' }); if (yes) { onDelete(post.id); setMenuOpen(false); } }}
@@ -593,6 +604,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.onReport === next.onReport
     && prev.onSave === next.onSave
     && prev.onDelete === next.onDelete
+    && prev.onEdit === next.onEdit
     && prev.onHide === next.onHide
     && prev.onMute === next.onMute
     && prev.onDismissSeeded === next.onDismissSeeded;

@@ -514,6 +514,11 @@ export function useFeedData({
     updatePostsInCache((p) => (p.id === id ? { ...p, state: 'solved' as const } : p));
   }, [updatePostsInCache]);
 
+  /** Drops a post that no longer exists (deleted elsewhere) from the loaded feed, without an API call. */
+  const forgetPost = useCallback((id: string) => {
+    removePostsFromCache((p) => p.id === id);
+  }, [removePostsFromCache]);
+
   return {
     user,
     posts,
@@ -545,6 +550,7 @@ export function useFeedData({
     handleNotHelpful,
     handleSolved,
     patchPost,
+    forgetPost,
     // Sports topic lane
     topic,
     setTopic,
