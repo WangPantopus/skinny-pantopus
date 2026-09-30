@@ -443,7 +443,7 @@ function MembersContent() {
             <div key={entry.id || idx} className="flex items-start gap-3 bg-app-surface border border-app-border rounded-lg p-3">
               <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-app-text">{entry.action}</p>
+                <p className="text-sm font-medium text-app-text">{entry.description || entry.action}</p>
                 <p className="text-xs text-app-text-secondary mt-0.5">
                   {entry.actor?.username || entry.actor_name || 'System'}
                   {entry.target_name ? ` \u2192 ${entry.target_name}` : ''}
