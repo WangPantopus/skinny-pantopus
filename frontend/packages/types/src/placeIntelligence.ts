@@ -276,6 +276,11 @@ export interface PlaceAddressCalendarData {
     recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
     recycling_next_date: string | null;
   } | null;
+  /**
+   * The household schedule shown here. Send it back as `expected_version` when
+   * saving, so a change made meanwhile is not undone. Omitted by older servers.
+   */
+  pickup_version?: string;
 }
 
 // ── Risk & readiness ─────────────────────────────────────────

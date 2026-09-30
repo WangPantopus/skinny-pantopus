@@ -73,7 +73,8 @@ it('clears the household schedule only after server confirmation', async () => {
   expect(screen.getByText('Garbage day')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Clear household schedule' }));
   await waitFor(() => expect(screen.queryByText('Garbage day')).not.toBeInTheDocument());
-  expect(clearPickupDay).toHaveBeenCalledWith('home-1');
+  // This fixture's server sends no pickup_version, so no expected version goes back.
+  expect(clearPickupDay).toHaveBeenCalledWith('home-1', undefined);
 });
 
 it('limits weekly selection to seven home-calendar dates and resets a stale biweekly choice', () => {

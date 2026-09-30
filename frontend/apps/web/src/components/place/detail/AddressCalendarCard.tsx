@@ -111,6 +111,9 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
   const [weekday, setWeekday] = useState<PickupWeekday | ''>(data.pickup_schedule?.weekday ?? '');
   const [frequency, setFrequency] = useState<'not_set' | 'weekly' | 'biweekly'>(data.pickup_schedule?.recycling_frequency ?? 'not_set');
   const [nextDate, setNextDate] = useState(data.pickup_schedule?.recycling_next_date ?? '');
+  // The schedule this form started from. A save sends it back, so a change
+  // saved meanwhile on another device is not silently undone.
+  const [openedVersion, setOpenedVersion] = useState(data.pickup_version);
   const [error, setError] = useState<string | null>(null);
 
   const upcoming = calendar.upcoming ?? [];
@@ -126,19 +129,33 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
     setSaving(true);
     setError(null);
     try {
-      const response = reset ? await api.clearPickupDay(homeId) : await api.setPickupDay(homeId, {
+      const response = reset ? await api.clearPickupDay(homeId, openedVersion) : await api.setPickupDay(homeId, {
         weekday: weekday as PickupWeekday,
         recycling_frequency: frequency,
         ...(frequency !== 'not_set' ? { recycling_next_date: nextDate } : {}),
+        ...(openedVersion ? { expected_version: openedVersion } : {}),
       });
       setConfirmed(response.calendar);
       setWeekday(response.calendar.pickup_schedule?.weekday ?? '');
       setFrequency(response.calendar.pickup_schedule?.recycling_frequency ?? 'not_set');
       setNextDate(response.calendar.pickup_schedule?.recycling_next_date ?? '');
+      setOpenedVersion(response.calendar.pickup_version);
       toast.success(reset ? 'Household pickup schedule cleared.' : 'Pickup schedule saved to your household calendar.');
       setPicking(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.placeIntelligence(homeId) });
     } catch (err) {
+      // Changed meanwhile: nothing was saved. Show the current schedule in the
+      // form so the person can review it and try again.
+      const failure = err as { statusCode?: number; data?: { calendar?: PlaceAddressCalendarData } } | null;
+      if (failure?.statusCode === 409 && failure.data?.calendar) {
+        const current = failure.data.calendar;
+        setConfirmed(current);
+        setWeekday(current.pickup_schedule?.weekday ?? '');
+        setFrequency(current.pickup_schedule?.recycling_frequency ?? 'not_set');
+        setNextDate(current.pickup_schedule?.recycling_next_date ?? '');
+        setOpenedVersion(current.pickup_version);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.placeIntelligence(homeId) });
+      }
       setError(err instanceof Error ? err.message : 'Could not save your pickup schedule. Try again.');
     } finally {
       busy.current = false;
@@ -155,6 +172,7 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
             setWeekday(calendar.pickup_schedule?.weekday ?? '');
             setFrequency(calendar.pickup_schedule?.recycling_frequency ?? 'not_set');
             setNextDate(calendar.pickup_schedule?.recycling_next_date ?? '');
+            setOpenedVersion(calendar.pickup_version);
             setError(null);
             setPicking((p) => !p);
           }} className="text-[12.5px] font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
