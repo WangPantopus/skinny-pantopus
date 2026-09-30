@@ -9,7 +9,7 @@ import type { GuestPass } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { passStatus } from '@/components/home/share/ShareCenter';
-import { failureMessage } from '@/components/home/share/shareFailure';
+import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 
 const TEMPLATES: { id: string; label: string; icon: typeof Wifi; duration: string; color: string }[] = [
   { id: 'wifi_only', label: 'Wi-Fi Only',       icon: Wifi,         duration: '2 hours',  color: '#0284c7' },
@@ -62,6 +62,8 @@ function ShareContent() {
       setPasses(res.passes);
     } catch (err: unknown) {
       if (request !== generation.current) return;
+      // Lockdown turns guest passes off for their managers too (the server says so); that is not a permission gap.
+      if (shareFailure(err).code === 'HOME_LOCKDOWN_ACTIVE') { setLoadDenied(true); setLoadError(failureMessage(err, 'Guest passes are off while Lockdown is on.')); return; }
       if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to create or view guest passes for this household.'); return; }
       setLoadDenied(false);
       setLoadError('Current guest passes could not be loaded. Retry to check current information.');
