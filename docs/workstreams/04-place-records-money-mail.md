@@ -269,6 +269,16 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T19:02:48Z — correction to the 19:01:28Z entry: fixes 3 (My Mail Day) and 4 (Stamps) are launch-cut #8 work, so they're recorded, not pursued.** The former Stream 2's cut map (`former-stream2-home-household.md`, "Mail extras (8)") lists household letters (routing, read state…), certified mail and e-signing among the cut surfaces, and I missed it when I committed them.
+  - **My Mail Day** triages and routes household letters. **Stamps** (the postage wallet and the collection earned by letter actions) serves only mail extras. Both branches stay local and unpushed as future-ready work: `claude/stream4-mailday-no-sample-fallback` `4cd7f9e7d` and `claude/stream4-stamps-no-invented-wallet` `608849fa2`. Their queued build was cancelled.
+  - **Recorded under cut #8, not fixed:**
+    - iOS My Mail Day shows the sample day on any read failure (`MailDayViewModel.fetch` → `MailDaySampleData`), and accepting a suggestion posts a fixture id;
+    - Stamps' wallet is sample data with a local-only "Buy";
+    - postal certified mail always claims "USPS Certified Mail" and "Postmark verified" (`CertifiedDetailLayout.defaultCarrier`, both apps);
+    - the mailbox map's "You are here" sits at a fixed sample point.
+  - **For the user's flags:** all four show invented data if they aren't behind the mail-extras flag. The fix shapes are on the two branches (error state; collection-only Stamps) and in this line (certified: no postmark claim without data; map: hide the dot without a location).
+  - **Still pursued:** fixes 1, 2 and 5 (the Your home trend, Place verify actions, document uploader names), which are Place and Home records, in scope.
+
 - **2026-09-30T19:01:28Z — #1040 merged; [#1062](https://github.com/WangPantopus/skinny-pantopus/pull/1062) (native activity labels) with the coordinator; five more fixes on branches, found on devices and by read-only sweeps; the native U02 sweep is running.**
   - **#1040 merged** (batch 209, 18:37:55Z, master `2693fcbcf`). The coordinator found a gap in review: Android's `openedVersion` was keyed on content only. Fixed in `ced76d805` with a version key.
     - **`20260930-stream4-native-pickup-e5-r3`** (MANIFEST `5889ef2148f1d8eceb6797f50044cf70691725c0a7cff76304ebfa45d4108b7d`): the identical-content case. Both Android builds recover with one 409, a reopen and 200, because refresh() unmounts the editor. iOS takes the new version from the 409 reply. So the key is recorded as a guard, not a fix for a reproduced loop.
