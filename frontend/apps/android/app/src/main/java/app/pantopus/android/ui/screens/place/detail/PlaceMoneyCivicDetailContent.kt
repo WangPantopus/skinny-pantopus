@@ -129,7 +129,7 @@ fun PlaceMoneyDetailContent(
                     "recorded — only the proven resident can watch a home.",
             cta = "Verify address",
             icon = PantopusIcon.TrendingDown,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
     }
     PlaceSourceNote("Freddie Mac Primary Mortgage Market Survey", "weekly")

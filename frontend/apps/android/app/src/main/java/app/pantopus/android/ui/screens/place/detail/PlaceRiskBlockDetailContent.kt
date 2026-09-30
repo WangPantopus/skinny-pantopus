@@ -107,7 +107,7 @@ fun PlaceRiskDetailContent(
                     "address a caller reads to 911.",
             cta = "Verify address",
             icon = PantopusIcon.HeartPulse,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
     }
 }
@@ -436,7 +436,7 @@ fun PlaceBlockDetailContent(
                 bucket = data.bucket,
                 label = data.label,
                 ctaTitle = "Be one of the first to verify on your block",
-                onTap = null,
+                onTap = LocalPlaceDetailVerify.current,
             )
         } else {
             PlaceDetailFallbackCard(env)

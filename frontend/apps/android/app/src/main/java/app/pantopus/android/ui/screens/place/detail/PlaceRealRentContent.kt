@@ -88,7 +88,7 @@ fun PlaceRealRentSection(
                     ?: "Verify your address to see what your block actually pays.",
             cta = "Verify address",
             icon = PantopusIcon.Users,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
         return
     }

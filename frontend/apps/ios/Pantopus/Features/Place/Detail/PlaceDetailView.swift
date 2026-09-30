@@ -29,6 +29,23 @@ struct PlaceDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
+        .sheet(isPresented: $viewModel.showVerify) {
+            PlaceVerifySheet(
+                address: verifyAddress,
+                onStart: { method in
+                    viewModel.showVerify = false
+                    viewModel.onStartVerify?(method)
+                },
+                onClose: { viewModel.showVerify = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        }
+    }
+
+    private var verifyAddress: String {
+        if case let .loaded(intel) = viewModel.state { return intel.place.label }
+        return ""
     }
 
     private var header: some View {
