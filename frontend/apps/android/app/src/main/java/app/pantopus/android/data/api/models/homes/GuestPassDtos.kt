@@ -27,7 +27,7 @@ data class GuestPassDto(
     @Json(name = "custom_title") val customTitle: String? = null,
     @Json(name = "max_views") val maxViews: Int? = null,
     @Json(name = "view_count") val viewCount: Int? = null,
-    /** Computed `"active" | "revoked" | "expired"` — list endpoint only. */
+    /** Computed `"active" | "scheduled" | "revoked" | "expired" | "reissue_required"` — list endpoint only. */
     val status: String? = null,
     @Json(name = "last_viewed_at") val lastViewedAt: String? = null,
 )

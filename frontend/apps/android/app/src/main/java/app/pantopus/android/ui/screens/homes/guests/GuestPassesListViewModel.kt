@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /** Nav-arg key for the home id consumed via [SavedStateHandle]. */
@@ -184,7 +186,13 @@ class GuestPassesListViewModel
         fun nextExpiry(): Instant? {
             val loaded = _state.value as? ListOfRowsUiState.Loaded ?: return null
             val ids = loaded.sections.firstOrNull { it.id == GuestPassesSection.ACTIVE }?.rows?.map { it.id } ?: return null
-            return passes.filter { it.id in ids }.mapNotNull { parseInstant(it.endAt) }.minOrNull()
+            val now = Instant.now()
+            // A scheduled row also re-projects when it starts ("Starts …" → time left).
+            return passes
+                .filter { it.id in ids }
+                .flatMap { listOfNotNull(parseInstant(it.endAt), parseInstant(it.startAt)) }
+                .filter { it.isAfter(now) }
+                .minOrNull()
         }
 
         fun refreshExpiry() {
@@ -258,7 +266,7 @@ class GuestPassesListViewModel
                             _pendingEvent.value = GuestPassesEvent.ConfirmRevoke(pass.id, label)
                         },
                     ),
-                body = expiryLabel(pass.endAt, now),
+                body = activeBodyLabel(pass, now),
                 subtitleIcon = PantopusIcon.UserCheck,
                 bodyIcon = PantopusIcon.Clock,
             )
@@ -294,13 +302,15 @@ class GuestPassesListViewModel
 
             /**
              * RN parity — `share.tsx:47`: `status == 'active'` AND either no
-             * end stamp or an end stamp still in the future.
+             * end stamp or an end stamp still in the future. A scheduled link
+             * becomes usable at its start, so it stays current and revocable
+             * instead of being filed under Past as "Expired" (as on the web).
              */
             fun isActive(
                 pass: GuestPassDto,
                 now: Instant,
             ): Boolean {
-                if ((pass.status ?: "active") != "active") return false
+                if ((pass.status ?: "active") !in setOf("active", "scheduled")) return false
                 val end = parseInstant(pass.endAt) ?: return true
                 return end.isAfter(now)
             }
@@ -326,10 +336,32 @@ class GuestPassesListViewModel
 
             /**
              * RN parity — `share.tsx:167`: "Revoked" for a revoked pass,
-             * "Expired" for everything else in the Past bucket.
+             * "Expired" for everything else in the Past bucket, except a link
+             * the list reports as `reissue_required` ("Needs new link", as on the web).
              */
             fun pastStatusLabel(pass: GuestPassDto): String =
-                if (pass.status == "revoked" || pass.revokedAt != null) "Revoked" else "Expired"
+                when {
+                    pass.status == "revoked" || pass.revokedAt != null -> "Revoked"
+                    pass.status == "reissue_required" -> "Needs new link"
+                    else -> "Expired"
+                }
+
+            private val START_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+
+            /**
+             * A pass whose start is still ahead says when it starts (the web's
+             * "Starts …"); every other current pass shows its time left.
+             */
+            fun activeBodyLabel(
+                pass: GuestPassDto,
+                now: Instant,
+            ): String {
+                val start = parseInstant(pass.startAt)
+                if (start != null && start.isAfter(now)) {
+                    return "Starts ${START_FORMAT.format(start.atZone(ZoneId.systemDefault()))}"
+                }
+                return expiryLabel(pass.endAt, now)
+            }
 
             /**
              * RN parity — `share.tsx:93-99` (`formatExpiry`). A null end
