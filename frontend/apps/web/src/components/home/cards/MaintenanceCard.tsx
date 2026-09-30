@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, type KeyboardEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Wrench, ChevronLeft, CheckCircle, XCircle, Calendar, ClipboardList, Building, Snowflake, CloudRain, Sprout, Thermometer, Palette, Home, Flame, DoorOpen, Paintbrush, ThermometerSnowflake, HousePlus, Flashlight } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -119,6 +119,18 @@ export default function MaintenanceCard({
     return () => { active = false; };
   }, [subTab, homeId, vendorsRetry]);
 
+  // An issue row opens the issue; keyboard users reach and open it the way DashboardCard works.
+  const issueRow = (issue: (typeof issues)[number]) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: () => onViewIssue(issue),
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault(); onViewIssue(issue);
+      }
+    },
+  });
+
   const scheduled = issues.filter((i) => i.status === 'scheduled');
   const active = issues.filter((i) => ['open', 'in_progress', 'scheduled'].includes(i.status));
   const history = issues.filter((i) => i.status === 'resolved' || i.status === 'canceled');
@@ -201,8 +213,8 @@ export default function MaintenanceCard({
             (subTab === 'active' ? active : scheduled).map((issue) => (
               <div
                 key={issue.id}
-                onClick={() => onViewIssue(issue)}
-                className="px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition cursor-pointer"
+                {...issueRow(issue)}
+                className="px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <Wrench className="w-5 h-5 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
@@ -228,8 +240,8 @@ export default function MaintenanceCard({
             history.map((issue) => (
               <div
                 key={issue.id}
-                onClick={() => onViewIssue(issue)}
-                className="px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition cursor-pointer"
+                {...issueRow(issue)}
+                className="px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <span className="flex-shrink-0">{issue.status === 'resolved' ? <CheckCircle className="w-5 h-5 text-green-500" /> : <XCircle className="w-5 h-5 text-red-500" />}</span>
                 <div className="min-w-0 flex-1">
