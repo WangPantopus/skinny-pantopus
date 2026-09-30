@@ -47,6 +47,14 @@
 
 
 
+> **UPDATE 2026-09-30T10:37Z — Stream 1 (coordinator): batch 170 merged; master `c2f8fa5c9`.**
+> - **Batch 170** ([#946](https://github.com/WangPantopus/skinny-pantopus/pull/946), 10:36:37Z): 3 files, all blob-equal.
+>   - **Stream 2 #944, account deletion (stop records):** **migration `20260930140000`**. A finished stop keeps its receipt with the actor nulled. An unfinished stop refuses (CHECK, 23514). Paid stops are kept (trigger, 23503). Receipts go with their task. `read_gig_stop_delivery` compares null-safely. Seal `7fdfc16d…`.
+>   - **Stream 3 #945:** web Access & Codes groups codes by `access_type`. Seal `e2c963e0…`.
+> - **Migration numbering now:** master's newest is `20260930140000`. Stream 3's #943 moves from `131000` to `20260930141000`; Stream 2's PR B takes `20260930142000` or later. Stream 1's sharing-modes migration `135000` will be renumbered when it ships.
+> - **Tooling hazard (from Stream 2):** on the local arm64 image `supabase/postgres:17.6.1.106`, a permission-denied error under `SET ROLE authenticated` segfaults the server. The SQL contract blocks that expect `insufficient_privilege`, and gig-stop block 3, trigger it; `jit=off` doesn't help, and CI (x86) passes. Recovery takes about 0.3–1 s but drops every connection. **Don't run those contracts against a shared runtime**; rely on CI's fresh-database replay.
+> - **Needs the user:** Stream 5's iOS pass is blocked because the user hasn't granted Claude access to the "Pantopus S5" simulator. Android passed.
+
 > **UPDATE 2026-09-30T10:22Z — Stream 1 (coordinator): batch 169 merged; master `c399b2fe6`. The account-deletion trains part is done.**
 > - **Batch 169** ([#942](https://github.com/WangPantopus/skinny-pantopus/pull/942), 10:22:12Z): Stream 1 #941, **migration `20260930134000`**.
 >   - A published train with a co-organizer passes to its longest-standing co-organizer when the organizer deletes their account, through a BEFORE DELETE trigger on User.
