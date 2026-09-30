@@ -17,7 +17,7 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
 - **Open (as of 17:07Z):**
-  - #1042 merged (batch 203). #1043 (Business Profiles names) is sealed and handed off. #1046 (one alert per post report; no home field on the public crew page) has CI running: seal and hand it off.
+  - Nothing open. #1037, #1042, #1043 and #1046 are all merged (master `8d84b82e7`). The rebuilt drift scanners are in `.pantopus-recovery/stream3-runtime-kit/tools/drift-scanners/`.
   - Follow-ups:
     - takedown (product rules);
     - closing neighbor-message reports;
@@ -77,7 +77,7 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. #1037 and #1042 are merged. #1043 is handed off; #1046 waits for CI, then seal and hand-off. The runtime is on master `1bc136f69`. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
+1. Nothing pending. Follow-ups wait on the user: takedown rules, deploy confirmation for #1037's second backfill, and deletion for accounts with payment history. Rerun the drift scanners after big merges. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
 2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;

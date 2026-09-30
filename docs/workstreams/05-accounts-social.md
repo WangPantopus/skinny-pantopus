@@ -9,6 +9,24 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1043 and #1046 merged; route-drift scan: one live gap routed; nothing open from Stream 5, 2026-09-30T18:05:56Z
+
+- **Merged:**
+  - #1043 in batch 204 (PR #1048, 17:57:47Z);
+  - #1046 in batch 206 (PR #1050, 18:02:07Z).
+  - Master is `8d84b82e7`. Stream 1 verified both seals.
+- **Route-drift scan:** rebuilt, together with the schema-drift scanner, in `.pantopus-recovery/stream3-runtime-kit/tools/drift-scanners/` (README inside).
+  - On master `8d84b82e7`: 1,259 routes and 2,393 calls (web, iOS, Android).
+  - Outside the cut areas, the only live gap is the web landlord portal's Notices and Settings tabs, which call `/api/v1/landlord/properties/:homeId/notices|settings|staff`. No route or table exists for them. This is the 09-23 decision "Route item 9: an honest 'not available yet' state", still unimplemented. Routed to Stream 1 for its owner.
+  - The rest are dead client helpers with 0 callers (Stream 5's chat helpers stay, per Stream 1) and two query-suffix artifacts.
+- **Open from Stream 5:** nothing.
+- **Follow-ups (recorded):**
+  - takedown rules (the user's call);
+  - closing neighbor-message reports;
+  - native report entry points on a device (offered to Stream 1);
+  - #1037's follow-up backfill, once the user confirms the API is deployed.
+- **Runtime:** DB at `20260930184000`; API 18134 and web 18131 on master `1bc136f69`. The backend is unchanged by later batches: #1043's and #1046's files only.
+
 ## LIVE — #1042 merged (batch 203); #1043 sealed and handed off; #1046 follow-ups open, 2026-09-30T17:57:09Z
 
 - **#1042 merged:** batch 203 (PR #1045), 17:50:15Z; master `1bc136f69`. Stream 1 verified the seal and every N04 condition.
