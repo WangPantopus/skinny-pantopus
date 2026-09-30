@@ -4846,21 +4846,28 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // no owner has nobody who can manage members, so make it an explicit
     // hand-over rather than a silent one. This mirrors the gig and escrow
     // pre-checks above.
-    const { data: ownedHomes } = await supabaseAdmin
+    const { data: ownedHomes, error: ownedHomesError } = await supabaseAdmin
       .from('Home')
       .select('id')
       .eq('owner_id', userId);
+    if (ownedHomesError) throw ownedHomesError;
 
     if (ownedHomes && ownedHomes.length > 0) {
       const homeIds = ownedHomes.map((h) => h.id);
-      const { data: coResidents } = await supabaseAdmin
+      const { data: occupancies, error: occupanciesError } = await supabaseAdmin
         .from('HomeOccupancy')
-        .select('home_id')
+        .select('home_id, is_active, verification_status, start_at, end_at, access_start_at, access_end_at')
         .in('home_id', homeIds)
         .eq('is_active', true)
         .neq('user_id', userId);
+      if (occupanciesError) throw occupanciesError;
+      // Only people who live there now count: a verified occupancy inside its dates (the
+      // rule the Home's own retirement uses). A pending or unverified occupant has no
+      // access and isn't listed as a resident, so the owner couldn't act on this message.
+      const { currentOccupancy } = require('../utils/homeAccessPolicy');
+      const coResidents = (occupancies || []).filter((o) => currentOccupancy(o) && o.verification_status === 'verified');
 
-      if (coResidents && coResidents.length > 0) {
+      if (coResidents.length > 0) {
         const blocked = [...new Set(coResidents.map((o) => o.home_id))];
         return res.status(409).json({
           error: 'Cannot delete account while you own a home that other people live in. '
