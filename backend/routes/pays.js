@@ -8,7 +8,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
-const { publicPayment, paymentRowAmounts, publicGigFee, capturedFeeCents } = require('../stripe/gigPaymentProof');
+const { publicPayment, payeePayment, paymentRowAmounts, publicGigFee, capturedFeeCents } = require('../stripe/gigPaymentProof');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -726,7 +726,7 @@ router.get('/', verifyToken, paymentHistoryReadLimiter, async (req, res) => {
       const isSender = String(payment?.payer_id || '') === String(userId);
       const { payerCents: payerAmount, payeeCents: payeeAmount } = paymentRowAmounts(payment);
       return {
-        ...publicPayment(payment),
+        ...(isSender ? publicPayment(payment) : payeePayment(payment)),
         amount_cents: isSender ? payerAmount : payeeAmount,
         _isSender: isSender,
         direction: isSender ? 'debit' : 'credit',
@@ -1253,7 +1253,8 @@ router.get('/:paymentId', verifyToken, async (req, res) => {
     }
 
     // A charged poster-fault fee: the fee, the released rest and the worker share.
-    res.json({ payment: { ...publicPayment(payment), gig_fee: publicGigFee(payment) } });
+    const visible = payment.payer_id === userId ? publicPayment(payment) : payeePayment(payment);
+    res.json({ payment: { ...visible, gig_fee: publicGigFee(payment) } });
 
   } catch (err) {
     logger.error('Get payment error', { error: err.message });
