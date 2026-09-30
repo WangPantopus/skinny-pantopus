@@ -71,12 +71,14 @@
     with `xcrun simctl boot DA8C2A5F-…`. The snapshot restores on boot, so reinstall the APK you need;
   - Android sign-in: `tools/android-s34-document.py <stage with fixture.json> login OWNER`, focus-checked secret typing with no
     raster. iOS stays signed in as the owner across reinstalls.
-- **Builds** in `/private/tmp/pantopus-stream4-builds`:
-  - `ios-u02-master` / `android-u02-master` (master `1e1b6bacc`);
-  - `ios-fixes` / `android-fixes` (`a93b3e462`);
-  - `ios-place` / `android-place` (old).
-  - Heavy builds go only through `/private/tmp/pantopus-tools/heavy-slot.sh`. Template: `builds/build-fixes-10.sh` in the fixes
-    bundle. It resolves branch heads after acquiring the slot and builds in the `stream-4-activity-labels` worktree.
+- **Builds: none kept.** At the resource cleanup (2026-09-30T22:45:11Z) these were deleted:
+  - `/private/tmp/pantopus-stream4-builds` (3.0 GB) and the iOS DerivedData `/private/tmp/pantopus-stream4-dd-ios` (12 GB);
+  - the extra worktrees `stream-4-activity-labels` and `stream-4-place-honesty` (clean; their branches merged);
+  - the Android build output, Gradle project cache and node_modules in the session worktree;
+  - sealed stage folders byte-identical to their audit copies. The evidence is in the audit store under the same names.
+- **Building next time:** build fresh from current master in your own worktree, through the heavy slot. The first build is cold.
+  The template `builds/build-fixes-10.sh` in the fixes bundle still names the removed worktree and DerivedData path; point
+  `WT` and `-derivedDataPath` at yours.
 
 **Next, in order.**
 1. **Done: #1102–#1111 merged in batch 223.** Fix any regression forward on a new branch from master, with the same steps:

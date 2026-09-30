@@ -36,7 +36,8 @@ Relative paths are in the shared coordination checkout `/Users/yingpengwang/pant
 - **Devices:** the S34 pair (iOS "Pantopus S34" `DA8C2A5F-39BC-421D-9F18-EB4B481E506F`; Android AVD `pantopus_s34` on emulator-5562), shared with Stream 3.
   - Both are shut down, with build `a93b3e462` installed. The emulator snapshot restores on boot, so reinstall the APK you need.
   - Boot and sign-in recipes are in the CURRENT RESUME.
-- **Builds** in `/private/tmp/pantopus-stream4-builds`: `ios-u02-master` / `android-u02-master` (master `1e1b6bacc`) and `ios-fixes` / `android-fixes` (`a93b3e462`). Build a fresh master for any new "before".
+- **Builds: none kept.** The previous session deleted its builds, iOS DerivedData, extra worktrees and redundant stage copies to free the Mac (2026-09-30T22:45:11Z).
+  Build fresh from current master in your own worktree, through the heavy slot. The first build is cold. The template is `builds/build-fixes-10.sh` in bundle `20260930-stream4-fixes-r1`; point its `WT` and `-derivedDataPath` at yours.
 
 ## 3. Rules in force
 - **Coordination checkout:**
