@@ -52,13 +52,17 @@ data class GetHomeEmergenciesResponse(
     }
 }
 
-/** `POST`/`PUT` emergency body. */
+/**
+ * `POST`/`PUT` emergency body. `clientRequestId` (create only) makes a retry of
+ * an unchanged draft return the saved entry instead of adding it again.
+ */
 @JsonClass(generateAdapter = true)
 data class CreateEmergencyRequest(
     val type: String,
     val label: String,
     val location: String? = null,
     val details: Map<String, String>? = null,
+    val clientRequestId: String? = null,
 )
 
 /** `POST`/`PUT` emergency envelope. */

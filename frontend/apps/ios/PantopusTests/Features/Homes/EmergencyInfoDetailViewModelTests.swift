@@ -100,7 +100,7 @@ final class EmergencyInfoDetailViewModelTests: XCTestCase {
         XCTAssertEqual(draft.details, "Behind heater")
     }
 
-    // MARK: - Local edit / delete
+    // MARK: - Edit / delete
 
     func testApplyUpdatedSwapsLoadedDraft() async {
         SequencedURLProtocol.sequence = [
@@ -138,12 +138,13 @@ final class EmergencyInfoDetailViewModelTests: XCTestCase {
               {"id":"e-1","home_id":"home-1","type":"contact",
                "label":"Dr. Lin","details":{}}
             ]}
-            """)
+            """),
+            .status(200, body: "{\"message\":\"Emergency info deleted\"}")
         ]
         let vm = makeVM()
         await vm.load()
         vm.showsDeleteConfirm = true
-        vm.confirmDelete()
+        await vm.confirmDelete()
         XCTAssertTrue(vm.isDeleted)
         XCTAssertFalse(vm.isDeleting)
         XCTAssertFalse(vm.showsDeleteConfirm)

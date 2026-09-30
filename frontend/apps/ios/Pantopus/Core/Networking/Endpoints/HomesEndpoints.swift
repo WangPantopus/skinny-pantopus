@@ -374,6 +374,22 @@ public enum HomesEndpoints {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/emergencies", body: request)
     }
 
+    /// `PUT /api/homes/:id/emergencies/:emergencyId` — route `backend/routes/home.js:3896`.
+    /// Replaces type, label, location and details; answers `{ emergency }`.
+    public static func updateEmergency(
+        homeId: String,
+        emergencyId: String,
+        request: CreateEmergencyRequest
+    ) -> Endpoint {
+        Endpoint(method: .put, path: "/api/homes/\(homeId)/emergencies/\(emergencyId)", body: request)
+    }
+
+    /// `DELETE /api/homes/:id/emergencies/:emergencyId` — route `backend/routes/home.js:3943`.
+    /// 404 `EMERGENCY_NOT_FOUND` when it is already gone.
+    public static func deleteEmergency(homeId: String, emergencyId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/homes/\(homeId)/emergencies/\(emergencyId)")
+    }
+
     // MARK: - Documents (T6.4b / P17)
 
     /// `GET /api/homes/:id/documents` — route `backend/routes/home.js:4944`.

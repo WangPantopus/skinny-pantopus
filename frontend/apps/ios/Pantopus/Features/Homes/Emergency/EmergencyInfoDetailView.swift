@@ -54,6 +54,19 @@ public struct EmergencyInfoDetailView: View {
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("emergencyInfoDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .overlay(alignment: .bottom) {
+            if let toast = viewModel.toast {
+                ToastView(message: toast)
+                    .padding(.bottom, Spacing.s10)
+                    .task {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        viewModel.toast = nil
+                    }
+                    .transition(.opacity)
+                    .accessibilityIdentifier("emergencyDetailToast")
+            }
+        }
+        .pantopusAnimation(.componentState, value: viewModel.toast)
         .task { await viewModel.load() }
         .confirmationDialog(
             "Delete this emergency item?",
@@ -61,7 +74,7 @@ public struct EmergencyInfoDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                viewModel.confirmDelete()
+                Task { await viewModel.confirmDelete() }
             }
             .accessibilityIdentifier("emergencyDetail_deleteConfirm")
             Button("Keep", role: .cancel) {}

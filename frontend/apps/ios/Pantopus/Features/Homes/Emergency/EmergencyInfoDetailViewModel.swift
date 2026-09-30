@@ -7,10 +7,11 @@
 //  id, projecting into a `EmergencyFormDraft` for display + handoff to
 //  the edit form.
 //
-//  Edit and delete are local-only today. The detail can hold an
-//  optimistic draft (set after a local edit) and an `isDeleted` flag
-//  (set after a confirmed delete). The parent navigator pops the view
-//  when either signal flips.
+//  Edit and delete go to the server (PUT / DELETE
+//  `/api/homes/:id/emergencies/:emergencyId`). The detail shows the saved
+//  entry the edit form hands back, and `isDeleted` flips only after the
+//  server confirms the delete (or says it is already gone). The parent
+//  navigator pops the view when either signal flips.
 //
 
 import Foundation
@@ -31,6 +32,8 @@ public final class EmergencyInfoDetailViewModel {
     public private(set) var isDeleting: Bool = false
     public private(set) var isDeleted: Bool = false
     public var showsDeleteConfirm: Bool = false
+    /// A failed delete keeps the row and says why.
+    public var toast: ToastMessage?
 
     private let homeId: String
     private let emergencyId: String
@@ -62,23 +65,9 @@ public final class EmergencyInfoDetailViewModel {
                 state = .missing
                 return
             }
-            if let draft = EmergencyFormDraft.from(dto: dto) {
-                state = .loaded(draft)
-            } else {
-                // Legacy list-of-rows types (shutoff_water etc.) don't
-                // map to the form schema — render the raw fields under
-                // a generic "Other" category so the user still sees
-                // them.
-                state = .loaded(EmergencyFormDraft(
-                    id: dto.id,
-                    category: .other,
-                    title: dto.label,
-                    severity: EmergencySeverity.from(rawValue: dto.details["severity"]),
-                    details: dto.details["detail"] ?? dto.location ?? "",
-                    verifiedByUserId: dto.details["verified_by"],
-                    lastUpdated: ISO8601DateFormatter().date(from: dto.updatedAt ?? "") ?? Date()
-                ))
-            }
+            // Legacy list-of-rows types (shutoff_water etc.) render their
+            // raw fields under the generic "Other" category.
+            state = .loaded(EmergencyFormDraft.display(dto: dto))
         } catch {
             state = .error(
                 (error as? APIError)?.errorDescription
@@ -87,23 +76,36 @@ public final class EmergencyInfoDetailViewModel {
         }
     }
 
-    /// Apply an optimistic local edit. Called by the form's
-    /// `onUpdated` callback while the backend still lacks a PUT route.
+    /// Show the saved entry. Called by the form's `onUpdated` after the
+    /// server confirmed the PUT.
     public func apply(updated: EmergencyFormDraft) {
         state = .loaded(updated)
         onChanged()
     }
 
-    /// Confirm and perform the local delete. Flips `isDeleted` so the
-    /// view can pop. Backend has no DELETE handler today; the parent
-    /// list reload (driven by `onChanged`) will simply re-show the row
-    /// until that ships.
-    public func confirmDelete() {
-        guard case .loaded = state else { return }
+    /// Delete on the server, then flip `isDeleted` so the view can pop.
+    /// Already gone on the server is the outcome the member asked for; any
+    /// other failure keeps the row and shows why.
+    public func confirmDelete() async {
+        guard case .loaded = state, !isDeleting else { return }
         isDeleting = true
-        isDeleted = true
-        isDeleting = false
         showsDeleteConfirm = false
+        defer { isDeleting = false }
+        do {
+            _ = try await api.request(
+                HomesEndpoints.deleteEmergency(homeId: homeId, emergencyId: emergencyId),
+                as: DeleteEmergencyResponse.self
+            )
+        } catch APIError.notFound {
+            // Already removed (for example by another device).
+        } catch {
+            toast = ToastMessage(
+                text: (error as? APIError)?.errorDescription ?? "Couldn't delete this item.",
+                kind: .error
+            )
+            return
+        }
+        isDeleted = true
         onChanged()
         onClose()
     }
