@@ -2,34 +2,32 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — user-approved notice and deletion confirmations: #831 merged, #833 open, native deletion re-check next, 2026-09-30T02:10Z
+## LIVE — user-approved round complete: #831 and #833 merged, #839 (native deletion) with Stream 1, 2026-09-30T03:35Z
 
-- **User direction (2026-09-29T22:09:04Z):** build the notifications-off notice (iOS, Android), the web account-deletion confirmation and the native lost-reply deletion check. Verify end to end in the real apps; no unit tests.
-- **[#831](https://github.com/WangPantopus/skinny-pantopus/pull/831) merged** (batch 130 [#832](https://github.com/WangPantopus/skinny-pantopus/pull/832), 01:32:16Z, master `3fbb9be95`).
-  - The Notifications settings screen shows the existing amber banner "Notifications are off" with **Open Settings** when the OS blocks Pantopus notifications (iOS and Android).
-  - Head `eab4f5c86`; seal `179873a4e6a71449f557647bf7b18a16ce06c51fc5237374282cbd6c5e397d9f` ([private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-notifications-off-notice-r1/RESULT.md)).
-  - Android 23:10–23:27Z and iOS 23:33–23:37Z (2026-09-29): banner when blocked; Open Settings lands on the app's own notification page; the banner is gone on return. No preference writes.
-- **[#833](https://github.com/WangPantopus/skinny-pantopus/pull/833) open, handed to Stream 1 at about 02:03Z:** web account deletion now says what happened on `/login`.
-  - Head `c80d5a78c`; seal `9306c6b1394896a177716b72717741943645ecfaf98006d63c42d59185fd8cbf`, 159 files ([private RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-deleted-confirmation-r1/RESULT.md)).
-  - Real Chrome runs (2026-09-30): answer lost → the blue box "We couldn't confirm your account was deleted…" (01:34Z); server error → the existing toast, still signed in (01:09Z); normal → "Account deleted successfully" (01:38Z). Master's files → a plain `/login` (01:50Z).
-  - ESLint shows 0 errors, `tsc` is clean, and related Jest passes (3 suites, 76 tests).
-- **Native deletion fix:** branch `claude/stream3-native-delete-lost-response`, head `d5d60506a`, not pushed yet.
-  - Reproduced on both apps with master code: a lost DELETE answer showed a connection error although the server had already signed the account out.
-  - The first fix treated "signed out during the delete" as deleted. It was withdrawn after an iOS run on 2026-09-30:
-    - DELETE 00:50:38Z, retry 401 00:51:19Z, refresh 401 00:51:37Z;
-    - the original DELETE returned **500 at 00:51:49Z with the account kept**. The server revokes sessions (step 3b) before it deletes the account.
-  - Final design (iOS and Android): no success plus a rejected refresh → sign out, forget the account on this device, and say on the login screen "We couldn't confirm your account was deleted. If you can still sign in, try again from Settings."
-  - Next: app-only builds (heavy, after Stream 1's release), then emulator and simulator runs (lost answer, first answer lost on iOS, no deletion, normal). Fixture rounds AUTH-DELETE3-R5/R6 were created at 02:04Z; R3 `ios` is reused.
+- **User direction (2026-09-29T22:09:04Z):** build the notifications-off notice, the web account-deletion confirmation and the native lost-reply deletion check; verify end to end in the real apps; no unit tests. All three are built and verified.
+- **[#831](https://github.com/WangPantopus/skinny-pantopus/pull/831) merged** (batch 130 #832, 01:32:16Z): "Notifications are off" banner with Open Settings (iOS + Android). Head `eab4f5c86`, seal `179873a4…` ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-notifications-off-notice-r1/RESULT.md)).
+- **[#833](https://github.com/WangPantopus/skinny-pantopus/pull/833) merged** (batch 131 #834, ~02:15Z, master `3a2b816ba`): web deletion outcome on `/login`. Head `c80d5a78c`, seal `9306c6b1…` ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-deleted-confirmation-r1/RESULT.md)).
+- **[#839](https://github.com/WangPantopus/skinny-pantopus/pull/839) open, handed to Stream 1 at 03:31Z:** native deletion when the answer is lost.
+  - Head `d5d60506a`; base `a3b3a5179`; clean against master `f35f71857`. Seal `cf7d9ce81ea8673dda70f549c9e1abe7d6f1e90deaab43ddbaf2935cb55fe092`, 232 files ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-native-delete-lost-response-r1/RESULT.md)).
+  - Rule: the DELETE fails without an answer → probe refresh. Rejected → sign out, forget that account only, and show the login banner "We couldn't confirm your account was deleted. If you can still sign in, try again from Settings." Valid → the existing error. Success is unchanged.
+  - Builds of the head: iOS dylib `ff8699db…`, APK `82be9358…` (heavy 02:39:21–02:54:50Z). All cases PASS:
+    - iOS (2026-09-30): lost answer 02:59:59Z, first answer lost 03:03:58Z, no deletion 03:07:16Z, normal 03:09:39Z.
+    - Android: lost answer 03:14:40Z, no deletion 03:18:27Z, normal 03:20:09Z.
+  - Befores on `a90eda9aa` builds (equal to the base for every deletion, auth, network and settings path): iOS 2026-09-29 22:32–22:35Z, Android 03:26–03:27Z. Both showed "Can't reach Pantopus" while the server had deleted the account; a retry then gave "signed out for security" plus a card for the deleted account.
+  - Lint: SwiftLint and SwiftFormat are clean; ktlint/detekt show nothing in the two Kotlin files.
 - **Decisions taken without asking (UTC):**
-  - 00:53–01:04Z (backend read from 00:53:19Z; native fix committed 01:03:41Z, web 01:07:17Z): truthful uncertainty instead of "deleted", on native and web. The unconfirmed copy is Stream 3's, within the approved confirmation.
-  - 01:38:05Z: deleted a local harness output that had captured a fixture cookie header (never committed; the account was deleted at 01:39:15Z). The harness now redacts errors.
-  - 01:46:58–01:51:22Z: S3's own dev server served master's three web files for the before run; the fix files were restored and hash-checked.
-- **Backend recommendation (not changed; security-sensitive, for the user and Stream 1):** in `DELETE /api/users/account`, revoke sessions only after the deletion commits, and clear the session cookies in its response. Clients could then tell "deleted" from "failed".
-- **Resources:**
-  - S3 sim `0AE16FA0` shut down 01:21:18Z; slot 2 and the iOS driver released 01:21:19Z; emulator-5554 stopped since 2026-09-29T23:27:43Z.
-  - Stream 1 holds heavy (from 01:51:43Z) and the iOS driver (C2 only, from ~01:42Z); S3 is next for heavy. At 02:05Z the 1-minute load was 387.
-  - Fault rules empty; deletion allowance off. API keys valid to 2026-10-01T19:35:48Z.
-- **Still open at boundaries the user supplies:** the 10 S3 rows listed in the previous block (physical devices, provider access, policies).
+  - 00:53–01:04Z: truthful "couldn't confirm", on native and web. Reason: at 00:51:49Z a DELETE revoked the sessions and then answered 500 with the account kept.
+  - 01:38:05Z: deleted a local harness output that had captured a fixture cookie header (never committed; the account was deleted 01:39:15Z). The harness now redacts errors.
+  - 01:46:58–01:51:22Z: S3's dev server served master's web files for the before run (restored and hash-checked).
+  - 02:39:21Z: took heavy at 1-minute load 179 once Stream 1 released it. The load came from processes outside S3; memory was 34% free.
+  - 03:22Z: replaced the first Android before-run, which had run on the emulator's snapshot APK (`634807499`, whose auth files differ from the base), with a rerun on the `a90eda9aa` APK.
+- **Backend recommendation (not changed; security-sensitive, for the user and Stream 1):** in `DELETE /api/users/account`, revoke sessions only after the deletion commits, and clear the session cookies in its response.
+- **Resources:** S3 holds no heavy, slot or driver.
+  - Heavy 02:39:21–02:54:50Z.
+  - iOS slot 3 + shared driver 02:55:15–03:11:24Z; then handed to Stream 2. The Owner is signed in again on iOS; sim `0AE16FA0` shut down.
+  - Android slot 3 03:11:38–03:20:36Z and 03:23:19–03:27:55Z; emulator stopped.
+  - Fault rules empty; deletion allowance off. Fixtures AUTH-DELETE3 through -R7, AUTH-DELETE7 and AUTH-DELETE8 deactivated; every private credential file deleted. API keys valid to 2026-10-01T19:35:48Z.
+- **Next:** Stream 1 reviews and batches #839. Otherwise S3 is idle. Open rows stay at boundaries the user supplies (physical devices, provider access, policies; see the previous block).
 
 ## Previous milestone — Stream 3 close-out sweep complete: PR805 merged, 2026-09-29T21:39Z (superseded by the LIVE block above)
 
