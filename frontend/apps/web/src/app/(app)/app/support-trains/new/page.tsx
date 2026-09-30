@@ -140,6 +140,9 @@ export default function NewSupportTrainPage() {
   const [publishing, setPublishing] = useState(false);
   // A draft left behind by a failed publish whose clean-up also failed; removed before the next try.
   const leftoverTrainId = useRef<string | null>(null);
+  // The create's request id, kept until its reply arrives: a retry after a lost reply
+  // then reaches the draft the server already made instead of making a second train.
+  const createRequestId = useRef<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
 
   // ── Computed: missing essentials ─────────────────────────────
@@ -273,7 +276,9 @@ export default function NewSupportTrainPage() {
         summary_chips: summaryChips,
       };
 
+      createRequestId.current ??= crypto.randomUUID();
       const createResult = await api.supportTrains.createSupportTrain({
+        client_request_id: createRequestId.current,
         draft_payload: draftPayload,
         title: title.trim(),
         sharing_mode: sharingMode as any,
@@ -284,6 +289,7 @@ export default function NewSupportTrainPage() {
         ...(delivery_location ? { delivery_location } : {}),
       });
 
+      createRequestId.current = null;
       const trainId = createResult.support_train_id;
       createdTrainId = trainId;
 

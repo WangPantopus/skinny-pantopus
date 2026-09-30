@@ -267,6 +267,17 @@ async function resolveDeliveryLocation(userId, deliveryLocation) {
   };
 }
 
+/** Inline delivery columns resolveDeliveryLocation can set; cleared when a draft is refreshed. */
+const EMPTY_DELIVERY = {
+  delivery_address: null,
+  delivery_city: null,
+  delivery_state: null,
+  delivery_zip: null,
+  delivery_lat: null,
+  delivery_lng: null,
+  delivery_place_id: null,
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function aiErrorStatus(errorCode) {
@@ -305,6 +316,7 @@ const deliveryLocationSchema = Joi.object({
 });
 
 const createSupportTrainSchema = Joi.object({
+  client_request_id: Joi.string().uuid().optional(),
   draft_payload: Joi.object().required(),
   title: Joi.string().max(200).required(),
   recipient_user_id: Joi.string().uuid().optional(),
@@ -657,8 +669,16 @@ router.post(
       enable_groceries,
       enable_gift_funds,
       timezone,
+      client_request_id,
     } = req.body;
     const userId = req.user.id;
+    // One create keeps its identity through an uncertain reply: a retry with the same
+    // client_request_id reaches the draft the first attempt made instead of making another.
+    const createId = (kind) => (client_request_id ? createHash('sha256')
+      .update(`pantopus:train-create:v1:${kind}:${userId.toLowerCase()}:${client_request_id.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null);
+    const requestActivityId = createId('activity');
+    const requestTrainId = createId('train');
 
     let resolvedRecipientHomeId = recipient_home_id || null;
     let resolvedActivityHomeId = home_id || null;
@@ -675,55 +695,123 @@ router.post(
       }
     }
 
-    // 1. Insert Activity
-    const { data: activity, error: actErr } = await supabaseAdmin
-      .from('Activity')
-      .insert({
-        creator_user_id: userId,
-        activity_type: 'support_train',
+    const activityFields = {
+      title,
+      summary: draft_payload.story || null,
+      home_id: resolvedActivityHomeId,
+      timezone,
+    };
+    const trainFields = {
+      recipient_user_id: recipient_user_id || null,
+      recipient_home_id: resolvedRecipientHomeId,
+      ...deliveryFields,
+      story: draft_payload.story || null,
+      sharing_mode,
+      enable_home_cooked_meals,
+      enable_takeout,
+      enable_groceries,
+      enable_gift_funds,
+      ai_draft_payload: draft_payload,
+    };
+    const readRequestTrain = async () => {
+      const { data, error } = await supabaseAdmin
+        .from('SupportTrain')
+        .select('id, activity_id, organizer_user_id, status')
+        .eq('id', requestTrainId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    // The same create already landed (its reply was lost): the draft takes this attempt's
+    // answers, which the organizer may have edited since, and keeps its ids.
+    const acknowledgeRetry = async (existing) => {
+      if (existing.organizer_user_id !== userId || existing.status !== 'draft') {
+        return res.status(409).json({
+          error: 'CREATE_REQUEST_DONE',
+          message: 'This support train was already created. Find it in My trains.',
+        });
+      }
+      const [{ error: activityRefreshErr }, { error: trainRefreshErr }] = await Promise.all([
+        supabaseAdmin.from('Activity').update(activityFields).eq('id', existing.activity_id),
+        supabaseAdmin
+          .from('SupportTrain')
+          .update({ ...EMPTY_DELIVERY, ...trainFields })
+          .eq('id', existing.id)
+          .eq('status', 'draft'),
+      ]);
+      if (activityRefreshErr || trainRefreshErr) {
+        logger.error('Refresh retried SupportTrain draft failed', {
+          supportTrainId: existing.id,
+          error: (activityRefreshErr || trainRefreshErr).message,
+        });
+        return res.status(500).json({ error: 'INTERNAL', message: 'Failed to create support train.' });
+      }
+      return res.status(201).json({
+        support_train_id: existing.id,
+        activity_id: existing.activity_id,
         status: 'draft',
-        title,
-        summary: draft_payload.story || null,
-        home_id: resolvedActivityHomeId,
-        timezone,
-      })
-      .select('id')
-      .single();
+      });
+    };
+    if (requestTrainId) {
+      const existing = await readRequestTrain();
+      if (existing) return acknowledgeRetry(existing);
+    }
 
-    if (actErr || !activity) {
+    // 1. Insert Activity
+    const activityRow = {
+      creator_user_id: userId,
+      activity_type: 'support_train',
+      status: 'draft',
+      ...activityFields,
+    };
+    const { data: activity, error: actErr } = await (requestActivityId
+      ? supabaseAdmin
+        .from('Activity')
+        .upsert({ ...activityRow, id: requestActivityId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('Activity').insert(activityRow))
+      .select('id')
+      .maybeSingle();
+
+    if (actErr || (!activity && !requestActivityId)) {
       logger.error('Create Activity failed', { userId, error: actErr?.message });
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to create activity.' });
     }
+    if (!activity) {
+      // This request's Activity already exists: a concurrent retry, or an attempt whose
+      // train insert and clean-up both failed. Its train, if any, answers the retry.
+      const existing = await readRequestTrain();
+      if (existing) return acknowledgeRetry(existing);
+      await supabaseAdmin.from('Activity').update(activityFields).eq('id', requestActivityId);
+    }
+    const activityId = activity?.id || requestActivityId;
 
     // 2. Insert SupportTrain
     const { data: supportTrain, error: stErr } = await supabaseAdmin
       .from('SupportTrain')
       .insert({
-        activity_id: activity.id,
+        activity_id: activityId,
         support_train_type: 'meal_support',
         organizer_user_id: userId,
-        recipient_user_id: recipient_user_id || null,
-        recipient_home_id: resolvedRecipientHomeId,
-        ...deliveryFields,
-        story: draft_payload.story || null,
         status: 'draft',
-        sharing_mode,
         show_exact_address_after_signup: false,
-        enable_home_cooked_meals,
-        enable_takeout,
-        enable_groceries,
-        enable_gift_funds,
-        ai_draft_payload: draft_payload,
+        ...trainFields,
+        ...(requestTrainId ? { id: requestTrainId } : {}),
       })
       .select('id')
       .single();
 
+    if (stErr?.code === '23505' && requestTrainId) {
+      // A concurrent retry of the same create inserted it first.
+      const existing = await readRequestTrain();
+      if (existing) return acknowledgeRetry(existing);
+    }
     if (stErr || !supportTrain) {
       logger.error('Create SupportTrain failed, cleaning up Activity', {
-        activityId: activity.id,
+        activityId,
         error: stErr?.message,
       });
-      await supabaseAdmin.from('Activity').delete().eq('id', activity.id);
+      // Only an Activity this request inserted; a reused one stays for the next retry.
+      if (activity) await supabaseAdmin.from('Activity').delete().eq('id', activityId);
       return res
         .status(500)
         .json({ error: 'INTERNAL', message: 'Failed to create support train.' });
@@ -742,7 +830,7 @@ router.post(
         error: orgErr.message,
       });
       await supabaseAdmin.from('SupportTrain').delete().eq('id', supportTrain.id);
-      await supabaseAdmin.from('Activity').delete().eq('id', activity.id);
+      await supabaseAdmin.from('Activity').delete().eq('id', activityId);
       return res
         .status(500)
         .json({ error: 'INTERNAL', message: 'Failed to create organizer record.' });
@@ -796,7 +884,7 @@ router.post(
 
     res.status(201).json({
       support_train_id: supportTrain.id,
-      activity_id: activity.id,
+      activity_id: activityId,
       status: 'draft',
     });
   })

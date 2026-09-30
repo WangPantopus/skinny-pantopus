@@ -250,6 +250,8 @@ export interface SupportTrainDeliveryLocation {
 
 /** POST /activities/support-trains */
 export interface CreateSupportTrainRequest {
+  /** Same id on a retry reaches the draft an earlier attempt already made (lost reply). */
+  client_request_id?: string;
   title: string;
   story?: string | null;
   support_train_type?: SupportTrainType;
