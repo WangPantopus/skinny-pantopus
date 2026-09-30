@@ -3471,11 +3471,12 @@ router.post('/:id/report', verifyToken, validate(reportPostSchema), async (req, 
     const reportId = createHash('sha256')
       .update(`pantopus:post-report:v1:${post.id.toLowerCase()}:${userId.toLowerCase()}`)
       .digest('hex').slice(0, 32);
-    const { error } = await supabaseAdmin.from('PostReport').upsert({
+    const { data: inserted, error } = await supabaseAdmin.from('PostReport').upsert({
       id: reportId, post_id: post.id, reported_by: userId, reason, details: details || null,
-    }, { onConflict: 'id', ignoreDuplicates: true });
+    }, { onConflict: 'id', ignoreDuplicates: true }).select('id');
     if (error) { logger.error('Error reporting post', { error: error.message, postId, userId }); return res.status(500).json({ error: 'Failed to report post' }); }
-    require('../services/adminAlerts').notifyReportToReview({ kind: 'post', reason, reportId }).catch(() => {});
+    // A simultaneous second submit is ignored by the upsert; only the request that wrote the row alerts.
+    if (inserted?.length) require('../services/adminAlerts').notifyReportToReview({ kind: 'post', reason, reportId }).catch(() => {});
     res.status(200).json({ message: 'Post reported successfully. We will review it shortly.' });
   } catch (err) {
     logger.error('Report error', { error: err.message });

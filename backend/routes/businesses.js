@@ -3551,22 +3551,8 @@ router.get('/public/:username', async (req, res) => {
       foundingSlot = slot;
     }
 
-    // Sole proprietor: inherit verified resident badge from personal account
-    let verifiedResident = null;
-    if (profile.personal_user_id) {
-      const { data: homeVerification } = await supabaseAdmin
-        .from('Home')
-        .select('county, verification_tier')
-        .eq('user_id', profile.personal_user_id)
-        .eq('is_active', true)
-        .maybeSingle();
-      if (homeVerification && homeVerification.verification_tier && homeVerification.verification_tier !== 'none') {
-        verifiedResident = {
-          county: homeVerification.county,
-          verification_tier: homeVerification.verification_tier,
-        };
-      }
-    }
+    // No home field (county, verification tier) goes on this public page. A sole-proprietor residency badge, if
+    // one is built, should be a server-computed boolean only (Stream 1, 2026-09-30).
 
     res.json({
       business: bizUser,
@@ -3580,7 +3566,6 @@ router.get('/public/:username', async (req, res) => {
       } : null,
       catalog: featuredItems || [],
       founding_slot: foundingSlot,
-      verified_resident: verifiedResident,
     });
   } catch (err) {
     logger.error('Public business profile error', { error: err.message, username: req.params.username });
