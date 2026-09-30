@@ -188,7 +188,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
-| Home health and seasonal checklist (complete, skip, carryover) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 (no typed input) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661)<br>✅ R2 (#587)<br>✅ health follows on-page saves (#860)<br>❓ E1 (#578) E3 (API race only, #587)<br>⬜ E4 E5<br>– E6 |
+| Home health and seasonal checklist (complete, skip, carryover) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 (no typed input) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>❓ E1 E3 R2<br>⬜ E4 E5<br>– E6 | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661)<br>✅ R2 (#587)<br>✅ health follows on-page saves (#860)<br>✅ E1 E3 E5 (0930 health-e1e3e4e5: a 503 gives an honest alert with Retry; a double click sends one PATCH; a stale skip after another device's completion is refused with 409 and nothing is undone; the wording is generic)<br>✅ E4 safe (refused with 403, nothing written, the checklist turns read-only) — gap: no sentence says why (later wording item)<br>– E6 |
 | Bill benchmark: Home opt-in and Place Money signals | ✅ E1 R1 (#619, 0927 f02-member-finance, 0929 f02-ios-retry-late-delivery)<br>✅ E4 (f02-member-finance)<br>⬜ E5 permission change (open work item 1)<br>❓ R2, and whether native offers the opt-in | ✅ E1 R1 (#619)<br>✅ E4 (f02-member-finance)<br>⬜ E5 (item 1; the 09-30 capture is unsealed)<br>❓ R2 | ✅ E1 R1 (#602)<br>✅ E4 (f02-member-finance, 0930 f02-home-dashboard-bills)<br>✅ E5 (0929 f02-same-account-permission, 0927 f04-withdrawal)<br>✅ R2 (0927 f01-bill-cohort, f04-withdrawal)<br>✅ E2 E3 on the opt-in save, no change (0930 optin-e2e3: a double click sends one PATCH; after a lost reply, the card says not confirmed and a reload shows the committed value) |
 | Place dashboard and section details (weather, air, alerts, civic, property; read-only) | ✅ R1 (#619, #638)<br>✅ R2 stale sun label (0927 sun-day-label)<br>✅ E4 (f02-member-finance)<br>⬜ election date parsing (iOS rejects date-only; #875 limits)<br>– write cases | ✅ R1 (#619, #638)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>– write cases | ✅ R1 (#602)<br>✅ R2 (#543, sun-day-label)<br>✅ E4, with the refusal worded as a permission and no retry on the dashboard, sections and Pulse (#896)<br>✅ election day shown as that day (#875)<br>– write cases |
 | Address calendar: pickup day (set, change, clear) | ✅ E1 E2 E3 E6 (0927 place-pickup)<br>✅ E4, generic wording (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>⬜ E5 | ✅ E1 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>❓ E2 E4<br>⬜ E5 | ✅ E1 E2 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>✅ E4: a refusal now says "You don't have permission to change this household's pickup schedule." and nothing is written ([#1003](https://github.com/WangPantopus/skinny-pantopus/pull/1003), merged in batch 190)<br>✅ E5: a stale save no longer undoes another device's change; the card shows the current schedule with the message ([#997](https://github.com/WangPantopus/skinny-pantopus/pull/997), merged in batch 188) |
@@ -205,8 +205,8 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Area | iOS | Android | Web |
 |---|---|---|---|
 | Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>✅ L3 (0930 home-account-switch: form sign-out/in, 0 private markers in 7 captures)<br>✅ L4 (0930 home-l1-l4: 401 → refresh → the same save once)<br>✅ L1 Emergency Info form kept (0930 home-l1-l4, emulated hide)<br>✅ L1 dashboard Report Issue draft kept across the re-check (#918, merged in batch 162; "Decided by Stream 4" item 5) |
-| Place (dashboard, sections, Money) | ✅ L2 (#638, f02-member-finance)<br>✅ L3 (0927 f02-ios-held-account, 0929 f02-ios-retry-late-delivery)<br>⬜ L1<br>⬜ L4 | ✅ L2 (#638)<br>✅ L3 (0927 f02-android-held-account)<br>⬜ L1<br>⬜ L4 | ✅ L2 reload<br>✅ L3 (0927 f02-web-held-account, 0930 home-account-switch; honest refusal #896)<br>✅ L1 (0930 home-l1-l4, emulated hide: same screen, no re-read)<br>⬜ L4 (Place's own actions not run; the shared refresh path passed on the dashboard) |
-| Address calendar | ✅ L2 restart (place-pickup)<br>⬜ L1 L3 L4 | ✅ L2 cold (0928 pickup-weekly)<br>⬜ L1 L3 L4 | ✅ L2 reload (pickup-weekly)<br>⬜ L1 L3 L4 |
+| Place (dashboard, sections, Money) | ✅ L2 (#638, f02-member-finance)<br>✅ L3 (0927 f02-ios-held-account, 0929 f02-ios-retry-late-delivery)<br>⬜ L1<br>⬜ L4 | ✅ L2 (#638)<br>✅ L3 (0927 f02-android-held-account)<br>⬜ L1<br>⬜ L4 | ✅ L2 reload<br>✅ L3 (0927 f02-web-held-account, 0930 home-account-switch; honest refusal #896)<br>✅ L1 (0930 home-l1-l4, emulated hide: same screen, no re-read)<br>✅ L4 (0930 pickup-l1l3l4: the pickup save, a Place action, survives a session refresh with exactly one write) |
+| Address calendar | ✅ L2 restart (place-pickup)<br>⬜ L1 L3 L4 | ✅ L2 cold (0928 pickup-weekly)<br>⬜ L1 L3 L4 | ✅ L2 reload (pickup-weekly)<br>✅ L1 (emulated hide: the unsaved draft is kept, no re-read) L3 (member B sees the honest refusal, no owner data or card) L4 (401 → refresh → the same save completes once) — 0930 pickup-l1l3l4, master's pickup code |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
@@ -215,7 +215,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
 | Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>🔷 A3 |
 | Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>🔷 A3 |
-| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 (not swept) |
+| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>🔷 A3: white on primary-600 is 4.09:1 (Copy link) and primary-600 on grey is 3.82:1 (the public page's "What is Pantopus?"); both go to Stream 1's approved AA token change |
 | Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
 
@@ -268,6 +268,22 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T14:15Z — three web verifications sealed, no code change.** Lease 14:01:01Z–14:08:47Z.
+  - **Home health E1/E3/E4/E5** (`20260930-stream4-health-e1e3e4e5-r1`, MANIFEST `6363e3964f78dd53ad935c5aa0141b9d4e0e98e52560cb3d11873990a33d1f77`):
+    - E1: an honest alert with Retry. E3: one PATCH.
+    - E5: a stale skip gets 409 and the other device's completion stands.
+    - E4: refused and nothing written, but the checklist turns read-only without a sentence saying why. Later wording item: show the refusal's reason on a 403. The bill opt-in has the same pattern.
+  - **Fridge card web a11y** (`20260930-stream4-fridge-a11y-r1`, MANIFEST `881920e966886a85c9e974b6593731951bd999084066b641ffe367ef2876a888`): A1 A2 A4 A5 pass. A3 is only the brand primary token pairs (4.09:1 and 3.82:1), sent to Stream 1 for the AA token change.
+    - The only ring-less stop is the Next.js development overlay portal.
+  - **Pickup L1/L3/L4 and Place L4** (`20260930-stream4-pickup-l1l3l4-r1`, MANIFEST `dfd844f9141648bc8bce7fa5c2c45b1484a133d5820d033aa3114f6a10211498`, on master `4d78c00e4`'s pickup code patched into the runtime):
+    - L1: the draft is kept across the hide and return.
+    - L4: 401, then refresh, then one save.
+    - L3: member B gets the honest refusal and sees no owner data.
+  - **Harness lessons:**
+    - The login limiter (10 per 15 min per IP) was hit once; restarts reset it.
+    - The member's lazy MailPreferences row, and the pickup rules (no FK to Home), need exact extra scopes in cleanup.
+    - Node fetch after a long idle can fail at the network level; sign in fresh with `connection: close`.
 
 - **2026-09-30T14:00Z — #1003 merged (batch 190, master `4d78c00e4`): web address calendar E4 ✅.**
   - **Native queue:** the iOS pickup editor shows fixed copy for any failure ("…Check the next collection date and try again."), including a 403. It should use the refusal's `message` (`catch APIError.forbidden(let message)`), with the permission sentence as the fallback.
