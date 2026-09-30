@@ -289,7 +289,7 @@ struct FlowingChipsRow: View {
                 }
                 Text(chip.label)
                     .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appTextStrong)
+                    .foregroundStyle(isSelected ? Theme.Color.primaryInkStrong : Theme.Color.appTextStrong)
                 Text(chip.count)
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
