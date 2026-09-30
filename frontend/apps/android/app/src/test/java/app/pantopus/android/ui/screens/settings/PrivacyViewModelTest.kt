@@ -301,7 +301,15 @@ class PrivacyViewModelTest {
                 every { lastError } returns MutableStateFlow(null)
                 every { isLocked } returns MutableStateFlow(false)
             }
-        return PrivacySettingsViewModel(appLock, auth, privacy, accountDeletion, stepUp, account)
+        return PrivacySettingsViewModel(
+            appLock,
+            auth,
+            privacy,
+            accountDeletion,
+            stepUp,
+            account,
+            io.mockk.mockk(relaxed = true),
+        )
     }
 
     private fun PrivacySettingsViewModel.loadedGroups(): List<GroupedListGroup> {

@@ -30,6 +30,7 @@ public struct PrivacyView: View {
                 AccountDeleteSheet(
                     isDeleting: viewModel.isDeletingAccount,
                     errorMessage: viewModel.deleteAccountError,
+                    organizedLiveTrainCount: viewModel.organizedLiveTrainCount,
                     onCancel: { viewModel.dismissDeleteSheet() },
                     onConfirm: { await viewModel.confirmDeleteAccount() }
                 )

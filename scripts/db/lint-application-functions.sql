@@ -13,7 +13,9 @@ CREATE TEMP TABLE adoption_lint_targets ON COMMIT DROP AS
 SELECT p.oid AS function_oid,
        p.oid::regprocedure::text AS function_identity,
        t.tgrelid AS relation_oid,
-       t.tgname AS trigger_name
+       t.tgname AS trigger_name,
+       t.tgoldtable AS old_table,
+       t.tgnewtable AS new_table
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 JOIN pg_language l ON l.oid = p.prolang
@@ -35,6 +37,10 @@ FROM adoption_lint_targets t
 CROSS JOIN LATERAL plpgsql_check_function_tb(
   t.function_oid::regprocedure,
   relid := COALESCE(t.relation_oid, 0)::regclass,
+  -- A statement trigger's transition tables (REFERENCING OLD/NEW TABLE AS ...)
+  -- exist only in its trigger context, so name them for the checker.
+  oldtable := t.old_table,
+  newtable := t.new_table,
   fatal_errors := false,
   use_incomment_options := false
   ) c;

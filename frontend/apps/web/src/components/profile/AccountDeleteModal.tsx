@@ -1,6 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as api from '@pantopus/api';
+
+// Trains the person is the primary organizer of that are live. When their account
+// is deleted, each one with a co-organizer passes to them and the others are removed
+// (support train organizer migration 20260930134000).
+const LIVE_TRAIN_STATUSES = new Set(['published', 'active', 'paused']);
+
+function organizerNotice(count: number): string {
+  if (count === 1) {
+    return "You organize an active Support Train. If it has a co-organizer, it passes to them. If not, it's removed with your account, along with its schedule and signups. To keep it going, add a co-organizer first.";
+  }
+  return `You organize ${count} active Support Trains. Each one with a co-organizer passes to them. The others are removed with your account, along with their schedules and signups. To keep a train going, add a co-organizer first.`;
+}
 
 interface AccountDeleteModalProps {
   open: boolean;
@@ -11,6 +24,29 @@ interface AccountDeleteModalProps {
 export default function AccountDeleteModal({ open, onClose, onConfirm }: AccountDeleteModalProps) {
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [organizedTrains, setOrganizedTrains] = useState(0);
+
+  // Best effort: a failed read leaves the organizer paragraph out and never blocks
+  // or delays the deletion.
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    api.supportTrains
+      .listMySupportTrains({ role: 'organizer', limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        const live = (res?.support_trains || []).filter(
+          (t) => t.my_role === 'organizer' && LIVE_TRAIN_STATUSES.has(t.status),
+        );
+        setOrganizedTrains(live.length);
+      })
+      .catch(() => {
+        if (!cancelled) setOrganizedTrains(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -82,6 +118,14 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
                 <span>Your messages and connections</span>
               </li>
             </ul>
+
+            <p className="text-sm text-app-secondary mb-4">
+              Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name.
+            </p>
+
+            {organizedTrains > 0 && (
+              <p className="text-sm text-app-secondary mb-4">{organizerNotice(organizedTrains)}</p>
+            )}
 
             <p className="text-sm font-semibold text-red-600 mb-6">
               This action cannot be undone.
