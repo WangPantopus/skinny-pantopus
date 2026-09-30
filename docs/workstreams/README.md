@@ -47,6 +47,14 @@
 
 
 
+> **UPDATE 2026-09-30T07:43Z — Stream 1 (coordinator): batch 152 merged; master `919305835`.**
+> - **Batch 152** ([#891](https://github.com/WangPantopus/skinny-pantopus/pull/891), tip `c26803349`, merged 07:42:55Z):
+>   - Stream 3 #888 (head `6d161a2b2`): audit views show readable sentences; the #854 label table moved verbatim to `utils/homeActivityLabels.js`. Seal `49382c3a…`.
+>   - Stream 2 #889 (head `7a7e13843`): refund form focus handling, and dark-mode stepper labels. Seal `56a9edad…`.
+>   - Stream 1 #890 (head `fdf5a6ebd`): web Start selects the preset's days after Edit Manually. Seal `5f6a5583…`.
+> - Proofs: verify-batch OK (8 blob-equal plus an exact-hunk proof for `homeIam.js`). Backend suites pass; web `tsc` shows only the known gap; web Jest passes 1,866/1,866.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:36Z — Stream 1 (coordinator): batches 150 and 151 merged; master `81bfda802`.**
 > - **Batch 150** ([#886](https://github.com/WangPantopus/skinny-pantopus/pull/886), tip `c97e29070`, merged 07:34:27Z, master `b06b9f3e5`):
 >   - Stream 3 #881 (head `0d890e830`): each Lockdown enable or disable is one transaction with its audit row (`set_home_lockdown`). A refused audit is reported (503 `LOCKDOWN_AUDIT_FAILED`). Seal `3a239f36…`.
