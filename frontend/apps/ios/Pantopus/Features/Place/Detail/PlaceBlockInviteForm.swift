@@ -129,6 +129,7 @@ struct BlockInviteForm: View {
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
+        .tint(Theme.Color.primarySolid)
         .disabled(!vm.canSend || outOfBudget)
     }
 

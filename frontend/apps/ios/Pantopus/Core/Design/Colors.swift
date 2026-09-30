@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 public extension Theme.Color {
     // MARK: - Primary (sky) scale
@@ -36,6 +37,18 @@ public extension Theme.Color {
     /// white text is drawn on it (5.93:1). In dark, `primary600` lightens to
     /// read on the page and would leave white text at 4.10:1.
     static let primarySolid = SwiftUI.Color("Primary/PrimarySolid", bundle: Theme.bundle)
+    /// The app-wide tint (`RootTabView`): system dialogs, navigation-bar buttons
+    /// and tinted system controls draw their text in it. `#0369a1` in light;
+    /// `#7dd3fc` in dark, because a dialog's buttons sit on the dark grey system
+    /// pill (5.57:1 there; the asset tint came through as `#0369a1` at 1.57:1).
+    /// A UIKit dynamic colour, so the dialogs UIKit presents resolve it for the
+    /// dark appearance too. A tinted fill that carries white text (for example
+    /// `.borderedProminent`) sets `primarySolid` itself.
+    static let primaryTint = SwiftUI.Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x7D / 255, green: 0xD3 / 255, blue: 0xFC / 255, alpha: 1)
+            : UIColor(red: 0x03 / 255, green: 0x69 / 255, blue: 0xA1 / 255, alpha: 1)
+    })
     /// Primary 700 — `#075985` in light, `#0369a1` in dark. The pressed state.
     static let primary700 = SwiftUI.Color("Primary/Primary700", bundle: Theme.bundle)
     /// Primary 800 — `#075985`.

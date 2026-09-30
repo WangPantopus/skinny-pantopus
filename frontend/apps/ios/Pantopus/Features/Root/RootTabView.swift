@@ -133,7 +133,8 @@ public struct RootTabView: View {
             .tag(RootTab.mail)
             .badge(model.messagesBadge)
         }
-        .tint(Theme.Color.primary600)
+        // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
+        .tint(Theme.Color.primaryTint)
         .environment(model)
         .task {
             await chatBadgeStore.start()

@@ -554,6 +554,7 @@ struct AddressCalendarCard: View {
             .foregroundStyle(Theme.Color.appTextSecondary)
             Button("Save schedule") { Task { await choose() } }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.Color.primarySolid)
                 .controlSize(.large)
                 .disabled(weekday.isEmpty || (frequency != "not_set" && !pickupDates.contains(nextDate)))
                 .accessibilityIdentifier("addressCalendarSave")
