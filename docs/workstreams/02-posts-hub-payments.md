@@ -7,7 +7,23 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T09:53Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T10:32Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+
+- **Latest (2026-09-30T10:32Z):**
+  - **[#933](https://github.com/WangPantopus/skinny-pantopus/pull/933) merged** in batch 166 (master `77dc37f64`): a failed read isn't "not found" for post actions either.
+  - **Account deletion is now first in the queue** (Stream 1 assignment: launch-critical, App Store requirement). It goes ahead of the native cells.
+  - **[#944](https://github.com/WangPantopus/skinny-pantopus/pull/944)** head `de27f3f64c6258e4bfbb0c568d767687eee5001e` (sent to Stream 1; Stream 5 reviewing): stopping a task no longer blocks deleting the account.
+    - Before: the route refused 7 of 9 people (everyone who cancelled or released a task, and every owner whose task was stopped).
+    - Migration `20260930140000`:
+      - a finished stop keeps its receipt with the actor cleared;
+      - an unfinished stop is refused by a CHECK, and #936's `TASK_STOP_IN_PROGRESS` stays the message;
+      - money-free receipts go with their task, while a stop tied to a payment keeps it (guard trigger);
+      - the other person's cancel push is still delivered (null-safe comparison).
+    - After: 9/9 real deletions through the route, 200.
+    - Seal `20260930-stream2-stop-records-account-deletion-r1`, 59 files, `7fdfc16d…65f9f`.
+  - **Next: PR B**, the five NOT NULL task columns that the route "sets to NULL" (GigQuestion.asked_by, GigIncident.reported_by/reported_against, GigChangeOrder.requested_by, Refund.initiated_by). Nullable + ON DELETE SET NULL, null-safe readers showing "Former member" on web, iOS and Android, proved with the dry run.
+  - **Local tooling hazard (told Stream 1 and Stream 5):** on the arm64 image `supabase/postgres:17.6.1.106`, a permission-denied call under `SET ROLE authenticated` segfaults Postgres (recovery takes about 0.3 s). So do SQL contract blocks that expect `insufficient_privilege`, and gig-stop block 3. It reproduces on master's schema; CI (x86) passes.
+  - **Native:** my Android APK built 10:16:46–10:22:23Z (master Android sources; the heavy slot passed to Stream 1). iOS stays blocked until the user grants simulator access to this session.
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
