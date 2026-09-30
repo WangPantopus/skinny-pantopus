@@ -153,6 +153,9 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
     public let targetId: String?
     public let createdAt: String?
     public let actor: HomeAuditActorDTO?
+    /// The server's plain-words description of the action (`describeHomeActivity`,
+    /// e.g. "Access code deleted"), the same wording the web audit log shows.
+    public let activityDescription: String?
 
     public init(
         id: String,
@@ -162,7 +165,8 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
         targetType: String? = nil,
         targetId: String? = nil,
         createdAt: String? = nil,
-        actor: HomeAuditActorDTO? = nil
+        actor: HomeAuditActorDTO? = nil,
+        activityDescription: String? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -172,6 +176,7 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
         self.targetId = targetId
         self.createdAt = createdAt
         self.actor = actor
+        self.activityDescription = activityDescription
     }
 
     /// RN falls back to "System" when the row has no resolvable actor
@@ -182,8 +187,10 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
         return "System"
     }
 
+    /// The server's description when it sends one; otherwise the verb in words,
     /// `OWNERSHIP_CLAIM_SUBMITTED` → "Ownership claim submitted".
     public var actionLabel: String {
+        if let activityDescription, !activityDescription.isEmpty { return activityDescription }
         let spaced = action
             .replacingOccurrences(of: "_", with: " ")
             .replacingOccurrences(of: ".", with: " ")
@@ -213,6 +220,7 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
         case targetId = "target_id"
         case createdAt = "created_at"
         case actor
+        case activityDescription = "description"
     }
 }
 
