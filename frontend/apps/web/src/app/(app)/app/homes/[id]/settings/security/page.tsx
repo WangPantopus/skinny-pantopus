@@ -124,18 +124,9 @@ function SecurityContent() {
         </div>
       )}
 
-      {/* Member attach */}
-      <OptionGroup
-        label="Member Join Policy"
-        options={[
-          { value: 'open_invite', label: 'Open invite — anyone with a link can join' },
-          { value: 'admin_approval', label: 'Admin approval — join requests need approval' },
-          { value: 'verified_only', label: 'Verified only — address verification required' },
-        ]}
-        selected={security.member_attach_policy}
-        onSelect={(v) => updateSetting('member_attach_policy', v)}
-        disabled={saving}
-      />
+      {/* Member Join Policy is hidden (user decision 2026-09-30): nothing reads member_attach_policy
+          and owners already approve every join through household review, so the choice had no
+          effect. The column and API field stay for the post-launch policy work. */}
 
       {saving && (
         <div className="flex justify-center py-2">
