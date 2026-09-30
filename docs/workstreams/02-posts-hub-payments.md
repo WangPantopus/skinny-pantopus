@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T08:54Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T09:11Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -77,7 +77,7 @@
   2. Pulse filter chip split (mute control out of the chip button, same look): Stream 2, in progress.
   3. One-time removal of leftover gig-room memberships: approved. Stream 5 implements it after its read-side rule (#908), as a reviewed forward migration.
   4. Assigned-task privacy: done in #910 (below).
-- **[#910](https://github.com/WangPantopus/skinny-pantopus/pull/910)** head `afb199ab27bde3f3fa2918707fdf6a0bf8bfe3ad` (sent to Stream 1; seal `20260930-stream2-tasks-identity-timing-privacy-r1`, 51 files, `ca1e3b05…ce4a`): **people outside an assigned task no longer see who, when, or its private details.**
+- **[#910](https://github.com/WangPantopus/skinny-pantopus/pull/910)** amended head `69dbb21a425db6b6edcc9460e4ac00844fc1a653` (sent to Stream 1 after its review; seal `20260930-stream2-tasks-identity-timing-privacy-r1`, 58 files, `9f1217ef…c396`): **people outside an assigned task no longer see who, when, or its private details.**
   - Before, `GET /api/gigs/:id` gave signed-out and stranger readers the access note ("side gate code…"), exact pickup/dropoff addresses and notes, care details, the remote meeting link, the worker's acknowledgement, delivery proof, the worker, and exact lifecycle times; `/timeline` gave the times too.
   - Now non-participants get none of the private fields. Once a worker is assigned: `accepted_by: "assigned"` (so installed clients keep the task taken), `acceptedBy: null`, day-only times (the Pacific date as 19:00Z, so the stepper stays truthful).
   - A rejected token, or the web session flag without its access cookie, now gets a 401, so clients refresh instead of showing the worker a stranger's view. `optionalAuth` has an additive `req.authRejected` flag.
@@ -85,7 +85,14 @@
   - Decisions: day precision rather than null; the `"assigned"` placeholder; open tasks keep their public posting details.
 - **Review of Stream 5's #908** (gig-room access rule, read-only):
   - Finding 1, privacy: `worker_release` and `reopen_bidding` set `accepted_by=NULL`, which reopens the room's owner–worker history to leftover members and to new Send Message joiners, and a later worker reads the earlier one's conversation. Suggested: rotate the room on release/reopen. Stream 5 decides; I offered a task-side join guard.
-  - Finding 2: #899's route admits `gigs.manage` only, while #908 also admits `gigs.post`. I'll align the route to the shared helper after #908 merges.
+  - ~~Finding 2~~ **retracted:** `getGigOwnerAccess(…, 'gigs.manage')` already falls back to `gigs.post` (`routes/gigs.js` 975–976). Verified on master with a synthetic business fixture (a post-only team member gets the task room). No change; sealed note `20260930-stream2-tasks-chat-owner-actor-r1` (`d12e4441…d9ee9`).
+  - Finding 1 is being implemented by Stream 5 in chat-owned code: retire the room when the accepted worker changes.
+- **#910 amendment (Stream 1's review):**
+  - supabase-js reports an unreachable auth service as an `AuthRetryableFetchError` object. Only a definite 4xx rejection, a revoked session or no user now counts as rejected. An unreachable answer is cached as its own marker for 5 s: anonymous, never a 401.
+  - Real outage proof: my own auth container was stopped. Bob's valid token got 200 anonymous during the outage and his worker view right after recovery; a rejected token got 401 once auth was back.
+- **[#919](https://github.com/WangPantopus/skinny-pantopus/pull/919)** head `9a73fc1be15f811473a2234bab188787a2885a2f` (sent to Stream 1; seal `20260930-stream2-pulse-web-chip-mute-control-r1`, 33 files, `a98aff6c…b5ac`): **the active Pulse chip's mute control is its own button** (user decision 2; U02 Pulse feed web A4).
+  - axe nested-interactive is gone. The tab walk reaches native "Recs" (pressed) and "Mute Recs in Pulse" buttons. The chip row is pixel-identical in light and dark. Space mutes the topic.
+  - The toast now says "Recommendation posts muted in Place feed" instead of the raw type.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
@@ -179,7 +186,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:55Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T09:11Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -215,7 +222,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>🔷 A4 filter chip mute control nested in the chip: structural fix proposed |
+| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
 | Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A3 A4 | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
 | Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
 | My posts | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
@@ -235,7 +242,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 35, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 1
 - U04 items: done 8, confirm from existing evidence 0, to do 8, your call 0, boundary 0, not offered 0
-- U02 items: done 18, confirm from existing evidence 0, to do 22, your call 9, boundary 1, not offered 0
+- U02 items: done 19, confirm from existing evidence 0, to do 22, your call 8, boundary 1, not offered 0
 
 ## Inventory and history
 
