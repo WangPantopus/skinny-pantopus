@@ -437,13 +437,42 @@ function savedGigReply(gig, canViewPrivateWork = false) {
   return safe;
 }
 
+// Exact access and hand-off details, the worker's live acknowledgement, delivery proof and who
+// cancelled stay with the poster (and their managers) and the assigned worker.
+const PRIVATE_TASK_FIELDS = ['access_notes', 'pickup_address', 'dropoff_address', 'pickup_notes', 'dropoff_notes',
+  'remote_details', 'worker_ack_status', 'worker_ack_note', 'worker_ack_eta_minutes', 'worker_ack_updated_at',
+  'last_worker_reminder_at', 'delivery_proof_qr', 'delivery_proof_photos', 'cancelled_by'];
+// Once a worker is assigned, everyone else learns that someone was and which steps happened:
+// not who, not the arrangement's details, and the day rather than the time.
+const ASSIGNED_TASK_FIELDS = ['care_details', 'special_instructions', 'logistics_details', 'event_details'];
+const TASK_LIFECYCLE_TIMES = ['accepted_at', 'started_at', 'worker_completed_at', 'owner_confirmed_at', 'cancelled_at', 'updated_at'];
+const ASSIGNED_WORKER_HIDDEN = 'assigned';
+
+// The calendar day in the app's default timezone, sent as that day's 19:00Z (midday Pacific) so
+// every U.S. timezone shows the same date and no time of day leaves the server.
+function taskDay(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+  return `${day}T19:00:00.000Z`;
+}
+
 function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
   if (!gig) return null;
   const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
   if (!canViewPrivateWork) {
     // Payment details stay with the poster, their managers and the worker, as on GET /:gigId/payment.
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
-      'owner_confirmation_note', 'owner_satisfaction', 'payment_id', 'payment_status', 'cancellation_fee']) delete safe[key];
+      'owner_confirmation_note', 'owner_satisfaction', 'payment_id', 'payment_status', 'cancellation_fee',
+      ...PRIVATE_TASK_FIELDS]) delete safe[key];
+    if (safe.accepted_by) {
+      for (const key of ASSIGNED_TASK_FIELDS) delete safe[key];
+      for (const key of TASK_LIFECYCLE_TIMES) if (safe[key]) safe[key] = taskDay(safe[key]);
+      // Still truthy, so clients keep treating the task as taken; never a person.
+      safe.accepted_by = ASSIGNED_WORKER_HIDDEN;
+    }
   }
   return {
     ...safe,
@@ -459,7 +488,7 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
             profile_picture_url: gig.profile_picture_url,
           },
         }),
-    acceptedBy: serializeUserAsLocalIdentity(acceptedBy),
+    acceptedBy: canViewPrivateWork ? serializeUserAsLocalIdentity(acceptedBy) : null,
   };
 }
 
@@ -6531,9 +6560,10 @@ router.post('/:gigId/change-orders/:orderId/withdraw', verifyToken, async (req, 
 
 /**
  * GET /api/gigs/:gigId/timeline
- * Returns computed timeline steps with timestamps for a gig.
+ * Returns computed timeline steps with timestamps for a gig. Once a worker is assigned,
+ * anyone but the owner, their managers and the worker gets the day of each step, not the time.
  */
-router.get('/:gigId/timeline', async (req, res) => {
+router.get('/:gigId/timeline', optionalAuth, async (req, res) => {
   try {
     const { gigId } = req.params;
 
@@ -6546,6 +6576,15 @@ router.get('/:gigId/timeline', async (req, res) => {
       .single();
 
     if (error || !gig) return res.status(404).json({ error: 'Gig not found' });
+
+    const viewerId = req.user?.id || null;
+    const isParticipant = Boolean(viewerId) && (String(gig.accepted_by) === String(viewerId)
+      || (await getGigOwnerAccess(gig.user_id, viewerId, 'gigs.manage')).allowed);
+    if (gig.accepted_by && !isParticipant) {
+      for (const key of ['accepted_at', 'started_at', 'worker_completed_at', 'owner_confirmed_at', 'cancelled_at']) {
+        if (gig[key]) gig[key] = taskDay(gig[key]);
+      }
+    }
 
     // Check if review exists
     const { count: reviewCount } = await supabaseAdmin
