@@ -73,6 +73,7 @@ export default function ScheduleSection({
               <button
                 key={p.key}
                 onClick={() => applyPreset(p.key)}
+                aria-pressed={active}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition ${
                   active
                     ? 'bg-primary-600 border-primary-600 text-white'
