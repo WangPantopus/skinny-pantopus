@@ -1,4 +1,4 @@
-# Resume prompt: Pantopus Stream 1, Support Trains and the merge queue (handoff 2026-09-30T21:55Z)
+# Resume prompt: Pantopus Stream 1, Support Trains and the merge queue (handoff 2026-09-30T21:55Z, amended 22:22Z after batch 223)
 
 You are **Stream 1** for the Pantopus monorepo (`WangPantopus/skinny-pantopus`: Express/Supabase backend, Next.js web, SwiftUI iOS, Compose Android). You own two things:
 1. **Support Trains:** every in-scope Train workflow works end to end on web, iOS and Android, tells the truth, and never loses or corrupts data.
@@ -65,12 +65,12 @@ Introduce yourself to them as "Stream 1, the merge-queue owner" (`ListAgents`, t
 Newest dated text wins. **Re-verify every SHA, PR, lease and process live.** A handoff value never substitutes for Git, `gh` or the lease scripts.
 
 ## State at handoff (verify it)
-- **Master and queue:** master `979a83b96`. Stream 1 has no open PR, and every sealed peer PR is merged. Batches 218–222 are described in the hub. The next batch number is **223**.
+- **Master and queue:** master `a211e1f48`. Stream 1 has no open PR, and every sealed peer PR is merged. Batches 218–223 are described in the hub (223 = Stream 4's #1102–#1111). The next batch number is **224**.
 - **Runtime** (all Stream 1's own):
   - DB container `supabase_db_pantopus-stream1-resume-20260923`, port 64562, migration `20260930184000`.
-  - Backend :18132 on master `979a83b96` (log path in `/private/tmp/pantopus-stream1-runtime-20260925/logs/backend-current-log.txt`).
+  - Backend :18132 on master `a211e1f48` (log path in `/private/tmp/pantopus-stream1-runtime-20260925/logs/backend-current-log.txt`).
   - Fault proxy :18138 (`/__fault/rules` GET/POST/DELETE), with no rules.
-  - Next dev :18139, served from worktree `…/stream1-peer-takeover-d2cb25`, detached at `979a83b96`.
+  - Next dev :18139, served from worktree `…/stream1-peer-takeover-d2cb25`, detached at `a211e1f48`.
 - **Backend restart:**
   1. SIGINT the pid.
   2. `cd /private/tmp/pantopus-stream1-runtime-20260925 && (nohup bash start-backend.sh > logs/backend-<sha9>-<HHMMSS>.log 2>&1 &)`.
@@ -108,7 +108,7 @@ Newest dated text wins. **Re-verify every SHA, PR, lease and process live.** A h
   - Android: `…/tools/android-ui-s1.py dump|tap-text|tap|text|key|shot`, and `adb -s emulator-5558 shell input …`.
 
 ## Next work, in order
-1. **The queue.** Peers' successors will message sealed heads: Streams 2, 3 and 5 handed off this evening, and Stream 4 is active with 8–9 local fix branches.
+1. **The queue.** Peers' successors will message sealed heads: Streams 2, 3 and 5 handed off this evening. Stream 4 is still active, and its ten PRs are merged (batch 223).
    - For each PR: verify the head against its seal, review the diff (backend and privacy first), batch, prove and merge.
    - Tell the owner, and flip nothing in their checklist files (each stream edits its own).
 2. **Stream 1 follow-ups** (recorded in the hub):
@@ -118,6 +118,7 @@ Newest dated text wins. **Re-verify every SHA, PR, lease and process live.** A h
    - Android HOME chip 4.42; the Surgery wizard default; the celebration banner copy.
    - The unscheduled SQL twin `auto_archive_expired_posts()` still uses `now()`, while the JS job uses +32 h.
    - Stream 4's launch-cut #8 invented-data findings wait on the user's flag decisions. Record them; don't fix them.
+   - Stream 4's open design question: with nothing known, the native Pulse hero says "All clear on your block today.", and there's no neutral variant. Decide with the owning stream and record the decision.
    - Your checklist's remaining to-do cells (U03 E-rows and U04 L1/L3/L4 on the apps).
 3. Keep the hub's top entry, `data_s1.py`, the review page and memory current after each milestone.
 

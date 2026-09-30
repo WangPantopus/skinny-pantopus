@@ -9,8 +9,8 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
-- **HANDOFF 2026-09-30T21:55Z (Stream 1). Start here.** The resume prompt is [`NEXT-STREAM1-PROMPT-2026-09-30-evening.md`](NEXT-STREAM1-PROMPT-2026-09-30-evening.md).
-  - **Queue:** empty. No Stream 1 PR is open, and every sealed peer PR is merged. Master is **`979a83b96`** (batch 222, 21:52:53Z). No migrations since `20260930184000`.
+- **HANDOFF 2026-09-30T21:55Z (Stream 1), amended 22:22Z after batch 223. Start here.** The resume prompt is [`NEXT-STREAM1-PROMPT-2026-09-30-evening.md`](NEXT-STREAM1-PROMPT-2026-09-30-evening.md).
+  - **Queue:** empty. No Stream 1 PR is open, and every sealed peer PR is merged. Master is **`a211e1f48`** (batch 223, 22:20:56Z), and the next batch is **224**. No migrations since `20260930184000`.
   - **Merged this session:**
 
     | Batch | PR | Time | Contents |
@@ -20,6 +20,7 @@
     | 220 | #1098 | 21:37Z | #1058, #1064, #1065, #1067, #1070 (Stream 3); #1096 web post edit (Stream 2); #1097 (iOS primaryInkStrong sweep) |
     | 221 | #1100 | 21:40Z | #1081 (Stream 5 native crew links/Directions; Stream 1 ran the four device checks) |
     | 222 | #1101 | 21:52Z | #1099 (Trains T7/T8 tiles and status, banner identity chip, Manage chip shade, #1067's Try again ink) |
+    | 223 | #1112 | 22:20Z | Stream 4's #1102–#1111: no invented value trend; Place verify actions open the verify sheet; document uploader names; maintenance empty tabs; fridge remove-row name; Android monogram; Android large text; warranties chip AA; civic copy; unchecked weather alerts aren't an all-clear. Seals F `5de362b2`, V `d8e02bba`, U02 `9e375256` |
 
     - Every head was checked against its seal. build-batch/verify-batch passed for each batch. The stacked #1093 was proved in two steps: master → #1061, then the rest.
   - **Evidence** (all under `.pantopus-recovery/audits/`):
@@ -36,15 +37,16 @@
     - Android U02 A1–A4 for Trains is still to do. Only T1/T2 were verified on Android.
   - **Runtime** (all Stream 1's):
     - DB `supabase_db_pantopus-stream1-resume-20260923` (64562).
-    - Backend :18132 on master `979a83b96`, pid 42250 at handoff, log `logs/backend-979a83b96-215319.log` (see `logs/backend-current-log.txt`). The Stripe guard is active.
+    - Backend :18132 on master `a211e1f48`, pid 49108 at handoff, log `logs/backend-a211e1f48-222110.log` (see `logs/backend-current-log.txt`). The Stripe guard is active.
     - Fault proxy :18138, with no rules.
-    - Next dev :18139, served from worktree `stream1-peer-takeover-d2cb25`, now detached at `979a83b96`.
+    - Next dev :18139, served from worktree `stream1-peer-takeover-d2cb25`, now detached at `a211e1f48`.
     - Device slots 1 (`emulator-5558`) and 2 (simulator `A189976E`) are held by `stream1:`. The simulator has candidate `1d6e40d3d` installed, and the emulator its APK.
     - Heavy slot: free.
   - **Fixtures:** none live. The Trains, money and crew fixtures were all removed by exact ids; 350/353 tables equal the 19:33:34Z baseline, and the rest is sign-in bookkeeping.
   - **Peers:**
     - Streams 2, 3 and 5 handed off this evening. Their successors will message the queue owner with sealed heads.
-    - Stream 4 is still active (8–9 local fix branches waiting for device before/after runs).
+    - Stream 4 is still active; its ten PRs merged in batch 223.
+    - Open design question from Stream 4: with nothing known, the native Pulse hero says "All clear on your block today.", and there's no neutral variant.
   - **Next for Stream 1:**
     - Batch whatever the peers send.
     - Recorded follow-ups:
