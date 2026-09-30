@@ -60,10 +60,10 @@
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
    - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (merged, batch 147, master `b16eca646`): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
-   - **Reproduced 2026-09-30 (decision with the coordinator):** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). Recommendation: honor it for tasks and documents (tasks need a migration).
+   - **Reproduced 2026-09-30:** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). **Coordinator decision (a):** honor it for tasks and documents (explicit visibility wins; the creator keeps sight; bills untouched). In progress on `claude/stream3-home-d06-default-visibility`. Native gap: iOS/Android document uploads send an explicit visibility (the picker defaults to all members), so they don't follow the default until the pickers start from it.
+   - **Reproduced 2026-09-30:** the "Member join policy" has no effect. With "Verified only", a residency claim routes exactly as under "Open invite" (`household_review`, pending). Bundle `20260930-stream3-home-d06-join-policy-r1` (`5d920d44…`). **Waiting on the user** (a design change): the coordinator's and my recommendation is to hide it on web now and record native as a gap. Don't implement the hide before approval.
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
-     - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
      - 8 of the 9 `HomePrivacy` toggles have no reader (no UI either); the address-precision toggle affects only the members-only Place header;
      - the public fridge-card link is not covered by Lockdown although the panel says existing share links stop working (unsure whether it counts as a share link);
      - `/discover` treats `members` visibility like `private`, and native apps have no visibility control;
@@ -87,6 +87,8 @@
 10. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
 
 **Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
+- **New 2026-09-30 (via the coordinator):** the member join policy has no effect. Hide it (recommended), relabel it, or define and wire each policy? Evidence: `20260930-stream3-home-d06-join-policy-r1`.
+- **New 2026-09-30 (via the coordinator):** should Lockdown also switch off the public 911 fridge card? It keeps emergency info reachable, but the panel says "Existing share links stop working".
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
 2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
 3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
