@@ -1063,6 +1063,11 @@ data class PlaceAddressCalendarData(
     val today: String = "",
     @Json(name = "pickup_schedule") val pickupSchedule: HouseholdPickupSchedule? = null,
     val source: String? = null,
+    /**
+     * The household schedule shown here. A save sends it back as `expected_version`, so a change saved
+     * meanwhile on another device is not undone. Omitted by older servers.
+     */
+    @Json(name = "pickup_version") val pickupVersion: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

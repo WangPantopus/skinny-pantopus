@@ -14,5 +14,6 @@ interface AddressCalendarActions {
 
     fun setPickupDay(request: SetPickupDayRequest)
 
-    fun clearPickupDay()
+    /** [expectedVersion] is the calendar's `pickupVersion` when the editor opened. */
+    fun clearPickupDay(expectedVersion: String?)
 }

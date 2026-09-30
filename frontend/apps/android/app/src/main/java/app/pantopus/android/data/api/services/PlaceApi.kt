@@ -57,9 +57,10 @@ interface PlaceApi {
         @Body body: SetPickupDayRequest,
     ): AddressCalendarResponse
 
-    /** `DELETE /api/homes/:id/calendar/pickup-day` — route `backend/routes/addressCalendar.js:70`. */
+    /** `DELETE /api/homes/:id/calendar/pickup-day[?expected_version=]` — route `backend/routes/addressCalendar.js`. */
     @DELETE("api/homes/{id}/calendar/pickup-day")
     suspend fun clearPickupDay(
         @Path("id") homeId: String,
+        @Query("expected_version") expectedVersion: String? = null,
     ): AddressCalendarResponse
 }
