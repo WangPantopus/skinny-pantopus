@@ -109,11 +109,14 @@ sealed interface BusinessPageBlockKind {
                 else -> Unknown(raw)
             }
 
-        /** Order of the "Add block" picker — matches RN's registry order. */
+        /**
+         * Order of the "Add block" picker — matches RN's registry order. Gallery, Team and Pulse aren't
+         * offered, as on the web: visitors never see them (no photo uploads, public team list or posts feed yet).
+         */
         val pickable: List<BusinessPageBlockKind> =
             listOf(
-                Hero, Text, Gallery, CatalogGrid, Hours, LocationsMap, Cta,
-                Faq, Reviews, Stats, Team, ContactForm, Embed, PostsFeed, Divider,
+                Hero, Text, CatalogGrid, Hours, LocationsMap, Cta,
+                Faq, Reviews, Stats, ContactForm, Embed, Divider,
             )
     }
 }
@@ -220,14 +223,14 @@ object BusinessPageBlockRegistry {
                 BusinessPageBlockRegistryEntry(
                     label = "Contact Form",
                     icon = PantopusIcon.Mail,
-                    summary = "Contact form sent to your email",
+                    summary = "Visitors send you a message",
                     defaultData = mapOf("heading" to "Contact Us"),
                 )
             BusinessPageBlockKind.Embed ->
                 BusinessPageBlockRegistryEntry(
                     label = "Embed",
                     icon = PantopusIcon.ExternalLink,
-                    summary = "YouTube, Vimeo, Google Maps, etc.",
+                    summary = "A YouTube or Vimeo video, or a link",
                     defaultData = mapOf("url" to ""),
                 )
             BusinessPageBlockKind.PostsFeed ->
@@ -306,8 +309,10 @@ sealed interface BusinessPageBlockForm {
                 BusinessPageBlockKind.Hours -> HeadingOnly("Hours data is pulled from your business locations")
                 BusinessPageBlockKind.LocationsMap -> HeadingOnly("Locations are pulled from your business settings")
                 BusinessPageBlockKind.Reviews -> HeadingOnly("Reviews are automatically pulled from your profile")
-                BusinessPageBlockKind.Team -> HeadingOnly("Team members are pulled from your team settings")
-                BusinessPageBlockKind.ContactForm -> HeadingOnly("Messages will be sent to your business email")
+                BusinessPageBlockKind.Team ->
+                    HeadingOnly("Your team isn't listed on your public page yet, so visitors don't see this block")
+                BusinessPageBlockKind.ContactForm ->
+                    HeadingOnly("Signed-in visitors can send you a message here. It arrives in your Inbox as a chat")
                 BusinessPageBlockKind.Divider -> Note("A horizontal separator between sections. No settings needed.")
                 is BusinessPageBlockKind.Unknown -> Unsupported(kind.rawValue)
             }

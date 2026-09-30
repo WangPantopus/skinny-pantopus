@@ -400,7 +400,7 @@ export const BLOCK_TYPE_REGISTRY: {
     type: 'embed',
     label: 'Embed',
     icon: <Link2 className="w-4 h-4" />,
-    description: 'Embed external content (video, map, widget)',
+    description: 'A YouTube or Vimeo video, or a link',
     defaultData: { url: '' },
   },
   {

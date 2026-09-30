@@ -211,8 +211,7 @@ private fun BlockFields(
         }
         BusinessPageBlockForm.Gallery -> {
             StringField("Heading", draft, "heading", "Gallery") { setString("heading", it) }
-            NumberField("Image Count", draft, "image_count", 6) { setNumber("image_count", it, 6) }
-            Hint("Image uploads available in the media manager")
+            Hint("Photos can't be added to a gallery yet, so visitors don't see this block")
         }
         BusinessPageBlockForm.Catalog -> {
             StringField("Heading", draft, "heading", "Our Services") { setString("heading", it) }
@@ -233,11 +232,11 @@ private fun BlockFields(
         BusinessPageBlockForm.Stats -> StatsEditor(draft, onDraftChange)
         BusinessPageBlockForm.Embed -> {
             StringField("URL", draft, "url", "https://youtube.com/…") { setString("url", it) }
-            Hint("YouTube, Vimeo, Google Maps, and other embeddable URLs")
+            Hint("YouTube and Vimeo videos play on your page. Any other web address shows as a link")
         }
         BusinessPageBlockForm.PostsFeed -> {
             StringField("Heading", draft, "heading", "Latest Updates") { setString("heading", it) }
-            NumberField("Max Items", draft, "max_items", 5) { setNumber("max_items", it, 5) }
+            Hint("Posts aren't shown on your public page yet, so visitors don't see this block")
         }
         is BusinessPageBlockForm.HeadingOnly -> {
             StringField("Heading", draft, "heading", "Section heading") { setString("heading", it) }

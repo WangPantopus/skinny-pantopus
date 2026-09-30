@@ -158,8 +158,7 @@ public struct BusinessPageBlockEditorSheet: View {
             stringField("Body", key: "body", placeholder: "Body text…")
         case .gallery:
             stringField("Heading", key: "heading", placeholder: "Gallery")
-            numberField("Image Count", key: "image_count", fallback: 6)
-            hint("Image uploads available in the media manager")
+            hint("Photos can't be added to a gallery yet, so visitors don't see this block")
         case .catalog:
             stringField("Heading", key: "heading", placeholder: "Our Services")
             chipRow(
@@ -179,10 +178,10 @@ public struct BusinessPageBlockEditorSheet: View {
             statsEditor
         case .embed:
             stringField("URL", key: "url", placeholder: "https://youtube.com/…")
-            hint("YouTube, Vimeo, Google Maps, and other embeddable URLs")
+            hint("YouTube and Vimeo videos play on your page. Any other web address shows as a link")
         case .postsFeed:
             stringField("Heading", key: "heading", placeholder: "Latest Updates")
-            numberField("Max Items", key: "max_items", fallback: 5)
+            hint("Posts aren't shown on your public page yet, so visitors don't see this block")
         case let .headingOnly(hintText):
             stringField("Heading", key: "heading", placeholder: "Section heading")
             hint(hintText)

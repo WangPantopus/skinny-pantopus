@@ -83,10 +83,11 @@ public enum BusinessPageBlockKind: Sendable, Hashable {
         }
     }
 
-    /// Order of the "Add block" picker — matches RN's registry order.
+    /// Order of the "Add block" picker — matches RN's registry order. Gallery, Team and Pulse aren't
+    /// offered, as on the web: visitors never see them (no photo uploads, public team list or posts feed yet).
     public static let pickable: [BusinessPageBlockKind] = [
-        .hero, .text, .gallery, .catalogGrid, .hours, .locationsMap, .cta,
-        .faq, .reviews, .stats, .team, .contactForm, .embed, .postsFeed, .divider
+        .hero, .text, .catalogGrid, .hours, .locationsMap, .cta,
+        .faq, .reviews, .stats, .contactForm, .embed, .divider
     ]
 }
 
@@ -207,14 +208,14 @@ public enum BusinessPageBlockRegistry {
             BusinessPageBlockRegistryEntry(
                 label: "Contact Form",
                 icon: .mail,
-                summary: "Contact form sent to your email",
+                summary: "Visitors send you a message",
                 defaultData: ["heading": .string("Contact Us")]
             )
         case .embed:
             BusinessPageBlockRegistryEntry(
                 label: "Embed",
                 icon: .externalLink,
-                summary: "YouTube, Vimeo, Google Maps, etc.",
+                summary: "A YouTube or Vimeo video, or a link",
                 defaultData: ["url": .string("")]
             )
         case .postsFeed:
@@ -276,8 +277,8 @@ public enum BusinessPageBlockForm: Sendable, Hashable {
         case .hours: self = .headingOnly(hint: "Hours data is pulled from your business locations")
         case .locationsMap: self = .headingOnly(hint: "Locations are pulled from your business settings")
         case .reviews: self = .headingOnly(hint: "Reviews are automatically pulled from your profile")
-        case .team: self = .headingOnly(hint: "Team members are pulled from your team settings")
-        case .contactForm: self = .headingOnly(hint: "Messages will be sent to your business email")
+        case .team: self = .headingOnly(hint: "Your team isn't listed on your public page yet, so visitors don't see this block")
+        case .contactForm: self = .headingOnly(hint: "Signed-in visitors can send you a message here. It arrives in your Inbox as a chat")
         case .divider: self = .note("A horizontal separator between sections. No settings needed.")
         case let .unknown(raw): self = .unsupported(type: raw)
         }
@@ -510,10 +511,21 @@ public struct BusinessPageBlockButton: Sendable, Hashable {
 
     /// Whether `url` is a web address the crew page will open (http or https with a host).
     public var hasWebAddress: Bool {
-        guard let url, let parsed = URL(string: url.trimmingCharacters(in: .whitespaces)),
+        Self.webAddress(url) != nil
+    }
+
+    /// Whether the button opens its web address: a Link action (or no action but an address, as the web
+    /// crew page reads it) with an http(s) address.
+    public var opensWebAddress: Bool {
+        (action == "link" || (action.isEmpty && url?.isEmpty == false)) && hasWebAddress
+    }
+
+    /// `raw` as a web address a page may open (http or https with a host), else nil.
+    public static func webAddress(_ raw: String?) -> URL? {
+        guard let raw, let parsed = URL(string: raw.trimmingCharacters(in: .whitespaces)),
               let scheme = parsed.scheme?.lowercased(), scheme == "https" || scheme == "http",
-              parsed.host?.isEmpty == false else { return false }
-        return true
+              parsed.host?.isEmpty == false else { return nil }
+        return parsed
     }
 }
 
