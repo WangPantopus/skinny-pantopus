@@ -10,15 +10,18 @@ Written 2026-09-30T04:16:32Z. You are **Stream 4**, one of the user's parallel w
 5. The private kit README: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md`. The path keeps `stream2`. Never print `runtime/accounts.env`.
 
 ## 2. State at the split
-- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open.
+- Master `d1ba0b28d` (refreshed 2026-09-30T04:36:26Z). Every former Stream 2 PR is merged, including the split's docs PRs #843 and #844 (merged 2026-09-30T04:24:12Z). Stream 1's own split (#846) is merged too. **Streams 3 and 4 have no open code PRs**; a docs-only PR that copies the U-row addition below to master may still be in the queue. Check `gh pr list --state open` for anything newer.
+- **Added 2026-09-30T04:36:26Z:** your screens' cells of U02–U05 are yours (U01 went to Stream 3). They sat in the former Stream 1's inventory, so the first split proof missed them. See your file's "Cross-cutting rows" section and open work item 8. `check-stream2-split.py` proves the assignment.
 - Docker Desktop has been down since ~03:30Z (disk full), so the shared runtime is unreachable until the user restarts it. Restarting it is the user's call; the founder's stack runs on it.
 - No runtime lease, device slot, heavy slot or iOS driver is held.
 - First item: the open F02 fixture: finish the iOS part and clean it up exactly (see the file) as soon as Docker is back and you hold the runtime lease.
 
 ## 3. Rules in force
-- Own only `docs/workstreams/04-place-records-money-mail.md` in this checkout. Fetch and fast-forward before editing, then commit and push only your own changes. Publish to master through docs-only PRs (as #843 did), and never commit peers' uncommitted edits.
+- Own only `docs/workstreams/04-place-records-money-mail.md` in this checkout. Every stream shares this checkout: fetch and fast-forward before editing, commit only your own paths with `git commit --only <paths>` (a plain commit would sweep in a peer's staged change), and check `git show --stat` before pushing. Publish to master through docs-only PRs (as #843 did), and never commit peers' uncommitted edits.
 - Branches `claude/stream4-<topic>` from current master; audit bundles `YYYYMMDD-stream4-<topic>-rN`; lease label `stream4:` for the runtime lease (`tools/runtime-lease.sh`), device slots, heavy and announcements.
 - The other stream of the pair shares the runtime, the kit, emulator-5556 and sim 6F914A30. Hold the runtime lease for any fixture, fault rule, backend restart, source-worktree branch switch, whole-DB baseline or device run, and release it promptly.
+- The `stream2:` label and `claude/stream2-…` branches now belong to the new **Stream 2 — Posts, Hub and payments** (`02-posts-hub-payments.md`); never use them. The merge-queue owner for all five streams is **Stream 1 — Support Trains and coordination** (`01-trains-coordination.md`).
+- Write code in your own session worktree, on a branch from current master. The shared worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a` serves the runtime's web: check your pushed branch out there, or edit it, only while holding the runtime lease, and keep its uncommitted `.claude/launch.json`.
 - Launch scope: never verify, test or fix the eight cut features.
 - No competing tracker or merge queue. The Stream 1 queue owner (the coordinator) batches PRs; hand each PR over with its head SHA and seal.
 - Never touch the founder's environment (64521/64522, backend 8000, simulator EB5AD759) or the physical iPhone. No destructive git or database commands, and no fixture deletion outside exact ownership. Keep secrets out of Git and chat.
