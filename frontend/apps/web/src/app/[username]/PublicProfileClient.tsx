@@ -38,6 +38,7 @@ type PublicProfileData = UserProfile & {
     verified?: boolean;
   };
   account_type?: string;
+  accountType?: string;
   services?: { id?: string; name?: string; title?: string; promise?: string; description?: string; from_price?: number; rate?: number; price?: number; availability?: string }[];
   availability?: string;
   verified?: boolean;
@@ -506,7 +507,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }
 
   // Business profiles get their own dedicated layout
-  if (profile.account_type === 'business') {
+  // The public profile routes send `accountType`.
+  if ((profile.accountType ?? profile.account_type) === 'business') {
     return <BusinessPublicProfile username={username} currentUser={currentUser} />;
   }
 
@@ -553,22 +555,25 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   })();
 
   const featuredSkills = Array.isArray(profile.skills) ? profile.skills : [];
+  // Only what the profile actually carries: no response time is recorded yet, so none is claimed.
   const responseTimeLabel =
     profile.typical_response_time ||
     profile.response_time_label ||
-    (profile.response_time_minutes ? `${profile.response_time_minutes} min` : 'Usually within 24h');
+    (profile.response_time_minutes ? `${profile.response_time_minutes} min` : null);
 
+  // Worker history: tasks done, no-shows and late cancels. The score (100 less 15 per no-show and 5 per late
+  // cancel) starts at 100, so it only means something once there is history.
   const reliabilityScore = typeof profile.reliability_score === 'number' ? profile.reliability_score : null;
-  const hasReliabilityHistory =
-    (profile.gigs_completed || 0) > 0 ||
-    profile.no_show_count != null ||
-    profile.late_cancel_count != null ||
-    profile.dispute_count != null;
+  const workerHistory = (profile.gigs_completed || 0) + (profile.no_show_count || 0) + (profile.late_cancel_count || 0);
+  const hasReliabilityHistory = workerHistory > 0;
   const reliabilityLabel = !hasReliabilityHistory
     ? 'New (no history yet)'
     : reliabilityScore != null
       ? (reliabilityScore >= 90 ? 'Highly Reliable' : reliabilityScore >= 75 ? 'Reliable' : 'Needs Consistency')
-      : 'Reliable';
+      : 'No score yet';
+  const reliabilityDetail = hasReliabilityHistory
+    ? `From ${workerHistory} task${workerHistory === 1 ? '' : 's'} as worker`
+    : 'No tasks as worker yet';
 
   const tabOptions: Array<{ key: ProfileTab; label: string; ownerOnly?: boolean }> = [
     { key: 'overview', label: 'Overview' },
@@ -606,7 +611,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         displayReviewCount={displayReviewCount}
         responseTimeLabel={responseTimeLabel}
         reliabilityLabel={reliabilityLabel}
-        reliabilityScore={reliabilityScore}
+        reliabilityDetail={reliabilityDetail}
         followState={followState}
         canFollow={connectionState !== 'blocked' && !followUnavailable}
         actionLoading={actionLoading}
@@ -703,7 +708,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
           <div className="space-y-4">
-            <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={reliabilityScore} />
+            <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
           </div>
           <AboutCard profile={profile} residency={residency} />
           <SkillsCard skills={featuredSkills} onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : handleRequestHire} ownerView={showOwnerOnly} />
