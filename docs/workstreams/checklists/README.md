@@ -1,7 +1,9 @@
 # Streams 1–2 exit checklists (U02–U04)
 
 The data files render both streams' canonical checklist sections, the frozen split
-reconciliation, and the review page (https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu).
+reconciliation, and the review page (https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2 since
+2026-09-30T23:14Z; the earlier page, WFpmhCwcUyLyakPRLjxJCu, can no longer be read or updated from
+Stream 1's session, so it stays frozen at its v11).
 
 - `data_s1.py` holds Stream 1's rows (Support Trains) and `data_s2.py` Stream 2's (Posts and
   Pulse, Start and Hub, money screens), each with per-client status chips. **Each stream edits

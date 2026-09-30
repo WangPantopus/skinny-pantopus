@@ -9,6 +9,11 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T23:15Z (Stream 1, new session "Stream 1 resume: Support Trains and merge queue").**
+  - Resumed from the 21:55Z handoff (amended 22:22Z). Checked live: master `a211e1f48`, no Stream 1 PR open, only #46/#429/#430/#625 (unrelated) and draft #842 open. Backend :18132 (pid 49108) and proxy :18138 healthy, Next :18139 answering, DB 64562 up. Heavy slot free; device slots 1 and 2 still held by `stream1:`, both devices shut down. Disk at 92% (33 GiB free).
+  - Peers online since ~23:12Z: Streams 2, 3, 4 and 5 (new sessions). None has a PR for the queue yet. Stream 4 keeps the native Pulse hero ("All clear on your block today.") as its item 5.
+  - **Review page moved:** the old page (WFpmhCwcUyLyakPRLjxJCu) can't be read or updated from this session's account ("not found"), so it's republished at **https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2** from coordination `2a615b108` (Stream 2's U03 web post edit flip included). Decided per the user's standing instruction: a current page at a new URL beats a stale page nobody can update. `checklists/README.md` points at it; Stream 2 was told to pass the new URL to `gen.py md 2`.
+  - Next: T9 (the viewer's own slot listed again under "Already on the train" as "a neighbor"), then Android Trains U02.
 - **HANDOFF 2026-09-30T21:55Z (Stream 1), amended 22:22Z after batch 223. Start here.** The resume prompt is [`NEXT-STREAM1-PROMPT-2026-09-30-evening.md`](NEXT-STREAM1-PROMPT-2026-09-30-evening.md).
   - **Queue:** empty. No Stream 1 PR is open, and every sealed peer PR is merged. Master is **`a211e1f48`** (batch 223, 22:20:56Z), and the next batch is **224**. No migrations since `20260930184000`.
   - **Merged this session:**
@@ -355,9 +360,9 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:56Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T23:15Z
 
-**Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
+**Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
 Legend: ✅ done (sealed evidence) · ❓ confirm from existing evidence before any rerun · ⬜ to do · 🔷 user decision · ⛔ named boundary · – not offered on that client.
 A row closes when every client cell is ✅, –, ⛔ with its named boundary, or 🔷 decided. Anything found broken gets the smallest fix with real-app before/after evidence and exact cleanup; visual changes go to the user first.
