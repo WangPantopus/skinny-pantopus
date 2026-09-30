@@ -132,6 +132,9 @@ public struct BodyReactionsBody: View {
     private let onCommentDelete: (@MainActor (String) -> Void)?
     /// Place label for the media grid's map-pin badge (A10.4).
     private let mediaLocationBadge: String?
+    /// One line of details under the text, such as a Lost & Found post's
+    /// contact; nil for none.
+    private let detailLine: String?
     /// Emoji flair on the active heart reaction (long-press popover pick).
     private let selectedReactionEmoji: String?
     private let onEmojiSelected: (@MainActor (String) -> Void)?
@@ -148,6 +151,7 @@ public struct BodyReactionsBody: View {
         reactions: PostReactionCounts,
         onReactionTap: @escaping @MainActor (PostReactionKind) -> Void,
         mediaLocationBadge: String? = nil,
+        detailLine: String? = nil,
         selectedReactionEmoji: String? = nil,
         onEmojiSelected: (@MainActor (String) -> Void)? = nil,
         composerAvatarURL: URL?,
@@ -174,6 +178,7 @@ public struct BodyReactionsBody: View {
         self.reactions = reactions
         self.onReactionTap = onReactionTap
         self.mediaLocationBadge = mediaLocationBadge
+        self.detailLine = detailLine
         self.selectedReactionEmoji = selectedReactionEmoji
         self.onEmojiSelected = onEmojiSelected
         self.composerAvatarURL = composerAvatarURL
@@ -202,6 +207,16 @@ public struct BodyReactionsBody: View {
                     .lineSpacing(7) // 15 + 7 ≈ 22pt line height
                     .padding(.horizontal, Spacing.s4)
                     .accessibilityLabel(bodyText)
+            }
+
+            if let detailLine {
+                // Selectable, so a phone number can be copied.
+                Text(detailLine)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, Spacing.s4)
+                    .accessibilityIdentifier("pulsePostDetail-detailLine")
             }
 
             if !media.isEmpty {

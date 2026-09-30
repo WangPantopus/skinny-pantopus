@@ -1337,10 +1337,16 @@ const buildFullName = (firstName, middleName, lastName) => {
 };
 
 /**
+ * The three availability checks below read User through supabaseAdmin: a uniqueness check has to see
+ * every account, and the shared anon client (no user identity) sees no User rows under row-level
+ * security, so the checks always answered "available" and a taken username or phone only failed later
+ * at the unique constraint. They return a boolean only.
+ */
+/**
  * Check if username is available
  */
 const isUsernameAvailable = async (username, excludeUserId = null) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('User')
     .select('id')
     .eq('username', username)
@@ -1359,7 +1365,7 @@ const isUsernameAvailable = async (username, excludeUserId = null) => {
  */
 const isPhoneAvailable = async (phoneNumber, excludeUserId = null) => {
   if (!phoneNumber) return true; // allow empty/undefined phone
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('User')
     .select('id')
     .eq('phone_number', phoneNumber)
@@ -1377,7 +1383,7 @@ const isPhoneAvailable = async (phoneNumber, excludeUserId = null) => {
  * Check if email is available
  */
 const isEmailAvailable = async (email, excludeUserId = null) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('User')
     .select('id')
     .eq('email', email)

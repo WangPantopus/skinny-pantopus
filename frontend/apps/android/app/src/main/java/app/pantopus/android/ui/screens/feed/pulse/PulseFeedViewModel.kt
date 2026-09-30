@@ -995,6 +995,7 @@ class PulseFeedViewModel
                 avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
                 meta = metaString(post),
                 intent = intent,
+                chipLabel = intent.chipLabelFor(post.lostFoundType),
                 title = if (intent == PulseIntent.Event) post.title else null,
                 body = post.content.orEmpty(),
                 reactions =

@@ -111,6 +111,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let commentCount: Int
     /// Overflow-menu capability set for this viewer.
     public let actions: PulsePostActions
+    /// The chip's word; a found Lost & Found post says "Found"
+    /// (`PulseIntent.chipLabel(lostFoundType:)`).
+    public let chipLabel: String
 
     /// Still-image URLs — kept for call sites (and tests) that only care
     /// about what the card displays, not the attachment kinds.
@@ -133,7 +136,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         userHasReacted: Bool,
         media: [PostMediaItem] = [],
         commentCount: Int = 0,
-        actions: PulsePostActions = PulsePostActions()
+        actions: PulsePostActions = PulsePostActions(),
+        chipLabel: String? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -150,6 +154,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.media = media
         self.commentCount = commentCount
         self.actions = actions
+        self.chipLabel = chipLabel ?? intent.cardChipLabel
     }
 }
 
@@ -264,7 +269,7 @@ public struct PulsePostCard: View {
                     .lineLimit(1)
             }
             Spacer(minLength: Spacing.s2)
-            PulseIntentChip(intent: content.intent)
+            PulseIntentChip(intent: content.intent, label: content.chipLabel)
             headerTrailingControl
         }
     }
@@ -459,7 +464,7 @@ public struct PulsePostCard: View {
     }
 
     private var a11yLabel: String {
-        var parts = [content.authorName, content.intent.cardChipLabel]
+        var parts = [content.authorName, content.chipLabel]
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
         if !content.media.isEmpty {
@@ -473,15 +478,17 @@ public struct PulsePostCard: View {
 /// foreground/background tokens against the existing design system.
 public struct PulseIntentChip: View {
     private let intent: PulseIntent
+    private let label: String
 
-    public init(intent: PulseIntent) {
+    public init(intent: PulseIntent, label: String? = nil) {
         self.intent = intent
+        self.label = label ?? intent.cardChipLabel
     }
 
     public var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(intent.icon, size: 10, strokeWidth: 2.5, color: foreground)
-            Text(intent.cardChipLabel.uppercased())
+            Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.4)
                 .foregroundStyle(foreground)
