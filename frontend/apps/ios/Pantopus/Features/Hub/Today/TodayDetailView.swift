@@ -262,7 +262,7 @@ private struct TodayHero: View {
     }
 
     private var kickerColor: Color {
-        content.isAlert ? Theme.Color.error : Theme.Color.primary600
+        content.isAlert ? Theme.Color.error : Theme.Color.primaryInk
     }
 }
 
