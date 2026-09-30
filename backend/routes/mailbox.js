@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
