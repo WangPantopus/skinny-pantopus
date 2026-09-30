@@ -12,6 +12,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { ensureRegionCoverage } = require('../services/seederProvisioningService');
+const { clearHubTodayCache } = require('../services/context/providerOrchestrator');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -222,6 +223,8 @@ router.put('/', verifyToken, validate(setLocationSchema), async (req, res) => {
     // The trim trigger handles keeping only 5
 
     logger.info('Viewing location updated', { userId, label, type, isPinned });
+    // Hub Today resolves its area from the viewing location; drop the cached copy.
+    clearHubTodayCache(userId);
 
     // Fire-and-forget: check if this location needs a seeder region provisioned
     ensureRegionCoverage({ latitude, longitude, city, state, userId }).catch(() => {});
@@ -254,6 +257,8 @@ router.put('/pin', verifyToken, validate(pinSchema), async (req, res) => {
     }
 
     logger.info('Pin toggled', { userId, isPinned });
+    // A pinned area outranks homes when Hub Today resolves its location.
+    clearHubTodayCache(userId);
     res.json({ isPinned: data.is_pinned });
   } catch (err) {
     logger.error('PUT /api/location/pin error', { error: err.message, userId });

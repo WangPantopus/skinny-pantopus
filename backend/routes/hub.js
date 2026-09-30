@@ -20,7 +20,7 @@ const { staleAffectsTrust } = require('../utils/verificationAge');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
-const { getHubToday } = require('../services/context/providerOrchestrator');
+const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 
 /**
  * GET /api/hub
@@ -647,7 +647,10 @@ router.get('/', verifyToken, async (req, res) => {
 router.get('/today', verifyToken, async (req, res) => {
   try {
     const result = await getHubToday(req.user.id);
-    res.set('Cache-Control', 'private, max-age=300');
+    // Revalidate on every read (the ETag keeps an unchanged payload cheap): the
+    // payload is the viewer's own area and home signals, so a device cache must
+    // never hand it to the next account or keep it after an area change.
+    res.set('Cache-Control', 'private, no-cache');
     res.json(result);
   } catch (err) {
     logger.error('Hub today error', { error: err.message, userId: req.user.id });
@@ -683,7 +686,8 @@ router.get('/briefings/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Briefing not found' });
     }
 
-    res.set('Cache-Control', 'private, max-age=300');
+    // Same as /today: a stored briefing belongs to one account.
+    res.set('Cache-Control', 'private, no-cache');
     res.json({ briefing: data });
   } catch (err) {
     logger.error('Briefing delivery error', { error: err.message, userId: req.user.id });
@@ -808,6 +812,8 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
       return res.status(500).json({ error: 'Failed to update preferences' });
     }
 
+    // The briefing location mode feeds Hub Today; drop this user's cached copy.
+    clearHubTodayCache(userId);
     res.json({ preferences: data });
   } catch (err) {
     logger.error('Hub preferences update error', { error: err.message, userId: req.user.id });
