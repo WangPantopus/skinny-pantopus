@@ -441,8 +441,9 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
   if (!gig) return null;
   const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
   if (!canViewPrivateWork) {
+    // Payment details stay with the poster, their managers and the worker, as on GET /:gigId/payment.
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
-      'owner_confirmation_note', 'owner_satisfaction']) delete safe[key];
+      'owner_confirmation_note', 'owner_satisfaction', 'payment_id', 'payment_status', 'cancellation_fee']) delete safe[key];
   }
   return {
     ...safe,
@@ -7583,11 +7584,81 @@ router.post('/:id/close', verifyToken, stopCommand('close'));
 // POST /api/gigs/:gigId/bids/:bidId/accept
 // ================================
 
+// ─── Unified conversation: the user's direct room with the gig owner + a task topic ───
+// Non-fatal: a failure is logged and leaves the ids null.
+async function openOwnerConversation(userId, gig) {
+  const gigId = gig.id;
+  const gigOwnerId = gig.user_id;
+  let directRoomId = null;
+  let topicId = null;
+  try {
+    // Create direct room between current user and gig owner
+    if (String(userId) !== String(gigOwnerId)) {
+      const { data: roomId } = await supabaseAdmin.rpc('get_or_create_direct_chat', {
+        p_user_id_1: userId,
+        p_user_id_2: gigOwnerId,
+      });
+      directRoomId = roomId || null;
+      if (directRoomId) {
+        // Ensure participants in direct room
+        await supabaseAdmin.from('ChatParticipant').upsert(
+          [
+            { room_id: directRoomId, user_id: userId, role: 'member' },
+            { room_id: directRoomId, user_id: gigOwnerId, role: 'owner' },
+          ],
+          { onConflict: 'room_id,user_id' }
+        );
+      }
+
+      // Find or create a task topic for this gig
+      const uid1 = userId < gigOwnerId ? userId : gigOwnerId;
+      const uid2 = userId < gigOwnerId ? gigOwnerId : userId;
+
+      const { data: existingTopic } = await supabaseAdmin
+        .from('ConversationTopic')
+        .select('id')
+        .eq('conversation_user_id_1', uid1)
+        .eq('conversation_user_id_2', uid2)
+        .eq('topic_type', 'task')
+        .eq('topic_ref_id', gigId)
+        .maybeSingle();
+
+      if (existingTopic) {
+        topicId = existingTopic.id;
+      } else {
+        const { data: newTopic } = await supabaseAdmin
+          .from('ConversationTopic')
+          .insert({
+            conversation_user_id_1: uid1,
+            conversation_user_id_2: uid2,
+            topic_type: 'task',
+            topic_ref_id: gigId,
+            title: gig.title || 'Untitled Gig',
+            status: 'active',
+            created_by: userId,
+          })
+          .select('id')
+          .single();
+        if (newTopic) topicId = newTopic.id;
+      }
+    }
+  } catch (topicErr) {
+    // Non-fatal — don't block gig chat access
+    logger.warn('Gig chat-room: failed to create topic/direct room', {
+      error: topicErr?.message,
+      gigId,
+    });
+  }
+  return { directRoomId, topicId };
+}
+
 /**
  * GET /api/gigs/:gigId/chat-room
  * Get (or create) the gig chat room, ensuring participants exist.
  * Access: gig owner, accepted worker, OR any authenticated user for pre-bid chat.
  * Pre-bid users get added as participants but are message-limited.
+ * Once a worker is assigned, the room is the owner's and the worker's conversation:
+ * anyone else gets their direct room with the owner and is never added to it.
  */
 router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
   const { gigId } = req.params;
@@ -7617,6 +7688,14 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
 
     const hasBid = !!userBid;
     const isPreBid = !isOwner && !isAcceptedWorker && !hasBid;
+
+    // An assigned task's room holds the owner's and the worker's messages: anyone else
+    // talks to the owner in their own direct room instead of joining it.
+    if (gig.accepted_by && !isOwner && !isAcceptedWorker) {
+      const { directRoomId, topicId } = await openOwnerConversation(userId, gig);
+      if (!directRoomId) return res.status(500).json({ error: 'Failed to get chat room' });
+      return res.json({ roomId: directRoomId, preBidInfo: null, topicId, gigOwnerId: gig.user_id });
+    }
 
     // Anyone authenticated can open gig chat for pre-bid questions
     // (but will be message-limited — see POST /api/chat/messages)
@@ -7715,67 +7794,9 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
     }
 
     // ─── Unified conversation: also create direct room + task topic ───
-    let topicId = null;
-    const gigOwnerId = gig.user_id;
-    try {
-      // Create direct room between current user and gig owner
-      if (String(userId) !== String(gigOwnerId)) {
-        const { data: directRoomId } = await supabaseAdmin.rpc('get_or_create_direct_chat', {
-          p_user_id_1: userId,
-          p_user_id_2: gigOwnerId,
-        });
-        if (directRoomId) {
-          // Ensure participants in direct room
-          await supabaseAdmin.from('ChatParticipant').upsert(
-            [
-              { room_id: directRoomId, user_id: userId, role: 'member' },
-              { room_id: directRoomId, user_id: gigOwnerId, role: 'owner' },
-            ],
-            { onConflict: 'room_id,user_id' }
-          );
-        }
+    const { topicId } = await openOwnerConversation(userId, gig);
 
-        // Find or create a task topic for this gig
-        const uid1 = userId < gigOwnerId ? userId : gigOwnerId;
-        const uid2 = userId < gigOwnerId ? gigOwnerId : userId;
-
-        const { data: existingTopic } = await supabaseAdmin
-          .from('ConversationTopic')
-          .select('id')
-          .eq('conversation_user_id_1', uid1)
-          .eq('conversation_user_id_2', uid2)
-          .eq('topic_type', 'task')
-          .eq('topic_ref_id', gigId)
-          .maybeSingle();
-
-        if (existingTopic) {
-          topicId = existingTopic.id;
-        } else {
-          const { data: newTopic } = await supabaseAdmin
-            .from('ConversationTopic')
-            .insert({
-              conversation_user_id_1: uid1,
-              conversation_user_id_2: uid2,
-              topic_type: 'task',
-              topic_ref_id: gigId,
-              title: gig.title || 'Untitled Gig',
-              status: 'active',
-              created_by: userId,
-            })
-            .select('id')
-            .single();
-          if (newTopic) topicId = newTopic.id;
-        }
-      }
-    } catch (topicErr) {
-      // Non-fatal — don't block gig chat access
-      logger.warn('Gig chat-room: failed to create topic/direct room', {
-        error: topicErr?.message,
-        gigId,
-      });
-    }
-
-    return res.json({ roomId, preBidInfo, topicId, gigOwnerId });
+    return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id });
   } catch (err) {
     logger.error('Gig chat-room: unexpected error', {
       error: err?.message,

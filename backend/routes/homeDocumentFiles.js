@@ -17,7 +17,7 @@ const metadataSchema = Joi.object({
   upload_id: uuid,
   doc_type: Joi.string().valid(...HOME_DOCUMENT_TYPES).required(),
   title: Joi.string().trim().min(1).max(255).required(),
-  visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES).default('members'),
+  visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES),
   details: Joi.object().pattern(Joi.string().max(100), Joi.string().max(2000)).max(20).default({}),
 });
 const multipart = multer({
@@ -48,6 +48,18 @@ async function allowedVisibilities(homeId, userId, permission) {
   return visibility.allowed;
 }
 
+// A document that names no visibility takes the Home's "Default Visibility for New
+// Items" when that is narrower than members, stepping down to the most restrictive
+// level the uploader may use, so they can still see what they upload. Any other
+// default keeps members. An explicit visibility always wins.
+const DEFAULT_VISIBILITY_STEPS = { sensitive: ['sensitive', 'managers'], managers: ['managers'] };
+async function defaultDocumentVisibility(homeId, allowed) {
+  const { data, error } = await db.from('Home').select('default_visibility').eq('id', homeId).maybeSingle();
+  if (error) throw fail('DOCUMENT_DATABASE_UNAVAILABLE', 'Could not load document state. Try again.');
+  const steps = DEFAULT_VISIBILITY_STEPS[data?.default_visibility] || [];
+  return steps.find((visibility) => allowed.includes(visibility)) || 'members';
+}
+
 function gate(permission) {
   return async (req, _res, next) => {
     try {
@@ -73,6 +85,10 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
     if (Object.keys(value.details).some(key => key.startsWith('upload_') || ['storage_contract', 'preview_url', 'original_filename'].includes(key))) {
       throw fail('INVALID_DOCUMENT_METADATA', 'Document details contain reserved fields.', 400);
     }
+    // The upload fingerprint keeps the request as sent (omitted still reads as members, as before
+    // defaults applied), so a retry matches across a deploy or a change to the Home default.
+    const requestedVisibility = value.visibility ?? 'members';
+    if (value.visibility === undefined) value.visibility = await defaultDocumentVisibility(req.params.homeId, req.documentVisibilities);
     if (!req.documentVisibilities.includes(value.visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to that document visibility.', 403);
     if (!storage.MIME_TYPES.has(req.file.mimetype)) throw fail('INVALID_DOCUMENT_TYPE', 'This file type is not supported.', 415);
     if (!req.file.size) throw fail('INVALID_DOCUMENT_SIZE', 'Choose a nonempty file of 25 MB or less.', 413);
@@ -83,7 +99,7 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
     const filename = req.file.originalname.replace(/[\\/\x00-\x1f\x7f]/g, '_').slice(0, 255);
     const sha256 = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
-      homeId, userId, value.doc_type, value.title, value.visibility,
+      homeId, userId, value.doc_type, value.title, requestedVisibility,
       Object.entries(value.details).sort(([a], [b]) => a.localeCompare(b)),
       filename, req.file.mimetype, req.file.size, sha256,
     ])).digest('hex');
