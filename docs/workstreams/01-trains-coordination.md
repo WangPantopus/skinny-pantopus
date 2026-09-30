@@ -9,6 +9,39 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T17:25Z (Stream 1).**
+  - **Batch 201** (17:18:42Z, PR #1039): **#1037** (Stream 5, migration `20260930184000`). Master `ed08ad438`.
+    - Owners get a seat when they create a business; add-member writes the seat; leaving one business keeps seats at the others; a member of two businesses no longer gets 403.
+    - The backfill only inserts, for active team members with no seat binding anywhere. A rerun writes `INSERT 0 0`.
+    - Before applying on hosted: run the read-only preview in the migration header. People who already hold a binding are a follow-up once this API is live.
+    - Seal `61fefcd1`, verified. The seat tables are service_role-only (checked on Stream 1's DB).
+    - Stream 1's DB is now at `20260930184000` (file sha `37120dd8…`, nothing to backfill there).
+  - **Batch 202** (17:21:22Z, PR #1041): **#1034** (Stream 2, Android a11y: Start "Sign in", task steps, refund reasons; seals `607283e7`/`1e9293bd`). Master `416898752`. No golden covers those screens, so #1029's goldens can't interact.
+  - **Stream 2's iOS cells run by Stream 1: 8 of 8 run, all PASS on master code.** Beyond the three listed at 16:56Z:
+    - Edit E1/E2/E5: `20260930-stream1-ios-post-edit-r1`, `4b8ed58a`;
+    - Posts L4: `…-ios-posts-session-refresh-r1`, `dd4939ee`;
+    - Create E6: `…-ios-create-e6-r1`, `3ee82fc9`.
+    - Still to do: the comment photo failure and U02 A1–A4, which need a master iOS build with #1027.
+  - **Found for Stream 2** (not changed by Stream 1):
+    - iOS My posts → "Write a post" opens only the Ask form (`YouTabRoot.swift:1505` passes `PulseComposeIntent.ask`).
+    - The iOS editor refuses a general post with no title ("Title is required.").
+  - **Held with fixes requested:**
+    - **#1040** (Stream 4, native pickup E5). Android keys `openedVersion` only on the schedule's content, but `pickup_version` hashes rule ids. After a same-content save elsewhere, every retry gets 409 until the screen is left. Fix: key on `pickupVersion` too.
+    - **#1038** (Stream 2, Hub Today truth). The Share text joins every Today signal, including private `bill_due`, `task_due`, `calendar`, `mail` and `gig` labels. **Decision:** share only place-level kinds (alert, precipitation, aqi, temperature, seasonal, local_update, address_calendar) on both clients and in the push path. Stream 1 runs the iOS runtime checks on the fixed head.
+  - **Waiting on CI:** #1036 (Stream 3, U02 large-text Home repairs). Seal `732b0e5d` is verified and the review passes. It waits for iOS build and Android lint/test/assemble (Paparazzi against #1029's goldens).
+  - **N04 "who processes reports" → Stream 5, approved with conditions.** The gap is verified: reports are write-only and nothing reads them.
+    - **Decision:** the platform admin processes reports, target within 24 hours.
+    - An admin queue plus a web page, reusing the admin-route pattern. No table and no migration.
+    - Notifications carry only kind, reason category, id and link.
+    - DM reports are included, and ListingReport is out (cut). One-line hooks in posts.js/gigs.js are approved; Stream 2 gets told first.
+    - Takedown is a follow-up.
+  - **Schema-drift candidates routed** (132 from Stream 5's rebuilt scanner, `builds/schema-drift-scan.txt` in `20260930-stream5-business-seat-writers-r1`):
+    - posts.js, trustState.js and public.js (Post/Gig parts) → Stream 2;
+    - mailbox*/mailCompose → Stream 4;
+    - landlordTenant, homeOwnership, homeSecurityPolicy → Stream 3;
+    - offers, marketplace, businessDiscovery, BusinessBooking: none (cut).
+    - Candidates only; verify before fixing.
+  - **Decision (public crew page badge):** never publish the owner's county or any Home field. If repaired, the route returns only a server-computed "verified resident" boolean. Stream 5 owns it, below N04.
 - **Update 2026-09-30T16:56Z (Stream 1).**
   - **Batch 200** (16:54:39Z, PR #1035): **#1029**, the native accents AA plus iOS dark-mode fills. Master `1e1b6bacc`.
     - Light primary600 `#0369A1` / primary700 `#075985` on iOS and Android.
