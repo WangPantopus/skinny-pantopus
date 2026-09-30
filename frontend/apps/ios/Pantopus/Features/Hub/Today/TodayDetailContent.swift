@@ -134,10 +134,13 @@ public struct TodayAroundItem: Identifiable, Equatable, Sendable {
 public struct TodayShareCard: Equatable, Sendable {
     public let title: String
     public let subtitle: String
+    /// What Share sends, built by `TodayDetailViewModel.shareMessage` from shareable fields only.
+    public let message: String
 
-    public init(title: String, subtitle: String) {
+    public init(title: String, subtitle: String, message: String = "") {
         self.title = title
         self.subtitle = subtitle
+        self.message = message
     }
 }
 

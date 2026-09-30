@@ -66,6 +66,8 @@ data class TodayAroundItem(
 data class TodayShareCard(
     val title: String,
     val subtitle: String,
+    /** What Share sends, built by [TodayDetailMapper.shareMessage] from shareable fields only. */
+    val message: String = "",
 )
 
 /** Full render payload for the Today detail screen. */

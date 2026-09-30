@@ -182,8 +182,8 @@ final class TodayDetailViewModel {
         let alerts = payload?.alerts ?? []
         let hasAlert = !alerts.isEmpty
         let storedSignals = briefing?.signalsSnapshot ?? []
-        let signals = (storedSignals.isEmpty ? (payload?.signals ?? []) : storedSignals)
-            .map(signal(from:))
+        let rawSignals = storedSignals.isEmpty ? (payload?.signals ?? []) : storedSignals
+        let signals = rawSignals.map(signal(from:))
         let label = payload?.location?.label ?? "Today"
         let storedSummary = briefing?.summaryText?.isEmpty == false ? briefing?.summaryText : nil
         return TodayDetailContent(
@@ -201,7 +201,11 @@ final class TodayDetailViewModel {
             signals: signals,
             aroundTitle: base.aroundTitle,
             around: [],
-            share: TodayShareCard(title: "Share today's briefing", subtitle: shareSubtitle)
+            share: TodayShareCard(
+                title: "Share today's briefing",
+                subtitle: shareSubtitle,
+                message: shareMessage(payload, signals: rawSignals)
+            )
         )
     }
 
@@ -357,22 +361,46 @@ extension TodayDetailViewModel {
         }
     }
 
-    /// What "Share today's briefing" sends: today's conditions, advisory and signals, and a
-    /// link to Pantopus. The place name is left out, since a location label can be an address.
-    static func shareText(for state: State) -> String {
+    /// Signal kinds about the place, which anyone nearby could know. The rest (bill_due, task_due, calendar,
+    /// mail, gig, and any kind this client doesn't know) are the viewer's own and never leave in a share.
+    static let shareableSignalKinds: Set<String> = [
+        "alert",
+        "precipitation",
+        "aqi",
+        "temperature",
+        "seasonal",
+        "local_update",
+        "address_calendar"
+    ]
+
+    /// What "Share today's briefing" sends: the weather, a public weather alert and place-level signals, with a
+    /// link to Pantopus. Never the place name (a location label can be an address), the summary line or a stored
+    /// briefing's text (both are composed from the viewer's own bills, tasks and mail), or a personal signal.
+    static func shareMessage(_ payload: HubTodayPayload?, signals: [HubTodayPayload.TodaySignalDTO]) -> String {
+        let weather = payload?.weather
         var parts: [String] = []
+        let conditions = [weather?.currentTempF.map { _ in temperature(weather) }, weather?.conditionLabel].compactMap { $0 }
+        parts.append(conditions.joined(separator: ", "))
+        parts.append(highLow(weather))
+        parts.append(payload?.alerts?.first.map { ribbon(from: $0).title } ?? "")
+        parts.append(signals.filter { shareableSignalKinds.contains($0.kind ?? "") }.compactMap(\.label).joined(separator: " · "))
+        let sentences = parts.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ". ")) }.filter { !$0.isEmpty }
+        if sentences.isEmpty { return shareFallback }
+        return "Today's briefing: \(sentences.joined(separator: ". ")).\nShared from Pantopus: \(InviteLinks.downloadURLString)"
+    }
+
+    /// The share text for the screen's state: the prepared message, or just the link while loading or failed.
+    static func shareText(for state: State) -> String {
         switch state {
         case let .populated(content), let .alert(content):
-            parts.append([content.temperature, content.condition].filter { $0 != "—°" && $0 != "—" }.joined(separator: ", "))
-            parts.append(content.highLowFeels)
-            parts.append(content.ribbon?.title ?? "")
-            parts.append(content.signals.map(\.title).joined(separator: " · "))
+            if content.share.message.isEmpty { shareFallback } else { content.share.message }
         default:
-            break
+            shareFallback
         }
-        let sentences = parts.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ". ")) }.filter { !$0.isEmpty }
-        if sentences.isEmpty { return "Today's Pantopus briefing — \(InviteLinks.downloadURLString)" }
-        return "Today's briefing: \(sentences.joined(separator: ". ")).\nShared from Pantopus: \(InviteLinks.downloadURLString)"
+    }
+
+    private static var shareFallback: String {
+        "Today's Pantopus briefing — \(InviteLinks.downloadURLString)"
     }
 
     private static func parseInstant(_ iso: String?) -> Date? {

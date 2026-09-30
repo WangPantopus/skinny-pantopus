@@ -42,9 +42,8 @@ object TodayDetailMapper {
         val alerts = payload?.alerts ?: emptyList()
         val hasAlert = alerts.isNotEmpty()
         val storedSignals = briefing?.signalsSnapshot ?: emptyList()
-        val signals =
-            (if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals)
-                .map { signal(it) }
+        val rawSignals = if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals
+        val signals = rawSignals.map { signal(it) }
         val label = payload?.location?.label ?: "Today"
         val storedSummary = briefing?.summaryText?.takeIf { it.isNotEmpty() }
         return TodayDetailContent(
@@ -62,7 +61,12 @@ object TodayDetailMapper {
             signals = signals,
             aroundTitle = base.aroundTitle,
             around = emptyList(),
-            share = TodayShareCard(title = "Share today's briefing", subtitle = SHARE_SUBTITLE),
+            share =
+                TodayShareCard(
+                    title = "Share today's briefing",
+                    subtitle = SHARE_SUBTITLE,
+                    message = shareMessage(payload, rawSignals),
+                ),
         )
     }
 
@@ -227,9 +231,37 @@ object TodayDetailMapper {
     }
 
     /**
-     * What "Share today's briefing" sends: today's conditions, advisory and signals, and a
-     * link to Pantopus. The place name is left out, since a location label can be an address.
+     * Signal kinds about the place, which anyone nearby could know. The rest (bill_due, task_due, calendar,
+     * mail, gig, and any kind this client doesn't know) are the viewer's own and never leave in a share.
      */
+    private val SHAREABLE_SIGNAL_KINDS: Set<String?> =
+        setOf("alert", "precipitation", "aqi", "temperature", "seasonal", "local_update", "address_calendar")
+
+    private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
+
+    /**
+     * What "Share today's briefing" sends: the weather, a public weather alert and place-level signals, with a
+     * link to Pantopus. Never the place name (a location label can be an address), the summary line or a stored
+     * briefing's text (both are composed from the viewer's own bills, tasks and mail), or a personal signal.
+     */
+    fun shareMessage(
+        payload: HubTodayPayload?,
+        signals: List<TodaySignalDto>,
+    ): String {
+        val weather = payload?.weather
+        val parts =
+            listOfNotNull(
+                listOfNotNull(weather?.currentTempF?.let { temperature(weather) }, weather?.conditionLabel).joinToString(", "),
+                highLow(weather),
+                payload?.alerts?.firstOrNull()?.let { ribbon(it).title },
+                signals.filter { it.kind in SHAREABLE_SIGNAL_KINDS }.mapNotNull { it.label }.joinToString(" · "),
+            )
+        val sentences = parts.map { it.trim('.', ' ') }.filter { it.isNotEmpty() }
+        if (sentences.isEmpty()) return SHARE_FALLBACK
+        return "Today's briefing: ${sentences.joinToString(". ")}.\nShared from Pantopus: ${InviteLinks.DOWNLOAD_URL}"
+    }
+
+    /** The share text for the screen's state: the prepared message, or just the link while loading or failed. */
     fun shareText(state: TodayDetailUiState): String {
         val content =
             when (state) {
@@ -237,16 +269,7 @@ object TodayDetailMapper {
                 is TodayDetailUiState.Alert -> state.content
                 else -> null
             }
-        val parts =
-            listOfNotNull(
-                content?.let { c -> listOf(c.temperature, c.condition).filter { it != "—°" && it != "—" }.joinToString(", ") },
-                content?.highLowFeels,
-                content?.ribbon?.title,
-                content?.signals?.joinToString(" · ") { it.title },
-            )
-        val sentences = parts.map { it.trim('.', ' ') }.filter { it.isNotEmpty() }
-        if (sentences.isEmpty()) return "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
-        return "Today's briefing: ${sentences.joinToString(". ")}.\nShared from Pantopus: ${InviteLinks.DOWNLOAD_URL}"
+        return content?.share?.message?.ifBlank { null } ?: SHARE_FALLBACK
     }
 
     private fun parseInstant(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
