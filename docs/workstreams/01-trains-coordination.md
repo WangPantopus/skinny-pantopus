@@ -32,7 +32,7 @@
     | `-native-1081-devices-r1` | `a33acbb7` | |
     | `-ios-primary-ink-strong-r1` | `1210fded` | |
     | `-ios-slot-tile-ink-r1` | `087226fa` | |
-  - **Checklist:** Stream 1's U02 iOS Trains rows are flipped in `checklists/data_s1.py` (U02 done 6 → 13), and the review page is republished (v10).
+  - **Checklist:** Stream 1's U02 iOS Trains rows are flipped in `checklists/data_s1.py` (U02 done 6 → 14, including T7/T8 via #1099), and the review page is republished (v11).
     - Android U02 A1–A4 for Trains is still to do. Only T1/T2 were verified on Android.
   - **Runtime** (all Stream 1's):
     - DB `supabase_db_pantopus-stream1-resume-20260923` (64562).
@@ -346,7 +346,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:39Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:56Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -384,7 +384,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | **Support Trains** | | | |
 | My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
 | Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | – No Train search on web |
-| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>⬜ A3 covered slot date tile (T7) and A4 card status (T8): draft PR #1099, device check pending | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
+| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
 | Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>🔷 A3 brand-blue token |
 | Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
 | Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
@@ -396,7 +396,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 55, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
-- U02 items: done 13, confirm from existing evidence 0, to do 7, your call 6, boundary 0, not offered 4
+- U02 items: done 14, confirm from existing evidence 0, to do 6, your call 6, boundary 0, not offered 4
 
 ## History
 
