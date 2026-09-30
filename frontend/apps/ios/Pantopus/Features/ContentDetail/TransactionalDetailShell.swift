@@ -1342,7 +1342,7 @@ private struct AvatarView: View {
 
     private var initialsCircle: some View {
         Circle()
-            .fill(Theme.Color.primary500)
+            .fill(Theme.Color.primarySolid)
             .overlay(
                 Text(initials)
                     .font(.system(size: size * 0.36, weight: .bold))

@@ -417,7 +417,7 @@ private struct NewMessageContactRowView: View {
     private var avatar: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
-                Circle().fill(Theme.Color.primary500)
+                Circle().fill(Theme.Color.primarySolid)
                 Text(row.initials)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)

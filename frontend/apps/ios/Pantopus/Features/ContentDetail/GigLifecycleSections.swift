@@ -355,7 +355,7 @@ private struct BidderAvatar: View {
 
     private var initialsCircle: some View {
         Circle()
-            .fill(Theme.Color.primary500)
+            .fill(Theme.Color.primarySolid)
             .overlay(
                 Text(initials.isEmpty ? "?" : initials)
                     .font(.system(size: 13, weight: .bold))

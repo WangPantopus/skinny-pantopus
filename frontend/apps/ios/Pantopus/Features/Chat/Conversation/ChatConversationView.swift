@@ -2124,7 +2124,7 @@ private struct ChatPersonAvatar: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
-                Circle().fill(Theme.Color.primary500)
+                Circle().fill(Theme.Color.primarySolid)
                 Text(initials)
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
@@ -3267,7 +3267,7 @@ private struct ChatMiniAvatar: View {
         // A15 `.mini-av` — 22pt circle, 9pt/700 initials. `hidden`
         // keeps the layout slot for continuation bubbles.
         ZStack {
-            Circle().fill(Theme.Color.primary500)
+            Circle().fill(Theme.Color.primarySolid)
             Text(initials)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextInverse)
