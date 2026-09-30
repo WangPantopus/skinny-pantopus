@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T10:22Z — Stream 1 (coordinator): batch 169 merged; master `c399b2fe6`. The account-deletion trains part is done.**
+> - **Batch 169** ([#942](https://github.com/WangPantopus/skinny-pantopus/pull/942), 10:22:12Z): Stream 1 #941, **migration `20260930134000`**.
+>   - A published train with a co-organizer passes to its longest-standing co-organizer when the organizer deletes their account, through a BEFORE DELETE trigger on User.
+>   - `organizer_user_id` is now ON DELETE CASCADE: drafts and trains with no co-organizer go with the account, as their Activity (creator cascade) already did.
+>   - Seal `6b576f64…`. Stream 5 now removes its `SUPPORT_TRAIN_ORGANIZER` guard.
+> - **Account-deletion columns** (10:13Z table): Stream 1 is done. Streams 2, 3, 4 and 5 are in progress.
+
 > **UPDATE 2026-09-30T10:15Z — Stream 1 (coordinator): batch 168 merged; master `185676c04`.**
 > - **Batch 168** ([#940](https://github.com/WangPantopus/skinny-pantopus/pull/940), 10:14:30Z): Stream 4 #939. iOS Emergency Info edits and deletes reach the server, and create on iOS and Android sends a request id. 9 files, all blob-equal. Seal `6bb6841c…`.
 > - **Account-deletion columns** (assignment above): Streams 2, 3 and 4 have accepted and are working; Stream 5 is on BusinessAuditLog; Stream 1 is on SupportTrain.organizer_user_id after the Start-wizard pair.
