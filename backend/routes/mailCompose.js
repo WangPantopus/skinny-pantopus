@@ -204,9 +204,11 @@ router.get('/recipients', verifyToken, async (req, res) => {
 
         let homesByUserId = {};
         if (connUserIds.length > 0) {
+          // A connection is outside the household: City/State only, no street or photo
+          // (docs/location-privacy-matrix.md, Homes). The homeId addresses the mail.
           const { data: occupancies } = await supabaseAdmin
             .from('HomeOccupancy')
-            .select('user_id, home_id, Home!inner(id, address, city, state, primary_photo_url)')
+            .select('user_id, home_id, Home!inner(id, city, state)')
             .in('user_id', connUserIds)
             .eq('is_active', true);
 
@@ -225,14 +227,9 @@ router.get('/recipients', verifyToken, async (req, res) => {
           seenUserIds.add(user.id);
 
           const userHome = homesByUserId[user.id] || null;
-          const homeMediaUrl = userHome
-            ? await getHomeMediaUrl(userHome.id, userHome.primary_photo_url)
-            : null;
-          const homeAddress = userHome
-            ? `${userHome.address}, ${userHome.city}, ${userHome.state}`
-            : null;
+          const homeAddress = userHome ? [userHome.city, userHome.state].filter(Boolean).join(', ') || null : null;
 
-          results.push(buildRecipientResult(user, userHome?.id, homeAddress, homeMediaUrl, 1));
+          results.push(buildRecipientResult(user, userHome?.id, homeAddress, null, 1));
         }
       }
     }
@@ -357,12 +354,11 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
 
     const memberCount = members.length;
 
-    // Get home media
-    const homeMediaUrl = await getHomeMediaUrl(homeId, home.primary_photo_url);
-
-    // Format address display
-    const addressParts = [home.address, home.city, home.state].filter(Boolean);
-    const addressDisplay = addressParts.join(', ');
+    // A connection is outside the household: City/State only, and no photo or member list
+    // (docs/location-privacy-matrix.md, Homes). Household members see the full context.
+    const homeMediaUrl = isOccupantOrOwner ? await getHomeMediaUrl(homeId, home.primary_photo_url) : null;
+    const addressParts = isOccupantOrOwner ? [home.address, home.city, home.state] : [home.city, home.state];
+    const addressDisplay = addressParts.filter(Boolean).join(', ');
 
     res.json({
       homeId: home.id,
@@ -370,7 +366,7 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       memberCount,
       homeMediaUrl,
       privateDeliveryAvailable: memberCount > 1,
-      members,
+      members: isOccupantOrOwner ? members : [],
     });
   } catch (err) {
     logger.error('Home context error', { error: err.message, homeId: req.params.homeId, userId: req.user.id });
