@@ -1888,11 +1888,13 @@ private struct FABButton: View {
     /// Resolve the FAB's tint to a fill color. Default `.sky` keeps the
     /// pre-T6 sky-blue render; `.home` and `.business` swap to the
     /// matching identity tokens.
+    /// Fills under white glyphs and labels: the `*Solid` twins, which stay deep in dark mode
+    /// (`home` lightens to #4ade80 there, 1.9:1 under white).
     private var tintBackground: Color {
         switch action.tint {
-        case .sky: Theme.Color.primary600
-        case .home: Theme.Color.home
-        case .business: Theme.Color.business
+        case .sky: Theme.Color.primarySolid
+        case .home: Theme.Color.homeSolid
+        case .business: Theme.Color.businessSolid
         }
     }
 }
