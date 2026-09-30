@@ -14,6 +14,7 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { escapeIlike } = require('../utils/escapeIlike');
+const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -21,38 +22,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const HOME_ADDRESS_VERIFICATION_REQUIRED_CODE = 'HOME_ADDRESS_VERIFICATION_REQUIRED';
 const HOME_ADDRESS_VERIFICATION_REQUIRED_MESSAGE =
   'Verify your home address before sending mail. Open Homes and finish address verification, then try sending again.';
-
-/**
- * Get the sender's active home IDs (via HomeOccupancy + Home ownership).
- */
-async function getSenderHomeIds(userId) {
-  const homeIdSet = new Set();
-
-  const [occupancyRes, ownerRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id')
-      .eq('user_id', userId)
-      .eq('is_active', true),
-    supabaseAdmin
-      .from('Home')
-      .select('id')
-      .eq('owner_id', userId),
-  ]);
-
-  if (occupancyRes.status === 'fulfilled') {
-    for (const row of occupancyRes.value?.data || []) {
-      if (row?.home_id) homeIdSet.add(row.home_id);
-    }
-  }
-  if (ownerRes.status === 'fulfilled') {
-    for (const row of ownerRes.value?.data || []) {
-      if (row?.id) homeIdSet.add(row.id);
-    }
-  }
-
-  return Array.from(homeIdSet);
-}
 
 async function hasVerifiedSenderHome(userId) {
   const [occupancyRes, ownerRes] = await Promise.allSettled([
@@ -148,6 +117,10 @@ function buildRecipientResult(user, homeId, homeAddress, homeMediaUrl, rank) {
  *
  * Search for mail recipients. Returns household members (if homeId given),
  * connections, and nearby users — sorted by relevance.
+ *
+ * A Home's members and address are the household's: only someone the household
+ * mail rule admits to that Home gets its member block, and a match found by the
+ * general search carries no Home (home-context refuses it anyway).
  */
 router.get('/recipients', verifyToken, async (req, res) => {
   try {
@@ -169,8 +142,9 @@ router.get('/recipients', verifyToken, async (req, res) => {
     const results = [];
     const seenUserIds = new Set();
 
-    // --- Priority 1: Household members (if homeId provided) ---
-    if (homeId) {
+    // --- Priority 1: Household members (if homeId provided and the sender belongs to it) ---
+    const senderHouseholds = homeId ? await getAccessibleHomeIds(senderId) : [];
+    if (homeId && senderHouseholds.includes(homeId.toLowerCase())) {
       // Fetch home data once, outside the member loop
       const [householdRes, homeRes] = await Promise.all([
         supabaseAdmin
@@ -276,41 +250,12 @@ router.get('/recipients', verifyToken, async (req, res) => {
         .limit(remaining);
 
       if (generalUsers) {
-        // Batch-fetch home occupancies
-        const genUserIds = generalUsers
-          .filter((u) => !seenUserIds.has(u.id))
-          .map((u) => u.id);
-
-        let homesByUserId = {};
-        if (genUserIds.length > 0) {
-          const { data: occupancies } = await supabaseAdmin
-            .from('HomeOccupancy')
-            .select('user_id, home_id, Home!inner(id, address, city, state, primary_photo_url)')
-            .in('user_id', genUserIds)
-            .eq('is_active', true);
-
-          if (occupancies) {
-            for (const occ of occupancies) {
-              if (!homesByUserId[occ.user_id]) {
-                homesByUserId[occ.user_id] = occ.Home;
-              }
-            }
-          }
-        }
-
+        // Someone who is neither a housemate nor a connection is matched by name
+        // only: their Home, address and photo stay private.
         for (const user of generalUsers) {
           if (seenUserIds.has(user.id)) continue;
           seenUserIds.add(user.id);
-
-          const userHome = homesByUserId[user.id] || null;
-          const homeMediaUrl = userHome
-            ? await getHomeMediaUrl(userHome.id, userHome.primary_photo_url)
-            : null;
-          const homeAddress = userHome
-            ? `${userHome.address}, ${userHome.city}, ${userHome.state}`
-            : null;
-
-          results.push(buildRecipientResult(user, userHome?.id, homeAddress, homeMediaUrl, 2));
+          results.push(buildRecipientResult(user, null, null, null, 2));
         }
       }
     }
@@ -363,9 +308,9 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       });
     }
 
-    // Verify sender has access: occupant, owner, or connected to a resident
-    const senderHomeIds = await getSenderHomeIds(senderId);
-    const isOccupantOrOwner = senderHomeIds.includes(homeId);
+    // Verify sender has access: a member the household mail rule admits (a pending
+    // claim is not membership), or connected to a resident
+    const isOccupantOrOwner = (await getAccessibleHomeIds(senderId)).includes(homeId.toLowerCase());
 
     let hasAccess = isOccupantOrOwner;
 
