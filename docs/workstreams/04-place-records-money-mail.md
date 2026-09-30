@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #939 (iOS Emergency Info writes; request id on iOS/Android create) merged in batch 168 (master `185676c04`). **Now: launch-critical account deletion** (assigned by the coordinator): 12 Home attribution columns plus 3 (HomeMapPin, CommunityMailItem, MailAssetLink) → nullable + ON DELETE SET NULL, null-safe readers; migration version 20260930132000. In progress: branch `claude/stream4-emergency-server-writes` `8f5d49117` (iOS Emergency Info edit/delete reach the server; creates carry a request id on iOS and Android), builds queued. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #939 (iOS Emergency Info writes; request id on iOS/Android create) merged in batch 168 (master `185676c04`). **Now: launch-critical account deletion** (assigned by the coordinator): [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952), migration `20260930153000`, head `a64f32e39`. DB, real-route and web proof are done; the iOS/Android "Former member" reads, cleanup and seal are next (see the live block). Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -268,6 +268,28 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T10:59Z — account deletion (launch-critical): [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) open, head `a64f32e39000b347b0bd74c3d0969710f87b6aa5` (rebased on master `af4e76f0c`), migration `20260930153000`.** Not yet in the queue: native reads, cleanup and seal come first.
+  - **Scope:** the 15 attribution columns become nullable with ON DELETE SET NULL (the 12 Home columns plus HomeMapPin, CommunityMailItem and MailAssetLink). Also:
+    - task/event guards allow clearing the author, never rewriting it;
+    - `get_home_records` capabilities stay booleans, and `mutate_home_record…` keeps the write check closed;
+    - an external share keeps a former member's document downloadable;
+    - the File CHECK allows a household-owned document file;
+    - a User BEFORE DELETE trigger keeps the member's Home document files with the household.
+  - **Clients:** "Former member" shows on the iOS/Android document detail, the only screen that names a record's author. Web shows no author, and every DTO already decodes these fields as optional.
+  - **Numbering:** reserved `132000` → `143000` (after master's `141000`) → `153000` at the coordinator's request (Stream 2 PR B `152000`, Stream 1 `154000`). The content is unchanged (blob `5d26dffde`).
+  - **Proof, bundle `20260930-stream4-account-delete-home-records-r1`:**
+    1. **Rolled-back DB proof** (10:46:59Z, inside Stream 3's window, as postgres without SET ROLE). Before, all 15 columns refuse clearing and the route's dry run returns `ok:false`. After, the dry run returns `ok:true`, the member is deleted, and 15 of 15 records are kept. **Counterfactuals:** master's function bodies return null capabilities, let an editor's write through, and drop the shared document's download.
+    2. **Real route** (lease 10:50:21Z–10:56:19Z). A disposable household admin (GoTrue admin create, password never printed) made 5 records through the API plus 10 fixture rows.
+       - `DELETE /api/users/account` on master's schema: **409 ACCOUNT_RECORDS_RETAINED**.
+       - Migration applied to the runtime at 10:53:18Z (ledger 100, recorded as `143000`).
+       - Then **200**: the token gets 401, and the User, auth user and occupancy are gone. The records stay with no author.
+       - The owner lists 5 record types and downloads the document (SHA-256 matches).
+    3. **Web** (read-only): dashboard, docs, tasks and emergency render the records with no errors.
+  - **Runtime left in place for the native reads** (Stream 3 knows; I clean up before them):
+    - Home `a3550399-d91e-4935-bf27-8f3bbc633b52` and its records;
+    - migration `20260930143000` in the runtime ledger; I'll rename it to `153000` at cleanup.
+  - **Decisions:** household records and documents stay with the household; only managers edit or delete authorless tasks and events. Stream 5 shipped the delete-screen disclosure in #950 at my suggestion.
 
 - **2026-09-30T10:14Z — [#939](https://github.com/WangPantopus/skinny-pantopus/pull/939) merged** (batch 168, [#940](https://github.com/WangPantopus/skinny-pantopus/pull/940), master `185676c04`). Bundle `20260930-stream4-emergency-server-writes-r1`, MANIFEST `6bb6841c504fcf5a4e6b41d775a67355a0e257c6a32a27542eda975ee673079d`.
   - iOS edit PUT 200, keeping the other client's detail keys; iOS delete DELETE 200.
