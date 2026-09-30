@@ -69,7 +69,10 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
   }, [homeId]);
   const readTimelinePage = useCallback(async (page = 1) => {
     const result = await api.homeProfile.getHomeTimeline(homeId!, page, 20);
-    if (!result || !Array.isArray(result.items) || typeof result.hasMore !== 'boolean') throw new Error('Invalid timeline response');
+    // Each row must be renderable, or one malformed row would take down the whole dashboard.
+    if (!result || !Array.isArray(result.items) || typeof result.hasMore !== 'boolean'
+      || result.items.some(item => !item || typeof item.id !== 'string' || typeof item.action !== 'string'
+        || !Number.isFinite(Date.parse(item.created_at)))) throw new Error('Invalid timeline response');
     return { items: result.items, page, hasMore: result.hasMore };
   }, [homeId]);
   const health = useSummaryRead<HomeHealthScore>(homeId, readHealth, 'Home health', onDenied);

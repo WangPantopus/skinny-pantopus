@@ -251,6 +251,7 @@ export async function createPost(data: {
   // Lost & found
   lostFoundType?: 'lost' | 'found';
   contactPref?: string;
+  contactPhone?: string;
   // Service offer
   serviceCategory?: string;
   // Cross-surface references

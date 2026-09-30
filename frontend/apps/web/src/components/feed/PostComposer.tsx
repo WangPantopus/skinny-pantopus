@@ -97,6 +97,7 @@ export interface PostComposerSubmitData {
   businessName?: string;
   lostFoundType?: 'lost' | 'found';
   contactPref?: string;
+  contactPhone?: string;
   serviceCategory?: string;
   tags?: string[];
   crossPostToConnections?: boolean;
@@ -476,6 +477,18 @@ export default function PostComposer({
       return;
     }
 
+    const contactPhoneDigits = f.contactPhone.replace(/\D/g, '');
+    if (f.selectedIntent === 'lost_found' && f.contactPref === 'phone') {
+      if (!contactPhoneDigits) {
+        setSubmitError('Add a phone number for contact.');
+        return;
+      }
+      if (contactPhoneDigits.length < 7 || contactPhoneDigits.length > 15) {
+        setSubmitError('Enter a valid phone number.');
+        return;
+      }
+    }
+
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
     createCommand.current ??= crypto.randomUUID();
@@ -509,7 +522,8 @@ export default function PostComposer({
       dealExpiresAt: f.selectedIntent === 'deal' && f.dealExpires ? f.dealExpires : undefined,
       businessName: f.selectedIntent === 'deal' && f.dealBusinessName ? f.dealBusinessName : undefined,
       lostFoundType: f.selectedIntent === 'lost_found' ? f.lostFoundType : undefined,
-      contactPref: f.selectedIntent === 'lost_found' && f.contactPref ? f.contactPref : undefined,
+      contactPref: f.selectedIntent === 'lost_found' ? f.contactPref : undefined,
+      contactPhone: f.selectedIntent === 'lost_found' && f.contactPref === 'phone' ? contactPhoneDigits : undefined,
       serviceCategory:
         f.selectedIntent === 'service_offer' || ['ask_local', 'recommendation'].includes(f.selectedIntent)
           ? f.serviceCategory || undefined
@@ -889,6 +903,8 @@ export default function PostComposer({
               onLostFoundTypeChange={(v) => setField('lostFoundType', v)}
               contactPref={f.contactPref}
               onContactPrefChange={(v) => setField('contactPref', v)}
+              contactPhone={f.contactPhone}
+              onContactPhoneChange={(v) => setField('contactPhone', v)}
             />
           )}
           {['service_offer', 'ask_local', 'recommendation'].includes(f.selectedIntent || '') && (

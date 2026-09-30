@@ -3,6 +3,7 @@
 import { useReducer, useCallback } from 'react';
 import type { PostType, PostVisibility } from '@pantopus/api';
 import type { PostLocation } from '../PostLocationPicker';
+import type { LostFoundContactPref } from './LostFoundFields';
 
 export type ProfileVisibilityScope = 'public' | 'connections' | 'local_context' | 'hidden';
 
@@ -26,7 +27,8 @@ export interface PostFormState {
   dealExpires: string;
   dealBusinessName: string;
   lostFoundType: 'lost' | 'found';
-  contactPref: string;
+  contactPref: LostFoundContactPref;
+  contactPhone: string;
   serviceCategory: string;
   tags: string;
   crossPostConnections: boolean;
@@ -53,7 +55,8 @@ const INITIAL_STATE: PostFormState = {
   dealExpires: '',
   dealBusinessName: '',
   lostFoundType: 'lost',
-  contactPref: '',
+  contactPref: 'dm',
+  contactPhone: '',
   serviceCategory: '',
   tags: '',
   crossPostConnections: false,
