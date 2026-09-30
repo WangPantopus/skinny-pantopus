@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Home, CreditCard, CheckSquare, Mail } from 'lucide-react';
 import type { HubHomeCard as HomeData } from './types';
@@ -80,11 +80,31 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
   );
 }
 
-export function AttachHomeCTA() {
+/** "Later" snoozes the Attach a Home prompt for this account for a week, across loads and tabs. */
+const ATTACH_HOME_LATER_KEY = 'pantopus.hub.attachHomeLaterUntil';
+const ATTACH_HOME_LATER_MS = 7 * 24 * 60 * 60 * 1000;
+
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
+function isSnoozed(key: string): boolean {
+  try {
+    return Number(window.localStorage.getItem(key)) > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export function AttachHomeCTA({ userId }: { userId: string }) {
   const router = useRouter();
+  const key = `${ATTACH_HOME_LATER_KEY}:${userId}`;
+  // Hidden on the server and until storage is read, so a snoozed card never flashes in.
+  const snoozed = useSyncExternalStore(subscribeStorage, () => isSnoozed(key), () => true);
   const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed) return null;
+  if (dismissed || snoozed) return null;
 
   return (
     <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/10 dark:to-green-900/10 border border-emerald-200 dark:border-emerald-800 border-dashed rounded-2xl p-5">
@@ -103,7 +123,14 @@ export function AttachHomeCTA() {
           Attach Home
         </button>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={() => {
+            setDismissed(true);
+            try {
+              window.localStorage.setItem(key, String(Date.now() + ATTACH_HOME_LATER_MS));
+            } catch {
+              // Storage unavailable (e.g. blocked): hidden for this visit only.
+            }
+          }}
           className="py-2 px-4 text-app-text-secondary dark:text-app-text-muted text-sm font-medium hover:text-app-text-strong dark:hover:text-gray-200 transition"
         >
           Later
