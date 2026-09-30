@@ -9,6 +9,30 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — anon default-deny #1022 reviewed by Streams 1–4, final CI running; iOS delete-sheet fix #1023 waits for Stream 1's simulator run; #1018 merged, 2026-09-30T15:18:32Z
+
+- **#1018 merged** in batch 195 (PR #1021, 15:02:29Z, master `134dfb1ed`). Stream 1 verified the database job itself and added the four correction seals to the batch 185/187/189 records.
+- **[#1022](https://github.com/WangPantopus/skinny-pantopus/pull/1022): anon default-deny.** Migration `20260930181000` (number from Stream 1). Head `ba22fad27`.
+  - The migration revokes every remaining table, view and sequence privilege from anon, plus the matching default privileges. authenticated and service_role are unchanged.
+  - **gigs.js my-bid** now reads the caller's own newest bid through supabaseAdmin. Android's task detail calls it for every non-owner, including the assigned worker (launch scope); it always got "no bid" and would otherwise have logged 500s. Stream 2 approved.
+  - **The three other gigs routes** (/nearby, /user/me, /assignments/me) have no callers and go from 200-empty to 500. offers.js already fails, because its tables don't exist. debug.js returns 404 in production.
+  - **check-migrations** refuses later GRANTs to anon or PUBLIC.
+  - **Contracts:** home-finance-rls, home-policy-boundary, paid-gig-acceptance, beacon-storage-access, plus the baseline PostgREST test.
+  - **Evidence** (bundle `20260930-stream5-anon-select-deny-r1`, not yet sealed):
+    - anon PostgREST reads went from 200 to 401 on all 14 relations probed; anon's grants went from 253 to 3 (the PostGIS relations);
+    - my-bid on a synthetic task:
+      - master code, after the revoke: 500 for everyone;
+      - branch code: the worker gets their current bid, the other bidder gets only their own, and the non-bidder and the owner get null;
+    - backend Jest: 341 suites passed; privacy gates pass.
+  - **Reviews:** Streams 2, 3 and 4 approved. Stream 1 approved the code after I corrected the migration comment in `ba22fad27`.
+  - **CI:** the first run failed on beacon-storage-access, which switches roles dynamically and which my inventory missed; fixed in `e441c3599`. The database job is running on `ba22fad27`. Stream 1 batches it once that job is green.
+- **[#1023](https://github.com/WangPantopus/skinny-pantopus/pull/1023): iOS delete sheet.** Once DELETE is typed, the button row scrolls above the keyboard; the return key reads Done; a drag dismisses the keyboard. No visual change. Stream 1 found the issue in the native pass.
+  - Stream 1 will re-run it on its simulator, since this session has none.
+  - master's iOS SwiftLint is red from two Stream 3 Home files (6e6a577f3, 46cd0b548); told Stream 3.
+- **Stream 1's native pass for Stream 5 is complete:** account deletion with a private-setup Home passed on iOS and Android (bundle `20260930-stream1-account-delete-native-r1`), and the #950 copy and the portfolio delete were verified.
+- **Runtime:** my DB has `181000` applied. API 18134 runs the #1022 branch (`0b844a532`); return it to master after #1022 merges. The my-bid fixture was removed by exact ids at 15:16:05Z.
+- **Open from Stream 5:** #1022, #1023.
+
 ## LIVE — #992 broke four SQL contracts (master's database job red since 13:15Z); fix #1018 green and handed to Stream 1; four evidence bundles corrected, 2026-09-30T14:54:13Z
 
 - **What happened:** #992 (API-only writes) revoked client write grants.
