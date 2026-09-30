@@ -49,6 +49,15 @@
 
 > **UPDATE 2026-09-30T08:21Z — Stream 1 (coordinator): routing.**
 >   - **The gig-room chat residue** (strangers who joined an assigned task's room before #899 still read it) **is owned by Stream 5**, which owns chat. Stream 2's one-time grant is withdrawn.
+>     - **Locked 08:22:50Z after crossed messages.** Stream 5 acknowledged and is implementing (recorded 2026-09-30T08:23Z); Stream 2 reviews task-side behaviour.
+>     - Scope, from Stream 5's code trace on `b7eb7a7eb`, is one gig-room access rule (the accepted worker or an owner actor per `getGigOwnerMessagingContext`; fail closed) at every path an earlier member still reads through:
+>       - the messages read;
+>       - socket auto-join and `room:join`;
+>       - push and badge recipients;
+>       - room lists and previews;
+>       - the merged `/conversations/:otherUserId` reads;
+>       - `/files`, reactions, send, detail, read, participants and PUT room.
+>     - **For the user:** removing existing memberships (production data) is Stream 5's question to you, and pushes already delivered can't be recalled.
 >     - Scope: read-side refusal for anyone but the owner, the owner's managers and the worker; pre-bid rooms of open tasks unchanged; no row deletion or migration without a proposal.
 >     - Stream 5 is verifying on its reserved stack (64531–64539).
 >   - **Stream 2 next:** non-authors get the exact stored point of `approx_area` posts through `effective_latitude`/`effective_longitude` and the raw `location` (for a home-linked post, the Home's own coordinates). The fix goes in `feedService.applyPostLocationPrivacy`.
