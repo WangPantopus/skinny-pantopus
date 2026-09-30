@@ -265,6 +265,11 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Restore previous visibility after Lockdown (D07, decided 2026-09-30).** Lockdown leaves the Home private.
   - After launch: store the pre-Lockdown visibility when Lockdown is enabled, and offer a one-tap "Restore previous visibility" once it's disabled. Never restore it automatically.
 - **Per-Home notification routing** (from #962): the Settings tab says it isn't live yet. Wire the saved preferences into delivery, or remove the switches.
+- **Tell invitees when a Home deletion or account purge withdraws their invitation (D10 lead, analyzed 2026-09-30).**
+  - Today: `deleteHome` cascades pending `HomeInvite` rows, and `purge_home_household_records` deletes them (`status = 'pending'`). The invitee is told nothing; the invitation leaves their list and the emailed link reads as expired. #1008 and #974 cover only pending claims and requests.
+  - An access request the owner approved (by inviting) stays `approved` after the purge. No requester screen shows request status (only the owner's review queue lists requests), so this has no user-visible effect. It only counts as "linked data" for the orphaned Home.
+  - After launch: a notification type for a withdrawn invitation (backend types and the three clients' inbox mapping), sent to registered invitees from the same pre-read as #1008, and optionally closing such approved requests as `cancelled`.
+  - Decided under the standing instruction: this is not a launch change, because it would add a notification type across three clients for a rare edge case with no stale actionable UI.
 
 ## Runtime, devices and kit (shared with Stream 4; lease label `stream3-home:`)
 
@@ -406,7 +411,7 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
     - branch: 2 notices;
     - the purge-path notices are unchanged (#974 r2).
   - **Checks:** 53 suites / 916 tests; exact cleanup with 353/353 tables equal.
-  - **The other D10 lead stays open:** an approved request whose pending invite the purge deleted.
+  - **The other D10 lead:** an approved request whose pending invite the purge deleted. Analyzed 2026-09-30 and moved to Post-launch work: it has no user-visible stale state, and invitees aren't told.
 
 - **2026-09-30T13:42Z — U01: three of its four items now closed on current builds, with no code change.**
   - **Personal residency cards: closed.** Bundle `20260930-stream3-home-u01-residency-cards-r1` (`d67413b1…`); exact cleanup at 13:40:47Z.
