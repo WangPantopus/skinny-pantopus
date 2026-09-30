@@ -9,6 +9,26 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1022 merged; authenticated default-deny #1028 (with the chat policy recursion fix) open, CI running; #1023 waits for #1024 and Stream 1's simulator run, 2026-09-30T15:46:26Z
+
+- **#1022 merged** (anon default-deny, 181000): batch 196, master `8099b6516`. My runtime API is back on master.
+- **[#1028](https://github.com/WangPantopus/skinny-pantopus/pull/1028): authenticated default-deny.** Migration `20260930182000`, head `3fda3a151`.
+  - **Stream 1's inventory-first decision:**
+    - no backend path reads as authenticated: the auth clients only call GoTrue, and the shared anon client never gets a session;
+    - nothing outside the API uses authenticated: no Realtime subscriptions, an empty publication, no Storage policies, no hooks.
+  - **Migration:**
+    - REVOKE ALL on tables and sequences from authenticated, plus default privileges. EXECUTE is unchanged, and the policies stay as defense in depth.
+    - It also fixes Stream 5's chat read-policy recursion (42P17 → clean refusal) with an `is_active_chat_participant` DEFINER helper, with the same meaning.
+  - **Contracts:** 13 converted: refusals, data on the service path, and each read policy's helper asserted per actor. The finance matrix keeps full coverage. Every converted section is listed in the PR.
+  - **Rule:** check-migrations refuses GRANTs to authenticated from 182000.
+  - **Evidence** (bundle `20260930-stream5-authenticated-select-deny-r1`, not yet sealed):
+    - direct reads with a user's own token plus the anon key went from 200 (own User, Home, occupancy, Post, Gig…) to 403 on all 14 relations probed; the chat tables went from 500 to 403, and anon from 500 to 401;
+    - signed-in API journeys are 200 before and after: Stream 2 task detail and my-bids, Streams 3/4 homes, tasks and bills, Stream 5 profile, privacy and chat.
+  - **Reviews:** Streams 3 and 4 approved; Stream 3's helper-EXECUTE assertions are added. Stream 2 has been told. CI is running on `3fda3a151`.
+- **[#1023](https://github.com/WangPantopus/skinny-pantopus/pull/1023), iOS delete sheet:** the iOS build job passed. The lint waits for Stream 3's #1024 (their Home files), and Stream 1's simulator run is pending.
+- **Runtime:** DB has 181000 and 182000. The local chat section went in as a delta, because 182000 was recorded before that section was added. The API runs master `8099b6516`. Journey fixture gig `ab5f…0001` gets removed after CI is green.
+- **Open from Stream 5:** #1023, #1028.
+
 ## LIVE — anon default-deny #1022 reviewed by Streams 1–4, final CI running; iOS delete-sheet fix #1023 waits for Stream 1's simulator run; #1018 merged, 2026-09-30T15:18:32Z
 
 - **#1018 merged** in batch 195 (PR #1021, 15:02:29Z, master `134dfb1ed`). Stream 1 verified the database job itself and added the four correction seals to the batch 185/187/189 records.
