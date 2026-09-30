@@ -7,9 +7,19 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T10:32Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T11:04Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
-- **Latest (2026-09-30T10:32Z):**
+- **Latest (2026-09-30T11:04Z):**
+  - **#944 merged** in batch 170 (master `c2f8fa5c9`).
+  - **[#953](https://github.com/WangPantopus/skinny-pantopus/pull/953)** (PR B) head `3a9c9ae8763134bfd9ad8f244e79539ad7c92d0c`, queued by Stream 1, seal pending: asking, reporting or requesting a change no longer blocks deleting the account.
+    - Before: 23502 for 6 fixture people through the real route.
+    - Migration `20260930152000` makes GigQuestion.asked_by, GigIncident.reported_by/against, GigChangeOrder.requested_by and Refund.initiated_by nullable + SET NULL.
+    - Readers show "Former member": web Q&A was "Anonymous", web change orders "Someone", iOS/Android Q&A "Neighbor". The web types are nullable, and approve/decline don't notify a deleted requester.
+    - Done: web E2E and the real-route deletions. Pending: the Android after-run and the iOS compile (heavy-slot queue).
+  - **PR C (stale change requests):** reproduced on the real route. After a helper change, the next helper could approve the previous helper's requests. The fix is a trigger that withdraws pending requests when the helper changes, and it is verified on my DB. The branch comes after PR B's native build.
+  - **Out of launch scope (cut #4, Stream 1's ruling):** native Q&A never shows the asker's name (the DTO decodes name/username; the backend sends displayName/handle).
+- **Earlier (10:32Z):**
+  - Previously (2026-09-30T10:32Z):**
   - **[#933](https://github.com/WangPantopus/skinny-pantopus/pull/933) merged** in batch 166 (master `77dc37f64`): a failed read isn't "not found" for post actions either.
   - **Account deletion is now first in the queue** (Stream 1 assignment: launch-critical, App Store requirement). It goes ahead of the native cells.
   - **[#944](https://github.com/WangPantopus/skinny-pantopus/pull/944)** head `de27f3f64c6258e4bfbb0c568d767687eee5001e` (sent to Stream 1; Stream 5 reviewing): stopping a task no longer blocks deleting the account.
