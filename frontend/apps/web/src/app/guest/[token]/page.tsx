@@ -156,6 +156,8 @@ export default function GuestViewPage() {
       if (details.requiresPasscode || details.code === 'SHARE_PASSCODE_REQUIRED'
         || (!details.code && details.message.includes('passcode'))) {
         setPasscodeError('Incorrect passcode. Please try again.');
+      } else if (details.code === 'SHARE_PASSCODE_ATTEMPTS') {
+        setPasscodeError(details.message || 'Too many passcode attempts. Try again in 15 minutes.');
       } else {
         applyFailure(err);
       }

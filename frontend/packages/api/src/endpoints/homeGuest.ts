@@ -50,8 +50,13 @@ export interface PasscodeRequired {
  * Returns 403 with { requiresPasscode: true } if a passcode is needed.
  */
 export async function viewGuestPass(token: string, passcode?: string): Promise<GuestPassView> {
-  const params = passcode ? { passcode } : undefined;
-  return get<GuestPassView>(`/api/homes/guest/${token}`, params);
+  return get<GuestPassView>(`/api/homes/guest/${token}`, undefined, passcodeConfig(passcode));
+}
+
+// The passcode travels percent-encoded in a header, never in the URL, so no URL
+// log (CDN, load balancer, server) records it.
+function passcodeConfig(passcode?: string) {
+  return passcode ? { headers: { 'X-Pantopus-Share-Passcode': encodeURIComponent(passcode) } } : undefined;
 }
 
 // ---- Shared Resource View ----
@@ -61,6 +66,5 @@ export async function viewGuestPass(token: string, passcode?: string): Promise<G
  * Returns 403 with { requiresPasscode: true } if a passcode is needed.
  */
 export async function viewSharedResource(token: string, passcode?: string): Promise<SharedResourceView> {
-  const params = passcode ? { passcode } : undefined;
-  return get<SharedResourceView>(`/api/homes/shared/${token}`, params);
+  return get<SharedResourceView>(`/api/homes/shared/${token}`, undefined, passcodeConfig(passcode));
 }
