@@ -9,10 +9,10 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
-- **Master** `8e44382ce` (batch 134). The queue is empty apart from the items below.
+- **Master** `d1ba0b28d` (batch 136, 2026-09-30T04:26Z; batches 135–136 were the renumbering and split docs, #843/#844/#846). The queue is empty apart from the items below.
 - **Docker Desktop is down** since about 03:30Z: the disk filled and Docker stopped with "no space left on device", so every local database stack is unreachable (all streams', and the founder's). Restarting Docker is the user's call because the founder's stack runs on it. S1, S2 and S5 freed only their own build outputs; a Time Machine local snapshot from 03:33:11Z still holds about 16 GB of those deleted files.
 - **Open PR #841** (`codex/train-native-start-retry-20260929`, head `7ef7d3010`): native Start a train finishes, and a failed or retried launch leaves one train; plus "Household of ?" removed. Android is fully verified; left: one iOS run on the final build (dylib `fd5a402a`: launch, publish-503 retry, double tap), then seal bundle `20260929-stream1-train-native-start-retry-r1` (its `RESULT.md` is drafted with two placeholders; product-delete round-2 train `e5121131` and rediff against the 01:44:29Z baseline) and batch it.
-- **Waiting for review in the queue:** Stream 5's [#843](https://github.com/WangPantopus/skinny-pantopus/pull/843) (docs renumbering, ready). Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
+- **Queue:** #843 and #844 merged in batch 135, #846 in batch 136. Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
 - **Parked launch-cut branches** (pushed 2026-09-30 so nothing is lost; no PR by design) belong to Stream 2's cut areas; they are listed in Stream 2's file.
 
 ## Scope

@@ -47,6 +47,12 @@
 
 
 
+> **UPDATE 2026-09-30T04:26Z — Stream 1 (coordinator): batches 135–136 merged; master `d1ba0b28d`.**
+> - **Batch 135** ([#845](https://github.com/WangPantopus/skinny-pantopus/pull/845) ← Stream 5 #843 + Streams 3–4 #844, stacked): the renumbering docs on master. #844 edits the same README hunks as #843, so the proof was tree equality: the tip's tree `adbc96ba1…` equals #844's head tree, and the tip contains both heads.
+> - **Batch 136** ([#847](https://github.com/WangPantopus/skinny-pantopus/pull/847) ← Stream 1 #846): master's snapshot of the Stream 1/2 split (status files, prompts, `checklists/`, the AGENTS.md sentence, `former-stream1-gigs-payments.md`); verify-batch OK, 16 files.
+> - **Still open:** #841 (Stream 1, native Start a train; one iOS run and the seal left, blocked by Docker). #842 is a Stream 5 DRAFT and stays out of batches.
+> - **Shared checkout rule (all streams agreed):** commit only by explicit paths (`git commit -- <paths>` or `--only`), because a bare `git commit` takes whatever another session has staged.
+
 > **UPDATE 2026-09-30T04:19Z — the former Stream 1 is split into Stream 1 (Support Trains and coordination) and Stream 2 (Posts, Hub and payments).**
 > - **Before the split, everything was committed and pushed.** The only open PR is #841 (native Start a train). Six older launch-cut branches with local-only commits (Marketplace and Open Gigs fixes from 2026-09-23/26, including one uncommitted Trade-modal change) were committed and pushed as parked branches, with no PR because those features are cut; Stream 2's file lists them. The rewritten 2026-09-27 successor prompt was committed unchanged.
 > - **Files:** Stream 1 → [`01-trains-coordination.md`](01-trains-coordination.md); Stream 2 → [`02-posts-hub-payments.md`](02-posts-hub-payments.md); the former file is [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md) (frozen); checklist data and proofs in [`checklists/`](checklists/README.md), where each stream edits only its own data file.
