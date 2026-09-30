@@ -18,12 +18,17 @@ const STATUSES = [
   { value: 'canceled', label: 'Canceled' },
 ];
 
+/** What the member has typed into a new issue: their own text, never the Home's existing records. */
+export type IssueDraft = { title: string; description: string; severity: string; estimatedCost: string };
+
 export default function IssueSlidePanel({
   open,
   onClose,
   onSave,
   issue,
   canEdit = true,
+  draft,
+  onDraftUnmount,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,6 +36,10 @@ export default function IssueSlidePanel({
   issue?: Record<string, any>; // null = create, object = edit
   /** false shows an existing issue without edit controls (the viewer can't update issues). */
   canEdit?: boolean;
+  /** A new issue's kept draft to start from (create only). */
+  draft?: IssueDraft | null;
+  /** Receives a new issue's typed draft if the panel unmounts while open (the dashboard's access re-check). */
+  onDraftUnmount?: (draft: IssueDraft) => void;
 }) {
   const isEdit = !!issue;
   const readOnly = isEdit && !canEdit;
@@ -52,15 +61,24 @@ export default function IssueSlidePanel({
       setStatus(issue.status || 'open');
       setEstimatedCost(issue.estimated_cost != null ? String(issue.estimated_cost) : '');
     } else {
-      setTitle('');
-      setDescription('');
-      setSeverity('medium');
+      setTitle(draft?.title ?? '');
+      setDescription(draft?.description ?? '');
+      setSeverity(draft?.severity ?? 'medium');
       setStatus('open');
-      setEstimatedCost('');
+      setEstimatedCost(draft?.estimatedCost ?? '');
     }
     setError('');
     pendingCreate.current = null;
-  }, [issue, open]);
+  }, [issue, open, draft]);
+
+  // The last rendered create-mode form, handed back only if the panel unmounts while open.
+  const latest = useRef<{ keep: boolean; draft: IssueDraft } | null>(null);
+  useEffect(() => {
+    latest.current = { keep: open && !issue, draft: { title, description, severity, estimatedCost } };
+  });
+  useEffect(() => () => {
+    if (latest.current?.keep) onDraftUnmount?.(latest.current.draft);
+  }, [onDraftUnmount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
