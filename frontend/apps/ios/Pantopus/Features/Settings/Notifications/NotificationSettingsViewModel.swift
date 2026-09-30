@@ -30,6 +30,8 @@
 
 import Foundation
 import Observation
+import UIKit
+import UserNotifications
 
 @Observable
 @MainActor
@@ -55,8 +57,13 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// Server truth, mutated optimistically ahead of the debounced PUT.
     public private(set) var preferences: NotificationPreferencesDTO?
 
+    /// iOS has notifications turned off for Pantopus, so nothing below can
+    /// arrive until they are back on in Settings.
+    public private(set) var systemNotificationsDenied = false
+
     private let api: APIClient
     private let saveDebounce: Duration
+    private let systemAuthorization: @Sendable () async -> UNAuthorizationStatus
     /// Wire-name keys accumulated since the last flush. Merged rather
     /// than replaced so a burst of taps on different rows all persist.
     private var pendingPatch: [String: JSONValue] = [:]
@@ -64,15 +71,44 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     private var saveInFlight = false
     private var saveRevision = 0
 
-    init(api: APIClient = .shared, saveDebounce: Duration = .milliseconds(600)) {
+    init(
+        api: APIClient = .shared,
+        saveDebounce: Duration = .milliseconds(600),
+        systemAuthorization: @escaping @Sendable () async -> UNAuthorizationStatus = {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        }
+    ) {
         self.api = api
         self.saveDebounce = saveDebounce
+        self.systemAuthorization = systemAuthorization
     }
 
     // MARK: - GroupedListDataSource
 
+    public var banner: GroupedListBanner? {
+        guard systemNotificationsDenied else { return nil }
+        return GroupedListBanner(
+            icon: .bellOff,
+            title: "Notifications are off",
+            subtitle: "Turn them on in Settings to get alerts from Pantopus.",
+            actionLabel: "Open Settings"
+        )
+    }
+
+    public func tapBanner() async {
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+        _ = await UIApplication.shared.open(url)
+    }
+
+    /// The switch lives in iOS Settings, so re-read it on load and whenever
+    /// the app comes back to the foreground.
+    public func refreshSystemPermission() async {
+        systemNotificationsDenied = await systemAuthorization() == .denied
+    }
+
     public func load() async {
         if preferences == nil { state = .loading }
+        await refreshSystemPermission()
         await fetch()
     }
 

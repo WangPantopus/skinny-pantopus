@@ -14,6 +14,7 @@ import SwiftUI
 
 public struct NotificationSettingsView: View {
     @State private var viewModel: NotificationSettingsViewModel
+    @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
 
     public init(onBack: @escaping @MainActor () -> Void) {
@@ -47,6 +48,12 @@ public struct NotificationSettingsView: View {
                 }
             }
             .pantopusAnimation(.componentState, value: viewModel.toast?.text)
+            // The notifications-off banner sends people to iOS Settings; drop
+            // it as soon as they come back with notifications allowed.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await viewModel.refreshSystemPermission() }
+            }
     }
 }
 
