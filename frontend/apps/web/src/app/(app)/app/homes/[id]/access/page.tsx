@@ -24,6 +24,8 @@ function AccessContent() {
   const [loading, setLoading] = useState(true);
   // A failed read is shown as unavailable with a retry, never as an empty list.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -39,8 +41,11 @@ function AccessContent() {
         throw new Error('Invalid secrets response');
       }
       setLoadError(null);
+      setLoadDenied(false);
       setSecrets(res.secrets);
-    } catch {
+    } catch (err: unknown) {
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this household’s access codes.'); return; }
+      setLoadDenied(false);
       setLoadError('Current access codes could not be loaded. Retry to check current information.'); toast.error('Failed to load access codes'); }
   }, [homeId]);
 
@@ -87,7 +92,7 @@ function AccessContent() {
       {loadError ? (
         <div className="text-center py-16">
           <p className="text-sm text-app-text-secondary">{loadError}</p>
-          <button type="button" onClick={() => { setLoading(true); fetchSecrets().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+          {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchSecrets().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
         </div>
       ) : secrets.length === 0 ? (
         <div className="text-center py-16">

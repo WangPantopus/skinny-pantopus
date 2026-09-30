@@ -28,6 +28,8 @@ function DocsContent() {
   const [loading, setLoading] = useState(true);
   // A failed read is shown as unavailable with a retry, never as an empty list.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -40,8 +42,11 @@ function DocsContent() {
         throw new Error('Invalid documents response');
       }
       setLoadError(null);
+      setLoadDenied(false);
       setDocs(res.documents);
-    } catch {
+    } catch (err: unknown) {
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this household’s documents.'); return; }
+      setLoadDenied(false);
       setLoadError('Current documents could not be loaded. Retry to check current information.'); toast.error('Failed to load documents'); }
   }, [homeId]);
 
@@ -76,7 +81,7 @@ function DocsContent() {
       {loadError ? (
         <div className="text-center py-16">
           <p className="text-sm text-app-text-secondary">{loadError}</p>
-          <button type="button" onClick={() => { setLoading(true); fetchDocs().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+          {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchDocs().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
         </div>
       ) : docs.length === 0 ? (
         <div className="text-center py-16">

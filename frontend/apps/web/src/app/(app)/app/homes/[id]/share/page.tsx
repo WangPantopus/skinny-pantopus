@@ -9,7 +9,7 @@ import type { GuestPass } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { passStatus } from '@/components/home/share/ShareCenter';
-import { failureMessage } from '@/components/home/share/shareFailure';
+import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 
 const TEMPLATES: { id: string; label: string; icon: typeof Wifi; duration: string; color: string }[] = [
   { id: 'wifi_only', label: 'Wi-Fi Only',       icon: Wifi,         duration: '2 hours',  color: '#0284c7' },
@@ -35,6 +35,8 @@ function ShareContent() {
   const [loading, setLoading] = useState(true);
   // A failed read is shown as unavailable with a retry, never as an empty list.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
@@ -56,9 +58,14 @@ function ShareContent() {
         throw new Error('Invalid passes response');
       }
       setLoadError(null);
+      setLoadDenied(false);
       setPasses(res.passes);
     } catch (err: unknown) {
       if (request !== generation.current) return;
+      // Lockdown turns guest passes off for their managers too (the server says so); that is not a permission gap.
+      if (shareFailure(err).code === 'HOME_LOCKDOWN_ACTIVE') { setLoadDenied(true); setLoadError(failureMessage(err, 'Guest passes are off while Lockdown is on.')); return; }
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to create or view guest passes for this household.'); return; }
+      setLoadDenied(false);
       setLoadError('Current guest passes could not be loaded. Retry to check current information.');
       toast.error(failureMessage(err, 'Failed to load guest passes'));
     }
@@ -117,9 +124,11 @@ function ShareContent() {
           <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Share Access</h1>
         </div>
+        {!loadDenied && (
         <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
           <Plus className="w-4 h-4" /> New Pass
         </button>
+        )}
       </div>
 
       {/* Quick share templates */}
@@ -160,7 +169,7 @@ function ShareContent() {
       {loadError ? (
         <div className="text-center py-16">
           <p className="text-sm text-app-text-secondary">{loadError}</p>
-          <button type="button" onClick={() => { setLoading(true); fetchPasses().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+          {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchPasses().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
         </div>
       ) : (<>
       {/* Active passes */}
