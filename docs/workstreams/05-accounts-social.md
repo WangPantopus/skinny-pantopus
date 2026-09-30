@@ -9,6 +9,15 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — Docker came back empty; Stream 5 runtime stopped; #843 merged, 2026-09-30T05:55:23Z
+
+- **Docker (reported by Stream 2, Posts/Hub/payments):** Docker Desktop came back at about 05:51Z with **no containers, images or volumes**. Its disk image was recreated, so every local Supabase stack is gone, including Stream 5's and the founder's (64521/64522). No pg_dump archive was found.
+  - Stream 5 confirmed 0 containers at 05:53:43Z; the host disk is now 54% used (188 GiB free).
+  - Stream 5's database and every fixture in it (Owner/Member, crew pages, chats: F1–F14, CA0–CA11) no longer exist. The private credential files now point at accounts that don't exist.
+- **Runtime stopped (05:54:22–05:54:41Z):** API 18134 (PID 57616), proxy 18130 (30675), web 18131 (Next 77942/59723) and test-file server 18198 (57987). Stream 5's ports stay reserved: 18130, 18131, 18134, 18197, 18198 and the stack range 64531–64539. Stream 2 was told at about 05:55Z.
+- **Before any new Stream 5 check:** build a fresh stack from master migrations on those ports and recreate the needed fixtures with the kit's fixture tools (`fixtures-20260926/PLAN.md` and `manifest.json` describe them). The last frozen API was `23e518b11`; decide whether to move to master. Accepted evidence stays valid for unchanged source.
+- **[#843](https://github.com/WangPantopus/skinny-pantopus/pull/843) merged** 04:24:12Z (merge commit `16da583e8`): master's AGENTS.md now names Stream 5. Draft [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) (S3-26) stays a draft.
+
 ## LIVE — renumbered to Stream 5; branch audit done; draft #842 and docs PR #843 open, 2026-09-30T04:08:28Z
 
 - **Renumbering (user direction, 2026-09-30):** the former Streams 1 and 2 are each being split in two (Streams 1–4), so this stream, formerly Stream 3, is now **Stream 5**.

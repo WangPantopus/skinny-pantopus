@@ -14,7 +14,7 @@ Written 2026-09-30T04:05:05Z. You are **Stream 5**, one of the user's parallel w
   - #833: the web account-deletion outcome on `/login`;
   - #839: native apps say a lost deletion answer "couldn't be confirmed". Master was `8e44382ce`.
 - One **draft** PR holds the old S3-26 web change (the assistant's mail chips read as text, not dead buttons). It can't be verified end to end while AI content is blocked, so it must not merge until it is verified or the user accepts it. See the LIVE block for its number.
-- Docker Desktop has been down since 2026-09-30T03:30Z (disk full), so every local Supabase stack, including this stream's and the founder's, is offline. The user decides the restart. Stream 5 freed about 8.3 GiB of its own caches; its next iOS build is a clean one.
+- Docker Desktop went down at 2026-09-30T03:30Z (disk full) and came back at about 05:51Z **empty**: every local Supabase stack, including this stream's and the founder's, is gone, with no dump found. Stream 5 stopped its runtime processes at 05:54Z. Before any new check, build a fresh stack from master migrations on Stream 5's reserved ports (18130/18131/18134/18197/18198, stack 64531–64539) and recreate fixtures with the kit tools. Stream 5 freed about 8.3 GiB of its own caches earlier, so its next iOS build is a clean one. #843 (AGENTS.md) merged at 04:24Z.
 - No lease is held. Fault rules are empty, the deletion allowance is off, and every AUTH-DELETE fixture round is deactivated.
 
 ## 3. Rules in force
