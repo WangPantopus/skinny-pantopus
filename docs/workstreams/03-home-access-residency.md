@@ -174,6 +174,12 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
   - The fixture accounts' credentials are still in `runtime/accounts.env`, but the accounts must be recreated in the new database. Never print the file; type values with the kit's secret tools only.
 - **State at the split:** Docker Desktop has been down since ~03:30Z on 2026-09-30 (disk full), so the runtime is unreachable until the user restarts it. No runtime lease, device slot, heavy slot or iOS driver is held.
 - **Since 2026-09-30T05:51:48Z:** Docker Desktop is back but reset (empty), so the shared runtime must be rebuilt before any runtime work. The steps are in the resume prompt §2. Until then, proxy 18142, backend 18143 and web 18144 still run from before the reset, pointing at the deleted database.
+- **Rebuilt 2026-09-30T06:11Z by Stream 3** (details in the kit README's "Rebuilt 2026-09-30" section):
+  - stack workdir `stack-20260930/` inside the kit, from master `ed5ea9ec5` (93 migrations applied), same project id and ports (API 64553, DB 64554, Inbucket 64558; the rest inside 64550–64559);
+  - new anon/service keys in `runtime/supabase.env` (the JWT secret, URL and DB URL are unchanged);
+  - owner `bb1d5fae…` and member B `438f0bb1…` recreated with their original ids and credentials; private bucket `s2-home-documents` recreated; **no Home or other fixture exists yet**;
+  - backend 18143 PID 13697, proxy 18142 PID 14166, web 18144 PID 14332 (the shared worktree is detached at `ed5ea9ec5`, `.claude/launch.json` kept), logged in `runtime/backend-restarts.log`;
+  - the first baseline (353 public tables) belongs to the rebuild lease only.
 
 ## Rules carried over from the former Stream 2
 
@@ -193,6 +199,14 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T06:11:21Z — shared runtime rebuilt from master `ed5ea9ec5`** (lease `stream3-home:` taken 06:05:49Z). Stream 4's stack was not started yet and the lease was free, so Stream 3 did it:
+  - `supabase start --workdir <kit>/stack-20260930` from master's config and migrations (93 applied), project `pantopus-stream2-native-resume-r2`, API 64553, DB 64554, Inbucket 64558; excluded studio, realtime, imgproxy, edge runtime, logflare, vector, supavisor and analytics, as Streams 1 and 2 did;
+  - new keys written to `runtime/supabase.env` (mode 600; the old file kept as `supabase.env.pre-reset-20260930`);
+  - owner and member B recreated with their original ids, emails and passwords (GoTrue admin create, then `public."User"`), without printing the accounts file; both log in through the real API (`mint-tokens.py`: 200/200), and the private bucket `s2-home-documents` is back;
+  - backend (old PID 2550 → 13697), proxy (30261 → 14166) and web (36051/66349 → 14332) restarted by exact PID after the shared worktree moved from `fcb889636` to a detached `ed5ea9ec5`; `/health` 200 direct and through the proxy, web `/login` 200;
+  - fresh whole-DB baseline, 353 public tables, 06:11:21Z. **No Homes or other fixtures exist**; each journey recreates only its own, from the bundle that first made them.
+  - Native tooling is still missing (hub 05:57Z; no reinstall recorded), so R06's iOS restart stays blocked, and this stream moves to the web and API parts of the open list, starting with D07's three web leads.
 
 - **2026-09-30T05:58:25Z — native tooling is gone too.** Stream 1's cleanup record (hub, 05:57Z), confirmed read-only: the Android SDK, every AVD and `~/.gradle` are missing, and Xcode has no iOS simulator runtime (sim 6F914A30 is listed but can't boot). The kit, the 528 audit bundles and the fixture password file survived. Reinstalling needs the user's OK. Until then this stream runs the runtime rebuild and web or API work only; the resume prompt says so.
 
