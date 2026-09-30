@@ -40,7 +40,6 @@ const {
   checkHomePermission,
   getUserAccess,
   hasPermission,
-  writeAuditLog,
 } = require('../utils/homePermissions');
 
 
@@ -413,43 +412,22 @@ router.post('/:id/lockdown', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to manage security' });
     }
 
-    const now = new Date().toISOString();
+    // One transaction under the Home's share lock: turn Lockdown on, make the home
+    // private, revoke every active guest pass and write the audit row
+    // (set_home_lockdown), so a concurrent disable can't land in between.
+    const { data: result, error: rpcErr } = await supabaseAdmin
+      .rpc('set_home_lockdown', { p_home_id: homeId, p_actor_id: actorId, p_enable: true });
 
-    // 1. Enable lockdown on the home
-    const { data: home, error: homeErr } = await supabaseAdmin
-      .from('Home')
-      .update({
-        lockdown_enabled: true,
-        lockdown_enabled_at: now,
-        lockdown_enabled_by: actorId,
-        visibility: 'private',
-        updated_at: now,
-      })
-      .eq('id', homeId)
-      .select()
-      .single();
-
-    if (homeErr) {
-      logger.error('Error enabling lockdown', { error: homeErr.message, homeId });
+    if (rpcErr || result?.ok !== true || !result.home) {
+      logger.error('Error enabling lockdown', { error: rpcErr?.message || result?.code, homeId });
       return res.status(500).json({ error: 'Failed to enable lockdown' });
     }
+    const { home } = result;
 
-    // 2. Revoke ALL active guest passes
-    const { data: revokedPasses, error: revokeErr } = await supabaseAdmin
-      .from('HomeGuestPass')
-      .update({ revoked_at: now, updated_at: now })
-      .eq('home_id', homeId)
-      .is('revoked_at', null)
-      .select('id');
-
-    if (revokeErr) {
-      logger.error('Error revoking guest passes during lockdown', { error: revokeErr.message });
+    if (result.guest_pass_revoke_failed) {
+      logger.error('Error revoking guest passes during lockdown', { homeId });
       // Lockdown stays on (the safe state), but unrevoked passes work again once it is lifted.
       // Say so, so the owner retries; a retry is idempotent and finishes the revoke.
-      await writeAuditLog(homeId, actorId, 'lockdown_enabled', 'Home', homeId, {
-        guest_passes_revoked: 0,
-        guest_pass_revoke_failed: true,
-      });
       return res.status(503).json({
         error: 'Lockdown is on, but existing guest passes could not be revoked. Try again to finish revoking them.',
         code: 'LOCKDOWN_PASS_REVOKE_FAILED',
@@ -457,16 +435,20 @@ router.post('/:id/lockdown', verifyToken, async (req, res) => {
       });
     }
 
-    const revokedCount = revokedPasses?.length || 0;
-
-    await writeAuditLog(homeId, actorId, 'lockdown_enabled', 'Home', homeId, {
-      guest_passes_revoked: revokedCount,
-    });
+    if (!result.audit_recorded) {
+      logger.error('Lockdown audit write failed', { homeId, action: 'lockdown_enabled' });
+      // Lockdown stays on (the safe state); only its record is missing. A retry records it.
+      return res.status(503).json({
+        error: 'Lockdown is on, but this change couldn’t be added to the audit log. Try again to record it.',
+        code: 'LOCKDOWN_AUDIT_FAILED',
+        home,
+      });
+    }
 
     res.json({
       message: 'Lockdown enabled',
       home,
-      guest_passes_revoked: revokedCount,
+      guest_passes_revoked: result.guest_passes_revoked,
     });
   } catch (err) {
     logger.error('Lockdown enable error', { error: err.message });
@@ -489,26 +471,24 @@ router.delete('/:id/lockdown', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to manage security' });
     }
 
-    const now = new Date().toISOString();
+    // Turning Lockdown off commits only together with its audit row (set_home_lockdown).
+    const { data: result, error: rpcErr } = await supabaseAdmin
+      .rpc('set_home_lockdown', { p_home_id: homeId, p_actor_id: actorId, p_enable: false });
 
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .update({
-        lockdown_enabled: false,
-        updated_at: now,
-      })
-      .eq('id', homeId)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error disabling lockdown', { error: error.message, homeId });
+    if (result?.code === 'LOCKDOWN_AUDIT_FAILED' && result.home) {
+      logger.error('Lockdown audit write failed', { homeId, action: 'lockdown_disabled' });
+      return res.status(503).json({
+        error: 'This change couldn’t be added to the audit log, so nothing changed. Try again.',
+        code: 'LOCKDOWN_AUDIT_FAILED',
+        home: result.home,
+      });
+    }
+    if (rpcErr || result?.ok !== true || !result.home) {
+      logger.error('Error disabling lockdown', { error: rpcErr?.message || result?.code, homeId });
       return res.status(500).json({ error: 'Failed to disable lockdown' });
     }
 
-    await writeAuditLog(homeId, actorId, 'lockdown_disabled', 'Home', homeId, {});
-
-    res.json({ message: 'Lockdown disabled', home });
+    res.json({ message: 'Lockdown disabled', home: result.home });
   } catch (err) {
     logger.error('Lockdown disable error', { error: err.message });
     res.status(500).json({ error: 'Failed to disable lockdown' });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, getAuthToken, onTokenChange, payments } from '@pantopus/api';
 import type { GigTipTerms, GigTipPreview, GigTipRequest, GigTipProgress, GigTipCheckout } from '@pantopus/api';
 import { ProtectedRecoverySlot, type ProtectedRecoverySnapshot } from '../home/tasks/TaskRecoveryStorage';
@@ -150,6 +150,29 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
   const pendingWorkerName = saved && saved.value.payeeId !== workerId ? 'the original worker' : workerName;
 
   function close() { invalidated.current = true; sequence.current++; onDismiss.current(); }
+  // Dialog semantics: announce and focus the dialog, keep Tab inside it, and let Escape close it only
+  // when "Skip"/"Close" would just close — never when it would cancel a tip already started.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const customAmountId = useId();
+  useEffect(() => { dialogRef.current?.focus(); }, []);
+  const onDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      if (!processing && (retired || complete || !savedRef.current || progress?.canCancel === false)) {
+        event.preventDefault();
+        close();
+      }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])') ?? []);
+    if (focusable.length === 0) { event.preventDefault(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === dialogRef.current)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+  };
   function remember(value: Saved) {
     savedRef.current = value; setSaved(value);
     if (PRESET_TIPS.some(tip => tip.amount === value.value.amountCents)) { setSelectedPreset(value.value.amountCents); setCustomAmount(''); }
@@ -333,11 +356,19 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-app-surface rounded-2xl shadow-xl max-w-sm w-full">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onDialogKeyDown}
+        className="bg-app-surface rounded-2xl shadow-xl max-w-sm w-full focus:outline-none"
+      >
         {/* Header */}
         <div className="p-6 text-center border-b border-app-border-subtle">
           <div className="text-3xl mb-2">🎉</div>
-          <h2 className="text-lg font-semibold text-app-text">
+          <h2 id={titleId} className="text-lg font-semibold text-app-text">
             Leave a tip for {pendingWorkerName}?
           </h2>
           <p className="text-sm text-app-text-secondary mt-1">
@@ -367,7 +398,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
 
           {/* Custom amount */}
           <div>
-            <label className="block text-sm font-medium text-app-text-secondary mb-1">
+            <label htmlFor={customAmountId} className="block text-sm font-medium text-app-text-secondary mb-1">
               Custom amount
             </label>
             <div className="relative">
@@ -375,6 +406,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
                 $
               </span>
               <input
+                id={customAmountId}
                 type="text"
                 inputMode="decimal"
                 placeholder="0.00"
@@ -393,7 +425,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
 
           {/* Error */}
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               {error}
             </div>
           )}
