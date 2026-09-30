@@ -26,6 +26,7 @@ const stripeService = require('../stripe/stripeService');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
+const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const {
   countActiveReservationsForSlot,
   listEffectivelyOpenSlots,
@@ -226,17 +227,12 @@ async function resolveDeliveryLocation(userId, deliveryLocation) {
     place_id,
   } = deliveryLocation;
 
-  // Existing home — verify occupancy, no new Home created
+  // Existing home — only one the user belongs to (a trusted occupancy; a pending claim
+  // is not membership), since the train shows its exact address. No new Home created.
   if (mode === 'home' && bodyHomeId) {
-    const { data: occ } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id')
-      .eq('user_id', userId)
-      .eq('home_id', bodyHomeId)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (!occ) {
-      logger.warn('Support Train delivery_location home_id not in user occupancy', {
+    const homeIds = await getAccessibleHomeIds(userId);
+    if (!homeIds.includes(bodyHomeId)) {
+      logger.warn('Support Train delivery_location home_id not a home the user belongs to', {
         userId,
         bodyHomeId,
       });
@@ -672,6 +668,15 @@ router.post(
       client_request_id,
     } = req.body;
     const userId = req.user.id;
+    // A train's organizers, recipient and helpers see its Home's exact address, so a train
+    // may only name a Home its organizer belongs to.
+    const namedHomeIds = [recipient_home_id, home_id].filter(Boolean);
+    if (namedHomeIds.length > 0) {
+      const homeIds = await getAccessibleHomeIds(userId);
+      if (namedHomeIds.some((id) => !homeIds.includes(id))) {
+        return res.status(403).json({ error: 'HOME_NOT_ACCESSIBLE', message: 'You can only use a home you belong to.' });
+      }
+    }
     // One create keeps its identity through an uncertain reply: a retry with the same
     // client_request_id reaches the draft the first attempt made instead of making another.
     const createId = (kind) => (client_request_id ? createHash('sha256')
