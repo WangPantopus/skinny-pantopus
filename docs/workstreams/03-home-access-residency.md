@@ -261,6 +261,11 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
   - Only the unused `occupancyAttachService` implements them. Today every join goes through household review whatever the setting, so the control is hidden (#917, native next).
   - After launch: wire the policy into the live admission paths (residency submissions, invitations, join requests), prove each level on all three apps, then show the control again.
   - The `member_attach_policy` column and the API field are kept for this.
+- **Membership renewal (R03, decided 2026-09-30).** A former member cannot rejoin the same Home today; every path refuses with `MEMBERSHIP_RENEWAL_REQUIRED` and says so.
+  - After launch: design renewal with re-verification, reactivate the one occupancy row per (home, user) rather than adding rows, keep the removal history, and prove it on all three apps.
+- **Restore previous visibility after Lockdown (D07, decided 2026-09-30).** Lockdown leaves the Home private.
+  - After launch: store the pre-Lockdown visibility when Lockdown is enabled, and offer a one-tap "Restore previous visibility" once it's disabled. Never restore it automatically.
+- **Per-Home notification routing** (from #962): the Settings tab says it isn't live yet. Wire the saved preferences into delivery, or remove the switches.
 
 ## Runtime, devices and kit (shared with Stream 4; lease label `stream3-home:`)
 
@@ -315,6 +320,16 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T14:03Z — the five open Stream 3 decisions are settled; #999 merged (batch 188).**
+  - **Decided under the standing instruction:**
+    - R03: an ended membership stays final for launch; renewal is post-launch.
+    - D07/D06: least-privilege member defaults stay.
+    - R04: launch without disputes (the flag defaults to off; a hosted check makes sure production doesn't turn it on).
+    - D07: Lockdown leaves the Home private; restoring is post-launch and one-tap.
+  - **Already decided by the user on 09-26:** "Allowed areas" became the real "What they can see" sections (`2c8908956`).
+  - Rationale and post-launch items are in the Decisions section and under "Post-launch work".
+  - **Every Stream 3 PR is merged:** #970–#974, #982, #983, #999 and #1008.
 
 - **2026-09-30T14:01Z — #1008 merged (batch 191, master `dc388a8ac`); U02's two recorded VoiceOver gaps closed as not reproduced.**
   - **Bundle:** `20260930-stream3-home-u02-navbar-probe-r1` (`85e9b466…`), no code change.
