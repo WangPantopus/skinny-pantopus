@@ -208,7 +208,7 @@ export default function MyProfilePage() {
                     className="w-32 h-32 rounded-full object-cover border-4 border-app-border mb-4"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-app-border mb-4">
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-app-border mb-4">
                     {initial}
                   </div>
                 )}
@@ -443,7 +443,7 @@ export default function MyProfilePage() {
             </div>
 
             {/* Profile Completion */}
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 p-6">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40 rounded-xl border border-blue-200 p-6">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
                   <div className="w-16 h-16 rounded-full bg-app-surface border-4 border-blue-300 flex items-center justify-center">
