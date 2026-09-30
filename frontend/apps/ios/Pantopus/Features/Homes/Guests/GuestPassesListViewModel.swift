@@ -195,9 +195,10 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
         let ids = Set(active.rows.map(\.id))
         let current = now()
         // A scheduled row also re-projects when it starts ("Starts …" → time left).
-        return passes.filter { ids.contains($0.id) }.flatMap { pass in
-            [pass.endAt, pass.startAt].compactMap { $0.flatMap(Self.parseISO) }.filter { $0 > current }
-        }.min()
+        let deadlines = passes
+            .filter { ids.contains($0.id) }
+            .flatMap { pass in [pass.endAt, pass.startAt].compactMap { $0.flatMap(Self.parseISO) } }
+        return deadlines.filter { $0 > current }.min()
     }
 
     func refreshExpiry() {
