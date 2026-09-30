@@ -144,16 +144,22 @@ function RepsList({ reps }: { reps: PlaceCivicRepresentative[] }) {
 }
 
 // ── Election — in-season block ──────────────────────────────
+// Election day is a calendar date ("2026-11-03"): read it at noon UTC and format it in UTC,
+// so no time zone moves it to the day before.
+function electionDay(iso: string): Date {
+  return new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+}
+
 function monthDay(iso: string): { mon: string; day: string } {
-  const d = new Date(iso);
+  const d = electionDay(iso);
   if (Number.isNaN(d.getTime())) return { mon: '', day: '' };
-  return { mon: d.toLocaleDateString('en-US', { month: 'short' }), day: String(d.getDate()) };
+  return { mon: d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }), day: String(d.getUTCDate()) };
 }
 
 function ElectionBanner({ data }: { data: PlaceCivicElectionData }) {
   const { mon, day } = monthDay(data.date);
-  const dateLine = new Date(data.date);
-  const dateLabel = Number.isNaN(dateLine.getTime()) ? '' : dateLine.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const dateLine = electionDay(data.date);
+  const dateLabel = Number.isNaN(dateLine.getTime()) ? '' : dateLine.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4">
       <div className="flex items-center gap-3">
