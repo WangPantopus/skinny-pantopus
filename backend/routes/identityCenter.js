@@ -425,7 +425,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     const { data: seats } = await supabaseAdmin
       .from('SeatBinding')
-      .select('seat:seat_id(id, business_user_id, display_name, role_base, is_active)')
+      .select('seat:seat_id(id, business_user_id, display_name, role_base, is_active, business:business_user_id(name))')
       .eq('user_id', userId);
 
     // P2.6 / unified-IA §8 — extra fields the unified Profiles & Privacy
@@ -440,8 +440,13 @@ router.get('/', verifyToken, async (req, res) => {
       })
       .filter(Boolean);
 
+    // Business Profiles lists the businesses you can act for, so each row is named by its business; the
+    // seat's own name ("Owner", "Front Desk") is what teammates see on the Team tab.
     const businessesWithRole = (seats || [])
-      .map((row) => serializeBusinessSeatForViewer(row.seat))
+      .map((row) => serializeBusinessSeatForViewer(row.seat && {
+        ...row.seat,
+        display_name: row.seat.business?.name || row.seat.display_name,
+      }))
       .filter(Boolean);
 
     // Block counts — fan-out queries kept narrow (head:true + count:exact).
