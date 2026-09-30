@@ -9,6 +9,37 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #923 and #931 merged; #935 and #936 queued; native pass waiting for a device slot, 2026-09-30T10:06:01Z
+
+- **Task chat privacy:**
+  - **[#923](https://github.com/WangPantopus/skinny-pantopus/pull/923) merged** 09:40:00Z (`53f9f1a43`, batch 163), head `c1c1234da`, seal `4ddb60cd…`. When a task's worker is released or bidding reopens, its gig room is retired as an inactive `group` room named "… (closed)", kept by the owner and the previous worker, and the task's next phase gets a fresh room.
+  - **[#935](https://github.com/WangPantopus/skinny-pantopus/pull/935) open** (Stream 1's #923 note 2). A closed chat also refuses edits and reactions (REST and socket) with `ROOM_INACTIVE`; deleting one's own message stays allowed.
+    - On master all three writes succeeded; on the fix all three are refused, and the active-room control still works.
+    - Head `9a8e9d9a1`, seal `a6ad0a37…`.
+- **Account deletion (accounts):**
+  - **[#931](https://github.com/WangPantopus/skinny-pantopus/pull/931) merged** 10:00:29Z (`3bcc4658a`, batch 166), head `90d0a9f2d`, seal `a9a1d758…`.
+    - The defect, reproduced on master `c1634c693`: a helper who released a task, a helper only notified of a reopen, and that task's owner each got a 500 from `DELETE /api/users/account`. All three were signed out everywhere but kept a half-deleted account. Cause: 26 of 69 no-action FKs to `User` aren't cleared, and `GigStopRequest.gig_id` RESTRICTs the cascaded `Gig`.
+    - The fix: `account_deletion_dry_run` replays the route's clearing plus the User delete in a rolled-back transaction, so the route refuses before any change (409 `ACCOUNT_RECORDS_RETAINED`, or 503). There's also 409 `SUPPORT_TRAIN_ORGANIZER` (Stream 1's wording). Sessions are revoked only after the User row is gone. Ten newer attribution columns are nulled, and the person's own reactions and stop notices are deleted.
+    - Verified on the API (before and after) and in real Chrome (the toast shows the message).
+  - **[#936](https://github.com/WangPantopus/skinny-pantopus/pull/936) open** (Stream 2's request). 409 `TASK_STOP_IN_PROGRESS` while the person has a stop request that isn't completed. It must merge **before** Stream 2's `actor_id` SET NULL migration. Head `d5acd348e`, seal `406d588f…`.
+  - **Agreements with other streams** (each lifts its 409 with no route change, because the dry run re-evaluates live):
+    - **Stream 2:** `GigStopRequest.actor_id` becomes nullable with SET NULL; `GigStopRequest.gig_id` and `GigStopDelivery.request_id` become CASCADE. Paid tasks stay behind the payment-history 409.
+    - **Stream 4:** `HomeMapPin.created_by`, `CommunityMailItem.published_by` and `MailAssetLink.linked_by` become nullable with SET NULL, shown as "Former member".
+    - **Stream 1:** trains get an organizer handover, then SET NULL; the `SUPPORT_TRAIN_ORGANIZER` guard is dropped when that merges.
+  - **Recorded follow-up (not started):** move the whole deletion into one SECURITY DEFINER transaction, which would close the narrow dry-run/delete race (Stream 1's #931 note 1).
+- **Decisions taken without asking** (the user's standing direction):
+  - Refuse honestly rather than delete other parties' records.
+  - Use a dry run rather than a catalog scan, which missed cascaded RESTRICTs.
+  - A closed chat refuses edits too, to keep the record intact; deleting one's own message stays allowed.
+  - The retired room is named "(closed)", which reads the same for both sides (Stream 2's suggestion).
+  - Fixture emails in web screenshots are blacked out before sealing.
+- **Native pass (#908, #923, #931, #935):**
+  - The Android build of `c1c1234da` (APK `05acb1e0…`) passed ktlint, detekt and lint at 10:03:42Z. The iOS build is running under heavy, held since 09:50:41Z.
+  - The device-slot request for `pantopus_s5` (5564) is queued; all four slots are held by Streams 1, 2 and 4.
+- **Fixtures:**
+  - `GIGROOM1` (alice, bob, dana, biz, carl, erin; gig1–gig8) and `DELBLOCK1` (del1, pairA owner and helper, pairB owner) stay for the native pass, then are removed by exact ids.
+  - Proxy `chat-audit` is on for the fixture callers; the deletion allowlist was reset to off at 09:56:22Z.
+
 ## LIVE — task chat privacy: #908 and #912 merged, #923 open (released worker's chat); native pass next, 2026-09-30T09:27:02Z
 
 - **Owner:** Stream 5 owns the gig-room privacy work (chat), by the coordinator's LOCKED decision of 08:22:50Z. The finding and the entry-point fix (#899) are Stream 2's.
