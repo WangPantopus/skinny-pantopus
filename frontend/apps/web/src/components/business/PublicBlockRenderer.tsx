@@ -346,7 +346,7 @@ function PublicLocationsMap({ data, locations }: { data: Record<string, any>; lo
                 </a>
               )}
             </div>
-            {loc.location && (
+            {loc.location && !loc.is_home_based && (
               <a
                 href={`https://maps.google.com/?q=${(loc.location as Record<string, any>).latitude},${(loc.location as Record<string, any>).longitude}`}
                 target="_blank"

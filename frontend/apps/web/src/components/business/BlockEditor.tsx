@@ -401,6 +401,8 @@ function CtaListEditor({
   const update = (i: number, key: string, val: string) => {
     const next = [...ctas];
     next[i] = { ...next[i], [key]: val };
+    // Only a Link keeps an address, so a hidden, stale one can't block saving.
+    if (key === 'action' && val !== 'link') delete next[i].url;
     onChange(next);
   };
 
@@ -437,7 +439,7 @@ function CtaListEditor({
                 </select>
                 <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
               </div>
-              {c.action === 'link' && (
+              {(c.action === 'link' || (!c.action && c.url)) && (
                 <>
                   <input
                     type="url"
@@ -448,7 +450,7 @@ function CtaListEditor({
                     className="mt-1.5 w-full rounded border border-app-border px-2 py-1 text-xs"
                   />
                   {!safeHttpUrl(c.url) && (
-                    <p className="mt-1 text-[10px] text-app-text-muted">Visitors see this button once it has a web address starting with https://</p>
+                    <p className="mt-1 text-[10px] text-app-text-muted">Enter a web address starting with https://</p>
                   )}
                 </>
               )}
