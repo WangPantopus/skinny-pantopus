@@ -290,6 +290,21 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T10:53Z — #945 and #943 merged; native session half done; runtime lent to Stream 4.**
+  - **Merged:**
+    - [#945](https://github.com/WangPantopus/skinny-pantopus/pull/945) in batch 170 (master `c2f8fa5c9`);
+    - [#943](https://github.com/WangPantopus/skinny-pantopus/pull/943) in batch 171 (master `1f6743f6b`), after renumbering its migration to `20260930141000` at the coordinator's request (head `8715ffab8`, re-sealed as `20260930-stream3-home-access-secret-creator-r2`, MANIFEST `2ba32887…`). The runtime ledger row and stack file were renamed to match; nothing was re-applied.
+  - **Native session on "Pantopus S34"** (shared fixture `runtime/stream3-home-native-session-r1`; the join request needed a verified HomeOwner row, added as `join-request.json`):
+    - iOS builds `edab09b8e`, `aeb8ce319` and `f372b8810` are done and point at `127.0.0.1:18142`; `46cd0b548` is building.
+    - Join-policy hide (`edab09b8e`): Home settings shows "Ownership & Security, Discoverability and owner claims"; Ownership & Security shows only Privacy & Discoverability and Owner claims.
+    - Requests row: before (`edab09b8e`), one Button `rowVerticalAction_Invite-rowVerticalAction_Decline` (the recorded gap reproduced). After (`aeb8ce319`), three elements: the row text button, then "Invite" and "Decline". Touch: the row body is a no-op in both (`onTap` defaults to `{}`); Decline opens its confirmation, and confirming stored `rejected` (10:48:51Z).
+    - Audit log before (`edab09b8e`): "Home access secret create/delete", while the API sends "Access code added/deleted". The after capture is pending.
+    - #943 on iOS: Access codes lists the Wi-Fi whose `created_by` is NULL.
+    - Members top bar (recorded U02 gap): the driver reports the standard SwiftUI navigation bar as one childless group. Back and the toolbar action are standard bar items, so this may be a driver artifact. It needs a real VoiceOver or XCUITest check before any change.
+  - **Runtime lease** given to Stream 4 at 10:49:16Z for launch-critical account deletion (their 15 Home columns). My fixture stays; they exclude it from their scopes.
+  - **Prepared, not yet proven** (needs the lease): branch `claude/stream3-home-d07-settings-dead-switches` (`3dd16d9a7`). The standalone Home Settings page's five Notifications switches render with no height (nonexistent Tailwind sizes) and save nothing. Removed; decided under the standing instruction (DECISION in stage `runtime/stream3-home-d07-settings-dead-switches-r1`). tsc, Jest (1,893) and lint are unchanged.
+  - **U01 floating chat button at 390×844,** owner, short household: nothing is covered on the dashboard, Members & Security, `/members` or `/access`. On `/settings` the button only overlaps the empty right end of the "Danger Zone" heading row. A long member list is still to check.
+
 - **2026-09-30T10:33Z — #943 and #945 with the coordinator; D06 address-check leak reproduced and repaired (native checks pending); runtime maintenance.** Runtime lease held since 10:12:28Z.
   - **[#943](https://github.com/WangPantopus/skinny-pantopus/pull/943)** (Stream 1's launch-critical assignment; found by Stream 5): saving an access code blocked deleting your account, because `HomeAccessSecret.created_by` was NOT NULL with a plain foreign key.
     - Fix: migration `20260930131000`, nullable with ON DELETE SET NULL. No reader change: the SQL checks fail closed or use IS DISTINCT FROM, and no client shows the creator.
