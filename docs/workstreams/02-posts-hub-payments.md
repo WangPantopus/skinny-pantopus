@@ -44,7 +44,7 @@ The session "Stream 2: Posts, Hub and payments" handed over at the user's reques
 2. **When #1096 merges:**
    1. In `checklists/data_s2.py`, change U03 "Edit a post" → Web to `done`, with evidence `#1096 merged (batch N), seal 406c0939`.
    2. Run `python3 checklists/gen.py check`.
-   3. Render with `gen.py md 2 "$(date -u +%Y-%m-%dT%H:%MZ)" https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu` and paste it over this file's checklist section.
+   3. Render with `gen.py md 2 "$(date -u +%Y-%m-%dT%H:%MZ)" https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu` and paste it over this file's checklist section. **The review page moved on 2026-09-30T23:14Z** (Stream 1 republished it): use https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2 from now on.
    4. Commit by explicit paths and push `codex/workstream-coordination`.
    5. Ask Stream 1, the holder of the review page, to republish it.
    6. Mark the inventory row "Web · post edit" FIXED.
@@ -178,6 +178,8 @@ The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.m
 - **Latest (2026-09-30T23:13Z): the successor session is active** (started 23:12Z by `date -u`).
   - **[#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096) merged** in batch 220 ([#1098](https://github.com/WangPantopus/skinny-pantopus/pull/1098), 2026-09-30T21:37:21Z) at head `c26c706e4`. Master is now `a211e1f48` (batch 223).
   - **Checklist:** U03 "Edit a post → Web" is done (#1096, seal 406c0939). U02 81 done / 2 boundary; U03 55 done / 0 to do / 2 not offered; U04 16 done. The inventory rows for web post edit and the composer date labels are marked fixed.
+  - **Review page:** Stream 1 republished it at a new URL, https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2 (23:14Z; the old one can't be updated from its account). The checklist section above is re-rendered with it.
+  - **Runtime:** backend 18160 (PID 64016) and Next 18169 (PID 64140) now serve this session's worktree `stream2-posts-hub-payments-29bc9a` (master `a211e1f48`; its node_modules brought to the current lockfile with `pnpm install --prefer-offline --frozen-lockfile`). The proxy 18168 and the stack are unchanged.
   - **No open Stream 2 PRs.** Next: the handoff backlog in order, starting with (1) the web deal expiry copy (reproduce first).
 - **Earlier (2026-09-30T21:31Z): handed over** at the user's request; start from "CURRENT RESUME — HANDOFF" above.
   - **Merged in batch 218** (#1094, master `d0a39aa4e`): [#1075](https://github.com/WangPantopus/skinny-pantopus/pull/1075), [#1085](https://github.com/WangPantopus/skinny-pantopus/pull/1085), [#1086](https://github.com/WangPantopus/skinny-pantopus/pull/1086), [#1088](https://github.com/WangPantopus/skinny-pantopus/pull/1088) and [#1091](https://github.com/WangPantopus/skinny-pantopus/pull/1091). Master is now `11e2b72f6` (batch 219).
@@ -623,9 +625,9 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T23:13Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T23:15Z
 
-**Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
+**Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
 Legend: ✅ done (sealed evidence) · ❓ confirm from existing evidence before any rerun · ⬜ to do · 🔷 user decision · ⛔ named boundary · – not offered on that client.
 A row closes when every client cell is ✅, –, ⛔ with its named boundary, or 🔷 decided. Anything found broken gets the smallest fix with real-app before/after evidence and exact cleanup; visual changes go to the user first.
