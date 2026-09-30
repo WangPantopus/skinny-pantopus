@@ -60,7 +60,7 @@
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
    - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (merged, batch 147, master `b16eca646`): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
-   - **Reproduced 2026-09-30:** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). **Coordinator decision (a):** honor it for tasks and documents (explicit visibility wins; the creator keeps sight; bills untouched). In progress on `claude/stream3-home-d06-default-visibility`. Native gap: iOS/Android document uploads send an explicit visibility (the picker defaults to all members), so they don't follow the default until the pickers start from it.
+   - **Reproduced 2026-09-30:** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). **Coordinator decision (a):** honor it for tasks and documents (explicit visibility wins; the creator keeps sight; bills untouched). **Repaired in [#898](https://github.com/WangPantopus/skinny-pantopus/pull/898), with the coordinator** (head `38c4d48c5`, bundle `20260930-stream3-home-d06-default-visibility-fix-r1`, MANIFEST `c998dcda…`): tasks through the thin wrapper migration `20260930080000`, documents in the upload route; only Managers and Sensitive defaults apply (narrow only). After it merges, apply `20260930080000` to the shared runtime with `supabase migration up`. Native gap: iOS/Android document uploads send an explicit visibility (the picker defaults to all members), so they don't follow the default until the pickers start from it (needs native toolchains). Lead: the access-code editor could start from the Home default the same way (access codes were left out of #898).
    - **Reproduced 2026-09-30:** the "Member join policy" has no effect. With "Verified only", a residency claim routes exactly as under "Open invite" (`household_review`, pending). Bundle `20260930-stream3-home-d06-join-policy-r1` (`5d920d44…`). **Waiting on the user** (a design change): the coordinator's and my recommendation is to hide it on web now and record native as a gap. Don't implement the hide before approval.
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
@@ -85,6 +85,7 @@
    Sources: `docs/REMAINING_WORK_2026-09-11.md` §10 and `docs/home-dashboard-current-summary-2026-09-11.md`. Keep the designs; propose any layout change.
 9. **U02–U05, this stream's cells.** Start with the two recorded VoiceOver gaps: the iOS residency review sheet's Close/Reload and the Members top bar are each one merged accessibility group. Then do native large text, screen readers and dark mode, and the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
 10. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
+11. **Cross-cutting lead (sent to the coordinator 2026-09-30; their call):** `globalWriteLimiter` is mounted at `app.use('/api')` before any auth (`backend/app.js:320`), so `req.user` is never set there. It always keys by IP at the 30/min anonymous limit, and every signed-in member of a household behind one IP shares 30 writes a minute.
 
 **Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
 - **New 2026-09-30 (via the coordinator):** the member join policy has no effect. Hide it (recommended), relabel it, or define and wire each policy? Evidence: `20260930-stream3-home-d06-join-policy-r1`.
@@ -213,6 +214,29 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T08:17Z — D06 default visibility: [#898](https://github.com/WangPantopus/skinny-pantopus/pull/898) is with the coordinator.** Head `38c4d48c5e744cce43aa7821a89f5fd7fbe09e33`, base master `66d57bcfe`. Bundle `20260930-stream3-home-d06-default-visibility-fix-r1`, 35 files, MANIFEST `c998dcda3309ab1cab87ba5df4d0d28a676ea2c5ade6c4c99dc804ceca823e50`.
+  - **Rule (the coordinator's option (a)):** a new task or document that names no visibility takes a Managers or Sensitive Home default in full when its creator can see that level. Otherwise it gets the most restrictive level the creator (and a task's assignee and viewers) can see. An explicit visibility wins; any other default keeps `members`, so it only narrows.
+  - **Fix:**
+    - tasks: migration `20260930080000`, a rename plus thin wrapper like `20260910180000`, reading the default under the existing Home lock;
+    - documents: the upload route.
+  - **Before, on master (lease 08:00:35Z):** every case stored `members`, and member B saw it.
+  - **After, with the migration test-applied:**
+    - owner → managers/sensitive (hidden from B);
+    - member creator → members;
+    - manager creator → managers;
+    - Sensitive default with a manager creator → managers;
+    - the receipt path and mail-to-task store managers, and their retries replay the same task;
+    - updates don't move visibility.
+  - **Real web:** the Add Task form sends no visibility, the task is stored managers, and B's Tasks page doesn't list it.
+  - **Function safety:** the wrapper keeps SECURITY DEFINER, the pinned config and service-role-only EXECUTE; the renamed original is owner-only; check-migrations passes against master.
+  - **Not run:** iOS and Android (no toolchains).
+  - **Cleanup:**
+    - the test migration was reverted, byte-identical;
+    - the documents were deleted through the real route, and storage is back to 0;
+    - exact SQL cleanup (105 rows), 351/353 tables equal the baseline.
+    - Lease released at 08:15:28Z; the runtime is on master `66d57bcfe` (PID 82416).
+  - **Cross-cutting lead, sent to the coordinator:** the global write limiter runs before auth, so it always keys by IP at 30 writes/min. A household behind one IP shares that limit (`backend/app.js:320`).
 
 - **2026-09-30T07:45Z — #888 merged; D06 default-visibility gap reproduced and sent to the coordinator.**
   - **#888:** merged in batch 152 ([#891](https://github.com/WangPantopus/skinny-pantopus/pull/891), tip `c26803349`, 07:42:55Z; master `919305835`). Stream 1 diff-proved the table moved byte-identical.
