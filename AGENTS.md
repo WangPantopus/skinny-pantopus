@@ -64,4 +64,8 @@ Workstreams were renumbered on 2026-09-30 (user direction): the former Streams 1
 and 2 are each being split in two (Streams 1–4), and the former Stream 3
 (Accounts and Social) is now Stream 5, with its status in
 `docs/workstreams/05-accounts-social.md`. In records dated before 2026-09-30,
-"Stream 3" means today's Stream 5.
+"Stream 3" means today's Stream 5. The former Stream 2 (Home and household) is split
+into Stream 3 — Home access, residency and security
+(`docs/workstreams/03-home-access-residency.md`) and Stream 4 — Place, records, money
+and mail (`docs/workstreams/04-place-records-money-mail.md`); its history is in
+`docs/workstreams/former-stream2-home-household.md`.

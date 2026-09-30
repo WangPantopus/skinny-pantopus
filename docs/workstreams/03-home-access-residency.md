@@ -1,0 +1,170 @@
+# Stream 3 — Home access, residency and security (split from the former Stream 2 on 2026-09-30)
+
+> **Split (user direction, 2026-09-30).** The former **Stream 2** (Home and household) is split into **Stream 3 — Home access, residency and security** ([`03-home-access-residency.md`](03-home-access-residency.md)) and **Stream 4 — Place, records, money and mail** ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)).
+> - Together their checklists are exactly the former Stream 2's, and nothing is shared or dropped:
+>   - the 40-row inventory, 20 rows each;
+>   - the 24 S2-xx UX items;
+>   - the open work and leads;
+>   - the 10 decisions waiting on the user.
+> - The former Stream 2 file is now frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split). In it, "Stream 2" / "S2" means the stream before the split.
+> - The former **Stream 3** (Accounts and Social) is now **Stream 5** ([`05-accounts-social.md`](05-accounts-social.md)). In records dated before 2026-09-30, "Stream 3" / "S3" means Stream 5, not the new Stream 3.
+> - Names that contain `stream2` or `S2-` keep them so nothing breaks: the runtime kit, stage folders, audit bundles, existing branches and UX IDs.
+> - **This stream from now on:**
+>   - branches `claude/stream3-home-<topic>`;
+>   - audit bundles `YYYYMMDD-stream3-home-<topic>-rN`;
+>   - device and heavy lease label `stream3-home:`, which is also its runtime-lease label;
+>   - session name "Stream 3: Home access and residency";
+>   - resume prompt [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md).
+
+## CURRENT RESUME — Stream 3 (start here; written 2026-09-30T04:16:32Z)
+
+**Scope.** Who can reach a home and what they can do there:
+- joining and onboarding (H01–H08);
+- residency claims and reviews, leaving and rejoining, ownership claims and transfer, landlord and lease approvals, and residency letters and passes (R01–R06);
+- Home settings (D05), privacy (D06), and members, permissions, security and Lockdown (D07);
+- the guest-pass lifecycle and sharing (D08, M02);
+- deleting a home (D10).
+
+**State at the split.**
+- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. The most recent in this area:
+  - #825: Lockdown reports a failed guest-pass revoke and can finish it;
+  - #827: pass managers are told guest passes are off during Lockdown;
+  - #828: the Lockdown panel states that the home becomes private and stays private;
+  - #835: members opening a page they can't see get a permission sentence.
+
+  Evidence and seals are in the history file.
+- **Strict progress for this stream:** 8 of 20 rows closed (H01–H06, R01–R02), 12 partial, 0 cut.
+- Nothing of Stream 3's is open in the database.
+
+**Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
+1. **R06, the iOS restart check.** This is the last local R06 item.
+   - **Already sealed** (no code change):
+     - accounts, via the real API, `20260930-stream2-r06-request-identity-r1` (MANIFEST `8365b5ca…`): the same `clientRequestId` gives the owner the same pass and another account a different one;
+     - the Android restart, same bundle: a lost reply shows the committed pass once, with no resend;
+     - the Android Identity ANR, `20260930-stream2-r06-identity-anr-repro-r1` (`f6f5b638…`): not reproduced in 3 bounded runs, so it's a watch item.
+   - **iOS:** use `tools/android-r06-restart-identity.py` as the model, on sim 6F914A30 with the shared iOS driver. First confirm the installed dylib still matches master for `PlaceResidencyPassSection.swift`.
+   - **Then** send R06 to the coordinator with device clock, full-day expiry and the hosted issuer lifecycle named as boundaries.
+2. **D07, members and security.**
+   - Racing Lockdown commands (enable and disable in flight together).
+   - Audit-write failure: `writeAuditLog` is non-fatal while the panel promises "Records Lockdown changes".
+   - Leads to reproduce first:
+     - scoped share links (`/scoped-grants`) get the same Lockdown denial #827 fixed for guest passes; no UI reproduced yet;
+     - the Invitations page still shows members the sender form when opened by URL (#820 gated only its link);
+     - the standalone Home Settings page (`/app/homes/:id/settings`, URL-only) links everyone to Members & Roles and Access & Codes.
+   - Accepted limit: the Lockdown retry control is gone after a page reload.
+3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
+4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
+5. **R03, leaving and rejoining:** the remaining re-entry and occupancy lifecycle, and the old reviewer-original release. Membership renewal is paused (decision 1 below).
+6. **H07, H08, M02 and D08, local parts:** remaining onboarding combinations, the exact copied link and public rendering, passcodes and scheduled start. Their hosted parts stay named.
+7. **D10 and R04, R05:**
+   - D10: linked-resource cleanup (Crew payments belong to Stream 1);
+   - R04: the remaining transfer, device-auth and recovery boundaries (the dispute flow waits on decision 3);
+   - R05: attachment lifetimes.
+8. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
+
+**Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
+1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
+2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
+3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
+4. Guest pass "Allowed areas" on the native Add guest form (M02, D08).
+5. Should Lockdown give the home its previous visibility back when it ends (D07)? #828 states the current behavior; restoring needs the old value stored.
+
+Shared with Stream 4:
+1. Brand colors that fail contrast (all streams): Stream 1 carries one design-token recommendation.
+2. When to verify hosted and provider behavior (both streams): a staging pass before launch, or a launch-day checklist.
+
+**Hosted and provider boundaries.** These rows can't close locally; name them and never turn them into passes:
+- H07, H08: email and link delivery, hosted storage.
+- R05: attachments and providers.
+- R06: the hosted issuer lifecycle, device clock and full-day expiry.
+- D08: hosted expiry and downloads, device clock.
+- M02: the hosted guest flow.
+- D10: files, balances and live obligations.
+
+## Checklist — the inventory rows owned by Stream 3 (20 of the former Stream 2's 40)
+
+State at the split, copied verbatim from the former file's "September 22 exact … 40-row inventory". From now on, update each row only here.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| H01 | **Closed — verified/preserve.** Existing detail/property authority and held-result retirement receipts are reused. | None within the recorded H01 scope; release-wide gates remain separate. |
+| H02 | **Closed — verified/preserve.** Existing list authority, safe errors and held-result retirement receipts are reused. | None within the recorded H02 scope. |
+| H03 | **Closed — verified/preserve.** Existing explicit projections and retryable detail/list/occupant reads are accepted. | None within the recorded H03 scope. |
+| H04 | **Closed — verified/preserve.** Existing per-field grants, household references and current roster are accepted. | Managed history and peer ownership remain separately gated outside H04. |
+| H05 | **Closed — verified/preserve.** Existing native identity, ownership, residency and current-access receipts are accepted. | Broader onboarding/first-use boundaries remain H07/H08/U01/U02. |
+| H06 | **Closed — verified/preserve.** Existing guarded deletion eligibility and occupancy/null behavior are accepted. | Broader member onboarding remains H08. |
+| H07 | **Partial/open.** Admission, invitation, task and recovery reused. New-account combined web/Android/iOS return now verified113-file830c6dbc with real auth/decision/SQL, controlled delivery and exact cleanup; no application change. | External delivery/hosted links, process/storage/lifecycle exit criteria and remaining onboarding combinations. |
+| H08 | **Partial/open.** Owner/applicant/private-setup lists and recipient decisions reused; three-client new-account invitation→verification→Login→original review→current Home now evidenced113-file830c6dbc. | Provider/hosted delivery and broader onboarding/verification exit criteria beyond this controlled combined transition. |
+| R01 | **Closed — verified/preserve.** Prepared residency review, protected originals/receipts, decisions, restart and access retirement are accepted. | Release-wide gates remain separate. |
+| R02 | **Closed — verified/preserve.** Atomic submission, lock races, selected-address fencing, populated preservation and legacy compatibility are accepted. | Historical-binary UI, hosted adoption and broader applicant/reviewer lifecycle remain outside R02. |
+| R03 | **Partial/open.** Existing protected removal/recovery preserved. Web waiting-room403/read503/protected Leave accepted37/3289 and merged#722. Native pending403/read503/Retry/protectedReviewClose and mounted truthful reopen accepted150/73becde6, final49b1/#724 for coordinator integration; exactfixturecleaned. | Remaining re-entry/occupancy lifecycle and old reviewer-original release; renewal paused. Other native verification/ownership-claim states, challenge/postcard countdowns and broad account/provider boundaries remain unverified. Reuse pending/reopen evidence; the misleading pull hint is repaired. AndroidreviewPNG0 and iOSownercontrolmenuoverlay are qualified in the seal. |
+| R04 | **Partial/open.** Existing ordinary claim/review and relationship milestones are reused. 2026-09-26: transfer to an email with no account no longer leaves the Home ownerless ([#473](https://github.com/WangPantopus/skinny-pantopus/pull/473), bundle `20260926-stream2-ownership-transfer-fix-r1`). | Remaining transfer/device-auth/recovery boundaries. Current dispute route is a dashboard redirect/inactive backend product state; claim challenge defaults behind HOUSEHOLD_CLAIM_CHALLENGE_FLOW, deployed setting unaudited. No new voting/dispute screen or flag activation authorized. |
+| R05 | **Partial/open.** Existing lease approval/end/move-out/request repairs and native receipts are reused; PR176 only repairs the Home Settings caller. | Remaining attachment account/lifetime and real-provider/rollout boundaries. Current native apps explicitly have no landlord-request screen; web request attachment entry is distinct from the existing residency-evidence alternative. Do not build new controls/readers from the stale inventory wording alone. |
+| R06 | **Partial/open.** 2026-09-26: native Identity entry, letter PDFs on both apps, and guest/service-provider wording and issue gating on all three platforms ([#493](https://github.com/WangPantopus/skinny-pantopus/pull/493), bundle `20260926-stream2-r06-native-letters-r1`). User-approved 2026-09-26 and done: Proposal A, a guest or service-provider role ends residency in `verifyByCode` and `isStillVerifiedResident` ([#538](https://github.com/WangPantopus/skinny-pantopus/pull/538), bundle `20260926-stream2-residency-guest-role-r1`, batch 32). | Proposal A public-verifier behavior is already accepted in #538; do not repeat it. Native pass issue/view/revoke and recorded recovery now accepted eb4445a2 (105files), exact fixture cleanup. Same-mounted-composer duplicate/uncertain issue now accepted61-file24284dc0, all3platforms, exact0b41/#729 for integration and5claimcleanup. Personal pass-list read503/recovery now accepted50-filef98146c4, actual all3 clients plus web true-empty; #732 exact977a94f mergedbatch88, no fixture/write and349non-auth hashes unchanged. Mounted controlled expiry now accepted84-fileca30aed5 across all3issuer clients/public verifier, exact21df/#735 mergedbatch89; oneclaim+14access cleaned/full349non-auth restore. Remaining: full-day/device-clock/account/restart request identity and broader issuer/hosted lifecycle; Android Identity navigation ANR unresolved. Distinct from guest passes.  Current bounded navigation non-reproduction63-file7a1641e4 reaches pass without ANR/five hashes equal; original ANR cause remains unresolved. |
+| D05 | **Partial/open.** #745 actualwebnull-nameRetry repaired5648d2bfd/45-file2758598a: blankcurrentinput/no-op0PATCH/name/clear/reload, exactownedHomecleanup/all349guardedhashes restored; no broaderaccount/concurrency/nativeclear claim.  #693 native rename pending-input gate verified with held200/503, retry/cold rereads and101-table cleanup in110-file6ea2e5ef, qualified AX capture limits.  #690 web in-flight inputs now gated; actual delayed200/503, draft retention, retry/next edit and101-table cleanup verified in43-file1106ecb4.  Settings read/save, permission, atomic and response-lifetime evidence is recorded. 2026-09-27: web Home editor coordinates repaired and real browser/API/SQL verified in [#626](https://github.com/WangPantopus/skinny-pantopus/pull/626), bundle `20260927-stream2-home-edit-coordinates-r1` (`66ab3a82…`); provider response EMULATED, external geocoding unverified. 2026-09-27 separate caller repair `57346effc` preserves unrelated two-tab edits; real browser/API/SQL edges sealed in `20260927-stream2-settings-retained-edits-r1` (`bfd106e6…`). | General settings recovery, concurrent edits, retained intent, privacy and explicit clearing across clients. |
+| D06 | **Partial/open.** #638 actual native privacy→Home-tools-return projection, read503/retry/restart verified; final bundle af14517d, fixture retained. Home privacy read-failure repair and actual consumer recovery are recorded. | Every exposed privacy control and all native/other consumers.  #749 pending-save afters/Place/cold/cleanup accepted within scoped173-file seal; merged batch95/#750; no whole-row closure. |
+| D07 | **Partial/open.** #758 ShareCentercollection error/retry34-file5154af44/all353unchanged, merged batch99/#760. #757 matchingLockdownreceipt guard58-file9b508c29/all353restored, merged batch99/#760; concurrency/serverpartialfailureunverified. #755 standalone saved access reveal + emergency-only Overview,47-filed8966910 seal/all353 restored; merged batch98/#756. #753 access-only dashboard and existing Lockdown member/invite copy,73-file986c3f0f seal/exactcleanup, merged batch97/#754. #751 one-row audit copy corrected after actual Lockdown issue-create/full-audit mismatch;50-file4a737de4 seal/cleanup, merged batch96/#752. #647 current Lockdown read/manage recovery and per-card failures verified (e570e414), merged; #649 corrects forced-signin copy; member/invite/audit/session effect wording now reconciled via649/751/753; concurrent/failing commands remain. #644 supplementary-summary failure/retry/real403/navigation evidence7eb50c75; healthy0 states only, Lockdown effects open. #641 repairs two real vendor false-empty readers, bounded UI/API/SQL evidence9a2d5cf9 and exact vendor cleanup. Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. 2026-09-26: web explicit role choice ([#474](https://github.com/WangPantopus/skinny-pantopus/pull/474), bundle `20260926-stream2-web-role-choice-r1`). Members "Invite" opens the real Invite Member panel instead of a stub that faked success ([#528](https://github.com/WangPantopus/skinny-pantopus/pull/528), bundle `20260926-stream2-members-invite-r1`). | Existing web provider/security read errors are accepted (#641/#644/#647), not repeat work. Remaining: Lockdown concurrent/failing commands and audit-write failure, ShareCenter lifetime boundaries and other consumers outside those accepted cases. |
+| D08 | **Partial/open.** #761 mountedexpiry145-filedca63a57: actualwebowner/public+installediOS/Android Active→Past/terminalexpiry, native503/errorlifetime/Retry/cold,20ownedcleaned/all347nonAuthrestored. Short supportedAPIexpiries, helperqualifications explicit; reviewed/mergedbatch101/#764. Earlier browserM02 share lifecycle and nativeissue/revoke/sections evidence retained. | Hosted expiry/storage/downloads, passcodes/scheduled-start, account/permission and device-clock/background boundaries remain. |
+| D10 | **Partial/open.** Three-app owned-fixture deletion/cascade/failure/permission/restart verified43a95cbb; Home58 plus2nativefixtures all0, retained delete-interval hashes equal. Web landing repaired byS1#652 and S2addendum43e1e269 passes. Current14-file5274506a binding preserves188acceptedfiles; complete document/claim/legacyretirement is an explicit contract boundary, task-media storage-layer proof alreadyaccepted, liveCrewpayment dependency confirmed open byS1. Files/liveobligations/account breadth open. Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
+| M02 | **Partial/open.** #761 mountedowner/public/nativeexpiry plus nativeerror/Retry/cold accepted locally in145-filedca63a57, exactcleanup/source/buildbindings; reviewed/mergedbatch101/#764. Shortdeadline limits explicit; no delivery/clipboard claim. Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. 2026-09-26: the guest-pass entry shows only to viewers with `members.manage` on all three platforms ([#519](https://github.com/WangPantopus/skinny-pantopus/pull/519), bundle `20260926-stream2-guest-pass-entry-r1`). A guest pass shared from iOS/Android links to the web app's guest page on the build's web origin, not the download link `pantopus.app` ([#521](https://github.com/WangPantopus/skinny-pantopus/pull/521), bundle `20260926-stream2-guest-pass-link-r1`). Both merged in batch 28. The native Add guest form names the real Home and tells the truth about delivery and the note ([#535](https://github.com/WangPantopus/skinny-pantopus/pull/535), bundle `20260926-stream2-add-guest-truth-r1`); its Allowed areas chips remain a privacy decision with the user. User-approved 2026-09-26 and done: the native Add guest "What they can see" sections are sent as `included_sections` ([#539](https://github.com/WangPantopus/skinny-pantopus/pull/539), bundle `20260926-stream2-add-guest-sections-r1`). Verified on both apps through DB, guest API and the web guest page. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+
+## Former S2-xx UX items owned by Stream 3 (6 of 24; all resolved, owned for any regression)
+
+| ID | Item (UX inventory 2026-09-23) | Disposition |
+|---|---|---|
+| S2-01 | "Invite your landlord" opens a 404 | fixed by #380 |
+| S2-05 | Visit setup "Link an access code ›" does nothing | fixed by #381 |
+| S2-06 | Landlord "tenant_request" notifications open nothing | fixed by #453 |
+| S2-10 | "A residency request is ready for review" opens the Home dashboard, not the review | fixed by #453 |
+| S2-17 | Home notification links land one level up or on the wrong tab | fixed by #453 |
+| S2-23 | Waiting room "Request help" only flashes an email address | fixed by #380 (already on master at the 2026-09-26 check) |
+
+## Runtime, devices and kit (shared with Stream 4; lease label `stream3-home:`)
+
+- **Kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/` ([README](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md)). Tools are in `tools/`, stages in `runtime/`. The audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Names containing `stream2` keep them.
+- **Isolated runtime** (never production; restart recipe in the kit README and the history file's 2026-09-27 CURRENT RESUME §3):
+  - DB 64554 (`supabase_db_pantopus-stream2-native-resume-r2`, Kong 64553);
+  - fault proxy 18142 (rules via `POST /__s2fault/set|clear`);
+  - backend 18143 (log restarts in `runtime/backend-restarts.log`);
+  - web 18144, which hot-reloads the checked-out branch of `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`.
+- **Exclusive runtime lease** (new 2026-09-30; the two streams share one runtime):
+  - Take it with `zsh tools/runtime-lease.sh acquire '<label>: <purpose>'` before creating or cleaning fixtures, setting fault rules, restarting the backend, switching that worktree's branch, taking a whole-DB baseline or driving the devices below.
+  - Release it with `zsh tools/runtime-lease.sh release '<label>'`, and check the holder with `status`.
+  - A baseline is valid only inside the lease it was taken in.
+- **Devices,** only while holding the runtime lease:
+  - emulator-5556 (AVD `Pantopus_Home_Recurrence_Acceptance`) and iOS sim 6F914A30, both through `/private/tmp/pantopus-tools/device-slot.sh`;
+  - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
+  - the shared iOS driver by announcing the take and the release to the other streams.
+  - On 2026-09-30 the per-cell build copies and the iOS DerivedData were deleted to free disk, so the next native builds are full rebuilds.
+- **Retained fixtures** (keep them; don't delete):
+  - Home105 "S2 First Load Home 2";
+  - Home70 "Stream2 Resume Home" (owner + member B as a verified member);
+  - cohort Home 9d885f71 with 9 neighbor homes (the F01 benchmark);
+  - SQL Homes abe5a8c9 and d4eaed7e.
+  - The accounts are in `runtime/accounts.env`: never print it; type values with the kit's secret tools only.
+- **State at the split:** Docker Desktop has been down since ~03:30Z on 2026-09-30 (disk full), so the runtime is unreachable until the user restarts it. No runtime lease, device slot, heavy slot or iOS driver is held.
+
+## Rules carried over from the former Stream 2
+
+- Read `AGENTS.md`, `docs/PROJECT_HANDOFF.md` and the hub [README](README.md) (the renumbering notice and the 2026-09-27 LAUNCH SCOPE block at the top).
+- **Launch scope (2026-09-27):** never verify, test or fix the eight cut features. If a finding lands in a cut area, note it as cut and move on.
+- **Verify before changing:** reproduce first, then make the smallest repair in the existing implementation. No new screens, schemas, migrations, services or replacement architectures, and no duplicate trackers. Preserve designs; propose any unavoidable design change.
+- **Evidence protocol:**
+  1. Write `DECISION.md` first, with its time from `date -u` (from the lease log).
+  2. Take a whole-DB baseline with `tools/fp.py snap`.
+  3. Capture befores and afters in the real apps.
+  4. Run the exact cleanup: preimage digests, and every non-auth table equal to the baseline before COMMIT.
+  5. Seal with `tools/seal-bundle.py`.
+  6. Open a PR whose body ends with the Claude Code line.
+  7. Hand the head and seal to the coordinator, then add an entry at the top of this file's live block.
+- **Merge policy:** required CI is off. A PR merges once it's verified end to end in the real apps with sealed evidence and reviewed. The Stream 1 queue owner (the coordinator) batches and merges; send it head + seal.
+- **Never:** the physical iPhone; the founder's environment (docker stack `pantopus-home-gig-replay` on 64521/64522, backend :8000, simulator EB5AD759); production providers; real user or payment data; credentials, tokens, raw logs or DB archives in Git or chat (never print `runtime/accounts.env`); destructive git (reset, stash, clean, gc, worktree removal).
+- **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
+
+## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T04:16:32Z — Stream 3 created by splitting the former Stream 2** (user direction).
+  - Rows: H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02.
+  - UX items: S2-01, S2-05, S2-06, S2-10, S2-17, S2-23.
+  - Decisions: 5 own + 2 shared.
+  - History up to the split: the "Live continuation — 2026-09-27, Codex Stream 2" block in [`former-stream2-home-household.md`](former-stream2-home-household.md), whose last entries are from 2026-09-30T03:40Z. Docker is down; nothing is held.

@@ -1,3 +1,10 @@
+# FORMER STREAM 2 — Home and household (history; split on 2026-09-30 into Streams 3 and 4)
+
+> **Split (user direction, 2026-09-30).** This file moved from `02-home-household.md`, which frees `02-` for Stream 1's split. This copy on master is an **older snapshot**; the complete history up to the split is `docs/workstreams/former-stream2-home-household.md` on the `codex/workstream-coordination` branch. Live status and checklists:
+> - **Stream 3 — Home access, residency and security:** [`03-home-access-residency.md`](03-home-access-residency.md) (rows H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02).
+> - **Stream 4 — Place, records, money and mail:** [`04-place-records-money-mail.md`](04-place-records-money-mail.md) (rows I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04).
+> - "Stream 2" / "S2" below means the stream before the split; "Stream 3" / "S3" in entries dated before 2026-09-30 means today's Stream 5.
+
 # CURRENT RESUME SUMMARY — Stream 2 Home and household (September 22, 2026)
 
 This section is the takeover point for another agent. It consolidates existing receipts and the coordinator's current integration state; the detailed historical sections below remain authoritative for individual journeys. Do not repeat accepted journeys, create a second tracker, or infer whole-row closure from a bounded repair.
