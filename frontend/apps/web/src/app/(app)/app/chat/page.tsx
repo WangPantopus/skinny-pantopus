@@ -287,9 +287,11 @@ export default function ChatListPage() {
     overscan: 8,
   });
 
+  // The initials are white, so each fill is the 700 step: white reads 5.0:1 or more on all eight (the 500
+  // steps read 2.2 to 4.5:1).
   const colors = [
-    'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500',
-    'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
+    'bg-blue-700', 'bg-emerald-700', 'bg-violet-700', 'bg-amber-700',
+    'bg-rose-700', 'bg-cyan-700', 'bg-indigo-700', 'bg-teal-700',
   ];
   const getColor = (name: string) => {
     const idx = name.split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0) % colors.length;
@@ -363,7 +365,7 @@ export default function ChatListPage() {
             {/* Pinned AI Assistant entry (outside the virtualized list) */}
             <button
               onClick={() => router.push('/app/chat/ai-assistant')}
-              className="w-full text-left px-4 py-3 hover:bg-violet-50/60 transition-colors bg-gradient-to-r from-violet-50/40 to-transparent border-b border-app"
+              className="w-full text-left px-4 py-3 hover:bg-violet-50/60 transition-colors bg-gradient-to-r from-violet-50/40 dark:from-violet-950/40 to-transparent border-b border-app"
             >
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -371,10 +373,10 @@ export default function ChatListPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-gray-900">Pantopus Assistant</span>
+                    <span className="font-semibold text-sm text-app">Pantopus Assistant</span>
                     <span className="px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">AI</span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">Draft gigs, listings, posts &amp; more with AI</p>
+                  <p className="text-xs text-app-text-secondary truncate mt-0.5">Draft gigs, listings, posts &amp; more with AI</p>
                 </div>
               </div>
             </button>
