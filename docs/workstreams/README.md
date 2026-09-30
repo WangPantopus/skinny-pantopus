@@ -2,6 +2,8 @@
 
 > **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub is `docs/workstreams/README.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
 
+> **2026-09-30 — the former Stream 2 (Home and household) is split into Streams 3 and 4.** Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](03-home-access-residency.md)) owns rows H01–H08, R01–R06, D05–D08, D10 and M02. Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)) owns rows I01–I07, D01–D04, D09, F01–F05, M01, M03 and M04. That's 20 each; together they are the former 40. The former file is history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`). The live copies are on the `codex/workstream-coordination` branch.
+
 
 > **▶ START HERE (handoff, Sep 23 20:50 UTC):** [`HANDOFF-2026-09-23-FINAL.md`](HANDOFF-2026-09-23-FINAL.md) — complete handoff of coordinator session `92cc4526`: what was done (187 PRs merged today; don't redo), exact paused state, prioritized remaining work, founder queue, runbooks. Paused-state detail: [`coordinator-state-2026-09-23/COORDINATOR-RESUME.md`](coordinator-state-2026-09-23/COORDINATOR-RESUME.md).
 
@@ -1178,7 +1180,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -3938,16 +3940,21 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | [Remaining work](../REMAINING_WORK_2026-09-11.md) | Authoritative requirements and acceptance rows | Coordinator, using stream evidence |
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
 | [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
-| [2. Home/household](02-home-household.md) | Current Home milestone and handoff | Stream 2 |
+| [3. Home access, residency and security](03-home-access-residency.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 3 |
+| [4. Place, records, money and mail](04-place-records-money-mail.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 4 |
+| [Former Stream 2 history](former-stream2-home-household.md) | Frozen history of the former Stream 2 (Home and household) up to the 2026-09-30 split | none |
 | [5. Accounts/social (formerly 3)](05-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
 | [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
 
-The coordinator is also Stream 1; there is no fourth implementation stream.
+The coordinator is also Stream 1. Streams 3 and 4 (split from the former Stream 2 on 2026-09-30) and Stream 5
+(formerly Stream 3) are implementation streams too.
 Each stream owns the affected backend, database contract and clients for its
 milestone. Platform boundaries do not split ownership of one user journey.
 
-Backlog ownership: Stream 1 handles P (gigs/payments); Stream 2 handles H/R/I/D/F/M
-(Home, residency, intelligence, records, bills, mail/guests); Stream 3 handles N/A
+Backlog ownership: Stream 1 handles P (gigs/payments). The former Stream 2's H/R/I/D/F/M rows are split:
+Stream 3 handles H, R, D05–D08, D10 and M02 (access, residency, settings, privacy, members/security, guest
+passes, home deletion); Stream 4 handles I, D01–D04, D09, F and M01/M03/M04 (Place intelligence, records,
+maintenance, readers, money signals, mail). Stream 5 (formerly Stream 3) handles N/A
 (social, notifications, accounts/providers). A03 shared storage changes require
 explicit ownership, and A05 routes each feature-specific finding to its domain
 owner. U (UI/accessibility/lifetime) checks accompany each affected journey; G/O/L
@@ -3973,8 +3980,8 @@ the gigs worktree is retired after this transfer; do not update status there.
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
-| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; PR53 merged into master `4cc9d3787`; branch re-based on master |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
+| 3, 4 | `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a` (shared; the isolated runtime's web server serves its checked-out branch, so switch it only while holding the runtime lease) | new branches from master: `claude/stream3-home-…` (Stream 3), `claude/stream4-…` (Stream 4); the former Stream 2's `/private/tmp/pantopus-workstream-home` is retired |
+| 5 (formerly 3) | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
