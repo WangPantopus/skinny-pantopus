@@ -27,6 +27,7 @@ const {
   isGigRoomClosedTo,
   hiddenGigRoomMembers,
   gigRoomRecipients,
+  isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
@@ -1949,6 +1950,9 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     if (await isGigRoomClosedTo(message.room_id, userId)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    if (await isRoomClosedForWrites(message.room_id)) {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
+    }
 
     const { data: updated, error } = await supabaseAdmin
       .from('ChatMessage')
@@ -2716,6 +2720,9 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
     }
     if (await isGigRoomClosedTo(message.room_id, userId)) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+    if (await isRoomClosedForWrites(message.room_id)) {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
     }
 
     // Toggle: check if reaction already exists

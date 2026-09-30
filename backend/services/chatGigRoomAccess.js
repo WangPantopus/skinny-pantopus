@@ -163,6 +163,20 @@ async function gigRoomRecipients(room, userIds) {
   return open;
 }
 
+// A task chat retired when its worker was released or bidding reopened (ChatRoom.is_active
+// false) keeps its history for the owner and that worker but takes no new messages, reactions
+// or edits: edits after the fact would let either side rewrite the record. A failed lookup
+// counts as closed. Deleting one's own message stays allowed.
+async function isRoomClosedForWrites(roomId) {
+  const { data, error } = await supabaseAdmin
+    .from('ChatRoom')
+    .select('is_active')
+    .eq('id', roomId)
+    .maybeSingle();
+  if (error) return true;
+  return data?.is_active === false;
+}
+
 module.exports = {
   getGigOwnerMessagingContext,
   gigRoomAccessUnavailable,
@@ -171,4 +185,5 @@ module.exports = {
   isGigRoomClosedTo,
   hiddenGigRoomMembers,
   gigRoomRecipients,
+  isRoomClosedForWrites,
 };

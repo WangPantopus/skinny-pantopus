@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const { isBlocked } = require('../services/blockService');
-const { closedGigRoomIds, isGigRoomClosedTo } = require('../services/chatGigRoomAccess');
+const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -597,6 +597,9 @@ module.exports = (io) => {
         }
         if (await isGigRoomClosedTo(message.room_id, userId)) {
           return callback({ error: 'Not authorized' });
+        }
+        if (await isRoomClosedForWrites(message.room_id)) {
+          return callback({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
         }
 
         // Toggle: check if reaction already exists
