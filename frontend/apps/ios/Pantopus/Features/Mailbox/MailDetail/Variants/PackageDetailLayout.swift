@@ -324,7 +324,7 @@ private struct PackageKeyFactsCard: View {
                 Text(package.status == .delivered ? "DELIVERED" : "IN MOTION")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.5)
-                    .foregroundStyle(package.status == .delivered ? Theme.Color.success : Theme.Color.primary600)
+                    .foregroundStyle(package.status == .delivered ? Theme.Color.success : Theme.Color.primaryInk)
                     .padding(.horizontal, Spacing.s2)
                     .padding(.vertical, 2)
                     .background(package.status == .delivered ? Theme.Color.successBg : Theme.Color.primary50)

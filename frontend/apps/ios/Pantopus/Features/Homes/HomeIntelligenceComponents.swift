@@ -73,7 +73,7 @@ struct HealthScoreRingCard: View {
                 Text("Retry")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -118,7 +118,7 @@ struct HealthScoreRingCard: View {
     private func quickWin(icon: PantopusIcon, label: String, actionId: String) -> some View {
         Button { onAction(actionId) } label: {
             HStack(spacing: Spacing.s3) {
-                Icon(icon, size: 18, color: Theme.Color.primary600)
+                Icon(icon, size: 18, color: Theme.Color.primaryInk)
                 Text(label)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appText)
@@ -276,7 +276,7 @@ struct SeasonalChecklistCard: View {
                 Text("Retry")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -287,7 +287,7 @@ struct SeasonalChecklistCard: View {
 
     private var emptyBody: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.leaf, size: 28, color: Theme.Color.primary600)
+            Icon(.leaf, size: 28, color: Theme.Color.primaryInk)
             Text("Your seasonal checklist is ready")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
@@ -306,7 +306,7 @@ struct SeasonalChecklistCard: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .frame(minHeight: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -421,7 +421,7 @@ struct SeasonalChecklistCard: View {
                             .foregroundStyle(Theme.Color.appTextInverse)
                             .padding(.horizontal, Spacing.s3)
                             .frame(minHeight: 32)
-                            .background(Theme.Color.primary600)
+                            .background(Theme.Color.primarySolid)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -515,7 +515,7 @@ struct PropertyValueCard: View {
                         Text("Retry")
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
@@ -543,7 +543,7 @@ struct PropertyValueCard: View {
 
     private var unavailableBody: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.trendingUp, size: 26, color: Theme.Color.primary600)
+            Icon(.trendingUp, size: 26, color: Theme.Color.primaryInk)
             Text("No estimate available")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
@@ -678,7 +678,7 @@ struct BillTrendsCard: View {
                     Text("Retry")
                         .pantopusTextStyle(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)

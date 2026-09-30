@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -496,15 +497,26 @@ private fun SunArc(sunSky: TodaySunSky) {
             drawCircle(arcColor, radius = 10.dp.toPx(), center = Offset(sunX, sunY))
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        // A gap keeps the three columns apart at large text, where the middle lines wrap.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
             SunLabel(sunSky.sunrise, "Sunrise", Alignment.Start)
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     sunSky.phaseLabel.uppercase(Locale.getDefault()),
                     style = PantopusTextStyle.overline,
                     color = PantopusColors.warning,
+                    textAlign = TextAlign.Center,
                 )
-                Text(sunSky.daylight, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+                Text(
+                    sunSky.daylight,
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.appTextSecondary,
+                    textAlign = TextAlign.Center,
+                )
             }
             SunLabel(sunSky.sunset, "Sunset", Alignment.End)
         }

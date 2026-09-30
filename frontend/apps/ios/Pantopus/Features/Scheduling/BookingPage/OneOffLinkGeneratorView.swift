@@ -235,7 +235,7 @@ private struct OneOffEventTypeCard: View {
     private var eventRow: some View {
         HStack(spacing: Spacing.s3) {
             if let selected = viewModel.selectedEventType {
-                Icon(selected.icon, size: 16, color: Theme.Color.primary600)
+                Icon(selected.icon, size: 16, color: Theme.Color.primaryInk)
                     .frame(width: 34, height: 34)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -362,10 +362,10 @@ private struct OneOffAvailabilityCard: View {
                 }
             } label: {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primary600)
+                    Icon(.plus, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                     Text("Add a time")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
@@ -383,7 +383,7 @@ private struct OneOffSlotRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
-            Icon(.calendar, size: 14, color: Theme.Color.primary600)
+            Icon(.calendar, size: 14, color: Theme.Color.primaryInk)
                 .frame(width: 30, height: 30)
                 .background(Theme.Color.primary50)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -510,7 +510,7 @@ private struct OneOffGenerateButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 46)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .bookingShadow(isEnabled ? .primary : nil)
             .opacity(isEnabled ? 1 : 0.5)
@@ -572,7 +572,7 @@ private struct OneOffResultURL: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
-                .background(copied ? Theme.Color.successSolid : Theme.Color.primary600)
+                .background(copied ? Theme.Color.successSolid : Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -631,7 +631,7 @@ private struct OneOffShareTile: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: Spacing.s2) {
-                Icon(icon, size: 21, color: Theme.Color.primary600)
+                Icon(icon, size: 21, color: Theme.Color.primaryInk)
                     .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
                     .background(Theme.Color.appSurface)
@@ -658,10 +658,10 @@ private struct OneOffCreateAnotherButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 14, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.plus, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                 Text("Create another")
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)

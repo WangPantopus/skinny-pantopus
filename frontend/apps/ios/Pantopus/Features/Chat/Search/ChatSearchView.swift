@@ -102,7 +102,7 @@ private struct ChatSearchResultRow: View {
             if result.verified {
                 Icon(.check, size: 8, strokeWidth: 3.5, color: Theme.Color.appTextInverse)
                     .frame(width: 15, height: 15)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 1, y: 1)

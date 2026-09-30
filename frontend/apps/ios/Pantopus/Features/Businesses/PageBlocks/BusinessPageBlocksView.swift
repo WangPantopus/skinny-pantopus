@@ -247,7 +247,7 @@ public struct BusinessPageBlocksView: View {
                         RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
                             .fill(Theme.Color.primary50)
                             .frame(width: 32, height: 32)
-                        Icon(entry.icon, size: 16, color: Theme.Color.primary600)
+                        Icon(entry.icon, size: 16, color: Theme.Color.primaryInk)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.label)

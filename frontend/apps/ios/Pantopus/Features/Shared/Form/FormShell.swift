@@ -252,7 +252,7 @@ private struct FormTopBar: View {
                             Text(rightActionLabel)
                                 .pantopusTextStyle(.body)
                                 .foregroundStyle(
-                                    rightActionEnabled ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                                    rightActionEnabled ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                                 )
                                 .frame(minWidth: 60, minHeight: 44)
                         }
@@ -307,7 +307,7 @@ private struct FormBottomCTA: View {
             }
             .frame(maxWidth: .infinity, minHeight: 48)
         }
-        .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+        .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)

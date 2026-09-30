@@ -60,8 +60,8 @@ struct RelatedRecords: View {
             HStack(spacing: 3) {
                 Text("See all \(total)")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
-                Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
+                Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
             }
             .accessibilityIdentifier("mailDetail_records_relatedRecords_seeAll")
         }

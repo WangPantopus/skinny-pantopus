@@ -259,7 +259,7 @@ public struct FeedPreferencesSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 40)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

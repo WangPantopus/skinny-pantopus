@@ -49,7 +49,7 @@ struct BeaconProfileTabStrip: View {
                             }
                         }
                         Rectangle()
-                            .fill(isActive ? Theme.Color.primary600 : Color.clear)
+                            .fill(isActive ? Theme.Color.primaryInk : Color.clear)
                             .frame(height: 2)
                     }
                 }
@@ -84,7 +84,7 @@ struct BeaconOwnerAnalyticsStrip: View {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                         .fill(Theme.Color.primary50)
                         .frame(width: 34, height: 34)
-                    Icon(.trendingUp, size: 17, color: Theme.Color.primary600)
+                    Icon(.trendingUp, size: 17, color: Theme.Color.primaryInk)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Your audience")
@@ -137,7 +137,7 @@ struct BeaconComposeCTA: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: Spacing.s0)
-                Icon(.arrowRight, size: 18, color: Theme.Color.primary600)
+                Icon(.arrowRight, size: 18, color: Theme.Color.primaryInk)
             }
             .padding(Spacing.s3)
             .background(Theme.Color.primary50)
@@ -168,7 +168,7 @@ struct BeaconOwnerEmptyBroadcasts: View {
                 Circle()
                     .fill(Theme.Color.primary50)
                     .frame(width: 72, height: 72)
-                Icon(.radioTower, size: 32, strokeWidth: 1.6, color: Theme.Color.primary600)
+                Icon(.radioTower, size: 32, strokeWidth: 1.6, color: Theme.Color.primaryInk)
             }
             .padding(.bottom, 18)
 
@@ -194,7 +194,7 @@ struct BeaconOwnerEmptyBroadcasts: View {
                     }
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 40)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -256,7 +256,7 @@ struct BeaconAboutSection: View {
                             if let url = URL(string: link.url) { onOpenLink(url) }
                         } label: {
                             HStack(spacing: Spacing.s2) {
-                                Icon(.link, size: 14, color: Theme.Color.primary600)
+                                Icon(.link, size: 14, color: Theme.Color.primaryInk)
                                 Text(link.label)
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(Theme.Color.primary700)

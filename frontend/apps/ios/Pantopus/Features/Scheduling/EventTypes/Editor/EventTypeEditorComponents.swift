@@ -147,7 +147,7 @@ struct DurationChip: View {
             .foregroundStyle(isSelected ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
-            .background(isSelected ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+            .background(isSelected ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -331,7 +331,7 @@ struct QuickDurationChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 11, color: Theme.Color.primary600)
+                Icon(.plus, size: 11, color: Theme.Color.primaryInk)
                 Text("\(minutes)")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
@@ -375,7 +375,7 @@ struct EventTypeSaveBar: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .disabled(!isEnabled)
             }

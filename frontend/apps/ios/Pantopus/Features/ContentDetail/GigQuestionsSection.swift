@@ -129,7 +129,7 @@ struct GigQuestionsSection: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(canSubmitQuestion ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                        .background(canSubmitQuestion ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .disabled(!canSubmitQuestion || viewModel.questionSubmitting)
@@ -173,7 +173,7 @@ struct GigQuestionsSection: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Button("Try again") { Task { await viewModel.loadQuestions() } }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("gigQuestionsRetry")
             }
             .frame(maxWidth: .infinity)
@@ -204,10 +204,10 @@ struct GigQuestionsSection: View {
     private func pinnedCard(_ question: GigQuestionDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: 6) {
-                Icon(.pin, size: 12, strokeWidth: 2.4, color: Theme.Color.primary600)
+                Icon(.pin, size: 12, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                 Text("Pinned answer")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 Spacer()
                 if viewModel.canPinQuestion(question) {
                     actionLink(
@@ -451,7 +451,7 @@ struct GigQuestionsSection: View {
         } else {
             Button("Answer") { viewModel.beginAnswering(question.id) }
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("gigQuestionsAnswerButton")
         }

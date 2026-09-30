@@ -113,7 +113,7 @@ struct DeepLinkHandoffView: View {
 
     private func eventPreview(_ response: ManageBookingResponse, tz: String) -> some View {
         HStack(spacing: Spacing.s3) {
-            Icon(.calendar, size: 18, color: Theme.Color.primary600)
+            Icon(.calendar, size: 18, color: Theme.Color.primaryInk)
                 .frame(width: 38, height: 38)
                 .background(Theme.Color.primary50)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))

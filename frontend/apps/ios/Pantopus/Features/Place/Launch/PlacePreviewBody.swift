@@ -64,6 +64,7 @@ struct PlacePreviewBody: View {
                     .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your Place")
                     .font(.system(size: 22, weight: .bold))
@@ -80,7 +81,7 @@ struct PlacePreviewBody: View {
             Spacer(minLength: 0)
             Button("Sign in", action: onSignIn)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -216,9 +217,9 @@ struct PlacePreviewBody: View {
                         Text(aha.followUp)
                             .font(.system(size: 13.5, weight: .semibold))
                             .multilineTextAlignment(.leading)
-                        Icon(.chevronRight, size: 14, strokeWidth: 2.25, color: Theme.Color.primary600)
+                        Icon(.chevronRight, size: 14, strokeWidth: 2.25, color: Theme.Color.primaryInk)
                     }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("place.preview.aha.followUp")

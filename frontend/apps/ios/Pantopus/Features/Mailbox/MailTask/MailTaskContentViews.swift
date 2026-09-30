@@ -26,7 +26,7 @@ struct TaskElfStrip: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.sparkles, size: 13, color: Theme.Color.appTextInverse)
                     .frame(width: 24, height: 24)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 Text(elf.headline)
                     .font(.system(size: 12, weight: .bold))

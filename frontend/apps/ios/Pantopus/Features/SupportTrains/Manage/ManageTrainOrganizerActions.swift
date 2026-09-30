@@ -630,6 +630,7 @@ public extension ManageTrainViewModel {
                 let window = [slot.startTime, slot.endTime]
                     .compactMap { $0 }
                     .filter { !$0.isEmpty }
+                    .map { displayTime($0) }
                     .joined(separator: " – ")
                 let filled = slot.filledCount ?? 0
                 let badge: String = if slot.status == "completed" {
@@ -696,6 +697,15 @@ public extension ManageTrainViewModel {
     }
 
     /// `HH:mm` — the shape both slot schemas validate.
+    /// "17:00:00" → "5:00 pm", the way the train's detail shows a slot's times.
+    internal nonisolated static func displayTime(_ value: String) -> String {
+        guard let date = clock(from: value) else { return value }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date).lowercased()
+    }
+
     internal nonisolated static func clockString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

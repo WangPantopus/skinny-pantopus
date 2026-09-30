@@ -99,7 +99,7 @@ private struct AddHomeSearchField: View {
                 "",
                 text: $query,
                 prompt: Text("Search by address or nearby…")
-                    .foregroundColor(Theme.Color.primary600)
+                    .foregroundColor(Theme.Color.primaryInk)
             )
             .font(Theme.Font.body)
             .foregroundStyle(Theme.Color.appText)
@@ -226,7 +226,7 @@ private struct NearbyHomeRow: View {
 
                 StatusPill(status: home.status)
                 if isSelected {
-                    Icon(.check, size: 16, color: Theme.Color.primary600)
+                    Icon(.check, size: 16, color: Theme.Color.primaryInk)
                         .frame(width: 24, height: 24)
                         .accessibilityHidden(true)
                 }
@@ -398,7 +398,7 @@ private struct ManualFallbackRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s3) {
-                Icon(.plus, size: 16, color: Theme.Color.primary600)
+                Icon(.plus, size: 16, color: Theme.Color.primaryInk)
                     .frame(width: 32, height: 32)
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -413,7 +413,7 @@ private struct ManualFallbackRow: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Icon(.chevronRight, size: 16, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 16, color: Theme.Color.primaryInk)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, Spacing.s3)
@@ -433,11 +433,11 @@ private struct ManualAddressButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s1) {
-                Icon(.plus, size: 14, color: Theme.Color.primary600)
+                Icon(.plus, size: 14, color: Theme.Color.primaryInk)
                 Text("Add address manually")
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.vertical, Spacing.s1)
         }

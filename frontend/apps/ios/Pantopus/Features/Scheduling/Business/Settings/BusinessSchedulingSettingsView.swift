@@ -258,7 +258,7 @@ struct BusinessSchedulingSettingsView: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .padding(.horizontal, 13)
                 .frame(height: 28)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
         }
     }

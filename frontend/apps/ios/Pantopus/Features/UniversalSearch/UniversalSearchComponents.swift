@@ -145,7 +145,7 @@ struct UniversalSearchNotice: View {
             } label: {
                 Text("Retry")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .buttonStyle(.plain)
         }
@@ -166,18 +166,18 @@ struct UniversalSearchBrowseNearbyCard: View {
     var body: some View {
         Button { onTap() } label: {
             HStack(spacing: Spacing.s3) {
-                Icon(.building2, size: 18, color: Theme.Color.primary600)
+                Icon(.building2, size: 18, color: Theme.Color.primaryInk)
                 VStack(alignment: .leading, spacing: Spacing.s0) {
                     Text("Browse nearby businesses")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     Text("Find trusted businesses near you with neighbor recommendations")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextMuted)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: Spacing.s0)
-                Icon(.chevronRight, size: 16, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 16, color: Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s3)

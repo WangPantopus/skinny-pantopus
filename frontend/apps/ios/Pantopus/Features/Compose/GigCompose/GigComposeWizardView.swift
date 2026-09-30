@@ -931,10 +931,10 @@ private struct ItemsModuleFields: View {
                     viewModel.updateForm { $0.items.append(GigTaskItemDraft(name: "")) }
                 } label: {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primary600)
+                        Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                         Text("Add item")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -1034,7 +1034,7 @@ private struct ModuleChipsRow: View {
                                 .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appText)
                                 .padding(.horizontal, Spacing.s3)
                                 .padding(.vertical, Spacing.s1 + 3)
-                                .background(active ? Theme.Color.primary600 : Theme.Color.appSurface)
+                                .background(active ? Theme.Color.primarySolid : Theme.Color.appSurface)
                                 .clipShape(Capsule())
                                 .overlay(
                                     Capsule().stroke(
@@ -1292,7 +1292,7 @@ private struct GigPhotoTile: View {
                 // render the generic photo glyph over the primary tint.
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                     .fill(Theme.Color.primary50)
-                    .overlay(Icon(.image, size: 22, color: Theme.Color.primary600))
+                    .overlay(Icon(.image, size: 22, color: Theme.Color.primaryInk))
             }
         }
     }
@@ -1394,7 +1394,7 @@ private struct EngagementOverrideControl: View {
                                 .multilineTextAlignment(.center)
                             Text(option.subcopy)
                                 .font(.system(size: 9.5))
-                                .foregroundStyle(active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                                .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)

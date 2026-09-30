@@ -297,7 +297,7 @@ private struct LegalContactFooter: View {
 
     private var card: some View {
         HStack(spacing: Spacing.s3) {
-            Icon(.mail, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+            Icon(.mail, size: 16, strokeWidth: 2, color: Theme.Color.primaryInk)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Theme.Color.appSurface))
                 .overlay(Circle().strokeBorder(Theme.Color.primary100, lineWidth: 1))
@@ -310,7 +310,7 @@ private struct LegalContactFooter: View {
                     .foregroundColor(Theme.Color.primary700)
             }
             Spacer(minLength: Spacing.s2)
-            Icon(.arrowUpRight, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+            Icon(.arrowUpRight, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, 14)

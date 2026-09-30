@@ -537,8 +537,8 @@ struct HubDiscoveryRail: View {
                     HStack(spacing: 2) {
                         Text("See all")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.chevronRight, size: 13, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -583,7 +583,7 @@ struct HubDiscoveryRail: View {
                             )
                             .padding(.horizontal, 14)
                             .frame(height: 30)
-                            .background(active ? Theme.Color.primary600 : Theme.Color.appSurface)
+                            .background(active ? Theme.Color.primarySolid : Theme.Color.appSurface)
                             .overlay(
                                 Capsule().stroke(
                                     active ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -645,7 +645,7 @@ struct HubDiscoveryRail: View {
             if let onRetry {
                 Button("Try again", action: onRetry)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("hubDiscoveryRetry")
             }
         }
@@ -842,8 +842,8 @@ struct HubRecentActivity: View {
                     HStack(spacing: 2) {
                         Text("See all")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.chevronRight, size: 13, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -936,7 +936,7 @@ struct HubFloatingProgress: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s1)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             }
             .buttonStyle(.plain)

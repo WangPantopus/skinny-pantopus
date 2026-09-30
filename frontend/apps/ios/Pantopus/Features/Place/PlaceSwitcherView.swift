@@ -174,14 +174,14 @@ struct PlaceSwitcherSheet: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(Theme.Color.primary100)
-                    Icon(.plus, size: 21, strokeWidth: 2.25, color: Theme.Color.primary600)
+                    Icon(.plus, size: 21, strokeWidth: 2.25, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Add a place")
                         .font(.system(size: 15.5, weight: .semibold))
                         .kerning(-0.15)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                     Text("Claim or verify another address")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.Color.appTextMuted)
@@ -214,7 +214,7 @@ struct PlaceSwitcherRowView: View {
                         .home,
                         size: 21,
                         strokeWidth: 2,
-                        color: isActive ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                        color: isActive ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                     )
                 }
                 .frame(width: 40, height: 40)

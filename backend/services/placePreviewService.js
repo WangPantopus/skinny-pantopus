@@ -217,6 +217,8 @@ function toneFor(score) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 // Each builder returns { score, grade, headline, detail, follow_up } or null.
+// A follow_up names only what claiming really gives: the home's Place page, the morning briefing or
+// the alert push. Never a reminder or an alert that doesn't exist.
 const AHA_BUILDERS = {
   alerts(d) {
     const active = Array.isArray(d.active) ? d.active : [];
@@ -256,9 +258,7 @@ const AHA_BUILDERS = {
       grade: d.zone_label || (d.zone ? `Zone ${d.zone}` : null),
       headline,
       detail: d.plain_meaning || (level === 'high' ? 'Flood insurance is usually required for a mortgage here.' : ''),
-      follow_up: level === 'minimal'
-        ? 'Claim it to hear the day the map changes.'
-        : 'Claim it to track insurance requirements and map changes.',
+      follow_up: 'Claim it for the full risk picture.',
     };
   },
   wildfire(d) {
@@ -290,9 +290,7 @@ const AHA_BUILDERS = {
       detail: high
         ? 'This is the Cascadia zone. Homes built before the modern code often are not bolted to their foundations; a retrofit is the usual fix.'
         : d.summary || '',
-      follow_up: high
-        ? 'Claim it to keep an earthquake-readiness list for this home.'
-        : 'Claim it for the full risk picture.',
+      follow_up: 'Claim it for the full risk picture.',
     };
   },
   lead_radon(d) {
@@ -308,7 +306,7 @@ const AHA_BUILDERS = {
         grade: 'Radon zone 1',
         headline: 'This county is in the EPA\'s highest radon band',
         detail: 'Zone 1 means the predicted average indoor level is above the EPA action level. Only a test tells you about this home.',
-        follow_up: 'Claim it and we\'ll remind you when a test kit is due.',
+        follow_up: 'The EPA recommends testing every home, whatever the zone.',
       };
     }
     const level = zone === 2 ? 'Moderate' : 'Low';
@@ -317,7 +315,7 @@ const AHA_BUILDERS = {
       grade: `Radon zone ${zone}`,
       headline: `${level} radon potential for this county`,
       detail: d.summary || '',
-      follow_up: 'Claim it and we\'ll remind you when a test kit is due.',
+      follow_up: 'The EPA recommends testing every home, whatever the zone.',
     };
   },
   environmental_hazards(d) {
@@ -351,7 +349,7 @@ const AHA_BUILDERS = {
       headline = `${plural(tri, 'facility reports', 'facilities report')} toxic releases within a mile`;
       detail = 'Reporting to the Toxics Release Inventory is disclosure, not a violation.';
     }
-    return { score, grade, headline, detail, follow_up: 'Claim it to be told when a violation is filed nearby.' };
+    return { score, grade, headline, detail, follow_up: 'Claim it to see the sites on record near this home.' };
   },
   drinking_water(d) {
     const n = Number(d.violation_count) || 0;
@@ -364,7 +362,7 @@ const AHA_BUILDERS = {
         ? `${name}: ${plural(n, 'health-based violation', 'health-based violations')} in 5 years`
         : `${name}: no health-based violations in 5 years`,
       detail: d.summary || '',
-      follow_up: 'Claim it to be told when the next notice is filed.',
+      follow_up: 'Claim it to see your water system\'s full record.',
     };
   },
   rent_band(d) {
@@ -388,8 +386,8 @@ const AHA_BUILDERS = {
       score: days <= 45 ? 66 : 28,
       grade: `${days} days`,
       headline: `${d.name} is ${plural(days, 'day', 'days')} away`,
-      detail: 'Districts and deadlines for this exact address live on its page.',
-      follow_up: 'Claim it to get your ballot deadline the week it matters.',
+      detail: 'Check your county elections office for registration and ballot deadlines.',
+      follow_up: 'Claim it to see this election and your districts on its page.',
     };
   },
   civic_districts(d) {

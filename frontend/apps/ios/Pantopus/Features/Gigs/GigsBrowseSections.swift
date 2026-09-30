@@ -86,8 +86,8 @@ struct GigsBrowseSectionsView: View {
                 HStack(spacing: 3) {
                     Text("See all")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
-                    Icon(.chevronRight, size: 12, strokeWidth: 2.4, color: Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                    Icon(.chevronRight, size: 12, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                 }
                 .frame(minHeight: 32)
                 .contentShape(Rectangle())
@@ -165,7 +165,7 @@ struct GigsBrowseSectionsView: View {
         } label: {
             Text("See all \(content.totalActive) tasks")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(Theme.Color.primary50)
@@ -219,7 +219,7 @@ struct GigRailCard: View {
                     HStack(spacing: Spacing.s2) {
                         Text(content.price)
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                         if let distance = content.distanceLabel {
                             Text("· \(distance)")
                                 .font(.system(size: 10, weight: .medium))

@@ -231,7 +231,7 @@ struct NavigationDrawerView: View {
                     item.icon,
                     size: 20,
                     strokeWidth: 2,
-                    color: item.isActive ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                    color: item.isActive ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                 )
                 Text(item.label)
                     .font(.system(size: 14.5, weight: item.isActive ? .bold : .medium))
@@ -272,7 +272,7 @@ struct NavigationDrawerView: View {
                         .fill(Theme.Color.appSurface)
                         .frame(width: 32, height: 32)
                         .overlay {
-                            Icon(.arrowLeft, size: 17, strokeWidth: 2.4, color: Theme.Color.primary600)
+                            Icon(.arrowLeft, size: 17, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                         }
                         .overlay {
                             Circle().stroke(Theme.Color.primary100, lineWidth: 1)
@@ -286,7 +286,7 @@ struct NavigationDrawerView: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     Spacer(minLength: Spacing.s2)
-                    Icon(.undo2, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                    Icon(.undo2, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                 }
                 .padding(Spacing.s3)
                 .background(Theme.Color.primary50)

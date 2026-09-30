@@ -215,9 +215,9 @@ struct MemberWorkingHoursSheet: View {
     private var copyLink: some View {
         Button { model.copyMondayToWeekdays() } label: {
             HStack(spacing: 6) {
-                Icon(.copy, size: 13, color: Theme.Color.primary600)
+                Icon(.copy, size: 13, color: Theme.Color.primaryInk)
                 Text("Copy Monday to weekdays")
-                    .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.Color.primary600)
+                    .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .buttonStyle(.plain)
@@ -324,7 +324,7 @@ struct MemberWorkingHoursSheet: View {
             Button { onNavigate?(.availabilityScheduleList) } label: {
                 Text("View personal")
                     .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .lineLimit(1)
             }
             .buttonStyle(.plain)

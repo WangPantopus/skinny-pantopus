@@ -373,7 +373,7 @@ public struct PulsePostCard: View {
                     Icon(
                         .bookmark,
                         size: 12,
-                        color: content.actions.isSaved ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                        color: content.actions.isSaved ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                     )
                     .frame(width: 24, height: 24)
                 }
@@ -465,11 +465,11 @@ public struct PulsePostCard: View {
                 if !reaction.label.isEmpty {
                     Text(reaction.label)
                         .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                        .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                 }
                 Text("\(reaction.count)")
                     .font(.system(size: 11.5))
-                    .foregroundStyle(active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                    .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
             }
         }
     }

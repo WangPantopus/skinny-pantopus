@@ -236,7 +236,7 @@ struct PostGigV1PhotoTile: View {
                 } placeholder: {
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                         .fill(Theme.Color.primary50)
-                        .overlay(Icon(.image, size: 20, color: Theme.Color.primary600))
+                        .overlay(Icon(.image, size: 20, color: Theme.Color.primaryInk))
                 }
             }
         }
@@ -407,11 +407,11 @@ struct PostGigV1ItemsField: View {
             if canAdd {
                 Button(action: onAdd) {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primary600)
+                        Icon(.plus, size: 14, strokeWidth: 2.4, color: Theme.Color.primaryInk)
                         Text("Add item")
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 44)
@@ -536,7 +536,7 @@ struct PostGigV1EmptyView: View {
 
     var body: some View {
         VStack(spacing: Spacing.s3) {
-            Icon(.briefcase, size: 30, color: Theme.Color.primary600)
+            Icon(.briefcase, size: 30, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -555,7 +555,7 @@ struct PostGigV1EmptyView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(minHeight: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .accessibilityIdentifier("postGigV1_emptyStart")
@@ -585,7 +585,7 @@ struct PostGigV1FatalErrorView: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
             Button("Retry", action: onRetry)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("postGigV1_retry")
         }

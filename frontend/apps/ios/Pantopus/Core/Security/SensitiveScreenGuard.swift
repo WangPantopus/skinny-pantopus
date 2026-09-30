@@ -87,7 +87,7 @@ public struct SensitiveScreenGuard<Content: View>: View {
 
     private var cover: some View {
         VStack(spacing: Spacing.s4) {
-            Icon(.lock, size: 44, color: Theme.Color.primary600)
+            Icon(.lock, size: 44, color: Theme.Color.primaryInk)
             Text(reason)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
@@ -103,7 +103,7 @@ public struct SensitiveScreenGuard<Content: View>: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, 22)
                         .frame(height: 44)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

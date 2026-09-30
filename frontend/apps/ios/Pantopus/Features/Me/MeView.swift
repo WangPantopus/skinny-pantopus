@@ -186,7 +186,7 @@ public struct MeView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -297,7 +297,7 @@ private struct MeHeader: View {
             )
             .shadow(color: Theme.Color.appText.opacity(0.18), radius: 6, x: 0, y: 4)
             if content.verified {
-                Icon(.check, size: 11, strokeWidth: 3.5, color: Theme.Color.primary600)
+                Icon(.check, size: 11, strokeWidth: 3.5, color: Theme.Color.primaryInk)
                     .frame(width: 22, height: 22)
                     .background(Theme.Color.appSurface)
                     .clipShape(Circle())
@@ -395,7 +395,7 @@ private struct MeActionGrid: View {
                                 .foregroundStyle(Theme.Color.appTextInverse)
                                 .padding(.horizontal, 5)
                                 .frame(minWidth: 16, minHeight: 16)
-                                .background(Theme.Color.primary600)
+                                .background(Theme.Color.primarySolid)
                                 .clipShape(Capsule())
                                 .padding(6)
                                 .accessibilityLabel("\(badge) unread")

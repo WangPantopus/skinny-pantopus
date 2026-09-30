@@ -33,7 +33,7 @@ public struct LegalSection: View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
             Text(String(format: "%02d", number))
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(Theme.Color.primary600)
+                .foregroundColor(Theme.Color.primaryInk)
             Text(title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Theme.Color.primary700)

@@ -145,7 +145,7 @@ public struct TransactionalDetailShell: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -611,7 +611,7 @@ public struct TransactionalDetailShell: View {
             Spacer(minLength: Spacing.s0)
             if party.showsMessageButton, let onMessage = onMessageCounterparty {
                 Button(action: onMessage) {
-                    Icon(.messageCircle, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                    Icon(.messageCircle, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                         .frame(width: 36, height: 36)
                         .background(Theme.Color.primary50)
                         .clipShape(Circle())
@@ -664,7 +664,7 @@ public struct TransactionalDetailShell: View {
         case let .detailRow(m):
             sectionCard(title: m.title, icon: m.sectionIcon) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(m.rowIcon, size: 14, color: Theme.Color.primary600)
+                    Icon(m.rowIcon, size: 14, color: Theme.Color.primaryInk)
                     Text(m.label)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
@@ -734,7 +734,7 @@ public struct TransactionalDetailShell: View {
                                     .lineLimit(1)
                                 Text(item.price)
                                     .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(Theme.Color.primary600)
+                                    .foregroundStyle(Theme.Color.primaryInk)
                             }
                             .frame(width: 120)
                         }
@@ -1061,7 +1061,7 @@ public struct TransactionalDetailShell: View {
         case .primary:
             ZStack {
                 Circle().fill(Theme.Color.primary50)
-                Icon(icon, size: size * 0.47, strokeWidth: 2, color: Theme.Color.primary600)
+                Icon(icon, size: size * 0.47, strokeWidth: 2, color: Theme.Color.primaryInk)
             }
             .frame(width: size, height: size)
         }
@@ -1176,7 +1176,7 @@ public struct TransactionalDetailShell: View {
                     Spacer()
                     Text(totalValue)
                         .font(.system(size: 16, weight: .heavy).monospacedDigit())
-                        .foregroundStyle(module.totalTone == .success ? Theme.Color.success : Theme.Color.primary600)
+                        .foregroundStyle(module.totalTone == .success ? Theme.Color.success : Theme.Color.primaryInk)
                 }
             }
         }
@@ -1206,7 +1206,7 @@ public struct TransactionalDetailShell: View {
                 Spacer()
                 Text(summary.totalValue)
                     .font(.system(size: 16, weight: .bold).monospacedDigit())
-                    .foregroundStyle(summary.totalTone == .success ? Theme.Color.success : Theme.Color.primary600)
+                    .foregroundStyle(summary.totalTone == .success ? Theme.Color.success : Theme.Color.primaryInk)
             }
         }
         .padding(.horizontal, 14)
@@ -1271,7 +1271,7 @@ public struct TransactionalDetailShell: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(dock.primary.enabled ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(dock.primary.enabled ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                         .stroke(dock.primary.enabled ? Color.clear : Theme.Color.appBorder, lineWidth: 1)
@@ -1342,7 +1342,7 @@ private struct AvatarView: View {
 
     private var initialsCircle: some View {
         Circle()
-            .fill(Theme.Color.primary500)
+            .fill(Theme.Color.primarySolid)
             .overlay(
                 Text(initials)
                     .font(.system(size: size * 0.36, weight: .bold))

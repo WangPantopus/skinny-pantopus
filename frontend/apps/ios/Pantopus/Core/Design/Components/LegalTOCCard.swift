@@ -55,7 +55,7 @@ public struct LegalTOCCard: View {
     private var header: some View {
         Button(action: onToggle) {
             HStack(spacing: Spacing.s2) {
-                Icon(.list, size: 14, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.list, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                 Text("Jump to section")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Theme.Color.appText)

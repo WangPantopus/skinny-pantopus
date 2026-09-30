@@ -249,7 +249,7 @@ struct FeedContextBar: View {
             Task { await viewModel.openSwitcher() }
         } label: {
             HStack(spacing: Spacing.s2) {
-                Icon(.mapPin, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.mapPin, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                 Text(viewModel.locationLabel ?? "Set an area")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
@@ -355,7 +355,7 @@ struct FeedLocationSwitcherSheet: View {
             Task { await viewModel.select(option) }
         } label: {
             HStack(spacing: Spacing.s3) {
-                Icon(option.kind.icon, size: 18, color: Theme.Color.primary600)
+                Icon(option.kind.icon, size: 18, color: Theme.Color.primaryInk)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label)
                         .font(.system(size: 15, weight: .semibold))

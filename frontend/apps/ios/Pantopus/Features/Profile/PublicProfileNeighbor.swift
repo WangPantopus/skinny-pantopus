@@ -465,7 +465,7 @@ struct NeighborAvatar: View {
                 // VerifiedBadge is green; the neighbor hero uses primary).
                 let badge = size >= 64 ? CGFloat(22) : CGFloat(16)
                 ZStack {
-                    Circle().fill(Theme.Color.primary600)
+                    Circle().fill(Theme.Color.primarySolid)
                     Icon(.check, size: badge * 0.58, strokeWidth: 3, color: Theme.Color.appTextInverse)
                 }
                 .frame(width: badge, height: badge)
@@ -573,11 +573,11 @@ struct NeighborTabBar: View {
                         HStack(spacing: 5) {
                             Text(entry.tab.label)
                                 .font(.system(size: 12.5, weight: isActive ? .bold : .semibold))
-                                .foregroundStyle(isActive ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                                .foregroundStyle(isActive ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                             if let count = entry.count {
                                 Text("\(count)")
                                     .font(.system(size: 10.5, weight: .bold))
-                                    .foregroundStyle(isActive ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                                    .foregroundStyle(isActive ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 1)
                                     .background(isActive ? Theme.Color.primary50 : Theme.Color.appSurfaceSunken)
@@ -587,7 +587,7 @@ struct NeighborTabBar: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.s3)
                         Rectangle()
-                            .fill(isActive ? Theme.Color.primary600 : Color.clear)
+                            .fill(isActive ? Theme.Color.primaryInk : Color.clear)
                             .frame(height: 2)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -629,7 +629,7 @@ struct NeighborSectionTitle: View {
             if let action {
                 Text(action)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .padding(.top, Spacing.s4)
@@ -791,7 +791,7 @@ struct NeighborReviewsEmptyCard: View {
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.sparkles, size: 22, color: Theme.Color.primary600)
+            Icon(.sparkles, size: 22, color: Theme.Color.primaryInk)
                 .frame(width: 48, height: 48)
                 .background(Theme.Color.primary50)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
@@ -871,7 +871,7 @@ struct NeighborWelcomeCard: View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             Icon(.hand, size: 16, color: Theme.Color.appTextInverse)
                 .frame(width: 32, height: 32)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(welcome.title)
@@ -971,7 +971,7 @@ struct NeighborActionBar: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .pantopusShadow(.primary)
             }

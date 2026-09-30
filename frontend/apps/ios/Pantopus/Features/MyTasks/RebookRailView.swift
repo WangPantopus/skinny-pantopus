@@ -234,7 +234,7 @@ public struct RebookRailView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 34)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -280,7 +280,7 @@ public struct RebookRailView: View {
             Circle().fill(Theme.Color.personalBg)
             Text(worker?.initials ?? "?")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .frame(width: 40, height: 40)
     }

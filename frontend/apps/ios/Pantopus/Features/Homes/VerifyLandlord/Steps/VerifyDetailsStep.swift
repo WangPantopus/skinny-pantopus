@@ -461,7 +461,7 @@ private struct LeaseUploadEmptyButton: View {
                     .fill(Theme.Color.primary50)
                     .frame(width: 36, height: 36)
                     .overlay {
-                        Icon(.upload, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                        Icon(.upload, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Attach lease or deed")

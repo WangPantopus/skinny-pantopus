@@ -354,7 +354,7 @@ struct CertifiedDetailLayout: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(content.isAcknowledged || content.isArchived ? Theme.Color.appSurface : Theme.Color.primary600)
+            .background(content.isAcknowledged || content.isArchived ? Theme.Color.appSurface : Theme.Color.primarySolid)
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(
@@ -411,7 +411,7 @@ struct CertifiedDetailLayout: View {
                 Icon(
                     proofSaved ? .badgeCheck : .download,
                     size: 15,
-                    color: proofSaved ? Theme.Color.success : Theme.Color.primary600
+                    color: proofSaved ? Theme.Color.success : Theme.Color.primaryInk
                 )
                 Text(proofSaved ? "Saved" : "Proof")
                     .font(.system(size: 12.5, weight: .semibold))
@@ -441,7 +441,7 @@ struct CertifiedDetailLayout: View {
     ) -> some View {
         Button(action: { action() }) {
             HStack(spacing: Spacing.s2) {
-                Icon(icon, size: 15, color: Theme.Color.primary600)
+                Icon(icon, size: 15, color: Theme.Color.primaryInk)
                 Text(label)
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)

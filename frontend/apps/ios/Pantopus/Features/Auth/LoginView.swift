@@ -37,7 +37,7 @@ struct LoginView: View {
 
                     VStack(spacing: Spacing.s2) {
                         Text("Welcome back", style: .overline)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .tracking(1.2)
                         Text("Log in to Pantopus")
                             .pantopusTextStyle(.h2)
@@ -91,7 +91,7 @@ struct LoginView: View {
 
                     if let info = viewModel.infoMessage {
                         HStack(alignment: .top, spacing: Spacing.s2) {
-                            Icon(.mail, size: 16, color: Theme.Color.primary600)
+                            Icon(.mail, size: 16, color: Theme.Color.primaryInk)
                             Text(info)
                                 .pantopusTextStyle(.small)
                                 .foregroundStyle(Theme.Color.appText)
@@ -178,7 +178,7 @@ struct LoginView: View {
                             )
                             .pantopusTextStyle(.small)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.plain)
@@ -225,7 +225,7 @@ struct LoginView: View {
                             Text("Create account")
                                 .pantopusTextStyle(.small)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                         .accessibilityIdentifier("loginCreateAccountLink")
                     }
@@ -419,7 +419,7 @@ struct PasswordField: View {
                         Text(trailingLink.label)
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .accessibilityIdentifier("loginForgotPasswordLink")
                 }
@@ -528,7 +528,7 @@ struct RememberedAccountCard: View {
                 Text("Not you?")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .frame(minHeight: 44)
             }
             .buttonStyle(.plain)

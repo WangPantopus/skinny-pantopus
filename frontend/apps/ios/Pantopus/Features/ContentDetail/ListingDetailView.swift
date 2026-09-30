@@ -291,7 +291,7 @@ private extension ListingDetailView {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -386,7 +386,7 @@ private struct MakeOfferSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)

@@ -174,7 +174,7 @@ public struct ExploreMapView: View {
                         center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude),
                         radius: 800
                     )
-                    .foregroundStyle(Theme.Color.primary600.opacity(0.05))
+                    .foregroundStyle(Theme.Color.primaryInk.opacity(0.05))
                     .stroke(
                         Theme.Color.primary600.opacity(0.45),
                         style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
@@ -320,7 +320,7 @@ public struct ExploreMapView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(minWidth: 16, minHeight: 16)
                         .padding(.horizontal, Spacing.s1)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(Capsule())
                 }
             }
@@ -561,7 +561,7 @@ public struct ExploreMapView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -663,7 +663,7 @@ public struct ExploreMapView: View {
                             .stroke(Theme.Color.primary100, lineWidth: 1)
                     )
                     .frame(width: 56, height: 56)
-                Icon(.compass, size: 24, color: Theme.Color.primary600)
+                Icon(.compass, size: 24, color: Theme.Color.primaryInk)
             }
             .accessibilityHidden(true)
             .padding(.bottom, Spacing.s3)
@@ -693,7 +693,7 @@ public struct ExploreMapView: View {
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -807,7 +807,7 @@ struct ExploreClusterDot: View {
 struct ExploreYouAreHereDot: View {
     var body: some View {
         Circle()
-            .fill(Theme.Color.primary600)
+            .fill(Theme.Color.primarySolid)
             .frame(width: 14, height: 14)
             .overlay(Circle().stroke(Color.white, lineWidth: 3))
             .background(
@@ -854,7 +854,7 @@ private struct ExploreActiveFilterChip: View {
             .foregroundStyle(Theme.Color.appTextInverse)
             .frame(minWidth: 16, minHeight: 16)
             .padding(.horizontal, 5)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
             .accessibilityLabel("\(count) active filters")
             .accessibilityIdentifier("exploreSheetFilterCount")

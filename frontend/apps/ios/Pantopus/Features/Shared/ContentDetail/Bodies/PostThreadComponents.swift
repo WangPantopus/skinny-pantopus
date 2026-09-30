@@ -64,7 +64,7 @@ struct CommentComposer: View {
                     }
                 }
                 .frame(width: 40, height: 40)
-                .background(canSend || isFocusedPresentation ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(canSend || isFocusedPresentation ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Circle())
             }
             .buttonStyle(.plain)
@@ -220,7 +220,7 @@ struct EmptyThreadState: View {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                     .fill(Theme.Color.primary50)
-                Icon(.messageSquarePlus, size: 22, color: Theme.Color.primary600)
+                Icon(.messageSquarePlus, size: 22, color: Theme.Color.primaryInk)
             }
             .frame(width: 48, height: 48)
             .accessibilityHidden(true)

@@ -61,9 +61,9 @@ public struct WalletRail: View {
                 HStack(spacing: 3) {
                     Text("Collection")
                         .font(.system(size: 11, weight: .bold))
-                    Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                    Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                 }
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("stampsWalletCollection")

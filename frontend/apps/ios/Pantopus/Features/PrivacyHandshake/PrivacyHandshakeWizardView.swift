@@ -198,7 +198,7 @@ public struct PrivacyHandshakeWizardView: View {
 
     private var platformTrustNote: some View {
         HStack(alignment: .top, spacing: 10) {
-            Icon(.lock, size: 16, color: Theme.Color.primary600)
+            Icon(.lock, size: 16, color: Theme.Color.primaryInk)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your private account stays private")
@@ -281,7 +281,7 @@ public struct PrivacyHandshakeWizardView: View {
 
     private func handleEchoCard(_ content: HandshakeReadyContent) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.userPlus, size: 16, color: Theme.Color.primary600)
+            Icon(.userPlus, size: 16, color: Theme.Color.primaryInk)
             Text("Following as ")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -335,7 +335,7 @@ public struct PrivacyHandshakeWizardView: View {
 
     private func alreadyMemberBody(_ content: HandshakeReadyContent) -> some View {
         VStack(spacing: Spacing.s3) {
-            Icon(.star, size: 36, color: Theme.Color.primary600)
+            Icon(.star, size: 36, color: Theme.Color.primaryInk)
                 .frame(width: 64, height: 64)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -382,7 +382,7 @@ public struct PrivacyHandshakeWizardView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 36)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

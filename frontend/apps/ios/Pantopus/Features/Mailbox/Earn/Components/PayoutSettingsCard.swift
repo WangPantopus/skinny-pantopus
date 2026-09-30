@@ -66,7 +66,7 @@ struct EarnPayoutSettingsCard: View {
             Button(action: onManage) {
                 Text("Manage")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .padding(.horizontal, Spacing.s1)
                     .frame(minHeight: 30)
             }

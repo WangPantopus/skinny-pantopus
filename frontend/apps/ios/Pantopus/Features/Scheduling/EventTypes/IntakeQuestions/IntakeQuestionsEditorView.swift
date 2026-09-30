@@ -182,7 +182,7 @@ struct IntakeQuestionsEditorView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .pantopusShadow(.primary)
             }

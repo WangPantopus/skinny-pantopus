@@ -51,10 +51,10 @@ struct VaultBreadcrumb: View {
             if let onChangeFolder, !isFiled {
                 Button(action: { onChangeFolder() }) {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.pencil, size: 11, color: Theme.Color.primary600)
+                        Icon(.pencil, size: 11, color: Theme.Color.primaryInk)
                         Text("Change folder")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)

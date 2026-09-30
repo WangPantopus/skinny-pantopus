@@ -25,7 +25,7 @@ struct SchedulingStubScaffold: View {
                 Circle()
                     .fill(Theme.Color.primary50)
                     .frame(width: 72, height: 72)
-                Icon(.calendarClock, size: 30, strokeWidth: 1.8, color: Theme.Color.primary600)
+                Icon(.calendarClock, size: 30, strokeWidth: 1.8, color: Theme.Color.primaryInk)
             }
             VStack(spacing: Spacing.s2) {
                 Text(title)

@@ -283,7 +283,7 @@ extension EditProfileView {
                 if !snapshot.value.isEmpty {
                     Button("Clear") { viewModel.update(.dateOfBirth, to: "") }
                         .font(Theme.Font.role(.caption))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .accessibilityIdentifier("field_dateOfBirth_clear")
                 }
             }

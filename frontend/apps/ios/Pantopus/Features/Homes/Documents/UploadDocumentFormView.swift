@@ -180,10 +180,10 @@ public struct UploadDocumentFormView: View {
                     Task { await viewModel.loadLinkOptionsIfNeeded() }
                 } label: {
                     HStack(spacing: Spacing.s2) {
-                        Icon(.link, size: 16, color: Theme.Color.primary600)
+                        Icon(.link, size: 16, color: Theme.Color.primaryInk)
                         Text("Add a link")
                             .pantopusTextStyle(.body)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                         Spacer()
                         Icon(.chevronRight, size: 16, color: Theme.Color.appTextSecondary)
                     }
@@ -287,10 +287,10 @@ private struct PickedFileCard: View {
         .overlay(alignment: .bottomTrailing) {
             Button(action: onReplace) {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.refreshCw, size: 12, color: Theme.Color.primary600)
+                    Icon(.refreshCw, size: 12, color: Theme.Color.primaryInk)
                     Text("Replace")
                         .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, Spacing.s1)
@@ -552,7 +552,7 @@ private struct LinkedEntityPickerSheet: View {
                 Button(action: onDismiss) {
                     Text("Cancel")
                         .pantopusTextStyle(.body)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .accessibilityIdentifier("uploadDocumentLinkSheetCancel")
             }

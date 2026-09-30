@@ -197,7 +197,7 @@ private struct MailboxChipBadge: View {
             .foregroundStyle(onAccent ? accent : Theme.Color.appTextInverse)
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 18)
-            .background(onAccent ? Theme.Color.appTextInverse : Theme.Color.primary600)
+            .background(onAccent ? Theme.Color.appTextInverse : Theme.Color.primarySolid)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Theme.Color.appSurface, lineWidth: 2))
             .accessibilityHidden(true)
@@ -219,7 +219,7 @@ private struct MailboxTabSegment: View {
                 HStack(spacing: Spacing.s1) {
                     Text(label)
                         .font(.system(size: 13, weight: isActive ? .bold : .medium))
-                        .foregroundStyle(isActive ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                        .foregroundStyle(isActive ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                     if let count {
                         MailboxTabCount(count: count, isActive: isActive)
                     }
@@ -252,7 +252,7 @@ private struct MailboxTabCount: View {
             .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 16)
-            .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+            .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
             .clipShape(Capsule())
             .accessibilityHidden(true)
     }

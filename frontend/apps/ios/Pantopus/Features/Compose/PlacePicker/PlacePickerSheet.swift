@@ -92,7 +92,7 @@ public struct PlacePickerSheet: View {
                 Button("Done", action: onDismiss)
                     .font(Theme.Font.small)
                     .fontWeight(.bold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .padding(.horizontal, Spacing.s4)
@@ -158,7 +158,7 @@ public struct PlacePickerSheet: View {
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 30)
-                .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                         .stroke(isActive ? .clear : Theme.Color.appBorder, lineWidth: 1)

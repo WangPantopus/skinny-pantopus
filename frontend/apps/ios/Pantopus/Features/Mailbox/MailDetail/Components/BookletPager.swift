@@ -137,10 +137,10 @@ public struct BookletPager: View {
                 mode = .grid
             } label: {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.fileType, size: 12, color: Theme.Color.primary600)
+                    Icon(.fileType, size: 12, color: Theme.Color.primaryInk)
                     Text("View all pages")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s1)
@@ -233,10 +233,10 @@ public struct BookletPager: View {
                     mode = .page
                 } label: {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.chevronLeft, size: 12, color: Theme.Color.primary600)
+                        Icon(.chevronLeft, size: 12, color: Theme.Color.primaryInk)
                         Text("Back to reader")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s1)
@@ -340,7 +340,7 @@ private struct ThumbnailCell: View {
                 if isCurrent {
                     Icon(.eye, size: 10, color: Theme.Color.appTextInverse)
                         .frame(width: 18, height: 18)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(Circle())
                         .padding(Spacing.s1)
                 }

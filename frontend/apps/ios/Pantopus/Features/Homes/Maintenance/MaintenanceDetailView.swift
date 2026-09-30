@@ -512,11 +512,11 @@ private struct DetailActions: View {
         VStack(spacing: Spacing.s3) {
             Button(action: onEdit) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.pencil, size: 16, color: Theme.Color.primary600)
+                    Icon(.pencil, size: 16, color: Theme.Color.primaryInk)
                     Text("Edit")
                         .pantopusTextStyle(.body)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(Theme.Color.primary50)

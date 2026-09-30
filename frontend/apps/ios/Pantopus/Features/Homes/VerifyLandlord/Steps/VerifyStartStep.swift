@@ -228,7 +228,7 @@ private struct VerifyWhyWeAskRow: View {
                         .fill(Theme.Color.appSurface)
                         .frame(width: 28, height: 28)
                         .overlay {
-                            Icon(.shieldCheck, size: 15, strokeWidth: 2.2, color: Theme.Color.primary600)
+                            Icon(.shieldCheck, size: 15, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Why verify your landlord?")
@@ -243,7 +243,7 @@ private struct VerifyWhyWeAskRow: View {
                     Icon(
                         isExpanded ? .chevronUp : .chevronRight,
                         size: 16,
-                        color: Theme.Color.primary600
+                        color: Theme.Color.primaryInk
                     )
                 }
                 .frame(minHeight: 44)

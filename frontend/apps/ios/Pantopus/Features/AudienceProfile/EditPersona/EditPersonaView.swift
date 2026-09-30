@@ -362,7 +362,7 @@ private struct EditPersonaErrorBody: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -449,7 +449,7 @@ private struct PLabel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextStrong)
             if required {
-                Text("*").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.Color.primary600)
+                Text("*").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.Color.primaryInk)
             }
             if let hint {
                 Text(hint)
@@ -601,7 +601,7 @@ private struct PersonaHandleField: View {
         HStack(spacing: Spacing.s1) {
             Text("@")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
             TextField("yourhandle", text: $handle)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.Color.appText)
@@ -734,7 +734,7 @@ private struct PersonaModeRow: View {
                 Icon(
                     isSelected ? .checkCircle : .circle,
                     size: 18,
-                    color: isSelected ? Theme.Color.primary600 : Theme.Color.appBorderStrong
+                    color: isSelected ? Theme.Color.primaryInk : Theme.Color.appBorderStrong
                 )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(option.label)
@@ -982,7 +982,7 @@ private struct PersonaStickyBar: View {
                         }
                         .frame(height: 42)
                         .padding(.horizontal, Spacing.s5)
-                        .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorder)
+                        .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorder)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                     }
                     .buttonStyle(.plain)

@@ -106,10 +106,10 @@ struct TerminalStateView: View {
             if viewModel.slug?.isEmpty == false {
                 Button { viewModel.openBookingPage() } label: {
                     HStack(spacing: Spacing.s1) {
-                        Icon(.rotateCcw, size: 14, strokeWidth: 2.3, color: Theme.Color.primary600)
+                        Icon(.rotateCcw, size: 14, strokeWidth: 2.3, color: Theme.Color.primaryInk)
                         Text("Book again")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -181,7 +181,7 @@ private struct TerminalCodeInput: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 Button(action: onSubmit) {
-                    Icon(.arrowRight, size: 17, strokeWidth: 2.3, color: Theme.Color.primary600)
+                    Icon(.arrowRight, size: 17, strokeWidth: 2.3, color: Theme.Color.primaryInk)
                         .frame(width: 42, height: 42)
                         .background(Theme.Color.primary50)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -298,7 +298,7 @@ private struct TerminalGetTheAppButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 46)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .pantopusShadow(.primary)
         }

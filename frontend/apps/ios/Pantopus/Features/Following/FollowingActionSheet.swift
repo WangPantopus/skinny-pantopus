@@ -86,7 +86,7 @@ struct FollowingActionSheet: View {
                             Icon(
                                 level.icon,
                                 size: 13,
-                                color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                                color: active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                             )
                             Text(level.label)
                                 .font(.system(size: 12.5, weight: .semibold))
@@ -206,7 +206,7 @@ struct FollowingActionSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.s3)
-                    .background(RoundedRectangle(cornerRadius: Radii.md).fill(Theme.Color.primary600))
+                    .background(RoundedRectangle(cornerRadius: Radii.md).fill(Theme.Color.primarySolid))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("followingMute.customApply")

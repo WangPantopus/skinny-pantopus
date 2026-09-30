@@ -130,7 +130,7 @@ public struct KeyValueBody: View {
     }
 
     private func iconTile(_ icon: PantopusIcon) -> some View {
-        Icon(icon, size: 15, color: Theme.Color.primary600)
+        Icon(icon, size: 15, color: Theme.Color.primaryInk)
             .frame(width: 30, height: 30)
             .background(Theme.Color.primary50)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))

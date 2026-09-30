@@ -485,7 +485,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -570,7 +570,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
             .fill(Theme.Color.primary50)
             .frame(width: 32, height: 32)
-            .overlay(Icon(icon, size: 16, color: Theme.Color.primary600))
+            .overlay(Icon(icon, size: 16, color: Theme.Color.primaryInk))
             .accessibilityHidden(true)
     }
 

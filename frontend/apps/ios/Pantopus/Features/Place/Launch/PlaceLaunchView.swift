@@ -105,7 +105,7 @@ struct PlaceLaunchView: View {
                 Spacer()
                 Button("Sign in", action: onSignIn)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("placeLaunchSignIn")
             }
             .padding(.horizontal, 20)
@@ -270,6 +270,7 @@ struct PlaceLaunchView: View {
         HStack(spacing: 10) {
             Icon(.mapPin, size: 18, strokeWidth: 2, color: addressFocused ? Theme.Color.primary600 : Theme.Color.appTextMuted)
             TextField("Type your home address", text: $viewModel.query)
+                .accessibilityLabel("Home address")
                 .accessibilityIdentifier("place.launch.address")
                 .focused($addressFocused)
                 .font(Theme.Font.body)
@@ -281,6 +282,7 @@ struct PlaceLaunchView: View {
                     Icon(.x, size: 16, strokeWidth: 2, color: Theme.Color.appTextMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear address")
             }
         }
         .padding(.horizontal, 14)

@@ -64,7 +64,7 @@ struct SetNewPasswordView: View {
 
             VStack(spacing: Spacing.s2) {
                 Text("Almost done", style: .overline)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .tracking(1.2)
                 Text("Set a new password")
                     .pantopusTextStyle(.h2)
@@ -123,7 +123,7 @@ struct SetNewPasswordView: View {
                     Text("← Back to sign in")
                         .pantopusTextStyle(.small)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.top, Spacing.s1)
                 .accessibilityIdentifier("setPassword.backLink")
@@ -172,7 +172,7 @@ struct SetNewPasswordView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 48)
         }
-        .background(viewModel.canSubmit ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+        .background(viewModel.canSubmit ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .disabled(!viewModel.canSubmit)
         .accessibilityIdentifier("setPassword.submit")
@@ -198,7 +198,7 @@ struct SetNewPasswordView: View {
                 .frame(maxWidth: 280)
 
             HStack(spacing: Spacing.s2) {
-                Icon(.shieldCheck, size: 14, color: Theme.Color.primary600)
+                Icon(.shieldCheck, size: 14, color: Theme.Color.primaryInk)
                 Text("Signed out of other devices for security")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -224,7 +224,7 @@ struct SetNewPasswordView: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .padding(.top, Spacing.s4)
             .accessibilityIdentifier("setPassword.continueBtn")

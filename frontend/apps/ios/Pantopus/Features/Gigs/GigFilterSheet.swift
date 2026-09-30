@@ -708,11 +708,11 @@ public struct GigFilterSheet: View {
                         .bell,
                         size: 13,
                         strokeWidth: 2.2,
-                        color: canSave ? Theme.Color.primary600 : Theme.Color.appTextMuted
+                        color: canSave ? Theme.Color.primaryInk : Theme.Color.appTextMuted
                     )
                     Text("Save this search")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(canSave ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                        .foregroundStyle(canSave ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
                 }
                 .frame(minHeight: 36)
                 .contentShape(Rectangle())

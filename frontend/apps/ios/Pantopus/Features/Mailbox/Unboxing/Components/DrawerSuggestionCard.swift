@@ -140,10 +140,10 @@ struct DrawerSuggestionCard: View {
     private var chooseAnotherButton: some View {
         Button(action: onChooseAnother) {
             HStack(spacing: Spacing.s1) {
-                Icon(.folderPlus, size: 14, strokeWidth: 2, color: Theme.Color.primary600)
+                Icon(.folderPlus, size: 14, strokeWidth: 2, color: Theme.Color.primaryInk)
                 Text("Choose another drawer")
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)

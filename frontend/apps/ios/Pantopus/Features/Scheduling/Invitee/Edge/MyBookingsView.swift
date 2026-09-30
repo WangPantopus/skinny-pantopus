@@ -177,10 +177,10 @@ struct MyBookingsView: View {
                         viewModel.bookAgain(booking)
                     } label: {
                         HStack(spacing: 5) {
-                            Icon(.rotateCcw, size: 12, strokeWidth: 2.3, color: Theme.Color.primary600)
+                            Icon(.rotateCcw, size: 12, strokeWidth: 2.3, color: Theme.Color.primaryInk)
                             Text("Book again")
                                 .font(.system(size: 11.5, weight: .bold))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                                 .tracking(-0.05)
                         }
                     }
@@ -212,7 +212,7 @@ struct MyBookingsView: View {
                             .foregroundStyle(Theme.Color.appTextInverse)
                             .padding(.horizontal, 14)
                             .frame(height: 28)
-                            .background(Theme.Color.primary600)
+                            .background(Theme.Color.primarySolid)
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)

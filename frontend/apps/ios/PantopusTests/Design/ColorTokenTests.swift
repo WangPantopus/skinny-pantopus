@@ -14,6 +14,7 @@ import XCTest
 
 final class ColorTokenTests: XCTestCase {
     private let lightTraits = UITraitCollection(userInterfaceStyle: .light)
+    private let darkTraits = UITraitCollection(userInterfaceStyle: .dark)
 
     // MARK: - Primary
 
@@ -28,6 +29,13 @@ final class ColorTokenTests: XCTestCase {
         assertColor(Theme.Color.primary700, hex: "#075985")
         assertColor(Theme.Color.primary800, hex: "#075985")
         assertColor(Theme.Color.primary900, hex: "#0c4a6e")
+    }
+
+    /// Text and icon ink: the brand primary in light, a light step in dark so it reads on the dark page.
+    func testPrimaryInk() {
+        assertColor(Theme.Color.primaryInk, hex: "#0369a1")
+        assertColor(Theme.Color.primaryInk, hex: "#38bdf8", traits: darkTraits)
+        assertColor(Theme.Color.primarySolid, hex: "#0369a1", traits: darkTraits)
     }
 
     func testSemantic() {
@@ -147,10 +155,11 @@ final class ColorTokenTests: XCTestCase {
     private func assertColor(
         _ color: Color,
         hex: String,
+        traits: UITraitCollection? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let ui = UIColor(color).resolvedColor(with: lightTraits)
+        let ui = UIColor(color).resolvedColor(with: traits ?? lightTraits)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else {
             XCTFail("Could not extract RGBA for \(hex)", file: file, line: line)

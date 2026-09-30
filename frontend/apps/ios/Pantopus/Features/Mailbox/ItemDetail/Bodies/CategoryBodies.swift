@@ -258,7 +258,7 @@ private struct PackageHandoffCard: View {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                     HStack(alignment: .top, spacing: Spacing.s3) {
-                        Icon(step.icon, size: 14, color: Theme.Color.primary600)
+                        Icon(step.icon, size: 14, color: Theme.Color.primaryInk)
                             .frame(width: 24, height: 24)
                             .background(Theme.Color.primary50)
                             .clipShape(Circle())
@@ -422,7 +422,7 @@ private struct PackageContentsCard: View {
                 Spacer()
                 Text("Order details")
                     .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
@@ -565,7 +565,7 @@ private struct PackageSplitDock: View {
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .opacity(isEnabled ? 1 : 0.6)
             }

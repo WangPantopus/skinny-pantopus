@@ -96,7 +96,7 @@ public struct ReceivedReviewsSection: View {
                 Text("Retry")
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("txnReview.retry")

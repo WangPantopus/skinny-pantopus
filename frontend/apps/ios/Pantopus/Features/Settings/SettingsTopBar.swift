@@ -43,7 +43,7 @@ struct SettingsTopBar: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(
                             trailing.isEnabled
-                                ? Theme.Color.primary600
+                                ? Theme.Color.primaryInk
                                 : Theme.Color.appTextMuted
                         )
                         .frame(minWidth: 36, minHeight: 36)

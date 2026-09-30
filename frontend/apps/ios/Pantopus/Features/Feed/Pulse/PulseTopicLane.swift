@@ -149,7 +149,7 @@ struct PulseTopicChipRow: View {
                         }
                         .padding(.horizontal, Spacing.s3)
                         .padding(.vertical, 6)
-                        .background(active ? Theme.Color.primary600 : Theme.Color.appSurfaceRaised)
+                        .background(active ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised)
                         .clipShape(Capsule())
                         .overlay(
                             Capsule().stroke(
@@ -187,7 +187,7 @@ struct PulseSportsEventModule: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             HStack(spacing: Spacing.s2) {
-                Icon(.crown, size: 16, strokeWidth: 2.2, color: Theme.Color.primary600)
+                Icon(.crown, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
                 Text("\(event.displayName ?? event.eventKey) is live")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextStrong)
@@ -220,7 +220,7 @@ struct PulseSportsEventModule: View {
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 7)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -260,7 +260,7 @@ struct PulseSportsStarterRow: View {
                         Button { onSelect(starter) } label: {
                             Text(starter.label)
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                                 .padding(.horizontal, Spacing.s3)
                                 .padding(.vertical, Spacing.s2)
                                 .background(Theme.Color.primary50)

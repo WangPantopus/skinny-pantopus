@@ -106,7 +106,7 @@ struct GigViewerBidPanel: View {
         HStack(spacing: Spacing.s2) {
             Text(amountLabel)
                 .font(.system(size: 18, weight: .heavy).monospacedDigit())
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("gigDetail.yourBid.amount")
             Spacer(minLength: Spacing.s2)
             statusPill

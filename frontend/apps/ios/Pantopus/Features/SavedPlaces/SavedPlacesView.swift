@@ -121,7 +121,7 @@ public struct SavedPlacesView: View {
                             .padding(.horizontal, Spacing.s4)
                             .frame(height: 32)
                             .background(
-                                Capsule().fill(active ? Theme.Color.primary600 : Theme.Color.appSurface)
+                                Capsule().fill(active ? Theme.Color.primarySolid : Theme.Color.appSurface)
                             )
                             .overlay(
                                 Capsule().stroke(
@@ -200,7 +200,7 @@ public struct SavedPlacesView: View {
         VStack(spacing: Spacing.s3) {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 76, height: 76)
-                Icon(.bookmark, size: 32, strokeWidth: 1.7, color: Theme.Color.primary600)
+                Icon(.bookmark, size: 32, strokeWidth: 1.7, color: Theme.Color.primaryInk)
             }
             Text("No saved places yet")
                 .font(.system(size: 20, weight: .bold))
@@ -220,7 +220,7 @@ public struct SavedPlacesView: View {
                 }
                 .padding(.horizontal, Spacing.s6)
                 .frame(height: 46)
-                .background(Capsule().fill(Theme.Color.primary600))
+                .background(Capsule().fill(Theme.Color.primarySolid))
             }
             .buttonStyle(.plain)
             .padding(.top, Spacing.s1)
@@ -251,7 +251,7 @@ public struct SavedPlacesView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Capsule().fill(Theme.Color.primary600))
+                    .background(Capsule().fill(Theme.Color.primarySolid))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("savedPlaces.error.retry")

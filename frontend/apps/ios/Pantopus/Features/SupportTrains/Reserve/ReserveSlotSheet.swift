@@ -176,7 +176,7 @@ public struct ReserveSlotSheet: View {
                         Icon(
                             option.icon,
                             size: 20,
-                            color: option == mode ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                            color: option == mode ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                         )
                         Text(option.label)
                             .font(.system(size: 15, weight: option == mode ? .semibold : .regular))
@@ -211,6 +211,7 @@ public struct ReserveSlotSheet: View {
                     .padding(Spacing.s3)
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                    .accessibilityLabel(mode == .cook ? "What are you making?" : "Dish name")
                     .accessibilityIdentifier("supportTrainReserveDishField")
             }
             if mode == .takeout {
@@ -220,6 +221,7 @@ public struct ReserveSlotSheet: View {
                     .padding(Spacing.s3)
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                    .accessibilityLabel("Restaurant name")
                     .accessibilityIdentifier("supportTrainReserveRestaurantField")
             }
             Toggle(isOn: $hasArrivalTime) {
@@ -244,6 +246,7 @@ public struct ReserveSlotSheet: View {
                 .padding(Spacing.s2)
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                .accessibilityLabel("Note to recipient")
                 .accessibilityIdentifier("supportTrainReserveNoteField")
         }
     }
@@ -414,7 +417,7 @@ public struct ReserveSlotSheet: View {
                 label()
                 Spacer(minLength: Spacing.s2)
                 if isSelected {
-                    Icon(.checkCircle, size: 20, color: Theme.Color.primary600)
+                    Icon(.checkCircle, size: 20, color: Theme.Color.primaryInk)
                 }
             }
             .padding(Spacing.s3)
@@ -471,7 +474,7 @@ public struct ReserveSlotSheet: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(enabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                .background(enabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

@@ -264,7 +264,7 @@ private struct CategoryTile: View {
                     .lineLimit(2)
                 Spacer(minLength: Spacing.s0)
                 if isSelected {
-                    Icon(.check, size: 14, color: Theme.Color.primary600)
+                    Icon(.check, size: 14, color: Theme.Color.primaryInk)
                 }
             }
             .padding(Spacing.s2)
@@ -341,7 +341,7 @@ private struct MemberPickerSheet: View {
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Close") { dismiss() }
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("memberPicker_close")
             }
             .padding(Spacing.s4)
@@ -392,7 +392,7 @@ private struct MemberPickerSheet: View {
                                     }
                                     Spacer()
                                     if selected == member.userId {
-                                        Icon(.check, size: 16, color: Theme.Color.primary600)
+                                        Icon(.check, size: 16, color: Theme.Color.primaryInk)
                                     }
                                 }
                                 .padding(Spacing.s4)

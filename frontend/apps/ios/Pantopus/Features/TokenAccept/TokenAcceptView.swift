@@ -129,7 +129,7 @@ public struct TokenAcceptView: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             HStack(spacing: 6) {
-                Icon(.user, size: 12, color: Theme.Color.primary600)
+                Icon(.user, size: 12, color: Theme.Color.primaryInk)
                 Text(offer.identityChip.label)
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary700)
@@ -167,7 +167,7 @@ public struct TokenAcceptView: View {
         HStack(alignment: .center, spacing: Spacing.s3) {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 40, height: 40)
-                Icon(.userPlus, size: 20, color: Theme.Color.primary600)
+                Icon(.userPlus, size: 20, color: Theme.Color.primaryInk)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Role offered")
@@ -220,7 +220,7 @@ public struct TokenAcceptView: View {
 
     private func safetyBand(_ band: SafetyBand) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Icon(band.icon, size: 16, color: Theme.Color.primary600)
+            Icon(band.icon, size: 16, color: Theme.Color.primaryInk)
                 .padding(.top, 1)
             Text(band.text)
                 .pantopusTextStyle(.caption)
@@ -278,7 +278,7 @@ public struct TokenAcceptView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -378,7 +378,7 @@ public struct TokenAcceptView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 36)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

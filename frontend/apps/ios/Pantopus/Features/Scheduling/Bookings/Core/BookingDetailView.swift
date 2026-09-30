@@ -329,7 +329,7 @@ struct BookingDetailView: View {
             }
             .foregroundStyle(Theme.Color.appTextInverse)
             .frame(maxWidth: .infinity, minHeight: 46)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

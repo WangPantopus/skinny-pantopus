@@ -308,8 +308,10 @@ extension SupportTrainDetailViewModel {
             daysLeft: daysLeft(slots: slots),
             slotsFilled: slotsFilled,
             slotsTotal: slotsTotal,
-            contributors: contributorBubbles(organizers),
-            extraCount: max(0, slotsFilled - min(organizers.count, 4)),
+            // `/:id` carries no helper roster. Organizers aren't helpers, so the
+            // strip shows the signup count alone rather than their faces.
+            contributors: [],
+            extraCount: 0,
             status: dto.status
         )
 
@@ -445,18 +447,6 @@ extension SupportTrainDetailViewModel {
         if modes.homeCookedMeals == true || modes.takeout == true { return .meals }
         if modes.groceries == true { return .errands }
         return .generic
-    }
-
-    private nonisolated static func contributorBubbles(_ organizers: [SupportTrainOrganizerDTO]) -> [ContributorBubble] {
-        let tones: [ContributorBubble.ContributorTone] = [.warning, .primary, .business, .success]
-        return organizers.prefix(4).enumerated().map { index, organizer in
-            let display = organizer.user?.name ?? organizer.user?.username ?? "Helper"
-            return ContributorBubble(
-                id: organizer.id,
-                initials: initials(from: display),
-                tone: tones[index % tones.count]
-            )
-        }
     }
 
     // MARK: Calendar

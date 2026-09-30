@@ -154,7 +154,7 @@ public struct AudienceProfileView: View {
                         Circle()
                             .stroke(Theme.Color.primary100, lineWidth: 1)
                             .frame(width: 72, height: 72)
-                        Icon(.radioTower, size: 30, color: Theme.Color.primary600)
+                        Icon(.radioTower, size: 30, color: Theme.Color.primaryInk)
                     }
                     VStack(spacing: 6) {
                         Text("Your audience starts here")
@@ -180,7 +180,7 @@ public struct AudienceProfileView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 46)
-                            .background(Theme.Color.primary600)
+                            .background(Theme.Color.primarySolid)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                         }
                         .buttonStyle(.plain)
@@ -288,7 +288,7 @@ public struct AudienceProfileView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -321,7 +321,7 @@ public struct AudienceProfileView: View {
     private var beaconsFooter: some View {
         Button(action: onOpenBeacons) {
             HStack(spacing: Spacing.s2) {
-                Icon(.rss, size: 16, color: Theme.Color.primary600)
+                Icon(.rss, size: 16, color: Theme.Color.primaryInk)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Beacon Updates")
                         .font(.system(size: 12, weight: .bold))
@@ -334,7 +334,7 @@ public struct AudienceProfileView: View {
                 Text("Open")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary700)
-                Icon(.chevronRight, size: 14, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 14, color: Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, 10)
@@ -357,7 +357,7 @@ public struct AudienceProfileView: View {
         if let onOpenFollowing {
             Button(action: onOpenFollowing) {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.users, size: 16, color: Theme.Color.primary600)
+                    Icon(.users, size: 16, color: Theme.Color.primaryInk)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Following")
                             .font(.system(size: 12, weight: .bold))
@@ -370,7 +370,7 @@ public struct AudienceProfileView: View {
                     Text("Open")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.Color.primary700)
-                    Icon(.chevronRight, size: 14, color: Theme.Color.primary600)
+                    Icon(.chevronRight, size: 14, color: Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, 10)
@@ -389,7 +389,7 @@ public struct AudienceProfileView: View {
 
     private func statusLine(_ header: AudienceHeaderContent) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.radioTower, size: 15, color: Theme.Color.primary600)
+            Icon(.radioTower, size: 15, color: Theme.Color.primaryInk)
                 .frame(width: 18, height: 18)
             Text("\(Self.formattedCount(header.followerCount)) followers")
                 .font(.system(size: 12.5))
@@ -406,8 +406,8 @@ public struct AudienceProfileView: View {
             Spacer(minLength: Spacing.s0)
             Text("View")
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
-            Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
+            Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
         }
         .padding(.horizontal, Spacing.s4)
         .frame(height: 38)
@@ -579,10 +579,10 @@ public struct AudienceProfileView: View {
             if let action {
                 HStack(spacing: 2) {
                     Text(action)
-                    Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                    Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                 }
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
             }
         }
         .padding(.top, 2)
@@ -668,7 +668,7 @@ public struct AudienceProfileView: View {
             onComposeBroadcast(viewModel.personaId ?? "")
         } label: {
             HStack(spacing: 10) {
-                Icon(.megaphone, size: 16, color: Theme.Color.primary600)
+                Icon(.megaphone, size: 16, color: Theme.Color.primaryInk)
                     .frame(width: 34, height: 34)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -708,7 +708,7 @@ public struct AudienceProfileView: View {
                     HStack {
                         Text(visibility.title)
                         if viewModel.composer.visibility == visibility {
-                            Icon(.check, size: 14, color: Theme.Color.primary600)
+                            Icon(.check, size: 14, color: Theme.Color.primaryInk)
                         }
                     }
                 }
@@ -733,7 +733,7 @@ public struct AudienceProfileView: View {
             ZStack {
                 Circle().fill(Theme.Color.primary50).frame(width: 52, height: 52)
                 Circle().stroke(Theme.Color.primary100, lineWidth: 1).frame(width: 52, height: 52)
-                Icon(.radioTower, size: 22, color: Theme.Color.primary600)
+                Icon(.radioTower, size: 22, color: Theme.Color.primaryInk)
             }
             Text("No broadcasts yet")
                 .font(.system(size: 14.5, weight: .bold))
@@ -754,7 +754,7 @@ public struct AudienceProfileView: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 38)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -886,7 +886,7 @@ public struct AudienceProfileView: View {
     private var manageAudienceRow: some View {
         Button(action: onOpenMembers) {
             HStack(spacing: Spacing.s3) {
-                Icon(.usersRound, size: 20, color: Theme.Color.primary600)
+                Icon(.usersRound, size: 20, color: Theme.Color.primaryInk)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Your audience")
                         .font(.system(size: 15, weight: .semibold))
@@ -977,7 +977,7 @@ public struct AudienceProfileView: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 28)
-            .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .overlay(
                 Capsule().stroke(
                     isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -1105,7 +1105,7 @@ public struct AudienceProfileView: View {
                             .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
                             .padding(.horizontal, 10)
                             .frame(height: 28)
-                            .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+                            .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
                             .overlay(
                                 Capsule().stroke(
                                     isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -1229,7 +1229,7 @@ public struct AudienceProfileView: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
             .frame(minHeight: 28)
-            .background(isActive ? Theme.Color.primary600 : Theme.Color.appSurface)
+            .background(isActive ? Theme.Color.primarySolid : Theme.Color.appSurface)
             .overlay(
                 Capsule().stroke(
                     isActive ? Theme.Color.primary600 : Theme.Color.appBorder,
@@ -1269,12 +1269,12 @@ public struct AudienceProfileView: View {
     private var viewAllMessagesCTA: some View {
         Button(action: onOpenCreatorInbox) {
             HStack(spacing: Spacing.s2) {
-                Icon(.inbox, size: 14, color: Theme.Color.primary600)
+                Icon(.inbox, size: 14, color: Theme.Color.primaryInk)
                 Text("View all messages")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary700)
                 Spacer(minLength: Spacing.s0)
-                Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, 10)

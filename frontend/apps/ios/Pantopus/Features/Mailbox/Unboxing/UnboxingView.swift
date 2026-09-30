@@ -381,10 +381,10 @@ private struct UnboxNav: View {
                 onBack()
             } label: {
                 HStack(spacing: Spacing.s0) {
-                    Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                     Text("Mailbox")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s1)
                 .frame(minHeight: 44)

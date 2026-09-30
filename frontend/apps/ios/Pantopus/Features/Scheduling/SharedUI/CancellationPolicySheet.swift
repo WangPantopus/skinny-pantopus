@@ -76,7 +76,7 @@ public struct CancellationPolicySheet: View {
                     Button("Done", action: onClose)
                         .font(Theme.Font.body)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
 

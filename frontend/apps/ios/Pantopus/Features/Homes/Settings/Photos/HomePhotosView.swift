@@ -41,7 +41,7 @@ public struct HomePhotosView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)

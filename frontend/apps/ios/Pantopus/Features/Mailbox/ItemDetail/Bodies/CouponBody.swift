@@ -172,7 +172,7 @@ private struct StoreBarcodeCard: View {
                 }
             } label: {
                 HStack(spacing: Spacing.s3) {
-                    Icon(.scanLine, size: 18, color: Theme.Color.primary600)
+                    Icon(.scanLine, size: 18, color: Theme.Color.primaryInk)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(isExpanded ? "Hide barcode" : "Show in store")
                             .pantopusTextStyle(.small)
@@ -214,7 +214,7 @@ private struct StoreBarcodeCard: View {
                     Button {
                         UIPasteboard.general.string = code
                     } label: {
-                        Icon(.copy, size: 18, color: Theme.Color.primary600)
+                        Icon(.copy, size: 18, color: Theme.Color.primaryInk)
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
@@ -506,8 +506,8 @@ private struct SimilarOffersRail: View {
             HStack(spacing: 3) {
                 Text("See all")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.Color.primary600)
-                Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                    .foregroundColor(Theme.Color.primaryInk)
+                Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
             }
         }
     }
@@ -605,8 +605,8 @@ private struct MiniCouponCard: View {
             HStack(spacing: 2) {
                 Text("Claim")
                     .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(Theme.Color.primary600)
-                Icon(.arrowRight, size: 10, color: Theme.Color.primary600)
+                    .foregroundColor(Theme.Color.primaryInk)
+                Icon(.arrowRight, size: 10, color: Theme.Color.primaryInk)
             }
         }
         .padding(.horizontal, Spacing.s3)

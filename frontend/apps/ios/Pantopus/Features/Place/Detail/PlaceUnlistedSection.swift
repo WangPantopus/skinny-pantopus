@@ -238,7 +238,7 @@ struct PlaceUnlistedSection: View {
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("place.unlisted.retry")
             }
         }
@@ -379,9 +379,9 @@ private struct UnlistedStateProgramCard: View {
             HStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                Icon(.externalLink, size: 13, strokeWidth: 2, color: Theme.Color.primary600)
+                Icon(.externalLink, size: 13, strokeWidth: 2, color: Theme.Color.primaryInk)
             }
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
         }
         .accessibilityIdentifier("place.unlisted.stateProgram.link.\(id)")
     }

@@ -113,7 +113,7 @@ public struct ConversationRow: View {
                 .font(.system(size: 14, weight: content.unread > 0 ? .semibold : .regular))
                 .foregroundStyle(
                     isAIRow
-                        ? Theme.Color.primary600
+                        ? Theme.Color.primaryInk
                         : (content.unread > 0 ? Theme.Color.appTextStrong : Theme.Color.appTextSecondary)
                 )
                 .lineLimit(1)
@@ -146,7 +146,7 @@ public struct ConversationRow: View {
 
     @ViewBuilder private var trailing: some View {
         if isAIRow {
-            Icon(.chevronRight, size: 18, color: Theme.Color.primary600)
+            Icon(.chevronRight, size: 18, color: Theme.Color.primaryInk)
                 .accessibilityHidden(true)
         } else {
             trailingDefault
@@ -162,7 +162,7 @@ public struct ConversationRow: View {
                 }
                 Text(content.timeLabel)
                     .font(.system(size: 12, weight: content.unread > 0 ? .semibold : .regular))
-                    .foregroundStyle(content.unread > 0 ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                    .foregroundStyle(content.unread > 0 ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
             }
             if content.unread > 0 {
                 Text("\(content.unread)")
@@ -170,7 +170,7 @@ public struct ConversationRow: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 6)
                     .frame(minWidth: 20, minHeight: 20)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
                     .accessibilityLabel("\(content.unread) unread")
             }
@@ -199,7 +199,7 @@ private struct DMAvatarView: View {
             if content.verified {
                 Icon(.check, size: 9, strokeWidth: 3.5, color: Theme.Color.appTextInverse)
                     .frame(width: 16, height: 16)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 1, y: 1)

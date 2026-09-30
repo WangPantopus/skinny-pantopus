@@ -317,7 +317,7 @@ public struct HomeRecordsView: View {
                     Task { await viewModel.retryAssetDetail() }
                 }
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("homeRecords_assetMail_retry")
             }
         }

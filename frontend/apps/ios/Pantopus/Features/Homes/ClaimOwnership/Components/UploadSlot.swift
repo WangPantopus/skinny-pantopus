@@ -209,7 +209,7 @@ struct UploadSlot: View {
             .foregroundStyle(Theme.Color.appTextSecondary)
             + Text("\(Int((progress * 100).rounded()))%")
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Theme.Color.primary600)
+            .foregroundStyle(Theme.Color.primaryInk)
     }
 
     private func ocrDetailText(detail: String, isWarn: Bool) -> Text {
@@ -223,7 +223,7 @@ struct UploadSlot: View {
         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
             .fill(Theme.Color.primary50)
             .frame(width: 40, height: 40)
-            .overlay { Icon(icon, size: 18, strokeWidth: 2.2, color: Theme.Color.primary600) }
+            .overlay { Icon(icon, size: 18, strokeWidth: 2.2, color: Theme.Color.primaryInk) }
     }
 
     @ViewBuilder
@@ -242,7 +242,7 @@ struct UploadSlot: View {
             RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
                 .fill(Theme.Color.primary50)
                 .frame(width: 40, height: 48)
-                .overlay { Icon(.image, size: 20, strokeWidth: 1.8, color: Theme.Color.primary600) }
+                .overlay { Icon(.image, size: 20, strokeWidth: 1.8, color: Theme.Color.primaryInk) }
         }
     }
 

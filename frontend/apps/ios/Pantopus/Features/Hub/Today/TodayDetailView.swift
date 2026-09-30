@@ -19,15 +19,16 @@ struct TodayDetailView: View {
     private let onBack: () -> Void
     /// Gets the text to send: today's conditions and signals (see `TodayDetailViewModel.shareText(for:)`).
     private let onShare: (String) -> Void
-    private let onMore: () -> Void
-    private let onManage: () -> Void
+    /// Nil where there's nowhere to go (the Today tab's briefing push): the control isn't shown.
+    private let onMore: (() -> Void)?
+    private let onManage: (() -> Void)?
 
     init(
         viewModel: TodayDetailViewModel = TodayDetailViewModel(),
         onBack: @escaping () -> Void = {},
         onShare: @escaping (String) -> Void = { _ in },
-        onMore: @escaping () -> Void = {},
-        onManage: @escaping () -> Void = {}
+        onMore: (() -> Void)? = nil,
+        onManage: (() -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
@@ -95,7 +96,7 @@ struct TodayDetailView: View {
                 TodaySectionCard(
                     title: content.signalsTitle,
                     accent: content.signalsAccent,
-                    action: SectionAction(label: "Manage", identifier: "todaySignalsManage", handler: onManage)
+                    action: onManage.map { SectionAction(label: "Manage", identifier: "todaySignalsManage", handler: $0) }
                 ) {
                     SignalsList(signals: content.signals)
                 }
@@ -149,7 +150,7 @@ private struct TodayTopBar: View {
     let dateLabel: String?
     let onBack: () -> Void
     let onShare: () -> Void
-    let onMore: () -> Void
+    let onMore: (() -> Void)?
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
@@ -188,13 +189,15 @@ private struct TodayTopBar: View {
             .accessibilityLabel("Share today's briefing")
             .accessibilityIdentifier("todayShareButton")
 
-            Button(action: onMore) {
-                Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
-                    .frame(width: 44, height: 44)
+            if let onMore {
+                Button(action: onMore) {
+                    Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("More options")
+                .accessibilityIdentifier("todayMoreButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More options")
-            .accessibilityIdentifier("todayMoreButton")
         }
         .padding(.horizontal, Spacing.s2)
         .frame(height: 48)
@@ -236,7 +239,7 @@ private struct TodayHero: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.xl)
                         .fill(Theme.Color.appSurfaceSunken)
-                    Icon(content.glyph, size: 30, color: Theme.Color.primary600)
+                    Icon(content.glyph, size: 30, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 56, height: 56)
                 .accessibilityHidden(true)
@@ -262,7 +265,7 @@ private struct TodayHero: View {
     }
 
     private var kickerColor: Color {
-        content.isAlert ? Theme.Color.error : Theme.Color.primary600
+        content.isAlert ? Theme.Color.error : Theme.Color.primaryInk
     }
 }
 
@@ -364,7 +367,7 @@ private struct TodaySectionCard<Content: View>: View {
                         Text(action.label)
                             .pantopusTextStyle(.caption)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                             .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
                             .contentShape(Rectangle())
                     }
@@ -586,7 +589,7 @@ private struct ShareCardView: View {
         HStack(spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.lg).fill(Theme.Color.primary50)
-                Icon(.share, size: 18, color: Theme.Color.primary600)
+                Icon(.share, size: 18, color: Theme.Color.primaryInk)
             }
             .frame(width: 40, height: 40)
             .accessibilityHidden(true)
@@ -613,7 +616,7 @@ private struct ShareCardView: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)

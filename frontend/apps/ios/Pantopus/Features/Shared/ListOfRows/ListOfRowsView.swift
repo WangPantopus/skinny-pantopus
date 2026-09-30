@@ -96,7 +96,7 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(
                                     action.isEnabled
-                                        ? Theme.Color.primary600
+                                        ? Theme.Color.primaryInk
                                         : Theme.Color.appTextMuted
                                 )
                         } else {
@@ -184,7 +184,7 @@ private struct TopBarActionBadge: View {
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s1)
             .frame(minWidth: 16, minHeight: 16)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(Capsule())
             .accessibilityHidden(true)
             .accessibilityIdentifier("listOfRowsTopBarActionBadge")
@@ -208,7 +208,7 @@ private struct TabStrip: View {
                                     .pantopusTextStyle(.small)
                                     .foregroundStyle(
                                         selected == tab.id
-                                            ? Theme.Color.primary600
+                                            ? Theme.Color.primaryInk
                                             : Theme.Color.appTextSecondary
                                     )
                                 if let count = tab.count {
@@ -216,7 +216,7 @@ private struct TabStrip: View {
                                         .pantopusTextStyle(.caption)
                                         .foregroundStyle(
                                             selected == tab.id
-                                                ? Theme.Color.primary600
+                                                ? Theme.Color.primaryInk
                                                 : Theme.Color.appTextMuted
                                         )
                                 }
@@ -525,8 +525,8 @@ private struct LoadedList: View {
                     HStack(spacing: Spacing.s1) {
                         Text("See all")
                             .pantopusTextStyle(.caption)
-                            .foregroundStyle(Theme.Color.primary600)
-                        Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        Icon(.chevronRight, size: 12, color: Theme.Color.primaryInk)
                     }
                 }
                 .buttonStyle(.plain)
@@ -688,7 +688,7 @@ private struct ListingContextHeader: View {
                                     .pencil,
                                     size: 14,
                                     strokeWidth: 2.0,
-                                    color: Theme.Color.primary600
+                                    color: Theme.Color.primaryInk
                                 )
                                 .frame(width: 28, height: 28)
                                 .background(Theme.Color.primary50)
@@ -1776,12 +1776,12 @@ private struct EngagementStrip: View {
                     Button(action: cta.handler) {
                         HStack(spacing: Spacing.s1) {
                             if let icon = cta.icon {
-                                Icon(icon, size: 12, color: Theme.Color.primary600)
+                                Icon(icon, size: 12, color: Theme.Color.primaryInk)
                             }
                             Text(cta.label)
                                 .pantopusTextStyle(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(Theme.Color.primary600)
+                                .foregroundStyle(Theme.Color.primaryInk)
                         }
                     }
                     .buttonStyle(.plain)
@@ -1888,11 +1888,13 @@ private struct FABButton: View {
     /// Resolve the FAB's tint to a fill color. Default `.sky` keeps the
     /// pre-T6 sky-blue render; `.home` and `.business` swap to the
     /// matching identity tokens.
+    /// Fills under white glyphs and labels: the `*Solid` twins, which stay deep in dark mode
+    /// (`home` lightens to #4ade80 there, 1.9:1 under white).
     private var tintBackground: Color {
         switch action.tint {
-        case .sky: Theme.Color.primary600
-        case .home: Theme.Color.home
-        case .business: Theme.Color.business
+        case .sky: Theme.Color.primarySolid
+        case .home: Theme.Color.homeSolid
+        case .business: Theme.Color.businessSolid
         }
     }
 }

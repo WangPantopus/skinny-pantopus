@@ -19,9 +19,10 @@ interface ProfileHeaderProps {
   trustBadges: Array<{ icon: string; text: string; color: string }>;
   displayRating: number;
   displayReviewCount: number;
-  responseTimeLabel: string;
+  /** Null when the profile carries no response time; the chip is then left out. */
+  responseTimeLabel: string | null;
   reliabilityLabel: string;
-  reliabilityScore: number | null;
+  reliabilityDetail: string;
   // Actions
   followState: boolean;
   /** False for a personally blocked target, or while that check is unavailable. */
@@ -61,7 +62,7 @@ export default function ProfileHeader({
   displayReviewCount,
   responseTimeLabel,
   reliabilityLabel,
-  reliabilityScore,
+  reliabilityDetail,
   followState,
   canFollow = true,
   actionLoading,
@@ -195,18 +196,18 @@ export default function ProfileHeader({
           </div>
 
           {/* Trust chips */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-6">
+          <div className={`grid grid-cols-1 ${responseTimeLabel ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mt-6`}>
             <TrustChip
               title="Rating"
               value={displayReviewCount > 0 ? `${displayRating.toFixed(1)} ★` : 'New'}
               detail={displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'Be their first review'}
             />
             <TrustChip title="Completed" value={gigsCompleted} detail="as worker" />
-            <TrustChip title="Response" value={responseTimeLabel} detail="typical response time" />
+            {responseTimeLabel && <TrustChip title="Response" value={responseTimeLabel} detail="typical response time" />}
             <TrustChip
               title="Reliability"
               value={reliabilityLabel}
-              detail={reliabilityScore != null ? 'Based on the last 90 days' : 'Based on available history'}
+              detail={reliabilityDetail}
             />
           </div>
         </section>

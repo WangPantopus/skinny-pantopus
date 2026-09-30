@@ -149,7 +149,7 @@ public struct PersonaDmThreadView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s5)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -234,14 +234,14 @@ public struct PersonaDmThreadView: View {
                 )
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
-                .background(message.fromViewer ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                .background(message.fromViewer ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Self.bubbleShape(fromViewer: message.fromViewer))
             HStack(spacing: Spacing.s1) {
                 Text(message.timeLabel)
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.Color.appTextMuted)
                 if message.readByCounterparty {
-                    Icon(.checkCheck, size: 11, color: Theme.Color.primary600)
+                    Icon(.checkCheck, size: 11, color: Theme.Color.primaryInk)
                 }
             }
         }

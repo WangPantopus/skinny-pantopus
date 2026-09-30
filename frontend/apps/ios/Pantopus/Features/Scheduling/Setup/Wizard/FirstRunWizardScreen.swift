@@ -136,7 +136,7 @@ private struct WizardResumeBanner: View {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .stroke(Theme.Color.primary100, lineWidth: 1)
                     )
-                Icon(.rotateCcw, size: 17, color: Theme.Color.primary600)
+                Icon(.rotateCcw, size: 17, color: Theme.Color.primaryInk)
             }
             .frame(width: 34, height: 34)
 

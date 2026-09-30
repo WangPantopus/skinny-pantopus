@@ -249,7 +249,7 @@ private struct LandingPrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(isEnabled ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+            .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .shadow(color: Theme.Color.primary600.opacity(isEnabled ? 0.3 : 0), radius: 9, x: 0, y: 8)
         }

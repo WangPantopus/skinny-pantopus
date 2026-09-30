@@ -213,10 +213,10 @@ struct TranslationReadingView: View {
                 onSelect(showingOriginal ? .translated : .original)
             } label: {
                 HStack(spacing: Spacing.s1) {
-                    Icon(.arrowRightLeft, size: 12, color: Theme.Color.primary600)
+                    Icon(.arrowRightLeft, size: 12, color: Theme.Color.primaryInk)
                     Text(showingOriginal ? "Show translation" : "Show original")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .contentShape(Rectangle())
             }

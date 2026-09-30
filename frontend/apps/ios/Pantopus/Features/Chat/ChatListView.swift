@@ -72,7 +72,7 @@ public struct ChatListView: View {
     private var emptyFrame: some View {
         VStack(spacing: 14) {
             Spacer()
-            Icon(.send, size: 30, strokeWidth: 1.8, color: Theme.Color.primary600)
+            Icon(.send, size: 30, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
@@ -93,13 +93,13 @@ public struct ChatListView: View {
                 }
                 .padding(.horizontal, 22)
                 .frame(height: 44)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("chatListNewMessage")
             HStack(spacing: Spacing.s2) {
-                Icon(.shieldCheck, size: 13, color: Theme.Color.primary600)
+                Icon(.shieldCheck, size: 13, color: Theme.Color.primaryInk)
                 Text("People you block can't message you")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -165,7 +165,7 @@ public struct ChatListView: View {
             Button { viewModel.selectFilter(.all) } label: {
                 Text("View all")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .padding(.horizontal, Spacing.s3)
                     .frame(minHeight: 44)
             }
@@ -195,7 +195,7 @@ public struct ChatListView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 22)
                     .frame(height: 44)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -317,7 +317,7 @@ private struct ChatListFilterTabs: View {
                         .foregroundStyle(filter == active ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                         .padding(.horizontal, 5)
                         .frame(minWidth: 18, minHeight: 16)
-                        .background(filter == active ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken)
+                        .background(filter == active ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                         .clipShape(Capsule())
                 }
             }

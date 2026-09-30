@@ -141,7 +141,7 @@ private struct InfoBanner: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(.info, size: 18, color: Theme.Color.primary600)
+            Icon(.info, size: 18, color: Theme.Color.primaryInk)
             Text(text)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.primary700)

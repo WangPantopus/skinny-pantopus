@@ -82,10 +82,10 @@ public struct MailTaskListView: View {
         HStack(spacing: Spacing.s1) {
             Button(action: { viewModel.tapBack() }, label: {
                 HStack(spacing: Spacing.s0) {
-                    Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                     Text("Mailbox")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(minHeight: 44)
             })
@@ -369,7 +369,7 @@ public struct MailTaskListView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 })
                 .buttonStyle(.plain)

@@ -86,7 +86,7 @@ struct ForgotPasswordView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 48)
                 }
-                .background(viewModel.canSubmit ? Theme.Color.primary600 : Theme.Color.appBorderStrong)
+                .background(viewModel.canSubmit ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .disabled(!viewModel.canSubmit)
                 .accessibilityIdentifier("forgotPasswordSubmitButton")

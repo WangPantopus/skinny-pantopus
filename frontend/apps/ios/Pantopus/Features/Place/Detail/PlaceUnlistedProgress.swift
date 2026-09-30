@@ -82,7 +82,7 @@ struct UnlistedProgressUnavailableCard: View {
                             .font(.system(size: 12.5, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
         }

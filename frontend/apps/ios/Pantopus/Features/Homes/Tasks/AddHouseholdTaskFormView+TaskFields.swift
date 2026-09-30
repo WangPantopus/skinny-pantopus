@@ -74,11 +74,11 @@ extension AddHouseholdTaskFormView {
                 Icon(
                     category.icon,
                     size: 14,
-                    color: selected ? Theme.Color.primary600 : Theme.Color.appTextSecondary
+                    color: selected ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                 )
                 Text(category.label)
                     .pantopusTextStyle(.small)
-                    .foregroundStyle(selected ? Theme.Color.primary600 : Theme.Color.appText)
+                    .foregroundStyle(selected ? Theme.Color.primaryInk : Theme.Color.appText)
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)

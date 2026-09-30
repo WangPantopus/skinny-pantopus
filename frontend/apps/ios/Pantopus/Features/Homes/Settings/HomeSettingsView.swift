@@ -117,7 +117,7 @@ struct HomeSettingsIdentityCard: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s3)
                         .frame(minHeight: 36)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .buttonStyle(.plain)

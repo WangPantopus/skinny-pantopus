@@ -172,7 +172,7 @@ private struct PublicEventTypeCard: View {
                 BookingLocationMode.icon(eventType.locationMode),
                 size: 18,
                 // JSX unselected tile glyph uses fg2 (appTextStrong), not fg3.
-                color: isSelected ? Theme.Color.primary600 : Theme.Color.appTextStrong
+                color: isSelected ? Theme.Color.primaryInk : Theme.Color.appTextStrong
             )
             .frame(width: 38, height: 38)
             .background(isSelected ? Theme.Color.primary50 : Theme.Color.appSurfaceSunken)
@@ -254,7 +254,7 @@ private struct BookingMgmtStickyCTA: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 44)
-        .background(Theme.Color.primary600)
+        .background(Theme.Color.primarySolid)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .pantopusShadow(.primary)
         .padding(.horizontal, Spacing.s4)

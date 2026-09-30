@@ -395,7 +395,7 @@ private struct StickyCorrectionBar: View {
                 }
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(Theme.Color.primary600)
+                .background(Theme.Color.primarySolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .pantopusShadow(.primary)
             }

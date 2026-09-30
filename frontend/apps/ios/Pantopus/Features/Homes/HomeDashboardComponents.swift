@@ -81,7 +81,7 @@ struct ClaimOwnershipBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
-                Icon(.shieldCheck, size: 20, color: Theme.Color.primary600)
+                Icon(.shieldCheck, size: 20, color: Theme.Color.primaryInk)
                 Text("Are you the owner?")
                     .pantopusTextStyle(.body)
                     .fontWeight(.semibold)
@@ -99,7 +99,7 @@ struct ClaimOwnershipBanner: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s4)
                         .padding(.vertical, Spacing.s2)
-                        .background(Theme.Color.primary600)
+                        .background(Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
                 }
                 .buttonStyle(.plain)
@@ -110,7 +110,7 @@ struct ClaimOwnershipBanner: View {
                     Text("View claims")
                         .pantopusTextStyle(.small)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .padding(.horizontal, Spacing.s4)
                         .padding(.vertical, Spacing.s2)
                 }
@@ -258,7 +258,7 @@ private struct OnboardingStepRow: View {
                 Text(step.cta)
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary600)
+                    .foregroundStyle(Theme.Color.primaryInk)
                     .padding(.horizontal, Spacing.s3)
                     .frame(minHeight: 44)
             }
@@ -395,7 +395,7 @@ struct DashboardCard<Content: View>: View {
                     Text(action)
                         .pantopusTextStyle(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
             }
             .padding(.horizontal, Spacing.s4)

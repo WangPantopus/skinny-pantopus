@@ -242,29 +242,39 @@ private fun ContributorStrip(content: TypeDatesCardContent) {
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         val visible = content.contributors.take(4)
-        Box(
-            modifier = Modifier.height(22.dp).width(contributorRowWidth(visible.size, content.extraCount)),
-        ) {
-            visible.forEachIndexed { index, bubble ->
-                ContributorDisc(
-                    bubble = bubble,
-                    modifier = Modifier.offset(x = (index * 15).dp),
-                )
-            }
-            if (content.extraCount > 0) {
-                ExtraDisc(
-                    extra = content.extraCount,
-                    modifier = Modifier.offset(x = (visible.size * 15).dp),
-                )
+        if (visible.isNotEmpty() || content.extraCount > 0) {
+            Box(
+                modifier = Modifier.height(22.dp).width(contributorRowWidth(visible.size, content.extraCount)),
+            ) {
+                visible.forEachIndexed { index, bubble ->
+                    ContributorDisc(
+                        bubble = bubble,
+                        modifier = Modifier.offset(x = (index * 15).dp),
+                    )
+                }
+                if (content.extraCount > 0) {
+                    ExtraDisc(
+                        extra = content.extraCount,
+                        modifier = Modifier.offset(x = (visible.size * 15).dp),
+                    )
+                }
             }
         }
         Text(
-            text = if (content.isFullyCovered) "All neighbors confirmed" else "${content.slotsFilled} neighbors signed up",
+            text = signupLine(content.slotsFilled),
             color = PantopusColors.appTextSecondary,
             fontSize = 12.sp,
         )
     }
 }
+
+/** Counts signups only: a covered slot is reserved, not yet confirmed. */
+private fun signupLine(filled: Int): String =
+    when (filled) {
+        0 -> "No one has signed up yet"
+        1 -> "1 neighbor signed up"
+        else -> "$filled neighbors signed up"
+    }
 
 private fun contributorRowWidth(
     visible: Int,

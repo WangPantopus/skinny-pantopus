@@ -203,7 +203,7 @@ public struct WalletView: View {
                     Button(action: onAction) {
                         Text(action)
                             .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary600)
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("walletSeeAllActivity")
@@ -323,7 +323,7 @@ public struct WalletView: View {
 
     private var withdrawSheet: some View {
         VStack(spacing: Spacing.s4) {
-            Icon(.arrowDownToLine, size: 32, color: Theme.Color.primary600)
+            Icon(.arrowDownToLine, size: 32, color: Theme.Color.primaryInk)
             Text("Withdraw to your bank")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
@@ -348,7 +348,7 @@ public struct WalletView: View {
                         .accessibilityIdentifier("wallet.withdrawAmountField")
                     Button("Max") { withdrawAmount = currentAvailable }
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("wallet.withdrawMaxBtn")
                 }
@@ -380,7 +380,7 @@ public struct WalletView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Theme.Color.primary600)
+                    .background(Theme.Color.primarySolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -470,7 +470,7 @@ private struct SetupPayoutsCTA: View {
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg + 2, style: .continuous))
             .pantopusShadow(.primary)
         }
@@ -588,7 +588,7 @@ private struct WithdrawCTA: View {
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Theme.Color.primary600)
+            .background(Theme.Color.primarySolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg + 2, style: .continuous))
             .pantopusShadow(.primary)
         }

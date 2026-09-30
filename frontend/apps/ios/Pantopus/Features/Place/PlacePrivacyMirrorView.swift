@@ -137,7 +137,7 @@ struct PlacePrivacyMirrorView: View {
                 .foregroundStyle(Theme.Color.appText)
             Button("Try again") { Task { await viewModel.refresh() } }
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary600)
+                .foregroundStyle(Theme.Color.primaryInk)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

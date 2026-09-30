@@ -193,10 +193,10 @@ private struct TranslationNav: View {
         HStack(spacing: Spacing.s1) {
             Button(action: onBack) {
                 HStack(spacing: Spacing.s0) {
-                    Icon(.chevronLeft, size: 22, color: Theme.Color.primary600)
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
                     Text("Mailbox")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .frame(minHeight: 44)
             }

@@ -120,7 +120,7 @@ public struct PostcardVerificationView: View {
                     Text("I already have a code")
                         .pantopusTextStyle(.body)
                         .fontWeight(.medium)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .accessibilityIdentifier("postcardHaveCodeCTA")
@@ -154,7 +154,7 @@ public struct PostcardVerificationView: View {
                     Text("Request a new code")
                         .pantopusTextStyle(.body)
                         .fontWeight(.medium)
-                        .foregroundStyle(Theme.Color.primary600)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .disabled(viewModel.isRequestingCode)
