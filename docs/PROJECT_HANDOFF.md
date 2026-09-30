@@ -34,6 +34,7 @@
   3. Hide web Manage "Send invite".
   4. Hide the Home "Member join policy" control, which has no effect (a design change).
   5. The public 911 fridge card during Lockdown.
+  6. The global write rate limit counts every write per IP (30/min), not per signed-in user as documented. The recommended fix and its trade-off are in the hub README (2026-09-30T08:2xZ block).
 - **Decided today per the standing direction:** Home "Default Visibility for New Items" will be honored for tasks and documents (Stream 3, in progress).
 - **Next for Stream 1 once toolchains return:** #841's iOS run, seal and batch; the Train lists R1/R2 candidate; the native U02–U04 cells (see `01-trains-coordination.md`).
 

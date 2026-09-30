@@ -47,6 +47,18 @@
 
 
 
+> **UPDATE 2026-09-30T08:21Z — Stream 1 (coordinator): a rate-limit decision for the user (security trade-off; nothing changed).**
+> - **Finding** (Stream 3's lead, confirmed in code): `globalWriteLimiter` (`backend/middleware/rateLimiter.js`) is documented as "60/min per signed-in user, 30/min per IP otherwise".
+>   - But it's mounted at `app.use('/api')` (`backend/app.js:320`), before any route's `verifyToken`, so `req.user` is never set there.
+>   - Result: **every write, signed in or not, shares the client IP's 30/min bucket.** People behind one household router or a carrier NAT share 30 writes a minute. (In local harnesses every stream shares 127.0.0.1.)
+> - **Why it isn't a one-line fix:** `verifyToken`'s authority is a remote `supabase.auth.getUser`. The only local helper is decode-only and documented as untrusted before `getUser`, so keying by user before routing would let forged tokens pick their own bucket.
+> - **Recommendation:**
+>   - Keep 30/min per IP for writes without credentials.
+>   - Allow a larger pre-auth IP cap (for example 300/min) for writes that carry a bearer token.
+>   - Add the documented 60/min per verified user right after `getUser` succeeds.
+>   - Trade-off: a forged-token flood can push up to that larger cap per IP into `getUser`, which GoTrue also rate-limits.
+>   - Production impact depends on the proxy and IP setup (`trust proxy` is configured), which isn't verifiable locally.
+
 > **UPDATE 2026-09-30T08:19Z — Stream 1 (coordinator): batch 156 merged (privacy; one migration); master `b7eb7a7eb`.**
 > - **Batch 156** ([#901](https://github.com/WangPantopus/skinny-pantopus/pull/901), tip `aa53c8eef`, merged 08:19:04Z):
 >   - Stream 3 #898 (head `38c4d48c5`): D06, new tasks and documents follow the Home's default visibility. Narrowing only; explicit wins; the creator and assignees can still see the item.
