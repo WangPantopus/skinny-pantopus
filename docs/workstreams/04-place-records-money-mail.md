@@ -269,6 +269,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T12:07Z — [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) sealed and with the coordinator for the joint batch.** Head `b410aae70a49870fef3770a4fd3c06cc6d78d143`. Bundle `20260930-stream4-household-data-r1`, 17 files, MANIFEST `b759067e2b4b6dcbf7de685a5cdb98ca9397070a4e7998f255c954c892ded99c`.
+  - **Adopted Stream 5 decision 10:** the purge closes and detaches the household chat instead of deleting it.
+  - **Personal data trigger widened** (now `delete_personal_home_data`): the departing person's attention-only letters at a Home go too, since otherwise nobody could ever read them.
+  - **Rolled-back proof re-run on this head** (12:05:51Z, in Stream 3's window) passed. The real-route proof is Stream 5's combined E2E on their stack with exactly this head.
+
 - **2026-09-30T12:03Z — account deletion, part 2: [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) open.** Head `ae0d7ca46ab78fdcdb6d6dfb915e6d1c0c773dbd`, migration `20260930162000` (reserved). #952 merged in batch 174 (master `536ec33a1`); #954 merged in batch 173.
   - **New blocker, reproduced** (rolled back, 11:53:51Z, in Stream 3's window): a member who ever attached a file to a Home task can't delete their account.
     - The dry run gives 23514, from protect_home_task_media_file ("File tombstones must be retained"), cascaded from File.user_id.
