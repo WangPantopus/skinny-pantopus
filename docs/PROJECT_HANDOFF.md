@@ -16,6 +16,27 @@
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
 
 
+## CURRENT RESUME POINT — 2026-09-30T07:52Z (five streams running; Stream 1 merged batches 140–153, master `57173fa22`)
+
+- **Where things stand.** Master is `57173fa22`. The merge queue is empty apart from #841 (Stream 1; native Start a train, waiting for one iOS run) and #842 (Stream 5 DRAFT; never batch). The per-batch record, with each PR's head, seal and checks, is in the [live hub README](workstreams/README.md) (UPDATE blocks dated 2026-09-30).
+- **Security and privacy fixes merged today (found by Stream 3, routed by Stream 1):**
+  - **Mail compose recipient search** (live leak). Any signed-in user with a Home id could list its residents plus the street address. Fixed by #867, #872 and #885: household rule only, connections see City/State, and pending claimants count as nobody.
+  - **Explore map homes layer** (latent: it draws nothing today because `location` arrives as EWKB hex). It would have returned every Home's exact coordinates and street. Fixed by #865, #869 and #874 to return only the viewer's own household (trusted occupancies), per `docs/location-privacy-matrix.md`.
+  - **Support Trains:** a draft or back-to-draft train was readable by anyone with its link (#883).
+- **Deploy notes.**
+  - `20260930070000_home_lockdown_command.sql` (#881, Lockdown as one transaction with its audit row) **must deploy before the backend**. It's function-only.
+  - Stream 3's coming default-visibility migration is expected to need no deploy order.
+  - Both are backwards compatible and pass `check-migrations`.
+- **Verification limits.** Everything merged today was verified on web and the API against isolated local stacks with owned synthetic fixtures. **No iOS or Android run is possible**: the 2026-09-30 wipe removed the simulator runtimes, the Android SDK, the AVDs and `~/.gradle`. No hosted, provider, money-capture or physical-device claim.
+- **Decisions waiting for the user:**
+  1. Permission to download the native toolchains (iOS runtime ~8–9 GB, Android SDK and image ~2.5 GB, Gradle ~3–5 GB). Stream 1 does the reinstall for all streams.
+  2. The app-wide accent-colour contrast token.
+  3. Hide web Manage "Send invite".
+  4. Hide the Home "Member join policy" control, which has no effect (a design change).
+  5. The public 911 fridge card during Lockdown.
+- **Decided today per the standing direction:** Home "Default Visibility for New Items" will be honored for tasks and documents (Stream 3, in progress).
+- **Next for Stream 1 once toolchains return:** #841's iOS run, seal and batch; the Train lists R1/R2 candidate; the native U02–U04 cells (see `01-trains-coordination.md`).
+
 ## CURRENT RESUME POINT — 2026-09-29T04:16Z (batch114 merged; native Support Train delete returns to a fresh list)
 
 > ## ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; applies to all streams; read before planning any verification)
