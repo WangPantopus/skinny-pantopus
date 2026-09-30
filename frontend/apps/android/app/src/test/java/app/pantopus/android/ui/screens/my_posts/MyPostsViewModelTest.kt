@@ -97,7 +97,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadEmptyTransitionsToEmpty() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = emptyList()))
             val vm = makeVM()
             vm.load()
@@ -110,7 +110,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadPopulatedTransitionsToLoadedOnActiveTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -126,7 +126,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadFailureTransitionsToErrorWhenCold() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVM()
             vm.load()
@@ -148,7 +148,7 @@ class MyPostsViewModelTest {
     @Test
     fun wirePostWithArchivedAtLandsInArchivedTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     MyPostsResponse(
                         posts =
@@ -222,7 +222,7 @@ class MyPostsViewModelTest {
     @Test
     fun rowProjectionUsesPrimaryBodyEmphasisAndHeaderChips() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -246,7 +246,7 @@ class MyPostsViewModelTest {
     @Test
     fun archivedRowUsesArchivedHighlightAndRestoreCTA() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     MyPostsResponse(posts = listOf(dto(id = "x1", archivedAt = "2026-05-11T10:00:00Z"))),
                 )
@@ -266,7 +266,7 @@ class MyPostsViewModelTest {
     @Test
     fun archiveOptimisticallyFlipsRowToArchivedTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -284,7 +284,7 @@ class MyPostsViewModelTest {
     @Test
     fun unarchiveFlipsRowBackToActive() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -302,7 +302,7 @@ class MyPostsViewModelTest {
     @Test
     fun confirmDeleteRemovesRowOnSuccess() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.deletePost("p1") } returns NetworkResult.Success(Unit)
             val vm = makeVM()
@@ -316,7 +316,7 @@ class MyPostsViewModelTest {
     @Test
     fun confirmDeleteRollsBackOnFailure() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.deletePost("p1") } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))

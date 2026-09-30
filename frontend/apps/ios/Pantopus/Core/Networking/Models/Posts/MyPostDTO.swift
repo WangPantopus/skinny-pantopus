@@ -4,10 +4,9 @@
 //
 //  T5.3.3 — My posts. Decoder for `GET /api/posts/user/:userId` (route
 //  `backend/routes/posts.js:3016`). Reuses the feed serializer on the
-//  backend, so most fields mirror `FeedPostDTO`; we add an optional
-//  `archivedAt` so the client can model the Archived-tab state
-//  locally even though the current backend filters archived rows out
-//  of the `/user/:id` response.
+//  backend, so most fields mirror `FeedPostDTO`. `archivedAt` splits
+//  the rows into the Active and Archived tabs (My posts asks for its
+//  archived posts with `include_archived=true`).
 //
 
 import Foundation

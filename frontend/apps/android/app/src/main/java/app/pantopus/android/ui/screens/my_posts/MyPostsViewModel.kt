@@ -284,7 +284,7 @@ class MyPostsViewModel
             // the list to its first page on every refresh.
             val depth = posts.size.coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                val result = postsRepo.userPosts(userId, depth)
+                val result = postsRepo.userPosts(userId, depth, includeArchived = true)
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
                 when (result) {
@@ -313,7 +313,7 @@ class MyPostsViewModel
         private suspend fun fetchNextPage(generation: Long): NetworkResult<MyPostsResponse>? {
             val cursor = nextPage ?: return null
             val userId = currentUserId() ?: return null
-            val result = postsRepo.userPosts(userId, PAGE_SIZE, cursor.createdAt, cursor.id)
+            val result = postsRepo.userPosts(userId, PAGE_SIZE, cursor.createdAt, cursor.id, includeArchived = true)
             if (generation != fetchGeneration) return null
             if (result is NetworkResult.Success) {
                 val known = posts.mapTo(HashSet()) { it.id }

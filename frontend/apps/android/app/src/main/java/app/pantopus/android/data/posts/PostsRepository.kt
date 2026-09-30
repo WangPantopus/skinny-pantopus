@@ -94,16 +94,18 @@ class PostsRepository
 
         /**
          * `GET /api/posts/user/:userId` — paged list of posts authored by a
-         * user. T5.3.3 My posts uses the signed-in user's id. Backend filters
-         * archived posts out today; the Archived tab is fed by local
-         * optimistic state until a `?status=archived` filter ships.
+         * user. T5.3.3 My posts uses the signed-in user's id with
+         * [includeArchived], so its Archived tab survives a reload; the
+         * backend ignores the flag for anyone else's list.
          */
         suspend fun userPosts(
             userId: String,
             limit: Int = 50,
             cursorCreatedAt: String? = null,
             cursorId: String? = null,
-        ): NetworkResult<MyPostsResponse> = safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId) }
+            includeArchived: Boolean = false,
+        ): NetworkResult<MyPostsResponse> =
+            safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId, includeArchived.takeIf { it }) }
 
         /** `DELETE /api/posts/:id`. */
         suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }
