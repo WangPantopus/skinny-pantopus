@@ -13,7 +13,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 
 - **Renumbering (user direction, 2026-09-30):** the former Streams 1 and 2 are each being split in two (Streams 1–4), so this stream, formerly Stream 3, is now **Stream 5**.
   - Coordination commit `478cdc05f` moved this file from `03-…` and added notices atop the hub README and PROJECT_HANDOFF. It also points every markdown link here and adds [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md).
-  - The session is named "Stream 5: Accounts and Social", and device leases use the `stream5:` label; the kit scripts accept both labels.
+  - The session is named "Stream 5: Accounts and Social", and device leases use the `stream5:` label, and the kit scripts accept only `stream5:` (tightened at about 04:15Z after the former Stream 2 became Streams 3, with `stream3-home:` leases, and 4, with `stream4:` leases).
   - Streams 1 and 2 were messaged at about 04:06Z.
 - **[#843](https://github.com/WangPantopus/skinny-pantopus/pull/843) (docs, for Stream 1's queue):** updates AGENTS.md ("three streams" becomes parallel workstreams, pointing to this branch's live guide) and gives master's older snapshot docs the same notice and file move. No application change.
 - **Branch audit at the user's request (commit, push and PR anything left):** every Stream 5 worktree is clean.

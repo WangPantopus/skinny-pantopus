@@ -25,7 +25,7 @@ Written 2026-09-30T04:05:05Z. You are **Stream 5**, one of the user's parallel w
 - Launch scope (2026-09-27): never verify, test or fix Beacon/creator tools, personas, public scheduling for general businesses, or the other cut features.
 - No competing tracker or merge queue. Stream 1's queue owner batches PRs; hand each PR over with its head SHA and seal.
 - Stream 5 owns only `docs/workstreams/05-accounts-social.md` in this checkout. Fetch and fast-forward before editing, and commit and push only your own changes.
-- Take device slots, the heavy slot and the shared iOS driver through the tools, and announce exact `date -u` times. Label leases `stream5:`; the kit scripts accept `stream5:` and `stream3:`.
+- Take device slots, the heavy slot and the shared iOS driver through the tools, and announce exact `date -u` times. Label leases `stream5:`; the kit scripts accept only `stream5:`. The former Stream 2 is now Streams 3 (`stream3-home:` leases, `claude/stream3-home-…` branches) and 4 (`stream4:`), so never use a plain `stream3:` lease.
 - Record every time from `date -u` and every SHA from `git rev-parse`; never estimate.
 
 ## 4. Still open, waiting on the user
