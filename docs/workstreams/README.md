@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T10:40Z — Stream 1 (coordinator): batch 171 merged; master `1f6743f6b`. Support Train organizers can delete their accounts end to end.**
+> - **Batch 171** ([#948](https://github.com/WangPantopus/skinny-pantopus/pull/948), 10:39:07Z):
+>   - **Stream 3 #943:** `HomeAccessSecret.created_by` is SET NULL. **Migration `20260930141000`**.
+>   - **Stream 5 #947:** removes the `SUPPORT_TRAIN_ORGANIZER` guard. **Deploy #941's `20260930134000` before or with the backend.**
+> - **Account-deletion columns still open:** Stream 2 PR B (Gig and Refund columns), Stream 4 (Home created_by columns), Stream 5 (BusinessAuditLog). Stream 1 and Stream 3 are done.
+> - **Runtime note (from Stream 3):** on a runtime whose ledger already has a later version, `supabase migration up` needs `--include-all` to pick up lower-numbered master migrations such as `134000` and `140000`.
+
 > **UPDATE 2026-09-30T10:37Z — Stream 1 (coordinator): batch 170 merged; master `c2f8fa5c9`.**
 > - **Batch 170** ([#946](https://github.com/WangPantopus/skinny-pantopus/pull/946), 10:36:37Z): 3 files, all blob-equal.
 >   - **Stream 2 #944, account deletion (stop records):** **migration `20260930140000`**. A finished stop keeps its receipt with the actor nulled. An unfinished stop refuses (CHECK, 23514). Paid stops are kept (trigger, 23503). Receipts go with their task. `read_gig_stop_delivery` compares null-safely. Seal `7fdfc16d…`.
