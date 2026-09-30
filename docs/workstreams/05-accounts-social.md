@@ -9,6 +9,22 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — renumbered to Stream 5; branch audit done; draft #842 and docs PR #843 open, 2026-09-30T04:08:28Z
+
+- **Renumbering (user direction, 2026-09-30):** the former Streams 1 and 2 are each being split in two (Streams 1–4), so this stream, formerly Stream 3, is now **Stream 5**.
+  - Coordination commit `478cdc05f` moved this file from `03-…` and added notices atop the hub README and PROJECT_HANDOFF. It also points every markdown link here and adds [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md).
+  - The session is named "Stream 5: Accounts and Social", and device leases use the `stream5:` label; the kit scripts accept both labels.
+  - Streams 1 and 2 were messaged at about 04:06Z.
+- **[#843](https://github.com/WangPantopus/skinny-pantopus/pull/843) (docs, for Stream 1's queue):** updates AGENTS.md ("three streams" becomes parallel workstreams, pointing to this branch's live guide) and gives master's older snapshot docs the same notice and file move. No application change.
+- **Branch audit at the user's request (commit, push and PR anything left):** every Stream 5 worktree is clean.
+  - Local unpushed Stream 5 commits are either patch-equivalent to master or local verification builds marked "not for push". Three older fix drafts have final versions on master (`275457c38`, `83fc150c8`, `9c01aad86`).
+  - Pushed branches with commits not on master:
+    - `claude/stream3-native-connection-persona-links`: an older draft, superseded by `83fc150c8`;
+    - `codex/stream3-a02-remote-signout-retry` (docs; #158 closed as a duplicate of #143 and #157) and `codex/stream3-verify-android-integration` (#172 closed): closed deliberately;
+    - `wip/stream3/accounts-social-publicshare-nostore`: a 2026-09-23 checkpoint with a local-only tsconfig change and a cut persona part; kept as a branch, not a PR candidate;
+    - `claude/stream3-web-assistant-summary-chips` (S3-26): never opened, so it is now **draft [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842)**. It is unverified because AI content is blocked; do not batch it until it is verified or the user accepts it.
+- **Still true:** Docker has been down since 03:30Z, and the user decides the restart. No lease is held. The open items are listed in the resume prompt §4.
+
 ## LIVE — user-approved round complete: #831, #833 and #839 all merged, 2026-09-30T03:40Z
 
 - **User direction (2026-09-29T22:09:04Z):** build the notifications-off notice, the web account-deletion confirmation and the native lost-reply deletion check; verify end to end in the real apps; no unit tests. All three are built and verified.
