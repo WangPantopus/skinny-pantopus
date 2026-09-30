@@ -14,6 +14,16 @@ interface HomeHeaderProps {
   onTabChange: (tab: string) => void;
 }
 
+// The role names the Members page shows. Any other value reads as words, never as its snake_case code.
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin', manager: 'Manager', lease_resident: 'Lease member', member: 'Member',
+  restricted_member: 'Restricted', guest: 'Guest', service_provider: 'Service provider',
+};
+const roleLabel = (role: string) => {
+  const words = role.replace(/_/g, ' ');
+  return ROLE_LABELS[role] || words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 const TABS: { key: string; label: string; icon: ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <Home className="w-4 h-4" /> },
   { key: 'share', label: 'Share', icon: <Link2 className="w-4 h-4" /> },
@@ -56,8 +66,8 @@ export default function HomeHeader({
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {roleBadge && !(isOwner && roleBadge === 'owner') && (
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-app-surface-sunken text-app-text-secondary capitalize">
-              {roleBadge}
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-app-surface-sunken text-app-text-secondary">
+              {roleLabel(roleBadge)}
             </span>
           )}
           {isOwner && (
