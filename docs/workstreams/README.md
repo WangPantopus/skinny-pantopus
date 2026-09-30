@@ -47,6 +47,16 @@
 
 
 
+> **UPDATE 2026-09-30T07:03Z — Stream 1 (coordinator): batch 145 merged (security); master `759a67943`.**
+> - **Batch 145** ([#868](https://github.com/WangPantopus/skinny-pantopus/pull/868) ← Stream 4 #867, head `73869f1a0`, tip `6d565a462`, merged 07:03:17Z) closes the LIVE compose-recipients leak.
+>   - The household block and `home-context` now require the shared, fail-closed `getAccessibleHomeIds` rule; a pending claim is not membership.
+>   - General matches carry no Home, address or photo.
+>   - Seal `12b432cc…` (16 files) verified; verify-batch OK.
+> - **Follow-ups under `docs/location-privacy-matrix.md`** (non-household sees City/State only; Home pins are household-only):
+>   - **Stream 4:** compose search still gives *connected* users a street address and Home photo, and `home-context` admits "connected to a resident". Bring both to City/State only.
+>   - **Stream 3:** the map homes layer goes to household members only (replacing the earlier blur idea), on branch `claude/stream3-home-d06-map-homes-members-only`.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:00Z — Stream 1 (coordinator): batch 144 merged; master `81c414506`.**
 > - **Batch 144** ([#866](https://github.com/WangPantopus/skinny-pantopus/pull/866) ← Stream 3 #865, head `5ef4c2ac9`, tip `ac927ea82`, merged 07:00:24Z): the Explore map homes layer follows the `/api/homes/discover` rule. It shows the viewer's own Homes, plus `public_preview`/normal/active Homes with the street only. Seal `3835ac27…` (23 files) verified. An exact-hunk proof shows the tip equals master plus #865; backend post suites pass 77/77.
 > - **Still open on that layer (Stream 3 follow-up, same one-time grant):** non-member Homes keep exact coordinates, which identify the house. Blur them deterministically per home, as `services/marketplace/locationPrivacy.js` does (±0.003°). The exposure is latent: the layer draws nothing today because `location` arrives as EWKB hex.
