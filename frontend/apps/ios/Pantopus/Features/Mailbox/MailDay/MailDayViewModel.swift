@@ -41,10 +41,10 @@ public final class MailDayViewModel {
     private let api: APIClient
 
     /// - Parameters:
-    ///   - variant: Which fixture to fall back to when the fetch can't
-    ///     complete (offline / previews / tests). Defaults to `.populated`.
-    ///   - content: Optional seed (tests / previews) overriding the
-    ///     sample fixture for this variant.
+    ///   - variant: Which frame an injected `content` seed projects as
+    ///     (previews / tests). Defaults to `.populated`.
+    ///   - content: Optional seed for previews and tests. Without it, a
+    ///     failed read shows the error state, never sample mail.
     ///   - onScanRequested: Invoked when the user taps any Scan CTA
     ///     (top scan-more card or empty-hero primary). Out of scope to
     ///     wire to the real scanner here — the host hands a closure.
@@ -96,9 +96,14 @@ public final class MailDayViewModel {
                 ? .empty(content)
                 : .populated(content)
         } catch {
-            // Offline / preview / tests without a stub fall back to the
-            // fixture for this variant so the screen still renders.
-            state = projectedState()
+            // A failed read (offline, a server error, an unreadable reply)
+            // shows the error state with Try again. Sample pieces are only
+            // for previews and tests that inject `content`; real users never
+            // see invented mail (or accept a suggestion for a fixture piece).
+            state = seededContent == nil
+                ? .error(message: (error as? APIError)?.errorDescription
+                    ?? "Something went wrong. Please try again.")
+                : projectedState()
         }
     }
 
