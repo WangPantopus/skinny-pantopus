@@ -32,7 +32,7 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
   recommendation: {
     label: 'Recommendation',
     color: '#B45309',
-    textColor: '#B45309',
+    textColor: '#92400E',
     darkTextColor: '#FBBF24',
     bgLight: '#FFFBEB',
     borderColor: '#FDE68A',
