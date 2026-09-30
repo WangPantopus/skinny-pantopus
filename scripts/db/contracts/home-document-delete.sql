@@ -34,9 +34,12 @@ SELECT set_config('request.jwt.claim.sub', 'eee00000-0000-4000-8000-000000000031
 DO $$
 DECLARE affected integer;
 BEGIN
-  IF EXISTS (SELECT FROM public."File" WHERE id = 'eee00000-0000-4000-8000-000000000033') THEN
+  -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+  BEGIN
+    PERFORM 1 FROM public."File" WHERE id = 'eee00000-0000-4000-8000-000000000033';
     RAISE EXCEPTION 'Generic File reads expose private document metadata';
-  END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   BEGIN
     UPDATE public."File" SET is_deleted = true WHERE id = 'eee00000-0000-4000-8000-000000000033';
     GET DIAGNOSTICS affected = ROW_COUNT;

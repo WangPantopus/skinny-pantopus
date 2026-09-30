@@ -41,11 +41,17 @@ SET LOCAL ROLE service_role;
 INSERT INTO public."User"(id,email,username,name,stripe_customer_id) VALUES
  ('eef10000-0000-4000-8000-000000000003','card-contract-3@example.invalid','card_contract_3','New card profile',NULL);
 UPDATE public."User" SET name='Updated card profile' WHERE id='eef10000-0000-4000-8000-000000000003';
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003' AND name='Updated card profile') THEN
+ RAISE EXCEPTION 'The API''s profile insertion/update was not stored'; END IF;
+END $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
- IF NOT EXISTS(SELECT FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003' AND name='Updated card profile') THEN
- RAISE EXCEPTION 'Owner cannot read the API''s profile insertion/update'; END IF;
+ -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses even
+ -- the owner's own profile read; the API returns it.
+ BEGIN PERFORM 1 FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003';
+  RAISE EXCEPTION 'Owner read the profile directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN
   UPDATE public."User" SET name='Client-forged profile' WHERE id='eef10000-0000-4000-8000-000000000003';
   RAISE EXCEPTION 'Client edited its own profile directly';

@@ -139,18 +139,32 @@ BEGIN
  RAISE EXCEPTION 'Prior canceled financial records were lost'; END IF;
 END $$;
 RESET ROLE;
--- Real unprivileged roles retain involved reads but cannot manufacture proof.
--- They hold no write grant on public tables (20260930174000): even ordinary
--- gig edits go through the API, which writes as service_role.
+-- Real unprivileged roles can't read or manufacture proof directly: they hold no
+-- privilege on public tables (writes since 20260930174000, reads since
+-- 20260930182000). Reads and even ordinary gig edits go through the API, as
+-- service_role. The read policies stay as defense in depth; the payer/payee
+-- predicate of payment_select_involved is checked below as data.
 SET LOCAL ROLE service_role;
 UPDATE public."Gig" SET description='Owner retains ordinary content edits' WHERE id='aae10000-0000-4000-8000-000000000101';
+DO $$ BEGIN
+ IF (SELECT description FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101') IS DISTINCT FROM 'Owner retains ordinary content edits' THEN
+  RAISE EXCEPTION 'The API''s content edit was not stored'; END IF;
+ IF (SELECT count(*) FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101'
+   AND 'aae10000-0000-4000-8000-000000000001' IN (payer_id,payee_id))<>2
+  OR (SELECT count(*) FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101'
+   AND 'aae10000-0000-4000-8000-000000000002' IN (payer_id,payee_id))<>2
+  OR EXISTS(SELECT FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101'
+   AND 'aae10000-0000-4000-8000-000000000004' IN (payer_id,payee_id)) THEN
+  RAISE EXCEPTION 'Payment involvement changed: payer and payee each in both records, the foreign actor in none'; END IF;
+END $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101')<>2 THEN RAISE EXCEPTION 'Payer lost financial reads'; END IF;
- IF (SELECT description FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101') IS DISTINCT FROM 'Owner retains ordinary content edits' THEN
-  RAISE EXCEPTION 'Owner cannot read the API''s content edit'; END IF;
+ BEGIN PERFORM 1 FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101';
+ RAISE EXCEPTION 'Payer read financial records directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM description FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101';
+ RAISE EXCEPTION 'Owner read gig content directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN UPDATE public."Payment" SET payment_status='authorized' WHERE id='aae10000-0000-4000-8000-000000000302';
  RAISE EXCEPTION 'Payer forged status'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN DELETE FROM public."Payment" WHERE id='aae10000-0000-4000-8000-000000000302';
@@ -165,13 +179,15 @@ DO $$ BEGIN
 END $$;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000002',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101')<>2 THEN RAISE EXCEPTION 'Payee lost financial reads'; END IF;
+ BEGIN PERFORM 1 FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101';
+ RAISE EXCEPTION 'Payee read financial records directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN UPDATE public."Payment" SET amount_total=1 WHERE id='aae10000-0000-4000-8000-000000000302';
  RAISE EXCEPTION 'Payee forged amount'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000004',true);
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101') THEN RAISE EXCEPTION 'Foreign actor read payment'; END IF;
+ BEGIN PERFORM 1 FROM public."Payment" WHERE gig_id='aae10000-0000-4000-8000-000000000101';
+ RAISE EXCEPTION 'Foreign actor read payment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 DO $$ DECLARE r text; fn regprocedure; BEGIN
@@ -282,8 +298,12 @@ UPDATE public."Gig" SET created_by='aae10000-0000-4000-8000-000000000003',
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000003',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
-  RAISE EXCEPTION 'Active posting creator lost existing read'; END IF;
+ -- Since 20260930182000 the grant refuses direct reads too. The read policy's creator clause
+ -- (gig_select_authorized) is this helper call on the gig's owner, asserted for each creator state.
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Active creator read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF NOT public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
+  RAISE EXCEPTION 'Active posting creator lost current authority'; END IF;
  -- Since #992 clients reach Gig only through the API, so the grant refuses this, not RLS.
  BEGIN UPDATE public."Gig" SET completion_note='Direct creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
   RAISE EXCEPTION 'Active creator edited the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
@@ -296,7 +316,9 @@ RESET ROLE;
 UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Revoked creator read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
   RAISE EXCEPTION 'Revoked creator retained private proof reads'; END IF;
  -- Since #992 clients reach Gig only through the API, so the grant refuses this, not RLS.
  BEGIN UPDATE public."Gig" SET completion_note='Revoked creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
@@ -307,7 +329,9 @@ UPDATE public."BusinessTeam" SET is_active=true WHERE business_user_id='aae10000
 UPDATE public."BusinessPermissionOverride" SET allowed=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Explicitly denied creator read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
   RAISE EXCEPTION 'Explicitly denied creator retained private proof'; END IF;
  IF public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000001') THEN
   RAISE EXCEPTION 'Caller borrowed another owner identity'; END IF;
@@ -317,27 +341,27 @@ UPDATE public."BusinessPermissionOverride" SET allowed=true
  WHERE business_user_id='aae10000-0000-4000-8000-000000000004' AND permission='gigs.manage';
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
-  RAISE EXCEPTION 'Current managing creator lost existing read'; END IF;
- IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Authorized creator edit' THEN
-  RAISE EXCEPTION 'Current managing creator cannot read the API''s edit'; END IF;
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Current managing creator read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF NOT public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
+  RAISE EXCEPTION 'Current managing creator lost current authority'; END IF;
 END $$;
+-- The owner, worker and unrelated owner are refused as well; the read policy's column predicates
+-- for them are checked as data after the anonymous section.
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000004',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
-  RAISE EXCEPTION 'Business owner lost proof'; END IF;
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Business owner read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000002',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
-  RAISE EXCEPTION 'Current worker lost proof'; END IF;
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'Current worker read the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
-  RAISE EXCEPTION 'Unrelated owner acquired business proof'; END IF;
- IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101')<>1 THEN
-  RAISE EXCEPTION 'Personal owner lost existing read'; END IF;
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id IN('aae10000-0000-4000-8000-000000000101','aae10000-0000-4000-8000-000000000102');
+  RAISE EXCEPTION 'Unrelated or personal owner read gigs directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',true);
@@ -353,6 +377,16 @@ RESET ROLE;
 DO $$ BEGIN
  IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Authorized creator edit' THEN
   RAISE EXCEPTION 'Refused writes changed stored proof'; END IF;
+ -- gig_select_authorized's column predicates, which the API applies through its own reads: the
+ -- business owner and the worker are involved in the business gig, the unrelated owner isn't, and
+ -- the personal owner owns the personal gig.
+ IF NOT EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102'
+   AND user_id='aae10000-0000-4000-8000-000000000004' AND accepted_by='aae10000-0000-4000-8000-000000000002')
+  OR EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102'
+   AND 'aae10000-0000-4000-8000-000000000001' IN (user_id,beneficiary_user_id,accepted_by,created_by))
+  OR NOT EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101'
+   AND user_id='aae10000-0000-4000-8000-000000000001') THEN
+  RAISE EXCEPTION 'Gig involvement changed for the owner, worker or unrelated owner'; END IF;
 END $$;
 
 -- Worker proof and its existing owner notices commit as one decision.
@@ -524,7 +558,11 @@ SELECT public.mutate_gig_completion_file('aaef0000-0000-4000-8000-000000000101',
  'aaef0000-0000-4000-8000-000000000202','reserve',jsonb_build_object('sha256',repeat('b',64),'bucket','test-private-completion','mime_type','text/plain','file_size',32,'file_name','proof.txt'));
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aaef0000-0000-4000-8000-000000000003',true);
-DO $$ BEGIN IF EXISTS(SELECT FROM public."File" WHERE metadata->>'storage_contract'='gig_completion_v1') THEN RAISE EXCEPTION 'Raw private File exposed'; END IF; END $$;
+DO $$ BEGIN
+ -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+ BEGIN PERFORM 1 FROM public."File" WHERE metadata->>'storage_contract'='gig_completion_v1';
+  RAISE EXCEPTION 'Raw private File exposed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
 RESET ROLE;
 
 -- Completion delivery reuses the exact existing Notification and queue worker.
@@ -589,15 +627,17 @@ BEGIN
  BEGIN UPDATE public."Notification" SET metadata=metadata-'gig_completion_delivery_v1' WHERE id=n.id;
   RAISE EXCEPTION 'Recipient erased delivery contract'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  RESET ROLE;
- -- The API changes the recipient's read state as service_role without touching
- -- the delivery contract, and the recipient reads the change.
+ -- The API changes the recipient's read state as service_role without touching the delivery
+ -- contract, and returns it to the recipient; the recipient's own direct read is refused.
  SELECT metadata->'gig_completion_delivery_v1' INTO delivery_before FROM public."Notification" WHERE id=n.id;
  SET LOCAL ROLE service_role;
  UPDATE public."Notification" SET is_read=false WHERE id=n.id;
+ IF (SELECT is_read FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM false THEN
+  RAISE EXCEPTION 'The API''s read-state change was not stored'; END IF;
  RESET ROLE;
  SET LOCAL ROLE authenticated;
- IF (SELECT is_read FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM false THEN
-  RAISE EXCEPTION 'Recipient cannot read the API''s read-state change'; END IF;
+ BEGIN PERFORM is_read FROM public."Notification" WHERE id=n.id;
+  RAISE EXCEPTION 'Recipient read the notice directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  RESET ROLE;
  IF (SELECT metadata->'gig_completion_delivery_v1' FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM delivery_before THEN
   RAISE EXCEPTION 'Read-state change touched the delivery contract'; END IF;
@@ -789,13 +829,18 @@ DO $$ DECLARE role_name text; key text; BEGIN
  END LOOP;
  FOR key IN SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='Payment'
   AND column_name<>'gig_completion_original' LOOP
-  IF NOT has_column_privilege('authenticated','public."Payment"',key,'SELECT') THEN RAISE EXCEPTION 'Existing column read lost: %',key; END IF;
+  -- Since 20260930182000 no client reads Payment directly; the API returns every existing column.
+  IF has_column_privilege('authenticated','public."Payment"',key,'SELECT') THEN RAISE EXCEPTION 'Client regained a Payment column read: %',key; END IF;
  END LOOP;
+END $$;
+DO $$ BEGIN
+ IF (SELECT metadata->>'existing' FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400') IS DISTINCT FROM 'preserved' THEN RAISE EXCEPTION 'Existing metadata lost'; END IF;
 END $$;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','ab050000-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
- IF (SELECT metadata->>'existing' FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400') IS DISTINCT FROM 'preserved' THEN RAISE EXCEPTION 'Existing metadata lost'; END IF;
+ BEGIN PERFORM metadata FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400';
+  RAISE EXCEPTION 'Payer read the payment directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM gig_completion_original FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400';
   RAISE EXCEPTION 'Direct original read succeeded'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;

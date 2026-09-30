@@ -32,23 +32,13 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'bbb00000-0000-4000-8000-000000000001', true);
   FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     EXECUTE format('SET LOCAL ROLE %I', role_name);
-    IF role_name = 'anon' THEN
-      -- Since 20260930181000 anon holds no privilege on public tables, so even the
-      -- ordinary public post is refused by the grant before RLS is consulted.
-      BEGIN
-        PERFORM 1 FROM public."Post" WHERE user_id = 'bbb00000-0000-4000-8000-000000000001';
-        RAISE EXCEPTION 'Anonymous role can read Post rows';
-      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-    ELSE
-      IF EXISTS (SELECT FROM public."Post"
-        WHERE user_id = 'bbb00000-0000-4000-8000-000000000001'
-          AND id <> 'bbb00000-0000-4000-8000-000000000020') THEN
-        RAISE EXCEPTION 'Browser role can read raw Beacon content';
-      END IF;
-      IF NOT EXISTS (SELECT FROM public."Post" WHERE id = 'bbb00000-0000-4000-8000-000000000020') THEN
-        RAISE EXCEPTION 'Ordinary public post access changed';
-      END IF;
-    END IF;
+    -- Neither browser role holds a privilege on public tables (anon since 20260930181000,
+    -- authenticated since 20260930182000), so even the ordinary public post is refused by the
+    -- grant before RLS is consulted. The API reads Post as service_role and projects identities.
+    BEGIN
+      PERFORM 1 FROM public."Post" WHERE user_id = 'bbb00000-0000-4000-8000-000000000001';
+      RAISE EXCEPTION 'Browser role % can read Post rows', role_name;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
     FOREACH rpc_call IN ARRAY ARRAY[
       'SELECT public.auto_archive_expired_posts()',
       'SELECT public.get_seeder_tapering_metrics(45.63::double precision, -122.67::double precision, 1000)',
@@ -94,4 +84,4 @@ BEGIN
 END $$;
 RESET ROLE;
 ROLLBACK;
-SELECT 'PASS: raw Beacon reads/writes denied to browser roles, anon refused outright, ordinary public reads preserved for signed-in readers, backend storage access preserved' AS result;
+SELECT 'PASS: browser roles refused every direct Post read and write, service-only Post RPCs denied, backend storage access preserved' AS result;

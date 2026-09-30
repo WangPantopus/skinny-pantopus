@@ -43,9 +43,19 @@ RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000003', true);
+-- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses
+-- every direct read. The read policy (home_is_active_member(id) OR owner) is kept as defense in
+-- depth, and its predicate is asserted through the same helper for each person.
 DO $$ BEGIN
-  IF EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
+  BEGIN
+    PERFORM 1 FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
     RAISE EXCEPTION 'Nonmember creator can read an established private home directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  IF public.home_is_active_member('ddd00000-0000-4000-8000-000000000010') THEN
+    RAISE EXCEPTION 'Nonmember creator counts as an active member of an established private home';
+  END IF;
+  IF NOT has_function_privilege('authenticated','public.home_is_active_member(uuid,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'The Home read policy''s helper must stay executable by authenticated';
   END IF;
 END $$;
 
@@ -53,8 +63,12 @@ SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000002
 DO $$
 DECLARE affected integer;
 BEGIN
-  IF NOT EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
-    RAISE EXCEPTION 'Active member cannot read their home';
+  BEGIN
+    PERFORM 1 FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+    RAISE EXCEPTION 'Active member read their home directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  IF NOT public.home_is_active_member('ddd00000-0000-4000-8000-000000000010') THEN
+    RAISE EXCEPTION 'Active member lost the membership the Home read policy admits';
   END IF;
   BEGIN
     UPDATE public."Home" SET name = 'Edited by fixture'
@@ -78,4 +92,4 @@ BEGIN
 END $$;
 RESET ROLE;
 ROLLBACK;
-SELECT 'PASS: private Home denial, member reads and API-only Home authority/deletion mutations' AS result;
+SELECT 'PASS: direct Home reads refused, the read policy''s member predicate kept, API-only Home authority/deletion mutations' AS result;

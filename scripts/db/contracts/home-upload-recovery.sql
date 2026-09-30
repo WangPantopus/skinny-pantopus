@@ -70,12 +70,22 @@ DO $$ BEGIN
   END IF;
 END $$;
 RESET ROLE;
+-- The API reads the quota as service_role; the stored value is exact.
+DO $$ BEGIN
+  IF (SELECT storage_used FROM public."FileQuota" WHERE user_id='eee00000-0000-4000-8000-000000000051') <> 11 THEN
+    RAISE EXCEPTION 'Stored quota is not exact';
+  END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','eee00000-0000-4000-8000-000000000051',true);
 DO $$ BEGIN
-  IF (SELECT storage_used FROM public."FileQuota" WHERE user_id=auth.uid()) <> 11 THEN
-    RAISE EXCEPTION 'Client cannot read its own quota';
-  END IF;
+  -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses
+  -- even the owner's own quota read; the API returns it instead.
+  BEGIN
+    PERFORM storage_used FROM public."FileQuota" WHERE user_id=auth.uid();
+    RAISE EXCEPTION 'Client read its quota directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   BEGIN
     UPDATE public."FileQuota" SET storage_used=0,storage_limit=99999999 WHERE user_id=auth.uid();
     RAISE EXCEPTION 'Client forged its quota';
