@@ -589,8 +589,9 @@ export default function PostDetailPage() {
                 <div className="flex items-center gap-2 text-xs text-blue-800">
                   <span>📅</span>
                   <span>
-                    {new Date(post.event_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                    {post.event_end_date && ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+                    {/* Stored as the wall-clock time the poster picked, labelled UTC (every composer), so shown in UTC. */}
+                    {new Date(post.event_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
+                    {post.event_end_date && ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}`}
                   </span>
                 </div>
               )}
@@ -614,7 +615,7 @@ export default function PostDetailPage() {
               {post.deal_expires_at && (
                 <div className="flex items-center gap-2 text-xs text-green-800">
                   <span>⏰</span>
-                  <span>Expires {new Date(post.deal_expires_at).toLocaleDateString()}</span>
+                  <span>Expires {new Date(post.deal_expires_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
                 </div>
               )}
             </div>
