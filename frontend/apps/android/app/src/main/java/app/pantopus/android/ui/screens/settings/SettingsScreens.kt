@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,14 +24,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.findFragmentActivity
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
  * T3.1 Settings index. Thin wrapper around [GroupedListScreen] —
@@ -105,6 +113,19 @@ fun NotificationSettingsScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val toastController = remember { ToastController() }
     val shownToast by toastController.current.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // The switch lives in the system settings the banner opens, so re-read
+    // it whenever the screen comes back to the foreground.
+    var notificationsBlocked by remember { mutableStateOf(!context.notificationsAllowed()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) notificationsBlocked = !context.notificationsAllowed()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
@@ -119,6 +140,18 @@ fun NotificationSettingsScreen(
             title = viewModel.title,
             state = state,
             footerCaption = footer,
+            // Parity with iOS `NotificationSettingsViewModel.banner`.
+            banner =
+                if (notificationsBlocked) {
+                    GroupedListBanner(
+                        icon = PantopusIcon.BellOff,
+                        title = "Notifications are off",
+                        subtitle = "Turn them on in Settings to get alerts from Pantopus.",
+                        actionLabel = "Open Settings",
+                    )
+                } else {
+                    null
+                },
             callbacks =
                 GroupedListCallbacks(
                     onBack = onBack,
@@ -126,6 +159,7 @@ fun NotificationSettingsScreen(
                     onSelectRadio = viewModel::onSelectRadio,
                     onSelectChip = viewModel::onSelectChip,
                     onRetry = viewModel::load,
+                    onTapBanner = { context.openAppNotificationSettings() },
                 ),
         )
         // Tag mirrors iOS `NotificationSettingsView`'s
@@ -232,3 +266,16 @@ fun PrivacySettingsScreen(
 
 /** Mirrors iOS `privacySettingsToast`. */
 const val PRIVACY_SETTINGS_TOAST_TAG = "privacySettingsToast"
+
+private fun Context.notificationsAllowed(): Boolean =
+    runCatching { NotificationManagerCompat.from(this).areNotificationsEnabled() }.getOrDefault(true)
+
+private fun Context.openAppNotificationSettings() {
+    runCatching {
+        startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
