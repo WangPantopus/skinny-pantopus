@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T08:27Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T08:29Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -67,9 +67,11 @@
     - Stream 5 implements (b): a room check across the chat routes and socket, following its path map. Stream 2 is not an editor of `chats.js` or the socket, and reviews task-side behaviour when Stream 5 sends the PR.
     - (a), removing memberships from production data, stays with the user; Stream 5 raises it.
   - The stranger's tip-preview refusal says "The original tip needs to be checked before continuing." It returns no data, but the copy is misleading (note).
-- **[#902](https://github.com/WangPantopus/skinny-pantopus/pull/902)** head `cc4aca1235832853c51d7b1476aac85627d4e3c2` (sent to Stream 1 08:26Z; seal `20260930-stream2-posts-location-privacy-r1`, 33 files, `48f986f3…cd92`): **non-authors got a post's exact point.**
+- **[#902](https://github.com/WangPantopus/skinny-pantopus/pull/902) merged** in batch 157 (#903, master `f310f01e6`, 2026-09-30T08:26:39Z; hub record `8e4581ea8`), head `cc4aca1235832853c51d7b1476aac85627d4e3c2` (seal `20260930-stream2-posts-location-privacy-r1`, 33 files, `48f986f3…cd92`): **non-authors got a post's exact point.**
   - `applyPostLocationPrivacy` blurred `latitude`/`longitude`, but `effective_latitude`/`effective_longitude` went out unblurred on the post detail (signed out included), the feed and profile posts, and so did the raw PostGIS `location` (post detail). For a home-linked post the effective pair is the home's coordinates.
   - Now non-authors get the same keyed blur on the effective pair and no `location`. Authors are unchanged, and web pages are pixel-identical. This is `docs/location-privacy-matrix.md` ("Non-authors never see exact post locations").
+- **Proposal for the user (no written policy, so not changed):** anyone with an assigned task's link, signed out included, can read the worker's identity (`accepted_by`/`acceptedBy`) and the exact start/finish times (`/timeline`, detail). Together with the approximate task area, that shows when a named helper was at someone's place. The web doesn't display the worker to strangers.
+  - Recommendation: give non-participants neither the worker's identity nor exact lifecycle times (dates only), like #900's payment rule.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
