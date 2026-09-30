@@ -280,8 +280,13 @@ struct PlaceFridgeCardSection: View {
                 vm.removeItem(key, index: index)
             } label: {
                 Icon(.x, size: 13, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+                    // The glyph stays 13 pt; the tappable area grows from the glyph's own 11 pt.
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // VoiceOver had no name for this icon-only button.
+            .accessibilityLabel(item.label.isEmpty ? "Remove this row" : "Remove \(item.label)")
         }
     }
 
