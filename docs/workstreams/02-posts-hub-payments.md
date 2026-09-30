@@ -7,9 +7,32 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T15:51Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T16:43Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
-- **Latest (2026-09-30T15:51Z):**
+- **Latest (2026-09-30T16:43Z):**
+  - **[#1027](https://github.com/WangPantopus/skinny-pantopus/pull/1027) merged** (batch 198, master `a60e276bb`). Stream 1 verified its seal; lint and CI are green.
+  - **[#1034](https://github.com/WangPantopus/skinny-pantopus/pull/1034)** head `7d15b7585984d038193c48755ea2a2590d1d226b` (sent). Android follow-up:
+    - Start keeps "Sign in" on one line at font 2.0, and the address field is named;
+    - task-progress steps read done / current step / not yet;
+    - refund reason radios are named.
+    - Verified on the APK of the head. Seals `20260930-stream2-u02-android-a11y-r2` `607283e7…` and `20260930-stream2-u02-money-screens-android-r1` `1e9293bd…` (the money fixture is removed: 350/353 tables equal the baseline, the other 3 are sign-in bookkeeping).
+    - Also checked: Start and the Report dialog stay light and readable in dark mode.
+  - **New finding, native Hub Today detail** (Android runtime; iOS maps the same placeholders):
+    - The screen showed the design sample's sun times (sunrise 6:14 AM, sunset 7:32 PM, "13h 18m of daylight" on Sep 30 in Vancouver, WA, where the day is about 11h 45m).
+    - It showed "3 members · sent to your household chat" for everyone.
+    - On Android, Share (top bar and card), More and Manage did nothing.
+    - The weather feed already had today's sunrise and sunset; the orchestrator dropped them.
+    - **Fix** on `claude/stream2-hub-today-truth` `7d3341e7f` (backend + Android + iOS, plus the "Post type: Share" chip name), building in the heavy slot. Backend: 5 suites, 104 tests pass. SwiftLint `--strict` and SwiftFormat are clean. The Android build and after-run are next.
+  - **Decisions** (per the user's standing direction):
+    1. Today's Share sends the conditions, advisory, signals and the Pantopus link, but no place name, because a location label can be a street address.
+    2. Android More opens the app menu (as on iOS), and Manage opens Notification settings (briefings and alerts). iOS Manage still opens the inbox (no route to Notification settings there; follow-up).
+    3. Sun & sky is left out when the feed has no sun times, never guessed.
+    4. A morning-briefing push on iOS opens Today (TodayTabRoot) with Back returning to the address's day and Share working. More and Manage there still have no route (follow-up).
+  - **Stream 1's iOS runs** (no code change): U03 Hub R1 passes (`7a50ea0a…`); U04 Hub L3 + L2 pass (`3280a64f…`).
+  - **Seen, not changed:** the Android Report dialog closes if the system theme changes while it is open (its state isn't kept across a configuration change; nothing is lost).
+  - **Correction:** the first seals of the two #1034 bundles carried hand-typed times. The times now come from the files, the bundles are resealed, and Stream 1 has the new seals.
+  - **My stack** is 16 master migrations behind (153000–183000). Applying them next, so the after-runs match master.
+- **Earlier (2026-09-30T15:51Z):**
   - **iOS cells:** Stream 1 is taking all of my iOS runtime cells on its simulator: U03 E6, E1/E2/E5, comment photo failure and Hub R1; U04 L4, Start L2/L3 and Hub L2/L3; and U02 A1–A4 after #1027. They're marked "Stream 1 iOS, queued"; Stream 1 reports each one.
   - **A3:** Stream 1's accents PR moves `primary600` to #0369A1 (5.93:1). My Android A3 cells point at it.
   - **Follow-up** `claude/stream2-start-large-text` 7d15b7585 is queued (Android):
@@ -302,7 +325,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T15:51Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T16:43Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -323,7 +346,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ✅ Public post page: E4 private post kept; R1 now "Couldn't load" with Try Again (#851) |
 | **Start and Hub** | | | |
 | Start funnel and Place preview | ✅ R1 (#635) | ✅ R1 (#635) | ✅ R1 (#607)<br>✅ R1 address lookup failures say so (suggestions, geocoder outage) (#873) |
-| Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>⬜ R1: Stream 1 iOS, queued | ✅ Pills open real screens (C-02)<br>✅ R1: every failed read is shown as a failure, with Try again (seal b716c9ce) | ✅ Hub posts (Sep25)<br>✅ R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change) (bundle 890d21cb) |
+| Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>✅ R1: every failed read is shown as a failure, with Try again (Stream 1 iOS run, no change) (Stream 1 bundle 7a50ea0a) | ✅ Pills open real screens (C-02)<br>✅ R1: every failed read is shown as a failure, with Try again (seal b716c9ce) | ✅ Hub posts (Sep25)<br>✅ R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change) (bundle 890d21cb) |
 
 **U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
 
@@ -331,34 +354,34 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4: Stream 1 iOS, queued | ✅ L1 L2 L3 (#667, Sep27)<br>✅ L4: comment and edit replay once after a session refresh (seal d875dafb) | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
 | Start and Place preview | ⬜ L2 L3: Stream 1 iOS, queued | ✅ L2: the preview survives a cold restart and is offered after sign-in (seal 433cf635)<br>✅ L3: the next person on the device no longer sees or is offered the previous address (#989, seal 433cf635) | ✅ L2 L3: the previewed address survives a browser restart and never moves to another account (no change) (bundle e2c35ebc) |
-| Hub (the former Stream 1 cards) | ⬜ L2 L3: Stream 1 iOS, queued | ✅ L3: account switch shows only the new account (seal ea85ae47)<br>✅ L2: cold restart reads fresh data (seal ea85ae47) | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
+| Hub (the former Stream 1 cards) | ✅ L3: account switch shows only the new account; L2: cold restart reads fresh data (Stream 1 iOS run, no change) (Stream 1 bundle 3280a64f) | ✅ L3: account switch shows only the new account (seal ea85ae47)<br>✅ L2: cold restart reads fresh data (seal ea85ae47) | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A4 selected states + heart names, A1 chips no longer clipped at font 2.0: fixed and verified in #1027 (seal a966aa19), waiting to merge<br>✅ A2: stays light and readable in system dark mode (#1013 + seal a966aa19)<br>🔷 A3: brand blue #0284C7 is 4.10:1 on white; Stream 1's accents PR moves it to #0369A1 (5.93:1) | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
-| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 comments (#667)<br>⬜ A4: chip tone no longer read (#1027, waiting to merge); share posts' chip to read "Post type: Share" (follow-up)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
-| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4: Stream 1 iOS, queued (after #1027) | ⬜ A4 states and names, A1 contact choices ("Phone" was zero-width at font 2.0): fixed and verified in #1027, waiting to merge<br>✅ A2: readable in system dark mode (#1013)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
-| My posts | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A4 row names + tab states: fixed and verified in #1027, waiting to merge<br>✅ A1: readable at font 2.0 (no change needed) (seal a966aa19)<br>✅ A2: delete dialog and options sheet readable in dark mode (luminance 43 → 225/240) (#1013, seal a966aa19)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
-| Report a post | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5; close button named (#829) |
+| Pulse feed | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A4 selected states + heart names; A1 chips no longer clipped at font 2.0 (#1027, seal a966aa19)<br>✅ A2: stays light and readable in system dark mode (#1013 + seal a966aa19)<br>🔷 A3: brand blue #0284C7 is 4.10:1 on white; Stream 1's accents PR moves it to #0369A1 (5.93:1) | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
+| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 comments (#667)<br>✅ A4: chip tone no longer read (#1027, seal a966aa19)<br>⬜ A4: a Share post's chip read "Share post", like the Share button; "Post type: Share" on branch claude/stream2-hub-today-truth (building)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
+| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4: Stream 1 iOS, queued (after #1027) | ✅ A4 states and names; A1 contact choices ("Phone" was zero-width at font 2.0) (#1027, seal a966aa19)<br>✅ A2: readable in system dark mode (#1013)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
+| My posts | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A4 row names + tab states (#1027, seal a966aa19)<br>✅ A1: readable at font 2.0 (no change needed) (seal a966aa19)<br>✅ A2: delete dialog and options sheet readable in dark mode (luminance 43 → 225/240) (#1013, seal a966aa19)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
+| Report a post | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 readable at font 2.0; A4 reasons and Cancel named (no change) (seal a966aa19)<br>✅ A2: stays light and readable in dark mode (seal 607283e7)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR #1029 (#0369A1, 5.93:1) | ✅ A1 A2 A3 A4 A5; close button named (#829) |
 | **Start and Hub** | | | |
-| Start funnel and Place preview | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A1 "Sign in" wraps letter by letter at font 2.0 and A4 unnamed address field: fix c84be82ce building<br>✅ A4 other controls named (seal a966aa19)<br>⬜ A2<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
-| Hub (the former Stream 1 cards) | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A4 filter state, A1 tile captions losing words: fixed and verified in #1027, waiting to merge<br>✅ A2: stays light and readable in dark mode (#1013)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
-| Today detail | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>🔷 A3 brand-blue token |
+| Start funnel and Place preview | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ⬜ A1 "Sign in" wrapped letter by letter at font 2.0; A4 unnamed address field: fixed and verified in #1034 (seal 607283e7), waiting to merge<br>✅ A4 other controls named (seal a966aa19)<br>✅ A2: stays light and readable in dark mode (seal 607283e7)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
+| Hub (the former Stream 1 cards) | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A4 filter state; A1 tile captions no longer lose words (#1027, seal a966aa19)<br>✅ A2: stays light and readable in dark mode (#1013)<br>🔷 A3: brand blue 4.10:1; Stream 1's accents PR (#0369A1, 5.93:1) | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
+| Today detail | ⬜ A1–A4: Stream 1 iOS, queued (after #1027); shows the same sample sun times until the Today fix merges | ✅ A4 controls named (no change) (today bundle before/)<br>⬜ Truth: sample sunrise/sunset and a fake "3 members · household chat" line for everyone; Share, More and Manage did nothing. Fix (real sun times from the feed, working actions) on claude/stream2-hub-today-truth, building; A1 A2 after that build<br>🔷 A3: brand blue; Stream 1's accents PR #1029 | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>🔷 A3 brand-blue token |
 | **Money screens (viewing only, no payments)** | | | |
-| Tip sheet | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>🔷 A2 dark: the sunken surface token equals the card surface, so the $5/$10/$20 presets lose their fill |
-| Payment card and refund sheet | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 (Sep22)<br>⬜ A3 A4 | ✅ A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable (#889) |
-| Payments and wallet settings | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>⬜ A3 A4 | ✅ A1 A2 A4 A5; filter and back-button names (#829)<br>🔷 A3 emerald token |
+| Tip sheet | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2, dark title fixed (PR198)<br>✅ A4: amounts, custom field, send and Not now named; disabled state announced with its reason (seal 1e9293bd)<br>🔷 A3: brand blue; Stream 1's accents PR #1029 | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>🔷 A2 dark: the sunken surface token equals the card surface, so the $5/$10/$20 presets lose their fill |
+| Payment card and refund sheet | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 (Sep22)<br>⬜ A4: task-progress states and refund reason names fixed and verified in #1034 (seals 1e9293bd, 607283e7), waiting to merge; other controls named<br>🔷 A3: brand blue; Stream 1's accents PR #1029 | ✅ A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable (#889) |
+| Payments and wallet settings | ⬜ A1–A4: Stream 1 iOS, queued (after #1027) | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>✅ A4: controls named; balance reads "Available to withdraw: 0.00 USD" (seal a966aa19)<br>🔷 A3: brand/emerald tokens; Stream 1's accents PR #1029 | ✅ A1 A2 A4 A5; filter and back-button names (#829)<br>🔷 A3 emerald token |
 
 **Outside this plan:** Money journeys: Tips, task payments, refunds, disputes and wallet reuse the accepted P02-P10 evidence. Nothing is rerun, and there is still no capture. Their hosted and provider parts stay with the P rows. Crew Day and rebooking a known crew: Not built yet: no screen or route calls it (Stream 3, Sep27). There's nothing to check. Launch cuts: Marketplace, Open Gigs, the business directory, and Hub or Pulse entry points into them stay excluded. The "WINNER" badge note belongs to bids, so it's dropped. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 45, confirm from existing evidence 0, to do 4, your call 0, boundary 0, not offered 2
-- U04 items: done 13, confirm from existing evidence 0, to do 3, your call 0, boundary 0, not offered 0
-- U02 items: done 25, confirm from existing evidence 0, to do 23, your call 14, boundary 1, not offered 0
+- U03 items: done 46, confirm from existing evidence 0, to do 3, your call 0, boundary 0, not offered 2
+- U04 items: done 14, confirm from existing evidence 0, to do 2, your call 0, boundary 0, not offered 0
+- U02 items: done 36, confirm from existing evidence 0, to do 15, your call 19, boundary 1, not offered 0
 
 ## Inventory and history
 
