@@ -212,10 +212,10 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
-| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>🔷 A3 |
-| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>🔷 A3 |
-| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>⬜ A3: re-measure on master's tokens. The sweep ran on the runtime's `00bf2d6ff`, which predates #979; there the 4.09:1 (Copy link) and 3.82:1 (the public page link) pairs failed. #979 maps both utilities to `#0369A1`, which computes to 5.93:1 and 5.53:1. |
+| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 with Stream 1 (0930 a3-remeasure on master's tokens): the health chip's inline amber (`HealthScoreRing.tsx:24/191`, 1.87:1), and in dark mode the "Owner" chip (`HomeHeader.tsx:74`, 1.34:1), a side effect of #979's text flip over a light tint |
+| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>✅ A3 on master's tokens (0930 a3-remeasure: the overview and all six sections are clean; "Turn it on" failed only on the runtime's pre-#979 `bg-primary-500`, and master's is `bg-primary-600`) |
+| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>✅ A3 on master's tokens for Emergency, Documents and Property Details<br>🔷 A3 Issues: the severity badge's inline hex (`maintenance/page.tsx:174`, 2.01:1) is with Stream 1's inline-hex follow-up |
+| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>✅ A3 on master's tokens (0930 a3-remeasure: 0 contrast findings on the leaf and the public page) |
 | Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
 
@@ -268,6 +268,18 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T15:37:32Z — native pickup E5 in progress; web A3 re-measured on master's tokens; a screenshot-masking correction.** Lease 15:14:33Z–15:35:16Z.
+  - **Native pickup E5** (branch `claude/stream4-native-pickup-changed-meanwhile`, head `c7ecaaa55`; stage `20260930-stream4-native-pickup-e5-r1`, not sealed yet):
+    - **iOS before (old build):** a stale editor save silently deleted another device's weekly recycling. The runtime backend and master's pickup backend both give 200.
+    - **iOS after:** 409. The editor stays open showing the current schedule (Tuesday, Every week, Thu Oct 1), with "The pickup schedule changed since you opened it…" in the card's existing error line. Choosing Wednesday again saves both changes.
+    - **Android before:** same silent loss.
+    - **Android after:** waits for my APK rebuild in the heavy slot; detekt wanted `HTTP_CONFLICT` instead of 409.
+  - **Web A3** (`20260930-stream4-a3-remeasure-r1`, MANIFEST `7999c8ffc22b70f2b5395779dc8495f8a72c96d6a726336dc4615dfaeedd9efd`): with master's two token files patched into the runtime (proven live), the fridge leaf and public page, Place and three records pages are clean.
+    - Stream 1 has the three residuals: the health chip's inline amber, the issues badge's inline amber, and the dark-mode "Owner" chip (#979 side effect).
+  - **Correction:** `tools/a11ycap-s4*.mjs` did not mask the signed-in account label. The app-shell captures in the sealed `20260930-stream4-fridge-a11y-r1` (the fridge-leaf light/dark PNGs) show the fixture owner's truncated e-mail in the sidebar. Sealed bundles aren't edited, so this entry is the correction.
+    - Both tools now mask both kit accounts at capture.
+    - The A3 bundle was sealed without its 39 app-shell captures.
 
 - **2026-09-30T14:25:05Z — iOS Mail tasks "Post as Task": recorded under the launch cut, not fixed.** Stream 1's alert scan found the dismissal-clears pattern here.
   - `MailTaskListView`'s confirmationDialog clears `convertTarget` on dismiss before `Task { await confirmConvert() }` reads it, so no request is sent (same shape as #980).
