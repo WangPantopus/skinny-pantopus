@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T07:19Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T07:24Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -39,6 +39,7 @@
   - Seal `20260930-stream2-start-web-lookup-failures-r1`, 32 files, `124f49b5…abfa`.
 - **Web Start L2/L3 verified without code change:** the previewed address survives a browser restart and saves after sign-in; sign-out clears it; a draft bound to Alice is never handed to Bob. The geocoder reads used labelled proxy stand-ins. Seal `20260930-stream2-start-web-lifetimes-r1`, 23 files, `e2c35ebc…f33b`.
 - **Found for other owners:** Scout and /unlisted still turn a geocoder outage into "add the city and state" (inventory row).
+- **[#879](https://github.com/WangPantopus/skinny-pantopus/pull/879)** head `ec5c6b91dd85f8ddf1a30a9af9d0494f0f28620b` (sent to Stream 1): the closed post detail panel is `inert`. Before, it was only slid off-screen, so a keyboard walk of My Pulse reached "Close post" at x=1800. Web My posts U02 A1/A2/A4/A5 are done; A3 is the brand-blue token. Seal `20260930-stream2-posts-web-my-posts-a11y-r1`, 29 files, `678c1c3b…2bad`.
 - **Web Hub R1 verified without code change:** the payload, the Today card and detail, and the Action Queue all fail truthfully; Discover's Posts tab makes no read. Seal `20260930-stream2-hub-web-reads-r1`, 31 files, `890d21cb…abe7`.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
@@ -122,7 +123,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:19Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:24Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -161,7 +162,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>🔷 A4 filter chip mute control nested in the chip: structural fix proposed |
 | Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A3 A4 | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
 | Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
-| My posts | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| My posts | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>🔷 A3 brand-blue token |
 | Report a post | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5; close button named (#829) |
 | **Start and Hub** | | | |
 | Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
@@ -178,7 +179,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 35, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 1
 - U04 items: done 8, confirm from existing evidence 0, to do 8, your call 0, boundary 0, not offered 0
-- U02 items: done 15, confirm from existing evidence 0, to do 25, your call 7, boundary 1, not offered 0
+- U02 items: done 16, confirm from existing evidence 0, to do 24, your call 8, boundary 1, not offered 0
 
 
 ## Inventory and history

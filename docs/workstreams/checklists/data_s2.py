@@ -29,7 +29,7 @@ U02 = [
         ("Pulse feed", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; post-type text, map markers and menus fixed", "#829"), c("decide", "A3 brand-blue token"), c("decide", "A4 filter chip mute control nested in the chip: structural fix proposed")]}),
         ("Post detail and comments", {"iOS": [c("done", "A1 kept as is", "your decision"), c("todo", "A2 A3 A4")], "Android": [c("done", "A1 A2 comments", "#667"), c("todo", "A3 A4")], "Web": [c("done", "A5 comments", "Sep27"), c("done", "A1 A2 A4; type chip and dark header fixed", "#829"), c("decide", "A3 brand-blue token")]}),
         ("Post composer", {"iOS": [c("done", "A1 kept as is", "your decision"), c("todo", "A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; intent text and AI button fixed", "#829"), c("decide", "A3 brand-blue token")]}),
-        ("My posts", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
+        ("My posts", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen)", "#879"), c("decide", "A3 brand-blue token")]}),
         ("Report a post", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A3 A4 A5; close button named", "#829")]}),
     ]),
     ("Start and Hub", [
