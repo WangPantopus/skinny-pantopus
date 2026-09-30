@@ -17,7 +17,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - the runtime's database (Kong 64553, DB 64554) is gone, with every fixture and fixture account in it (Home105, Home70, the cohort Home 9d885f71 and its 9 neighbors, and the SQL Homes), and your open F02 fixture;
   - host processes from before the reset still run and point at the deleted database: proxy 18142 (PID 30261), backend 18143 (PID 2550) and web 18144 (PID 66349);
   - the founder's stack (64521/64522, backend 8000) is gone too. That's the user's to handle, never yours;
-  - **native tooling is gone too** (checked 2026-09-30T05:58:25Z): the Android SDK (adb, emulator, system images), every AVD including emulator-5556's `Pantopus_Home_Recurrence_Acceptance`, and `~/.gradle`. Xcode is installed but has no iOS simulator runtime, so sim 6F914A30 is listed but can't boot. Reinstalling them is a large download and needs the user's OK; until then only web and API work can run;
+  - **native tooling is gone too** (checked 2026-09-30T05:58:25Z): the Android SDK (adb, emulator, system images), every AVD including emulator-5556's `Pantopus_Home_Recurrence_Acceptance`, and `~/.gradle`. Xcode is installed but has no iOS simulator runtime, so sim 6F914A30 is listed but can't boot. Reinstalling them is a large download and needs the user's OK. The new Stream 2 has asked Stream 1 to do one machine-wide reinstall, so check the hub first and don't start your own download. Until then only web and API work can run;
   - the disk has 187 GiB free.
 - No runtime lease, device slot, heavy slot or iOS driver is held.
 - **First, under the runtime lease:** whichever of Streams 3 and 4 takes it first rebuilds the shared runtime from current master, then tells the other stream.
