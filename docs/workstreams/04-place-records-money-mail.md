@@ -269,6 +269,17 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T12:27Z — [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) revised after Stream 5's combined E2E review; the new head and seal are with the coordinator for the decision-9 trio** (#968 + Stream 3's #974 + Stream 5's #976). Head `ab0a5b09745682febc14ee27de5efb3fcd4ee18e` on master `81cf2e959`. Bundle `20260930-stream4-household-data-r2`, 20 files, MANIFEST `e1498d364dc70894f02d1879e7ca75312b57a86b2e4a3d483da4899aabf5d948`; it supersedes r1 `b759067e…`.
+  - **Stream 5's real-route E2E on `b410aae70` passed** (their bundle `20260930-stream5-retire-homes-r1`):
+    - task-photo member: 409 → 200 `kept`, and the household keeps and downloads the photo;
+    - last member: `purged`, the chat closed and detached, and a later member sees nothing;
+    - a revoked purge grant gives 503 with nothing changed.
+  - **Fixed from their review:**
+    - the purge also refuses for a legacy `Home.owner_id` owner who still has access (otherwise data loss); Stream 3 aligns `othersKeepHome` as 'kept';
+    - replies stop sending a deleted uploader's id.
+    Rolled-back run at 12:25:58Z in Stream 3's window.
+  - **Follow-up after the trio** (Stream 3): when a shell is purged, end the other non-verified occupancies and close pending claims, with notices. Proposed to live in Stream 3's `retireHomeForDeletedAccount`, since those are their lifecycle transitions.
+
 - **2026-09-30T12:07Z — #968 is queued for the decision-9 joint batch** (with Stream 3's retireHomeForDeletedAccount PR and Stream 5's route PR, after Stream 5's combined E2E is sealed).
   - **Known limit (coordinator: not a blocker).** The purge and account deletion tombstone the legacy Home media Files that came through the old generic files route: the Home gallery (`HomeMedia`) and the Home row's Wi-Fi QR and house-rules files. No recovery job covers them, so their bytes stay in S3. Nobody can reach them through the app, since their rows are soft-deleted and the Home no longer links them.
   - The private document and task-media buckets are collected by the existing recovery jobs (every 5 minutes).
