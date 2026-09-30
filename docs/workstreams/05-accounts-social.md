@@ -9,6 +9,35 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1055/#1066/#1068 merged (batches 211–213); S3-22 #1076 open (crew page buttons + http(s)-only links + no directions to a home), CI running, 2026-09-30T19:44:13Z
+
+- **Merged:**
+  - #1055 (S3-62, a verified resident can endorse) in batch 211 at `460712c09`, seal `43d8bc14…`;
+  - #1066 (the 14-day rule counts from `verified_at`) in batch 212 at the rebased head `42a46ab58`, re-sealed `77e1fc82…` (equal patch-ids);
+  - #1068 (chat list contrast) in batch 213.
+  - Master is `8d4851ce5`.
+- **S3-22 → PR #1076** (head `9eba6032d`, bundle `20260930-stream5-crew-page-buttons-r1`):
+  - **Renderer:**
+    - Hero buttons were dead. Hero and CTA-block buttons now follow the editor's action: Call → `tel:`, Directions → maps, Link → http(s) only, Message and Book → the inquiry chat.
+    - A button with no target is hidden.
+    - The CTA block's unchecked `window.open(b.url)` is gone. On master a stored `javascript:` link was passed to `window.open`.
+  - **Editor:** a Link gets an address field with a hint.
+  - **Stream 1's review, in the same PR:**
+    - the API rejects non-http(s) button links (400);
+    - no Directions for home-based crews in the header, Locations tab and Locations block (they pointed at the fuzzed point).
+  - **E2E** (before `69f19cbb2`, after `9eba6032d`, via the non-writing `/b/` substitution, 0 `/api/b/` requests, 0 view rows): every action, the signed-in inquiry POST, the home-based and storefront Directions, the API 200 → 400, and the editor field.
+  - **Routed to Stream 1 (native):**
+    - the iOS and Android page editors drop a web-set button `url` (`BusinessPageBlockModel.swift:490`, `.kt:317`);
+    - the crew profile "Directions" chip is static on both, and should be hidden for home-based crews.
+- **Decisions recorded:**
+  - Book keeps the inquiry-chat fallback. Public scheduling stays cut.
+  - A button whose target is missing is hidden rather than dead.
+  - Directions is hidden for home-based crews, which was Stream 1's call.
+- **Next:**
+  1. #1076's seal and handoff.
+  2. Then the remaining S3 rows. S3-23 (verification asks for a raw file id) is next in the business-web group.
+- **Runtime:** API and web on master `69f19cbb2`; DB at `20260930184000`. No fixtures remain.
+
 ## LIVE — #1060 merged (batch 210); #1055 re-sealed with a verified-occupancy rule; #1066 (14-day rule) sealed; #1068 (chat list contrast) open; #1052 re-check: no regressions, 2026-09-30T19:19:15Z
 
 - **Merged:** #1060, "an unpublished business stays hidden from outsiders", in batch 210 (PR #1063, 18:52:46Z; master `5fded9767`). Stream 1 verified seal `645806d1…`.
