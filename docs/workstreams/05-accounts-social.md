@@ -9,6 +9,36 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1060 merged (batch 210); #1055 re-sealed with a verified-occupancy rule; #1066 (14-day rule) sealed; #1068 (chat list contrast) open; #1052 re-check: no regressions, 2026-09-30T19:19:15Z
+
+- **Merged:** #1060, "an unpublished business stays hidden from outsiders", in batch 210 (PR #1063, 18:52:46Z; master `5fded9767`). Stream 1 verified seal `645806d1…`.
+- **#1055 (S3-62), held by Stream 1 for a trust gap and now fixed:**
+  - With the column fixed, any active non-guest occupant qualified, **verified or not**.
+  - Round 2 adds `verification_status = 'verified'`. Head `460712c09`, CI 36761361028 success, re-sealed `43d8bc14…`.
+  - E2E: an unverified member got 201 on `e75977dbb` and 403 with the reason in the toast on `460712c09`. The verified resident still gets 201 and "Endorsed (1)"; the retract returns 200.
+  - Waiting for Stream 1's batch.
+- **#1066, "the 14-day rule counts from verification"** (approved by Stream 1): stacked on #1055, head `f1afa2cff`, CI 36764090895 success, sealed `3498c08b…`.
+  - The 403 promised "verified for at least 14 days" but measured the Home's age. It now measures the occupancy's `verified_at`.
+  - **Decision recorded:** a verified row with a null `verified_at` (legacy) counts as not yet 14 days until it is verified again. There's no per-row time for it, and every current writer stamps `verified_at`.
+  - E2E:
+    - verified today at a 20-day-old home: 201 → **403** (API and toast);
+    - verified 15 days ago: **201**;
+    - null `verified_at`: **403**.
+- **#1052 contrast re-check** (Stream 1's request), sealed `843ff213…`, bundle `20260930-stream5-dark-hues-recheck-r1`:
+  - 21 Stream 5 web routes × light/dark, before (`60636ee9c`) vs after (`5fded9767`).
+  - Failures went from **12 to 2, with no regressions**. #1052 fixed the dark Log Out card (1.00–2.34:1), "Permanently delete" (4.41:1), privacy "Try Again" (3.12:1) and the notifications row and button.
+  - The remaining 2 predate #1052: the chat list's initials avatars.
+- **#1068, "chat list initials and the Assistant row are readable in both schemes"** (web, one file), head `931cd604b`, CI running.
+  - The initials move from the 500 steps (2.15–4.47:1) to the 700 steps of the same hues (5.02–7.90:1).
+  - The dark-mode Assistant row gets a dark gradient stop and app inks (1.01/1.03:1 → 13.82/6.68:1).
+  - The same palette in Stream 3's Home member panels was routed through Stream 1.
+  - **Decision:** this is an accessibility fix within the user's AA direction, keeping the layout and hues. Recorded here and in the PR.
+- **Next:**
+  1. #1068's seal.
+  2. Retarget #1066 once #1055 merges.
+  3. S3-22: the crew page's hero buttons.
+- **Runtime:** DB at `20260930184000`; API 18134 and web 18131 on master `5fded9767`. No fixtures remain; the endorse-check allowance is disabled.
+
 ## LIVE — #1053 merged (security batch 207); #1055 (S3-62 endorsements) sealed and handed off; #1060 open, CI running, 2026-09-30T18:41:00Z
 
 - **Merged:** #1053, "a business's private data stays with its team", in security batch 207 (PR #1054, 18:29:47Z, master `60636ee9c`). Stream 1 verified seal `4fbae5e1…`.
