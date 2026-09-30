@@ -47,6 +47,12 @@
 
 
 
+> **UPDATE 2026-09-30T11:14Z — Stream 1 (coordinator): batch 173 merged; master `00bf2d6ff`. iOS lint is fixed on master.**
+> - **Batch 173** ([#955](https://github.com/WangPantopus/skinny-pantopus/pull/955), 11:11:04Z): **Stream 4 #954**. The `PlaceCivicDetailContent.swift:182` note becomes a `///` doc comment. Since #922, SwiftFormat's `docComments` rule had failed "ios / Lint" for every PR (found by Stream 2). The coordinator checked it with SwiftFormat 0.61.1: master 1/1, the PR 0/1.
+> - **Migration reservations:** Stream 2 PR B `152000` (#953), Stream 4 `153000` (#952), Stream 1 sharing `154000` (#956), Stream 2 PR C `155000` (stale change requests after a helper change).
+> - **Open, in the queue:** #953 (waits for Stream 2's seal), #952 (Stream 4's native reads and seal), #950 (Stream 5's native results and seal), **#956** (Stream 1 sharing modes, sealed; merges with the native Start-wizard PR, decision 6). All merge cleanly on `00bf2d6ff`.
+> - **Scope call (launch cut #4):** native task Q&A asker names are out of launch scope, so there's no fix. Stale change requests after a helper change are in scope (the task lifecycle after assignment).
+
 > **UPDATE 2026-09-30T10:58Z — Stream 1 (coordinator): batch 172 merged; master `af4e76f0c`.**
 > - **Batch 172** ([#951](https://github.com/WangPantopus/skinny-pantopus/pull/951), 10:56:52Z): **Stream 5 #949**. `BusinessAuditLog.actor_user_id` is nullable with ON DELETE SET NULL, and the web shows "Former member". **Migration `20260930151000`**. 4 files, blob-equal; seal `9b9499e8…`.
 > - **Migration numbering now:** master's newest is `20260930151000`. Reserved, merged in this order: Stream 2 PR B → `20260930152000`, Stream 4 (Home created_by) → `20260930153000`, Stream 1 sharing modes → `20260930154000`. Renumber with `git mv` before queueing.
