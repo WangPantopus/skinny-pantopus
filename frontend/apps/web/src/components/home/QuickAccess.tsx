@@ -531,7 +531,7 @@ function AccessCodeForm({
             <button
               type="submit"
               disabled={saving || !form.label.trim() || !form.secret_value.trim()}
-              className="flex-1 text-sm font-medium py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+              className="flex-1 text-sm font-medium py-2 rounded-lg bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving…' : isEdit ? 'Update' : 'Add Code'}
             </button>

@@ -153,7 +153,7 @@ export default function BillsBudgetCard({
           {canManage && (bill.status === 'due' || bill.status === 'overdue') && (
             <button
               onClick={(e) => { e.stopPropagation(); onMarkBillPaid(bill.id); }}
-              className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-600 text-white hover:bg-green-700 transition"
+              className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-700 text-white hover:bg-green-800 transition"
             >
               Mark Paid
             </button>

@@ -121,9 +121,9 @@ function TaskCreationPanel({
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
                   priority === p
                     ? p === 'high'
-                      ? 'bg-red-500 text-white'
+                      ? 'bg-red-600 text-white'
                       : p === 'medium'
-                        ? 'bg-amber-500 text-white'
+                        ? 'bg-amber-700 text-white'
                         : 'bg-gray-500 text-white'
                     : 'bg-app-surface text-app-text-secondary dark:text-app-text-muted hover:bg-app-hover dark:hover:bg-gray-700'
                 }`}
@@ -321,9 +321,9 @@ function TaskDetailPanel({
                   className={`flex-1 py-2 text-sm font-medium transition-colors ${
                     editPriority === p
                       ? p === 'high'
-                        ? 'bg-red-500 text-white'
+                        ? 'bg-red-600 text-white'
                         : p === 'medium'
-                          ? 'bg-amber-500 text-white'
+                          ? 'bg-amber-700 text-white'
                           : 'bg-gray-500 text-white'
                       : 'bg-app-surface text-app-text-secondary dark:text-app-text-muted hover:bg-app-hover dark:hover:bg-gray-700'
                   }`}

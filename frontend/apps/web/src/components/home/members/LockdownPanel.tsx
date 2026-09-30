@@ -219,7 +219,7 @@ export default function LockdownPanel({
             <button
               onClick={handleDisable}
               disabled={toggling}
-              className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition"
+              className="w-full py-3 rounded-xl bg-green-700 text-white text-sm font-bold hover:bg-green-800 disabled:opacity-50 transition"
             >
               {toggling ? 'Disabling...' : 'Disable Lockdown'}
             </button>

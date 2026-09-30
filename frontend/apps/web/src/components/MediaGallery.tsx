@@ -59,7 +59,7 @@ export default function MediaGallery({
               {editable && onDelete && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                  className="absolute top-1 right-1 w-6 h-6 bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                 >
                   ✕
                 </button>
@@ -83,7 +83,7 @@ export default function MediaGallery({
               {editable && onDelete && (
                 <button
                   onClick={() => onDelete(item.id)}
-                  className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                  className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                 >
                   ✕
                 </button>

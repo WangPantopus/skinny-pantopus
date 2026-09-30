@@ -80,6 +80,9 @@ function webPalette(tokens: Record<string, string>): Palette {
     }
   }
   result.link = rgb(tokens['color-link']);
+  // The Tailwind accent utilities (bg-/text-primary and emerald 600-800).
+  for (const name of Object.keys(tokens).filter((k) => k.startsWith('accent-')))
+    result[name] = rgb(tokens[name]);
   return result;
 }
 
@@ -167,6 +170,19 @@ for (const [name, palette] of Object.entries({
     if (palette.link) {
       test.each(surfaces)('link text clears AA on %s', (surface) => {
         expect(contrast(palette.link, palette[surface])).toBeGreaterThanOrEqual(
+          4.5,
+        );
+      });
+    }
+    const accents = Object.keys(palette).filter((k) => k.startsWith('accent-'));
+    for (const fill of accents.filter((k) => k.includes('-fill'))) {
+      test(`${fill} supports white text`, () => {
+        expect(contrast(white, palette[fill])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+    for (const text of accents.filter((k) => k.includes('-text'))) {
+      test.each(surfaces)(`${text} clears AA on %s`, (surface) => {
+        expect(contrast(palette[text], palette[surface])).toBeGreaterThanOrEqual(
           4.5,
         );
       });

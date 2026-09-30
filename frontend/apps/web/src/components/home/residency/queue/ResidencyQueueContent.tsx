@@ -50,9 +50,9 @@ export function ResidencyQueueContent({ homeId, queue, fromMembers = false }: Pr
         aria-label={fromMembers ? undefined : (action === 'approve' ? 'Approve: review approval' : 'Deny: review rejection')}
         className={fromMembers
           ? `px-3 py-1.5 text-sm rounded-lg font-medium ${action === 'approve'
-            ? 'bg-green-600 text-white hover:bg-green-700' : 'border border-red-300 text-red-600 hover:bg-red-50'}`
+            ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-red-300 text-red-600 hover:bg-red-50'}`
           : `flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold transition ${action === 'approve'
-            ? 'bg-green-500 text-white hover:bg-green-600' : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'}`}>
+            ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'}`}>
         {!fromMembers && (action === 'approve' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />)}
         {fromMembers ? (action === 'approve' ? 'Review approval' : 'Review rejection') : (action === 'approve' ? 'Approve' : 'Deny')}
       </Link>)}</div>

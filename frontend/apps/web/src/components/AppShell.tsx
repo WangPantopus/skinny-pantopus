@@ -417,7 +417,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </div>
           <button onClick={() => router.push('/app/chat')} className="p-2 hover-bg-app rounded-lg relative" aria-label="Messages">
             <MessageCircle className="w-5 h-5 text-app-muted" />
-            {chatUnread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] leading-[18px] text-center font-bold">{chatUnread > 99 ? '99+' : chatUnread}</span>}
+            {chatUnread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] leading-[18px] text-center font-bold">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
           <button onClick={() => router.push('/app/profile')} className="w-8 h-8 rounded-full overflow-hidden bg-primary-600 text-white flex items-center justify-center font-semibold hover:bg-primary-700 text-sm shrink-0" aria-label="Profile">
             {avatarUrl ? <Image src={avatarUrl} alt="" width={32} height={32} sizes="32px" quality={75} className="w-full h-full object-cover" /> : userInitial}
@@ -907,7 +907,7 @@ function SidebarItem({
       <button onClick={onClick} onMouseEnter={onPrefetch} onFocus={onPrefetch} className={`w-full flex items-center justify-center py-2.5 rounded-lg transition relative group ${active ? activeClasses : inactiveClasses}`} title={label} data-testid={testId} data-accent={accent} data-active={active ? 'true' : 'false'}>
         <Icon className="w-5 h-5 flex-shrink-0" />
         {accessory ? <span className="absolute bottom-0.5 right-0.5">{accessory}</span> : null}
-        {count != null && count > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[9px] font-bold rounded-full flex items-center justify-center bg-red-500 text-white">{count > 99 ? '99+' : count}</span>}
+        {count != null && count > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[9px] font-bold rounded-full flex items-center justify-center bg-red-600 text-white">{count > 99 ? '99+' : count}</span>}
         {/* Tooltip */}
         <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-app-surface-sunken text-white dark:text-app-text text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">{label}</span>
       </button>
@@ -920,7 +920,7 @@ function SidebarItem({
       <Icon className="w-5 h-5 flex-shrink-0" />
       <span className="flex-1 text-left truncate">{label}</span>
       {accessory}
-      {count != null && count > 0 && <span className="min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full flex items-center justify-center bg-red-500 text-white">{count > 99 ? '99+' : count}</span>}
+      {count != null && count > 0 && <span className="min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full flex items-center justify-center bg-red-600 text-white">{count > 99 ? '99+' : count}</span>}
     </button>
   );
 }

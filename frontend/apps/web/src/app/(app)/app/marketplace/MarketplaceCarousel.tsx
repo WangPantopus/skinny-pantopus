@@ -62,7 +62,7 @@ export default function MarketplaceCarousel({ listings, onCardClick, onSave, loa
                       Budget: ${Number(item.budget_max).toFixed(0)}
                     </span>
                   ) : item.is_free ? (
-                    <span className="px-1.5 py-0.5 bg-green-600 text-white text-[10px] font-bold rounded">FREE</span>
+                    <span className="px-1.5 py-0.5 bg-green-700 text-white text-[10px] font-bold rounded">FREE</span>
                   ) : item.price != null ? (
                     <span className="px-1.5 py-0.5 bg-gray-900/80 text-white text-[10px] font-bold rounded">
                       ${Number(item.price).toFixed(0)}

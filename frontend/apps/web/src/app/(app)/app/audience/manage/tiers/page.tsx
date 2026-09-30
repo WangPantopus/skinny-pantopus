@@ -200,7 +200,7 @@ export default function ManageTiersPage() {
               type="button"
               onClick={handleSave}
               disabled={saving || dirtyTierIds.length === 0}
-              className="rounded-md bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save changes'}
             </button>

@@ -215,7 +215,7 @@ function Stepper({ step, setStep, hasPersona }: {
               aria-current={isActive ? 'step' : undefined}
               className={`flex items-center gap-2 rounded-md px-3 py-1 ${
                 isActive
-                  ? 'bg-teal-600 text-white'
+                  ? 'bg-teal-700 text-white'
                   : reachable
                     ? 'bg-teal-50 text-teal-800 hover:bg-teal-100'
                     : 'bg-app/50 text-app-secondary'
@@ -253,14 +253,14 @@ function StepIdentity({ persona, paidMembershipsEnabled, onContinue }: {
           <button
             type="button"
             onClick={onContinue}
-            className="mt-4 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+            className="mt-4 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
           >
             Continue to tiers
           </button>
         ) : (
           <Link
             href="/app/audience"
-            className="mt-4 inline-flex rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+            className="mt-4 inline-flex rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
           >
             Go to dashboard
           </Link>
@@ -283,7 +283,7 @@ function StepIdentity({ persona, paidMembershipsEnabled, onContinue }: {
       </p>
       <Link
         href="/app/persona"
-        className="mt-4 inline-flex rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+        className="mt-4 inline-flex rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
       >
         Open profile setup
       </Link>
@@ -332,7 +332,7 @@ function StepTiers({
           type="button"
           onClick={onContinue}
           disabled={saving}
-          className="rounded-md bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? 'Saving…' : dirtyCount > 0 ? 'Save and continue' : 'Continue'}
         </button>
@@ -459,7 +459,7 @@ function StepStripe({ persona }: { persona: PersonaShape | null }) {
           type="button"
           onClick={handleStartOnboarding}
           disabled={!persona || loading || polling || status?.ready}
-          className="rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status?.ready
             ? 'Stripe connected'

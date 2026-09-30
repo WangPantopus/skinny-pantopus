@@ -27,7 +27,7 @@ export default function CounterCard({ item, onAction }: CounterCardProps) {
     >
       {/* Action type icon */}
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-        isOverdue ? 'bg-amber-500 text-white' : 'bg-app-surface-sunken text-app-text-secondary'
+        isOverdue ? 'bg-amber-700 text-white' : 'bg-app-surface-sunken text-app-text-secondary'
       }`}>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

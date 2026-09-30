@@ -51,7 +51,7 @@ function Toggle({
         type="button"
         onClick={() => onChange(!enabled)}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-          enabled ? 'bg-primary-500' : 'bg-app-surface-sunken'
+          enabled ? 'bg-primary-600' : 'bg-app-surface-sunken'
         }`}
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-app-surface transition-transform shadow ${

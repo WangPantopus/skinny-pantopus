@@ -86,7 +86,7 @@ export default function JoinPage() {
               className="w-16 h-16 rounded-full object-cover mx-auto mb-3 border-2 border-white/20"
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-xl font-bold mx-auto mb-3 border-2 border-white/20">
+            <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold mx-auto mb-3 border-2 border-white/20">
               {initial}
             </div>
           )}

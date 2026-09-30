@@ -234,7 +234,7 @@ function ReviewClaimContent() {
                 ) : comparison?.incumbent?.has_verified_owner && ['initiated', 'evidence_submitted', 'under_review'].includes(claim.claim_phase_v2 || '') ? (
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleRelationshipAction(claim, 'invite_to_household')}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition">
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold hover:bg-green-800 transition">
                       <UserPlus className="w-4 h-4" /> {(claim.claim_type || 'owner') === 'owner' ? 'Invite as owner' : 'Invite'}
                     </button>
                     <button onClick={() => handleRelationshipAction(claim, 'decline_relationship')}
@@ -254,7 +254,7 @@ function ReviewClaimContent() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleOwnershipReview(claim.id, 'approve')}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition">
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold hover:bg-green-800 transition">
                       <Check className="w-4 h-4" /> Approve
                     </button>
                     <button onClick={() => handleOwnershipReview(claim.id, 'reject')}

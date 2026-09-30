@@ -108,7 +108,7 @@ export default function ProfileHeader({
                 </div>
               )}
               {Boolean(residency?.hasHome && residency?.verified) && (
-                <span className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-white text-xs" title="Verified resident">
+                <span className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center border-2 border-white text-xs" title="Verified resident">
                   ✓
                 </span>
               )}

@@ -122,7 +122,7 @@ export default function ChatRichCard({ msgType, metadata, msgText, isMine }: Cha
               quality={80}
             />
             <div className={`absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-xs font-bold ${
-              isFree ? 'bg-green-500 text-white' : 'bg-surface text-app shadow'
+              isFree ? 'bg-green-700 text-white' : 'bg-surface text-app shadow'
             }`}>
               {isFree ? 'FREE' : price != null ? `$${Number(price).toFixed(0)}` : 'Make Offer'}
             </div>

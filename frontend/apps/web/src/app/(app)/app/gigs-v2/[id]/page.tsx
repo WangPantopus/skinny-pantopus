@@ -100,7 +100,7 @@ function TrustCapsule({
   return (
     <div className="relative bg-gray-100 rounded-lg px-3 py-2">
       {isRecommended && (
-        <span className="absolute -top-2 right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+        <span className="absolute -top-2 right-2 bg-green-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
           Best Match
         </span>
       )}
@@ -187,7 +187,7 @@ function OfferCardV2({
       <div className="flex items-center gap-4">
         <button
           onClick={() => onAccept(offer.id)}
-          className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          className="px-5 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors"
         >
           Accept
         </button>
@@ -315,7 +315,7 @@ function InstantAcceptButton({
 
   if (state === 'success') {
     return (
-      <div className="bg-green-500 text-white text-center py-4 rounded-xl font-bold text-lg animate-pulse">
+      <div className="bg-green-700 text-white text-center py-4 rounded-xl font-bold text-lg animate-pulse">
         ✓ You're assigned!
       </div>
     );
@@ -326,7 +326,7 @@ function InstantAcceptButton({
       <button
         onClick={handlePress}
         disabled={state === 'loading'}
-        className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 disabled:opacity-60 transition-colors"
+        className="w-full bg-green-700 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-800 disabled:opacity-60 transition-colors"
       >
         {state === 'loading' ? (
           <span className="flex items-center justify-center gap-2">

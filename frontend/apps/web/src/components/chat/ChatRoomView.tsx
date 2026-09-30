@@ -301,7 +301,7 @@ export default function ChatRoomView({
                       </div>
                     )}
                     <div className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
-                      isMine ? 'bg-violet-500 text-white rounded-br-md' : 'bg-violet-50 text-app border border-violet-200 rounded-bl-md'
+                      isMine ? 'bg-violet-600 text-white rounded-br-md' : 'bg-violet-50 text-app border border-violet-200 rounded-bl-md'
                     }`}>
                       {msgText}
                       {attachments.length > 0 && (
@@ -367,7 +367,7 @@ export default function ChatRoomView({
               </svg>
             </button>
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                 {getInitials(chatTitle)}
               </div>
               <div className="min-w-0">

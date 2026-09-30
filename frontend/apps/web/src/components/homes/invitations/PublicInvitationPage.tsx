@@ -176,7 +176,7 @@ export default function PublicInvitationPage() {
                 className="w-10 h-10 rounded-full object-cover"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold">
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
                 {(inviter?.name || '?')[0].toUpperCase()}
               </div>
             )}

@@ -56,7 +56,7 @@ export default function SettingsTab({ businessId, profile, onUpdate }: SettingsT
           className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
             profile?.is_published
               ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-              : 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-green-700 text-white hover:bg-green-800'
           } disabled:opacity-50`}
         >
           {profile?.is_published ? 'Unpublish' : 'Publish'}
