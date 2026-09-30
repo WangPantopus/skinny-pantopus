@@ -9,6 +9,52 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — decision-9 trio proven end to end (#974 + #976 + #968, one batch pending); #950, #964 and #966 merged, 2026-09-30T12:24:13Z
+
+- **Merged since the last block:**
+  - [#964](https://github.com/WangPantopus/skinny-pantopus/pull/964) (batch 178, 11:51:06Z, master `0c3a2dae1`): a direct or parentless group chat is deleted when its last member leaves (migration `20260930161000`).
+  - [#966](https://github.com/WangPantopus/skinny-pantopus/pull/966) (batch 179, 12:03:47Z, master `7709e55fb`) fixed **a miss of mine**:
+    - #964's statement trigger (`REFERENCING OLD TABLE AS gone`) failed master's "Replay and lint the complete schema" job, because the application lint ran plpgsql_check without naming transition tables (`42P01 relation "gone" does not exist`). Both #964's own CI run and batch 178's failed that way, and I hadn't read it before the handover.
+    - The lint now passes each trigger's `tgoldtable`/`tgnewtable`. Local result: 1 error → 0, with warnings, functions and bindings unchanged.
+  - [#950](https://github.com/WangPantopus/skinny-pantopus/pull/950) (batch 179): the delete confirmation says what stays, and live-train organizers see Stream 1's paragraph.
+    - Native checks on `675f51155`: Android ktlint, detekt, lint and assemble pass; `PrivacyViewModelTest` 15/15; the iOS build passes.
+    - Resealed as `cd4e4988…`.
+    - Its two iOS CI reds were master's: a SwiftFormat file, and the Start-wizard test that Stream 1 fixed in #967.
+- **Open, one batch:** [#976](https://github.com/WangPantopus/skinny-pantopus/pull/976) (mine, head `987b9a218`), with Stream 3's [#974](https://github.com/WangPantopus/skinny-pantopus/pull/974) and Stream 4's [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) (`b410aae70`, migration `20260930162000`).
+  - **The change:** account deletion step 1c retires each Home the person created or lives in, before anything else changes. The outcome is `deleted`, `purged` or `kept`. A refusal gives 409 `ACCOUNT_RECORDS_RETAINED` or 503 `ACCOUNT_DELETE_UNAVAILABLE`.
+  - **E2E** on a local combined tree (bundle `20260930-stream5-retire-homes-r1`, seal `a9b574bf…`), real route plus real Chrome:
+    - private setup: master leaves an orphan Home; now `deleted`;
+    - member with a task photo: master 409 (23514); now 200 `kept`, and the photo stays with the household;
+    - sole owner: `deleted`;
+    - last member: `purged`, shell kept, and a later member sees nothing;
+    - with the purge grant revoked locally, the route gives 503 and changes nothing.
+  - **Checks on the final tree:** backend Jest 341 suites / 6286 tests, 0 failures; privacy and CI checks pass.
+  - `987b9a218` moves the import into the step. The alias guard allowlists `backend/routes/users.js:306` by line number, so any new top-of-file import in users.js breaks the guard.
+- **Decision 10** (standing direction; Stream 4 adopted it in `b410aae70`): the purge **closes and detaches** a household chat (type `group`, home_id NULL, inactive, "(closed)") instead of deleting it.
+  - The next household can't inherit it through `get_or_create_home_chat`.
+  - Former members keep their own history, read-only (`ROOM_INACTIVE`).
+  - #964's trigger deletes the room once nobody else is in it. Both paths are proven (hs4/hs6; hs7 in real Chrome and hs10).
+- **Observations sent, not changed:**
+  - Stream 4: the task-media list still returns the deleted uploader's id from `HomeTaskMediaIntent`.
+  - Stream 3: the LIF-02 pre-check counts an unverified occupancy with no access as a co-resident, so the owner gets `HOME_TRANSFER_REQUIRED`.
+  - Both: a person linked only by `Home.owner_id` is ignored by `othersKeepHome` and by the purge.
+- **Runtime state (Stream 5 stack 64531/64532):**
+  - API 18134 runs the **local combined tree `a2e222885`**, not master. The DB has 162000 applied, ahead of master until #968 merges. Return the API to master after the batch.
+  - My launcher now sets `HOME_DOCUMENTS_BUCKET=pantopus-home-documents` (a private bucket row on my stack), so task photos upload locally.
+  - The proxy's deletion allowlist is off.
+- **Fixtures to remove later by exact ids** (`DELBLOCK1` manifest):
+  - accounts hs2b, hs4b, hs6, hs9 and hs9b, and solo2;
+  - their homes, the hs4 shell and the closed chat;
+  - hs5's master-run orphan Home;
+  - the bucket row.
+- **Next:**
+  1. After the trio merges, return the API to master.
+  2. Check the `ChatRoom` insert policy found today: "Users can create chat rooms" lets any signed-in user insert a room of any type through PostgREST. It's defense in depth, since participants can't be added that way. First confirm whether any user-token path creates rooms.
+  3. The iOS pass, when the grant arrives.
+- **Needs the user:**
+  - simulator access for "Pantopus S5";
+  - the money/legal call on payment-history accounts (recommendation: anonymize).
+
 ## LIVE — account deletion reaches most users; #935/#936/#947 merged, #949/#950 open; Android native pass done, iOS waits for the user's simulator grant, 2026-09-30T10:54:37Z
 
 - **Merged since the last block:**
