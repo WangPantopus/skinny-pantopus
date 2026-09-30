@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
+
+/** 'resolving' until the saved viewing area has been read; 'failed' when that read failed. */
+export type AreaStatus = 'resolving' | 'ready' | 'failed';
 
 export interface AreaPickerState {
   userLat: number | null;
@@ -11,6 +14,7 @@ export interface AreaPickerState {
   viewingLng: number | null;
   viewingLabel: string;
   radiusMiles: number | null;
+  areaStatus: AreaStatus;
   showAreaPicker: boolean;
   areaQuery: string;
   areaSearching: boolean;
@@ -29,6 +33,9 @@ export function useAreaPicker(showToast: (msg: string) => void) {
   const [areaQuery, setAreaQuery] = useState('');
   const [areaSearching, setAreaSearching] = useState(false);
   const [areaSuggestions, setAreaSuggestions] = useState<Record<string, any>[]>([]);
+  // A failed read of the saved area is not the same as having no area.
+  const [areaStatus, setAreaStatus] = useState<AreaStatus>('resolving');
+  const resolveGeneration = useRef(0);
 
   const refreshDeviceLocation = useCallback(async () => {
     if (!navigator.geolocation) return null;
@@ -50,36 +57,43 @@ export function useAreaPicker(showToast: (msg: string) => void) {
   }, []);
 
   // Primary: resolve server-side viewing location; fallback: browser GPS
+  const resolveArea = useCallback(async (isCancelled: () => boolean = () => false) => {
+    const generation = ++resolveGeneration.current;
+    const stale = () => isCancelled() || generation !== resolveGeneration.current;
+    setAreaStatus('resolving');
+    let resolved = false;
+    try {
+      const res = await api.location.resolveLocation();
+      if (stale()) return;
+      const vl = res?.viewingLocation;
+      if (vl && vl.latitude != null && vl.longitude != null) {
+        setViewingLat(vl.latitude);
+        setViewingLng(vl.longitude);
+        setViewingLabel(vl.label || 'Set area');
+        setRadiusMiles(vl.radiusMiles ?? null);
+        resolved = true;
+      }
+      setAreaStatus('ready');
+    } catch {
+      // resolveLocation unavailable; say so, then fall through to GPS
+      if (stale()) return;
+      setAreaStatus('failed');
+    }
+    // Always request device GPS in background for eligibility checks
+    const loc = await refreshDeviceLocation();
+    if (!stale() && loc && !resolved) {
+      setViewingLat((prev) => (prev == null ? loc.latitude : prev));
+      setViewingLng((prev) => (prev == null ? loc.longitude : prev));
+    }
+  }, [refreshDeviceLocation]);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      let resolved = false;
-      try {
-        const res = await api.location.resolveLocation();
-        if (cancelled) return;
-        const vl = res?.viewingLocation;
-        if (vl && vl.latitude != null && vl.longitude != null) {
-          setViewingLat(vl.latitude);
-          setViewingLng(vl.longitude);
-          setViewingLabel(vl.label || 'Set area');
-          setRadiusMiles(vl.radiusMiles ?? null);
-          resolved = true;
-        }
-      } catch {
-        // resolveLocation unavailable; fall through to GPS
-      }
-      // Always request device GPS in background for eligibility checks
-      if (!cancelled) {
-        const loc = await refreshDeviceLocation();
-        if (!cancelled && loc && !resolved) {
-          setViewingLat((prev) => (prev == null ? loc.latitude : prev));
-          setViewingLng((prev) => (prev == null ? loc.longitude : prev));
-        }
-      }
-    })();
+    void resolveArea(() => cancelled);
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resolveArea]);
+
+  const retryResolveArea = useCallback(() => { void resolveArea(); }, [resolveArea]);
 
   // Area search autocomplete
   useEffect(() => {
@@ -186,6 +200,8 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     viewingLabel,
     radiusMiles,
     setRadiusMiles,
+    areaStatus,
+    retryResolveArea,
     showAreaPicker,
     setShowAreaPicker,
     areaQuery,

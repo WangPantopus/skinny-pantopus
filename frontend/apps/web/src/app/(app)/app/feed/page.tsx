@@ -10,7 +10,7 @@ import {
   ClipboardList, Map as MapIcon, Settings,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { FeedSurface, PostType } from '@pantopus/api';
+import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import {
   PostComposer, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
   NeighborhoodPulse, EmptyFeed, SparseFeedSummary, PostSkeleton,
@@ -72,6 +72,25 @@ export default function FeedPage() {
 
   const inSportsLane = feed.surface === 'place' && feed.topic === 'sports';
   const activeEvents = useActiveSportsEvents(inSportsLane);
+
+  // A Place feed without coordinates means "no area set" only once the saved area has been read.
+  const placeAreaMissing = feed.surface === 'place' && (area.viewingLat == null || area.viewingLng == null);
+  const areaResolving = placeAreaMissing && area.areaStatus === 'resolving';
+  const areaFailed = placeAreaMissing && area.areaStatus === 'failed';
+
+  // The Pulse card counts the unfiltered Place feed for the viewed area. Keep the last successful
+  // unfiltered read so a post-type chip, a topic lane, a pending read or a failed read never shows
+  // the other counts as 0; with no such read for this area the card shows dashes.
+  const pulseScope = placeAreaMissing ? null : `${area.viewingLat},${area.viewingLng},${area.radiusMiles ?? ''}`;
+  const unfilteredPlaceLoaded = feed.surface === 'place' && feed.filter === 'all' && feed.topic == null
+    && pulseScope != null && !feed.loading && !(feed.error && feed.posts.length === 0);
+  const [pulseSnapshot, setPulseSnapshot] = useState<{ scope: string; posts: Post[] } | null>(null);
+  useEffect(() => {
+    if (unfilteredPlaceLoaded && pulseScope) setPulseSnapshot({ scope: pulseScope, posts: feed.posts });
+  }, [unfilteredPlaceLoaded, pulseScope, feed.posts]);
+  const pulsePosts = unfilteredPlaceLoaded
+    ? feed.posts
+    : (pulseSnapshot && pulseSnapshot.scope === pulseScope ? pulseSnapshot.posts : null);
 
   // Composer sports pre-prime: when the composer opens from the Sports lane,
   // these map `sportsMode`/primaryEvent into the composer's initial topic
@@ -348,7 +367,7 @@ export default function FeedPage() {
         ) : (
           /* List View */
           <div className="px-4 py-6 space-y-4 max-w-2xl mx-auto">
-            {feed.surface === 'place' && <NeighborhoodPulse posts={feed.posts} />}
+            {feed.surface === 'place' && <NeighborhoodPulse posts={pulsePosts} />}
 
             {feed.surface === 'place' && (
               <NearbyProvidersCard
@@ -436,13 +455,21 @@ export default function FeedPage() {
                 />
               </div>
             )}
-            {feed.loading ? (
+            {areaFailed && (
+              <div role="alert">
+                <ErrorState
+                  message="We couldn't load your area. Please try again."
+                  onRetry={area.retryResolveArea}
+                />
+              </div>
+            )}
+            {feed.loading || areaResolving ? (
               <div className="space-y-4">
                 <PostSkeleton />
                 <PostSkeleton />
                 <PostSkeleton />
               </div>
-            ) : feed.error && feed.posts.length === 0 ? null : feed.posts.length === 0 ? (
+            ) : (feed.error && feed.posts.length === 0) || areaFailed ? null : feed.posts.length === 0 ? (
               <>
                 {feed.surface === 'place' && (
                   <SparseFeedSummary
