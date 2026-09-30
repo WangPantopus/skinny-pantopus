@@ -3775,8 +3775,9 @@ router.get(
       }
     }
 
-    // Check viewer access based on sharing_mode
-    if (viewerLevel === 'none') {
+    // Check viewer access based on sharing_mode. A draft (never published, or moved back
+    // to draft) is for its organizers and recipient only: "neighbors stop seeing it".
+    if (viewerLevel === 'none' && st.status !== 'draft') {
       if (st.sharing_mode === 'private_link') {
         // Private link: anyone with the link can view
         viewerLevel = 'viewer';
