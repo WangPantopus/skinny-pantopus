@@ -1,3 +1,7 @@
+# STREAM 5 — Accounts and Social (formerly Stream 3; renumbered 2026-09-30)
+
+> **Older snapshot (2026-09-22).** The live status is `docs/workstreams/05-accounts-social.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams on 2026-09-30: the former Streams 1 and 2 are each being split in two (Streams 1–4), and this stream, formerly Stream 3, is now **Stream 5**. This file moved from `03-accounts-social.md`; below, "Stream 3" means Stream 5.
+
 # CURRENT STREAM 3 RESUME SUMMARY — 2026-09-22
 
 This is the current handoff point. It supersedes older opening paragraphs and stale “pending”
