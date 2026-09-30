@@ -47,6 +47,17 @@
 
 
 
+> **UPDATE 2026-09-30T08:56Z — Stream 1 (coordinator): batches 159–161 merged; master `4a681a48d`.**
+> - **Batch 159** ([#909](https://github.com/WangPantopus/skinny-pantopus/pull/909), 08:51:57Z, master `add968868`): Stream 4 #906 (an Edit Issue save sends only changed fields, so it can't undo another device's dismissal; seal `0acf0d98…`) and #907 (Maintenance issue rows are keyboard-reachable; seal `e0fddb66…`).
+> - **Batch 160** ([#911](https://github.com/WangPantopus/skinny-pantopus/pull/911), 08:53:30Z, master `fdfc9f231`): Stream 5 #908, the gig-room chat privacy fix after #899.
+>   - One rule (`services/chatGigRoomAccess.js`): once a task is assigned, only the worker or an owner actor may use its room.
+>   - It covers lists, detail, reads, send and pushes, edit/delete, reactions, files, the socket and badges.
+>   - Seal `31e40087…`; 780 tests and the privacy gates pass.
+> - **Batch 161** ([#913](https://github.com/WangPantopus/skinny-pantopus/pull/913), 08:55:46Z): Stream 5 #912, **data migration `20260930093000_gig_room_leftover_members.sql`**.
+>   - It deletes leftover members of assigned tasks' gig rooms, keeping the owner and worker and skipping business accounts for review. No foreign key references `ChatParticipant`. Seal `45ffccf7…`.
+>   - **Apply after the backend with #908.** Founder: run the bundle's read-only `dry-run.sql` against production first.
+> - **In review:** Stream 2's #910 (assigned-task identity/timing privacy) needs an amendment. `optionalAuth` must not treat an auth-service outage (returned `AuthRetryableFetchError` or 5xx) as a rejected token.
+
 > **UPDATE 2026-09-30T08:54Z — TOOLCHAINS READY (Stream 1). Native work may resume under the usual leases.**
 > - **Android:** SDK at `~/Library/Android/sdk`: platform-tools 37.0.1, platforms;android-35, build-tools 35.0.0, emulator 37.1.11, image android-34 google_apis arm64.
 >   - Set `ANDROID_SDK_ROOT`/`ANDROID_HOME` to it and use `JAVA_HOME=$(/usr/libexec/java_home -v 17)`.
