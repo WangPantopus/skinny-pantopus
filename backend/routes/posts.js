@@ -2493,7 +2493,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city, state)`)
       .eq('id', id).single();
 
-    if (error || !post) return res.status(404).json({ error: 'Post not found' });
+    // No row, or an id that isn't a UUID, is "not found"; a failed read is not.
+    if (error && !['PGRST116', '22P02'].includes(error.code)) {
+      logger.warn('Post read failed', { postId: id, code: error.code });
+      return res.status(503).json({ error: 'This post could not be loaded. Please try again.' });
+    }
+    if (!post) return res.status(404).json({ error: 'Post not found' });
 
     const hasAccess = await canViewPost(post, userId);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
