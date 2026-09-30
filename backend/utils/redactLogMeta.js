@@ -41,6 +41,22 @@ const REDACTION = '[redacted]';
 const MAX_DEPTH = 8;
 
 /**
+ * Bearer-link paths: the segment after these prefixes IS the credential (a guest
+ * pass, a scoped share or its document receipt, a Home invitation, a fridge
+ * card, a residency claim or letter, an invite opt-out, a scheduling booking
+ * link, a gig share-status link, a public join code). The request logger and
+ * the auth middleware log paths absolute (/api/homes/guest/…) or relative to
+ * their router (/guest/…), so both forms match where auth middleware runs.
+ */
+const BEARER_PATH = /(\/(?:api\/homes\/)?(?:guest|shared|shared-documents|invitations\/token)|\/(?:api\/public\/)?(?:fridge-cards|residency-claims|residency-letters|block-invites\/opt-out)|\/api\/public\/(?:book\/o|booking)|\/api\/gigs\/status|\/api\/users\/public\/join)\/[^/?#\s"]+/gi;
+/** Keys whose string values are request paths or URLs. Matched case-insensitively. */
+const PATH_KEYS = new Set(['path', 'url', 'originalurl']);
+
+function redactBearerPath(text) {
+  return typeof text === 'string' ? text.replace(BEARER_PATH, '$1/:code') : text;
+}
+
+/**
  * Depth- and cycle-safe redaction of a log metadata object.
  * Coarse, non-identifying fields (city, state) are deliberately kept: they are
  * what makes a log line useful for debugging without naming anyone's home.
@@ -54,11 +70,12 @@ function redactLogMeta(value, seen = new WeakSet(), depth = 0) {
 
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    out[key] = REDACTED_KEYS.has(key.toLowerCase())
+    const lower = key.toLowerCase();
+    out[key] = REDACTED_KEYS.has(lower)
       ? REDACTION
-      : redactLogMeta(val, seen, depth + 1);
+      : PATH_KEYS.has(lower) ? redactBearerPath(val) : redactLogMeta(val, seen, depth + 1);
   }
   return out;
 }
 
-module.exports = { redactLogMeta, REDACTED_KEYS };
+module.exports = { redactLogMeta, redactBearerPath, REDACTED_KEYS };
