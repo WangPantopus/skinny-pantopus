@@ -355,6 +355,37 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T23:45:29Z — New Stream 4 session (resumed 23:12Z). #1116 is with the queue owner; Document detail C/D is being reproduced; the lease is held from 23:39:44Z.**
+  - **#1116, lint only** ([#1116](https://github.com/WangPantopus/skinny-pantopus/pull/1116), head `9b3347813`, on master `763969f07`).
+    - #1103 (batch 223) left a `trailing_closure` error in `HubTabRoot.swift:3343` that fails master's `swiftlint --strict`.
+      Stream 2 found it; the coordinator asked Stream 4 to own the fix.
+    - The fix is one hunk: the closure becomes a trailing closure, with no behaviour change. SwiftLint `--strict` gives 0
+      violations and SwiftFormat 0/1.
+    - It was built with git plumbing (a temporary index plus `commit-tree`), so the session worktree, which two queued
+      builds were using, was never touched.
+    - The coordinator reviewed it and is batching it after its candidate build compiles.
+  - **Item 2, Document detail C/D.** Branch `claude/stream4-document-no-file-actions` `e8f27d9cb`, from `a211e1f48`.
+    - Android C: the image-decode fallback's "Open externally" gets its action.
+    - D, a document with no file: the preview says "No file attached · This document has details only, so there's
+      nothing to open." with no pill (iOS and Android), and Android disables Open and Share, as iOS already does.
+    - Android's disabled footer actions draw at the design system's disabled alpha (0.5, `Buttons.kt`).
+    - The existing U02 frame (`20260930-stream4-u02-native-r1`, `document-detail-0`) shows iOS already dims disabled
+      plain buttons, so iOS gets no opacity change (it would double-dim).
+    - Before/after captures are in progress: stage `stream4-docdetail-a3-r1`, fixture Home `265d037b`, S34 pair in slots 3
+      and 4.
+  - **Window:** the shared worktree and backend run on master `763969f07` (restart 23:40:31Z, PID 81606) and will be
+    restored to `00bf2d6ff`.
+    - Items 3 (iOS dark re-measure) and 4 (web A3 live re-measure) run in the same window. #1061 merged at 21:10:19Z.
+  - **Found, next:**
+    - The Place hero and the Today's Pulse page can read as an all-clear when weather alerts weren't checked.
+      - The AI Pulse composer treats an NWS `error` or a Home with no coordinates as "Your home area is quiet".
+      - Both native Pulse pages tier signals by 80/50/25 on the backend's 0–10 scale, so a critical alert files under
+        "When you have a minute".
+      - This is item 5, drafted, for the next window.
+    - Web Documents never shows "View" or the size. It reads `file_url` and `file_size`, which the API doesn't send; the
+      API sends `content_url` and `size_bytes`. That's a D09 candidate.
+    - Sent to Stream 2: the Pulse signals' `/gig-v2/new` actions are an Open Gigs (cut #4) entry point, so no change.
+
 - **2026-09-30T22:21:17Z — #1102–#1111 merged in batch 223** ([#1112](https://github.com/WangPantopus/skinny-pantopus/pull/1112),
   master `a211e1f48`). The coordinator checked every head and each bundle's integrity (verify-batch: 46 files).
   - Review notes: #1104 lets only the display name leave the server. The #1111 `alertsChecked` rule was accepted. The
