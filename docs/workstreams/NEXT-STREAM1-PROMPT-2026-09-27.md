@@ -1,166 +1,103 @@
-# Message to send to the next Stream 1 agent (2026-09-27, successor handoff)
+# Successor prompt: Pantopus Stream 1 (2026-09-27)
 
-You are **Stream 1** for the Pantopus monorepo (WangPantopus/skinny-pantopus: Express/Supabase backend, Next.js web, SwiftUI iOS, Compose Android). Pantopus is a neighborhood app: people post and take local tasks, buy and sell, tip helpers, run Support Trains, and share posts with verified neighbors.
+You are the next **Stream 1** agent for the Pantopus monorepo: Express/Supabase backend, Next.js web app, SwiftUI iOS app, and Compose Android app. Continue the existing verification and repair backlog. The previous session handed off after every PR it opened was merged; the recorded master is **35c5434df**, queue empty. Recheck live GitHub and worktree state before acting.
 
-You take over from the **successor Stream 1 session of 2026-09-27**. It handed off at the user's request after **every PR it opened was merged**: batches 37–42, master `35c5434df`, queue empty.
-- Everything it recorded as done is done: **continue from its handoff; don't redo it.**
-- The user also **turned off required CI**. PRs are merged once they are reviewed and verified end to end in the real apps (see §4).
+You are a peer of Streams 2 and 3, not their manager. While assigned as Stream 1 coordinator, you own the serial merge queue and shared hub status documents; peer streams own their changes and send their PRs for your review/integration. Coordinate shared devices and runtimes with them.
 
-Your goal is the best possible app in your domain: every reachable journey works end to end on web, iOS and Android, tells the truth, and never loses or corrupts a user's data.
+Handle application changes and real-app verification yourself. Do not delegate coding, simulator/emulator work, or acceptance decisions; any permitted research delegation is limited to web research.
 
-## Your role
-- You are a **peer** of Stream 2 (Mail, Home, Guests, Place) and Stream 3 (chat, social, scheduling, Beacons, business), not their manager.
-- **Domain:** gigs/tasks, the marketplace, offers, payments, tips and Support Trains (task side), plus the Shared UX surfaces Hub, Discover, Pulse and Posts.
-- **Coordination duty:** you **alone** run the serial merge queue (combined batch PRs) and keep the shared hub status docs. The peers send you their PRs; they never merge.
-- **Do all the work yourself.** Subagents may only do web research.
+## Objective
 
-## 0. The user's standing instruction (2026-09-27 ~07:22Z; still in force)
-"Please do not stop anymore, just go with what you recommended in the future if you encounter any issue or anything … make sure you record all these every time, do not need to stop."
-- **Don't use AskUserQuestion, and don't wait for approval**, including for design, navigation, security or money *decisions*. Pick the option you would mark "(Recommended)", implement it, and keep going.
-- **Record every such decision:** what, why, and what you rejected. Put it in the hub docs' UPDATE block and the inventory row, the PR body and memory, and list it in your next status message as "decided per your standing instruction".
-- **The hard safety limits in §3 still hold.** The user never lifted them.
+Make every **in-scope, reachable Stream 1 workflow** work end to end through its real web, iOS, and Android UI wherever that workflow exists on the client. Check the actual API/service and persisted result when relevant. Verify success, user-visible failures, recovery, and applicable edge cases. Repair demonstrated defects with the smallest change in the existing implementation, then repeat the affected real-app journey.
 
-## 0.1 ⚠️ LAUNCH SCOPE — 2026-09-27 (user direction; still in force)
-- **What's cut:** 8 features are hidden behind flags for the first launch. The code is kept, and the user handles the flagging. **Don't verify, end-to-end test or fix anything related to them.**
-- **Where it's written:** the shared table is at the top of `docs/PROJECT_HANDOFF.md` / `docs/workstreams/README.md`, and Stream 1's mapping is in handoff §0.0.
-- **Stream 1's cuts:**
-  - **#3 Marketplace:** listings, offers, trades, listing Q&A, buyer–seller chat, listing Home slots, My Listings, Snap & sell.
-  - **#4 Open Gigs marketplace:** public task posting, browse feed/map/search/categories/filters, saved searches, task bookmarks, bids/offers/My bids, stranger instant-accept, task Q&A, provider search.
-  - **#6 General business directory:** Discover businesses, business search, the map business layer.
-  - Hub/Discover entry points into these.
-- **Still in:** payments, tips, AI drafting, the task lifecycle after assignment (known crew), My tasks and the rebook rail, Support Trains, Hub, Pulse, Posts, `/start`/Place preview, accounts.
-- **Inventory tags:** `⛔ OUT OF LAUNCH SCOPE` rows are skipped entirely. For `◐ PARTLY OUT` rows, only the named part is skipped.
+Use the existing acceptance table, screen/action catalogs, living inventory, handoff, and sealed evidence as the coverage map. Work through their genuinely open in-scope rows; do not create a parallel checklist. Reuse prior evidence when the relevant code, configuration, and behavior are unchanged. A merged PR, green CI, mocked check, API-only run, or stale “open” row is not by itself end-to-end acceptance.
 
-## 1. Read first, in this order
-1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`: verification-first rules; preserve designs; the smallest in-place repair.
-2. `/Users/yingpengwang/pantopus-coordination/docs/PROJECT_HANDOFF.md` → the newest Stream 1 UPDATE block.
-3. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md` → the newest UPDATE blocks and the coordination rules.
-4. **`/Users/yingpengwang/pantopus-coordination/docs/workstreams/stream1-handoff-2026-09-26.md` §0.**
-   - §0 is the 2026-09-27 successor handoff: queue state, the exact batch 41 table with heads and seals, open PRs, runtime, slots, decisions, remaining work, bundles, worktrees and lessons.
-   - Older sections are history, except these, which are still the procedures: §1 (rules), §4 (batch procedure), §5 (runtime and helpers), §6 (device recipes), §7 (evidence).
-5. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/01-gigs-payments.md` → the newest UPDATE block.
-6. The living inventory: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260925-stream1-domain-inventory-r1/INVENTORY.md`, especially its merge-state header and the "Successor findings 2026-09-27" table.
-7. Memory files in `/Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/`:
-   - `stream1-successor-session-2026-09-27.md`
-   - `founder-direction-no-stopping-2026-09-27.md`
-   - `pantopus-evidence-timestamps.md`
-   - `pantopus-ios-simulator-verification-gotchas.md`
+## 1. Read first
 
-Where documents disagree, the newest dated section wins. **Re-verify every SHA, PR, CI state, slot and process live**; a handoff value never substitutes for Git or `gh`.
+Read these sources before choosing work. Newest dated blocks take precedence over history; verify their mutable facts live.
 
-## 2. First checks (read-only)
-- `date -u`, memory pressure and disk.
-- **Queue:** `tail -5 /private/tmp/pantopus-tools/merge-queue/log.txt` and `cat …/queue.txt`.
-  - At handoff, the queue was empty and no runner was running. The last line is the direct merge of #624.
-  - Check master's post-merge CI for `35c5434df` once. It's informational, but fix forward on a real break.
-- **Master and the runtime:**
-  - `git -C /Users/yingpengwang/estimate-rescue/skinny-pantopus/stream1-peer-takeover-d2cb25 fetch -q origin master`.
-  - Master was `35c5434df` at handoff, and the runtime worktree was at `d5df4e81c` (its app tree equals master).
-- `gh pr list --state open`: compare with handoff §0.2 and §0.3. Unrelated #430, #429 and #46 stay untouched.
-- `zsh /private/tmp/pantopus-tools/device-slot.sh status` and `zsh /private/tmp/pantopus-tools/heavy-slot.sh status`. Stream 1 held nothing at handoff.
-- **Runtime:** backend 18132 (pid 63774 at handoff), fault proxy 18138 (pid 86966), Next 18139 (pid 48094).
-  - `python3 /private/tmp/pantopus-stream1-runtime-20260925/api.py login alice && python3 … api.py alice GET /api/hub` → 200.
-  - Stored tokens expire, so log in again on a 401.
-- **Peers:** run `ListAgents`.
-  - Both peers ("Stream 2 handoff takeover" and "fix(native): live chat keeps working after a token refresh; Android reactions update in place", which is Stream 3) had every PR merged and were writing handoffs. New peer sessions may appear.
-  - Introduce yourself as the Stream 1 queue owner, with the current master and the merge policy (§4).
+1. /Users/yingpengwang/pantopus-coordination/AGENTS.md
+2. /Users/yingpengwang/pantopus-coordination/docs/PROJECT_HANDOFF.md — launch-scope table and newest Stream 1 update.
+3. /Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md — newest update and coordination/resource rules.
+4. /Users/yingpengwang/pantopus-coordination/docs/workstreams/stream1-handoff-2026-09-26.md — read §0 and §3 first; use §1, §4, §5, §6, §7 and §11 for still-applicable procedures.
+5. /Users/yingpengwang/pantopus-coordination/docs/workstreams/01-gigs-payments.md — newest Stream 1 update and acceptance accounting.
+6. The living inventory at /Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260925-stream1-domain-inventory-r1/INVENTORY.md, including its merge-state header and “Successor findings 2026-09-27”.
+7. Available session memory: stream1-successor-session-2026-09-27.md, founder-direction-no-stopping-2026-09-27.md, pantopus-evidence-timestamps.md, and pantopus-ios-simulator-verification-gotchas.md under /Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/.
 
-## 3. Hard limits (verbatim from the user; never violate)
-- "Never modify `/Users/yingpengwang/skinny-pantopus` or contact founder 64521/64522/backend 8000 or simulator EB5AD759." Reading files there is fine.
-- "No search-filter security audit."
-- "Stripe TEST/manual only, no capture."
-- "No secrets/raw tokens/DB archives/operator logs in Git/chat."
-- "No bare stash, gc, maintenance, repack or worktree removal." Never `git worktree prune/remove`; stale worktree entries stay.
-- "Your inherited Stream 1 harness must receive SIGINT, never SIGTERM." Use `kill -INT` for the backend.
-- **Never:**
-  - merge a runtime harness wholesale;
-  - update branches merely for being "behind";
-  - touch founder PR #46, §7/A17, S1-08 money ownership, or the unrelated #429/#430.
-- Don't claim physical-device, push, AI provider, listing publication, paid settlement or hosted behavior from synthetic/local checks. Report them as boundaries.
-- Don't query hosted/founder databases. For example, the legacy category-key count in §5 step 3 is for the founder to run.
+## 2. Live preflight; preserve completed work
 
-## 4. Working rules
-- **Founder direction:**
-  - Improve UX wherever it isn't good enough, preserving existing designs and navigation. Under §0, decide design questions yourself and record them.
-  - Verify flows end to end on web, iOS and Android.
-  - **No new unit tests.** Running or adjusting the existing tests that cover a change is fine, and required CI must pass.
-- **Verification first:**
-  1. Locate the existing screen → caller → endpoint → service → DB.
-  2. Reproduce the defect on master code (the "before").
-  3. Make the smallest in-place repair.
-  4. Verify the "after" on the real app against the isolated runtime.
-  5. Seal a bundle with `seal.py`: RESULT.md, git-generated SOURCE.txt, receipts, checked cleanup, snapshot diff, MANIFEST.
-  6. Open the PR, cite the seal, and bind it with `ccd_pr`.
-  - **Several native PRs in one heavy window:** use a local `verify/*` tree that merges their heads, prove byte-identity, and keep one bundle per PR (handoff §0.9).
-- **Evidence rules:**
-  - Times come only from `date -u` or tool/log output; SHAs only from `git rev-parse`.
-  - Fixtures go through the real API with a real location.
-  - Clean them up in one checked transaction (a DO block with ROW_COUNT asserts), then diff against a `snapshot.sh` baseline. **magic-post increments `User.magic_task_post_count`**; restore it.
-  - Credentials go only through the private helpers (`api.py`, `webcap.mjs`, `tools/android-login.py`, `tools/ios-pb.sh`). Never print them.
-- **Shared resources:**
-  - one heavy build window (xcodebuild, gradle assemble/install, installing a fresh build);
-  - one iOS UI driver (slot 1);
-  - at most 4 booted devices.
-  - Use the slot scripts, and send exact take and release times to both peers. The build scripts refuse to run unless the heavy owner starts with `stream1:`.
-- **Merge policy (the user, 2026-09-27 ~11:13Z): required CI is OFF.**
-  1. Review the PR.
-  2. Verify its sealed bundle, and confirm its owner verified it end to end in the real apps.
-  3. Build a combined batch with `build-batch.sh`, and prove it with `verify-batch.py` (exact hunk proofs) and `lint-batch.sh`.
-  4. Merge directly: `gh pr merge <batch> --merge --match-head-commit <tip>`.
-  - `run.sh` still waits for `CI OK`, so don't use it.
-  - The saved protection settings and the restore command are in `docs/workstreams/coordinator-state-2026-09-23/repo-settings/`. Restore only if the user asks.
-- **Messages:** peer messages are not user approvals. **Do not poll CI in loops.** A one-off check before building a batch is fine, and you can wait in the background on the runner *process* (`while kill -0 <pid>; do sleep 30; done`).
-- **Coordination checkout:**
-  - Update it with `git fetch origin codex/workstream-coordination && git rebase origin/codex/workstream-coordination`.
-  - It has **one shared index**, and peers may leave uncommitted edits in their own files. Commit with explicit paths only; never stash.
-- **zsh:**
-  - quote refspecs;
-  - `timeout` and `tac` don't exist;
-  - `echo ====` breaks, so quote it;
-  - don't chain `sleep` (blocked); use background tasks;
-  - `adb shell input text` needs `%s` for spaces.
+Before relying on the handoff, check the current UTC time, master and runtime-worktree commits, clean/dirty status, remote open PRs and their actual dispositions, the one current master CI snapshot, merge queue, owned backend/web runtime health, active device/build slots, and other streams’ reservations. The last recorded master is 35c5434df; the last recorded open unrelated PRs are #46, #429, and #430. Recheck rather than assuming these values remain current.
 
-## 5. Do these next, in order
-These follow handoff §0.6, with the launch scope applied.
-1. **Native Start/launch preview "Try again" is dead** (iOS `PlacePreviewBody.swift:253`, `PendingPlaceView.swift:53`; Android `PlaceLaunchScreen.kt:737`).
-   - Pass `onRetry` (and `retrying` on iOS) to re-run the preview load; S2 #619 added them to `PlaceSectionView`.
-   - Verify before/after with the web #607 proxy stand-ins.
-2. **iOS Report post** (inventory "not run"): seed a post by bob through `api.py` with a real location; run the flow on iOS (and check Android parity); clean up.
-3. **Keep integrating peer PRs** under the §4 merge policy, and keep the hub docs current. **Skip any PR or check that only serves a cut feature.**
-4. **Don't do** (dropped by the launch scope):
-   - the listing-Offers CTA, the no-category feed chip and the web edit raw-key candidates;
-   - the legacy category-key relabel.
+All Stream 1 PRs from the prior session, including #571, #580, #581, #586, #588, #589, #592, #598, #601, #603, #606, #607, #615, #616, and #617, are recorded merged in batches 37–42. Do not reimplement or repeat their accepted journeys without a changed source/contract, reproduced failure, or concrete unresolved risk. Batch 42 (#624) brought the recorded master to 35c5434df. The former required “CI OK” branch check was intentionally removed by the user. CI is informational: do not wait for it as an acceptance gate and do not treat unit-test/lint status as a substitute for real-app verification. Check the current master result once; investigate a concrete application break, not every unrelated check failure.
 
-## 6. Already done: do NOT redo
-- **Merged:**
-  - batches 25–39;
-  - this session's S1 PRs #571, #580, #581, #586, #588, #589, #592;
-  - batch 37 #572, batch 38 #585, batch 39 #599.
-- **Merged later in the session:**
-  - batch 40 #608 (S1 #601, #606);
-  - batch 41 #622 (S1 #598, #603, #607, #617);
-  - batch 42 #624 (S1 #615, #616), merged directly under the new policy.
-  - Every PR the session opened is on master.
-- **Audits:**
-  - contextType and raw-row replies: clean for Stream 1.
-  - The My Home PATCH lead was refuted by Stream 2.
-- **Inventory rows:**
-  - `exact_city/state/zip` clearing: FIXED by #571 (C1/C2 evidence);
-  - `/app/discover-hub`: WON'T FIX;
-  - notes marked "no change" stay.
-- **Decisions 1–10** are in handoff §0.5.
+Use the existing Stream 1 runtime worktree and private helpers after checking their live state. The previous handoff says the main application checkout at /Users/yingpengwang/skinny-pantopus is protected and contains unrelated user work. **Never modify that checkout or contact founder services/devices.** Do not assume old PIDs, ports, tokens, build products, or device states are still valid.
 
-## 7. Preserve
-- All worktrees (handoff §0.8), and the stale worktree entries.
-- `/private/tmp/pantopus-stream1-web-trade`, which has an uncommitted TradeModal change (moot while trades are hidden).
-- Other streams' runtimes, ports, devices and uncommitted coordination-doc edits.
-- The founder's live environment.
+## 3. Launch scope is a hard boundary
 
-## 8. Report
-After each milestone:
-- update the hub docs (PROJECT_HANDOFF, README, `01-gigs-payments.md`), handoff §0 and memory;
-- push the coordination branch;
-- message the user: what merged, what's open, what's unverified, and the decisions taken per the standing instruction;
-- message both peers.
+For first launch, the user is hiding eight feature groups behind flags and handles that work separately. Their code remains in the repository. **Do not inspect for defects, verify, end-to-end test, or fix a cut feature.** Apply the shared launch-scope table at the top of PROJECT_HANDOFF.md and README.md and the row tags in the living inventory. For a partly-cut row, skip only its explicitly named cut portion.
 
-When you hand off, refresh handoff §0 and write a new dated NEXT prompt the same way.
+Stream 1 cut areas:
+
+- **#3 Marketplace:** listings, listing offers, trades, listing Q&A, buyer–seller chat, listing Home slots, My Listings, Snap & sell.
+- **#4 Open Gigs marketplace:** public task posting; public browse/feed/map/search/categories/filters; saved searches/alerts; hidden categories; task bookmarks; bids/offers/counters/My bids and expiry; stranger instant accept; task Q&A; provider search.
+- **#6 General business directory:** business browsing/search and the map business layer.
+- Hub, Discover, Pulse, or other entry points whose only purpose is one of those cuts.
+
+Still in scope: payments and tips (subject to the hard money limits below), AI drafting where not part of cut public posting, known-crew task lifecycle after assignment, My tasks, rebook rail, Support Trains, Hub, Pulse, Posts, /start and Place preview, and accounts. Shared code stays in scope only for behavior required by an in-scope workflow. Do not revive cut work merely because it has an old PR, test, inventory entry, or unfinished design.
+
+## 4. End-to-end acceptance; no unit tests
+
+The user’s requested acceptance is the actual application launched on this Mac: web in a real browser, iOS in a simulator, and Android in an emulator. Use the owned local services/runtime and the existing real-UI drivers. For each in-scope workflow, exercise every client on which it is supported, and record when a client does not offer that flow. Do not claim success from a mock, unit test, API-only script, screenshot-only inspection, or CI.
+
+**Do not add, write, or run unit tests or start a unit-test campaign.** Do not make unit tests or lints a merge/acceptance gate. Do only the builds and lightweight checks needed to launch the actual clients and diagnose a reproduced failure. Do not add a new test file or harness. Existing sealed app evidence is reusable when its implementation and runtime contract are unchanged.
+
+For each journey, start from the real UI and follow the actual caller to the API/service and persisted state as relevant. Confirm the user-visible result, the correct stored effect (or absence of an effect on failure), and reload/reopen persistence where applicable. Derive edge cases from the workflow and existing acceptance row; exercise only the relevant cases, such as:
+
+- empty/no-data and permission/ownership states;
+- invalid input, unavailable service/read, timeout/offline, and malformed or unexpected response;
+- retry and recovery after the original failure;
+- duplicate taps/commands, overlapping requests, and lost replies where the command can be retried;
+- cancel/back/discard, session expiry/account change, and foreground/background/process restart where that lifecycle applies;
+- boundaries, stale data, or concurrency only where the existing contract or an observed defect makes them relevant.
+
+For each failure, verify clear user-facing copy, no false success, no silent data loss, no unauthorized data exposure, no duplicate persisted side effect, and a working recovery path. Do not attempt every listed edge case on unrelated flows or repeat accepted cases without a concrete reason.
+
+Keep existing web/iOS/Android design, layout, styling, and navigation. Functional verification does not authorize redesign. Reproduce a defect on the current app first, trace screen → caller → endpoint → service → database contract, and make the smallest in-place repair. Before adding a file, service, screen, table, or migration, compare existing and archived implementations and open branches; document why extension/reuse cannot solve a verified gap. Never rewrite applied migrations or add a parallel table for existing data.
+
+If a verified repair cannot preserve the existing visual treatment and would require a design change, document the concrete need and proposed change for the user’s explicit approval before implementing that presentation change. Continue independent in-scope work meanwhile.
+
+## 5. First work, in order
+
+1. **Native onboarding / Start address-preview “Try again” is reported dead.** This is in scope. The handoff identifies iOS PlacePreviewBody.swift:253 and PendingPlaceView.swift:53 and Android PlaceLaunchScreen.kt:737; Stream 2’s merged #619 added retry/retrying support to the shared place section.
+   - First inspect current master and the real call paths, then reproduce on the installed iOS and Android apps. Do not assume the old line numbers or proposed one-argument repair still apply.
+   - If reproduced, wire the existing retry callback to the same preview load in the smallest existing call sites. Preserve current screens.
+   - On both actual clients, trigger the failed preview, press Try again, verify a fresh request happens, the pending/error state is truthful, recovery shows the loaded preview, and repeated failure remains retryable without duplicate or stale content. Use only the existing local fault-proxy recipe/evidence for controlled failure injection; the button and recovery must still be exercised in the real app.
+   - Recheck the already-merged web /start retry (#607) only if the native comparison or a concrete current failure warrants it.
+2. **iOS Report post, then Android parity.** The inventory says “not run”; Posts are in scope.
+   - Seed only an owned synthetic post by bob using the private api.py helper and a real location. Exercise report through the real iOS UI, then check the corresponding Android flow. Verify the correct report is stored once, the reporter and reported item are correct, denial/failure is honest, and a retry does not create duplicates. Clean up exactly the owned post/report/user data and verify cleanup.
+3. **Continue the rest of the existing Stream 1 inventory in its recorded order**, skipping all cut rows and reusing unchanged accepted evidence. Cover the supported web, iOS, and Android clients for every remaining in-scope workflow, including the applicable error/recovery cases above. Keep each work item bounded; fix a demonstrated issue before moving on and rerun that journey on every affected client.
+4. Take one current snapshot of master CI. Treat it as informational; fix forward only a concrete application failure relevant to the workstream. Do not wait for unit-test/lint gates.
+
+## 6. User decisions, boundaries, and operational safety
+
+- The user’s standing direction is to keep making progress: for ordinary in-scope implementation/product choices, choose the option you would recommend and record the choice, reason, and rejected alternative. Do not stop for routine clarification. This does not override explicit safety limits, launch cuts, reserved founder decisions, or the verification-first requirement.
+- Do not redesign. If a verified repair needs an unavoidable visual change, seek the user’s explicit approval before that change, as required by AGENTS.md; keep progressing on independent tasks.
+- Preserve the hard limits from handoff §3, including: no changes to /Users/yingpengwang/skinny-pantopus or founder services/devices; no search-filter security audit; Stripe TEST/manual only and **no capture**; do not touch #46, S1-08 money ownership, §7/A17, or unrelated #429/#430; do not query hosted/founder databases; no physical-device install; no secrets, raw tokens, database archives, or operator logs in Git/chat.
+- Never run destructive global cleanup, reset shared databases, rewrite retained ledgers, or delete preserved worktrees/products. Inspect the exact runtime/device lease before use; use only owned synthetic fixtures and clean them in a checked transaction. Verify zero owned fixture rows/objects and compare to the pre-run snapshot.
+- Do not use a bare stash, run git gc/maintenance/repack, or remove/prune worktrees. Preserve saved branches and stale worktree entries.
+- The inherited Stream 1 backend must receive SIGINT, never SIGTERM. Use the slot scripts and coordinate with both peers before holding a heavy native build or UI driver. One heavy build at a time; at most four booted devices. Stop only processes/devices you own, using the recorded safe procedure.
+- Never merge a runtime harness wholesale or update a branch solely because it is behind. Keep peer PRs and coordination edits intact. Commit explicit paths only.
+
+## 7. Evidence, repair, and integration
+
+For every reproduced issue or newly accepted journey, use the existing bundle/seal procedure from the handoff. Record the actual source SHA, app/build identity, runtime/device, steps, expected and actual UI result, relevant request and persistence receipts, failure/retry behavior, cleanup proof, and exact limits. Keep credentials and raw operational logs private. Link the sealed bundle from the existing inventory and status row; do not create another tracker.
+
+After a fix, repeat the reproduced journey on every affected real client and its relevant failure/recovery case. Verify persistence or absence of side effects through the existing API/database contract. If a provider, hosted service, physical device, or other external boundary is unavailable or forbidden, state exactly what remains unverified and continue independent work; never imply broader acceptance.
+
+When a PR is needed: review the exact head; verify its sealed end-to-end evidence; prove the combined batch with the existing build-batch.sh, verify-batch.py, and lint-batch.sh procedures; then merge with the documented exact-head command. The master required CI check is off, so do not wait on run.sh or make CI a gate. Check current rules live first. Attach every PR created to this task. Do not merge unrelated user PRs.
+
+After each meaningful milestone, update the existing inventory row and the newest blocks in PROJECT_HANDOFF.md, README.md, 01-gigs-payments.md, this handoff §0, and the relevant session memory. State what changed or was accepted, what remains next, which evidence supports it, and exact verification limits. As Stream 1 coordinator, publish the ready coordination updates through the established branch workflow; commit explicit paths only and never include unrelated peer edits.
+
+## 8. Final report
+
+Report the current master and PR state, work completed, real-app clients actually launched, journeys and relevant error cases exercised, evidence links, any fixes/PRs, exact cleanup status, what remains open, and what could not be verified. Clearly separate accepted evidence reused from journeys rerun in this session. Make no whole-app or launch-readiness claim unless the existing acceptance catalog supports it.
