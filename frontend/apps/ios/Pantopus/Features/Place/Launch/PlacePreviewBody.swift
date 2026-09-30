@@ -64,6 +64,7 @@ struct PlacePreviewBody: View {
                     .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your Place")
                     .font(.system(size: 22, weight: .bold))

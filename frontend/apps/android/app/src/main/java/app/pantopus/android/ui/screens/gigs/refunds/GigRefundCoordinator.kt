@@ -37,6 +37,9 @@ data class GigRefundState(
     val mayRequest: Boolean get() = !invalidated && ready && !busy && attempt == null && summary?.mayRequest == true
     val activeReceipt: PaymentRefundRequestDto? get() = requests.firstOrNull { it.requestId == attempt?.requestId }
     val unconfirmed: Boolean get() = attempt != null && activeReceipt == null
+
+    /** A successful check found no request and none is waiting to be confirmed. */
+    val hasNoRequests: Boolean get() = !invalidated && ready && requests.isEmpty() && attempt == null
     val mayRetry: Boolean get() =
         !invalidated && ready && !busy && attempt != null &&
             (activeReceipt == null || (activeReceipt?.pending == true && activeReceipt?.canRetry == true))
