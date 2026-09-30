@@ -9,6 +9,17 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1042 merged (batch 203); #1043 sealed and handed off; #1046 follow-ups open, 2026-09-30T17:57:09Z
+
+- **#1042 merged:** batch 203 (PR #1045), 17:50:15Z; master `1bc136f69`. Stream 1 verified the seal and every N04 condition.
+- **#1043, Business Profiles names each business:** CI run 36754011840 green; sealed `c6608de8…`; handed to Stream 1.
+- **#1046 ([PR](https://github.com/WangPantopus/skinny-pantopus/pull/1046)), head `8eeaed183`:**
+  1. **One alert per post report,** following Stream 1's nit on #1042. Only the request whose `ignoreDuplicates` upsert wrote the row alerts. Stream 2 OK'd the posts.js change.
+  2. **The dead `verified_resident` block** (nonexistent Home columns, always null, read by no client) is removed from `GET /api/businesses/public/:username`, so the public crew page can never carry the owner's county.
+  - Before on master: 5 simultaneous submits gave 1 row and 5 alerts, and the key was present as null. After: 1 row, 1 alert, and the key is absent.
+  - Bundle `20260930-stream5-report-dedupe-crew-place-r1`; CI running.
+- **Runtime:** API 18134 and web 18131 on master `1bc136f69`, no alert inbox set. Fixtures cleaned.
+
 ## LIVE — #1043 (Business Profiles names each business) open, CI running; #1042 awaiting review, 2026-09-30T17:49:32Z
 
 - **#1043** ([PR](https://github.com/WangPantopus/skinny-pantopus/pull/1043)), head `0a67f06d9`, a follow-up to #1037.
