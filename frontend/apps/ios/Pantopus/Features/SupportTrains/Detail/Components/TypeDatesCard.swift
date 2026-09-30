@@ -249,7 +249,7 @@ public struct TypeDatesCard: View {
         if content.slotsTotal == 0 {
             return "\(content.title). \(statusLabel). No slots scheduled yet."
         }
-        return "\(content.title). \(metaLine). \(content.slotsFilled) of \(content.slotsTotal) slots covered."
+        return "\(content.title). \(statusLabel). \(metaLine). \(content.slotsFilled) of \(content.slotsTotal) slots covered."
     }
 
     private func tone(for tone: ContributorBubble.ContributorTone) -> Color {
