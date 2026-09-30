@@ -17,7 +17,7 @@
 >   - session name "Stream 4: Place, records, money and mail";
 >   - resume prompt [`NEXT-STREAM4-PROMPT-2026-09-30.md`](NEXT-STREAM4-PROMPT-2026-09-30.md).
 
-## CURRENT RESUME — Stream 4 (start here; written 2026-09-30T04:16:32Z)
+## CURRENT RESUME — Stream 4 (start here; handoff written 2026-09-30T22:19:24Z)
 
 **Scope.** What a home knows and keeps:
 - Place and home intelligence: the health score and seasonal checklist, the address calendar, property data, weather/air/alerts/civic, and timeline freshness (I01–I07);
@@ -29,46 +29,127 @@
 
 **Launch-scope owner:** Stream 4 checks cut #7 (Household extras) and cut #8 (Mail extras) for the former Stream 2's area. Never verify, test or fix them.
 
-**State at the split.**
-- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. **Refreshed 2026-09-30T04:25:38Z:** the split's docs PRs #843 and #844 merged at 04:24:12Z (master `15711c8dc`), so Stream 4 has **no open PRs**.
-- **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04). This stream's U02–U05 cells have their own section and are not in these counts.
-- **The open F02 fixture was deleted with the database by the Docker reset (2026-09-30T05:51:48Z), not by an exact cleanup.** It was member B's occupancy `7a6417c0` on cohort Home 9d885f71, the `finance.view` override (then `allowed=false`) and 2 `member_override` audit rows. Nothing is left to clean, and no after-run fingerprint comparison is possible.
+**State at handoff (2026-09-30T22:19Z).**
+- **Master:** `979a83b96` (batch 222). Every earlier Stream 4 PR is merged (see the live block).
+- **Open, with the coordinator** (handed 22:1xZ to "Stream 1 peer takeover continuation"): **#1102–#1111**. Each is verified
+  on devices before/after and seals are recorded. They merged cleanly together as `a93b3e462` on master `11e2b72f6`.
 
-  The F02 native re-run's Android journey (stage `runtime/f02-native-permission-r1`, captured 03:07–03:10Z on 2026-09-30) is on disk but unsealed:
-  - Money showed neighborhood-only figures, then "Your electric bills average 12% above" with finance, then neighborhood-only again after the revoke;
-  - the Home dashboard showed its Bills stat and tab only while finance was granted.
+  | PR | Head | What | Evidence |
+  |---|---|---|---|
+  | [#1102](https://github.com/WangPantopus/skinny-pantopus/pull/1102) | `09ece6779` | Your home: no invented value trend (web, iOS, Android) | fixes §1 |
+  | [#1103](https://github.com/WangPantopus/skinny-pantopus/pull/1103) | `c7073adfd` | Place detail locked "Verify address" and the density CTA open the verify sheet; iOS Pulse nudge closure labelled | verify-r2 |
+  | [#1104](https://github.com/WangPantopus/skinny-pantopus/pull/1104) | `7d0268a2f` | Documents name the uploader instead of a raw user id (backend `uploaded_by_name`) | fixes §3 |
+  | [#1105](https://github.com/WangPantopus/skinny-pantopus/pull/1105) | `f61d20a4c` | Maintenance: no false "No maintenance logged yet" on an empty Scheduled tab | fixes §4 |
+  | [#1106](https://github.com/WangPantopus/skinny-pantopus/pull/1106) | `19d997ec8` | Fridge composer remove-row: a name and a usable target | fixes §5 |
+  | [#1107](https://github.com/WangPantopus/skinny-pantopus/pull/1107) | `372fecdc8` | Android Place avatar: the monogram, not "RC" | fixes §6 |
+  | [#1108](https://github.com/WangPantopus/skinny-pantopus/pull/1108) | `2aeef6b55` | Android large text: five breaks and clips fixed; nothing changes below font scale 1.5 | fixes §7 |
+  | [#1109](https://github.com/WangPantopus/skinny-pantopus/pull/1109) | `710a02c03` | Warranties chip text meets AA (4.42 → 6.15), plus the results golden | fixes §8 |
+  | [#1110](https://github.com/WangPantopus/skinny-pantopus/pull/1110) | `589f46637` | Civic empty state: only the date is promised (web, iOS, Android) | fixes §9 |
+  | [#1111](https://github.com/WangPantopus/skinny-pantopus/pull/1111) | `3c2b76535` | Weather safety: unchecked alerts never read "No active alerts" (backend `74f494001` + native) | fixes §10, verify-r2 |
 
-  If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
+  Seals:
+  - fixes = `20260930-stream4-fixes-r1`, MANIFEST `5de362b237e9d784fa9af21fc71e9a73195119b43e81c12e69673e6ec029b68e`;
+  - verify-r2 = `20260930-stream4-verify-actions-r2`, `d8e02bba37f45f4e72bdc6cdbfd893ad3640fa7ff7197b8ff3f1c0661de876d1`;
+  - U02 sweep = `20260930-stream4-u02-native-r1`, `9e375256e8e3011184c731bc28ab8b0e44a53fcf45dbc48f521ab003494ea307`;
+  - r1 attempt = `…-verify-actions-r1`, `94781d84…`.
+- **Runtime:** free; the lease was released at 22:11:38Z.
+  - The backend is at rest on `00bf2d6ff` (pid 45803, 22:10:51Z), with no patches and no ATTOM key.
+  - The proxy has no rules. The shared web worktree shows only its kept `.claude/launch.json`.
+  - **No Stream 4 fixture exists.** Every one was cleaned exactly.
+- **Devices** (take them only through `/private/tmp/pantopus-tools/device-slot.sh` with a `stream4:` label):
+  - the S34 pair: iOS "Pantopus S34" `DA8C2A5F-39BC-421D-9F18-EB4B481E506F` and Android AVD `pantopus_s34` (emulator-5562);
+  - both are shut down, with the 10-branch build `a93b3e462` installed;
+  - boot Android with `emulator -avd pantopus_s34 -port 5562 -no-window -no-snapshot-save -no-audio -no-boot-anim` and iOS
+    with `xcrun simctl boot DA8C2A5F-…`. The snapshot restores on boot, so reinstall the APK you need;
+  - Android sign-in: `tools/android-s34-document.py <stage with fixture.json> login OWNER`, focus-checked secret typing with no
+    raster. iOS stays signed in as the owner across reinstalls.
+- **Builds** in `/private/tmp/pantopus-stream4-builds`:
+  - `ios-u02-master` / `android-u02-master` (master `1e1b6bacc`);
+  - `ios-fixes` / `android-fixes` (`a93b3e462`);
+  - `ios-place` / `android-place` (old).
+  - Heavy builds go only through `/private/tmp/pantopus-tools/heavy-slot.sh`. Template: `builds/build-fixes-10.sh` in the fixes
+    bundle. It resolves branch heads after acquiring the slot and builds in the `stream-4-activity-labels` worktree.
 
-**Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #939 (iOS Emergency Info writes; request id on iOS/Android create) merged in batch 168 (master `185676c04`). **Account deletion (launch-critical):** [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) sealed and with the coordinator (head `a22ad2054`, migration `20260930153000`); [#954](https://github.com/WangPantopus/skinny-pantopus/pull/954) (iOS lint unblock) merged in batch 173. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
-1. **F02 native re-run, iOS part.**
-   - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
-   - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
-   - Recommended: rerun the Android part on the recreated cohort as well, so both platforms are sealed together with an exact cleanup. Keep the 03:07Z capture as supporting evidence.
-   - Sign member B in on sim 6F914A30 through the real login screen. Type from the private file only after a focus check, and take no raster on the login screen.
-   - The owner toggles View finance on the web with `tools/web-f02-home-dashboard.cjs` and `OUT_DIR`. B opens Money and the Home dashboard before, with finance, and after the revoke.
-   - Sign the iOS app back in as the owner.
-   - Then run the exact cleanup: adapt `tools/cleanup-f02-home-dashboard.py`; its PropertyIntelligenceCache read-side refresh rule applies. Seal Android + iOS and hand the result to the coordinator.
-   - If iOS can't run in the first lease, clean the fixture exactly first and recreate it later (one SQL row plus two UI toggles).
-   - Remaining after this: the hosted and provider boundaries. Web Home-dashboard consumer evidence is sealed as `20260930-stream2-f02-home-dashboard-bills-r1` (`12a3a6bd…`).
-2. **I07, freshness:** done on web 2026-09-30: #854 labels, #860 saves on the page, #863 malformed rows, and a concurrent-insert check. Remaining: native labels (queue), live updates from other devices (none on web), `created_at` ties (not reproduced) and time zones.
-3. **D09, readers:** 2026-09-30, #863 (the Home activity reader). Remaining: other malformed-success readers and a complete cross-client pass (native is blocked). The share and access reader files are Stream 3's area; coordinate any change to them.
-4. **D01, records:** 2026-09-30, #871 (the web emergency-info create receipt). Remaining: native emergency create (queue), web emergency E1/E3/E4 confirmation (❓ in the checklist) and issue E5 on screen. Its guest-pass record part touches Stream 3's D08/M02; coordinate.
-5. **D04, maintenance history:** one truthful lifecycle across `HomeMaintenanceLog` and `HomeIssue` with competing readers and writers.
-6. **I04, the address calendar:** daylight-saving and holiday edge cases for pickup days. Provider holiday data stays named.
-7. **I05, property data, local parts:** stale cache, absent or wrong property, and verification wording.
-8. **U02–U05, this stream's cells.** Native large text, screen readers and dark mode on the Place, records, money and mail screens, then the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
-9. **Native queue (blocked until the machine-wide native reinstall; the user's OK).** From today's web work:
-   - F02 native permission re-run (item 1);
-   - I07: the native Home recent-activity card still humanizes raw audit codes and target types (#854 fixed web only);
-   - D01: iOS and Android emergency-info create send no request id, so a lost-reply retry duplicates (#871 fixed web);
-   - I06: iOS parses dates with `ISO8601DateFormatter(.withInternetDateTime)`, which rejects the date-only election day (#875 fixed web; Android is correct);
-   - D04: maintenance history is app-only;
-   - U02: native A1–A4 cells.
-10. **Latent and cut notes:**
-   - web Mail due dates use `new Date(<SQL date>)`, but no product route writes `Mail.due_date`, and bill blocks in letters are cut;
-   - the native Dismiss confirm wording is cut (#8).
+**Next, in order.**
+1. **Get #1102–#1111 merged with the coordinator.** If a review asks for changes:
+   - fix on the branch;
+   - rebuild (heavy slot);
+   - re-verify only the affected screens on devices;
+   - seal a new `-r2` bundle (sealed bundles are never edited);
+   - update the PR, and record it here.
+   Required CI is off; CI runs per PR with path filters.
+2. **Two Document detail candidates. Reproduce first; both are low reach.**
+   - **C, Android image decode failure:** "Open externally" is a no-op, because the `ImagePreview` error slot passes `{}`.
+     - Reproduce: `tools/s4-doc-fixture.py <stage> <label> badjpeg` uploads non-image bytes as image/jpeg through the real route.
+       Delete it through the product route, which also removes the stored object.
+     - Fix: pass `onOpenExternally`.
+   - **D, a document with no file** (legacy metadata-only; no current client creates these).
+     - Android's footer Open/Share and both apps' preview pill are silent no-ops. iOS already disables its footer Open/Share.
+     - Reproduce with a metadata-only document (the U02 seed's `POST /documents`), then make the smallest repair: Android
+       parity, and hide the pill.
+3. **After Stream 1's #1061 merges, re-measure iOS dark tint.**
+   - iOS dark sweep of place-risk, place-today, pickup-editor, maintenance, issues, document-detail and home-dashboard, then
+     `tools/s4-u02-contrast.py`.
+   - Send anything under 4.5:1 to Stream 1 with file:line. That includes the fridge "Revoke" (system `.bordered`, 4.49 light /
+     3.13 dark).
+4. **Web A3 live re-measure.** The source already passes on master; this closes the two ⬜ web A3 cells.
+   - Under the lease, apply current master's `tailwind.config.js`, `globals.css`, `HealthScoreRing.tsx`, `HomeHeader.tsx` and
+     `maintenance/page.tsx` to the shared web worktree.
+   - Measure the Home dashboard (light and dark) and Issues, then revert.
+5. **Native Pulse hero with nothing known** still says "All clear on your block today.", and there's no neutral variant.
+   Decide the honest state (standing instruction: at least drop the green "All clear" chip when neither air nor alerts is
+   known), implement it on iOS and Android, and verify on devices.
+6. **U03 native ⬜ cells** (U03 table):
+   - Home health E1/E3/R2;
+   - Android pickup E2/E4;
+   - Home issues E3/E6. For E5 on screen, the native status taps are same-field last-write-wins;
+   - fridge E3 (plus Android E6) and E2 revoke;
+   - Android maintenance E3;
+   - iOS Emergency add E1/E3/E4 and every delete case;
+   - native Documents delete.
+   Faults: `tools/s3-proxy.py <stage> set '<rule>'` (actions `status`, `delay` or `delayResponse`; `<H>` comes from
+   `fixture.json['H']`, so write both `home` and `H`). A document with a real file: `tools/s4-doc-fixture.py … pdf`.
+7. **U04 native cells** (L1/L3/L4 on Home records, Place and the address calendar). Drivers are drafted but have not run:
+   - `tools/s4-u04-android.sh` and `tools/s4-u04-ios.sh`, on Stream 3's step tools;
+   - fixture: `S3_STAGE=<stage> S3_HOME_NAME="S4 Lifetimes Home" S3_ADD_MEMBER=1 python3 tools/s3-u04-fixture.py fixture`;
+   - check the labels on a device first. Android `homes/` deep links cover only dashboard, members, owners and verification.
+8. **Older open work** (unchanged since 04:16Z; read each row's last column before starting):
+   - the F02 native permission re-run (iOS and Android on a recreated F01 cohort);
+   - I04 DST and holiday edges;
+   - I05 property local parts;
+   - D04, one truthful maintenance lifecycle;
+   - D09, the remaining readers;
+   - D01, issue E5 on screen.
+9. **Hosted and provider boundaries stay named** (below). U05 waits for the launch flags on master.
+
+**Lessons from 2026-09-30 (read before driving devices).**
+- **uiautomator:** an ElementTree node with no children is **falsy**, so test with `is not None`. `if t:` hid Android
+  Maintenance detail for a whole pass.
+- **iOS Place cards:** each locked or density card is **one** combined accessibility Button (`place.locked.<title>`,
+  `place.density`). Tap its bottom CTA row, not its centre.
+- **Android Identity:** the locked cards sit about 15 long swipes down, below the data-broker list.
+- **Place tier:** an *unverified* occupancy is refused (403), not T3. T3 is an owner by `Home.owner_id` with **no occupancy
+  row**: `tools/s4-owner-home-fixture.py <stage> "<name>" nooccupancy`.
+- **Coordinates:** set `map_center_lat/lng` for the hub path (weather/air/alerts) and the block-density card.
+- **Lazy rows appear on first views:** PropertyIntelligenceCache, HomeSeasonalChecklistItem, and a `UserReferral`
+  (`post_transaction`) row for the owner.
+  - Let `s4-cleanup-home.py`'s count assertion show them, then pass them as counts or extra scopes.
+  - AddressCalendarRule pickup rows are keyed by `scope_key`, so they need an extra scope.
+- **Per-platform decisions:** iOS keeps its fixed type ramp (user 09-29), so iOS A1 means clipping only. Android is light-only
+  (#1013), so Android A2 means it stays light and readable.
+- **Heavy-slot builds:** resolve heads after acquiring the slot, and never edit a queued script. To withdraw a queued job, kill
+  the parent script, then its `acquire`.
+- **Paparazzi:** verify has a tolerance. Re-record only goldens the change draws, since a re-record also rewrites caret pixels.
+
+**Decided by Stream 4 later on 2026-09-30 (standing instruction; each is recorded in its PR):**
+1. **Honesty over decoration:**
+   - Your home shows no invented trend or "Block median" (#1102);
+   - Civic promises only the date (#1110);
+   - the Place preview's matching claims went to Stream 2, who fixed them in #1091.
+2. **An unchecked alerts section is never an all-clear:** backend and native (#1111).
+3. **Android large text:** from font scale 1.5, reflow or stack, with nothing changing below 1.5 (#1108).
+4. **The Warranties chip** goes one palette step darker, per the user's decision 3 (#1109).
+5. **Document detail candidates C and D:** reproduce before fixing (low reach).
 
 **Decided by Stream 4 (2026-09-30T08:50Z), under the user's direction of ~08:36Z.** The direction: "go with what you think is the best decision for user experience, best safety, security practice, best to retain users … record your decision … just keep working." The earlier options and the closure plan are here: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
 1. **Issue photos and files at launch (D02): launch without issue media.**
@@ -190,12 +271,12 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 |---|---|---|---|
 | Home health and seasonal checklist (complete, skip, carryover) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>⬜ E1 E3 R2 (checked 09-30: no native capture; the 0927 native 503s hit Hire or reads)<br>⬜ E4 E5<br>– E6 (no typed input) | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661, #669)<br>⬜ E1 E3 R2 (checked 09-30: no native capture)<br>⬜ E4 E5<br>– E6 | ✅ E2 (0927 checklist-uncertain-recovery)<br>✅ R1 (#661)<br>✅ R2 (#587)<br>✅ health follows on-page saves (#860)<br>✅ E1 E3 E5 (0930 health-e1e3e4e5: a 503 gives an honest alert with Retry; a double click sends one PATCH; a stale skip after another device's completion is refused with 409 and nothing is undone; the wording is generic)<br>✅ E4 safe (refused with 403, nothing written, the checklist turns read-only) — gap: no sentence says why (later wording item)<br>– E6 |
 | Bill benchmark: Home opt-in and Place Money signals | ✅ E1 R1 (#619, 0927 f02-member-finance, 0929 f02-ios-retry-late-delivery)<br>✅ E4 (f02-member-finance)<br>⬜ E5 permission change (open work item 1)<br>✅ R2: Place Money "Bill benchmark · Not available for your area yet." (0929 f02-ios-retry-late-delivery, 0927 f02-ios-held-account) and the Home bill card's "No paid USD bills…" (0927 checklist-uncertain-recovery)<br>– opt-in: web only (`BillTrendChart.tsx:99`); the apps only decode `bill_benchmark_opt_in` | ✅ E1 R1 (#619)<br>✅ E4 (f02-member-finance)<br>⬜ E5 (item 1; the 09-30 capture is unsealed)<br>✅ R2 Home bill card "No paid USD bills…" (0930 native-activity-r2); Place Money "Not available for your area yet." is captured in 0930 u02-native-r1 (seals after its cleanup)<br>– opt-in: web only | ✅ E1 R1 (#602)<br>✅ E4 (f02-member-finance, 0930 f02-home-dashboard-bills)<br>✅ E5 (0929 f02-same-account-permission, 0927 f04-withdrawal)<br>✅ R2 (0927 f01-bill-cohort, f04-withdrawal)<br>✅ E2 E3 on the opt-in save, no change (0930 optin-e2e3: a double click sends one PATCH; after a lost reply, the card says not confirmed and a reload shows the committed value) |
-| Place dashboard and section details (weather, air, alerts, civic, property; read-only) | ✅ R1 (#619, #638)<br>✅ R2 stale sun label (0927 sun-day-label)<br>✅ E4 (f02-member-finance)<br>✅ election date: a date-only Election Day shows its day, NOV 3 in Pacific time (#922, merged 09:40:00Z; 0930 ios-civic-date)<br>– write cases | ✅ R1 (#619, #638)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>– write cases | ✅ R1 (#602)<br>✅ R2 (#543, sun-day-label)<br>✅ E4, with the refusal worded as a permission and no retry on the dashboard, sections and Pulse (#896)<br>✅ election day shown as that day (#875)<br>– write cases |
+| Place dashboard and section details (weather, air, alerts, civic, property; read-only) | ✅ R1 (#619, #638)<br>✅ R2 stale sun label (0927 sun-day-label)<br>✅ E4 (f02-member-finance)<br>✅ R1 alerts: an unchecked alerts section no longer reads "No active alerts", on the Today card and in the backend ([#1111](https://github.com/WangPantopus/skinny-pantopus/pull/1111), with the coordinator; 0930 fixes §10, 0930 verify-actions-r2)<br>✅ election date: a date-only Election Day shows its day, NOV 3 in Pacific time (#922, merged 09:40:00Z; 0930 ios-civic-date)<br>– write cases | ✅ R1 (#619, #638)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>✅ R1 alerts, not a false all-clear (#1111)<br>– write cases | ✅ R1 (#602)<br>✅ R2 (#543, sun-day-label)<br>✅ E4, with the refusal worded as a permission and no retry on the dashboard, sections and Pulse (#896)<br>✅ election day shown as that day (#875)<br>– write cases |
 | Address calendar: pickup day (set, change, clear) | ✅ E1 E2 E3 E6 (0927 place-pickup)<br>✅ E4, generic wording (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>✅ E5: a stale save gets 409; the editor shows the current schedule with "The pickup schedule changed since you opened it…" and a retry keeps both changes (0930 native-pickup-e5-r1 and -r3; [#1040](https://github.com/WangPantopus/skinny-pantopus/pull/1040), merged in batch 209)<br>✅ E4: a refused save now says "You don't have permission to change this household's pickup schedule." (master said "…Check the next collection date and try again."); nothing written (0930 native-pickup-e4-ios-r1; #1040 merged) | ✅ E1 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>⬜ E2 E4 (checked 09-30: 0927 place-pickup covers them on iOS only; Android's held PUT there is E3)<br>✅ E5: a stale save gets 409; the card reloads with the sentence and the reopened editor saves both changes (0930 native-pickup-e5-r2 and -r3; [#1040](https://github.com/WangPantopus/skinny-pantopus/pull/1040), merged in batch 209) | ✅ E1 E2 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>✅ R2 empty state (0927 place-pickup first use and after Clear; that code is unchanged since)<br>✅ E4: a refusal now says "You don't have permission to change this household's pickup schedule." and nothing is written ([#1003](https://github.com/WangPantopus/skinny-pantopus/pull/1003), merged in batch 190)<br>✅ E5: a stale save no longer undoes another device's change; the card shows the current schedule with the message ([#997](https://github.com/WangPantopus/skinny-pantopus/pull/997), merged in batch 188) |
 | Home issues (report, edit, status, dismiss) | ✅ E1 malformed replies (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>⬜ E3 E6 (checked 09-30: "Reporting…" is disabled during a held create, but no second tap was made, 0928 home-issue-retry)<br>⬜ E5 on screen (API 409 only)<br>– cost edit | ✅ E1 (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>⬜ E3 E6 (checked 09-30: no capture)<br>⬜ E5 on screen<br>– cost edit | ✅ E1 (#654, #769)<br>✅ E2 (#740, #654)<br>✅ E3 E6 (#654)<br>✅ E4 (#482, #654, #835)<br>✅ R1 (#680, 0929 web-false-empty-sweep-r2)<br>✅ R2 (#529)<br>✅ E5: a stale edit no longer undoes another device's change (#906, merged in batch 159) |
 | Emergency info (add, delete) | ✅ R1 (#698)<br>✅ add E2: the retry after a lost reply returns the same entry, one row; master's retry duplicated it (0930 emergency-server-writes; #939, merged in batch 168)<br>✅ add E6 blank title: Save disabled with "Title is required." (same bundle, `cap/02`)<br>⬜ add E1 E3 E4; delete E cases (only a successful delete is captured) | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>✅ E2: the retry returns the same entry, one row (0930 emergency-server-writes; #939) | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 (#871)<br>✅ E1 E3, no change (0930 emergency-access-denied)<br>✅ E4: a permission sentence, no Retry or Add (#904) |
 | Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>⬜ E3 (checked 09-30: 0928 fridge-lifecycle says duplicate clicks were not exercised)<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>⬜ E3 E6 (checked 09-30: no capture; only iOS has the empty-card state)<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>✅ E3, no change (0930 fridge-e3: a sub-frame double click sends two requests, but issue dedupes by client id and revoke answers its receipt: one card, one revocation, no error) |
-| Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>✅ R2: an empty Completed list agrees with SQL 0 (0927 maintenance-edit-read; again in 0928 maintenance-delete)<br>⬜ false empty: the Scheduled tab says "No maintenance logged yet" beside "Completed 1" (U02 sweep; fix `claude/stream4-maintenance-tab-empty`, device before/after next window)<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>✅ R2: a cold read shows the empty list, SQL 0 (0928 maintenance-delete)<br>⬜ E3 (the only repeated-tap capture is iOS)<br>⬜ false empty on the Scheduled tab (same fix)<br>⛔ E4 E6 API only | – no manual-log screen on web |
+| Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>✅ R2: an empty Completed list agrees with SQL 0 (0927 maintenance-edit-read; again in 0928 maintenance-delete)<br>✅ false empty fixed: an empty Scheduled tab now says "Nothing scheduled. Your logged maintenance is under Completed." ([#1105](https://github.com/WangPantopus/skinny-pantopus/pull/1105), with the coordinator; 0930 fixes §4)<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>✅ R2: a cold read shows the empty list, SQL 0 (0928 maintenance-delete)<br>⬜ E3 (the only repeated-tap capture is iOS)<br>✅ false empty fixed (#1105; 0930 fixes §4)<br>⛔ E4 E6 API only | – no manual-log screen on web |
 | Documents reader (list, delete) | ✅ R1 (#680, #701)<br>✅ R2: after Retry, the real API's empty list shows "No documents yet" (0927 malformed-home-lists; again in 0927 home-list-null-members)<br>⬜ delete | ✅ R1 (#680, #701)<br>✅ R2 (same bundles: "All 0", "No documents yet")<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
 | Home activity | – no timeline screen. The dashboard's Recent activity card showed audit codes ("HOME INVITE CREATED") over raw table names ("HomeInvite"): ✅ sentences over "Home activity" on both apps (0930 native-activity-r1 and -r2; [#1062](https://github.com/WangPantopus/skinny-pantopus/pull/1062), with the coordinator) | – (same) | ✅ R1 (0928 home-timeline-pagination)<br>✅ labels and actor (#854)<br>✅ malformed rows (#863)<br>✅ concurrent insert (#854 bundle)<br>✅ follows on-page saves (#860)<br>✅ live updates from other devices: decided, re-read on focus/visibility/reload for launch ("Decided by Stream 4" item 4) |
 | Mail: printed postcards, welcome cards, street digest (M01) | 🔷 not built (decision 2) | 🔷 | 🔷 (compose routes are live: security repairs #867/#872 through the API; the compose UI is cut, #8) |
@@ -212,11 +293,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>⬜ A3 live re-measure. Earlier, with Stream 1 (0930 a3-remeasure): the health chip's inline amber (1.87:1) and the dark-mode "Owner" chip (1.34:1). Master `20e7b4768`'s source now passes: the chip uses the warning, success and error tokens (6.03, 5.24 and 6.79:1 light; 9.74, 7.91 and 6.23:1 dark), and the Owner chip's emerald tint and text flip together (6.78:1 light, 8.8:1 dark) |
-| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>✅ A3 on master's tokens (0930 a3-remeasure: the overview and all six sections are clean; "Turn it on" failed only on the runtime's pre-#979 `bg-primary-500`, and master's is `bg-primary-600`) |
-| Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>✅ A3 on master's tokens for Emergency, Documents and Property Details<br>⬜ A3 Issues live re-measure. The earlier inline-hex badge (2.01:1) is gone: on master `20e7b4768` the status badges use semantic tokens (4.83 to 7.09:1 light, 5.98 to 9.74:1 dark; source) |
-| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>✅ A3 on master's tokens (0930 a3-remeasure: 0 contrast findings on the leaf and the public page) |
-| Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
+| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ✅ A1: fixed type ramp (the user's 09-29 decision), nothing clips (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>⬜ A3 dark: the blue tint on dark surfaces (4.2:1); re-measure after Stream 1's #1061<br>✅ A4 | ✅ A1: quick actions, stat labels and the property map placeholder no longer break ([#1108](https://github.com/WangPantopus/skinny-pantopus/pull/1108), with the coordinator; before/after in 0930 fixes)<br>✅ A2: light-only by design (#1013), light and readable in night mode<br>✅ A3<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>⬜ A3 live re-measure. Earlier, with Stream 1 (0930 a3-remeasure): the health chip's inline amber (1.87:1) and the dark-mode "Owner" chip (1.34:1). Master `20e7b4768`'s source now passes: the chip uses the warning, success and error tokens (6.03, 5.24 and 6.79:1 light; 9.74, 7.91 and 6.23:1 dark), and the Owner chip's emerald tint and text flip together (6.78:1 light, 8.8:1 dark) |
+| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>⬜ A3 dark tint (#1061); fridge "Revoke" (system `.bordered`) 4.49:1 light, borderline<br>✅ A4 | ✅ A1: inline readings no longer break mid-word (#1108)<br>✅ A2 (light-only)<br>✅ A3<br>✅ A4: the avatar reads the place monogram ([#1107](https://github.com/WangPantopus/skinny-pantopus/pull/1107)) | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>✅ A3 on master's tokens (0930 a3-remeasure: the overview and all six sections are clean; "Turn it on" failed only on the runtime's pre-#979 `bg-primary-500`, and master's is `bg-primary-600`) |
+| Records pages: Issues (Maintenance), Emergency Info, Documents | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3: the Warranties chip was 4.42:1; now 6.15:1 ([#1109](https://github.com/WangPantopus/skinny-pantopus/pull/1109)); the rest clean; dark tint is #1061<br>✅ A4 | ✅ A1: Document detail's "Open externally" is no longer cut (#1108)<br>✅ A2 (light-only)<br>✅ A3: Warranties chip (#1109)<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>✅ A3 on master's tokens for Emergency, Documents and Property Details<br>⬜ A3 Issues live re-measure. The earlier inline-hex badge (2.01:1) is gone: on master `20e7b4768` the status badges use semantic tokens (4.83 to 7.09:1 light, 5.98 to 9.74:1 dark; source) |
+| Fridge card and its public page | ✅ A1 A2 A3 (0930 u02-native; "Revoke" borderline as above)<br>✅ A4: the remove-row control is named with a 28 pt target ([#1106](https://github.com/WangPantopus/skinny-pantopus/pull/1106)) | ✅ A1 A2 A3<br>✅ A4: "Remove <item>" in a 32 dp button, replacing "✕" (#1106) | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>✅ A3 on master's tokens (0930 a3-remeasure: 0 contrast findings on the leaf and the public page) |
+| Maintenance history (app only) | ✅ A1 A2 A3 A4 (0930 u02-native) | ✅ A1 A2 A3 A4 (0930 u02-native; Maintenance detail captured after the driver fix) | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
 
 **U05** — not started; it waits for the launch flags on master (this stream's screen and action inventory for Stream 1's release manifest).
@@ -268,6 +349,38 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T22:19:24Z — HANDOFF. The fixes window is done: 10 PRs (#1102–#1111) are with the coordinator, 4 bundles are sealed, and every fixture is cleaned. Lease and slot 4 were released at 22:11:38Z.**
+  - **Window** (lease 21:11:01Z–22:11:38Z, slot 4, S34 pair):
+    - U02: Android Maintenance detail captured in base/xl/dark after the driver fix.
+    - Your home: seeded, with a dummy ATTOM key behind the egress guard (restart 21:21:39Z).
+    - Before-sweeps on master `1e1b6bacc`, iOS and Android (plus Android at font 2.0).
+    - Web before: Your home and Civic.
+    - T3 fixture for the verify controls. The first attempt, r1 (unverified occupancy), was refused with 403 and cleaned exactly.
+    - Alerts backend path reproduced: a Home with coordinates read alerts `ready` with 0 active while hub `partial_failures`
+      included alerts.
+    - Patches applied and the backend restarted (21:45:18Z). After-sweeps on the 10-branch build `a93b3e462`. Web after.
+    - Reverted with `git apply -R`; resting restart at 22:10:51Z.
+    - Exact cleanups:
+      - r1 21:38:42Z (353/353);
+      - r2 22:00:34Z (351/353 plus 2 auth);
+      - U02 fixture 81cb4308 22:11:17Z (349/353 plus 4 auth). This included a `UserReferral` side-effect row and 2
+        AddressCalendarRule scope rows.
+    - Devices reset and shut down.
+  - **New in the window:** the native Today Alerts card ignored its section status (an unavailable section read "No active
+    alerts"). Fixed in the alerts PR (`3c2b76535`, iOS and Android), alongside the backend half.
+  - **Seals:**
+    - `20260930-stream4-u02-native-r1`: 706 files, `9e375256…`;
+    - `…-verify-actions-r1`: 12 files, `94781d84…`;
+    - `…-verify-actions-r2`: 65 files, `d8e02bba…`;
+    - `…-fixes-r1`: 401 files, `5de362b2…`.
+    - Secret scans passed before each seal.
+  - **Correction:** r1's README says its scan covered "13 files". The scan and the bundle both have **12**. The sealed bundle
+    isn't edited.
+  - **U02 cells:** this stream's native cells are updated in the table. A3 dark (the iOS tint) waits for #1061. Web A3 has a
+    source-level pass, and its live re-measure is next-list item 4.
+  - **Handoff:** the CURRENT RESUME at the top is rewritten (state, next list, lessons, decisions), and the resume prompt
+    `NEXT-STREAM4-PROMPT-2026-09-30.md` is updated to match.
 
 - **2026-09-30T20:41:10Z — Two more honesty fixes in my Place rows, found by reading code against my U02 frames; both committed on branches for device before/after in my next window.**
   - **Place Today Alerts: a failed alerts check read as an all-clear** (safety). Branch `claude/stream4-alerts-no-false-all-clear`, `74f494001`, backend only.
