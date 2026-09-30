@@ -79,6 +79,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     public private(set) var isDeletingAccount = false
     /// Re-auth or DELETE failure, rendered inside the sheet.
     public var deleteAccountError: String?
+    /// Live Support Trains the person is the primary organizer of. The sheet says
+    /// what happens to them (support train organizer migration 20260930134000).
+    public private(set) var organizedLiveTrainCount = 0
 
     /// The re-auth gate in front of the DELETE. Defaults to the shared
     /// `AppLockManager` device-credential check; unit tests substitute a
@@ -168,6 +171,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         case "deleteAccount":
             deleteAccountError = nil
             isDeleteSheetPresented = true
+            await loadOrganizedLiveTrainCount()
         case "downloadData":
             onOpen(.dataExport)
         case "whatWeCollect":
@@ -265,6 +269,19 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     }
 
     // MARK: - Account deletion
+
+    /// Best effort: a failed read leaves the organizer paragraph out and never
+    /// blocks or delays the deletion.
+    private func loadOrganizedLiveTrainCount() async {
+        organizedLiveTrainCount = 0
+        let live: Set<String> = ["published", "active", "paused"]
+        let response: SupportTrainsListResponse? = try? await api.request(
+            SupportTrainsEndpoints.mine(role: .organizer, limit: 50)
+        )
+        organizedLiveTrainCount = response?.supportTrains.filter { train in
+            train.myRole == "organizer" && live.contains(train.status ?? "")
+        }.count ?? 0
+    }
 
     public func dismissDeleteSheet() {
         guard !isDeletingAccount else { return }
