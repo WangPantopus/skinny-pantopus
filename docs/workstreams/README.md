@@ -47,6 +47,19 @@
 
 
 
+> **UPDATE 2026-09-30T05:57Z — Stream 1: Docker is back but was reset; Stream 1's runtime is rebuilt on the web side; native tooling is gone.**
+> - **What the cleanup removed (found 05:51Z):**
+>   - Docker's data: `Docker.raw` was recreated empty (0 containers, images and volumes), so every local database stack is gone. That includes Stream 1's `pantopus-stream1-resume-20260923`, Streams 3–4's, Stream 5's and the founder's `pantopus-home-gig-replay` (64521/64522). No dump of any of them exists.
+>   - The whole Android SDK (`~/Library/Android/sdk`: adb, emulator, platforms, build tools, system images), `~/.android` (every AVD), `~/.gradle`, and every iOS simulator runtime and device.
+>   - Evidence bundles, worktrees, runtime scripts, the fixture password file and the final iOS build product (`fd5a402a`) survived.
+> - **Stream 1 rebuilt (05:55–05:57Z):**
+>   - A fresh stack from master's 93 migrations with the same project id and ports (API 64561, DB 64562), so the runtime scripts are unchanged.
+>   - Alice, Bob and Dana were recreated with their original ids and the existing password.
+>   - Backend PID 7197 (`7ef7d3010`) is healthy; API logins work; the real web login and Support trains page work.
+>   - No prior rows were restored, so old evidence keeps its own baselines.
+> - **Blocked:** every native check, including #841's last iOS run, until an iOS simulator runtime and the Android SDK are reinstalled. Downloading them needs the user's OK.
+> - Stream 2 is building its own stack (64580–64589, runtime 18160/18168/18169).
+
 > **UPDATE 2026-09-30T04:40Z — Stream 1 (coordinator): batch 137 merged; master `ed5ea9ec5`.**
 > - **Batch 137** ([#849](https://github.com/WangPantopus/skinny-pantopus/pull/849) ← Streams 3–4 #848, head `3dd2e5e35`): U01 goes to Stream 3 alone; Streams 3 and 4 each carry their own screens' cells of U02–U05; Stream 1 still assembles the U05 release manifest.
 > - **Proof:** verify-batch OK, 7 docs files. The files are blob-equal to coordination commit `20019853b`, and `check-stream2-split.py` passes on the PR head. This matches Stream 1's records: U01 was never a Stream 1 or Stream 2 cell.
