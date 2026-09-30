@@ -17,6 +17,202 @@
 >   - session name "Stream 3: Home access and residency";
 >   - resume prompt [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md).
 
+## HANDOFF — Stream 3, evening of 2026-09-30 (START HERE; written 2026-09-30T21:18:39Z)
+
+The previous session stopped here at the user's request, at a clean boundary.
+- It holds no lease, no slot and no fixture, and no fault rules are active.
+- Everything is committed and pushed. Every PR is sealed and with the coordinator.
+- The older "CURRENT RESUME" below is kept as history. The ordered backlog is §4 here.
+
+### 1. State at handoff (re-check before relying on it)
+
+- **Master:** `11e2b72f68bd6bf5b41815be6032db96e6181891` (batch 219, 21:10:57Z).
+- **Merged today:** #1024, #1036 and #1051, plus everything before them.
+- **Open PRs:** five, all sealed, E2E-verified in the real apps, with green or clean CI, and sent to the coordinator
+  (Stream 1) for its next batch at 21:15Z. The user asked for ready PRs to be merged.
+  - **First job:** confirm they merged (`gh pr view <n> --json state,mergedAt`). If one isn't merged, ask the
+    coordinator. Don't merge around the queue.
+
+| PR | What | Head | Evidence (audit store `…/.pantopus-recovery/audits/`) |
+|---|---|---|---|
+| [#1058](https://github.com/WangPantopus/skinny-pantopus/pull/1058) | Android list top bar: at font ≥1.3 a labelled action shows its icon, so the Members title stays | `4bb90fa845f0ec0ae11a355d2bba2a126c4a3987` | `20260930-stream3-home-u04-lifetimes-r1`, MANIFEST `57e9a75b54e741dd63568eb88eabcd581db052472530c38ef90dd0c2dcdf55a6` |
+| [#1064](https://github.com/WangPantopus/skinny-pantopus/pull/1064) | Standalone web `/homes/:id/settings` and `/settings/security` say when their read fails (Retry, or a 403 sentence) | `f4b71575d83b001954c6efc4cca01f40f7717370` | `20260930-stream3-home-web-settings-read-errors-r1`, `9c25be46191f18a7167b0e856448655b3473f65cb7c4dda5b122bd872b876b18` |
+| [#1065](https://github.com/WangPantopus/skinny-pantopus/pull/1065) | Web Settings tab gets an owner-only "Security & Privacy" row (discoverability, owner claims); merge with or after #1064 | `140b24b1f892a60d222b9c4b4f20b77292e4ee69` | the same bundle |
+| [#1070](https://github.com/WangPantopus/skinny-pantopus/pull/1070) | Web member initials on 700 fills (2.15 → 5.02:1) | `76d2236c0d2f140a02d149b2a1fd5c1e8276b73b` | the same bundle |
+| [#1067](https://github.com/WangPantopus/skinny-pantopus/pull/1067) | iOS and Android residency letters and passes lists: Try again after a failed read | `7d9a15105a172734a945430be1000f034c12c214` | `20260930-stream3-home-residency-list-retry-r1`, `e28414b21d63577280fcfd9cb674c44c6ef9d4b9626c924f89648c8b96af48f5` (2 CI checks were pending at 21:15Z) |
+
+- **Runtime:**
+  - The lease and device slot 4 are with Stream 4 (released to them at 21:10:43Z). Their fixture Home `81cb4308…` is
+    theirs.
+  - Nothing of Stream 3 is in the database: every fixture today was cleaned exactly.
+  - Backend PID 91084 on `00bf2d6ff`. The shared web worktree was restored byte-exact after each placement.
+- **Local worktree:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-3-home-access-627a9d`, clean, on branch
+  `claude/stream3-home-residency-list-retry`. Start new work from `origin/master` on a new
+  `claude/stream3-home-<topic>` branch.
+- **Kit** (local, not in Git):
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit`.
+  - Stages are in `runtime/`; audits are in `../audits/`.
+  - The saved builds are `apks-s3/7d9a15105-app-debug.apk` and `apps-s3/7d9a15105/Pantopus.app` (master `5fded9767`
+    plus #1067), and `apks-s3/4bb90fa84-app-debug.apk` (#1058).
+
+### 2. Today's results, in the checklists below (each cell cites its bundle)
+
+- **U04 L1, L3, L4 pass on iOS and Android** (`0930 u04-lifetimes`):
+  - **L1:** a rename draft, an Add guest name, Members and Identity survive 20 s in the background, with the same process
+    and nothing saved.
+  - **L4:** a one-time expired-token 401 on the rename PATCH → `/api/users/refresh` 200 → the replay 200. The owner
+    stays signed in.
+  - **L3:** member B sees nothing of the owner's Home ("Home access unavailable", "You do not have permission…"), and the
+    owner is restored.
+- **U03:**
+  - Every ❓ cell got a verified disposition, including the new ☑️ marker for 09-11…09-13 reports.
+  - R1 residency letters and passes: fixed (#1067).
+  - Web privacy: the R1 fix and reachability (#1064, #1065).
+  - Landlord unbuilt tabs: hidden (#1051, merged).
+- **U02:** the Android top bar at font 2.0 (#1058), and web member initials contrast (#1070).
+- **Web U04 was not run.** Its script is ready (§3).
+
+### 3. Tools built today (kit `tools/`; every one refuses to overwrite a label or a sealed stage's files)
+
+- **Fixtures:**
+  - `s3-u04-fixture.py fixture|cleanup` makes one owner Home and cleans it up exactly. `S3_STAGE` picks the stage (the
+    default is `stream3-home-u04-native-r2`; take `fp.py snap` in it first), `S3_HOME_NAME` names the Home, and
+    `S3_ADD_MEMBER=1` adds B as a household member.
+  - `s3-landlord-fixture.py` does the same for a Home with a verified landlord authority.
+- **`s3-proxy.py <stage> set|clear|list|count`:** fault rules with `<H>` expansion, request counts from the proxy log.
+  `S3_FIXTURE_STAGE` reads H from another stage.
+- **`s3-worktree-place.py <stage> save|before|after|restore`:** whole-file before/after placement in the shared web
+  worktree, driven by `worktree-files.json`. Every blob is checked by hash, and `git status` must match at restore.
+- **Device step drivers:**
+  - `android-s3-step.py`: url, launch, tap, tapfield, type, clear, back, font, scrollto, background (records process
+    ids), wait, capture.
+  - `ios-s3-step.py`: url, launch, tap [bridge], tapfield, type, clear, scrollto, background (process ids), wait,
+    capture. The text op takes `value`; an empty default read falls back to axbridge.
+- **Sequences:**
+  - `s3-u04-android.sh` and `s3-u04-ios.sh` run one case per call. `S3_STAGE` and `S3_RETRY_STAGE` must be new stages.
+  - `s3-u04-l3-scan.py` scans frames for the owner's data. Both fixture accounts' first name is "Stream2", so an
+    `ownerFirstName` hit on B's greeting is a false positive.
+- **Web:**
+  - `web-s3-u04.cjs l1|l4|l3`: `S3_STAGE`, default `stream3-home-u04-web-r1`. It uses the dashboard Settings tab and
+    signs in through the form.
+  - `web-s3-settings-read-errors.cjs`, `web-s3-landlord-tabs.cjs`, `s3-web-security-run.sh`.
+
+### 4. Next actions, in order
+
+1. Confirm the five PRs above merged, then mark their cells "merged" here.
+2. **Web U04 L1, L3, L4:**
+   - Lease, then `fp.py snap runtime/stream3-home-u04-web-r1 baseline-public-fingerprints`.
+   - `S3_STAGE=stream3-home-u04-web-r1 python3 tools/s3-u04-fixture.py fixture`.
+   - `S3_STAGE=… node tools/web-s3-u04.cjs l1 l1-a`, then `l4 l4-a "<new name>"`, then `l3 l3-a`.
+   - Scan with `s3-u04-l3-scan.py`, exact cleanup, redact screenshots, seal.
+   - L1 on web fakes a hidden tab (visibilityState and events); say so in the bundle.
+3. **U03 E4 lead on the native Members screen:**
+   - For a viewer without access, Android still offers "Invite member" and "Recover a member removal", and iOS offers the
+     two recovery links, beside "You do not have permission to view these records." (`0930 u04-lifetimes`,
+     `l3-member-views`).
+   - Reproduce, then make the smallest repair (hide those controls on a permission error, as the web pages do since
+     #835). Evidence and PR as usual.
+4. **Remaining U04 native cells:** L4 on a Members or guest-pass write; L1 and L4 on the Homes list; L3 on residency
+   letters and passes (B opens the owner's Identity).
+5. **U03 ⬜ cells** (the tables below list each one):
+   - native joining E1/E3/E6;
+   - native departed-applicant E5;
+   - removal E1/E3;
+   - a real residency-pass double tap (E3);
+   - D05 native E2/E4/E5/E6/R1;
+   - D07 native E1/E2/E3;
+   - D10 iOS E3/E6 and Android E2/E3;
+   - the guest-pass copied link;
+   - U03 cases in the native landlord wizard;
+   - web E3s;
+   - web L2 reload of the Homes list.
+6. **U02:**
+   - native A1/A2 of the verification pages and the privacy mirror;
+   - native A3 (the role-palette avatars and other fills) and A4 (VoiceOver and TalkBack);
+   - web A1/A4/A5;
+   - the "Not in any sweep" row.
+7. **U01:** long native activity identities (needs long account names).
+8. **☑️ cells:** show the source unchanged since the cited report, or re-run the case, before counting it toward closure.
+9. **R03/R04:** the boundaries in their rows. **U05** waits for the launch flags on master.
+
+### 5. Gotchas learned today (on top of the rules below)
+
+- **Lease, slots, heavy slot:**
+  - `zsh tools/runtime-lease.sh acquire "stream3-home: …"` waits every 30 s. Stream 4 shares it, so message them before
+    and after.
+  - `/private/tmp/pantopus-tools/device-slot.sh acquire "stream3-home: …"` gives slot 4 for S34 and pantopus_s34. Shut
+    the devices down before releasing.
+  - The heavy slot is `/private/tmp/pantopus-tools/heavy-slot.sh`. Run acquire in the background.
+- **Emulator:** it restores a snapshot on boot. Reinstall the APK (`adb install -r` keeps data), launch the app, then
+  run `android-s3-login.py`, which is focus-checked.
+- **iOS sign-in:** `ios-s3-account.py`'s Log in tap lands on the keyboard's Passwords bar. Tap the exposed strip at
+  (201, 534), then dismiss the prompt at (127, 547).
+- **iOS accessibility stall:** if both the default reader and axbridge return nothing, `simctl shutdown` and `boot`
+  fixes it (data kept). Don't loop axbridge; it takes about 30 s a read.
+- **Long Identity page:** the residency lists sit below nineteen data-broker cards. Use `scrollto`.
+- **Lazy rows** to include in exact cleanups: HomeSeasonalChecklistItem and PropertyIntelligenceCache (the Home's
+  dashboard), and MailPreferences (member B's default row, created when B's session opens).
+- **Screenshots show fixture e-mails:** the web sidebar footer (black out x 52–239, y 804–860), and iOS sign-in and
+  Settings screens (keep them out of bundles). Never print `runtime/accounts.env`.
+- **Shell:** zsh does not split `$VAR` command strings, so use arrays. macOS has no `timeout`.
+- **Coordination checkout:** it holds other streams' uncommitted edits. Always `git commit --only
+  docs/workstreams/03-home-access-residency.md`.
+
+### 6. Decisions made today under the standing instruction ("decide for the best UX and safety, record it")
+
+- **#1051:** hide the landlord Notices and Settings tabs rather than show an empty "not available".
+- **#1064:** the standalone pages use the Owners page's load-error pattern.
+- **#1065:** add one owner-only entry row in the Settings tab rather than build or move the page, matching native Home
+  settings.
+- **#1067:** the rate-watch Try again control on both residency lists.
+- **#1070:** 700 shades, matching Stream 5's chat fix.
+- **☑️:** the marker for older reports.
+- **Builds:** U04 ran on the `7d9a15105` builds, the closest to master.
+
+### 7. Prompt for the next Stream 3 session
+
+```text
+You are Stream 3 — Home access, residency and security. Name this session "Stream 3: Home access and residency".
+Before editing, read in order:
+- /Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-3-home-access-627a9d/AGENTS.md
+- the project handoff (docs/PROJECT_HANDOFF.md)
+- the coordination hub README and 03-home-access-residency.md, both in /Users/yingpengwang/pantopus-coordination
+  (branch codex/workstream-coordination; `git fetch` then `git merge --ff-only`). In 03, start at
+  "HANDOFF — Stream 3, evening of 2026-09-30" and work its §4 in order.
+
+Work in /Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-3-home-access-627a9d. Branch from origin/master as
+claude/stream3-home-<topic>. The runtime kit is
+/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit.
+
+Rules:
+- Do all the code, verification and fixing yourself. Subagents may only search and gather information.
+- Standing user instruction: when a decision would normally go to the user, make the choice that is best for user
+  experience, safety and security, and retention, record it (the 03 file's decisions, the PR body, memory), and keep
+  working without stopping.
+- Evidence protocol:
+  1. Write DECISION.md first.
+  2. Take an `fp.py snap` baseline.
+  3. Capture befores and afters in the real apps.
+  4. Clean up exactly.
+  5. Redact fixture e-mails.
+  6. Seal with `seal-bundle.py`.
+  7. Open the PR; its body ends with the Claude Code line.
+  8. Send the head and seal to the coordinator (Stream 1), which merges.
+  9. Add a live entry in 03.
+- Commit trailer: "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>".
+- Never print runtime/accounts.env. Never touch the founder's environment (64521/64522, backend 8000, simulator
+  EB5AD759) or the physical iPhone.
+- No destructive git or database commands. Delete fixtures only within your exact ownership. Keep secrets out of Git
+  and chat.
+- Record every time from `date -u` and every SHA from `git rev-parse`.
+- Launch scope: never verify, test or fix the eight cut features.
+- Own only docs/workstreams/03-home-access-residency.md in the coordination repo, and always
+  `git commit --only <that file>`.
+- Share the runtime lease, device slot 4 and the heavy slot with Stream 4. Message them when you take or release any of
+  them.
+- No new unit tests.
+```
+
 ## CURRENT RESUME — Stream 3 (start here; written 2026-09-30T04:16:32Z)
 
 **Scope.** Who can reach a home and what they can do there:
@@ -221,10 +417,10 @@ Itemized from sealed evidence in the audit store using Stream 1's case names (`c
 | Leaving, member removal and recovery | ✅ E5 (#781 re-inviting an ended member; #794 approving an ended member's request: honest 409 on all three clients)<br>☑️ E2 (09-13 iOS removal recovery r6: after a lost committed reply, Retry sends the same UUID; one command)<br>⬜ E1 E3 (not in the older reports)<br>🔷 re-entry (decision 1) | ✅ E5 (#781 re-inviting an ended member; #794 approving an ended member's request: honest 409 on all three clients)<br>☑️ E2 (09-13 Android removal recovery: a cold Retry sends the identical UUID; one command)<br>⬜ E1 E3 (not in the older reports)<br>🔷 re-entry (decision 1) | ✅ E1 (#722 Leave)<br>✅ E5 (#781, #794)<br>☑️ E2 (09-13 browser removal recovery r2: one UUID and a byte-identical body; one command)<br>⬜ E3<br>🔷 re-entry (decision 1) |
 | Ownership: claims, Owners page, transfer | ✅ transfer copy (`0927 native-transfer-account`: both recipient cards show the account requirement; the string is on master)<br>⛔ a native transfer itself (behind device authentication)<br>⬜ E1 E2 E3 E4 E5 R1<br>✅ disputes: launch without them (decision 3, 2026-09-30) | same as iOS | ✅ E4 (#835: permission sentence; Invite and Transfer hidden)<br>✅ E6 (#473: an unknown or own email gets an honest 400; nothing changes)<br>✅ R1 owners pages (sweep r2)<br>⛔ E1 revoke failure through the API only (#473)<br>✅ disputes: launch without them (decision 3; the flag defaults off)<br>⛔ hosted check that production doesn't set the flag |
 | Landlord and lease approvals | – no native landlord approval screen (the 09-13 lease runs approved through the service)<br>☑️ tenant side (09-13 lease-transaction: the lease request keeps its fields on an impossible date; a committed request or invitation acceptance whose reply became a 503 keeps one lease)<br>⬜ U03 cases in the native landlord verification wizard | same as iOS | ☑️ E1 E2 E6 (09-13 landlord-account r1, an isolated renderer on the real SDK, routes and SQL: invalid dates send nothing; a server failure keeps the reviewed dates; a lost reply retries the same intent)<br>✅ the unbuilt Notices and Settings tabs are no longer offered ([#1051](https://github.com/WangPantopus/skinny-pantopus/pull/1051), `0930 landlord-unbuilt-tabs`; merged in batch 211)<br>⬜ E3 E5 R1 R2 in the full app |
-| Residency letters and passes, public verify pages | ✅ E1 (0927 native-residency-pass: issue and revoke 503 show an error; retry works)<br>✅ E2 (#729; the app killed after a committed issue or revoke shows the right state after restart)<br>✅ E4 (#493 guest wording; #538 public pages)<br>✅ E5 (#735 expiry while open)<br>⬜ R1 in-place retry (#732, `0928 residency-pass-read`: a list 503 shows the error; recovery needs Back and re-entry): fix [#1067](https://github.com/WangPantopus/skinny-pantopus/pull/1067) (Try again on the letters history and passes list, both platforms), proof pending<br>⬜ E3 a real double tap (`0927 native-residency-pass`: one claim while Issuing is disabled; duplicate taps not run) | ✅ E1 E2 (native-residency-pass; #729; 0930 r06-request-identity restart)<br>✅ E4 (#493, #538)<br>✅ E5 (#735)<br>⬜ R1 in-place retry (fix #1067, proof pending), E3 (as iOS) | ✅ E2 (#729: after a lost 201, the retry gets the same pass)<br>✅ E4 E5 (#538 public pages say revoked or no longer verified; #735 expiry on issuer and public pages)<br>✅ R1 (#732: 503 then Try again)<br>❓ R2 (no claims: the history section is hidden with no empty text; decide whether that is right)<br>⬜ E3<br>⛔ device clock, full-day expiry, hosted issuer |
+| Residency letters and passes, public verify pages | ✅ E1 (0927 native-residency-pass: issue and revoke 503 show an error; retry works)<br>✅ E2 (#729; the app killed after a committed issue or revoke shows the right state after restart)<br>✅ E4 (#493 guest wording; #538 public pages)<br>✅ E5 (#735 expiry while open)<br>✅ R1 in-place retry ([#1067](https://github.com/WangPantopus/skinny-pantopus/pull/1067), `0930 residency-list-retry`, `e28414b2…`: before, a list 503 showed only the error; after, Try again on the letters history and the passes list, one GET each, error gone)<br>⬜ E3 a real double tap (`0927 native-residency-pass`: one claim while Issuing is disabled; duplicate taps not run) | ✅ E1 E2 (native-residency-pass; #729; 0930 r06-request-identity restart)<br>✅ E4 (#493, #538)<br>✅ E5 (#735)<br>✅ R1 in-place retry (#1067, `0930 residency-list-retry`, `e28414b2…`)<br>⬜ E3 (as iOS) | ✅ E2 (#729: after a lost 201, the retry gets the same pass)<br>✅ E4 E5 (#538 public pages say revoked or no longer verified; #735 expiry on issuer and public pages)<br>✅ R1 (#732: 503 then Try again)<br>❓ R2 (no claims: the history section is hidden with no empty text; decide whether that is right)<br>⬜ E3<br>⛔ device clock, full-day expiry, hosted issuer |
 | Home settings (D05) | ✅ E1 E3 (#693: the rename field is locked while saving; a 503 keeps the draft)<br>✅ rename starts from the real name, an untouched Save sends nothing, and clearing works (#982)<br>⬜ E2 E4 E5 E6 R1 | ✅ E1 E3 (#693)<br>✅ the same rename fixes (#982)<br>⬜ E2 E4 E5 E6 R1 | ✅ E1 E3 (#690: inputs locked while saving; a failure keeps the draft)<br>✅ E4 (#858: entries gated by permission)<br>✅ E5 (#632: two tabs keep each other's edits; #745: a name cleared elsewhere)<br>✅ E6 (#626: invalid coordinates aren't saved; geocoder emulated)<br>✅ R1 (#694 malformed read; #745 read 503; both then Try again)<br>❓ E2 partial (#632, `0927 settings-retained-edits`: a committed reply held at the proxy recovers by reload; a truly lost reply on the open page and a retried Save are not recorded) |
-| Privacy (D06) | ✅ E1 (#749: a 503 rolls back with an error)<br>✅ E3 (`0928 privacy-save-order`: two real extra taps during a held save are ignored, one unchanged row; not an accessibility-disabled assertion)<br>✅ E5 R1 (#638: Place shows the saved setting on return; an injected 503 shows an error)<br>⬜ no native Home visibility control; document pickers don't start from the Home default | ✅ E1 E3 (#749: extra taps while saving make no extra save)<br>✅ E5 R1 (#638)<br>⬜ the same native gaps | ✅ E4 (#803: an invite-only Home's link gives non-members 403; #865, #869, #874 map homes layer through the API)<br>✅ Default Visibility for New Items applies (#898)<br>✅ join policy hidden (#917 web, #971 native); the fridge card keeps working during Lockdown (#916)<br>⬜ R1 Security & Privacy page: a failed read spins forever (fix [#1064](https://github.com/WangPantopus/skinny-pantopus/pull/1064), proof pending)<br>⬜ reachability: nothing links to that page, the only web place for discoverability and the owner-claim policy (fix [#1065](https://github.com/WangPantopus/skinny-pantopus/pull/1065), proof pending)<br>❓ E1 (code: a failed save keeps the saved choice and toasts; not run) |
-| Members, permissions, security and Lockdown (D07) | ✅ E4 E5 (#781, #794)<br>✅ R1 malformed Access & Codes list (#701)<br>– Lockdown (web only)<br>✅ the Members audit list shows plain words (#972, `0930 d07-native-audit-labels`; the dashboard's recent-activity card is Stream 4's)<br>⬜ E1 E2 E3 | same as iOS | ✅ E1 (#757 mismatched Lockdown replies rejected; #825 "Finish revoking"; #881 "Record this change")<br>✅ E4 (#474, #816, #820, #835, #858)<br>✅ E5 (#881 two-tab race)<br>✅ E6 (#791: already a member or already invited)<br>✅ R1 (#644 security summary; #647 Lockdown summary; sweep r2)<br>✅ audit labels (#888)<br>✅ decisions 2 and 5 settled 2026-09-30 (least-privilege defaults; Lockdown leaves the Home private) |
+| Privacy (D06) | ✅ E1 (#749: a 503 rolls back with an error)<br>✅ E3 (`0928 privacy-save-order`: two real extra taps during a held save are ignored, one unchanged row; not an accessibility-disabled assertion)<br>✅ E5 R1 (#638: Place shows the saved setting on return; an injected 503 shows an error)<br>⬜ no native Home visibility control; document pickers don't start from the Home default | ✅ E1 E3 (#749: extra taps while saving make no extra save)<br>✅ E5 R1 (#638)<br>⬜ the same native gaps | ✅ E4 (#803: an invite-only Home's link gives non-members 403; #865, #869, #874 map homes layer through the API)<br>✅ Default Visibility for New Items applies (#898)<br>✅ join policy hidden (#917 web, #971 native); the fridge card keeps working during Lockdown (#916)<br>✅ R1 Security & Privacy page: a failed read now says so with Retry (403: a permission sentence) instead of spinning forever ([#1064](https://github.com/WangPantopus/skinny-pantopus/pull/1064), `0930 web-settings-read-errors`, `9c25be46…`)<br>✅ reachability: the Settings tab's owner-only "Security & Privacy" row opens that page, the only web place for discoverability and the owner-claim policy ([#1065](https://github.com/WangPantopus/skinny-pantopus/pull/1065), `0930 web-settings-read-errors`, `9c25be46…`)<br>❓ E1 (code: a failed save keeps the saved choice and toasts; not run) |
+| Members, permissions, security and Lockdown (D07) | ✅ E4 E5 (#781, #794)<br>✅ R1 malformed Access & Codes list (#701)<br>– Lockdown (web only)<br>✅ the Members audit list shows plain words (#972, `0930 d07-native-audit-labels`; the dashboard's recent-activity card is Stream 4's)<br>⬜ E1 E2 E3<br>⬜ E4 lead: for a viewer without access (member B), Members shows the permission error but still offers Invitation recovery and Member removal recovery on iOS, and Invite member and Recover a member removal on Android (`0930 u04-lifetimes`, `l3-member-views`) | same as iOS | ✅ E1 (#757 mismatched Lockdown replies rejected; #825 "Finish revoking"; #881 "Record this change")<br>✅ E4 (#474, #816, #820, #835, #858)<br>✅ E5 (#881 two-tab race)<br>✅ E6 (#791: already a member or already invited)<br>✅ R1 (#644 security summary; #647 Lockdown summary; sweep r2)<br>✅ audit labels (#888)<br>✅ decisions 2 and 5 settled 2026-09-30 (least-privilege defaults; Lockdown leaves the Home private) |
 | Guest passes (D08, M02) | ✅ E4 (#519: entry only for pass managers)<br>✅ E5 (#761: expiry while open)<br>✅ R1 malformed list (#701)<br>✅ scheduled start: a scheduled pass stays current, shows "Starts …" and is revocable (#999, `0930 d08-scheduled-start`)<br>⬜ copied link<br>✅ Allowed areas → the real "What they can see" sections (user-approved 09-26, `2c8908956`) | same as iOS | ✅ E4 (#519; #827 pass managers during Lockdown)<br>✅ E5 (#761: list and public page)<br>✅ R1 (#758 malformed Share list; #680)<br>☑️ PR #53/#60 (a local dev server, synthetic auth): a wrong passcode is refused without spending quota; a stale reply keeps the new draft; "View Limit Reached"<br>⬜ E1 a 5xx on the guest page (only a 400 `SHARE_INVALID` reason was run)<br>✅ passcodes (#915)<br>✅ scheduled start: Share Center "Scheduled · Starts …", guest page "Not Active Yet" (API `SHARE_NOT_STARTED` in `0930 d08-scheduled-start`)<br>⬜ copied link and public rendering |
 | Deleting a Home (D10) | ✅ E1 (503: recoverable error)<br>✅ E2 (deleted; the app terminated before the reply; the Home is gone after restart)<br>✅ E4 (403)<br>⬜ E3 (the bundle: "No native duplicate-attempt claim")<br>⬜ E6 cancel flow | ✅ E1 (503, then same-screen retry)<br>✅ E4<br>✅ E6 (Cancel sends nothing)<br>⬜ E2 (the reply was held 6 s and delivered, not lost) E3 | ✅ E1 E4 (503 keeps state; 403 after access is removed; restore and retry)<br>✅ E3 (a forced duplicate click sends one DELETE)<br>✅ E6 (cancel stages and invalid confirmation send nothing)<br>⛔ linked-resource cleanup (files, balances, Crew payments) |
 
@@ -234,17 +430,17 @@ All D10 cells come from 0927 home-delete-three-apps. Homes list and Home identit
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Homes list, joining and waiting room | ✅ L2 My Homes after restart (home-delete-three-apps)<br>⬜ L1 L3 L4 | ✅ L2 (same)<br>⬜ L1 L3 L4 | ⬜ L2 reload (none recorded; the 09-13 browser removal run covers a fresh My Homes, not a reload)<br>⬜ L1 L3 L4 |
-| Residency letters and passes | ✅ L2 (native-residency-pass: restart after a committed issue or revoke)<br>✅ L2 request-identity restart (`0930 r06-ios-restart`, `badb1a99…`)<br>⬜ L1 L3 L4 | ✅ L2 (native-residency-pass; 0930 r06-request-identity)<br>⬜ L1 L3 L4 | ✅ L2 reload (#732, #735)<br>⛔ L3 checked through the API only (0930 r06-request-identity: another account never gets the same pass)<br>⬜ L1 L4 |
-| Home settings and privacy | ✅ L2 (#693 cold restart; #749)<br>⬜ L1 L3 L4 | ✅ L2 (#693; #749)<br>⬜ L1 L3 L4 | ✅ L2 reload<br>⬜ L1 L3 L4 |
-| Members, security and guest passes | ✅ L2 (#761 guest list)<br>⬜ L1 L3 L4 | ✅ L2 (#761)<br>⬜ L1 L3 L4 | ✅ L2 reload (#761, #881)<br>⬜ L1 L3 L4 |
+| Homes list, joining and waiting room | ✅ L2 My Homes after restart (home-delete-three-apps)<br>✅ L3: after the owner signs out, member B's Place and the owner's Home link show nothing of the owner's; the owner signs back in and sees the Home (`0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L1 L4 | ✅ L2 (same)<br>✅ L3: B's My homes shows "No saved Homes yet"; the owner's Home link shows "Home access unavailable"; the owner is restored (`0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L1 L4 | ⬜ L2 reload (none recorded; the 09-13 browser removal run covers a fresh My Homes, not a reload)<br>⬜ L1 L3 L4 |
+| Residency letters and passes | ✅ L2 (native-residency-pass: restart after a committed issue or revoke)<br>✅ L2 request-identity restart (`0930 r06-ios-restart`, `badb1a99…`)<br>✅ L1: Identity kept after 20 s in the background, same process (`0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L3 L4 | ✅ L2 (native-residency-pass; 0930 r06-request-identity)<br>✅ L1 (the same, `0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L3 L4 | ✅ L2 reload (#732, #735)<br>⛔ L3 checked through the API only (0930 r06-request-identity: another account never gets the same pass)<br>⬜ L1 L4 |
+| Home settings and privacy | ✅ L2 (#693 cold restart; #749)<br>✅ L1: a rename draft survives 20 s in the background, same process, nothing saved<br>✅ L4: a one-time expired-token 401 on the rename PATCH is refreshed (`/api/users/refresh` 200) and replayed (200); the new name shows and the owner stays signed in<br>✅ L3: the owner's Home link as member B shows "Home access unavailable" (`0930 u04-lifetimes`, `57e9a75b…`) | ✅ L2 (#693; #749)<br>✅ L1, L4, L3 (the same cases, `0930 u04-lifetimes`, `57e9a75b…`) | ✅ L2 reload<br>⬜ L1 L3 L4 |
+| Members, security and guest passes | ✅ L2 (#761 guest list)<br>✅ L1: Members, and an Add guest name, kept after 20 s in the background; nothing created<br>✅ L3: the owner's Members link as member B says "You do not have permission to view these records." (`0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L4 | ✅ L2 (#761)<br>✅ L1, L3 (the same, `0930 u04-lifetimes`, `57e9a75b…`)<br>⬜ L4 | ✅ L2 reload (#761, #881)<br>⬜ L1 L3 L4 |
 | Deleting a Home | ✅ L2 restart: the Home is gone | ✅ L2 relaunch: the Home is gone | ✅ L2 landing after delete (S1 #652) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Members & Security, Members, invitations, Lockdown, audit log | ✅ A1 A2 (Members, Pending, Requests, audit log; `0930 u02-native-a1a2`); the Requests row's whole name is [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036)<br>⬜ A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ✅ A1 A2 (`0930 u02-native-a1a2`; #1036: the Requests name, chip and Decline at font 2.0)<br>⬜ A3 A4<br>⬜ the top-bar title shows as "…" at font 2.0: fix [#1058](https://github.com/WangPantopus/skinny-pantopus/pull/1058), emulator proof pending | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour<br>⬜ A3 member initials: white on 500 fills is 2.15–4.47:1; fix [#1070](https://github.com/WangPantopus/skinny-pantopus/pull/1070) moves them to 700 (5.02–7.90:1), proof pending |
+| Members & Security, Members, invitations, Lockdown, audit log | ✅ A1 A2 (Members, Pending, Requests, audit log; `0930 u02-native-a1a2`); the Requests row's whole name is [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036)<br>⬜ A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ✅ A1 A2 (`0930 u02-native-a1a2`; #1036: the Requests name, chip and Decline at font 2.0)<br>⬜ A3 A4<br>✅ the top-bar title at font 2.0: "Members" in full, and the action becomes a named icon ([#1058](https://github.com/WangPantopus/skinny-pantopus/pull/1058), `0930 u04-lifetimes`, `57e9a75b…`) | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour<br>✅ A3 member initials: 700 fills, measured in Chrome 2.15 → 5.02:1 (amber) and 4.23 → 7.10:1 (violet) ([#1070](https://github.com/WangPantopus/skinny-pantopus/pull/1070), `0930 web-settings-read-errors`, `9c25be46…`) |
 | Residency review, verification pages, ownership (owners, claim, transfer, dispute) | ✅ A1 A2: Review claims, residency review, Owners, Transfer (`0930 u02-native-a1a2`; #1036: the Review claims links at xl, the Transfer Home name)<br>✅ A3 dark Approve 1.92:1 → 5.48:1 (#1029, Stream 1)<br>⬜ A1 A2 verification pages<br>⬜ A4<br>✅ the review sheet's Close/Reload: not reproduced, they are separate elements (`0930 u02-navbar-probe`) | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; the residency review is FLAG_SECURE, so it was checked through the accessibility tree; #1036: the Transfer Home name)<br>⬜ A1 A2 verification pages<br>⬜ A3 A4 | ✅ A2 evidence choices (#801), Strong tier (#822)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
 | Settings, privacy mirror, Home editor, Delete home | ✅ A1 A2: Home settings, the rename editor, Privacy, Ownership & Security, My homes and Delete home (`0930 u02-native-a1a2`; #1036: the Homes-list unit label and wrapping chips)<br>⛔ Delete home: at xl the system dialog clips its message (Delete stays reachable)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; #1036: Rename stays at font 2.0, the unit label, wrapping chips)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A2 editor Visibility (#807), Danger Zone and Leave Home (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
 | Share center, add guest | ✅ A1 A2: Guest passes and Add guest (`0930 u02-native-a1a2`)<br>⬜ A3 A4 | ✅ A1 A2 (`0930 u02-native-a1a2`; a pass label truncates at 2 lines at 2×, and the "Dog walker" part stays visible)<br>⬜ A3 A4 | ✅ A2 partial (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5 |
