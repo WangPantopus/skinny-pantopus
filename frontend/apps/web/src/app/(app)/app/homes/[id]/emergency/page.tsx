@@ -41,6 +41,8 @@ function EmergencyContent() {
   // One id per unchanged draft: a retry after a lost reply returns the saved entry instead of adding it again.
   const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
   // A superseded list read must never replace a newer one.
   const generation = useRef(0);
 
@@ -57,9 +59,12 @@ function EmergencyContent() {
         throw new Error('Invalid emergency information response');
       }
       setLoadError(null);
+      setLoadDenied(false);
       setItems(res.emergencies as HomeEmergency[]);
     } catch (err: unknown) {
       if (request !== generation.current) return;
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this household’s emergency info.'); return; }
+      setLoadDenied(false);
       setLoadError('Current emergency info could not be loaded. Retry to check current information.');
       toast.error(failureMessage(err, 'Failed to load emergency info'));
     }
@@ -129,9 +134,11 @@ function EmergencyContent() {
           <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Emergency Info</h1>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
-          <Plus className="w-4 h-4" /> Add
-        </button>
+        {!loadDenied && (
+          <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
+            <Plus className="w-4 h-4" /> Add
+          </button>
+        )}
       </div>
 
       {/* 911 banner */}
@@ -139,7 +146,7 @@ function EmergencyContent() {
         <Phone className="w-5 h-5" /> Emergency? Call 911
       </a>
 
-      {showCreate && (
+      {showCreate && !loadDenied && (
         <div className="bg-app-surface border border-app-border rounded-xl p-4 mb-4 space-y-3">
           <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <div className="flex flex-wrap gap-1.5">
@@ -166,7 +173,7 @@ function EmergencyContent() {
       {loadError ? (
         <div className="text-center py-16">
           <p className="text-sm text-app-text-secondary">{loadError}</p>
-          <button type="button" onClick={() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+          {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-16">
