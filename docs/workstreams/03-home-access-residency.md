@@ -50,8 +50,8 @@
    - **Then** send R06 to the coordinator with device clock, full-day expiry and the hosted issuer lifecycle named as boundaries.
 2. **D07, members and security.**
    - ~~Racing Lockdown commands; audit-write failure~~: both reproduced on master and repaired in [#881](https://github.com/WangPantopus/skinny-pantopus/pull/881) (one transaction per Lockdown command via the new `set_home_lockdown`), merged in batch 150. Its migration was applied to the shared runtime at 07:37:21Z (`supabase migration up`; ledger 94).
-   - ~~Raw codes in the audit lists~~ (Stream 4's lead): repaired in [#888](https://github.com/WangPantopus/skinny-pantopus/pull/888) (with the coordinator); the Home activity labels are now shared by `/timeline` and `/audit-log`.
-   - Minor lead (coordinator note on #881): "Record this change" re-runs enable, so the recorded row says `guest_passes_revoked: 0` when the unrecorded first attempt did the revoking, and `lockdown_enabled_at` moves to the retry.
+   - ~~Raw codes in the audit lists~~ (Stream 4's lead): repaired in [#888](https://github.com/WangPantopus/skinny-pantopus/pull/888), merged in batch 152 (master `919305835`); the Home activity labels are now shared by `/timeline` and `/audit-log`.
+   - Minor lead (coordinator note on #881; parked, not needed before launch): "Record this change" re-runs enable, so the recorded row says `guest_passes_revoked: 0` when the unrecorded first attempt did the revoking, and `lockdown_enabled_at` moves to the retry.
    - ~~Three web leads~~ (scoped share links during Lockdown; Invitations by URL; the standalone Settings links): all three reproduced and repaired in [#858](https://github.com/WangPantopus/skinny-pantopus/pull/858), merged in batch 141 (master `8af54a57a`).
    - New leads (recorded, not reproduced as defects yet):
      - the URL-only Settings page's Notifications switches have no height, keep local state only and name cut features (needs a product call: remove or persist);
@@ -60,14 +60,16 @@
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
    - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (merged, batch 147, master `b16eca646`): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
+   - **Reproduced 2026-09-30 (decision with the coordinator):** "Default Visibility for New Items" (web Home settings) has no effect. The owner saved `managers`, a new task was stored `members`, and member B saw it. Bundle `20260930-stream3-home-d06-default-visibility-r1` (`f6fbbe7f…`). Recommendation: honor it for tasks and documents (tasks need a migration).
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
      - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
      - 8 of the 9 `HomePrivacy` toggles have no reader (no UI either); the address-precision toggle affects only the members-only Place header;
-     - `default_visibility` ("Default Visibility for New Items", web) has no effect, because record creation hardcodes `members`;
      - the public fridge-card link is not covered by Lockdown although the panel says existing share links stop working (unsure whether it counts as a share link);
      - `/discover` treats `members` visibility like `private`, and native apps have no visibility control;
-     - per-Home notification preferences are saved but never read.
+     - per-Home notification preferences are saved but never read;
+     - guest-pass passcodes travel as `?passcode=` and are limited only by the generic 60/min/IP view limiter (to measure: logging and guessing);
+     - `POST /check-address` returning a Home id for an invite-only mask, and the 911 fridge card staying live during Lockdown, are product questions (recorded, not defects).
 5. **R03, leaving and rejoining:** the remaining re-entry and occupancy lifecycle, and the old reviewer-original release. Membership renewal is paused (decision 1 below).
 6. **H07, H08, M02 and D08, local parts:** remaining onboarding combinations, the exact copied link and public rendering, passcodes and scheduled start. Their hosted parts stay named.
 7. **D10 and R04, R05:**
@@ -209,6 +211,15 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T07:45Z — #888 merged; D06 default-visibility gap reproduced and sent to the coordinator.**
+  - **#888:** merged in batch 152 ([#891](https://github.com/WangPantopus/skinny-pantopus/pull/891), tip `c26803349`, 07:42:55Z; master `919305835`). Stream 1 diff-proved the table moved byte-identical.
+  - **D06 (lease 07:42:27Z; bundle `20260930-stream3-home-d06-default-visibility-r1`, 10 files, MANIFEST `f6fbbe7fdbedb14f8c9e1db4718be65ddb958e220a2eaf72bc9631f6377d2940`, no code change):**
+    - the owner saved "Default Visibility for New Items" = Managers through the real API, and it reads back;
+    - a task created without a visibility (as every web form sends it) was stored `members`, and member B saw it.
+    - Options (honor / remove / relabel) are with the coordinator. My recommendation is to honor it for tasks and documents.
+  - **Cleanup:** exact (6 rows, 351/353). Lease released at 07:43:40Z.
+  - **Next queued:** the member join policy's effect, then guest-pass passcode handling (D06/D08).
 
 - **2026-09-30T07:39Z — #881 merged; its migration is on the runtime; [#888](https://github.com/WangPantopus/skinny-pantopus/pull/888) is with the coordinator.**
   - **#881:** merged in batch 150 ([#886](https://github.com/WangPantopus/skinny-pantopus/pull/886), tip `c97e29070`, 07:34:27Z); master is now `81bfda802`. Stream 1 verified the seal (66 files) and check-migrations.
