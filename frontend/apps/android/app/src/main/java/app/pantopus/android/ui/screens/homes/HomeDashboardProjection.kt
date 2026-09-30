@@ -248,7 +248,7 @@ object HomeDashboardProjection {
 
         return dashboard.recentActivity.mapIndexed { index, entry ->
             val actorName = entry.actorUserId?.let { namesByUserId[it] }
-            val phrase = humanized(entry.action) ?: entry.action
+            val phrase = firstNonEmpty(entry.description, humanized(entry.action)) ?: entry.action
             HomeDashboardActivityItem(
                 id = entry.id,
                 initials = initials(actorName),

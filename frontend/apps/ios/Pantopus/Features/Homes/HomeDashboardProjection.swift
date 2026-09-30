@@ -233,7 +233,7 @@ extension HomeDashboardProjection {
 
         return dashboard.recentActivity.enumerated().map { index, entry in
             let actorName = entry.actorUserId.flatMap { namesByUserId[$0] }
-            let phrase = humanized(entry.action) ?? entry.action
+            let phrase = firstNonEmpty(entry.description, humanized(entry.action)) ?? entry.action
             return HomeDashboardActivityItem(
                 id: entry.id,
                 initials: initials(from: actorName),
