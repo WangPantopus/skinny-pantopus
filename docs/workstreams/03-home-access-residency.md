@@ -121,6 +121,7 @@
 
       Pending, provisional and unverified occupants have no access, so they don't keep it.
   - **U01 web chat-button overlap (2026-09-30):** closed with no code change. Nothing meaningful stays covered at the end of any Stream 3 page at 375×548 or 390×664, and extra padding would change the whole app's AppShell layout.
+  - **Removed-Home notice (#1008):** people whose pending requests die with a deleted Home get the existing decline notices with neutral wording ("This home was removed from Pantopus …").
   - **D08 scheduled passes (#999):** native lists follow the web: a scheduled pass stays current, shows "Starts …" and stays revocable; `reissue_required` shows "Needs new link".
     - **LIF-02** (Stream 5's route): only a current verified occupant blocks an owner's account deletion. Pending people have nobody to be handed to, the "remove the other residents" message pointed at people the owner can't see, and App Store 5.1.1(v) forbids needless obstacles to deleting an account.
     - **After a 'purged' Home**, `retireHomeForDeletedAccount` closes the remaining pending standing with the existing lifecycle transitions and notices, so nobody waits forever in a Home with no owner: non-verified occupancies, pending residency and ownership claims, and household access requests. #968 stays records-only.
@@ -306,6 +307,15 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T13:53Z — D10 lead fixed: [#1008](https://github.com/WangPantopus/skinny-pantopus/pull/1008), applicants hear when their Home is deleted.**
+  - **Change:** `deleteHome` (the owner's Delete Home and #974's `deleted` outcome) reads other people's pending residency claims and access requests before deleting. Afterwards it sends the existing decline notice types, "This home was removed from Pantopus, so your … request was closed." A failure never blocks the deletion.
+  - **Evidence:** head `2c85a128f`, bundle `20260930-stream3-home-d10-deleted-home-notice-r1` (`dd6e07d3…`).
+    - master: the Home is deleted and the applicant gets 0 notices;
+    - branch: 2 notices;
+    - the purge-path notices are unchanged (#974 r2).
+  - **Checks:** 53 suites / 916 tests; exact cleanup with 353/353 tables equal.
+  - **The other D10 lead stays open:** an approved request whose pending invite the purge deleted.
 
 - **2026-09-30T13:42Z — U01: three of its four items now closed on current builds, with no code change.**
   - **Personal residency cards: closed.** Bundle `20260930-stream3-home-u01-residency-cards-r1` (`d67413b1…`); exact cleanup at 13:40:47Z.
