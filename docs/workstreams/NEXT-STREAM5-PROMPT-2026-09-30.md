@@ -1,6 +1,6 @@
 # Resume prompt for the next Stream 5 session — Accounts and Social (formerly Stream 3)
 
-Rewritten 2026-09-30T15:23:12Z (commit time; first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams. Until 2026-09-30 this stream was **Stream 3**. The user renumbered it because the former Streams 1 and 2 were each split in two (now Streams 1–4). Scope, accepted evidence, decisions, kit and runtime carried over.
+Rewritten 2026-09-30T20:20:28Z (commit time; first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams. Until 2026-09-30 this stream was **Stream 3**. The user renumbered it because the former Streams 1 and 2 were each split in two (now Streams 1–4). Scope, accepted evidence, decisions, kit and runtime carried over.
 
 Every fact here is a snapshot. Verify the live state (branch, worktrees, remote PRs, CI, leases) before acting.
 
@@ -10,35 +10,29 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
 3. `AGENTS.md` and `docs/PROJECT_HANDOFF.md`: the verification-first rules.
 4. The private kit README: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream3-runtime-kit/README.md`. The path keeps `stream3`. Never print or dump the fixture credential files.
 
-## 2. State at 2026-09-30T15:23:12Z
-- **Merged today** (details and seals in the status file):
-  - chat privacy and account deletion: #908–#950, #964, #966, and the Home-retirement trio #974/#976/#968;
-  - the security track: #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002, #1012, #1015;
-  - #1018: SQL contracts fixed after #992 broke four of them.
-  - Stream 1's native pass of the account-deletion work passed on iOS and Android.
-- **Open (as of 17:07Z):**
-  - Nothing open. #1037, #1042, #1043 and #1046 are all merged (master `8d84b82e7`). The rebuilt drift scanners are in `.pantopus-recovery/stream3-runtime-kit/tools/drift-scanners/`.
-  - Follow-ups:
-    - takedown (product rules);
-    - closing neighbor-message reports;
-    - native report entry points on a device (offered to Stream 1);
-    - the public crew badge as a boolean only (Stream 1's privacy call);
-    - #1037's backfill for people who already hold a binding, after the API deploys.
+## 2. State at 2026-09-30T20:20:28Z
+- **Merged today:**
+  - earlier: chat privacy, account deletion, the security track, #1018, #1022, #1023, #1028, #1030 (details and seals in the status file);
+  - since 16:00Z: #1037 (crew seats), #1042 (report queue), #1043, #1046, #1053 (private crew data), #1060 (unpublished crews 404), #1055 (S3-62: a verified resident can endorse), #1066 (the 14-day rule counts from `verified_at`), #1068 (chat contrast) and #1076 (**S3-22**: crew page buttons, http(s)-only links, no Directions to a home).
+- **Open (as of this rewrite):**
+  - **#1077**, light cards readable in dark mode: sealed `adcb284e…`, targets master.
+  - **#1080**, the real profile completion percentage: sealed `a139de2d…`, stacked on #1077. Retarget it to master after #1077 merges.
+  - **#1081**, native (iOS and Android): page editors keep button `url`; Directions opens Maps and is hidden for home-based crews. Waiting on CI and Stream 1's device run (4 checks listed in the PR); seal after both.
+- **Follow-ups:**
+  - takedown (product rules);
+  - closing neighbor-message reports;
+  - native report entry points on a device (Stream 1);
+  - #1037's second backfill after the API deploys (user);
+  - deletion for accounts with payment history (user).
   - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
-- **Merged since the first rewrite:**
-  - #1022, the anon default-deny (batch 196);
-  - #1028, the authenticated default-deny with the chat policy fix (batch 197);
-  - #1023, the iOS delete sheet, verified on iOS by Stream 1 (batch 197);
-  - #1030, the business RPC revoke with the auth.uid()-default rule and the `client-rpc-surface` contract (batch 199).
-  - Master is `f7373d0cd`.
-- **Evidence corrections:** the local "67/67 contracts" claims in the #992, #996, #1001 and #1002 bundles were invalid. The loop recorded basename's exit status, and the local database had crashed. Each bundle now carries CORRECTION.md and was resealed; Stream 1 recorded the new seals.
+- **`/b/` pages without `/b/` reads:** in a test browser, answer `GET /api/b/:username` with the real non-writing `GET /api/businesses/public/:username` (the scripts in the S3-22 and S3-62 bundles). Prove 0 `/api/b/` requests in the API and proxy logs and 0 `BusinessProfileView` rows.
 
 ## 3. Runtime (Stream 5's own; reserved ports)
 - **Stack:** `pantopus-stream3-block-r1`, Kong 64531, DB 64532. It has master's migrations through `20260930183000` plus #1037's `20260930184000`; 182000's chat-policy section went in as a delta. Apply new ones with `supabase migration up --local` from `/private/tmp/pantopus-stream5-db-r1`, after copying the file into its `supabase/migrations`.
 - **API 18134:**
   1. Point the source checkout `/private/tmp/pantopus-stream3-chat-realtime-r1` at the wanted commit (detached, clean backend).
   2. From `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`, run `S3_SRC=<checkout> S3_BACKEND_TREE_OF=<sha> S3_LOCAL_STORAGE=1 nohup python3 api-launch-private.py`. The receipt is `api-start-isolation-safe.json`.
-  3. It currently runs master `1bc136f69` (started 17:55:13Z), with no alert inbox set.
+  3. It currently runs master `20e7b4768` (started 20:04:55Z), with no alert inbox set. Web 18131 serves the same master.
   4. About 10 logins per API process trip the rate limiter; restart before a new journey.
 - **Proxy and web:** proxy 18130 (deletion check disabled), web 18131.
 - **Fixture accounts still present:** solo2, hs2b, hs4b, hs6, hs9b, hs11b, hs12, hs12b, hs13b, hs15b, rls1, rls2. Earlier deletion journeys removed the rest (dm*, hs1–5, org1 and others).
@@ -77,9 +71,8 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. Nothing pending. Follow-ups wait on the user: takedown rules, deploy confirmation for #1037's second backfill, and deletion for accounts with payment history. Rerun the drift scanners after big merges. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
-2. #1023 is merged; nothing is left there.
-3. **Recorded, not started:**
-  - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;
-4. The authenticated SELECT default-deny is #1028; the ChatParticipant recursion is fixed in it.
+1. Retarget #1080 once #1077 merges, then hand it off.
+2. Seal #1081 after its CI and Stream 1's device results.
+3. Rerun the drift scanners after big merges (kit `tools/drift-scanners/`, README inside).
+4. **Recorded, not started:** move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race. This needs a migration number from Stream 1.
 5. Otherwise, open new work only for a reproduced in-scope failure or a finding routed by another stream.
