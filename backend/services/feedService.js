@@ -259,6 +259,12 @@ function applyPostLocationPrivacy(post, viewerUserId) {
   applyLocationPrecision(post, effectivePrecision, isAuthor);
 
   if (!isAuthor) {
+    // The denormalized effective point (a place tag, the author's position or the
+    // home's coordinates) gets the same floor; the raw PostGIS point never leaves.
+    applyLocationPrecision(post, effectivePrecision, false, {
+      latField: 'effective_latitude', lngField: 'effective_longitude', setUnlockedFlag: false, stripAddress: false,
+    });
+    delete post.location;
     post.locationUnlocked = false;
     if (post.home) {
       post.home = {
