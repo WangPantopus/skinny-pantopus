@@ -459,6 +459,7 @@ app.use('/api/v1/address', require('./routes/addressValidation')); // Address va
 app.use('/api/v1', require('./routes/landlordTenant'));            // Landlord portal + tenant flows
 app.use('/api/admin', require('./routes/admin'));             // Platform admin
 app.use('/api/admin/verification', require('./routes/adminVerification')); // Admin verification queue
+app.use('/api/admin/reports', require('./routes/adminReports')); // Admin report review queue
 app.use('/api/admin/payment-ops', require('./routes/paymentOps')); // Payment ops (stuck detection, manual triggers)
 app.use('/api/internal/briefing', require('./routes/internalBriefing')); // Lambda briefing scheduler (must be before /api/internal)
 app.use('/api/internal', require('./routes/internal'));       // Internal/cron triggers

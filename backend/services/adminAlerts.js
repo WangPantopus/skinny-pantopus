@@ -70,4 +70,49 @@ async function notifyClaimToReview({ claim, home, claimantUserId }) {
   }
 }
 
-module.exports = { notifyClaimToReview, recipients };
+const REPORTED = { user: 'person', post: 'post', gig: 'task', message: 'neighbor message' };
+const REASONS = new Set(['spam', 'harassment', 'inappropriate', 'misinformation', 'safety', 'other']);
+
+function reportsQueueUrl() {
+  const base = String(process.env.WEB_APP_URL || process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+  return `${base}/app/admin/reports`;
+}
+
+/**
+ * People who report someone, a post, a task or a neighbor message are told their report will be reviewed.
+ * One email per new report with a link to the report queue. It carries only the kind, the reason category and
+ * the report id: never the reporter, the reported person, the free-text details or the reported content.
+ *
+ * @param {object} params
+ * @param {'user'|'post'|'gig'|'message'} params.kind
+ * @param {string} [params.reason]   A report reason category; anything else (free text) is left out.
+ * @param {string} [params.reportId] The report row id (for a neighbor message, the flagged message id).
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyReportToReview({ kind, reason, reportId }) {
+  const to = recipients();
+  if (!to.length || !REPORTED[kind]) return false;
+
+  const what = REPORTED[kind];
+  const why = REASONS.has(reason) ? reason : null;
+  const subject = `[Pantopus] Report to review · ${what}${why ? ` · ${why}` : ''}`;
+  const text = [
+    `A ${what} was reported${why ? ` for ${why}` : ''}.`,
+    '',
+    `Report: ${reportId || 'n/a'}`,
+    `Review it: ${reportsQueueUrl()}`,
+  ].join('\n');
+  const html = `<p>A <strong>${what}</strong> was reported${why ? ` for <strong>${why}</strong>` : ''}.</p>
+<ul><li>Report: <code>${reportId || 'n/a'}</code></li></ul>
+<p><a href="${reportsQueueUrl()}">Open the report queue</a></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: report-to-review email failed (non-fatal)', { kind, reportId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { notifyClaimToReview, notifyReportToReview, recipients };

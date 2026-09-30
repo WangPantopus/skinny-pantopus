@@ -5146,12 +5146,12 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
     }
 
     if (!existingReport) {
-      const { error: insertErr } = await supabaseAdmin.from('UserReport').insert({
+      const { data: inserted, error: insertErr } = await supabaseAdmin.from('UserReport').insert({
         reported_user_id: userId,
         reported_by: reporterId,
         reason,
         details: details || null,
-      });
+      }).select('id').maybeSingle();
 
       if (insertErr) {
         if (isUserReportTableMissing(insertErr)) {
@@ -5163,6 +5163,7 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
         logger.error('User report insert error', { userId, reporterId, error: insertErr.message });
         return res.status(500).json({ error: 'Failed to report user' });
       }
+      require('../services/adminAlerts').notifyReportToReview({ kind: 'user', reason, reportId: inserted?.id }).catch(() => {});
     }
 
     res.json({
