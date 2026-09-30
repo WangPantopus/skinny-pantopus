@@ -151,7 +151,7 @@ async function verifyDpop(req, opts = {}) {
     req.dpop = null;
     const code = err instanceof DpopError ? err.code : 'DPOP_INVALID';
     logger.warn('auth.dpop.invalid', {
-      code,
+      errorCode: code,
       reason: err.message,
       path: req.originalUrl || req.path,
       ip: req.ip,

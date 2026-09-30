@@ -110,7 +110,7 @@ router.post('/test-gig', verifyToken, async (req, res) => {
     if (error) {
       logger.error('Test gig creation failed', {
         error: error.message,
-        code: error.code,
+        errorCode: error.code,
         details: error.details,
         hint: error.hint
       });

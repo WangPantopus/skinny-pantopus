@@ -178,7 +178,7 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
     // The authorized document row is the committed publication. A bookkeeping
     // write failure must not turn real delivered bytes into a false failure.
     const completed = await db.from('File').update({ processing_status: 'completed' }).eq('id', documentId).eq('is_deleted', false);
-    if (completed.error) logger.warn('Home document completion bookkeeping pending', { code: 'DOCUMENT_DATABASE_UNAVAILABLE' });
+    if (completed.error) logger.warn('Home document completion bookkeeping pending', { errorCode: 'DOCUMENT_DATABASE_UNAVAILABLE' });
     return res.status(201).json({ document: serializeHomeDocument(document) });
   } catch (error) { next(error); }
 });
@@ -257,7 +257,7 @@ router.delete('/:homeId/documents/:documentId', verifyToken, gate('docs.manage')
         const saved = await db.from('File').update({ metadata: { ...deleted.metadata, storage_cleanup_pending: false } }).eq('id', documentId).eq('is_deleted', true);
         cleanupPending = Boolean(saved.error);
       } catch (error) {
-        logger.warn('Home document storage cleanup pending', { code: error.code || 'DOCUMENT_DELETE_UNAVAILABLE' });
+        logger.warn('Home document storage cleanup pending', { errorCode: error.code || 'DOCUMENT_DELETE_UNAVAILABLE' });
       }
     }
     res.status(cleanupPending ? 202 : 200).json({ deleted: true, cleanup_pending: cleanupPending });
@@ -269,7 +269,7 @@ router.use(require('./homeDocumentReplacement'));
 router.use((error, _req, res, _next) => {
   const status = error instanceof multer.MulterError ? (error.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : error.status || 503;
   const code = error instanceof multer.MulterError ? 'INVALID_DOCUMENT_UPLOAD' : error.code || 'DOCUMENT_UNAVAILABLE';
-  logger.warn('Home document operation failed', { code, status });
+  logger.warn('Home document operation failed', { errorCode: code, status });
   res.status(status).json({ code, error: error.status ? error.message : 'Could not complete the document operation. Try again.' });
 });
 

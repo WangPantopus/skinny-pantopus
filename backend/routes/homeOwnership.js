@@ -584,7 +584,7 @@ router.post('/:id/ownership-claims/:claimId/resolve-relationship', verifyToken, 
   } catch (err) {
     if (req.body.action === 'invite_to_household') {
       if (err.statusCode || err.status) return res.status(err.statusCode || err.status).json({ error: err.message, code: err.code });
-      logger.error('Failed to resolve claimant invitation', { code: err.code });
+      logger.error('Failed to resolve claimant invitation', { errorCode: err.code });
       return res.status(500).json({ error: 'Failed to resolve claimant relationship' });
     }
     return require('../services/homeClaimRelationshipService').sendError(res, err);

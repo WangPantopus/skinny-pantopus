@@ -165,7 +165,7 @@ async function ensureTodayItems(userId, today) {
       logger.error('Mail day materialization failed', {
         userId,
         rows: inserts.length,
-        code: writeErr.code,
+        errorCode: writeErr.code,
         error: writeErr.message,
       });
       return 0;

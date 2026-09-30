@@ -227,7 +227,7 @@ router.post('/:id/members/:userId/role', verifyToken, async (req, res) => {
     res.json({ message: result.preset_key ? 'Preset applied' : 'Role updated',
       role_base: result.role_base, ...(result.preset_key ? { preset_key: result.preset_key } : {}) });
   } catch (err) {
-    logger.error('Update member role error', { code: err.code, homeId: req.params.id });
+    logger.error('Update member role error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -246,7 +246,7 @@ router.post('/:id/members/:userId/permissions', verifyToken, async (req, res) =>
     invalidateRoleCache?.(req.params.userId);
     res.json({ message: 'Permission updated', permission: result.permission, allowed: result.allowed });
   } catch (err) {
-    logger.error('Toggle permission error', { code: err.code, homeId: req.params.id });
+    logger.error('Toggle permission error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -297,7 +297,7 @@ router.delete('/:id/members/:userId', verifyToken, async (req, res) => {
     invalidateRoleCache?.(req.params.userId);
     res.json({ message: 'Member removed' });
   } catch (err) {
-    logger.error('Remove member error', { code: err.code, homeId: req.params.id });
+    logger.error('Remove member error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });

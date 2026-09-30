@@ -481,7 +481,7 @@ async function recordCreateHomeOutcomeSafe(outcome) {
     logger.warn('Failed to record create-home observability event', {
       error: error.message,
       outcome: outcome?.outcome || 'unknown',
-      code: outcome?.code || null,
+      errorCode: outcome?.code || null,
     });
   }
 }
@@ -714,7 +714,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
         city: firstHome.city, state: firstHome.state, postal_code: firstHome.zipcode, country: firstHome.country ?? 'US' },
     });
   } catch (err) {
-    logger.error('Address check unavailable', { code: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE' });
+    logger.error('Address check unavailable', { errorCode: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE' });
     res.status(503).json({
       error: 'Could not check this Home. Please try again.',
       code: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE',
@@ -1454,7 +1454,7 @@ async function acceptHomeInvitation(req, res, selector) {
     await homeInvitationService.notifyAccepted(result, req.user.id);
     return res.json({ occupancy: result.occupancy, homeId: result.homeId });
   } catch (err) {
-    logger.error('Home invitation acceptance failed', { code: err.code });
+    logger.error('Home invitation acceptance failed', { errorCode: err.code });
     return res.status(err.statusCode || err.status || 503).json({ error: err.message, code: err.code });
   }
 }
@@ -1798,7 +1798,7 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
         ownerUserIds: result.notify_user_ids, requesterName: result.actor_name, homeLabel: result.home_label,
         homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
       });
-    } catch (err) { logger.error('Household request notification failed after commit', { code: err.code }); }
+    } catch (err) { logger.error('Household request notification failed after commit', { errorCode: err.code }); }
     res.json({ ok: true, notified_owners: result.notify_user_ids.length });
   } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
@@ -1812,7 +1812,7 @@ router.get('/:id/household-access-requests', verifyToken, async (req, res) => {
     const status = typeof req.query.status === 'string' ? req.query.status.toLowerCase() : 'pending';
     res.json({ requests: await homeInvitationService.listRequests(req.params.id, req.user.id, status) });
   } catch (err) {
-    logger.error('household-access-requests list error', { code: err.code });
+    logger.error('household-access-requests list error', { errorCode: err.code });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -1841,7 +1841,7 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
           requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: result.actor_name,
         });
-      } catch (err) { logger.error('Household rejection notification failed after commit', { code: err.code }); }
+      } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
     res.json({ ok: true });
   } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
@@ -2001,7 +2001,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     await homeAuthorityService.deleteHome(req.params.id, req.user.id);
     res.json({ message: 'Home deleted successfully' });
   } catch (err) {
-    logger.error('Home delete error', { code: err.code, homeId: req.params.id });
+    logger.error('Home delete error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -2020,7 +2020,7 @@ router.post('/:id/attach', verifyToken, validate(attachDetachSchema), async (req
         username: result.user.username, name: result.user.name, attachedAt: result.occupancy.created_at },
     });
   } catch (err) {
-    logger.error('Attach user error', { code: err.code, homeId: req.params.id });
+    logger.error('Attach user error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -2035,7 +2035,7 @@ router.post('/:id/detach', verifyToken, validate(attachDetachSchema), async (req
       targetId: req.body.userId, action: 'remove' });
     res.json({ message: 'User detached from home successfully' });
   } catch (err) {
-    logger.error('Detach user error', { code: err.code, homeId: req.params.id });
+    logger.error('Detach user error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -2068,7 +2068,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
     res.json({ message: 'You have been removed from this home', homeId: req.params.id,
       ...(result.reconciled_stale_occupancy ? { reconciled_stale_occupancy: true } : {}) });
   } catch (err) {
-    logger.error('Move-out error', { code: err.code, homeId: req.params.id });
+    logger.error('Move-out error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4014,7 +4014,7 @@ router.get('/:id/access', verifyToken, async (req, res) => {
   try {
     res.json({ secrets: await homeAccessSecretService.list(req.params.id, req.user.id) });
   } catch (err) {
-    logger.error('Access secrets fetch error', { code: err.code, homeId: req.params.id });
+    logger.error('Access secrets fetch error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4028,7 +4028,7 @@ router.post('/:id/access', verifyToken, async (req, res) => {
       action: 'create', payload: req.body });
     res.status(201).json({ secret });
   } catch (err) {
-    logger.error('Access secret creation error', { code: err.code, homeId: req.params.id });
+    logger.error('Access secret creation error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4042,7 +4042,7 @@ router.put('/:id/access/:secretId', verifyToken, async (req, res) => {
       secretId: req.params.secretId, action: 'update', payload: req.body });
     res.json({ secret });
   } catch (err) {
-    logger.error('Access secret update error', { code: err.code, homeId: req.params.id });
+    logger.error('Access secret update error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4056,7 +4056,7 @@ router.delete('/:id/access/:secretId', verifyToken, async (req, res) => {
       secretId: req.params.secretId, action: 'delete' });
     res.json({ message: 'Access secret deleted' });
   } catch (err) {
-    logger.error('Access secret delete error', { code: err.code, homeId: req.params.id });
+    logger.error('Access secret delete error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4080,7 +4080,7 @@ router.post('/:id/invite', verifyToken, homeOutboundLimiter, async (req, res) =>
     const emailSent = await homeInvitationService.notifyCreated(result, req.body.message);
     res.status(201).json({ invitation: result.invitation, emailSent });
   } catch (err) {
-    logger.error('Create home invitation failed', { code: err.code, homeId: req.params.id });
+    logger.error('Create home invitation failed', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
@@ -4363,13 +4363,13 @@ router.post('/:id/claim/:claimId/approve', verifyToken, validate(residencyApprov
           link: `/homes/${req.params.id}/dashboard`,
           metadata: { home_id: req.params.id, claim_id: req.params.claimId },
         });
-      } catch (err) { logger.error('Residency approval notification failed', { code: err.code }); }
+      } catch (err) { logger.error('Residency approval notification failed', { errorCode: err.code }); }
     }
     res.json({ ...result, message: result.replayed
       ? 'Original approval confirmed. Review the current membership below.' : 'Claim approved, membership confirmed',
     residency_session: { ...session, home_id: result.home_id } });
   } catch (err) {
-    logger.error('Approve claim error', { code: err.code, homeId: req.params.id });
+    logger.error('Approve claim error', { errorCode: err.code, homeId: req.params.id });
     homeResidencyReviewService.sendError(res, err);
   }
 });
@@ -4393,13 +4393,13 @@ router.post('/:id/claim/:claimId/reject', verifyToken, validate(residencyRejecti
           icon: '📬', link: `/homes/${req.params.id}/waiting-room`,
           metadata: { home_id: req.params.id, claim_id: req.params.claimId },
         });
-      } catch (err) { logger.error('Residency rejection notification failed', { code: err.code }); }
+      } catch (err) { logger.error('Residency rejection notification failed', { errorCode: err.code }); }
     }
     res.json({ ...result, message: result.replayed
       ? 'Original rejection confirmed. Review the current claim below.' : 'Claim rejected',
     residency_session: { ...session, home_id: result.home_id } });
   } catch (err) {
-    logger.error('Reject claim error', { code: err.code, homeId: req.params.id });
+    logger.error('Reject claim error', { errorCode: err.code, homeId: req.params.id });
     homeResidencyReviewService.sendError(res, err);
   }
 });

@@ -573,7 +573,7 @@ router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
       lease: { state, lease: ownLease },
     });
   } catch (error) {
-    logger.error('GET tenant home status failed', { code: error.code });
+    logger.error('GET tenant home status failed', { errorCode: error.code });
     return res.status(503).json({ error: 'Could not load landlord status. Please retry.' });
   }
 });
