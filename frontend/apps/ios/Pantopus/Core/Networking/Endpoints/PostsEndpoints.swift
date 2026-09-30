@@ -107,18 +107,20 @@ public enum PostsEndpoints {
     }
 
     /// `GET /api/posts/user/:userId` — paged list of posts authored by a
-    /// user, filtered to the active set (`archived_at IS NULL`) on the
-    /// backend. Route `backend/routes/posts.js:3016`. Use the signed-in
-    /// user's id to power the "My posts" screen.
+    /// user. Active posts only, unless the signed-in user asks for their own
+    /// list with `includeArchived` ("My posts"); the backend ignores the
+    /// flag for anyone else's list.
     public static func userPosts(
         userId: String,
         limit: Int = 50,
         cursorCreatedAt: String? = nil,
-        cursorId: String? = nil
+        cursorId: String? = nil,
+        includeArchived: Bool = false
     ) -> Endpoint {
         var query: [String: String] = ["limit": String(limit)]
         if let cursorCreatedAt { query["cursorCreatedAt"] = cursorCreatedAt }
         if let cursorId { query["cursorId"] = cursorId }
+        if includeArchived { query["include_archived"] = "true" }
         return Endpoint(method: .get, path: "/api/posts/user/\(userId)", query: query)
     }
 

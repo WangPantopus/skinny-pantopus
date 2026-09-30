@@ -57,10 +57,11 @@ public struct ProfilePortfolioSection: View {
                 get: { viewModel.pendingDelete != nil },
                 set: { if !$0 { viewModel.pendingDelete = nil } }
             ),
-            titleVisibility: .visible
-        ) {
+            titleVisibility: .visible,
+            presenting: viewModel.pendingDelete
+        ) { item in
             Button("Delete", role: .destructive) {
-                Task { await viewModel.confirmDelete() }
+                Task { await viewModel.confirmDelete(item) }
             }
             Button("Cancel", role: .cancel) { viewModel.pendingDelete = nil }
         }

@@ -105,9 +105,9 @@ interface PostsApi {
 
     /**
      * `GET /api/posts/user/:userId` — paged list of posts authored by a
-     * user. Backend filters `archived_at IS NULL`, so the response only
-     * carries active posts today. Route `backend/routes/posts.js:3016`.
-     * Used by the My posts screen with the signed-in user's id.
+     * user. Active posts only, unless the signed-in user asks for their own
+     * list with `include_archived=true` (My posts). Route
+     * `backend/routes/posts.js`, `/user/:userId`.
      */
     @GET("api/posts/user/{userId}")
     suspend fun userPosts(
@@ -115,6 +115,7 @@ interface PostsApi {
         @Query("limit") limit: Int = 50,
         @Query("cursorCreatedAt") cursorCreatedAt: String? = null,
         @Query("cursorId") cursorId: String? = null,
+        @Query("include_archived") includeArchived: Boolean? = null,
     ): MyPostsResponse
 
     /** `DELETE /api/posts/:id` — author-only. Route `backend/routes/posts.js:2483`. */

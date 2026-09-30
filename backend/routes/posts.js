@@ -3350,7 +3350,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const requestingUserId = req.user.id;
-    const { limit = 20, cursorCreatedAt, cursorId } = req.query;
+    const { limit = 20, cursorCreatedAt, cursorId, include_archived: includeArchived } = req.query;
     const parsedLimit = parseInt(limit);
 
     // v1.1: Determine viewer relationship to filter visible surfaces
@@ -3381,10 +3381,13 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     let query = supabaseAdmin.from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
       .eq('user_id', userId)
-      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(parsedLimit);
+
+    // Archived posts are left out of every list except the owner's own My posts,
+    // which asks for them to fill its Archived tab (and to restore them).
+    if (!(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
 
     if (isOwn) {
       // Own profile: see everything (no filters on visibility)
