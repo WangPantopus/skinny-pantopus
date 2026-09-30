@@ -269,6 +269,34 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T20:07:15Z — The lease and device slot 4 went to Stream 3 at 20:03:33Z, with both S34 devices reset and shut down. The native U02 sweep is paused until my next window (one capture left, then cleanup and seal). New A3 finding: the Warranties chip.**
+  - **Handover:**
+    - iOS S34 was reset to the default text size and light mode at 19:29:22Z, then shut down at 20:03Z.
+    - pantopus_s34 was reset to font 1.0 with night mode off (20:02:29Z); the app was force-stopped, then `emu kill`.
+    - The backend is on `00bf2d6ff` with no patches (since 18:32:38Z). I set no fault rules.
+    - Fixture Home 81cb4308 stays during Stream 3's session, as agreed.
+  - **U02, since the 19:39:31Z entry** (the bundle isn't sealed yet):
+    - **Android A2:** the app is light-only by design (`Theme.kt`; #1013). In system night mode it stays light and readable, with no dark Material surfaces, as Stream 2 recorded for its screens. The dark pass was stopped after 20 frames; reruns added the Place dashboard.
+    - **A3, a new finding on both apps:** the Documents "Warranties & manuals" chip is 4.42:1 (yellow-700 text on its FEF3C7 tint), under 4.5:1.
+      - Fix: `claude/stream4-document-warranty-chip-aa` `371f4e0c3`, one palette step darker (yellow-800, 6.15:1), per the user's decision 3.
+      - The other seven categories measure 4.52:1 to 8.4:1.
+    - **Correction to the 19:39:31Z entry's iOS A3 line ("light mode is clean apart from disabled controls"):**
+      - It missed that chip.
+      - It also missed the fridge card's "Revoke", a system `.bordered` button: 4.49:1 in light mode (borderline) and 3.13:1 in dark. I'll re-measure it after Stream 1's #1061 and send any gap there.
+    - **Android maintenance detail was never captured, because of a bug in my driver.** It tested found nodes with `if t:`, and an ElementTree node with no children is falsy, so the Completed tab was never tapped.
+      - The app works: a manual tap at 19:46:55Z and a replay of the driver's steps at 19:56:31Z both listed the log.
+      - The driver is fixed (`is not None`); the capture moves to my next window.
+      - The same flaw skipped the pickup editor's Cancel. Nothing was saved: the sweep never taps Save, and every screen starts with a force-stop. Cleanup checks the pickup row against the baseline.
+      - My other Android tools use dict nodes, and Stream 3's Android sweep uses `is None`, so neither is affected.
+  - **Builds:**
+    - The all-fixes build (7 branches, heads resolved when it starts) is third in the heavy queue.
+    - The warranty-chip checks follow it: ktlint, detekt, a Paparazzi verify over `homes.*`, a record of `DocumentSearchSnapshotTest`, and an iOS build.
+  - **Next window, after Stream 3:**
+    - capture Android maintenance detail in all three modes;
+    - then `fixes-window plan` (before/after on the fixes builds);
+    - clean up 81cb4308 exactly, then seal U02;
+    - open the PRs.
+
 - **2026-09-30T19:39:31Z — U03's ❓ cells are checked against sealed evidence; the native U02 sweep has finished iOS (base, xl, dark) and Android base and xl; two more Android large-text fixes.**
   - **U03:** a read-only search of the audit store; I opened every cited file before changing a cell.
     - **✅ from existing seals:**
