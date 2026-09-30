@@ -269,14 +269,14 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
-- **2026-09-30T14:20Z — correction to the 14:15Z fridge a11y entry.** The sweep ran on the shared runtime at `00bf2d6ff`, which predates Stream 1's #979 (AA tokens, batch 184).
+- **2026-09-30T14:12:21Z (committed) — correction to the 14:10:47Z fridge a11y entry.** The sweep ran on the shared runtime at `00bf2d6ff`, which predates Stream 1's #979 (AA tokens, batch 184).
   - My "fridge code identical to master" check covered the fridge files but **not the shared design tokens** (`tailwind.config.js`, `globals.css`).
   - The two failing pairs (4.09:1 and 3.82:1) are the old `primary-600`. Master maps `bg-`/`text-primary-600` to `#0369A1`: 5.93:1 white-on-fill and 5.53:1 on `#f6f7f9`, computed, not yet measured.
   - A3 is back to ⬜ until a re-measure on master's tokens: the next lease window, with the two token files patched into the shared web.
   - The sealed bundle stays as is; this entry is the correction.
   - **Lesson:** for any visual or a11y check on the shared runtime, diff the design-token files too, not only the feature files.
 
-- **2026-09-30T14:15Z — three web verifications sealed, no code change.** Lease 14:01:01Z–14:08:47Z.
+- **2026-09-30T14:10:47Z (committed) — three web verifications sealed, no code change.** Lease 14:01:01Z–14:08:47Z.
   - **Home health E1/E3/E4/E5** (`20260930-stream4-health-e1e3e4e5-r1`, MANIFEST `6363e3964f78dd53ad935c5aa0141b9d4e0e98e52560cb3d11873990a33d1f77`):
     - E1: an honest alert with Retry. E3: one PATCH.
     - E5: a stale skip gets 409 and the other device's completion stands.
@@ -292,25 +292,25 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
     - The member's lazy MailPreferences row, and the pickup rules (no FK to Home), need exact extra scopes in cleanup.
     - Node fetch after a long idle can fail at the network level; sign in fresh with `connection: close`.
 
-- **2026-09-30T14:00Z — #1003 merged (batch 190, master `4d78c00e4`): web address calendar E4 ✅.**
+- **2026-09-30T13:57:10Z (committed) — #1003 merged (batch 190, master `4d78c00e4`): web address calendar E4 ✅.**
   - **Native queue:** the iOS pickup editor shows fixed copy for any failure ("…Check the next collection date and try again."), including a 403. It should use the refusal's `message` (`catch APIError.forbidden(let message)`), with the permission sentence as the fallback.
   - Android already prefers `message` for a readable 403. Verify both on devices in the next native batch.
 
-- **2026-09-30T14:00Z — #997 merged (batch 188, 13:50:33Z, master `63e409b89`): web address calendar E5 ✅.** #1003 (E4, stacked) goes in the next batch.
+- **2026-09-30T13:52:49Z (committed) — #997 merged (batch 188, 13:50:33Z, master `63e409b89`): web address calendar E5 ✅.** #1003 (E4, stacked) goes in the next batch.
   - **Address calendar R2 (empty) is confirmed from existing evidence on all three platforms, with no rerun.** The 0927 place-pickup captures (`web-first-use.txt`, `ios/first-use.json`, `ios/cleared.json`, `android/first-use.txt`, `android/cleared.txt`) show "Nothing on the calendar for the next two weeks." at first use and after Clear.
   - `git diff 44d4c71ec origin/master` touches no empty-state or `upcoming` line on any platform. The iOS and Android files are unchanged, and the web card's 24 changed lines are #997's form and save handling.
 
-- **2026-09-30T13:55Z — [#1003](https://github.com/WangPantopus/skinny-pantopus/pull/1003) is with the coordinator, stacked on #997: a refused pickup change now says it's a permission (U03 web address calendar E4).** Head `7a767236cc5ed911088cc288eb05952cebaae4bb`. Bundle `20260930-stream4-pickup-e4-r1`, 30 files, MANIFEST `63deccdf2c227f7b925a870361ebcc307135e4d1e6a6f5163719d4abd1f56620`. Lease 13:41:03Z–13:49:02Z.
+- **2026-09-30T13:51:29Z (committed) — [#1003](https://github.com/WangPantopus/skinny-pantopus/pull/1003) is with the coordinator, stacked on #997: a refused pickup change now says it's a permission (U03 web address calendar E4).** Head `7a767236cc5ed911088cc288eb05952cebaae4bb`. Bundle `20260930-stream4-pickup-e4-r1`, 30 files, MANIFEST `63deccdf2c227f7b925a870361ebcc307135e4d1e6a6f5163719d4abd1f56620`. Lease 13:41:03Z–13:49:02Z.
   - **Before (master, 13:41:47Z):** a member with an owner `calendar.edit` deny (or a child member) saved and cleared on web. They got 403 with the alerts "Could not save your pickup day" / "Could not reset your pickup day", with Save still enabled. Nothing was written.
   - **After (13:48:42Z):** both get 403 `HOME_ACCESS_DENIED`, and the card's existing error line reads "You don't have permission to change this household's pickup schedule." The member still reads the calendar.
   - **Not covered:** iOS keeps its fixed copy for any failure: "Could not save your pickup schedule. Check the next collection date and try again." Recorded as a native item. Android's readable-403 rule prefers the new `message`, but it wasn't run on a device.
   - **Restart-log correction:** the 13:48:09Z backend restart entry claimed a patch that didn't apply (a relative path under `git -C`); a correction line follows it at 13:48:19Z. The run used the real patched restart at 13:48:30Z.
-- **2026-09-30T13:55Z — two web cells verified with no change (sealed, no PR).**
+- **2026-09-30T13:51:29Z (committed) — two web cells verified with no change (sealed, no PR).**
   - **Bill opt-in E2/E3** (`20260930-stream4-optin-e2e3-r1`, MANIFEST `29d0d255df7caa69fe13ff638e59f0ee283a3299f620dc41bbc64698682d3c0b`): a double click sends 1 PATCH. After a lost reply (the reply held 35 s against the 30 s client timeout), the card says "The sharing preference was not confirmed. Reload current bill trends…". The reload shows the committed value, and a re-save is one more request. 3 in total by proxy id.
   - **Fridge card E3** (`20260930-stream4-fridge-e3-r1`, MANIFEST `b768ba2ab76032f057338d5f1b58c823cc1c8177b457627c11cc33b5b45bf446`): a sub-frame double click sends 2 requests each for issue and revoke. Issue dedupes by its client id and revoke answers its existing receipt: one card, revoked once, no error toast. Duplicate success toasts weren't measured.
   - **Login limiter:** 10 sign-ins per 15 minutes per IP. The owner hit it once, at 13:45Z. Plan runs that sign in several accounts accordingly; a backend restart resets it.
 
-- **2026-09-30T13:35Z — [#997](https://github.com/WangPantopus/skinny-pantopus/pull/997) is with the coordinator: a stale pickup form no longer undoes a schedule saved meanwhile (U03 web address calendar E5).** Head `b48eb357c851ea03c2ad840f2030fd8e0b657109` on master `8ed5085bf`. Migration `20260930177000_pickup_schedule_changed_meanwhile.sql`; Stream 1 moved the number from 174000 to 175000 to 177000, with no content change (blob `be618e1e…`). Bundle `20260930-stream4-pickup-e5-r1`, 85 files, MANIFEST `4bd225555739bf69bac9f51a253dd59766dadfd65914f2ff0d77c0bf1289a66b`. Leases: 13:05:06Z (before-run) and 13:27:46Z–13:30:01Z (after-run).
+- **2026-09-30T13:35:23Z (committed) — [#997](https://github.com/WangPantopus/skinny-pantopus/pull/997) is with the coordinator: a stale pickup form no longer undoes a schedule saved meanwhile (U03 web address calendar E5).** Head `b48eb357c851ea03c2ad840f2030fd8e0b657109` on master `8ed5085bf`. Migration `20260930177000_pickup_schedule_changed_meanwhile.sql`; Stream 1 moved the number from 174000 to 175000 to 177000, with no content change (blob `be618e1e…`). Bundle `20260930-stream4-pickup-e5-r1`, 85 files, MANIFEST `4bd225555739bf69bac9f51a253dd59766dadfd65914f2ff0d77c0bf1289a66b`. Leases: 13:05:06Z (before-run) and 13:27:46Z–13:30:01Z (after-run).
   - **Before (master, 13:05:42Z):** device A's stale save sent `recycling_frequency: not_set` and got 200 with no message. Device B's weekly recycling was deleted.
   - **Fix:**
     - Calendars carry `pickup_version` (md5 of the household pickup rule ids, or `none`).
@@ -325,7 +325,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
   - **Fresh-database replay** on my own throwaway DB-only stack (64551; stopped, 0 containers and 0 volumes): all 114 migrations, exit 0. Rolled-back behavior checks pass, backend and SQL versions are equal, and a two-session race gives the second save `changed`. Lint shows 0 findings on the new functions.
   - **Shared DB:** ledger 103 → 104 (`20260930177000`, service-only functions). Worktree and backend are back on `00bf2d6ff` (PID 45107). Exact cleanup: 351/353 tables equal, the difference is auth history only.
   - **Still open:** native E5 (iOS/Android send no version; the cells stay ⬜). The pinned function lint (CLI 2.116.0) and the pgTAP contracts are CI-only here.
-- **2026-09-30T13:35Z — merged and cross-stream notes.**
+- **2026-09-30T13:35:23Z (committed) — merged and cross-stream notes.**
   - #984 (Documents delete button name) merged in batch 184 (`a6793fda4`). The decision-9 trio #968/#976 merged in batch 182.
   - **#992 (clients lose table writes):** it doesn't affect Stream 4. There are 0 direct Supabase `.from()` reads or writes of the 28 listed tables in web, the shared packages, iOS or Android.
   - **Agreed with Stream 5:** REVOKE ALL on the view `MailAnalyticsSummary` from PUBLIC, anon and authenticated (service_role keeps it). It runs with owner rights and exposed every user's letter-reading analytics to the anon key. Nothing reads it.
