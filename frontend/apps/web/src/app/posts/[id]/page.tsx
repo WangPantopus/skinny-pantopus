@@ -35,7 +35,9 @@ export async function generateMetadata({
       title: 'Post Not Available | Pantopus',
       description: result.status === 403
         ? 'This post is not publicly shareable.'
-        : 'This Pantopus post could not be found.',
+        : result.status === 404
+          ? 'This Pantopus post could not be found.'
+          : 'This post could not be loaded. Please try again.',
     };
   }
 
@@ -75,6 +77,8 @@ export default async function PublicPostPage({
   }
 
   if (!post) {
+    // Only a 403 means the post is not shareable; any other failure is a failed read.
+    const accessRestricted = result.status === 403;
     return (
       <main className="min-h-screen bg-app text-app">
         <div className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 text-center sm:px-6">
@@ -82,13 +86,22 @@ export default async function PublicPostPage({
             Post Share
           </p>
           <h1 className="mt-6 text-3xl font-semibold tracking-tight text-app">
-            This post isn&apos;t publicly shareable
+            {accessRestricted ? "This post isn't publicly shareable" : "Couldn't load this post"}
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-app-text-secondary">
-            The link works, but this post can only be viewed by people who have access in Pantopus
-            or by recipients of an explicit external share.
+            {accessRestricted
+              ? 'The link works, but this post can only be viewed by people who have access in Pantopus or by recipients of an explicit external share.'
+              : 'Something went wrong while loading this page. Please try again.'}
           </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+            {!accessRestricted ? (
+              <a
+                href={`/posts/${encodeURIComponent(id)}`}
+                className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
+              >
+                Try Again
+              </a>
+            ) : null}
             <OpenInAppButton
               appUrl={buildPostAppUrl(id)}
               linkHref={buildPostShareUrl(id)}
