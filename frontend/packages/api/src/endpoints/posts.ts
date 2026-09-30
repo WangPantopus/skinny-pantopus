@@ -277,11 +277,21 @@ export async function getPost(postId: string): Promise<{ post: Post }> {
 
 export async function updatePost(postId: string, data: {
   content?: string;
+  title?: string | null;
   mediaUrls?: string[];
   mediaTypes?: string[];
   mediaThumbnails?: string[];
   postType?: PostType;
   visibility?: PostVisibility;
+  tags?: string[];
+  eventDate?: string | null;
+  eventEndDate?: string | null;
+  eventVenue?: string | null;
+  safetyBehaviorDescription?: string | null;
+  dealExpiresAt?: string | null;
+  dealBusinessName?: string | null;
+  lostFoundType?: 'lost' | 'found' | null;
+  serviceCategory?: string | null;
 }): Promise<{ message: string; post: Post }> {
   return patch(`/api/posts/${postId}`, data);
 }

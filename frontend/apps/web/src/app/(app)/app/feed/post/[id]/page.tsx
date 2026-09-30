@@ -12,7 +12,7 @@ import {
   Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { CommentThread } from '@/components/feed';
+import { CommentThread, EditPostDialog } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from '@/components/feed/FeedMediaImage';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
@@ -59,6 +59,7 @@ export default function PostDetailPage() {
 
   // Report flow
   const [showReportModal, setShowReportModal] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // Lightbox
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -527,6 +528,18 @@ export default function PostDetailPage() {
               )}
               {isOwn && (
                 <button
+                  onClick={() => setEditing(true)}
+                  className="p-2 text-app-text-muted hover:text-app hover-bg-app rounded-lg transition"
+                  title="Edit post"
+                  aria-label="Edit post"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+              {isOwn && (
+                <button
                   onClick={handleDelete}
                   className="p-2 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition"
                   title="Delete post"
@@ -895,6 +908,24 @@ export default function PostDetailPage() {
       )}
 
       {/* ─── Report Modal ─────────────────────────────────── */}
+      {editing && post && (
+        <EditPostDialog
+          post={post}
+          user={user}
+          onClose={() => setEditing(false)}
+          onSaved={(_postId, changes) => {
+            setPost((p: Post | null) => (p ? { ...p, ...changes } : p));
+            setEditing(false);
+            showToast('Post updated');
+          }}
+          onGone={() => {
+            // Deleted elsewhere while it was open: show the page's "Post not found" state.
+            setEditing(false);
+            setPost(null);
+          }}
+        />
+      )}
+
       <ReportModal
         open={showReportModal}
         onClose={() => setShowReportModal(false)}
