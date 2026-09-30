@@ -179,7 +179,7 @@ private struct ElectionCard: View {
         }
     }
 
-    // Election Day arrives date-only ("2026-11-03"): read and show it as that calendar day.
+    /// Election Day arrives date-only ("2026-11-03"): read and show it as that calendar day.
     private var monthAbbrev: String {
         guard let d = PlacePresentation.parseCalendarDay(data.date) else { return "" }
         let f = DateFormatter()
