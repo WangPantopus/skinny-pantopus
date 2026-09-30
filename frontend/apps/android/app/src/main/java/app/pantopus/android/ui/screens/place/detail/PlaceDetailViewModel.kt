@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.net.HttpURLConnection.HTTP_CONFLICT
 import java.util.UUID
 import javax.inject.Inject
 
@@ -85,22 +86,38 @@ class PlaceDetailViewModel
                 _calendarError.value = null
                 when (val r = repo.setPickupDay(homeId, request)) {
                     is NetworkResult.Success -> refresh()
-                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't save your pickup day.")
+                    is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't save your pickup day.")
                 }
                 _calendarBusy.value = false
             }
         }
 
-        override fun clearPickupDay() {
+        override fun clearPickupDay(expectedVersion: String?) {
             if (_calendarBusy.value) return
             _calendarBusy.value = true
             viewModelScope.launch {
                 _calendarError.value = null
-                when (val r = repo.clearPickupDay(homeId)) {
+                when (val r = repo.clearPickupDay(homeId, expectedVersion)) {
                     is NetworkResult.Success -> refresh()
-                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't reset your pickup day.")
+                    is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't reset your pickup day.")
                 }
                 _calendarBusy.value = false
+            }
+        }
+
+        /**
+         * Changed meanwhile (409): nothing was saved. Reload so the card shows the current schedule, with the
+         * reason kept on the card. Any other failure keeps the editor as it was.
+         */
+        private fun pickupFailed(
+            error: NetworkError,
+            fallback: String,
+        ) {
+            if ((error as? NetworkError.ClientError)?.code == HTTP_CONFLICT) {
+                _calendarError.value = "The pickup schedule changed since you opened it. Review the current schedule and try again."
+                refresh()
+            } else {
+                _calendarError.value = error.displayMessage(fallback)
             }
         }
 

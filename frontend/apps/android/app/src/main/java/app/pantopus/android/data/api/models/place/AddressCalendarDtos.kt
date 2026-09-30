@@ -15,4 +15,6 @@ data class SetPickupDayRequest(
     val weekday: String,
     @Json(name = "recycling_frequency") val recyclingFrequency: String = "not_set",
     @Json(name = "recycling_next_date") val recyclingNextDate: String? = null,
+    /** The calendar's `pickup_version` when the editor opened; a change made meanwhile gives 409. */
+    @Json(name = "expected_version") val expectedVersion: String? = null,
 )

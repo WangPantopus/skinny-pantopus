@@ -137,7 +137,10 @@ class PlaceRepository
             request: SetPickupDayRequest,
         ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.setPickupDay(homeId, request) }
 
-        suspend fun clearPickupDay(homeId: String): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId) }
+        suspend fun clearPickupDay(
+            homeId: String,
+            expectedVersion: String? = null,
+        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId, expectedVersion) }
 
         /** The Neighborhood Pulse signal stream for a home. */
         suspend fun pulse(homeId: String): NetworkResult<NeighborhoodPulse> = safeApiCall { aiApi.pulse(homeId) }

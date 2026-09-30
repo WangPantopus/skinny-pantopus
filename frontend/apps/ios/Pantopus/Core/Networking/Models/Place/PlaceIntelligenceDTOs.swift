@@ -1157,6 +1157,10 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     public let ruleCount: Int
     public let today: String
     public var pickupSchedule: HouseholdPickupSchedule?
+    /// The household schedule shown here. A save sends it back as
+    /// `expected_version`, so a change saved meanwhile on another device is
+    /// not undone. Omitted by older servers.
+    public var pickupVersion: String?
 
     private enum CodingKeys: String, CodingKey {
         case upcoming, next, today
@@ -1164,6 +1168,7 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
         case windowDays = "window_days"
         case ruleCount = "rule_count"
         case pickupSchedule = "pickup_schedule"
+        case pickupVersion = "pickup_version"
     }
 }
 

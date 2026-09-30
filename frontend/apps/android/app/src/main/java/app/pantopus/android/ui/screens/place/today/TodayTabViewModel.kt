@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.place.today
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection.HTTP_CONFLICT
 import javax.inject.Inject
 
 /**
@@ -89,23 +91,39 @@ class TodayTabViewModel
                 _calendarError.value = null
                 when (val r = repo.setPickupDay(id, request)) {
                     is NetworkResult.Success -> refresh()
-                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't save your pickup day.")
+                    is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't save your pickup day.")
                 }
                 _calendarBusy.value = false
             }
         }
 
-        override fun clearPickupDay() {
+        override fun clearPickupDay(expectedVersion: String?) {
             val id = homeId ?: return
             if (_calendarBusy.value) return
             _calendarBusy.value = true
             viewModelScope.launch {
                 _calendarError.value = null
-                when (val r = repo.clearPickupDay(id)) {
+                when (val r = repo.clearPickupDay(id, expectedVersion)) {
                     is NetworkResult.Success -> refresh()
-                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't reset your pickup day.")
+                    is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't reset your pickup day.")
                 }
                 _calendarBusy.value = false
+            }
+        }
+
+        /**
+         * Changed meanwhile (409): nothing was saved. Reload so the card shows the current schedule, with the
+         * reason kept on the card. Any other failure keeps the editor as it was.
+         */
+        private fun pickupFailed(
+            error: NetworkError,
+            fallback: String,
+        ) {
+            if ((error as? NetworkError.ClientError)?.code == HTTP_CONFLICT) {
+                _calendarError.value = "The pickup schedule changed since you opened it. Review the current schedule and try again."
+                refresh()
+            } else {
+                _calendarError.value = error.displayMessage(fallback)
             }
         }
     }
