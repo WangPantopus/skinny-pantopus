@@ -54,6 +54,9 @@ async function deleteEligibility(homeId, actorId) {
 }
 
 async function deleteHome(homeId, actorId) {
+  // Other people's pending requests go with the Home (their rows cascade), so
+  // they are read first and told afterwards, as a reviewer's decline tells them.
+  const applicants = await pendingApplicants(homeId, actorId);
   for (let attempt = 0; attempt < 2; attempt++) {
     const args = { p_home_id: homeId, p_user_id: actorId };
     const prepared = await rpc('prepare_home_task_media_home_delete', args);
@@ -61,7 +64,13 @@ async function deleteHome(homeId, actorId) {
     if (prepared.home_id !== homeId || !Array.isArray(prepared.cleanup)) throw fail();
     await require('./homeTaskMediaService').cleanupForHomeDelete(homeId, prepared.cleanup);
     const result = await rpc('delete_home_authorized', args);
-    if (result.allowed === true && result.deleted === true) return result;
+    if (result.allowed === true && result.deleted === true) {
+      await notifyApplicants(applicants, 'home-removed', {
+        residency: 'This home was removed from Pantopus, so your residency request was closed.',
+        access: 'This home was removed from Pantopus, so your request to join it was closed.',
+      }, homeId);
+      return result;
+    }
     if (attempt === 0 && result.allowed === false && result.code === 'HOME_DELETE_TASK_MEDIA_CLEANUP_REQUIRED') continue;
     throwDeleteResult(result);
   }
@@ -122,25 +131,50 @@ async function closeStrandedApplications(homeId, userId) {
     ]);
   } catch (_) { throw fail(); }
   if (claims?.error || requests?.error || !Array.isArray(claims?.data) || !Array.isArray(requests?.data)) throw fail();
+  await notifyApplicants({ claims: claims.data, requests: requests.data }, 'home-reviewers-gone', {
+    residency: 'No one at this home can review your request anymore. You can verify by mail instead.',
+    access: 'Your request to join this home was closed because no one there can approve it anymore.',
+  }, homeId, `/homes/${homeId}/waiting-room`);
+  return { residencyClaims: claims.data.length, accessRequests: requests.data.length };
+}
+
+// Pending residency claims and household access requests of anyone but the
+// actor. A failed read only means no notices; it never blocks the deletion.
+async function pendingApplicants(homeId, actorId) {
+  try {
+    const [claims, requests] = await Promise.all([
+      db.from('HomeResidencyClaim').select('id, user_id').eq('home_id', homeId).eq('status', 'pending').neq('user_id', actorId),
+      db.from('HomeHouseholdAccessRequest').select('id, requester_user_id').eq('home_id', homeId).eq('status', 'pending')
+        .neq('requester_user_id', actorId),
+    ]);
+    if (claims?.error || requests?.error || !Array.isArray(claims?.data) || !Array.isArray(requests?.data)) throw claims?.error || requests?.error;
+    return { claims: claims.data, requests: requests.data };
+  } catch (err) {
+    logger.error('Pending applicants read failed', { errorCode: err?.code || null });
+    return { claims: [], requests: [] };
+  }
+}
+
+// The existing decline notice types, with this outcome's wording. The logger
+// redacts keys named "code", so the error's own code travels as errorCode. A
+// notice failure is logged; the outcome stands.
+async function notifyApplicants({ claims, requests }, keyPrefix, body, homeId, residencyLink = null) {
   const { createNotification } = require('./notificationService');
   const notices = [
-    ...claims.data.map(claim => ({
-      userId: claim.user_id, type: 'residency_rejected', title: 'Verification update',
-      body: 'No one at this home can review your request anymore. You can verify by mail instead.',
-      icon: '📬', link: `/homes/${homeId}/waiting-room`, metadata: { home_id: homeId, claim_id: claim.id },
-      idempotencyKey: `home-reviewers-gone:residency:${claim.id}`,
+    ...claims.map(claim => ({
+      userId: claim.user_id, type: 'residency_rejected', title: 'Verification update', body: body.residency,
+      icon: '📬', ...(residencyLink ? { link: residencyLink } : {}), metadata: { home_id: homeId, claim_id: claim.id },
+      idempotencyKey: `${keyPrefix}:residency:${claim.id}`,
     })),
-    ...requests.data.map(request => ({
-      userId: request.requester_user_id, type: 'home_access_request_rejected', title: 'Request not approved',
-      body: 'Your request to join this home was closed because no one there can approve it anymore.',
+    ...requests.map(request => ({
+      userId: request.requester_user_id, type: 'home_access_request_rejected', title: 'Request not approved', body: body.access,
       icon: '🏠', metadata: { home_id: homeId, request_id: request.id },
-      idempotencyKey: `home-reviewers-gone:access-request:${request.id}`,
+      idempotencyKey: `${keyPrefix}:access-request:${request.id}`,
     })),
   ];
   for (const notice of notices) {
-    try { await createNotification(notice); } catch (err) { logger.error('Stranded application notice failed', { code: err.code }); }
+    try { await createNotification(notice); } catch (err) { logger.error('Applicant notice failed', { errorCode: err?.code || null }); }
   }
-  return { residencyClaims: claims.data.length, accessRequests: requests.data.length };
 }
 
 // Who keeps a Home is the same test as purge_home_household_records' guard
