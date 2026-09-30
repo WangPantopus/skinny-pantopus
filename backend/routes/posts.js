@@ -250,7 +250,8 @@ const createPostSchema = Joi.object({
   lostFoundContactPref: Joi.string().valid('dm', 'comment', 'phone').optional(),
   // Frontend alias for lostFoundContactPref
   contactPref: Joi.string().valid('dm', 'comment', 'phone').optional(),
-  contactPhone: Joi.string().pattern(/^\d{7,15}$/).optional(),
+  // Stored as digits; the apps send the number as typed, e.g. "(555) 555-0123".
+  contactPhone: Joi.string().replace(/\D/g, '').pattern(/^\d{7,15}$/).optional(),
   // Services & Offers
   serviceCategory: Joi.string().max(100).optional(),
   // Cross-surface references

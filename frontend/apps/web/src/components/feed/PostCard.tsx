@@ -16,6 +16,7 @@ import LinkPreviewCard from './LinkPreviewCard';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { lostFoundContactLabel } from './composer/LostFoundFields';
 import type { AudienceProfile, Post } from '@pantopus/types';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
@@ -346,7 +347,7 @@ function PostCard({
           <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
             {post.lost_found_type === 'lost' ? <Search className="w-3.5 h-3.5 flex-shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />}
             <span className="uppercase">{post.lost_found_type}</span>
-            {post.lost_found_contact_pref && <span className="font-normal">· Contact: {post.lost_found_contact_pref}</span>}
+            {post.lost_found_contact_pref && <span className="font-normal">· Contact: {lostFoundContactLabel(post.lost_found_contact_pref)}</span>}
           </div>
         </div>
       )}

@@ -21,6 +21,7 @@ import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
+import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -624,7 +625,7 @@ export default function PostDetailPage() {
               <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
                 <span>{post.lost_found_type === 'lost' ? '🔍' : '✅'}</span>
                 <span className="uppercase">{post.lost_found_type}</span>
-                {post.lost_found_contact_pref && <span className="font-normal">· Contact: {post.lost_found_contact_pref}</span>}
+                {post.lost_found_contact_pref && <span className="font-normal">· Contact: {lostFoundContactLabel(post.lost_found_contact_pref)}</span>}
               </div>
             </div>
           )}
