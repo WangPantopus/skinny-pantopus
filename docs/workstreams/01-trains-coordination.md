@@ -139,6 +139,14 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions 2026-09-30.** Items (3) and (4) are answered by the user; the rest were decided by Stream 1 under the standing direction, which is to choose the best for user experience, safety and retention and record it.
 - (3) **Accent colours (user):** use the recommended AA values. Stream 1 implements them app-wide.
+  - **Plan (measured 2026-09-30T12:1xZ with the WCAG formula; implementation after the native Nearby fix):**
+    - **Web.** Tailwind compiles `bg-/text-primary-600` from `packages/theme/tailwind.cjs` hex, not from CSS variables. Emerald and amber are Tailwind built-ins. So split the palettes (`theme.extend.backgroundColor` vs `textColor`), backed by CSS variables, with no class churn in ~380 files:
+      - fills: `bg-primary-600` → #0369a1 in both themes (white on it 5.93; today 4.10); `bg-primary-700` (hover) → #075985; `bg-emerald-600` → #047857 (5.48; today 3.77).
+      - text: `text-primary-600` → #0369a1 in light (5.39–5.68 on the greys; today 3.72–3.92) and #38bdf8 in dark (6.83–9.42; #0369a1 would be 2.47–3.40 there). `text-emerald-600` → #047857 light and #34d399 dark.
+      - per use: amber-500 fills with white text (9 lines) → amber-700 (5.02); the header badge `bg-red-500` → red-600 (4.83); the audience badge `bg-teal-500`. Post-type colours in `POST_TYPE_CONFIG`, the composer's `IntentSelector` list and `FeedFilters` go to one step darker where white text fails (each ≥4.5; amber, emerald and teal need 700).
+    - **iOS.** Colours come from asset colorsets. Primary600's light value → #0369A1; dark stays #0284C7 (a light value can't serve both white-text fills and dark-surface text; a text/solid split is the later step). Avatar initials and post map pins on primary500 (2.77) get a darker fill. iOS "snapshot" tests only check that a PNG renders; `ColorTokenTests.swift` pins values and gets updated.
+    - **Android.** `Color.kt` primary600 → #0369A1 (light values only). `ColorTokenTest.kt` gets updated; Paparazzi snapshots are compared in CI, so they're re-recorded (`recordPaparazziDebug`, heavy slot).
+    - **Evidence:** before/after contrast tables plus real-browser and device screenshots of the U02 A3 screens.
 - (4) **Web "Send invite" (user: hide only if that's the better experience):** hidden, since it delivered nothing. Copy link stays. Shipped in #956 (batch 175).
 - (5) **Native Start a train visibility (decided).**
   - The problem: step 1's "Invite only" / "Block-visible" switches and the review step's Visibility choice are one setting, but "Invite only" (on by default) silently overrode the review choice (shown as "Nearby neighbors"). The success screen then said "visible to nearby neighbors" for an invited-only train.
