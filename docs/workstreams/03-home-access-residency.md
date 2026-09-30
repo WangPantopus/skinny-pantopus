@@ -308,6 +308,17 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T14:01Z — #1008 merged (batch 191, master `dc388a8ac`); U02's two recorded VoiceOver gaps closed as not reproduced.**
+  - **Bundle:** `20260930-stream3-home-u02-navbar-probe-r1` (`85e9b466…`), no code change.
+  - **Method:** on "Pantopus S34", the same screens were read with the kit driver's two backends.
+    - The default `ax` backend shows a system navigation bar as one childless `Group`. That is where "one merged group" came from.
+    - The `axbridge` backend shows the real tree:
+      - **Members:** `NavigationBar` with Back (`BackButton`), the title, and "Review residency claims" (`listOfRowsTopBarAction`);
+      - **residency review sheet:** `NavigationBar` with Close (`homeResidencyReview.close`), the title, and "Reload current access" (`homeResidencyReview.reload`).
+  - **Result:** each control is its own accessibility element.
+  - **Tooling:** read screens that have a system navigation bar with `"backend":"axbridge"`.
+  - **Cleanup:** exact at 14:00:39Z. Lease released; no slot held.
+
 - **2026-09-30T13:53Z — D10 lead fixed: [#1008](https://github.com/WangPantopus/skinny-pantopus/pull/1008), applicants hear when their Home is deleted.**
   - **Change:** `deleteHome` (the owner's Delete Home and #974's `deleted` outcome) reads other people's pending residency claims and access requests before deleting. Afterwards it sends the existing decline notice types, "This home was removed from Pantopus, so your … request was closed." A failure never blocks the deletion.
   - **Evidence:** head `2c85a128f`, bundle `20260930-stream3-home-d10-deleted-home-notice-r1` (`dd6e07d3…`).
