@@ -49,8 +49,7 @@
    - **iOS:** use `tools/android-r06-restart-identity.py` as the model, on sim 6F914A30 with the shared iOS driver. First confirm the installed dylib still matches master for `PlaceResidencyPassSection.swift`.
    - **Then** send R06 to the coordinator with device clock, full-day expiry and the hosted issuer lifecycle named as boundaries.
 2. **D07, members and security.**
-   - Racing Lockdown commands (enable and disable in flight together).
-   - Audit-write failure: `writeAuditLog` is non-fatal while the panel promises "Records Lockdown changes".
+   - ~~Racing Lockdown commands; audit-write failure~~: both reproduced on master and repaired in [#881](https://github.com/WangPantopus/skinny-pantopus/pull/881) (one transaction per Lockdown command via the new `set_home_lockdown`; with the coordinator). After merge, apply `20260930070000_home_lockdown_command.sql` to the shared runtime.
    - ~~Three web leads~~ (scoped share links during Lockdown; Invitations by URL; the standalone Settings links): all three reproduced and repaired in [#858](https://github.com/WangPantopus/skinny-pantopus/pull/858), merged in batch 141 (master `8af54a57a`).
    - New leads (recorded, not reproduced as defects yet):
      - the Members & Security audit list shows raw action codes (Stream 4; its #854 label table can be reused);
@@ -59,7 +58,7 @@
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
-   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (with the coordinator): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
+   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). Second follow-up [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) (merged, batch 147, master `b16eca646`): trusted occupancies only, via the shared `getAccessibleHomeIds` (a pending claim, which anyone can file, no longer counts as household). The mail-compose recipients leak is Stream 4's.
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
      - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
@@ -209,6 +208,22 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T07:29Z — D07 Lockdown commands: [#881](https://github.com/WangPantopus/skinny-pantopus/pull/881) is with the coordinator; #874 merged** (batch 147, master `b16eca646`; the map-privacy thread is closed).
+  - **#881:** head `0d890e830b7881b44f355ba9ce589f3a7baa0559`, base `b16eca646`; merge-tree clean and `check-migrations` passing against master `3bf2cde34`. Bundle `20260930-stream3-home-d07-lockdown-commands-r1`, 66 files, MANIFEST `3a239f36d134b115d0dc1482d57ee97ff4214d9230454760cee218999f1c6075`.
+  - **Reproduced on master (lease 07:17:49Z; test-only hooks on one fixture Home: a 6 s revoke sleep, and a refused Lockdown audit insert):**
+    - a disable racing an enable (two real Chrome tabs, and the real API) left the Home off with the audit log ending "lockdown enabled"; the enable reply said on 4 s after it was turned off;
+    - with the audit refused, Enable answered 200 while the panel marked "Records Lockdown changes · Active", and Disable unlocked the Home. Nothing was recorded or logged (`writeAuditLog` ignores the returned `{ error }`).
+  - **Fix:** a forward migration adds `set_home_lockdown` (SECURITY DEFINER, service role only; justified in the bundle). Each command is one transaction under the Home's share lock.
+    - Enable stays on and reports a failed revoke or audit (new 503 `LOCKDOWN_AUDIT_FAILED`).
+    - Disable changes nothing unless it's recorded.
+    - The panel offers "Record this change".
+  - **After:**
+    - races: the disable waits for the enable's lock, and the audit reads enabled → disabled, matching off;
+    - refused audit on enable: 503, Lockdown stays on, and the retry records it;
+    - refused audit on disable: 503, nothing changed.
+  - **Checks:** backend 130/130; web `tsc`/ESLint clean; Jest 1866/1866.
+  - **Cleanup:** exact (22 rows, 351/353); the hooks and the test-applied function were dropped. Lease released at 07:27:33Z; the runtime is on master `44405970` (PID 50231).
 
 - **2026-09-30T07:17Z — [#874](https://github.com/WangPantopus/skinny-pantopus/pull/874) is with the coordinator** (map homes layer, second follow-up). Head `8979e15f47b16c8be683006efe36b5533332bc01`, base `f82d24a18`, merge-tree clean. Bundle `20260930-stream3-home-d06-map-trusted-occupancy-r1`, 22 files, MANIFEST `d84f3a0da80ec9fb4d4cb3ef256e54498d4c9f1c9f4558d054c6a55510465fed`.
   - **Reproduced (lease 07:14:05Z):** member B's real `POST /api/homes/:id/claim` on a private invite-only fixture Home answered 201 and left B an `is_active: true`, `pending_approval` occupancy. With EWKB decoding EMULATED, master's real handler then gave B that Home's full street and exact coordinates.
