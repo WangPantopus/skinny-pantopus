@@ -228,6 +228,7 @@ struct PlaceFridgeCardSection: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.Color.primarySolid)
                 .disabled(vm.isIssuing || !vm.hasContent)
                 Text("Issuing freezes the card exactly as entered. To change it later, issue a fresh card and revoke the old one.")
                     .font(.system(size: 11.5))
@@ -341,6 +342,7 @@ private struct PlaceFridgeCardRow: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(Theme.Color.primarySolid)
                         Button(role: .destructive) {
                             Task { await vm.revoke(card.id) }
                         } label: {

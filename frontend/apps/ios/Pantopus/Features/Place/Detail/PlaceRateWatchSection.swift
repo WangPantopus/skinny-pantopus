@@ -160,6 +160,7 @@ struct RateWatchForm: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.Color.primarySolid)
                 .disabled(vm.isSaving || vm.monthInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 Text(
                     "We compare Freddie Mac's weekly 30-year survey average with the average for your month — facts about the market, not refinancing advice. Only you can see this."
