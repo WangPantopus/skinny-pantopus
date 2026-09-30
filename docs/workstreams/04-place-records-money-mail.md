@@ -269,6 +269,26 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T13:35Z — [#997](https://github.com/WangPantopus/skinny-pantopus/pull/997) is with the coordinator: a stale pickup form no longer undoes a schedule saved meanwhile (U03 web address calendar E5).** Head `b48eb357c851ea03c2ad840f2030fd8e0b657109` on master `8ed5085bf`. Migration `20260930177000_pickup_schedule_changed_meanwhile.sql`; Stream 1 moved the number from 174000 to 175000 to 177000, with no content change (blob `be618e1e…`). Bundle `20260930-stream4-pickup-e5-r1`, 85 files, MANIFEST `4bd225555739bf69bac9f51a253dd59766dadfd65914f2ff0d77c0bf1289a66b`. Leases: 13:05:06Z (before-run) and 13:27:46Z–13:30:01Z (after-run).
+  - **Before (master, 13:05:42Z):** device A's stale save sent `recycling_frequency: not_set` and got 200 with no message. Device B's weekly recycling was deleted.
+  - **Fix:**
+    - Calendars carry `pickup_version` (md5 of the household pickup rule ids, or `none`).
+    - PUT and DELETE pickup-day accept `expected_version`, checked in the new service-only `mutate_home_pickup_calendar_if_unchanged` under the existing locks. A changed schedule gives 409 `PICKUP_SCHEDULE_CHANGED` with the current calendar.
+    - The web card shows the current schedule in its form, with the message in its existing error line.
+    - Older clients that send no version keep the unchanged three-argument last-write-wins save.
+  - **After, the same two-device web steps:**
+    - A's save got 409 and B's recycling was kept.
+    - A picked Wednesday again and the save got 200; both changes stand.
+    - The old no-version save is still last-write-wins.
+    - A stale reset got 409 and changed nothing; malformed versions got 400.
+  - **Fresh-database replay** on my own throwaway DB-only stack (64551; stopped, 0 containers and 0 volumes): all 114 migrations, exit 0. Rolled-back behavior checks pass, backend and SQL versions are equal, and a two-session race gives the second save `changed`. Lint shows 0 findings on the new functions.
+  - **Shared DB:** ledger 103 → 104 (`20260930177000`, service-only functions). Worktree and backend are back on `00bf2d6ff` (PID 45107). Exact cleanup: 351/353 tables equal, the difference is auth history only.
+  - **Still open:** native E5 (iOS/Android send no version; the cells stay ⬜). The pinned function lint (CLI 2.116.0) and the pgTAP contracts are CI-only here.
+- **2026-09-30T13:35Z — merged and cross-stream notes.**
+  - #984 (Documents delete button name) merged in batch 184 (`a6793fda4`). The decision-9 trio #968/#976 merged in batch 182.
+  - **#992 (clients lose table writes):** it doesn't affect Stream 4. There are 0 direct Supabase `.from()` reads or writes of the 28 listed tables in web, the shared packages, iOS or Android.
+  - **Agreed with Stream 5:** REVOKE ALL on the view `MailAnalyticsSummary` from PUBLIC, anon and authenticated (service_role keeps it). It runs with owner rights and exposed every user's letter-reading analytics to the anon key. Nothing reads it.
+
 - **2026-09-30T12:59Z — [#984](https://github.com/WangPantopus/skinny-pantopus/pull/984) is with the coordinator: the web Documents delete button now has a screen-reader name, and web Documents delete E1–E3 are verified with no change.** Head `b443db73f422b0636fb703eb435fc58fa50cb9a5`. Bundle `20260930-stream4-docs-delete-r1`, 29 files, MANIFEST `bdef747f4889083425738795a89cd5f4438983e5ea0acb418dda43c9f0ca83bb`. Lease 12:52:23Z–12:58:32Z.
   - **U02 A4:** the icon-only trash button had no accessible name (axe button-name ×3 with three documents; the 09-30 sweep's seed had none). It now reads "Delete <title>", like Tasks and Emergency. Axe after: 0 violations; the fix was patched into the shared worktree and reverted exactly.
   - **U03 web Documents delete:**
