@@ -17,12 +17,14 @@
 --    collects. Now, like Home documents since 20260930153000, the member's task-attachment
 --    files are released to the household before the delete, and the task keeps them.
 --
--- 2. Personal map pins go with the account. A pin marked visible_to 'personal' is shown
---    only to its creator; kept with no author it would be visible to nobody, so it is the
---    person's own data retained after their account is gone. Household, neighborhood and
---    public pins stay without an author. DELETE /api/users/account never nulls
---    HomeMapPin.created_by itself (its foreign key does, after this trigger), so the
---    trigger still sees the author, and account_deletion_dry_run replays it.
+-- 2. Home items only this person could see go with the account. A pin marked visible_to
+--    'personal' is shown only to its creator, and a letter at a Home marked for one
+--    person's attention (attn_only / attn_plus_admins) only to that person; kept with no
+--    author (HomeMapPin.created_by and Mail.attn_user_id are ON DELETE SET NULL) they would
+--    be visible to nobody: the person's own data retained after their account is gone.
+--    Household, neighborhood and public pins and household letters stay. The route never
+--    nulls these two columns itself (their foreign keys do, after this trigger), so the
+--    trigger still sees the person, and account_deletion_dry_run replays it.
 --
 -- 3. purge_home_household_records(home, departing user), for coordinator decision 9: when
 --    the person deleting their account is the last member of a Home that delete-my-Home
@@ -37,9 +39,10 @@
 --    media, pets, polls, fridge cards, access codes and Wi-Fi, guest passes and scoped
 --    grants, pending invitations it sent, household map pins, household mail (exactly the
 --    letters a new member could open under homeMailAccess), mail aliases and routing,
---    household chat rooms, activity log, permission overrides, private data, quorum actions,
+--    activity log, permission overrides, private data, quorum actions,
 --    business links, and the household text on the Home row (entry, parking, house rules,
---    tips, welcome message, description, move-in date, photos, Wi-Fi QR and rules files).
+--    tips, welcome message, description, move-in date, photos, Wi-Fi QR and rules files). The
+--    household chat room is closed and detached from the Home (Stream 5 decision 10).
 --    It keeps the Home row's property facts, other people's claims, requests, leases and
 --    verifications, public data and caches, and financial, gig and community records. The
 --    storage recovery jobs (every 5 minutes) remove the tombstoned bytes.
@@ -133,8 +136,11 @@ REVOKE ALL ON FUNCTION public.retire_home_task_media_owner() FROM PUBLIC, anon, 
 CREATE TRIGGER retire_home_task_media_owner BEFORE DELETE ON public."User"
   FOR EACH ROW EXECUTE FUNCTION public.retire_home_task_media_owner();
 
--- 2. Personal map pins go with the account.
-CREATE FUNCTION public.delete_personal_home_map_pins()
+-- 2. Home items only this person could see go with the account: personal map pins, and
+-- letters at a Home marked for their attention only (with Mail.attn_user_id SET NULL they
+-- would otherwise be readable by nobody under homeMailAccess). Letters addressed to them
+-- already cascade with Mail.recipient_user_id.
+CREATE FUNCTION public.delete_personal_home_data()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -142,13 +148,15 @@ CREATE FUNCTION public.delete_personal_home_map_pins()
 AS $function$
 BEGIN
   DELETE FROM public."HomeMapPin" WHERE created_by = OLD.id AND visible_to = 'personal';
+  DELETE FROM public."Mail" WHERE attn_user_id = OLD.id AND recipient_user_id IS NULL
+    AND delivery_visibility IN ('attn_only', 'attn_plus_admins');
   RETURN OLD;
 END $function$;
 
-REVOKE ALL ON FUNCTION public.delete_personal_home_map_pins() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.delete_personal_home_data() FROM PUBLIC, anon, authenticated;
 
-CREATE TRIGGER delete_personal_home_map_pins BEFORE DELETE ON public."User"
-  FOR EACH ROW EXECUTE FUNCTION public.delete_personal_home_map_pins();
+CREATE TRIGGER delete_personal_home_data BEFORE DELETE ON public."User"
+  FOR EACH ROW EXECUTE FUNCTION public.delete_personal_home_data();
 
 -- 3. A departing last member's household records, for a Home shell that stays.
 CREATE FUNCTION public.purge_home_household_records(p_home_id uuid, p_departing_user_id uuid)
@@ -255,8 +263,13 @@ BEGIN
   DELETE FROM public."MailAlias" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('MailAlias', n);
   DELETE FROM public."MailRoutingQueue" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('MailRoutingQueue', n);
   DELETE FROM public."MailPartySession" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('MailPartySession', n);
-  DELETE FROM public."ChatRoom" WHERE home_id = p_home_id AND type = 'home';
-  GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('ChatRoom_household', n);
+  -- The household chat is closed and detached (Stream 5 decision 10): the next household
+  -- on this shell can never inherit it, former members keep reading their own history,
+  -- and the room goes once its last participant leaves (delete_empty_member_rooms).
+  UPDATE public."ChatRoom" SET type='group', home_id=NULL, is_active=false,
+      name=left(coalesce(name,'Home Chat'),246)||' (closed)', updated_at=now()
+    WHERE home_id = p_home_id AND type = 'home';
+  GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('ChatRoom_household_closed', n);
   DELETE FROM public."HomeAuditLog" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('HomeAuditLog', n);
   DELETE FROM public."HomePermissionOverride" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('HomePermissionOverride', n);
   DELETE FROM public."HomePrivateData" WHERE home_id = p_home_id; GET DIAGNOSTICS n = ROW_COUNT; v := v || jsonb_build_object('HomePrivateData', n);
