@@ -53,8 +53,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public private(set) var publishedTrainId: String?
     /// A half-built draft a failed launch couldn't delete; the next launch removes it first.
     private var leftoverTrainId: String?
-    /// The create's request id, kept until its reply arrives: a retry after a lost reply
-    /// then reaches the draft the server already made instead of making a second train.
+    /// The create's request id, kept until its reply arrives, so a retry reaches the same draft.
     private var createRequestId: String?
 
     // MARK: - Constants
@@ -469,15 +468,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     /// Deletes a draft this wizard created; false when the delete didn't go through.
     private func deleteDraft(_ trainId: String) async -> Bool {
-        do {
-            _ = try await api.request(
-                SupportTrainActionsEndpoints.deleteTrain(supportTrainId: trainId),
-                as: EmptyResponse.self
-            )
-            return true
-        } catch {
-            return false
-        }
+        let endpoint = SupportTrainActionsEndpoints.deleteTrain(supportTrainId: trainId)
+        return await (try? api.request(endpoint, as: EmptyResponse.self)) != nil
     }
 
     // MARK: - Helpers
