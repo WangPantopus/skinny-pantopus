@@ -413,6 +413,48 @@ public struct AddSupportTrainSlotBody: Encodable, Sendable {
     }
 }
 
+/// `POST …/generate-slots`: every day from `startDate` through `endDate`
+/// (the daily `every_dinner` preset) with these times, label and mode.
+/// `replaceExisting` makes a retry after a lost reply replace the open
+/// slots instead of adding a second set.
+public struct GenerateSupportTrainSlotsBody: Encodable, Sendable {
+    public let preset = "every_dinner"
+    public let startDate: String
+    public let endDate: String
+    public let startTime: String
+    public let endTime: String
+    public let slotLabel: String
+    public let supportMode: String
+    public let replaceExisting = true
+
+    public init(
+        startDate: String,
+        endDate: String,
+        startTime: String,
+        endTime: String,
+        slotLabel: String,
+        supportMode: String
+    ) {
+        self.startDate = startDate
+        self.endDate = endDate
+        self.startTime = startTime
+        self.endTime = endTime
+        self.slotLabel = slotLabel
+        self.supportMode = supportMode
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case preset
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case slotLabel = "slot_label"
+        case supportMode = "support_mode"
+        case replaceExisting = "replace_existing"
+    }
+}
+
 public struct SupportTrainHelperDTO: Decodable, Sendable, Hashable {
     public let id: String
     public let username: String?

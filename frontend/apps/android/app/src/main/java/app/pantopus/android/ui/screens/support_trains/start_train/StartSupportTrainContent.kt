@@ -146,25 +146,45 @@ enum class StartSupportTrainVisibility(
     val title: String,
     val subtitle: String,
     val icon: PantopusIcon,
+    /** Who the success screen says can find the new train. */
+    val audience: String,
 ) {
     Neighbors(
         "private_link",
         "Nearby neighbors",
         "Anyone within 25 mi can find and sign up.",
         PantopusIcon.Users,
+        "nearby neighbors",
     ),
     Connections(
         "invited_only",
         "My connections",
         "Only people you're connected to can find this.",
         PantopusIcon.UserPlus,
+        "your connections",
     ),
     LinkOnly(
         "direct_share_only",
         "Link only",
         "Hidden — share the link with people you trust.",
         PantopusIcon.Link,
+        "people you share the link with",
     ),
+    ;
+
+    companion object {
+        /** Step 1's switches as one choice: "Invite only" is My connections,
+         *  "Block-visible" is Nearby neighbors, and neither is Link only. */
+        fun from(
+            inviteOnly: Boolean,
+            blockVisible: Boolean,
+        ): StartSupportTrainVisibility =
+            when {
+                inviteOnly -> Connections
+                blockVisible -> Neighbors
+                else -> LinkOnly
+            }
+    }
 }
 
 /** One generated slot in the preview grid. */
@@ -193,7 +213,8 @@ data class StartSupportTrainFormState(
     val endDateMillis: Long = defaultEndMillis(),
     val slotDuration: StartSupportTrainSlotDuration = StartSupportTrainSlotDuration.Sixty,
     val allowComments: Boolean = true,
-    val visibility: StartSupportTrainVisibility = StartSupportTrainVisibility.Neighbors,
+    // Matches "Invite only", which is on by default.
+    val visibility: StartSupportTrainVisibility = StartSupportTrainVisibility.Connections,
 ) {
     companion object {
         const val REASON_CHAR_LIMIT: Int = 500

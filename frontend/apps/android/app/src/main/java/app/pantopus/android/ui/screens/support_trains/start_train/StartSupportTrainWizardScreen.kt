@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.support_trains.start_train
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,7 +43,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -1053,14 +1058,21 @@ private fun RadioCircle(isSelected: Boolean) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LaunchErrorBanner(message: String) {
+    // The error sits under the review's last section. Bring it into view and let TalkBack
+    // read it, so a failed launch doesn't look like nothing happened.
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(message) { requester.bringIntoView() }
     Row(
         modifier =
             Modifier
+                .bringIntoViewRequester(requester)
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.errorBg)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .semantics { liveRegion = LiveRegionMode.Polite }
                 .testTag("startSupportTrainLaunchError"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -1118,7 +1130,7 @@ internal fun SuccessStep(
         )
         Text(
             text =
-                "$slotCount slots are open and visible to ${visibility.title.lowercase()}. " +
+                "$slotCount slots are open and visible to ${visibility.audience}. " +
                     "Review who signs up from the new train's dashboard.",
             style = PantopusTextStyle.body,
             color = PantopusColors.appTextSecondary,

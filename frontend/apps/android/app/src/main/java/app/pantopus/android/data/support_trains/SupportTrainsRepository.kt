@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.support_trains.CancelReservationBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainResponse
 import app.pantopus.android.data.api.models.support_trains.EnableSupportTrainFundBody
+import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsBody
 import app.pantopus.android.data.api.models.support_trains.ReserveSlotBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainFundDto
@@ -103,6 +104,21 @@ class SupportTrainsRepository
                 ) {
                     throw JsonDataException("Date save could not be confirmed.")
                 }
+                Unit
+            }
+
+        /**
+         * `POST …/generate-slots` — the whole schedule in one request. Fails unless the server
+         * confirms [expectedCount] slots. Route `backend/routes/supportTrains.js:903`.
+         */
+        suspend fun generateSlots(
+            supportTrainId: String,
+            body: GenerateSupportTrainSlotsBody,
+            expectedCount: Int,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                val saved = api.generateSlots(supportTrainId, body)
+                if (saved.count != expectedCount) throw JsonDataException("Dates save could not be confirmed.")
                 Unit
             }
 

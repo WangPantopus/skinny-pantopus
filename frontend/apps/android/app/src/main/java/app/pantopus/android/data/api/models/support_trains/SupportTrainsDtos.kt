@@ -203,3 +203,27 @@ data class AddSupportTrainSlotBody(
     val capacity: Int = 1,
     @Json(name = "client_request_id") val clientRequestId: String? = null,
 )
+
+/**
+ * `POST /api/activities/support-trains/:id/generate-slots` body: a slot on every day from
+ * [startDate] through [endDate] (the daily `every_dinner` preset) with these times, label and
+ * mode. [replaceExisting] makes a retry after a lost reply replace the open slots instead of
+ * adding a second set. Backend validation lives at `generateSlotsSchema`.
+ */
+@JsonClass(generateAdapter = true)
+data class GenerateSupportTrainSlotsBody(
+    @Json(name = "start_date") val startDate: String,
+    @Json(name = "end_date") val endDate: String,
+    @Json(name = "start_time") val startTime: String,
+    @Json(name = "end_time") val endTime: String,
+    @Json(name = "slot_label") val slotLabel: String,
+    @Json(name = "support_mode") val supportMode: String,
+    val preset: String = "every_dinner",
+    @Json(name = "replace_existing") val replaceExisting: Boolean = true,
+)
+
+/** `POST …/generate-slots` reply: how many slots the server created. */
+@JsonClass(generateAdapter = true)
+data class GenerateSupportTrainSlotsResponse(
+    val count: Int = 0,
+)
