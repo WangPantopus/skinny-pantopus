@@ -2980,9 +2980,7 @@ public struct HubTabRoot: View {
                     requestedKind: briefingKind
                 ),
                 onBack: pop,
-                onShare: {
-                    systemSheet = .share(items: ["Today's Pantopus briefing — \(InviteLinks.downloadURLString)"])
-                },
+                onShare: { text in systemSheet = .share(items: [text]) },
                 onMore: { push(.menu) },
                 onManage: { push(.notifications) }
             )

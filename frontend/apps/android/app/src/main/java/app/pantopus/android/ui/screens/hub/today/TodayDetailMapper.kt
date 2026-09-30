@@ -8,7 +8,9 @@ import app.pantopus.android.data.api.models.hub.TodayAlertDto
 import app.pantopus.android.data.api.models.hub.TodayAqiDto
 import app.pantopus.android.data.api.models.hub.TodaySignalDto
 import app.pantopus.android.data.api.models.hub.TodayWeatherDto
+import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.theme.PantopusIcon
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,8 +21,9 @@ import kotlin.math.roundToInt
  * P1-F — projects the orchestrated `/api/hub/today` payload onto
  * [TodayDetailContent] (mirrors the iOS `TodayDetailViewModel` mapping). The
  * data-backed sections (kicker, weather hero, AQI chip, advisory ribbon,
- * Signals) map from the response; the decorative sun-arc + Share card have no
- * backend field, so they fall back to the [base] design placeholder.
+ * Signals, Sun & sky) map from the response, and the Share card says what
+ * Share sends; only the Around title comes from the [base] design placeholder
+ * (the list itself stays empty).
  */
 @Suppress("TooManyFunctions")
 object TodayDetailMapper {
@@ -39,9 +42,8 @@ object TodayDetailMapper {
         val alerts = payload?.alerts ?: emptyList()
         val hasAlert = alerts.isNotEmpty()
         val storedSignals = briefing?.signalsSnapshot ?: emptyList()
-        val signals =
-            (if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals)
-                .map { signal(it) }
+        val rawSignals = if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals
+        val signals = rawSignals.map { signal(it) }
         val label = payload?.location?.label ?: "Today"
         val storedSummary = briefing?.summaryText?.takeIf { it.isNotEmpty() }
         return TodayDetailContent(
@@ -53,13 +55,18 @@ object TodayDetailMapper {
             glyph = glyph(payload?.weather, hasAlert),
             chips = listOfNotNull(aqiChip(payload?.aqi)),
             ribbon = if (hasAlert) ribbon(alerts.first()) else null,
-            sunSky = base.sunSky,
+            sunSky = sunSky(payload?.weather, payload?.location?.timezone, now),
             signalsTitle = if (signals.isEmpty()) "Signals" else "Signals · ${signals.size} today",
             signalsAccent = if (hasAlert) TodayTone.Error else TodayTone.Personal,
             signals = signals,
             aroundTitle = base.aroundTitle,
             around = emptyList(),
-            share = base.share,
+            share =
+                TodayShareCard(
+                    title = "Share today's briefing",
+                    subtitle = SHARE_SUBTITLE,
+                    message = shareMessage(payload, rawSignals),
+                ),
         )
     }
 
@@ -166,7 +173,106 @@ object TodayDetailMapper {
         now: Instant,
         timezone: String?,
     ): String {
-        val zone = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+        val zone = zoneFor(timezone)
         return now.atZone(zone).format(DateTimeFormatter.ofPattern("EEE · MMM d", Locale.US))
     }
+
+    /** The Share card's line: what Share sends. */
+    const val SHARE_SUBTITLE = "Send today's weather and signals to a neighbor"
+
+    private const val MINUTES_PER_HOUR = 60
+    private const val EARLY_MORNING_UNTIL = 8
+    private const val MID_MORNING_UNTIL = 11
+    private const val MIDDAY_UNTIL = 14
+    private const val AFTERNOON_UNTIL = 17
+
+    /**
+     * "Sun & sky" from today's sunrise and sunset, in the place's timezone. Null when the
+     * feed has no sun times, so the card is left out rather than showing made-up ones.
+     */
+    fun sunSky(
+        weather: TodayWeatherDto?,
+        timezone: String?,
+        now: Instant,
+    ): TodaySunSky? {
+        val sunrise = parseInstant(weather?.sunriseUtc) ?: return null
+        val sunset = parseInstant(weather?.sunsetUtc) ?: return null
+        if (!sunset.isAfter(sunrise)) return null
+        val zone = zoneFor(timezone)
+        val clock = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+        val daylight = Duration.between(sunrise, sunset)
+        val elapsed = Duration.between(sunrise, now).toMillis().toFloat() / daylight.toMillis()
+        return TodaySunSky(
+            progress = elapsed.coerceIn(0f, 1f),
+            sunrise = sunrise.atZone(zone).format(clock),
+            sunset = sunset.atZone(zone).format(clock),
+            phaseLabel = phaseLabel(now, sunrise, sunset, zone),
+            daylight = "${daylight.toHours()}h ${daylight.toMinutes() % MINUTES_PER_HOUR}m of daylight",
+        )
+    }
+
+    /** Where the day is, by the place's clock: "Before sunrise", "Early morning" … "Evening", "After sunset". */
+    fun phaseLabel(
+        now: Instant,
+        sunrise: Instant,
+        sunset: Instant,
+        zone: ZoneId,
+    ): String {
+        if (now.isBefore(sunrise)) return "Before sunrise"
+        if (now.isAfter(sunset)) return "After sunset"
+        val hour = now.atZone(zone).hour
+        return when {
+            hour < EARLY_MORNING_UNTIL -> "Early morning"
+            hour < MID_MORNING_UNTIL -> "Mid-morning"
+            hour < MIDDAY_UNTIL -> "Midday"
+            hour < AFTERNOON_UNTIL -> "Afternoon"
+            else -> "Evening"
+        }
+    }
+
+    /**
+     * Signal kinds about the place, which anyone nearby could know. The rest (bill_due, task_due, calendar,
+     * mail, gig, and any kind this client doesn't know) are the viewer's own and never leave in a share.
+     */
+    private val SHAREABLE_SIGNAL_KINDS: Set<String?> =
+        setOf("alert", "precipitation", "aqi", "temperature", "seasonal", "local_update", "address_calendar")
+
+    private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
+
+    /**
+     * What "Share today's briefing" sends: the weather, a public weather alert and place-level signals, with a
+     * link to Pantopus. Never the place name (a location label can be an address), the summary line or a stored
+     * briefing's text (both are composed from the viewer's own bills, tasks and mail), or a personal signal.
+     */
+    fun shareMessage(
+        payload: HubTodayPayload?,
+        signals: List<TodaySignalDto>,
+    ): String {
+        val weather = payload?.weather
+        val parts =
+            listOfNotNull(
+                listOfNotNull(weather?.currentTempF?.let { temperature(weather) }, weather?.conditionLabel).joinToString(", "),
+                highLow(weather),
+                payload?.alerts?.firstOrNull()?.let { ribbon(it).title },
+                signals.filter { it.kind in SHAREABLE_SIGNAL_KINDS }.mapNotNull { it.label }.joinToString(" · "),
+            )
+        val sentences = parts.map { it.trim('.', ' ') }.filter { it.isNotEmpty() }
+        if (sentences.isEmpty()) return SHARE_FALLBACK
+        return "Today's briefing: ${sentences.joinToString(". ")}.\nShared from Pantopus: ${InviteLinks.DOWNLOAD_URL}"
+    }
+
+    /** The share text for the screen's state: the prepared message, or just the link while loading or failed. */
+    fun shareText(state: TodayDetailUiState): String {
+        val content =
+            when (state) {
+                is TodayDetailUiState.Populated -> state.content
+                is TodayDetailUiState.Alert -> state.content
+                else -> null
+            }
+        return content?.share?.message?.ifBlank { null } ?: SHARE_FALLBACK
+    }
+
+    private fun parseInstant(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+    private fun zoneFor(timezone: String?): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
 }

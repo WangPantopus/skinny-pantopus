@@ -28,7 +28,9 @@ final class TodayDetailMappingTests: XCTestCase {
             conditionLabel: label,
             highF: high,
             lowF: low,
-            precipitationNext6h: precip
+            precipitationNext6h: precip,
+            sunriseUtc: nil,
+            sunsetUtc: nil
         )
     }
 
@@ -103,8 +105,8 @@ final class TodayDetailMappingTests: XCTestCase {
     func testSignalsMapWithIconAndSeverity() {
         let content = TodayDetailViewModel.makeContent(
             from: payload(signals: [
-                .init(kind: "rain", label: "Light shower", detail: "After 4pm", urgency: "low", action: nil),
-                .init(kind: "grid", label: "Grid strain", detail: "Reduce heat", urgency: "high", action: nil)
+                .init(kind: "rain", label: "Light shower", detail: "After 4pm", urgency: "low"),
+                .init(kind: "grid", label: "Grid strain", detail: "Reduce heat", urgency: "high")
             ])
         )
         XCTAssertEqual(content.signals.count, 2)

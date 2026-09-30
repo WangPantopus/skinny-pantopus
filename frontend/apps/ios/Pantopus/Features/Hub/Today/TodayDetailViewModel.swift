@@ -7,11 +7,11 @@
 //  (route `backend/routes/hub.js:596`) via the provider-orchestrated payload.
 //
 //  The briefing's data-backed sections — locality kicker, weather hero,
-//  AQI chip, advisory ribbon (from `alerts`), and the Signals list — map
-//  directly from the response. The purely decorative sun-arc, "Around the
-//  block" list, and Share card have no field in `/api/hub/today`, so they
-//  fall back to the design placeholder (`TodaySampleData`) until a backend
-//  source exists. Today always has data, so there is no `.empty` state — the
+//  AQI chip, advisory ribbon (from `alerts`), the Signals list and Sun & sky
+//  (`sunrise_utc` / `sunset_utc`; left out without them) — map directly from
+//  the response, and the Share card says what Share sends. Only the "Around
+//  the block" title comes from the design placeholder (`TodaySampleData`); the
+//  list stays empty. Today always has data, so there is no `.empty` state — the
 //  advisory variant (`.alert`) stands in, selected by `content.isAlert`.
 //
 //  Previews / snapshots / tests still seed deterministic content via
@@ -167,7 +167,7 @@ final class TodayDetailViewModel {
     // MARK: - Mapping (pure — unit-test surface)
 
     /// Project the orchestrated payload into render content. `base` supplies
-    /// the decorative sun-arc + share card the backend doesn't provide.
+    /// only the "Around the block" title (the list stays empty).
     ///
     /// When `briefing` is present (a push tap carrying
     /// `metadata.briefing_delivery_id`), its stored `summary_text` and
@@ -182,8 +182,8 @@ final class TodayDetailViewModel {
         let alerts = payload?.alerts ?? []
         let hasAlert = !alerts.isEmpty
         let storedSignals = briefing?.signalsSnapshot ?? []
-        let signals = (storedSignals.isEmpty ? (payload?.signals ?? []) : storedSignals)
-            .map(signal(from:))
+        let rawSignals = storedSignals.isEmpty ? (payload?.signals ?? []) : storedSignals
+        let signals = rawSignals.map(signal(from:))
         let label = payload?.location?.label ?? "Today"
         let storedSummary = briefing?.summaryText?.isEmpty == false ? briefing?.summaryText : nil
         return TodayDetailContent(
@@ -195,13 +195,17 @@ final class TodayDetailViewModel {
             glyph: glyph(for: payload?.weather, hasAlert: hasAlert),
             chips: [aqiChip(payload?.aqi)].compactMap { $0 },
             ribbon: hasAlert ? ribbon(from: alerts[0]) : nil,
-            sunSky: base.sunSky,
+            sunSky: sunSky(payload?.weather, timezone: payload?.location?.timezone, now: now),
             signalsTitle: signals.isEmpty ? "Signals" : "Signals · \(signals.count) today",
             signalsAccent: hasAlert ? .error : .personal,
             signals: signals,
             aroundTitle: base.aroundTitle,
             around: [],
-            share: base.share
+            share: TodayShareCard(
+                title: "Share today's briefing",
+                subtitle: shareSubtitle,
+                message: shareMessage(payload, signals: rawSignals)
+            )
         )
     }
 
@@ -312,5 +316,97 @@ final class TodayDetailViewModel {
         }
         formatter.dateFormat = "EEE · MMM d"
         return formatter.string(from: now)
+    }
+}
+
+// MARK: - Sun & sky, sharing
+
+extension TodayDetailViewModel {
+    /// The Share card's line: what Share sends.
+    static let shareSubtitle = "Send today's weather and signals to a neighbor"
+
+    /// "Sun & sky" from today's sunrise and sunset, in the place's timezone. Nil when the
+    /// feed has no sun times, so the card is left out rather than showing made-up ones.
+    static func sunSky(_ weather: HubTodayPayload.TodayWeather?, timezone: String?, now: Date) -> TodaySunSky? {
+        guard let sunrise = parseInstant(weather?.sunriseUtc), let sunset = parseInstant(weather?.sunsetUtc) else { return nil }
+        guard sunset > sunrise else { return nil }
+        let zone = timezone.flatMap(TimeZone.init(identifier:)) ?? .current
+        let clock = DateFormatter()
+        clock.locale = Locale(identifier: "en_US_POSIX")
+        clock.timeZone = zone
+        clock.dateFormat = "h:mm a"
+        let daylight = sunset.timeIntervalSince(sunrise)
+        let minutes = Int(daylight / 60)
+        return TodaySunSky(
+            progress: min(1, max(0, now.timeIntervalSince(sunrise) / daylight)),
+            sunrise: clock.string(from: sunrise),
+            sunset: clock.string(from: sunset),
+            phaseLabel: phaseLabel(now: now, sunrise: sunrise, sunset: sunset, zone: zone),
+            daylight: "\(minutes / 60)h \(minutes % 60)m of daylight"
+        )
+    }
+
+    /// Where the day is, by the place's clock: "Before sunrise", "Early morning" … "Evening", "After sunset".
+    static func phaseLabel(now: Date, sunrise: Date, sunset: Date, zone: TimeZone) -> String {
+        if now < sunrise { return "Before sunrise" }
+        if now > sunset { return "After sunset" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        switch calendar.component(.hour, from: now) {
+        case ..<8: return "Early morning"
+        case ..<11: return "Mid-morning"
+        case ..<14: return "Midday"
+        case ..<17: return "Afternoon"
+        default: return "Evening"
+        }
+    }
+
+    /// Signal kinds about the place, which anyone nearby could know. The rest (bill_due, task_due, calendar,
+    /// mail, gig, and any kind this client doesn't know) are the viewer's own and never leave in a share.
+    static let shareableSignalKinds: Set<String> = [
+        "alert",
+        "precipitation",
+        "aqi",
+        "temperature",
+        "seasonal",
+        "local_update",
+        "address_calendar"
+    ]
+
+    /// What "Share today's briefing" sends: the weather, a public weather alert and place-level signals, with a
+    /// link to Pantopus. Never the place name (a location label can be an address), the summary line or a stored
+    /// briefing's text (both are composed from the viewer's own bills, tasks and mail), or a personal signal.
+    static func shareMessage(_ payload: HubTodayPayload?, signals: [HubTodayPayload.TodaySignalDTO]) -> String {
+        let weather = payload?.weather
+        var parts: [String] = []
+        let conditions = [weather?.currentTempF.map { _ in temperature(weather) }, weather?.conditionLabel].compactMap { $0 }
+        parts.append(conditions.joined(separator: ", "))
+        parts.append(highLow(weather))
+        parts.append(payload?.alerts?.first.map { ribbon(from: $0).title } ?? "")
+        parts.append(signals.filter { shareableSignalKinds.contains($0.kind ?? "") }.compactMap(\.label).joined(separator: " · "))
+        let sentences = parts.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ". ")) }.filter { !$0.isEmpty }
+        if sentences.isEmpty { return shareFallback }
+        return "Today's briefing: \(sentences.joined(separator: ". ")).\nShared from Pantopus: \(InviteLinks.downloadURLString)"
+    }
+
+    /// The share text for the screen's state: the prepared message, or just the link while loading or failed.
+    static func shareText(for state: State) -> String {
+        switch state {
+        case let .populated(content), let .alert(content):
+            if content.share.message.isEmpty { shareFallback } else { content.share.message }
+        default:
+            shareFallback
+        }
+    }
+
+    private static var shareFallback: String {
+        "Today's Pantopus briefing — \(InviteLinks.downloadURLString)"
+    }
+
+    private static func parseInstant(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return precise.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
     }
 }
