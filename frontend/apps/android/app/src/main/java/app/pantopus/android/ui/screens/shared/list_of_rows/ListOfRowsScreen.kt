@@ -1248,7 +1248,7 @@ private fun ContentColumn(
         if (row.title.isNotEmpty()) {
             // At large font scales the inline chip goes under the title, so it
             // can't take the title's whole width ("Household member" at 2x).
-            val stackInlineChip = row.inlineChip != null && LocalDensity.current.fontScale >= STACKED_CHIP_FONT_SCALE
+            val stackInlineChip = row.inlineChip != null && LocalDensity.current.fontScale >= LARGE_FONT_SCALE
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
@@ -2178,7 +2178,9 @@ private fun TopBarActionButton(action: TopBarAction) {
         if (action.isEnabled) PantopusColors.primary600 else PantopusColors.appTextMuted
     val iconTint =
         if (action.isEnabled) PantopusColors.appText else PantopusColors.appTextMuted
-    if (action.label != null) {
+    // At large font scales a labelled action shows its icon (as on iOS) so the bar's title keeps its room; TalkBack
+    // still reads its content description.
+    if (action.label != null && LocalDensity.current.fontScale < LARGE_FONT_SCALE) {
         Box(
             modifier =
                 Modifier
@@ -2379,5 +2381,8 @@ private fun fabTintColor(tint: FabTint): Color =
 // app.pantopus.android.ui.components.CompactButton — the canonical port
 // of `Core/Design/Components/CompactButton.swift`. Imported above.
 
-/** Font scale from which a row's inline chip sits under its title instead of beside it. */
-private const val STACKED_CHIP_FONT_SCALE = 1.3f
+/**
+ * Font scale from which rows and the top bar switch to their large-text layouts: a row's inline chip sits under its
+ * title, and a labelled top-bar action shows its icon.
+ */
+private const val LARGE_FONT_SCALE = 1.3f
