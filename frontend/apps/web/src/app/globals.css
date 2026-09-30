@@ -624,7 +624,10 @@
     --color-identity-business: #A78BFA;
     --app-surface: 15 23 42;
     --app-surface-raised: 30 41 59;
-    --app-surface-sunken: 15 23 42;
+    /* A step below --app-surface (it was equal), so sunken fills such as
+       inputs and preset chips stay visible on dark cards, as 243 does on
+       255 in light. Text tokens gain contrast on it. */
+    --app-surface-sunken: 8 14 32;
     --app-surface-muted: 17 24 39;
     --app-border: 31 41 55;
     --app-border-strong: 55 65 81;

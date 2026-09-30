@@ -18,12 +18,12 @@ export function AIMessageBubble({ message, isStreaming }: AIMessageBubbleProps) 
       <div
         className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5 ${
           isUser
-            ? 'bg-gray-200'
+            ? 'bg-app-border'
             : 'bg-gradient-to-br from-violet-500 to-indigo-600'
         }`}
       >
         {isUser ? (
-          <User className="w-3.5 h-3.5 text-gray-600" />
+          <User className="w-3.5 h-3.5 text-app-text-secondary" />
         ) : (
           <Sparkles className="w-3.5 h-3.5 text-white" />
         )}
@@ -41,7 +41,7 @@ export function AIMessageBubble({ message, isStreaming }: AIMessageBubbleProps) 
             className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
               isUser
                 ? 'bg-violet-600 text-white rounded-br-md'
-                : 'bg-gray-100 text-gray-800 rounded-bl-md'
+                : 'bg-app-surface-sunken text-app-text rounded-bl-md'
             }`}
           >
             {message.content}
@@ -60,7 +60,7 @@ export function AIMessageBubble({ message, isStreaming }: AIMessageBubbleProps) 
 
         {/* Streaming placeholder when no content yet */}
         {isStreaming && !message.content && message.role === 'assistant' && (
-          <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-gray-100">
+          <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-app-surface-sunken">
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
