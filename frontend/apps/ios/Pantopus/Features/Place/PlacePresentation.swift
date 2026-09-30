@@ -101,6 +101,18 @@ enum PlacePresentation {
         return out.string(from: date)
     }
 
+    /// A calendar day from "2026-11-03" (or a timestamp's date part), at
+    /// noon UTC; format it in UTC. A date-only value is not an instant:
+    /// the internet-date-time parsers reject it outright.
+    static func parseCalendarDay(_ raw: String?) -> Date? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespaces), raw.count >= 10 else { return nil }
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = TimeZone(identifier: "UTC")
+        parse.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return parse.date(from: String(raw.prefix(10)) + "T12:00")
+    }
+
     /// Parses a LOCAL wall-clock datetime with no zone or seconds
     /// ("2026-06-12T05:19") — the shape sunrise/sunset arrive in.
     private static let localDateTimeFormatter: DateFormatter = {
