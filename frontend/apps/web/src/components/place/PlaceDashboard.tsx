@@ -151,9 +151,16 @@ export default function PlaceDashboard() {
   }
 
   if (intelQuery.isError || !intelQuery.data) {
+    // A 403 means this account can't see the place (e.g. ?home= from another
+    // account): not a connection problem, and a retry can't change it.
+    const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
       <Shell>
-        <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => intelQuery.refetch()} />
+        {denied ? (
+          <ErrorState title="This place isn't available" message="You don't have permission to view this place." />
+        ) : (
+          <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => intelQuery.refetch()} />
+        )}
       </Shell>
     );
   }
