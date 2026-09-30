@@ -9,6 +9,32 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — HANDOFF: #1080 merged (batch 217); #1087/#1089/#1090/#1092 sealed and with Stream 1; #1081 (native) needs CI rerun + Stream 1's device run; next = sweep backlog, 2026-09-30T21:10:15Z
+
+- **Read [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md) first.** It holds the full state, runtime, rules, backlog and lessons.
+- **Merged since the last block:** #1080, "the profile completion card shows the real percentage", in batch 217 (PR #1084, 20:29:26Z, master `e514e033b`). Stream 1 verified seal `7d730cad…`.
+- **Sealed and handed to Stream 1** (all merge cleanly into `e514e033b`):
+  - **#1087, "a public profile's trust signals are true":** head `0ccc4d928`, CI 36775249193, seal `7fbf14f0…`.
+    - The public routes now send the User's worker counters. These are already public via `/api/gigs/reliability/:userId`.
+    - The invented "Usually within 24h" and the "Reliable" guess are gone, and a crew at `/{username}` gets its crew page.
+    - E2E: a worker with 3 done and 1 no-show showed "Completed 0 / New" on master and shows "Completed 3 / Reliable" on the fix. No history reads "New" even though the API sends a score of 100.
+  - **#1089, "a failed connection action says why":** head `0d8c493ab`, CI 36775674336, seal `95da3278…`. A withdrawn request's Accept gets 404 from the API; master showed nothing, and the fix shows a toast and refreshes the list.
+  - **#1090, "the crew dashboard Inbox":** head `a17a7d73b`, CI 36776269108, seal `a63a3c35…`. Rows read "? Unknown" and opened a 403 room on master; the fix shows the name and preview and opens the crew's chat.
+  - **#1092, the stale "skills aren't saved" note removed:** head `be13de394`, CI 36776925247, seal `470e0df6…`. On master, skills save through the UI (200/200) and are listed after a reload.
+- **Open, not sealed: #1081** (iOS + Android page editors keep a button's `url`; the Directions chip opens Maps and is hidden for home-based crews), head `7fb117fa7`.
+  - Run 36771770835 has iOS queued. Android lint, test and assemble passed; the instrumented job died on a CI emulator hang (recorded in the bundle).
+  - Rerun it with `gh run rerun 36771770835 --failed` when the run completes.
+  - Stream 1 runs the 4 device checks on iOS and Android with the recipe I sent. After that: seal and hand off.
+- **Sweep of Stream 5's web screens** (read-only, 22 candidates, each confirmed before any fix): 5 fixed (above and #1080). The remaining items are in the prompt's section 5, in priority order: crew page placeholder blocks and the contact form; Services/Portfolio dead ends; block Appearance settings; the dead hero upload; checklist dead links; SeatCard keyboard access; preview hard-coding.
+- **Decisions recorded:**
+  - Reliability shows only from real history.
+  - The public routes send the canonical worker counters instead of posted tasks.
+  - The duplicate "Address on file" badge was left out; the header already shows verified residency.
+  - A failed connection action refreshes the list.
+- **Runtime:** API 18134 and web 18131 on master `e514e033b`; DB at `20260930184000`; proxy allowances disabled. No fixtures remain from today's runs.
+  - One unexplained crew is left alone: "S5 Crew Biz" (`s5_gig_biz_dfa0bf`, created 08:42Z).
+- **Kit:** `tools/stream5-e2e/README.md` and `ci-record.sh` hold today's E2E patterns: the `/b/` substitution, one real write through a read-only page, the WebSocket stub, gradient-aware contrast, and the 60 s profile cache.
+
 ## LIVE — S3-22 #1076 merged (batch 215); #1077 (light cards) and #1080 (profile completion truth) sealed; #1081 (native crew links + Directions) waiting on CI and Stream 1's device run, 2026-09-30T20:20:10Z
 
 - **Merged:** #1076, S3-22 crew page buttons with http(s)-only links and no Directions to a home, in batch 215 (PR #1079, master `daeb2e26d`), seal `952d6a9d…`. **The S3-22 row is closed.**
