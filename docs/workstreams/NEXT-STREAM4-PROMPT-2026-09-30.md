@@ -24,7 +24,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - #885 (compose: a pending claim is not a member).
 
   Then [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`) merged in batch 155 (master `66d57bcfe`, 08:02Z).
-  Open since 08:28Z: [#904](https://github.com/WangPantopus/skinny-pantopus/pull/904) (web Emergency Info 403 wording; seal `…-emergency-access-denied-r1` `76bb6524…`). Check `gh pr view 904` before relying on this.
+  Then [#904](https://github.com/WangPantopus/skinny-pantopus/pull/904) (web Emergency Info 403 wording; seal `…-emergency-access-denied-r1` `76bb6524…`) merged in batch 158 (master `88149d747`). Native toolchains are being reinstalled by Stream 1 (user-approved per the coordinator); wait for its "toolchains ready" announcement.
 - **Verification-only seals:**
   - I04 DST: `20260930-stream4-address-calendar-dst-r1`;
   - I05 local parts: `…-property-local-r1`;
