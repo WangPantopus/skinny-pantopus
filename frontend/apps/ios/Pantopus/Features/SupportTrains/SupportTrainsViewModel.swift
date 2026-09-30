@@ -94,23 +94,46 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     private let onOpenTrain: @MainActor (String) -> Void
     private let onSearch: @MainActor () -> Void
     private let locationProvider: @MainActor () async -> (latitude: Double, longitude: Double)?
+    private let locationRequester: @MainActor () async -> (latitude: Double, longitude: Double)?
+    private let openLocationSettings: @MainActor () -> Void
 
     private var mine: [SupportTrainListItemDTO] = []
     private var nearby: [SupportTrainListItemDTO] = []
     private var loadedOnce = false
+    /// Nearby has no location to search from, so it asks for one instead of
+    /// claiming there are no trains.
+    private var nearbyNeedsLocation = false
+    /// "Use my location" got no location (refused or off): Settings is next.
+    private var locationRequestFailed = false
+    /// A tab whose last read failed shows the error and Try again, not an empty list.
+    private var mineFailed = false
+    private var nearbyFailed = false
 
+    /// Nearby searches from the device's location, like the Tasks feed. Without
+    /// permission there's no cached fix, and nothing prompts until the person
+    /// taps "Use my location".
     init(
         api: APIClient = .shared,
         onStartTrain: @escaping @MainActor () -> Void = {},
         onOpenTrain: @escaping @MainActor (String) -> Void = { _ in },
         onSearch: @escaping @MainActor () -> Void = {},
-        locationProvider: @escaping @MainActor () async -> (latitude: Double, longitude: Double)? = { nil }
+        locationProvider: @escaping @MainActor () async -> (latitude: Double, longitude: Double)? = {
+            DeviceLocationProvider.shared.cachedCoordinate().map { (latitude: $0.latitude, longitude: $0.longitude) }
+        },
+        locationRequester: @escaping @MainActor () async -> (latitude: Double, longitude: Double)? = {
+            await DeviceLocationProvider.shared.requestCurrent().map { (latitude: $0.latitude, longitude: $0.longitude) }
+        },
+        openLocationSettings: @escaping @MainActor () -> Void = {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }
     ) {
         self.api = api
         self.onStartTrain = onStartTrain
         self.onOpenTrain = onOpenTrain
         self.onSearch = onSearch
         self.locationProvider = locationProvider
+        self.locationRequester = locationRequester
+        self.openLocationSettings = openLocationSettings
     }
 
     // MARK: - Lifecycle
@@ -128,6 +151,23 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
 
     public func loadMoreIfNeeded() async {
         // Single-shot feeds — pagination deferred to a follow-up.
+    }
+
+    /// Nearby's "Use my location": asks for permission if it hasn't been answered,
+    /// then searches from the fix. If none comes (refused or off), the next tap
+    /// opens Settings.
+    public func useMyLocation() async {
+        if locationRequestFailed {
+            openLocationSettings()
+            return
+        }
+        guard let loc = await locationRequester() else {
+            locationRequestFailed = true
+            rebuild()
+            return
+        }
+        _ = await fetchNearby(at: loc)
+        rebuild()
     }
 
     // MARK: - Fetching
@@ -150,27 +190,39 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
                 SupportTrainsEndpoints.mine()
             )
             mine = response.supportTrains
+            mineFailed = false
             return true
         } catch {
+            mineFailed = true
             return false
         }
     }
 
     private func fetchNearby() async -> Bool {
+        // A reload starts over: after a trip to Settings, "Use my location" may work now.
+        locationRequestFailed = false
         guard let loc = await locationProvider() else {
-            // Nearby tab gracefully degrades to "we need your location" — we
-            // still render the other two tabs.
+            // Nearby asks for a location instead; the other two tabs still render.
+            nearbyNeedsLocation = true
+            nearbyFailed = false
             nearby = []
             return true
         }
+        return await fetchNearby(at: loc)
+    }
+
+    private func fetchNearby(at loc: (latitude: Double, longitude: Double)) async -> Bool {
+        nearbyNeedsLocation = false
         do {
             let response: SupportTrainsNearbyResponse = try await api.request(
                 SupportTrainsEndpoints.nearby(latitude: loc.latitude, longitude: loc.longitude)
             )
             nearby = response.supportTrains
+            nearbyFailed = false
             return true
         } catch {
             nearby = []
+            nearbyFailed = true
             return false
         }
     }
@@ -190,9 +242,28 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     }
 
     private func rebuild() {
+        if let failure = failureMessage(for: selectedTab) {
+            state = .error(message: failure)
+            return
+        }
         let activeRows: [SupportTrainListItemDTO]
         let emptyContent: ListOfRowsState.EmptyContent
         switch selectedTab {
+        case SupportTrainsTab.nearby where nearbyNeedsLocation:
+            activeRows = []
+            emptyContent = ListOfRowsState.EmptyContent(
+                icon: locationRequestFailed ? .mapPinOff : .mapPin,
+                headline: "Turn on location to see trains nearby",
+                subcopy: locationRequestFailed
+                    ? "Location is off for Pantopus. Allow it in Settings to find support trains within 25 mi of you."
+                    : "Pantopus uses your location only to find support trains within 25 mi of you.",
+                ctaTitle: locationRequestFailed ? "Open Settings" : "Use my location"
+            ) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    Task { await self.useMyLocation() }
+                }
+            }
         case SupportTrainsTab.nearby:
             activeRows = nearbyRows
             emptyContent = ListOfRowsState.EmptyContent(
@@ -229,6 +300,14 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         }
         let mapped = activeRows.map(rowModel(for:))
         state = .loaded(sections: [RowSection(id: "trains", rows: mapped)], hasMore: false)
+    }
+
+    /// The tab's own read failed: say so (the error state offers Try again).
+    private func failureMessage(for tab: String) -> String? {
+        switch tab {
+        case SupportTrainsTab.nearby: nearbyFailed ? "Couldn't load trains nearby. Try again." : nil
+        default: mineFailed ? "Couldn't load your support trains. Try again." : nil
+        }
     }
 
     // MARK: - Mapping

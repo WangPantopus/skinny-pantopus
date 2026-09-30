@@ -44,7 +44,9 @@ data class SupportTrainsNearbyResponse(
  */
 @JsonClass(generateAdapter = true)
 data class SupportTrainListItemDto(
-    val id: String,
+    // My trains sends `id`; the Nearby RPC sends `support_train_id` instead, and
+    // [app.pantopus.android.data.support_trains.SupportTrainsRepository.nearby] copies it here.
+    val id: String = "",
     val title: String? = null,
     val status: String? = null,
     @Json(name = "published_at") val publishedAt: String? = null,
@@ -59,6 +61,7 @@ data class SupportTrainListItemDto(
     @Json(name = "slots_total") val slotsTotal: Int? = null,
     @Json(name = "distance_meters") val distanceMeters: Double? = null,
     @Json(name = "recipient_name") val recipientName: String? = null,
+    @Json(name = "support_train_id") val supportTrainId: String? = null,
 )
 
 /**

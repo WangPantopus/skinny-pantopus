@@ -100,7 +100,27 @@ public struct SupportTrainListItemDTO: Decodable, Sendable, Identifiable, Hashab
         case slotsFilled = "slots_filled"
         case slotsTotal = "slots_total"
         case distanceMeters = "distance_meters"
-        case recipientName = "recipient_name"
+        case recipientName = "recipient_name", supportTrainId = "support_train_id"
+    }
+}
+
+public extension SupportTrainListItemDTO {
+    /// My trains sends `id`; the Nearby RPC (`list_support_trains_nearby`) sends `support_train_id`.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: .supportTrainId)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        status = try c.decodeIfPresent(String.self, forKey: .status)
+        publishedAt = try c.decodeIfPresent(String.self, forKey: .publishedAt)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        myRole = try c.decodeIfPresent(String.self, forKey: .myRole)
+        supportTrainType = try c.decodeIfPresent(String.self, forKey: .supportTrainType)
+        startsOn = try c.decodeIfPresent(String.self, forKey: .startsOn)
+        endsOn = try c.decodeIfPresent(String.self, forKey: .endsOn)
+        slotsFilled = try c.decodeIfPresent(Int.self, forKey: .slotsFilled)
+        slotsTotal = try c.decodeIfPresent(Int.self, forKey: .slotsTotal)
+        distanceMeters = try c.decodeIfPresent(Double.self, forKey: .distanceMeters)
+        recipientName = try c.decodeIfPresent(String.self, forKey: .recipientName)
     }
 }
 

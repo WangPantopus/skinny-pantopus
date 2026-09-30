@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -102,10 +103,22 @@ class SupportTrainsViewModel
     @Inject
     constructor(
         private val repo: SupportTrainsRepository,
+        private val location: LocationProvider,
     ) : ViewModel() {
         private var mine: List<SupportTrainListItemDto> = emptyList()
         private var nearbyRows: List<SupportTrainListItemDto> = emptyList()
         private var loadedOnce: Boolean = false
+
+        // Nearby has no location to search from, so it asks for one instead of
+        // claiming there are no trains.
+        private var nearbyNeedsLocation: Boolean = false
+
+        // "Use my location" got no location (refused or off): Settings is next.
+        private var locationRequestFailed: Boolean = false
+
+        // A tab whose last read failed shows the error and Try again, not an empty list.
+        private var mineFailed: Boolean = false
+        private var nearbyFailed: Boolean = false
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -144,12 +157,19 @@ class SupportTrainsViewModel
             }
 
         /**
-         * Caller-supplied location accessor (suspend so the host can
-         * trampoline to a CoroutineScope-friendly API). Returning null
-         * gracefully skips the Nearby fetch — the My-trains tab still
-         * renders.
+         * Where Nearby searches from: the device's last fix, like the Tasks feed.
+         * Returning null skips the Nearby fetch and the tab asks for a location;
+         * the My-trains tab still renders. Tests replace it.
          */
-        var locationProvider: suspend () -> Pair<Double, Double>? = { null }
+        var locationProvider: suspend () -> Pair<Double, Double>? = {
+            location.cachedCoordinate()?.let { it.latitude to it.longitude }
+        }
+
+        /** Set by the screen: ask for the permission if needed, then [useMyLocation]. */
+        var onRequestLocation: () -> Unit = {}
+
+        /** Set by the screen: open this app's system settings. */
+        var onOpenLocationSettings: () -> Unit = {}
 
         fun load() {
             // After the first load, each return re-reads quietly, so a train
@@ -186,31 +206,72 @@ class SupportTrainsViewModel
             when (val result = repo.mine()) {
                 is NetworkResult.Success -> {
                     mine = result.data.supportTrains
+                    mineFailed = false
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    mineFailed = true
+                    false
+                }
             }
 
         private suspend fun fetchNearby(): Boolean {
+            // A reload starts over: after a trip to Settings, "Use my location" may work now.
+            locationRequestFailed = false
             val loc =
                 locationProvider() ?: run {
+                    nearbyNeedsLocation = true
+                    nearbyFailed = false
                     nearbyRows = emptyList()
                     return true
                 }
+            return fetchNearby(loc)
+        }
+
+        private suspend fun fetchNearby(loc: Pair<Double, Double>): Boolean {
+            nearbyNeedsLocation = false
             return when (val result = repo.nearby(latitude = loc.first, longitude = loc.second)) {
                 is NetworkResult.Success -> {
                     nearbyRows = result.data.supportTrains
+                    nearbyFailed = false
                     true
                 }
                 is NetworkResult.Failure -> {
                     nearbyRows = emptyList()
+                    nearbyFailed = true
                     false
                 }
             }
         }
 
+        /**
+         * Nearby's "Use my location", after the screen has the permission: search
+         * from a fresh fix. If none comes, the next tap opens Settings.
+         */
+        fun useMyLocation() {
+            viewModelScope.launch {
+                val fix = location.requestCurrent()
+                if (fix == null) {
+                    locationRequestFailed = true
+                } else {
+                    fetchNearby(fix.latitude to fix.longitude)
+                }
+                applyState()
+            }
+        }
+
+        /** The permission was refused: offer Settings instead. */
+        fun locationPermissionDenied() {
+            locationRequestFailed = true
+            applyState()
+        }
+
         private fun applyState() {
             _tabs.value = makeTabs()
+            failureMessage(_selectedTab.value)?.let {
+                _state.value = ListOfRowsUiState.Error(it)
+                return
+            }
             val activeRows =
                 when (_selectedTab.value) {
                     SupportTrainsTab.NEARBY -> nearbyRows
@@ -348,17 +409,17 @@ class SupportTrainsViewModel
                 else -> "Active" to StatusChipVariant.Info
             }
 
+        // The tab's own read failed: say so (the error state offers Try again).
+        private fun failureMessage(tab: String): String? =
+            when (tab) {
+                SupportTrainsTab.NEARBY -> if (nearbyFailed) "Couldn't load trains nearby. Try again." else null
+                else -> if (mineFailed) "Couldn't load your support trains. Try again." else null
+            }
+
         private fun emptyState(tab: String): ListOfRowsUiState.Empty =
             when (tab) {
                 SupportTrainsTab.NEARBY ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Heart,
-                        headline = "No trains nearby right now",
-                        subcopy =
-                            "When a neighbor starts a meal, ride, or pet-care train within 25 mi, you'll see it here.",
-                        ctaTitle = "Start a train",
-                        onCta = { onStartTrain() },
-                    )
+                    if (nearbyNeedsLocation) locationEmptyState() else noTrainsNearbyState()
                 SupportTrainsTab.INVITATIONS ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Mail,
@@ -378,4 +439,28 @@ class SupportTrainsViewModel
                         onCta = { onStartTrain() },
                     )
             }
+
+        private fun locationEmptyState(): ListOfRowsUiState.Empty =
+            ListOfRowsUiState.Empty(
+                icon = if (locationRequestFailed) PantopusIcon.MapPinOff else PantopusIcon.MapPin,
+                headline = "Turn on location to see trains nearby",
+                subcopy =
+                    if (locationRequestFailed) {
+                        "Location is off for Pantopus. Allow it in Settings to find support trains within 25 mi of you."
+                    } else {
+                        "Pantopus uses your location only to find support trains within 25 mi of you."
+                    },
+                ctaTitle = if (locationRequestFailed) "Open Settings" else "Use my location",
+                onCta = { if (locationRequestFailed) onOpenLocationSettings() else onRequestLocation() },
+            )
+
+        private fun noTrainsNearbyState(): ListOfRowsUiState.Empty =
+            ListOfRowsUiState.Empty(
+                icon = PantopusIcon.Heart,
+                headline = "No trains nearby right now",
+                subcopy =
+                    "When a neighbor starts a meal, ride, or pet-care train within 25 mi, you'll see it here.",
+                ctaTitle = "Start a train",
+                onCta = { onStartTrain() },
+            )
     }
