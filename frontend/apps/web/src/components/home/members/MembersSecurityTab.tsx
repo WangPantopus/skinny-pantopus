@@ -95,6 +95,8 @@ export default function MembersSecurityTab({
   const canViewMembers = can('members.view');
   const canManagePasses = canManageMembers;
   const canViewSecrets = can('access.view_wifi') || can('access.view_codes');
+  // Ownership verification is read from the Owners list, which needs ownership.view; without it the card is hidden.
+  const canViewOwnership = can('ownership.view');
 
   // Detail panel
   const [detailMember, setDetailMember] = useState<HomeMember | null>(null);
@@ -133,8 +135,9 @@ export default function MembersSecurityTab({
   const [lockdownEnabled, setLockdownEnabled] = useState(false);
   const [showLockdown, setShowLockdown] = useState(false);
   const [secretsCount, setSecretsCount] = useState(0);
+  const [ownershipVerified, setOwnershipVerified] = useState(false);
   const [securityLoading, setSecurityLoading] = useState(true);
-  const [securityErrors, setSecurityErrors] = useState<Partial<Record<'passes' | 'settings' | 'secrets', string>>>({});
+  const [securityErrors, setSecurityErrors] = useState<Partial<Record<'passes' | 'settings' | 'secrets' | 'owners', string>>>({});
   const securityGeneration = useRef(0);
 
   // Load supplementary data
@@ -144,13 +147,14 @@ export default function MembersSecurityTab({
     setSecurityErrors({});
     setPassesNotice('');
     try {
-      const [passesRes, settingsRes, secretsRes] = await Promise.allSettled([
+      const [passesRes, settingsRes, secretsRes, ownersRes] = await Promise.allSettled([
         canManagePasses ? api.homeIam.getGuestPasses(homeId) : Promise.resolve({ passes: [] }),
         api.homeProfile.getHomeSettings(homeId),
         canViewSecrets ? api.homeProfile.getHomeAccessSecrets(homeId) : Promise.resolve({ secrets: [] }),
+        canViewOwnership ? api.homeOwnership.getHomeOwners(homeId) : Promise.resolve({ owners: [] }),
       ]);
       if (generation !== securityGeneration.current) return;
-      const errors: Partial<Record<'passes' | 'settings' | 'secrets', string>> = {};
+      const errors: Partial<Record<'passes' | 'settings' | 'secrets' | 'owners', string>> = {};
       if (passesRes.status === 'fulfilled') {
         const passes = (passesRes.value as Record<string, any>).passes || [];
         const active = passes.filter(
@@ -167,15 +171,20 @@ export default function MembersSecurityTab({
       if (secretsRes.status === 'fulfilled') {
         setSecretsCount(((secretsRes.value as Record<string, any>).secrets || []).length);
       } else errors.secrets = failureMessage(secretsRes.reason, 'Access secrets could not be loaded. Please try again.');
+      if (ownersRes.status === 'fulfilled') {
+        const owners = (ownersRes.value as { owners?: unknown }).owners;
+        if (Array.isArray(owners)) setOwnershipVerified(owners.some((o) => o?.owner_status === 'verified'));
+        else errors.owners = 'Ownership verification could not be loaded. Please try again.';
+      } else errors.owners = failureMessage(ownersRes.reason, 'Ownership verification could not be loaded. Please try again.');
       setSecurityErrors(errors);
     } catch (error) {
       if (generation !== securityGeneration.current) return;
       const message = failureMessage(error, 'Security details could not be loaded. Please try again.');
-      setSecurityErrors({ passes: message, settings: message, secrets: message });
+      setSecurityErrors({ passes: message, settings: message, secrets: message, owners: message });
     } finally {
       if (generation === securityGeneration.current) setSecurityLoading(false);
     }
-  }, [homeId, canManagePasses, canViewSecrets]);
+  }, [homeId, canManagePasses, canViewSecrets, canViewOwnership]);
 
   useEffect(() => {
     loadSecurity();
@@ -358,7 +367,8 @@ export default function MembersSecurityTab({
         )}
       </div>
 
-      {/* ===== Section 2: Security Center ===== */}
+      {/* ===== Section 2: Security Center (only when one of its cards applies, never a bare heading) ===== */}
+      {(canManagePasses || canViewSecrets || can('security.manage') || canViewOwnership) && (
       <div>
         <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-3">Security Center</h3>
         {securityLoading ? (
@@ -426,23 +436,29 @@ export default function MembersSecurityTab({
             </div>
           )}
 
-          {/* Home Verification */}
+          {/* Ownership verification: whether the Home has a verified owner, from the Owners list. No Home field
+              records verification, so a viewer who can't read ownership doesn't get a card that can only say "Not verified". */}
+          {canViewOwnership && (
           <div className="bg-app-surface rounded-xl border border-app-border p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">✅</span>
-              <span className="text-sm font-semibold text-app-text">Verification</span>
+              <span className="text-sm font-semibold text-app-text">Ownership verification</span>
             </div>
+            {securityErrors.owners ? <ErrorState message={securityErrors.owners} onRetry={loadSecurity} /> : (
             <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 border ${
-              home?.verified
+              ownershipVerified
                 ? 'bg-green-50 text-green-700 border-green-200'
                 : 'bg-app-surface-sunken text-app-text-secondary border-app-border'
             }`}>
-              {home?.verified ? 'Verified' : 'Not verified'}
+              {ownershipVerified ? 'Verified' : 'Not verified'}
             </span>
+            )}
           </div>
+          )}
         </div>
         )}
       </div>
+      )}
 
       {/* ===== Section 3: Audit Log ===== */}
       {canManageMembers && (
