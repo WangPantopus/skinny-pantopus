@@ -273,6 +273,7 @@ SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000003'
 DO $$ BEGIN
  IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
   RAISE EXCEPTION 'Active posting creator lost existing read'; END IF;
+ -- Since #992 clients reach Gig only through the API, so the grant refuses this, not RLS.
  BEGIN UPDATE public."Gig" SET completion_note='Direct creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
   RAISE EXCEPTION 'Active creator edited the gig directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
@@ -282,6 +283,7 @@ SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
   RAISE EXCEPTION 'Revoked creator retained private proof reads'; END IF;
+ -- Since #992 clients reach Gig only through the API, so the grant refuses this, not RLS.
  BEGIN UPDATE public."Gig" SET completion_note='Revoked creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
   RAISE EXCEPTION 'Revoked creator retained writes'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;

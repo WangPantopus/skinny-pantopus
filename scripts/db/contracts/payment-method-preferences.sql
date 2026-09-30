@@ -94,6 +94,7 @@ DO $$ BEGIN
    ('eef10000-0000-4000-8000-000000000004','card-contract-4@example.invalid','card_contract_4','Anonymous binding','cus_stolen');
   RAISE EXCEPTION 'Anonymous client inserted provider binding';
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ -- Since #992 anon holds no write grant, so the grant refuses this, not RLS matching no row.
  BEGIN
   UPDATE public."User" SET stripe_customer_id='cus_stolen' WHERE id='eef10000-0000-4000-8000-000000000001';
   RAISE EXCEPTION 'Anonymous client updated provider binding';

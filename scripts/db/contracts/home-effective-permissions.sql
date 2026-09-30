@@ -222,6 +222,7 @@ BEGIN
       END IF;
       RAISE EXCEPTION 'Read-only finance viewer inserted % through RLS',relation;
     EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    -- Since #992 clients reach these tables only through the API, so the grant refuses this, not RLS.
     BEGIN
       EXECUTE format('UPDATE public.%I SET details=''{}''::jsonb WHERE id=$1',relation) USING existing_id;
       RAISE EXCEPTION 'Read-only finance viewer updated % directly',relation;
@@ -315,6 +316,7 @@ BEGIN
   IF (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h) <> 2 THEN
     RAISE EXCEPTION 'Real child document RLS visibility or recursion boundary failed: % rows; permissions %', (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h), public.home_get_user_permissions(h);
   END IF;
+  -- Since #992 clients reach HomeDocument only through the API, so the grant refuses this, not RLS.
   BEGIN
     UPDATE public."HomeDocument" SET title='Should not change' WHERE id='ddb00000-0000-4000-8000-000000000201';
     RAISE EXCEPTION 'Child updated its own document directly';
