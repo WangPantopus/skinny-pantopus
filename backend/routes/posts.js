@@ -736,7 +736,13 @@ async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILIT
     .eq('id', postId)
     .single();
 
-  if (error || !post) {
+  // No row, or an id that isn't a UUID, is "not found"; a failed read is not.
+  if (error && !['PGRST116', '22P02'].includes(error.code)) {
+    logger.warn('Post read failed', { postId, code: error.code });
+    res.status(503).json({ error: 'This post could not be loaded. Please try again.' });
+    return null;
+  }
+  if (!post) {
     res.status(404).json({ error: 'Post not found' });
     return null;
   }
