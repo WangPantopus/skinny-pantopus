@@ -47,7 +47,23 @@ public struct AccountDeleteSheet: View {
         confirmText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == Self.confirmWord
     }
 
+    /// Scroll target for the button row, so it can be brought above the keyboard.
+    private static let buttonsID = "accountDeleteButtons"
+
     public var body: some View {
+        ScrollViewReader { proxy in
+            scrollContent
+                .scrollDismissesKeyboard(.interactively)
+                // Once the word is typed, bring the armed button above the keyboard:
+                // otherwise its suggestion bar covers the button and takes the tap.
+                .onChange(of: isConfirmed) { _, armed in
+                    guard armed else { return }
+                    withAnimation { proxy.scrollTo(Self.buttonsID, anchor: .bottom) }
+                }
+        }
+    }
+
+    private var scrollContent: some View {
         ScrollView {
             VStack(spacing: Spacing.s0) {
                 warningDisc
@@ -90,6 +106,7 @@ public struct AccountDeleteSheet: View {
                 buttons
                     .padding(.top, Spacing.s5)
                     .padding(.bottom, Spacing.s6)
+                    .id(Self.buttonsID)
             }
             .padding(.horizontal, Spacing.s6)
             .frame(maxWidth: .infinity)
@@ -151,6 +168,7 @@ public struct AccountDeleteSheet: View {
             .disabled(isDeleting)
             .textInputAutocapitalization(.characters)
             .autocorrectionDisabled(true)
+            .submitLabel(.done)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
