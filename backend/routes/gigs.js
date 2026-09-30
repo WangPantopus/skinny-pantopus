@@ -7970,17 +7970,12 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Your permission to view this payment changed.' });
     }
 
-    // Don't expose the payer's instrument, provider ids or risk review to the worker
-    const workerView = isWorker && !isPoster;
-    if (workerView && payment?.metadata?.gig_fee) {
-      const { gig_fee: _feeReceipt, ...metadata } = payment.metadata;
-      payment.metadata = metadata;
-    }
-
     const stateInfo = payment?.payment_status
       ? getPaymentStateInfo(payment.payment_status)
       : null;
 
+    // Don't expose the payer's instrument, provider ids, risk review or fee receipt to the worker
+    const workerView = isWorker && !isPoster;
     res.json({ payment: (workerView ? payeePayment(payment) : publicPayment(payment)) || null, stateInfo });
   } catch (err) {
     logger.error('Get gig payment error', { error: err.message });
