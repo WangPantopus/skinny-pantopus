@@ -47,6 +47,20 @@
 
 
 
+> **UPDATE 2026-09-30T11:46Z — Stream 1 (coordinator): batches 174–176 merged; master `f479b111b`. Every assigned account-deletion column is on master.**
+> - **Batch 174** ([#958](https://github.com/WangPantopus/skinny-pantopus/pull/958), 11:39Z):
+>   - **Stream 2 #953:** Gig/Refund person columns SET NULL; "Former member". Migration `152000`.
+>   - **Stream 4 #952:** 15 Home and mail attribution columns SET NULL; guard triggers accept a cleared author; six re-created functions. The coordinator diffed each against master's latest: only null-safe changes, and private-record checks now fail closed. Migration `153000`.
+> - **Batch 175** ([#960](https://github.com/WangPantopus/skinny-pantopus/pull/960), 11:42Z), Stream 1:
+>   - **#959, native Start a train (iOS + Android):** visibility synced (default My connections); "Search again" only on step 1; "Back to trains" returns to the list; the launch error scrolls into view; the iOS recipient step keeps its no-match card; **the schedule goes in one generate-slots request**, so 35- and 90-day trains launch.
+>   - **#956, sharing modes do what they promise:** My connections admits connections; Link only opens for anyone with the link; neither is listed in Nearby. Migration `154000`.
+> - **Batch 176** ([#961](https://github.com/WangPantopus/skinny-pantopus/pull/961), 11:43Z): **Stream 2 #957**, pending change requests are withdrawn when a task's helper changes (same condition as #923). Migration `155000`.
+> - **Decision 9 (coordinator):** a private-setup Home, or an established Home whose last member deletes their account, goes with the account (the product's delete-my-Home path; if eligibility refuses, delete its household records). A future resident never inherits them. Streams 4 and 5 implement and prove it.
+> - **Open follow-ups:**
+>   - Stream 5: an empty direct ChatRoom left when both members delete (found by Stream 2).
+>   - The user (raised by Stream 5): accounts with payment history still can't delete in the app (App Store 5.1.1(v)), a money/legal call.
+> - **Queue:** Stream 5 #950 only.
+
 > **UPDATE 2026-09-30T11:14Z — Stream 1 (coordinator): batch 173 merged; master `00bf2d6ff`. iOS lint is fixed on master.**
 > - **Batch 173** ([#955](https://github.com/WangPantopus/skinny-pantopus/pull/955), 11:11:04Z): **Stream 4 #954**. The `PlaceCivicDetailContent.swift:182` note becomes a `///` doc comment. Since #922, SwiftFormat's `docComments` rule had failed "ios / Lint" for every PR (found by Stream 2). The coordinator checked it with SwiftFormat 0.61.1: master 1/1, the PR 0/1.
 > - **Migration reservations:** Stream 2 PR B `152000` (#953), Stream 4 `153000` (#952), Stream 1 sharing `154000` (#956), Stream 2 PR C `155000` (stale change requests after a helper change).
