@@ -54,7 +54,7 @@
    - New leads (recorded, not reproduced as defects yet):
      - the Members & Security audit list shows raw action codes (Stream 4; its #854 label table can be reused);
      - the URL-only Settings page's Notifications switches have no height, keep local state only and name cut features (needs a product call: remove or persist);
-     - a member opening the Members page by URL still sees "Recover a member removal" and "Refresh members".
+     - ~~a member opening the Members page by URL still sees "Recover a member removal" and "Refresh members"~~: no change needed (code check 2026-09-30). Member-removal recovery includes the member's own leave (`is_self`, `removalLink(homeId, 'self')`), and the Homes list shows the same link to everyone; "Refresh members" is the page's standing refresh, which #835 kept.
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
