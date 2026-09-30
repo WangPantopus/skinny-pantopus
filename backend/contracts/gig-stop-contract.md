@@ -73,3 +73,13 @@ started work, no-show execution, released worker earnings, disputes and unknown
 historical provider attempts return explicit review restrictions. Fees are
 never silently waived or labeled charged. Close requires an actually open,
 unassigned task with no unresolved payment or checkout.
+
+Account deletion: a person who made a stop can delete their account once none
+of their stops is still `pending` or `needs_review` (until then the route
+returns `409 TASK_STOP_IN_PROGRESS`, and the database refuses to clear the
+actor of an unfinished stop). A finished stop keeps its receipt, with the
+stored actor cleared. Clients only read stop requests they made, so they never
+receive a request without an actor. When a task goes with its owner's account,
+its money-free receipts go with it; a stop tied to a payment is kept and the
+deletion is refused. The other person's stop notice is still delivered after
+the actor's account is gone.
