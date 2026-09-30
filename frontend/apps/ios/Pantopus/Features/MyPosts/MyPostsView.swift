@@ -24,6 +24,18 @@ public struct MyPostsView: View {
     public var body: some View {
         @Bindable var bindable = viewModel
         return ListOfRowsView(dataSource: viewModel)
+            .overlay(alignment: .bottom) {
+                // A failed archive, restore or delete says so (the row is already back).
+                if let toast = viewModel.toastMessage {
+                    ToastView(message: ToastMessage(text: toast, kind: .error))
+                        .padding(.bottom, 96)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: toast) {
+                            try? await Task.sleep(nanoseconds: 2_500_000_000)
+                            viewModel.toastMessage = nil
+                        }
+                }
+            }
             .accessibilityIdentifier("my-posts")
             .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
                 Task { await viewModel.refresh() }

@@ -187,6 +187,10 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     /// sees an explicit two-step confirmation for irreversible deletes.
     public var deleteTarget: MyPostsDeleteTarget?
 
+    /// A failed archive, restore or delete puts the row back and says so,
+    /// like the post page.
+    public var toastMessage: String?
+
     // MARK: - Dependencies
 
     private let api: APIClient
@@ -568,6 +572,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         } catch {
             localArchiveOverrides = previousOverrides
             rebuild()
+            toastMessage = "Couldn't archive the post"
         }
     }
 
@@ -585,6 +590,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         } catch {
             localArchiveOverrides = previousOverrides
             rebuild()
+            toastMessage = "Couldn't restore the post"
         }
     }
 
@@ -604,6 +610,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             posts = previousPosts
             localArchiveOverrides = previousOverrides
             rebuild()
+            toastMessage = "Couldn't delete the post"
         }
     }
 
