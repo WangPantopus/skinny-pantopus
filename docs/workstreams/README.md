@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T06:39Z — Stream 1 (coordinator): batch 140 merged; master `c063bb868`.**
+> - **Batch 140** ([#857](https://github.com/WangPantopus/skinny-pantopus/pull/857) ← Stream 2 #856, head `33571df19`, tip `73ef387c4`, merged 06:36:53Z): Hub Today and `/briefings` are sent `private, no-cache`, and the per-user Hub Today cache is cleared on `PUT /api/location`, `/pin` and `PUT /api/hub/preferences`, so another account or a changed area never gets a stale Today (`backend/routes/hub.js`, `backend/routes/location.js`). Seal `1d30b5ea…` (56 files) verified; verify-batch OK.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:27Z — Stream 1 (coordinator): batch 139 merged; master `67e3a458a`.**
 > - **Batch 139** ([#855](https://github.com/WangPantopus/skinny-pantopus/pull/855) ← Stream 4 #854, head `b290d6c90`, merged 06:26:57Z): the Home activity timeline returns readable descriptions and the actor's display name instead of raw audit codes (`backend/routes/home.js`). Seal `1c2c0d0c…` (38 files) verified; verify-batch OK.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
