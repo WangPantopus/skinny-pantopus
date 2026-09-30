@@ -36,6 +36,7 @@ const logger = require('../utils/logger');
 const { OLD_TO_NEW_PERM, homeAccessExpiresAt } = require('../utils/homeAccessPolicy');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeExternalShareService = require('../services/homeExternalShareService');
+const { describeHomeActivity } = require('../utils/homeActivityLabels');
 const {
   checkHomePermission,
   getUserAccess,
@@ -336,7 +337,8 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch audit log' });
     }
 
-    res.json({ entries: data || [] });
+    // A readable sentence beside each raw code, the same one the Home activity timeline shows.
+    res.json({ entries: (data || []).map((entry) => ({ ...entry, description: describeHomeActivity(entry) })) });
   } catch (err) {
     logger.error('Audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch audit log' });
