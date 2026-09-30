@@ -47,6 +47,18 @@
 
 
 
+> **UPDATE 2026-09-30T07:36Z — Stream 1 (coordinator): batches 150 and 151 merged; master `81bfda802`.**
+> - **Batch 150** ([#886](https://github.com/WangPantopus/skinny-pantopus/pull/886), tip `c97e29070`, merged 07:34:27Z, master `b06b9f3e5`):
+>   - Stream 3 #881 (head `0d890e830`): each Lockdown enable or disable is one transaction with its audit row (`set_home_lockdown`). A refused audit is reported (503 `LOCKDOWN_AUDIT_FAILED`). Seal `3a239f36…`.
+>     - **It adds migration `20260930070000_home_lockdown_command.sql`: deploy it before the backend.** It's a function only (`SECURITY DEFINER`, `service_role` EXECUTE only), backwards compatible, and the migration policy passes.
+>   - Stream 1 #883 (head `f2d2bac31`): a train never published, or moved back to draft, is closed to link and invite readers, signed out included. Seal `ecd5354d…`.
+>   - Stream 2 #884 (head `e25ad4960`): the web tip sheet is an accessible modal. Escape never cancels a started tip, and no money path changes. Seal `27d8588c…`.
+> - **Batch 151** ([#887](https://github.com/WangPantopus/skinny-pantopus/pull/887), tip `3f719c842`, merged 07:35:47Z):
+>   - Stream 4 #882 (head `58502ba61`): a malformed health or checklist reply shows that card's Retry instead of taking down the web dashboard. Seal `c44de224…`.
+>   - Stream 4 #885 (head `5f9206776`): compose's household lists count only trusted occupancies, so a pending claimant is neither listed nor counted. Seal `ae63d979…`.
+> - Proofs for both batches: verify-batch OK (all blob-equal). The backend suites pass; web `tsc` shows only the known gap; web Jest passes 1,866/1,866.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:26Z — Stream 1 (coordinator): batch 149 merged; master `3bf2cde34`.**
 > - **Batch 149** ([#880](https://github.com/WangPantopus/skinny-pantopus/pull/880) ← Stream 2 #879, head `ec5c6b91d`, tip `29a5ce5a1`, merged 07:25:41Z): the closed post panel (feed, My Pulse) is `inert`, so it's out of the tab order and screen readers (React 19.2 supports the prop). Seal `678c1c3b…` (29 files) verified; web Jest passes 1,866/1,866.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
