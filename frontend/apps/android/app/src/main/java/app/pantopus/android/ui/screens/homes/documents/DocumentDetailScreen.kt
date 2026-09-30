@@ -612,8 +612,13 @@ private fun MetadataGrid(
     projection: DocumentRowProjection,
     modifier: Modifier = Modifier,
 ) {
+    // A member who deleted their account leaves the document with the household.
     val uploadedBy =
-        dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() } ?: dto.createdBy ?: "—"
+        if (dto.createdBy == null) {
+            "Former member"
+        } else {
+            dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() } ?: dto.createdBy.orEmpty()
+        }
     val uploadedLabel = projection.uploadedLabel ?: "—"
     val visibility =
         when (dto.visibility) {
