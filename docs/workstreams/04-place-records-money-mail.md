@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** [#922](https://github.com/WangPantopus/skinny-pantopus/pull/922) (iOS election date; with the coordinator). In progress: branch `claude/stream4-emergency-server-writes` `8f5d49117` (iOS Emergency Info edit/delete reach the server; creates carry a request id on iOS and Android), builds queued. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #922 (iOS election date) merged in batch 163 (master `c1634c693`). In progress: branch `claude/stream4-emergency-server-writes` `8f5d49117` (iOS Emergency Info edit/delete reach the server; creates carry a request id on iOS and Android), builds queued. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -268,6 +268,8 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T09:40Z — #922 merged** in batch 163 ([#926](https://github.com/WangPantopus/skinny-pantopus/pull/926), tip `9f7eefadf`), master `c1634c693`. The coordinator verified the seal (`750ef739…`) and agreed with the noon-UTC calendar-day reading. The emergency repair builds are running under the heavy slot (since 09:38:34Z).
 
 - **2026-09-30T09:30Z — native work: #922 (iOS election date) is with the coordinator; iOS Emergency Info edit and delete were never saved (reproduced); the repair is building.**
   - **#918 merged** in batch 162 (master `fd7de8790`). Coordinator review note, not blocking: the panel's unmount cleanup also runs when `onDraftUnmount` changes identity. That cleanup runs with the old closure, so the kept draft carries the old user id and the restore drops it. Revisit if the file is touched again.
