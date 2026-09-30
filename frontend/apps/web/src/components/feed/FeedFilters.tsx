@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Home, MessageCircle, Star, Calendar, Search, AlertTriangle, Tag, Newspaper, Trophy, User, Megaphone } from 'lucide-react';
 import type { PostType } from '@pantopus/api';
 
@@ -37,52 +37,74 @@ interface FeedFiltersProps {
 
 export default function FeedFilters({ selected, onChange, counts, surface = 'place', onMuteTopic }: FeedFiltersProps) {
   const filters = surface === 'place' ? PLACE_FILTERS : NETWORK_FILTERS;
+  const idPrefix = useId();
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
       {filters.map((ch) => {
         const isActive = selected === ch.key;
         const count = counts?.[ch.key];
-
-        return (
-          <button
-            key={ch.key}
-            onClick={() => onChange(ch.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
-              isActive
-                ? 'text-white shadow-md scale-[1.02]'
-                : 'bg-surface text-app-muted border border-app hover-bg-app hover:shadow-sm'
+        const countId = `${idPrefix}-${ch.key}-count`;
+        const chipClass = `flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
+          isActive
+            ? 'text-white shadow-md scale-[1.02]'
+            : 'bg-surface text-app-muted border border-app hover-bg-app hover:shadow-sm'
+        }`;
+        const chipStyle = isActive
+          ? { background: ch.color, boxShadow: `0 4px 12px ${ch.color}30` }
+          : undefined;
+        const countBadge = count != null && count > 0 && (
+          <span
+            id={countId}
+            className={`min-w-[18px] h-4 px-1 text-[9px] font-bold rounded-full flex items-center justify-center ${
+              isActive ? 'bg-glass/25 text-white' : 'bg-surface-muted text-app-muted'
             }`}
-            style={
-              isActive
-                ? { background: ch.color, boxShadow: `0 4px 12px ${ch.color}30` }
-                : undefined
-            }
           >
-            <span className="flex-shrink-0">{ch.icon}</span>
-            <span>{ch.label}</span>
-            {isActive && ch.key !== 'all' && onMuteTopic && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); onMuteTopic(ch.key); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onMuteTopic(ch.key); } }}
-                className="ml-0.5 text-white/70 hover:text-white text-xs leading-none cursor-pointer"
-                title={`Mute ${ch.label} in Pulse`}
-              >
-                ✕
-              </span>
-            )}
-            {count != null && count > 0 && (
-              <span
-                className={`min-w-[18px] h-4 px-1 text-[9px] font-bold rounded-full flex items-center justify-center ${
-                  isActive ? 'bg-glass/25 text-white' : 'bg-surface-muted text-app-muted'
-                }`}
-              >
-                {count > 99 ? '99+' : count}
-              </span>
-            )}
-          </button>
+            {count > 99 ? '99+' : count}
+          </span>
+        );
+
+        if (!(isActive && ch.key !== 'all' && onMuteTopic)) {
+          return (
+            <button
+              key={ch.key}
+              onClick={() => onChange(ch.key)}
+              aria-pressed={isActive}
+              className={chipClass}
+              style={chipStyle}
+            >
+              <span className="flex-shrink-0">{ch.icon}</span>
+              <span>{ch.label}</span>
+              {countBadge}
+            </button>
+          );
+        }
+
+        // The active chip holds two controls, choosing the filter and muting its topic. A
+        // button can't contain another, so they are siblings inside the same pill.
+        return (
+          <div key={ch.key} role="group" aria-label={`${ch.label} filter`} className={chipClass} style={chipStyle}>
+            <button
+              type="button"
+              onClick={() => onChange(ch.key)}
+              aria-pressed
+              aria-describedby={countBadge ? countId : undefined}
+              className="flex items-center gap-1.5"
+            >
+              <span className="flex-shrink-0">{ch.icon}</span>
+              <span>{ch.label}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onMuteTopic(ch.key)}
+              aria-label={`Mute ${ch.label} in Pulse`}
+              title={`Mute ${ch.label} in Pulse`}
+              className="ml-0.5 text-white/70 hover:text-white text-xs leading-none"
+            >
+              ✕
+            </button>
+            {countBadge}
+          </div>
         );
       })}
     </div>

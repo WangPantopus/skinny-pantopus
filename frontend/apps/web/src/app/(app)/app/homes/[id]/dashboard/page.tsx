@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
@@ -15,7 +15,7 @@ import { HomeSettingsTab } from '@/components/home/settings';
 
 import TaskSlidePanel from '@/components/home/TaskSlidePanel';
 import { useHomeTaskActions } from '@/components/home/tasks/useHomeTaskActions';
-import IssueSlidePanel from '@/components/home/IssueSlidePanel';
+import IssueSlidePanel, { type IssueDraft } from '@/components/home/IssueSlidePanel';
 import BillSlidePanel from '@/components/home/BillSlidePanel';
 import PackageSlidePanel from '@/components/home/PackageSlidePanel';
 
@@ -97,11 +97,15 @@ function InvitationsLink({ homeId }: { homeId: string }) {
   return <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations and recovery</Link></div>;
 }
 
+// A member's own typed new-issue draft, held above the access re-check that remounts the dashboard.
+type KeptIssueDraft = { homeId: string; userId: string | null; draft: IssueDraft };
+
 function HomeDashboardContent() {
   const router = useRouter();
   const homeId = useParams().id as string;
   const { access, error: permissionsError, needsVerification, loading: permissionsLoading, reload: reloadPermissions } = useHomePermissions();
   const data = useHomeData(homeId);
+  const issueDraft = useRef<KeptIssueDraft | null>(null);
   const { loading, error } = data;
   const accessError = error || permissionsError || (!loading && !permissionsLoading &&
     (!access || (!access.hasAccess && !access.verification_required) || homeAccessFingerprint(access) !== data.accessFingerprint)
@@ -141,10 +145,14 @@ function HomeDashboardContent() {
   }
 
   // Unmount private panels, deferred summaries and local edits whenever authority retires.
-  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} />;
+  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} issueDraft={issueDraft} />;
 }
 
-function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDataReturn }) {
+function HomeDashboardReady({ homeId, data, issueDraft }: {
+  homeId: string;
+  data: UseHomeDataReturn;
+  issueDraft: MutableRefObject<KeptIssueDraft | null>;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
@@ -178,6 +186,31 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
     openInviteModal, closeInviteModal,
     setExpandedCard,
   } = useHomePanels();
+
+  // A new-issue draft typed before an access re-check comes back only for the same member, the same Home and while
+  // they can still report issues; otherwise it is dropped. Existing issues never reopen on their own.
+  const canReportIssue = can('maintenance.edit') || can('maintenance.manage');
+  const [restoredIssueDraft, setRestoredIssueDraft] = useState<IssueDraft | null>(null);
+  const issueDraftChecked = useRef(false);
+  useEffect(() => {
+    if (issueDraftChecked.current) return;
+    issueDraftChecked.current = true;
+    const kept = issueDraft.current;
+    issueDraft.current = null;
+    if (!kept || kept.homeId !== homeId || kept.userId !== currentUserId || !canReportIssue) return;
+    const { title, description, estimatedCost } = kept.draft;
+    if (!title.trim() && !description.trim() && !estimatedCost.trim()) return;
+    setRestoredIssueDraft(kept.draft);
+    openIssuePanel();
+  }, [issueDraft, homeId, currentUserId, canReportIssue, openIssuePanel]);
+  const keepIssueDraft = useCallback((draft: IssueDraft) => {
+    issueDraft.current = { homeId, userId: currentUserId, draft };
+  }, [issueDraft, homeId, currentUserId]);
+  const closeIssue = useCallback(() => {
+    issueDraft.current = null;
+    setRestoredIssueDraft(null);
+    closeIssuePanel();
+  }, [issueDraft, closeIssuePanel]);
 
   const tabFromUrl = searchParams.get('tab') || 'dashboard';
   const linkedType = searchParams.get('linkedType');
@@ -380,10 +413,12 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
       />
       <IssueSlidePanel
         open={issuePanel.open}
-        onClose={closeIssuePanel}
+        onClose={closeIssue}
         onSave={handleIssueSave}
         issue={issuePanel.issue}
         canEdit={can('home.edit') || can('maintenance.manage')}
+        draft={issuePanel.issue ? null : restoredIssueDraft}
+        onDraftUnmount={keepIssueDraft}
       />
       <BillSlidePanel
         open={billPanel.open}

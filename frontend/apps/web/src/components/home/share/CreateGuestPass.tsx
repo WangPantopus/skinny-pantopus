@@ -144,9 +144,12 @@ export default function CreateGuestPass({
     );
   };
 
+  // A new passcode needs at least 6 characters (the API refuses shorter ones).
+  const passcodeTooShort = passcode.trim().length > 0 && passcode.trim().length < 6;
+
   // Create pass
   const handleCreate = async () => {
-    if (!open || pending.current !== null) return;
+    if (!open || pending.current !== null || passcodeTooShort) return;
     const request = generation.current;
     const issuedHome = homeId;
     const issuedPasscode = passcode.trim();
@@ -350,7 +353,7 @@ export default function CreateGuestPass({
                   placeholder="Leave blank for no passcode"
                   maxLength={128}
                 />
-                <p className="text-[10px] text-app-text-muted mt-0.5">Guest must enter this code to view the pass</p>
+                <p className="text-[10px] text-app-text-muted mt-0.5">At least 6 characters. Guest must enter this code to view the pass</p>
               </div>
 
               <div>
@@ -383,7 +386,7 @@ export default function CreateGuestPass({
               </button>
               <button
                 onClick={handleCreate}
-                disabled={creating || sections.length === 0}
+                disabled={creating || sections.length === 0 || passcodeTooShort}
                 className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition"
               >
                 {creating ? 'Creating...' : 'Create'}
@@ -442,7 +445,7 @@ export default function CreateGuestPass({
               </button>
               <button
                 onClick={handleCreate}
-                disabled={creating || sections.length === 0}
+                disabled={creating || sections.length === 0 || passcodeTooShort}
                 className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition"
               >
                 {creating ? 'Creating...' : 'Create Pass'}

@@ -7,7 +7,7 @@ function handler(router, method, path) {
   return router.stack.find(layer => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
 }
 function response() {
-  return { statusCode: 200, headers: {}, set(k,v) { this.headers[k]=v; return this; },
+  return { statusCode: 200, headers: {}, locals: {}, set(k,v) { this.headers[k]=v; return this; },
     status(code) { this.statusCode=code; return this; }, json(body) { this.body=body; return this; },
     type(value) { this.mime=value; return this; }, attachment(value) { this.filename=value; return this; },
     send(body) { this.body=body; return this; } };

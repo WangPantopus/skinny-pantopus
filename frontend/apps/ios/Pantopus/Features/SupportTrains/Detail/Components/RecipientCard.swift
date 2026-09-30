@@ -21,7 +21,10 @@ public struct RecipientCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             header
-            quoteBlock
+            // A train with no story or household summary has nothing to quote.
+            if !content.quote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                quoteBlock
+            }
         }
         .padding(Spacing.s3)
         .frame(maxWidth: .infinity, alignment: .leading)

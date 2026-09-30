@@ -1,8 +1,10 @@
 const winston = require('winston');
-const { redactLogMeta } = require('./redactLogMeta');
+const { redactLogMeta, redactBearerPath } = require('./redactLogMeta');
 
 const redactFormat = winston.format((info) => {
   const { timestamp, level, message, stack, ...meta } = info;
+  // The request log line's message is "<METHOD> <path>".
+  if (typeof message === 'string') info.message = redactBearerPath(message);
   return Object.assign(info, redactLogMeta(meta));
 });
 

@@ -299,6 +299,8 @@ public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Has
 /// profile context); we only ride the `story` slot so the reason copy
 /// survives the round-trip onto the published-train detail screen.
 public struct CreateSupportTrainBody: Encodable, Sendable {
+    /// Same id on a retry reaches the draft an earlier attempt already made (lost reply).
+    public let clientRequestId: String?
     public let draftPayload: DraftPayload
     public let title: String
     public let recipientUserId: String?
@@ -318,8 +320,10 @@ public struct CreateSupportTrainBody: Encodable, Sendable {
         enableTakeout: Bool = true,
         enableGroceries: Bool = true,
         enableGiftFunds: Bool = false,
-        timezone: String = TimeZone.current.identifier
+        timezone: String = TimeZone.current.identifier,
+        clientRequestId: String? = nil
     ) {
+        self.clientRequestId = clientRequestId
         self.draftPayload = draftPayload
         self.title = title
         self.recipientUserId = recipientUserId
@@ -332,6 +336,7 @@ public struct CreateSupportTrainBody: Encodable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case clientRequestId = "client_request_id"
         case draftPayload = "draft_payload"
         case title
         case recipientUserId = "recipient_user_id"
@@ -360,6 +365,11 @@ public struct CreateSupportTrainResponse: Decodable, Sendable {
 
     public init(id: String) {
         self.id = id
+    }
+
+    /// The route answers `{ support_train_id, activity_id, status }`.
+    enum CodingKeys: String, CodingKey {
+        case id = "support_train_id"
     }
 }
 

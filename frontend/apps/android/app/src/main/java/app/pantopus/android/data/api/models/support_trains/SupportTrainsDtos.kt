@@ -169,6 +169,8 @@ data class CreateSupportTrainBody(
     @Json(name = "enable_groceries") val enableGroceries: Boolean = true,
     @Json(name = "enable_gift_funds") val enableGiftFunds: Boolean = false,
     val timezone: String = java.util.TimeZone.getDefault().id,
+    /** Same id on a retry reaches the draft an earlier attempt already made (lost reply). */
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class DraftPayload(
@@ -183,7 +185,8 @@ data class CreateSupportTrainBody(
  */
 @JsonClass(generateAdapter = true)
 data class CreateSupportTrainResponse(
-    val id: String,
+    // The route answers `{ support_train_id, activity_id, status }`.
+    @Json(name = "support_train_id") val id: String,
 )
 
 /**

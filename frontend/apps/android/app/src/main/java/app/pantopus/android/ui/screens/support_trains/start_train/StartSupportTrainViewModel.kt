@@ -73,6 +73,15 @@ class StartSupportTrainViewModel
         private val _publishedTrainId = MutableStateFlow<String?>(null)
         val publishedTrainId: StateFlow<String?> = _publishedTrainId.asStateFlow()
 
+        /** A half-built draft a failed launch couldn't delete; the next launch removes it first. */
+        private var leftoverTrainId: String? = null
+
+        /**
+         * The create's request id, kept until its reply arrives: a retry after a lost reply
+         * then reaches the draft the server already made instead of making a second train.
+         */
+        private var createRequestId: String? = null
+
         private var searchJob: Job? = null
 
         // ─── Step 1 actions ─────────────────────────────────────────────
@@ -421,15 +430,21 @@ class StartSupportTrainViewModel
             _launchError.value = null
             val current = _form.value
             val trimmedReason = current.reason.trim()
+            val requestId = createRequestId ?: java.util.UUID.randomUUID().toString()
+            createRequestId = requestId
             val body =
                 CreateSupportTrainBody(
                     draftPayload = CreateSupportTrainBody.DraftPayload(story = trimmedReason),
                     title = derivedTitle(),
                     recipientUserId = _selectedBeneficiary.value?.userId,
                     sharingMode = effectiveSharingMode(current),
+                    clientRequestId = requestId,
                 )
             viewModelScope.launch {
                 try {
+                    leftoverTrainId?.let { leftover ->
+                        if (supportTrains.deleteTrain(leftover) is NetworkResult.Success) leftoverTrainId = null
+                    }
                     val created =
                         when (val result = supportTrains.create(body)) {
                             is NetworkResult.Success -> result.data
@@ -438,6 +453,7 @@ class StartSupportTrainViewModel
                                 return@launch
                             }
                         }
+                    createRequestId = null
                     _publishedTrainId.value = created.id
                     for (slot in generatedSlots()) {
                         val slotBody =
@@ -452,6 +468,7 @@ class StartSupportTrainViewModel
                             is NetworkResult.Success -> Unit
                             is NetworkResult.Failure -> {
                                 _launchError.value = "Couldn't add a slot. Try again."
+                                discardDraft(created.id)
                                 return@launch
                             }
                         }
@@ -462,12 +479,22 @@ class StartSupportTrainViewModel
                         }
                         is NetworkResult.Failure -> {
                             _launchError.value = "Couldn't publish the train. Try again."
+                            discardDraft(created.id)
                         }
                     }
                 } finally {
                     _isSubmitting.value = false
                 }
             }
+        }
+
+        /**
+         * Launching is several calls. If a later one fails, remove the half-built
+         * draft so trying again makes exactly one train.
+         */
+        private suspend fun discardDraft(trainId: String) {
+            _publishedTrainId.value = null
+            if (supportTrains.deleteTrain(trainId) !is NetworkResult.Success) leftoverTrainId = trainId
         }
 
         private fun handleSuccessExit() {

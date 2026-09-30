@@ -3,29 +3,36 @@
  *
  * Soft-auth: if a valid Bearer token (or httpOnly cookie) is present,
  * populate req.user = { id, email }.  Otherwise set req.user = null
- * and continue — never returns 401.
+ * and continue — never returns 401. A token the auth service rejected
+ * (invalid, expired or revoked; not an unreachable service) also sets
+ * req.authRejected, for routes whose signed-in view differs.
  *
  * Uses a short-lived in-memory token→user cache (15 s) to avoid
  * hitting Supabase auth on every request.
  */
 
+const { isAuthRetryableFetchError } = require('@supabase/supabase-js');
 const supabase = require('../config/supabase');
 const logger = require('../utils/logger');
 const authSessionService = require('../services/authSessionService');
 
 // ── Token → user cache (15 s TTL) ──────────────────────────────
 const TOKEN_CACHE_TTL = 15_000;
+// An unreachable auth service is remembered briefly, so an outage answers fast
+// (anonymous) without pinning a valid user as signed out after it recovers.
+const UNREACHABLE_TTL = 5_000;
+const UNREACHABLE = Symbol('auth-unreachable');
 const TOKEN_CACHE_MAX = 500;
 const _tokenCache = new Map();
 
 function getCached(token) {
   const entry = _tokenCache.get(token);
   if (!entry) return undefined;
-  if (Date.now() - entry.ts > TOKEN_CACHE_TTL) {
+  if (Date.now() - entry.ts > (entry.user === UNREACHABLE ? UNREACHABLE_TTL : TOKEN_CACHE_TTL)) {
     _tokenCache.delete(token);
     return undefined;
   }
-  return entry.user; // may be null (invalid token cached)
+  return entry.user; // null = rejected token, UNREACHABLE = service down
 }
 
 function setCache(token, user) {
@@ -36,9 +43,20 @@ function setCache(token, user) {
   _tokenCache.set(token, { user, ts: Date.now() });
 }
 
+// A definite "no" from the auth service (an invalid, expired or unknown token), as
+// opposed to the service being unreachable (network, timeout, 5xx), which supabase-js
+// also returns as an error object. Only a rejection may read as "signed out".
+function isRejection(error) {
+  if (!error) return true; // the service answered, with no user
+  if (isAuthRetryableFetchError(error)) return false;
+  const status = Number(error.status);
+  return Number.isInteger(status) && status >= 400 && status < 500;
+}
+
 // ── Middleware ───────────────────────────────────────────────────
 async function optionalAuth(req, _res, next) {
   req.user = null;
+  req.authRejected = false;
 
   try {
     // Extract token: prefer Bearer header (mobile) over httpOnly cookie (web).
@@ -57,7 +75,8 @@ async function optionalAuth(req, _res, next) {
     // Check cache first
     const cached = getCached(token);
     if (cached !== undefined) {
-      req.user = cached;
+      req.user = cached === UNREACHABLE ? null : cached;
+      req.authRejected = cached === null; // only rejections are cached as null
       return next();
     }
 
@@ -65,7 +84,13 @@ async function optionalAuth(req, _res, next) {
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data?.user) {
+      if (!isRejection(error)) {
+        logger.debug('optionalAuth: auth service unreachable, treating as anonymous', { status: error?.status });
+        setCache(token, UNREACHABLE);
+        return next();
+      }
       setCache(token, null);
+      req.authRejected = true;
       return next();
     }
 
@@ -77,6 +102,7 @@ async function optionalAuth(req, _res, next) {
       if (state.known && state.revoked) {
         logger.debug('optionalAuth: session revoked, treating as anonymous', { session_id: claims.id });
         setCache(token, null);
+        req.authRejected = true;
         return next();
       }
     }

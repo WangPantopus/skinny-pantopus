@@ -6,7 +6,7 @@ import SlidePanel from '../SlidePanel';
 import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 
 const LOCKDOWN_EFFECTS = [
-  { icon: '❌', text: 'Revokes all active guest passes', detail: 'Existing share links stop working immediately', revokesPasses: true },
+  { icon: '❌', text: 'Revokes all active guest passes', detail: 'Guest pass and share links stop working immediately; your fridge card keeps working', revokesPasses: true },
   { icon: '👁', text: 'Makes your home private', detail: 'It stays private after Lockdown ends; change it under Visibility in Home Settings' },
   { icon: '🔒', text: 'Keeps existing member permissions', detail: 'Members keep the access their current permissions allow' },
   { icon: '🚫', text: 'Keeps member invitations available', detail: 'Authorized members can still create and manage invitations' },
