@@ -63,7 +63,8 @@
 > | Stream 5 | BusinessAuditLog.actor_user_id | `20260930133000` |
 > | Stream 1 | SupportTrain.organizer_user_id (decision 8) | `20260930134000` |
 >
-> - Stream 1's sharing-modes migration is `20260930120000`. Stream 5 keeps the 409 as the safety net until every part lands and reports what the dry run still hits.
+> - Stream 2's stop-records migration (PR A) holds `20260930120000`; Stream 1's sharing-modes migration moved to `20260930135000`. Stream 5 keeps the 409 as the safety net until every part lands and reports what the dry run still hits.
+> - **Rule:** a reserved number only helps if merges follow number order. Whichever branch merges later renumbers with a plain `git mv` when the coordinator asks at batch time; `check-migrations.cjs` must pass on the batch tip.
 
 > **UPDATE 2026-09-30T10:08Z — Stream 1 (coordinator): batch 167 merged; master `eabe68c1c`.**
 > - **Batch 167** ([#938](https://github.com/WangPantopus/skinny-pantopus/pull/938), 10:07:29Z): 7 files, all blob-equal. No migrations.
