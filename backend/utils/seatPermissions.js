@@ -80,50 +80,18 @@ async function getSeatForUser(businessUserId, userId) {
         updated_at
       )
     `)
-    .eq('user_id', userId)
-    .maybeSingle();
+    .eq('user_id', userId);
 
   if (error) {
     logger.warn('getSeatForUser query error', { error: error.message, businessUserId, userId });
     return null;
   }
 
-  if (!data || !data.seat) return null;
-
-  const seat = data.seat;
-  // Verify this seat belongs to the right business and is active
-  if (seat.business_user_id !== businessUserId || !seat.is_active) {
-    // The binding exists but seat is not for this business or not active.
-    // Try a direct query in case there are multiple seats (user at multiple businesses).
-    return await _findActiveSeatForUserAtBusiness(businessUserId, userId);
-  }
-
-  return seat;
-}
-
-/**
- * Internal helper: when a user has multiple seats (multiple businesses),
- * the single SeatBinding join might return the wrong one. Do a targeted lookup.
- */
-async function _findActiveSeatForUserAtBusiness(businessUserId, userId) {
-  const { data: bindings, error } = await supabaseAdmin
-    .from('SeatBinding')
-    .select('seat_id')
-    .eq('user_id', userId);
-
-  if (error || !bindings || bindings.length === 0) return null;
-
-  const seatIds = bindings.map(b => b.seat_id);
-
-  const { data: seat } = await supabaseAdmin
-    .from('BusinessSeat')
-    .select('id, business_user_id, display_name, display_avatar_file_id, role_base, contact_method, is_active, invite_status, accepted_at, notes, created_at, updated_at')
-    .eq('business_user_id', businessUserId)
-    .eq('is_active', true)
-    .in('id', seatIds)
-    .maybeSingle();
-
-  return seat || null;
+  // A user holds one binding per seat, across every business they belong to.
+  const binding = (data || []).find(
+    (b) => b.seat && b.seat.business_user_id === businessUserId && b.seat.is_active
+  );
+  return binding ? binding.seat : null;
 }
 
 // ============================================================
