@@ -231,7 +231,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T09:11Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T12:15Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -244,23 +244,23 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | **Posts and Pulse** | | | |
 | Pulse feed, My posts, counts | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
-| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E1 E2 E3 (#657, #718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
-| Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>⬜ E2 E5 | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
+| Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
+| Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511) | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
 | Delete a post | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
-| Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
+| Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the Android comment composer is text-only) | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
 | Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ✅ Public post page: E4 private post kept; R1 now "Couldn't load" with Try Again (#851) |
 | **Start and Hub** | | | |
 | Start funnel and Place preview | ✅ R1 (#635) | ✅ R1 (#635) | ✅ R1 (#607)<br>✅ R1 address lookup failures say so (suggestions, geocoder outage) (#873) |
-| Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>⬜ R1 | ✅ Pills open real screens (C-02)<br>⬜ R1 | ✅ Hub posts (Sep25)<br>✅ R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change) (bundle 890d21cb) |
+| Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>⬜ R1 | ✅ Pills open real screens (C-02)<br>✅ R1: every failed read is shown as a failure, with Try again (seal b716c9ce) | ✅ Hub posts (Sep25)<br>✅ R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change) (bundle 890d21cb) |
 
 **U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4 | ✅ L1 L2 L3 (#667, Sep27)<br>⬜ L4 | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
+| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4 | ✅ L1 L2 L3 (#667, Sep27)<br>✅ L4: comment and edit replay once after a session refresh (seal d875dafb) | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
 | Start and Place preview | ⬜ L2 L3 | ⬜ L2 L3 | ✅ L2 L3: the previewed address survives a browser restart and never moves to another account (no change) (bundle e2c35ebc) |
-| Hub (the former Stream 1 cards) | ⬜ L3<br>⬜ L2 | ⬜ L3<br>⬜ L2 | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
+| Hub (the former Stream 1 cards) | ⬜ L3<br>⬜ L2 | ✅ L3: account switch shows only the new account (seal ea85ae47)<br>✅ L2: cold restart reads fresh data (seal ea85ae47) | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
@@ -285,8 +285,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 35, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 1
-- U04 items: done 8, confirm from existing evidence 0, to do 8, your call 0, boundary 0, not offered 0
+- U03 items: done 38, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 2
+- U04 items: done 11, confirm from existing evidence 0, to do 5, your call 0, boundary 0, not offered 0
 - U02 items: done 19, confirm from existing evidence 0, to do 22, your call 8, boundary 1, not offered 0
 
 ## Inventory and history
