@@ -215,7 +215,7 @@ public struct PasswordChangeView: View {
                 .padding(.top, 1)
             Text("You'll be signed out of other devices after updating.")
                 .font(.system(size: 11.5))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -68,7 +68,7 @@ struct GigFulfillmentPanel: View {
     private var statusBadge: some View {
         Text(status?.badgeLabel ?? "Waiting")
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(status == nil ? Theme.Color.appTextSecondary : Theme.Color.primary700)
+            .foregroundStyle(status == nil ? Theme.Color.appTextSecondary : Theme.Color.primaryInkStrong)
             .padding(.horizontal, 10)
             .padding(.vertical, Spacing.s1)
             .background(status == nil ? Theme.Color.appSurfaceSunken : Theme.Color.primary50)
@@ -81,7 +81,7 @@ struct GigFulfillmentPanel: View {
             Icon(.navigation, size: 13, strokeWidth: 2.4, color: Theme.Color.primaryInk)
             Text(label)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Spacer()
         }
         .padding(.horizontal, 10)

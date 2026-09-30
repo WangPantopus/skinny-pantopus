@@ -178,7 +178,7 @@ struct VerifyEmailView: View {
         if viewModel.isVerifying {
             return BannerCopy(
                 text: "Verifying your email…",
-                color: Theme.Color.primary700,
+                color: Theme.Color.primaryInkStrong,
                 background: Theme.Color.primary50
             )
         }

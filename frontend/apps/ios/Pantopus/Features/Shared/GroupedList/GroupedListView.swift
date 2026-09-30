@@ -396,7 +396,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                     } label: {
                         Text(option)
                             .font(.system(size: 13, weight: isActive ? .bold : .medium))
-                            .foregroundStyle(isActive ? Theme.Color.primary700 : Theme.Color.appTextSecondary)
+                            .foregroundStyle(isActive ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary)
                             .padding(.horizontal, Spacing.s3)
                             .padding(.vertical, 6)
                             .background(isActive ? Theme.Color.primary50 : Theme.Color.appSurfaceSunken)

@@ -226,7 +226,7 @@ struct PlaceSwitcherRowView: View {
                         .lineLimit(1)
                     Text(isActive ? "Current place" : row.city)
                         .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                        .foregroundStyle(isActive ? Theme.Color.primary700 : Theme.Color.appTextMuted)
+                        .foregroundStyle(isActive ? Theme.Color.primaryInkStrong : Theme.Color.appTextMuted)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

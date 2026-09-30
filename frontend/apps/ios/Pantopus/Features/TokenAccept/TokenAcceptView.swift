@@ -132,7 +132,7 @@ public struct TokenAcceptView: View {
                 Icon(.user, size: 12, color: Theme.Color.primaryInk)
                 Text(offer.identityChip.label)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
             }
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s1)

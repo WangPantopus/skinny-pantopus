@@ -108,7 +108,7 @@ public struct LegalTOCCard: View {
         HStack(spacing: 10) {
             Text(String(format: "%02d", index + 1))
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(Theme.Color.primary700)
+                .foregroundColor(Theme.Color.primaryInkStrong)
                 .frame(width: 22, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)

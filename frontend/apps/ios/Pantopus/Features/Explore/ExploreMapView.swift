@@ -285,10 +285,10 @@ public struct ExploreMapView: View {
                 onOpenSaved()
             } label: {
                 HStack(spacing: 5) {
-                    Icon(.bookmark, size: 14, strokeWidth: 2.4, color: Theme.Color.primary700)
+                    Icon(.bookmark, size: 14, strokeWidth: 2.4, color: Theme.Color.primaryInkStrong)
                     Text("Saved")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                 }
                 .padding(.horizontal, 11)
                 .frame(height: 32)
@@ -310,10 +310,10 @@ public struct ExploreMapView: View {
             showFilterSheet = true
         } label: {
             HStack(spacing: 5) {
-                Icon(.slidersHorizontal, size: 14, strokeWidth: 2.4, color: Theme.Color.primary700)
+                Icon(.slidersHorizontal, size: 14, strokeWidth: 2.4, color: Theme.Color.primaryInkStrong)
                 Text("Filter")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                 if viewModel.filters.activeCount > 0 {
                     Text("\(viewModel.filters.activeCount)")
                         .font(.system(size: 10, weight: .bold))

@@ -101,7 +101,7 @@ public struct ChannelChip: View {
                 Circle().stroke(Theme.Color.primary300, lineWidth: 0.5)
             )
             .overlay(
-                Icon(.lock, size: 7, color: Theme.Color.primary700)
+                Icon(.lock, size: 7, color: Theme.Color.primaryInkStrong)
             )
             .offset(x: 8, y: -8)
     }

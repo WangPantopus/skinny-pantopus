@@ -532,10 +532,10 @@ public struct MembershipDetailView: View {
 
     private func scheduledChangeBanner(_: MembershipDetailContent) -> some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(.calendarClock, size: 15, color: Theme.Color.primary700)
+            Icon(.calendarClock, size: 15, color: Theme.Color.primaryInkStrong)
             Text("A tier change is scheduled — it takes effect at the end of this period.")
                 .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Spacing.s0)
         }
@@ -672,10 +672,10 @@ public struct MembershipDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
 
             HStack(alignment: .top, spacing: Spacing.s2) {
-                Icon(.info, size: 15, color: Theme.Color.primary700)
+                Icon(.info, size: 15, color: Theme.Color.primaryInkStrong)
                 Text("Reason: the creator missed their reply-policy window.")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Spacing.s0)
             }

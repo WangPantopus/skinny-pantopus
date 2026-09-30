@@ -260,9 +260,9 @@ struct HubFirstRunHero: View {
                     HStack(spacing: Spacing.s1) {
                         Text("Start verification")
                             .font(.system(size: 13, weight: .bold))
-                        Icon(.arrowRight, size: 14, color: Theme.Color.primary700)
+                        Icon(.arrowRight, size: 14, color: Theme.Color.primaryInkStrong)
                     }
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                     .padding(.horizontal, Spacing.s4)
                     .padding(.vertical, Spacing.s2)
                     .background(Color.white)

@@ -202,7 +202,7 @@ private struct EtaProgressBar: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Text("Branch", style: .overline)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.Color.primary100)
@@ -218,7 +218,7 @@ private struct EtaProgressBar: View {
             }
             .frame(height: 12)
             Text("Porch", style: .overline)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
         }
         .accessibilityLabel("Delivery progress from branch to porch, about 68 percent")
     }
@@ -785,10 +785,10 @@ public struct GenericMailBody: View {
         ContentDetailFlowLayout(spacing: 6) {
             ForEach(content.tags, id: \.self) { tag in
                 HStack(spacing: Spacing.s1) {
-                    Icon(.tag, size: 11, color: Theme.Color.primary700)
+                    Icon(.tag, size: 11, color: Theme.Color.primaryInkStrong)
                     Text(tag)
                         .font(.system(size: PantopusTextStyle.caption.size, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s1)

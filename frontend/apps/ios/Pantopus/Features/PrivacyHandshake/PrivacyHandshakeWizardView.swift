@@ -69,7 +69,7 @@ public struct PrivacyHandshakeWizardView: View {
                 Circle().fill(Theme.Color.primary50).frame(width: 52, height: 52)
                 Text(persona.displayName.prefix(1).uppercased())
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(persona.displayName)

@@ -1344,13 +1344,13 @@ private struct FanQuotaHero: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Icon(.messageSquare, size: 13, strokeWidth: 2.5, color: Theme.Color.primary700)
+            Icon(.messageSquare, size: 13, strokeWidth: 2.5, color: Theme.Color.primaryInkStrong)
             Text("\(entitlement.messageLimit) messages")
                 .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Text("this period")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Text("·")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.Color.primary300)
@@ -1681,11 +1681,11 @@ private struct ChatConversationHeader: View {
     /// glyph, primary50 on primary700).
     private var aiBadge: some View {
         HStack(spacing: 3) {
-            Icon(.sparkles, size: 8, strokeWidth: 3, color: Theme.Color.primary700)
+            Icon(.sparkles, size: 8, strokeWidth: 3, color: Theme.Color.primaryInkStrong)
             Text("AI")
                 .font(.system(size: 9, weight: .bold))
                 .tracking(0.4)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 1)
@@ -3575,7 +3575,7 @@ private struct ChatComposer: View {
                 if showsSendCost && canSend {
                     Text("-1")
                         .font(.system(size: 9, weight: .heavy))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Theme.Color.appSurface)

@@ -876,7 +876,7 @@ struct NeighborWelcomeCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(welcome.title)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                 Text(welcome.body)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.Color.appTextStrong)

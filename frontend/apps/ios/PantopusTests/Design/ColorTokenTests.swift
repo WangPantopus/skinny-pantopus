@@ -36,6 +36,8 @@ final class ColorTokenTests: XCTestCase {
         assertColor(Theme.Color.primaryInk, hex: "#0369a1")
         assertColor(Theme.Color.primaryInk, hex: "#38bdf8", traits: darkTraits)
         assertColor(Theme.Color.primarySolid, hex: "#0369a1", traits: darkTraits)
+        assertColor(Theme.Color.primaryInkStrong, hex: "#075985")
+        assertColor(Theme.Color.primaryInkStrong, hex: "#7dd3fc", traits: darkTraits)
     }
 
     func testSemantic() {

@@ -307,7 +307,7 @@ private struct LegalContactFooter: View {
                     .foregroundColor(Theme.Color.appText)
                 Text(verbatim: email)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundColor(Theme.Color.primary700)
+                    .foregroundColor(Theme.Color.primaryInkStrong)
             }
             Spacer(minLength: Spacing.s2)
             Icon(.arrowUpRight, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)

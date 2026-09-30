@@ -160,7 +160,7 @@ private struct HomeContextStrip: View {
             }
             Spacer(minLength: Spacing.s0)
             Text("Owner invite", style: .overline)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, 3)
                 .background(Theme.Color.primary100)
@@ -269,7 +269,7 @@ private struct StatefulSlider: View {
             track
             Text("\(value)%")
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(isError ? Theme.Color.error : Theme.Color.primary700)
+                .foregroundStyle(isError ? Theme.Color.error : Theme.Color.primaryInkStrong)
                 .frame(minWidth: 44)
                 .padding(.horizontal, Spacing.s2 + 2)
                 .padding(.vertical, Spacing.s1)

@@ -238,7 +238,7 @@ public struct BusinessHeader: View {
             if let handle {
                 Text(handle)
                     .font(.system(size: PantopusTextStyle.caption.size, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
             }
             if handle != nil, locality != nil {
                 Circle()

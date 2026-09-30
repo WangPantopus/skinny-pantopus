@@ -854,7 +854,7 @@ public struct TransactionalDetailShell: View {
                     if bid.won {
                         bidTagPill("Winner", foreground: Theme.Color.success, background: Theme.Color.successBg)
                     } else if let tag = bid.tag {
-                        bidTagPill(tag, foreground: Theme.Color.primary700, background: Theme.Color.primary50)
+                        bidTagPill(tag, foreground: Theme.Color.primaryInkStrong, background: Theme.Color.primary50)
                     }
                 }
                 if let ratingLine = bid.ratingLine {
@@ -896,7 +896,7 @@ public struct TransactionalDetailShell: View {
                 HStack(spacing: Spacing.s2) {
                     Text(stop.letter)
                         .font(.system(size: 9, weight: .heavy))
-                        .foregroundStyle(stop.tone == .primary ? Theme.Color.primary700 : Theme.Color.success)
+                        .foregroundStyle(stop.tone == .primary ? Theme.Color.primaryInkStrong : Theme.Color.success)
                         .frame(width: 14, height: 14)
                         .background(stop.tone == .primary ? Theme.Color.primary100 : Theme.Color.successBg)
                         .clipShape(Circle())
