@@ -222,31 +222,66 @@ BEGIN
       END IF;
       RAISE EXCEPTION 'Read-only finance viewer inserted % through RLS',relation;
     EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-    EXECUTE format('UPDATE public.%I SET details=''{}''::jsonb WHERE id=$1',relation) USING existing_id;
-    GET DIAGNOSTICS affected=ROW_COUNT;
-    IF affected <> 0 THEN RAISE EXCEPTION 'Read-only finance viewer updated % through RLS',relation; END IF;
-    EXECUTE format('DELETE FROM public.%I WHERE id=$1',relation) USING existing_id;
-    GET DIAGNOSTICS affected=ROW_COUNT;
-    IF affected <> 0 THEN RAISE EXCEPTION 'Read-only finance viewer deleted % through RLS',relation; END IF;
+    BEGIN
+      EXECUTE format('UPDATE public.%I SET details=''{}''::jsonb WHERE id=$1',relation) USING existing_id;
+      RAISE EXCEPTION 'Read-only finance viewer updated % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    BEGIN
+      EXECUTE format('DELETE FROM public.%I WHERE id=$1',relation) USING existing_id;
+      RAISE EXCEPTION 'Read-only finance viewer deleted % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   END LOOP;
   IF public.has_home_permission(h,'manage_finance') OR public.home_member_can(h,'manage_finance') THEN
     RAISE EXCEPTION 'Legacy finance-management wrapper elevated read-only permission';
   END IF;
 END $finance_read_only$;
 RESET ROLE;
--- A real management grant still permits these operations. The positive control
--- rules out broken fixtures, blanket table revocation or a nonfunctional policy.
+-- A real management grant is still recognized, which rules out a broken
+-- fixture. Clients hold no write grant on public tables (20260930174000), so
+-- even this manager's direct writes are refused: finance records are written
+-- only through the API, as service_role, after its own permission check.
 INSERT INTO public."HomePermissionOverride" (home_id,user_id,permission,allowed)
 VALUES ('ddb00000-0000-4000-8000-000000000101','ddb00000-0000-4000-8000-000000000012','finance.manage',true);
 SET LOCAL ROLE authenticated;
 DO $finance_manager$
 DECLARE h uuid := 'ddb00000-0000-4000-8000-000000000101';
   u uuid := 'ddb00000-0000-4000-8000-000000000012';
-  relation text; affected integer; inserted_id uuid;
+  relation text; existing_id uuid;
 BEGIN
-  IF NOT public.has_home_permission(h,'manage_finance') OR NOT public.home_member_can(h,'manage_finance') THEN
+  IF NOT public.has_home_permission(h,'manage_finance') OR NOT public.home_member_can(h,'manage_finance')
+    OR NOT public.home_has_permission(h,'finance.manage') THEN
     RAISE EXCEPTION 'Legacy wrapper lost a current finance-management grant';
   END IF;
+  FOREACH relation IN ARRAY ARRAY['HomeBill','HomeSubscription'] LOOP
+    existing_id := CASE relation WHEN 'HomeBill' THEN 'ddb00000-0000-4000-8000-000000000301'::uuid
+      ELSE 'ddb00000-0000-4000-8000-000000000302'::uuid END;
+    BEGIN
+      IF relation = 'HomeBill' THEN
+        INSERT INTO public."HomeBill" (home_id,bill_type,amount,created_by) VALUES (h,'other',20,u);
+      ELSE
+        INSERT INTO public."HomeSubscription" (home_id,service_name,cost,renewal_date,created_by)
+          VALUES (h,'Direct subscription',20,CURRENT_DATE,u);
+      END IF;
+      RAISE EXCEPTION 'Finance manager inserted % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    BEGIN
+      EXECUTE format('UPDATE public.%I SET details=''{}''::jsonb WHERE id=$1',relation) USING existing_id;
+      RAISE EXCEPTION 'Finance manager updated % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    BEGIN
+      EXECUTE format('DELETE FROM public.%I WHERE id=$1',relation) USING existing_id;
+      RAISE EXCEPTION 'Finance manager deleted % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  END LOOP;
+END $finance_manager$;
+RESET ROLE;
+-- The API's write path still inserts, updates and deletes these records.
+SET LOCAL ROLE service_role;
+DO $api_write$
+DECLARE h uuid := 'ddb00000-0000-4000-8000-000000000101';
+  u uuid := 'ddb00000-0000-4000-8000-000000000012';
+  relation text; affected integer; inserted_id uuid;
+BEGIN
   FOREACH relation IN ARRAY ARRAY['HomeBill','HomeSubscription'] LOOP
     IF relation = 'HomeBill' THEN
       INSERT INTO public."HomeBill" (home_id,bill_type,amount,created_by)
@@ -257,12 +292,12 @@ BEGIN
     END IF;
     EXECUTE format('UPDATE public.%I SET details=''{}''::jsonb WHERE id=$1',relation) USING inserted_id;
     GET DIAGNOSTICS affected=ROW_COUNT;
-    IF affected <> 1 THEN RAISE EXCEPTION 'Finance manager could not update its inserted %',relation; END IF;
+    IF affected <> 1 THEN RAISE EXCEPTION 'The API role could not update its inserted %',relation; END IF;
     EXECUTE format('DELETE FROM public.%I WHERE id=$1',relation) USING inserted_id;
     GET DIAGNOSTICS affected=ROW_COUNT;
-    IF affected <> 1 THEN RAISE EXCEPTION 'Finance manager could not delete its inserted %',relation; END IF;
+    IF affected <> 1 THEN RAISE EXCEPTION 'The API role could not delete its inserted %',relation; END IF;
   END LOOP;
-END $finance_manager$;
+END $api_write$;
 RESET ROLE;
 
 INSERT INTO public."HomeDocument" (id,home_id,created_by,doc_type,title,visibility)
@@ -272,7 +307,7 @@ FROM (VALUES (201,'members'),(202,'managers'),(203,'sensitive'),(204,'public')) 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','ddb00000-0000-4000-8000-000000000003',true);
 DO $$
-DECLARE h uuid := 'ddb00000-0000-4000-8000-000000000101'; affected integer;
+DECLARE h uuid := 'ddb00000-0000-4000-8000-000000000101';
 BEGIN
   IF NOT public.home_is_active_member(h) OR public.home_my_role(h) <> 'restricted_member'
     OR NOT public.is_home_member(h) OR public.has_home_permission(h,'manage_tasks')
@@ -280,9 +315,10 @@ BEGIN
   IF (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h) <> 2 THEN
     RAISE EXCEPTION 'Real child document RLS visibility or recursion boundary failed: % rows; permissions %', (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h), public.home_get_user_permissions(h);
   END IF;
-  UPDATE public."HomeDocument" SET title='Should not change' WHERE id='ddb00000-0000-4000-8000-000000000201';
-  GET DIAGNOSTICS affected=ROW_COUNT;
-  IF affected <> 0 THEN RAISE EXCEPTION 'Child updated its own document through RLS'; END IF;
+  BEGIN
+    UPDATE public."HomeDocument" SET title='Should not change' WHERE id='ddb00000-0000-4000-8000-000000000201';
+    RAISE EXCEPTION 'Child updated its own document directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   IF public.home_is_active_member(h,'ddb00000-0000-4000-8000-000000000001')
     OR public.home_has_permission(h,'ownership.manage','ddb00000-0000-4000-8000-000000000001')
     OR cardinality(public.home_get_user_permissions(h,'ddb00000-0000-4000-8000-000000000001')) <> 0
@@ -321,4 +357,4 @@ DO $$ BEGIN
   END IF;
 END $$;
 ROLLBACK;
-SELECT 'PASS: exact defaults, current shared residency, age/owner/override ceilings, own-safe wrappers, finance read/write boundaries and HomeDocument RLS' AS result;
+SELECT 'PASS: exact defaults, current shared residency, age/owner/override ceilings, own-safe wrappers, finance reads with API-only writes and HomeDocument RLS' AS result;

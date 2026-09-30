@@ -5,8 +5,10 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 SELECT plan(1);
 SELECT lives_ok($contract$
--- Finance RLS must honor exact read/write permissions independently of Home
--- editing, ownership, split assignment, stale flags and overlapping old policy.
+-- Finance RLS must honor exact read permissions independently of Home editing,
+-- ownership, split assignment, stale flags and overlapping old policy. Clients
+-- hold no write grant on public tables (20260930174000): finance records are
+-- written only through the API (service_role), which checks finance.manage.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 SET LOCAL search_path = public, extensions, pg_catalog;
@@ -59,6 +61,8 @@ UNION ALL SELECT 'HomeSubscription',jsonb_agg(to_jsonb(s) ORDER BY id) FROM publ
 UNION ALL SELECT 'HomeBillSplit',jsonb_agg(to_jsonb(s) ORDER BY id) FROM public."HomeBillSplit" s;
 
 SET LOCAL ROLE authenticated;
+-- Every actor's direct insert, update and delete is refused, including the
+-- finance managers the write policies used to admit (actors 4, 5 and 9).
 DO $matrix$
 DECLARE h uuid := 'ddf10000-0000-4000-8000-000000000101';
   bill uuid := 'ddf10000-0000-4000-8000-000000000201';
@@ -66,17 +70,17 @@ DECLARE h uuid := 'ddf10000-0000-4000-8000-000000000101';
   affected integer; insert_sql text;
 BEGIN
   FOR actor IN SELECT * FROM (VALUES
-    (1,false,false,false,'owner with explicit finance denies'),
-    (2,false,false,false,'Home editor'),
-    (3,true,false,false,'finance viewer'),
-    (4,false,true,false,'finance manager without view'),
-    (5,true,true,true,'finance viewer and manager'),
-    (6,false,false,false,'child owner with grants'),
-    (7,false,false,false,'ended member with grants'),
-    (8,false,false,false,'assigned split member without finance'),
-    (9,false,true,false,'owner with explicit read deny'),
-    (10,false,false,false,'outsider')
-  ) a(n,can_read,can_insert,can_change,label) LOOP
+    (1,false,'owner with explicit finance denies'),
+    (2,false,'Home editor'),
+    (3,true,'finance viewer'),
+    (4,false,'finance manager without view'),
+    (5,true,'finance viewer and manager'),
+    (6,false,'child owner with grants'),
+    (7,false,'ended member with grants'),
+    (8,false,'assigned split member without finance'),
+    (9,false,'owner with explicit read deny'),
+    (10,false,'outsider')
+  ) a(n,can_read,label) LOOP
     u := ('ddf10000-0000-4000-8000-' || lpad(actor.n::text,12,'0'))::uuid;
     PERFORM set_config('request.jwt.claim.sub',u::text,true);
     FOREACH relation IN ARRAY ARRAY['HomeBill','HomeSubscription','HomeBillSplit'] LOOP
@@ -94,38 +98,22 @@ BEGIN
         ELSE 'INSERT INTO public."HomeBillSplit" (id,bill_id,user_id,share_amount) VALUES ($1,$4,$3,20)' END;
       BEGIN
         EXECUTE insert_sql USING inserted_id,h,u,bill;
-        IF NOT actor.can_insert THEN RAISE EXCEPTION '% inserted forbidden %',actor.label,relation; END IF;
-        -- Roll back successful positive controls so other actors see identical records.
-        RAISE EXCEPTION 'Rollback successful insertion probe' USING ERRCODE='P0002';
-      EXCEPTION
-        WHEN no_data_found THEN NULL;
-        WHEN insufficient_privilege THEN
-          IF actor.can_insert THEN RAISE EXCEPTION '% lost permitted % insertion',actor.label,relation; END IF;
-      END;
-      IF actor.can_insert AND NOT actor.can_read THEN
-        BEGIN
-          EXECUTE insert_sql || ' RETURNING id' INTO inserted_id USING inserted_id,h,u,bill;
-          RAISE EXCEPTION '% read % through INSERT RETURNING',actor.label,relation;
-        EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-      END IF;
+        RAISE EXCEPTION '% inserted % directly',actor.label,relation;
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+      BEGIN
+        EXECUTE insert_sql || ' RETURNING id' INTO inserted_id USING inserted_id,h,u,bill;
+        RAISE EXCEPTION '% read % through INSERT RETURNING',actor.label,relation;
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
       BEGIN
         EXECUTE format('UPDATE public.%I SET %I=20 WHERE id=$1',relation,
           CASE relation WHEN 'HomeBill' THEN 'amount' WHEN 'HomeSubscription' THEN 'cost' ELSE 'share_amount' END)
           USING original_id;
-        GET DIAGNOSTICS affected=ROW_COUNT;
-        IF affected <> (CASE WHEN actor.can_change THEN 1 ELSE 0 END) THEN
-          RAISE EXCEPTION '% has incorrect % update access: %',actor.label,relation,affected;
-        END IF;
-        RAISE EXCEPTION 'Rollback update probe' USING ERRCODE='P0002';
-      EXCEPTION WHEN no_data_found THEN NULL; END;
+        RAISE EXCEPTION '% updated % directly',actor.label,relation;
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
       BEGIN
         EXECUTE format('DELETE FROM public.%I WHERE id=$1',relation) USING original_id;
-        GET DIAGNOSTICS affected=ROW_COUNT;
-        IF affected <> (CASE WHEN actor.can_change THEN 1 ELSE 0 END) THEN
-          RAISE EXCEPTION '% has incorrect % delete access: %',actor.label,relation,affected;
-        END IF;
-        RAISE EXCEPTION 'Rollback deletion probe' USING ERRCODE='P0002';
-      EXCEPTION WHEN no_data_found THEN NULL; END;
+        RAISE EXCEPTION '% deleted % directly',actor.label,relation;
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
     END LOOP;
   END LOOP;
 END $matrix$;
@@ -187,6 +175,12 @@ BEGIN
       OR has_table_privilege('anon',format('public.%I',v_relation),'TRUNCATE') THEN
       RAISE EXCEPTION 'Client retained TRUNCATE privilege outside finance RLS';
     END IF;
+    IF has_any_column_privilege('authenticated',format('public.%I',v_relation),'INSERT,UPDATE')
+      OR has_any_column_privilege('anon',format('public.%I',v_relation),'INSERT,UPDATE')
+      OR has_table_privilege('authenticated',format('public.%I',v_relation),'DELETE')
+      OR has_table_privilege('anon',format('public.%I',v_relation),'DELETE') THEN
+      RAISE EXCEPTION 'Client regained a direct % write grant',v_relation;
+    END IF;
   END LOOP;
   IF (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission" r)
     IS DISTINCT FROM (SELECT rows FROM finance_reference_before) THEN RAISE EXCEPTION 'Role grants changed'; END IF;
@@ -201,7 +195,7 @@ BEGIN
     RAISE EXCEPTION 'Incorrect split permission helper privileges';
   END IF;
 END $preservation$;
-SELECT 'PASS: finance RLS command separation, editor/owner/minor/revoked/foreign denials, positive controls and complete row preservation' AS result;
+SELECT 'PASS: finance reads by exact permission, every direct client write refused, editor/owner/minor/revoked/foreign denials and complete row preservation' AS result;
 
 $contract$, 'home-finance-rls.sql');
 SELECT * FROM finish();
