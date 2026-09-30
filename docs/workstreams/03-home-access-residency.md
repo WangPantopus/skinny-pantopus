@@ -279,6 +279,21 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T09:16Z — [#920](https://github.com/WangPantopus/skinny-pantopus/pull/920) (role label) is with the coordinator; native join-policy hide building; a new U01 finding.**
+  - **#920:** from Stream 4's lead. The web dashboard header showed "Service_provider" and "Lease_resident" (raw `role_base` with CSS `capitalize`); it now shows the Members page's names.
+    - Head `24e503fe2`, bundle `20260930-stream3-home-role-label-r1`, `fbc4d49c…`.
+    - Proof: real Chrome as member B before and after; exact cleanup, 351/353. Lease 09:06:56–09:12:12Z, released early for Stream 4's iOS run.
+  - **Native Member Join Policy hide:**
+    - committed locally as `f7cb1e32a` (both view models and their existing tests);
+    - the Android unit test, ktlint, detekt and debug build are running under the heavy slot, with the iOS build next;
+    - device checks on "Pantopus S34" and `pantopus_s34` follow when Stream 4 returns the lease;
+    - before: the sealed 2026-09-23 Android capture plus master's own unit tests.
+  - **U01 finding (to reproduce and repair next):** the web Security Center's "Verification" card reads `home.verified`, but no Home column or API payload sets that field. So it says "Not verified" on every Home, even owner-verified ones, and it's the only Security Center card an ordinary verified member sees. That matches U01's "verified-member screen's separate unverified-property label".
+  - **Two other U01 notes:**
+    - the web residency request cards were already repaired on 2026-09-11 ("three distinct request cards"); recheck before any change;
+    - floating chat overlap: check whether the last member row's badge can scroll clear of "Open messages panel" at 390 px.
+  - **D06 native document pickers:** starting from the Home default needs the Home settings and the user's own access on both apps. Neither app has those endpoints, so this stays a recorded native gap.
+
 - **2026-09-30T09:00Z — #898 merged and on the runtime; D08 measured; four more PRs with the coordinator; U02–U04 itemized.**
   - **#898:** merged in batch 156 (master `b7eb7a7eb`). `20260930080000` was applied to the shared runtime at 08:27:22Z (ledger 95, logged).
   - **D08 measurement** (`20260930-stream3-home-d08-passcode-measure-r1`, 17 files, `2f0a911c…`, no code change):
