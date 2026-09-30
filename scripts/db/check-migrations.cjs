@@ -42,10 +42,10 @@ function enablesRowLevelSecurity(sql, table) {
 const DEFINER_REVOKE_REQUIRED_FROM = '20260930176000';
 // Row-level-security policies call these boolean helpers, so client roles must keep EXECUTE on them.
 // Redefining one does not require a revoke; this is the complete set of SECURITY DEFINER functions the
-// policies referenced on 2026-09-30.
+// policies referenced on 2026-09-30, plus the chat membership helper added in 20260930182000.
 const RLS_POLICY_HELPERS = new Set(['gig_creator_has_current_authority', 'has_home_permission',
   'home_bill_has_finance_permission', 'home_can_see_visibility', 'home_has_permission', 'home_is_active_member',
-  'home_member_can', 'is_home_member']);
+  'home_member_can', 'is_active_chat_participant', 'is_home_member']);
 function definerFunctions(sql) {
   const text = withoutLineComments(sql);
   const create = new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:${IDENT}\s*\.\s*)?${IDENT}\s*\(`, 'gi');
@@ -70,8 +70,42 @@ function clientsCannotExecute(sql, fn) {
     if (named(match[1])) for (const role of match[2].split(',')) revoked.add(role.trim().toLowerCase());
   }
   if (['public', 'anon', 'authenticated'].every(role => revoked.has(role))) return true;
+  return grantedToClients(text, fn);
+}
+function grantedToClients(text, fn) {
+  const named = list => [...list.matchAll(new RegExp(String.raw`(?:${IDENT}\s*\.\s*)?${IDENT}\s*\(`, 'g'))]
+    .some(match => (!match[1] || identifier(match[1]) === 'public') && identifier(match[2]) === fn);
   return [...text.matchAll(/\bGRANT\s+(?:ALL(?:\s+PRIVILEGES)?|EXECUTE)\s+ON\s+(?:FUNCTION|ROUTINE)\s+([\s\S]*?)\s+TO\s+([^;]*);/gi)]
     .some(match => named(match[1]) && /\b(?:anon|authenticated)\b/i.test(match[2]));
+}
+
+// From this version on, a SECURITY DEFINER function with a parameter that defaults to auth.uid() may be granted to
+// anon or authenticated only if it is a reviewed caller-bound helper below. The default doesn't bind a function to
+// its caller: it still answers for any value a client passes. business_get_user_permissions did, after #996's scan
+// counted it as caller-bound (20260930183000). The helpers below were reviewed as caller-bound, and
+// home-effective-permissions asserts the Home ones answer nothing about another user.
+const AUTH_UID_DEFAULT_GRANTS_REFUSED_FROM = '20260930183000';
+const CALLER_BOUND_HELPERS = new Set([...RLS_POLICY_HELPERS, 'home_get_user_permissions', 'home_has_role_at_least',
+  'home_my_role']);
+function authUidDefaultGrants(sql) {
+  const text = withoutLineComments(sql);
+  const create = new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:${IDENT}\s*\.\s*)?${IDENT}\s*\(`, 'gi');
+  const found = [];
+  for (const match of text.matchAll(create)) {
+    if (match[1] && identifier(match[1]) !== 'public') continue;
+    const fn = identifier(match[2]);
+    let depth = 1; let i = match.index + match[0].length;
+    for (; i < text.length && depth > 0; i++) depth += text[i] === '(' ? 1 : text[i] === ')' ? -1 : 0;
+    if (!/\bDEFAULT\s+auth\s*\.\s*uid\s*\(\s*\)/i.test(text.slice(match.index + match[0].length, i - 1))) continue;
+    const body = /\bAS\s+(\$[A-Za-z0-9_]*\$)/ig; body.lastIndex = i;
+    const start = body.exec(text);
+    if (!start) continue;
+    const end = text.indexOf(start[1], start.index + start[0].length);
+    const tail = end < 0 ? '' : text.slice(end + start[1].length, text.indexOf(';', end + start[1].length) + 1 || undefined);
+    if (!/\bSECURITY\s+DEFINER\b/i.test(text.slice(i, start.index) + tail)) continue;
+    if (!CALLER_BOUND_HELPERS.has(fn) && grantedToClients(text, fn)) found.push(fn);
+  }
+  return found;
 }
 
 // From this version on, a migration may not give anon or PUBLIC any privilege on a public table,
@@ -135,6 +169,11 @@ function validate(policy, files) {
           if (!RLS_POLICY_HELPERS.has(fn) && !clientsCannotExecute(sql, fn)) {
             errors.push(`Revoke EXECUTE on SECURITY DEFINER function public."${fn}" from PUBLIC, anon and authenticated in the same migration: ${name}`);
           }
+        }
+      }
+      if (match[1] >= AUTH_UID_DEFAULT_GRANTS_REFUSED_FROM) {
+        for (const fn of authUidDefaultGrants(sql)) {
+          errors.push(`SECURITY DEFINER function public."${fn}" is granted to clients with a parameter defaulting to auth.uid(), which doesn't bind it to the caller; keep it service-only, or bind it to the caller and add it to CALLER_BOUND_HELPERS with a contract: ${name}`);
         }
       }
       if (match[1] >= RLS_REQUIRED_FROM) {
