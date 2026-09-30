@@ -374,6 +374,7 @@ object BusinessProfileMapper {
             serviceArea = serviceAreaText,
             latitude = location.location?.lat,
             longitude = location.location?.lng,
+            isApproximate = location.isApproximateHome,
         )
     }
 

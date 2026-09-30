@@ -248,12 +248,26 @@ public struct BusinessLocationDTO: Decodable, Sendable, Hashable, Identifiable {
     public let phone: String?
     public let email: String?
     public let timezone: String?
+    /// Set on the public view of a home-based business's location, whose point is approximate.
+    public let isHomeBased: Bool?
+    /// The team's own rows carry the type and exact-location switch instead.
+    public let locationType: String?
+    public let showExactLocation: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id, label
         case isPrimary = "is_primary"
         case address, address2, city, state, zipcode, country
         case location, phone, email, timezone
+        case isHomeBased = "is_home_based"
+        case locationType = "location_type"
+        case showExactLocation = "show_exact_location"
+    }
+
+    /// A home-based business's location that the public sees only approximately (the API's rule:
+    /// `home_based_private` without "show exact location"), so it gets no directions.
+    public var isApproximateHome: Bool {
+        isHomeBased == true || (locationType == "home_based_private" && showExactLocation != true)
     }
 }
 
