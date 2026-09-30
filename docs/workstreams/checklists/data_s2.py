@@ -14,14 +14,14 @@ U03 = [
     ]),
     ("Start and Hub", [
         ("Start funnel and Place preview", "", {"iOS": [c("done", "R1", "#635")], "Android": [c("done", "R1", "#635")], "Web": [c("done", "R1", "#607")]}),
-        ("Hub cards and status pills", "Stream 1 parts only", {"iOS": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Android": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Web": [c("done", "Hub posts", "Sep25"), c("todo", "R1")]}),
+        ("Hub cards and status pills", "Stream 1 parts only", {"iOS": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Android": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Web": [c("done", "Hub posts", "Sep25"), c("done", "R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change)", "bundle 890d21cb")]}),
     ]),
 ]
 
 U04 = [
     ("Posts and comments", "", {"iOS": [c("done", "L1 L2 L3", "Sep27-28"), c("todo", "L4")], "Android": [c("done", "L1 L2 L3", "#667, Sep27"), c("todo", "L4")], "Web": [c("done", "L2 L3 L4", "Sep27, #785"), c("todo", "L1 draft kept across tabs")]}),
     ("Start and Place preview", "", {"iOS": [c("todo", "L2 L3")], "Android": [c("todo", "L2 L3")], "Web": [c("todo", "L2 L3")]}),
-    ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("todo", "L2")]}),
+    ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("done", "L3 Today no longer reused across accounts; area change and Refresh re-read", "#856"), c("todo", "L2")]}),
 ]
 
 U02 = [
