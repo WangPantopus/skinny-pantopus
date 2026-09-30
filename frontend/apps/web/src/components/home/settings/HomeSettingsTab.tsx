@@ -48,6 +48,54 @@ const DAYS_OF_WEEK = [
   { value: 'sunday', label: 'Sunday' },
 ];
 
+// ---- Form values and unsaved edits ----
+
+type SettingsForm = {
+  name: string;
+  home_type: string;
+  house_rules: string;
+  parking_instructions: string;
+  entry_instructions: string;
+  trash_day: string;
+  local_tips: string;
+  guest_welcome_message: string;
+  default_visibility: string;
+  default_guest_pass_hours: string;
+  notifications: { bills: boolean; tasks: boolean; mail: boolean; delivery: boolean; guest_pass: boolean };
+};
+
+/** Unsaved edits: only the fields that differ from the settings they were typed over, as typed. */
+export type SettingsDraft = Partial<SettingsForm>;
+
+// What Save sends for these form values (the same shape as the settings read).
+function settingsPayload(form: SettingsForm): Record<string, unknown> {
+  return {
+    name: form.name.trim() || null,
+    home_type: form.home_type,
+    house_rules: form.house_rules.trim(),
+    parking_instructions: form.parking_instructions.trim(),
+    entry_instructions: form.entry_instructions.trim(),
+    trash_day: form.trash_day,
+    local_tips: form.local_tips.trim(),
+    guest_welcome_message: form.guest_welcome_message.trim(),
+    default_visibility: form.default_visibility,
+    default_guest_pass_hours: Number(form.default_guest_pass_hours) || 48,
+    preferences: { notifications: form.notifications },
+  };
+}
+
+// The fields whose Save value differs from the loaded settings, or null when nothing is unsaved.
+function unsavedEdits(form: SettingsForm, loaded: Record<string, unknown>): SettingsDraft | null {
+  const payload = settingsPayload(form);
+  const edits: SettingsDraft = {};
+  for (const key of Object.keys(payload)) {
+    if (JSON.stringify(payload[key]) === JSON.stringify(loaded[key])) continue;
+    if (key === 'preferences') edits.notifications = form.notifications;
+    else (edits as Record<string, unknown>)[key] = form[key as keyof SettingsForm];
+  }
+  return Object.keys(edits).length > 0 ? edits : null;
+}
+
 // ============================================================
 // Main Component
 // ============================================================
@@ -59,6 +107,8 @@ export default function HomeSettingsTab({
   can,
   currentUserId,
   onHomeUpdate,
+  draft,
+  onDraftUnmount,
 }: {
   homeId: string;
   home: Record<string, any>;
@@ -66,6 +116,10 @@ export default function HomeSettingsTab({
   can: (perm: string) => boolean;
   currentUserId: string | null;
   onHomeUpdate: () => void;
+  /** Unsaved edits to put back over the next settings read (kept across the dashboard's access re-check). */
+  draft?: SettingsDraft | null;
+  /** Receives the unsaved edits if the tab unmounts with any (the dashboard's access re-check). */
+  onDraftUnmount?: (draft: SettingsDraft) => void;
 }) {
   const canManageDataDestruction =
     home?.can_delete_home === true ||
@@ -109,6 +163,33 @@ export default function HomeSettingsTab({
   const [deleteStep, setDeleteStep] = useState(0);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Unsaved edits handed back after an access re-check go over the next read, once.
+  const restore = useRef<SettingsDraft | null>(null);
+  const applyDraft = useCallback((kept: SettingsDraft) => {
+    if (kept.name !== undefined) setHomeName(kept.name);
+    if (kept.home_type !== undefined) setHomeType(kept.home_type);
+    if (kept.house_rules !== undefined) setHouseRules(kept.house_rules);
+    if (kept.parking_instructions !== undefined) setParkingInstructions(kept.parking_instructions);
+    if (kept.entry_instructions !== undefined) setEntryInstructions(kept.entry_instructions);
+    if (kept.trash_day !== undefined) setTrashDay(kept.trash_day);
+    if (kept.local_tips !== undefined) setLocalTips(kept.local_tips);
+    if (kept.guest_welcome_message !== undefined) setGuestWelcome(kept.guest_welcome_message);
+    if (kept.default_visibility !== undefined) setDefaultVisibility(kept.default_visibility);
+    if (kept.default_guest_pass_hours !== undefined) setDefaultGuestHours(kept.default_guest_pass_hours);
+    if (kept.notifications) {
+      setNotifBills(kept.notifications.bills);
+      setNotifTasks(kept.notifications.tasks);
+      setNotifMail(kept.notifications.mail);
+      setNotifDelivery(kept.notifications.delivery);
+      setNotifGuestPass(kept.notifications.guest_pass);
+    }
+  }, []);
+  useEffect(() => {
+    if (!draft) return;
+    if (loadedSettings.current) applyDraft(draft);
+    else restore.current = draft;
+  }, [draft, applyDraft]);
 
   // Load settings
   const loadSettings = useCallback(async () => {
@@ -170,18 +251,46 @@ export default function HomeSettingsTab({
         default_guest_pass_hours: Number(prefs.default_guest_pass_hours || h.default_guest_pass_hours || 48),
         preferences: { notifications },
       };
+      if (restore.current) {
+        applyDraft(restore.current);
+        restore.current = null;
+      }
     } catch (error: unknown) {
       if (revision !== loadGeneration.current) return;
       setLoadError(failureMessage(error, 'Home settings could not be loaded. Please try again.'));
     } finally {
       if (revision === loadGeneration.current) setLoading(false);
     }
-  }, [homeId, home]);
+  }, [homeId, home, applyDraft]);
 
   useEffect(() => {
     void loadSettings();
     return () => { loadGeneration.current++; };
   }, [loadSettings, canEdit]);
+
+  const form: SettingsForm = {
+    name: homeName,
+    home_type: homeType,
+    house_rules: houseRules,
+    parking_instructions: parkingInstructions,
+    entry_instructions: entryInstructions,
+    trash_day: trashDay,
+    local_tips: localTips,
+    guest_welcome_message: guestWelcome,
+    default_visibility: defaultVisibility,
+    default_guest_pass_hours: defaultGuestHours,
+    notifications: { bills: notifBills, tasks: notifTasks, mail: notifMail, delivery: notifDelivery, guest_pass: notifGuestPass },
+  };
+
+  // The dashboard unmounts this tab while it re-checks access (a hidden tab, a refresh), so the last rendered
+  // form's unsaved edits, if any, are handed up then.
+  const latestForm = useRef(form);
+  const handUp = useRef(onDraftUnmount);
+  useEffect(() => { latestForm.current = form; handUp.current = onDraftUnmount; });
+  useEffect(() => () => {
+    const edits = loadedSettings.current ? unsavedEdits(latestForm.current, loadedSettings.current) : null;
+    if (edits) handUp.current?.(edits);
+  }, []);
 
   // Save all settings
   const handleSave = async () => {
@@ -189,27 +298,7 @@ export default function HomeSettingsTab({
     setSaving(true);
     setSaveMsg('');
     try {
-      const draft = {
-        name: homeName.trim() || null,
-        home_type: homeType,
-        house_rules: houseRules.trim(),
-        parking_instructions: parkingInstructions.trim(),
-        entry_instructions: entryInstructions.trim(),
-        trash_day: trashDay,
-        local_tips: localTips.trim(),
-        guest_welcome_message: guestWelcome.trim(),
-        default_visibility: defaultVisibility,
-        default_guest_pass_hours: Number(defaultGuestHours) || 48,
-        preferences: {
-          notifications: {
-            bills: notifBills,
-            tasks: notifTasks,
-            mail: notifMail,
-            delivery: notifDelivery,
-            guest_pass: notifGuestPass,
-          },
-        },
-      };
+      const draft = settingsPayload(form);
       // Omit untouched values so another editor's unrelated changes survive.
       const changes = Object.fromEntries(Object.entries(draft).filter(
         ([key, value]) => JSON.stringify(value) !== JSON.stringify(loadedSettings.current?.[key]),
@@ -217,6 +306,8 @@ export default function HomeSettingsTab({
       if (Object.keys(changes).length > 0) {
         await api.homeProfile.updateHomeSettings(homeId, changes);
       }
+      // What was saved is no longer an unsaved edit.
+      loadedSettings.current = draft;
 
       // The Home reload below remounts this tab, so confirm with a toast.
       toast.success('Settings saved');
