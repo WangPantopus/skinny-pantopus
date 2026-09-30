@@ -216,7 +216,7 @@ Itemized from sealed evidence in the audit store using Stream 1's case names (`c
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | Joining: invitations, waiting room, residency claim, verification pages | ✅ E4 R1 (#724: pending 403 shows the waiting state; a 503 shows an error, not "No claim in review")<br>✅ new-account invite → verification → original review (0928 home-new-account-invite)<br>❓ E1 E2 E3 E5 E6 | ✅ E4 R1 (#724)<br>✅ new-account invite (0928 home-new-account-invite)<br>❓ E1 E2 E3 E5 E6 | ✅ E1 E4 R1 (#722 waiting room: Leave 503 keeps the original, and Retry sends one command; pending 403 says "Waiting for approval"; read 503 and Retry)<br>✅ R2 (#558: no false "No household admin yet")<br>✅ R1 invitations and verify pages, owner view (0929 web-false-empty-sweep-r2)<br>✅ new-account invite (0928 home-new-account-invite)<br>❓ E2 E3 E5 E6 |
-| Owner's residency review (approve, reject) | ✅ hint copy (#799)<br>❓ E5 departed applicant (#796 ran on web)<br>⬜ E1 E2 E3 R1 | same as iOS | ✅ E5 (#796: a departed applicant's claim gets an honest 409; Reject works)<br>✅ R1 review-claim and residency (sweep r2)<br>✅ hint copy (#799)<br>❓ E1 E2 E3 |
+| Owner's residency review (approve, reject) | ✅ hint copy (#799)<br>❓ E5 departed applicant (#796 ran on web)<br>✅ E1 E2 E3 R1 (`0930 u03-residency-review`: a 503 keeps the saved decision and Retry approves it; a lost reply commits once, and after relaunch "Original decision confirmed"; a double tap sends 1 POST; a read 503 then Reload) | same as iOS (the same bundle; the review screen is FLAG_SECURE, so it was checked through the accessibility tree) | ✅ E5 (#796: a departed applicant's claim gets an honest 409; Reject works)<br>✅ R1 review-claim and residency (sweep r2)<br>✅ hint copy (#799)<br>❓ E1 E2 E3 |
 | Leaving, member removal and recovery | ✅ E5 (#781 re-inviting an ended member; #794 approving an ended member's request: honest 409 on all three clients)<br>❓ E1 E2 E3 (the older removal reports #722 reuses)<br>🔷 re-entry (decision 1) | same as iOS | ✅ E1 (#722 Leave)<br>✅ E5 (#781, #794)<br>❓ E2 E3 (older removal reports)<br>🔷 re-entry (decision 1) |
 | Ownership: claims, Owners page, transfer | ❓ transfer copy (0927 native-transfer-account; blocked by device auth, never submitted)<br>⬜ E1 E2 E3 E4 E5 R1<br>✅ disputes: launch without them (decision 3, 2026-09-30) | same as iOS | ✅ E4 (#835: permission sentence; Invite and Transfer hidden)<br>✅ E6 (#473: an unknown or own email gets an honest 400; nothing changes)<br>✅ R1 owners pages (sweep r2)<br>⛔ E1 revoke failure through the API only (#473)<br>✅ disputes: launch without them (decision 3; the flag defaults off)<br>⛔ hosted check that production doesn't set the flag |
 | Landlord and lease approvals | ❓ older R05 reuse only (confirm)<br>⬜ U03 cases in the native landlord wizard | same as iOS | ❓ older R05 reuse<br>⬜ U03 cases |
@@ -324,6 +324,15 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T17:37Z — U03: the owner's residency review passes E1, E2, E3 and R1 on iOS and Android (no code change); the D10 approved-request lead moved to post-launch.**
+  - **Bundle:** `20260930-stream3-home-u03-residency-review-r1`, MANIFEST `24e573216fc5dd0d2013d7f9efe6941d6faeefca40806548ad551213b666f669`, 153 files. Lease 17:15:17–17:35:51Z. Six own Homes with member B's real household claims; exact cleanup, 349/353 equal and the rest auth history.
+  - **Per platform:**
+    - R1 (read 503): an honest error and Reload.
+    - E1 (decision 503): "not confirmed", then Retry approves it; 1 receipt.
+    - E2 (reply held 45 s while the server commits): the client's own re-send, a relaunch and Retry total 4 POSTs, all mapped to 1 decision, 1 receipt and 1 notice. The sheet then shows "Original decision confirmed".
+    - E3 (double tap): exactly 1 POST.
+  - **[#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036):** CI almost all green (the Android suite is still running); mergeable.
 
 - **2026-09-30T17:02Z — U02 native A1/A2 done on 19 screens; [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036) with the coordinator; #1024 merged (batch 197).**
   - **Bundle:** `20260930-stream3-home-u02-native-a1a2-r1`, MANIFEST `732b0e5df0561d60ca1ae311511d20d7077e987e8e708ce14d8f5fff0f07fe10`, 1,084 files.
