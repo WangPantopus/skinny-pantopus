@@ -79,6 +79,7 @@ const stripeService = require('../stripe/stripeService');
 const { calculateAndStoreCompleteness, calculateProfileCompleteness } = require('../utils/businessCompleteness');
 const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateGuard');
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
+const membershipService = require('../services/businessMembershipService');
 
 
 // ============ CONSTANTS ============
@@ -393,6 +394,21 @@ router.get('/check-username', async (req, res) => {
 //  BUSINESS CRUD
 // ================================================================
 
+// The owner's seat: the identity the dashboard Team tab, seat invites and Profiles & Privacy read. The
+// business already exists by then, so a failure is logged rather than undoing the creation.
+async function bootstrapOwnerSeat(businessUserId, actorId) {
+  try {
+    await membershipService.ensureSeat({
+      businessUserId,
+      userId: actorId,
+      roleBase: 'owner',
+      bindingMethod: 'owner_bootstrap',
+    });
+  } catch (err) {
+    logger.error('Owner seat bootstrap failed', { businessUserId, error: err.message || err });
+  }
+}
+
 /**
  * POST / — Create a new business
  *
@@ -487,6 +503,7 @@ router.post('/', verifyToken, validate(createBusinessSchema), async (req, res) =
     }
 
     const businessUserId = data.business_user_id;
+    await bootstrapOwnerSeat(businessUserId, actorId);
 
     // 6a) Apply entity-type side effects (fee override, nonprofit flags)
     applyEntityTypeSideEffects(businessUserId, business_type || 'for_profit', {
@@ -635,6 +652,7 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
     }
 
     const businessUserId = data.business_user_id;
+    await bootstrapOwnerSeat(businessUserId, actorId);
 
     // 7) Post-creation side effects (fire-and-forget)
 
