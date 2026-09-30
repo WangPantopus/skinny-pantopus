@@ -5,6 +5,7 @@ import { X, Check, Package } from 'lucide-react';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
 
 type TradeModalProps = {
   open: boolean;
@@ -16,22 +17,29 @@ type TradeModalProps = {
 export default function TradeModal({ open, onClose, listing, onTradeProposed }: TradeModalProps) {
   const [myListings, setMyListings] = useState<any[]>([]);
   const [loadingListings, setLoadingListings] = useState(true);
+  // A failed read is not "no listings"; say so and offer a retry.
+  const [listingsFailed, setListingsFailed] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [cashSupplement, setCashSupplement] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const loadMyListings = useCallback(() => {
+    setLoadingListings(true);
+    setListingsFailed(false);
+    api.listings.getMyListings({ status: 'active' as any })
+      .then((result) => setMyListings(result?.listings || []))
+      .catch(() => { setMyListings([]); setListingsFailed(true); })
+      .finally(() => setLoadingListings(false));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    setLoadingListings(true);
     setSelectedIds(new Set());
     setCashSupplement('');
     setMessage('');
-    api.listings.getMyListings({ status: 'active' as any })
-      .then((result) => setMyListings(result?.listings || []))
-      .catch(() => setMyListings([]))
-      .finally(() => setLoadingListings(false));
-  }, [open]);
+    loadMyListings();
+  }, [open, loadMyListings]);
 
   // Lock body scroll
   useEffect(() => {
@@ -115,6 +123,12 @@ export default function TradeModal({ open, onClose, listing, onTradeProposed }: 
             <div className="flex justify-center py-10">
               <div className="animate-spin h-6 w-6 border-2 border-emerald-600 border-t-transparent rounded-full" />
             </div>
+          ) : listingsFailed ? (
+            <ErrorState
+              title="Couldn't load your listings"
+              message="Check your connection and try again."
+              onRetry={loadMyListings}
+            />
           ) : myListings.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-sm text-app-text-muted">You have no active listings to offer.</p>
