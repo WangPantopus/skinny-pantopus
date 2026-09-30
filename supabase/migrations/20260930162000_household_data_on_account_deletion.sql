@@ -1,7 +1,8 @@
 -- Backwards compatible: yes. Makes HomeTaskMedia.uploaded_by nullable with ON DELETE SET NULL;
 -- lets the task-attachment guards accept an owner cleared to NULL on update (inserts stay
--- strict); lets a task-attachment file be owned by the household; adds two User BEFORE
--- DELETE triggers and one service-only function. No rows change when applied. The deployed
+-- strict); lets a task-attachment file be owned by the household; replies stop naming an
+-- attachment's uploader once that account is gone; adds two User BEFORE DELETE triggers and
+-- one service-only function. No rows change when applied. The deployed
 -- backend never calls the function and never writes NULL to these columns. Deploy order does
 -- not matter.
 --
@@ -15,7 +16,8 @@
 --    HomeTaskMedia.uploaded_by also cascaded, which silently removed the attachment from the
 --    household's task and left its upload `ready`, a state the storage recovery job never
 --    collects. Now, like Home documents since 20260930153000, the member's task-attachment
---    files are released to the household before the delete, and the task keeps them.
+--    files are released to the household before the delete, and the task keeps them; replies
+--    name no uploader once that account is gone (home_task_media_projection).
 --
 -- 2. Home items only this person could see go with the account. A pin marked visible_to
 --    'personal' is shown only to its creator, and a letter at a Home marked for one
@@ -31,8 +33,8 @@
 --    refuses, the Home shell stays but its household records go, so a later resident who
 --    claims or joins it can never read them. homeAuthorityService.retireHomeForDeletedAccount
 --    (Stream 3) decides and calls it through homeRecordService.purgeHouseholdRecords. It
---    refuses (HOME_PURGE_HOUSEHOLD_PRESENT) while anyone else has access or a verified
---    ownership, so it can never empty a live household. It removes the household's tasks
+--    refuses (HOME_PURGE_HOUSEHOLD_PRESENT) while anyone else has access, a verified
+--    ownership or a legacy Home.owner_id with access, so it can never empty a live household. It removes the household's tasks
 --    (attachments retired as the product's own delete does), events, bills, documents (files
 --    tombstoned as the document delete path does), assets, devices, vendors, subscriptions,
 --    maintenance, packages, emergency info, issues, checklist, systems and notes, resources,
@@ -107,6 +109,20 @@ BEGIN
   RETURN NEW;
 END $function$;
 
+-- An attachment the household keeps names no uploader once that account is gone: the
+-- upload's own record keeps the id for storage identity, but replies never send it.
+CREATE OR REPLACE FUNCTION public.home_task_media_projection(i "HomeTaskMediaIntent")
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT jsonb_build_object('id',i.id,'home_id',i.original_home_id,'task_id',i.original_task_id,
+    'uploaded_by',(SELECT u.id FROM public."User" u WHERE u.id=i.uploaded_by),'file_name',i.file_name,'mime_type',i.mime_type,'file_size',i.file_size,
+    'file_type',CASE WHEN i.mime_type LIKE 'image/%' THEN 'image' ELSE 'document' END,
+    'created_at',i.created_at,'state',i.state,'available',i.state='ready','cleanup_pending',i.cleanup_pending);
+$function$;
+
 -- Home document and task-attachment files may be owned by the household (no user) once
 -- their uploader deleted their account; lease evidence and gig-completion files keep
 -- their rule.
@@ -176,7 +192,10 @@ BEGIN
   IF EXISTS (SELECT FROM public."HomeOccupancy" o WHERE o.home_id = p_home_id AND o.user_id <> p_departing_user_id
       AND coalesce((public.home_effective_access(p_home_id, o.user_id)->>'has_access')::boolean, false))
     OR EXISTS (SELECT FROM public."HomeOwner" w WHERE w.home_id = p_home_id AND w.owner_status = 'verified'
-      AND NOT (w.subject_type = 'user' AND w.subject_id = p_departing_user_id)) THEN
+      AND NOT (w.subject_type = 'user' AND w.subject_id = p_departing_user_id))
+    -- A legacy owner linked only through Home.owner_id still has owner access.
+    OR EXISTS (SELECT FROM public."Home" h WHERE h.id = p_home_id AND h.owner_id <> p_departing_user_id
+      AND coalesce((public.home_effective_access(p_home_id, h.owner_id)->>'has_access')::boolean, false)) THEN
     RETURN '{"ok":false,"code":"HOME_PURGE_HOUSEHOLD_PRESENT","status":409}'::jsonb;
   END IF;
 
