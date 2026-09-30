@@ -114,6 +114,8 @@ data class PostDetailDto(
     @Json(name = "event_date") val eventDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
+    /** How the owner asked to be contacted: `dm`, `comment`, `phone` or `phone|<digits>`. */
+    @Json(name = "lost_found_contact_pref") val lostFoundContactPref: String? = null,
     @Json(name = "service_category") val serviceCategory: String? = null,
     @Json(name = "deal_business_name") val dealBusinessName: String? = null,
 )

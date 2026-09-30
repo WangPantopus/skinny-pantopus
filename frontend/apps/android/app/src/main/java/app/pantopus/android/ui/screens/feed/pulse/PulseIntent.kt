@@ -65,6 +65,9 @@ enum class PulseIntent(
                 VisitorGuide -> PantopusIcon.Compass
             }
 
+    /** The card chip's word for one post: a found Lost & Found post says "Found", not "Lost". */
+    fun chipLabelFor(lostFoundType: String?): String = if (this == Lost && lostFoundType == "found") "Found" else cardChipLabel
+
     companion object {
         fun fromKey(key: String): PulseIntent = entries.firstOrNull { it.key == key } ?: All
 

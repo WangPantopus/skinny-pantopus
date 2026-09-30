@@ -105,6 +105,8 @@ data class PulsePostCardContent(
     val media: List<PostMediaItem> = emptyList(),
     /** Overflow-menu capability set for this viewer. */
     val actions: PulsePostActions = PulsePostActions(),
+    /** The chip's word; a found Lost & Found post says "Found" ([PulseIntent.chipLabelFor]). */
+    val chipLabel: String = intent.cardChipLabel,
 ) {
     /** Thumbnail-preferring URL projection kept for test compatibility. */
     val mediaUrls: List<String>
@@ -230,7 +232,7 @@ private fun CardHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PulseIntentChip(intent = content.intent)
+        PulseIntentChip(intent = content.intent, label = content.chipLabel)
         HeaderTrailingControl(
             content = content,
             onOverflow = onOverflow,
@@ -545,7 +547,10 @@ private fun ReactionPill(
  * foreground/background tokens against the existing design system.
  */
 @Composable
-fun PulseIntentChip(intent: PulseIntent) {
+fun PulseIntentChip(
+    intent: PulseIntent,
+    label: String = intent.cardChipLabel,
+) {
     val (fg, bg) = intent.tintColors()
     Row(
         modifier =
@@ -564,7 +569,7 @@ fun PulseIntentChip(intent: PulseIntent) {
             tint = fg,
         )
         Text(
-            text = intent.cardChipLabel.uppercase(),
+            text = label.uppercase(),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = fg,
@@ -592,7 +597,7 @@ private fun PulseIntent.tintColors(): Pair<Color, Color> =
 private fun buildA11yLabel(content: PulsePostCardContent): String {
     val parts = mutableListOf<String>()
     parts.add(content.authorName)
-    if (content.intent.cardChipLabel.isNotEmpty()) parts.add(content.intent.cardChipLabel)
+    if (content.chipLabel.isNotEmpty()) parts.add(content.chipLabel)
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)
     if (content.mediaUrls.isNotEmpty()) {

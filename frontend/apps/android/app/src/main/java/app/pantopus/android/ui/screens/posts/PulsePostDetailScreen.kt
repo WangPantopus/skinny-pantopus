@@ -32,11 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
+import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -60,6 +63,26 @@ private val reportReasons =
         "safety" to "Safety concern",
         "other" to "Other",
     )
+
+/**
+ * "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web card and post page show it;
+ * null for other posts. The contact is stored as `dm`, `comment`, `phone` or `phone|<digits>`.
+ */
+internal fun lostFoundDetailLine(post: PostDetailDto): String? {
+    if (post.postType != "lost_found") return null
+    val kind = PulseLostFoundKind.entries.firstOrNull { it.key == post.lostFoundType }?.label
+    val contact =
+        post.lostFoundContactPref?.let { stored ->
+            val pref = PulseLostFoundContactPref.entries.firstOrNull { it.key == stored.substringBefore('|') }
+            val number = stored.substringAfter('|', "")
+            when {
+                pref == null -> null
+                pref == PulseLostFoundContactPref.Phone && number.isNotEmpty() -> "Contact: ${pref.label} $number"
+                else -> "Contact: ${pref.label}"
+            }
+        }
+    return listOfNotNull(kind, contact).joinToString(" · ").ifEmpty { null }
+}
 
 /**
  * Pulse post detail screen. ViewModel reads the post id via the
@@ -382,6 +405,7 @@ fun PulsePostDetailLoadedContent(
         body = {
             BodyReactionsBody(
                 body = content.post.content,
+                detailLine = lostFoundDetailLine(content.post),
                 media = content.media,
                 intent = content.intent,
                 reactions = content.reactions,

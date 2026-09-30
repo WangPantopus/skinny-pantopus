@@ -295,6 +295,7 @@ public struct PulsePostDetailLoadedContent: View {
                     reactions: detail.reactions,
                     onReactionTap: onReactionTap,
                     mediaLocationBadge: detail.post.locationName,
+                    detailLine: detail.post.lostFoundDetailLine,
                     selectedReactionEmoji: selectedReactionEmoji,
                     onEmojiSelected: onEmojiSelected,
                     composerAvatarURL: nil,
@@ -379,4 +380,27 @@ private struct ErrorLayout: View {
         composerText: $composer,
         isSendingComment: false
     )
+}
+
+extension PostDetailDTO {
+    /// "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web
+    /// card and post page show it; nil for other posts. The contact is stored
+    /// as `dm`, `comment`, `phone` or `phone|<digits>`.
+    var lostFoundDetailLine: String? {
+        guard postType == "lost_found" else { return nil }
+        var parts: [String] = []
+        switch lostFoundType {
+        case "lost": parts.append("Lost")
+        case "found": parts.append("Found")
+        default: break
+        }
+        if let stored = lostFoundContactPref {
+            let pieces = stored.split(separator: "|", maxSplits: 1).map(String.init)
+            if let key = pieces.first, let pref = PulseLostFoundContactPref(rawValue: key) {
+                let number = pieces.count > 1 ? pieces[1] : ""
+                parts.append(pref == .phone && !number.isEmpty ? "Contact: \(pref.label) \(number)" : "Contact: \(pref.label)")
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }

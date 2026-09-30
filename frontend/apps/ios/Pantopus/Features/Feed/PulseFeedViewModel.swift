@@ -862,7 +862,8 @@ public final class PulseFeedViewModel {
                 muteEntityName: post.creator?.displayName ?? "this author",
                 postType: post.postType,
                 topicLabel: intent.cardChipLabel
-            )
+            ),
+            chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType)
         )
     }
 
