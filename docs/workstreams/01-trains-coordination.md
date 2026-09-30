@@ -17,7 +17,7 @@
     - Seal `61fefcd1`, verified. The seat tables are service_role-only (checked on Stream 1's DB).
     - Stream 1's DB is now at `20260930184000` (file sha `37120dd8…`, nothing to backfill there).
   - **Batch 202** (17:21:22Z, PR #1041): **#1034** (Stream 2, Android a11y: Start "Sign in", task steps, refund reasons; seals `607283e7`/`1e9293bd`). Master `416898752`. No golden covers those screens, so #1029's goldens can't interact.
-  - **Stream 2's iOS cells run by Stream 1: 8 of 8 run, all PASS on master code.** Beyond the three listed at 16:56Z:
+  - **Stream 2's iOS cells run by Stream 1: 6 of 8 done, all PASS on master code.** Beyond the three listed at 16:56Z:
     - Edit E1/E2/E5: `20260930-stream1-ios-post-edit-r1`, `4b8ed58a`;
     - Posts L4: `…-ios-posts-session-refresh-r1`, `dd4939ee`;
     - Create E6: `…-ios-create-e6-r1`, `3ee82fc9`.
