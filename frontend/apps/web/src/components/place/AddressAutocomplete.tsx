@@ -45,8 +45,11 @@ export default function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [selected, setSelected] = useState(false);
+  // A failed suggestions read must not look like "no matches" (the submit stays disabled without one).
+  const [lookupFailed, setLookupFailed] = useState(false);
 
   const listId = useId();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,6 +59,7 @@ export default function AddressAutocomplete({
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
+    setLookupFailed(false);
     api.geo
       .autocompleteWithAbort(q, controller.signal)
       .then((res) => {
@@ -64,7 +68,8 @@ export default function AddressAutocomplete({
         setActiveIndex(-1);
       })
       .catch(() => {
-        // aborted or failed — keep the field usable, just no dropdown
+        // Aborted: a newer search replaced this one. Failed: keep the field usable and say so.
+        if (!controller.signal.aborted) setLookupFailed(true);
       })
       .finally(() => {
         if (abortRef.current === controller) setLoading(false);
@@ -91,6 +96,7 @@ export default function AddressAutocomplete({
       setSuggestions([]);
       setOpen(false);
       setLoading(false);
+      setLookupFailed(false);
       if (abortRef.current) abortRef.current.abort();
       return;
     }
@@ -139,6 +145,7 @@ export default function AddressAutocomplete({
       >
         <MapPin size={19} strokeWidth={2} className={active ? 'text-primary-600 shrink-0' : 'text-app-text-muted shrink-0'} />
         <input
+          ref={inputRef}
           type="text"
           inputMode="text"
           autoComplete="off"
@@ -191,6 +198,24 @@ export default function AddressAutocomplete({
             );
           })}
         </ul>
+      ) : null}
+
+      {lookupFailed ? (
+        <p role="alert" className="mt-2 flex flex-wrap items-center gap-x-2 text-[13.5px] text-app-text-secondary">
+          We couldn&apos;t look up addresses right now.
+          <button
+            type="button"
+            onClick={() => {
+              // Back to the field (and cancel its pending close) so the new suggestions stay open.
+              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+              inputRef.current?.focus();
+              runSearch(query.trim());
+            }}
+            className="font-semibold text-primary-700 dark:text-primary-300"
+          >
+            Try again
+          </button>
+        </p>
       ) : null}
     </div>
   );
