@@ -348,6 +348,12 @@ export default function PostComposer({
   const showGlobalLocation = canUseGlobalAudience && showLocationControl(activePostAs, selectedAudience);
   const homeNeighborhoodLocked = activePostAs === 'home' && selectedAudience === 'neighborhood'
     && !['owner', 'admin'].includes((selectedIdentity?.role || '').toLowerCase());
+  // The Place feed refuses a deal without an end date (a Connections deal may leave it empty);
+  // an edit may not clear one the post already has.
+  const createAudience: Audience = canUseGlobalAudience
+    ? selectedAudience
+    : (networkVisibility || f.visibility) === 'connections' ? 'connections' : 'nearby';
+  const dealExpiryRequired = isEdit ? Boolean(editSeed?.dealExpires) : LOCAL_PUBLIC_AUDIENCES.has(createAudience);
 
   const contentPlaceholder = activeSurface === 'connections'
     ? 'Share something with your connections…'
@@ -565,6 +571,11 @@ export default function PostComposer({
 
     if (LOCAL_PUBLIC_AUDIENCES.has(targetAudience) && targetPostType === 'general') {
       setShowPurposePicker(true);
+      return;
+    }
+
+    if (LOCAL_PUBLIC_AUDIENCES.has(targetAudience) && targetPostType === 'deal' && !f.dealExpires) {
+      setSubmitError('A deal needs an expiry date.');
       return;
     }
 
@@ -1024,6 +1035,7 @@ export default function PostComposer({
               onDealBusinessNameChange={(v) => setField('dealBusinessName', v)}
               dealExpires={f.dealExpires}
               onDealExpiresChange={(v) => setField('dealExpires', v)}
+              expiryRequired={dealExpiryRequired}
             />
           )}
           {f.selectedIntent === 'lost_found' && (
