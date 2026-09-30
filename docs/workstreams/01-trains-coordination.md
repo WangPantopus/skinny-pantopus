@@ -9,6 +9,21 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T16:56Z (Stream 1).**
+  - **Batch 200** (16:54:39Z, PR #1035): **#1029**, the native accents AA plus iOS dark-mode fills. Master `1e1b6bacc`.
+    - Light primary600 `#0369A1` / primary700 `#075985` on iOS and Android.
+    - The iOS `*Solid` fill twins (new `primarySolid`) are used in the shared buttons and chips and in 11 feature fills.
+    - 485 goldens were re-recorded. All native streams were told to rebase and re-record only their own snapshots.
+    - Seal `1bdf366a`, including Stream 3's Approve check at 1.92 → 5.48:1.
+  - **Stream 2's iOS cells run by Stream 1: 5 of 8 PASS on master code.** Each has a sealed bundle:
+    - Hub R1: `20260930-stream1-ios-hub-reads-r1`, `7a50ea0a`;
+    - Hub L3/L2: `…-ios-hub-account-switch-r1`, `3280a64f`;
+    - Start L2/L3: `…-ios-start-lifetimes-r1`, `be19dced`. iOS sign-out, including Remove account, clears the pending preview, and the Start screen is rebuilt on every sign-out, so iOS has no Android #989-class leak.
+    - Next: Edit E1/E2/E5, Posts L4, Create E6, comment photo failure, then U02 A1–A4.
+  - **Queue:**
+    - #1034 (Stream 2, Android a11y follow-up; seals `607283e7` and `1e9293bd`): waits for its Android CI job, because it changes layout on screens with goldens.
+    - Stream 5 has **184000** for the business seat repair: owners get no seat; add-member's seat write is broken; leaving one business unbinds seats elsewhere; users with seats at two or more businesses are locked out. It's a production data backfill, so the PR must say in plain words what rows it creates and rebinds, with a read-only preview query for the founder.
+  - **Tooling:** `tools/ios-ui-s1.py private … --chunked` sends 4 characters at a time. Under load, a one-burst password dropped characters, and the login got 401.
 - **Update 2026-09-30T16:20Z (Stream 1).**
   - **Batch 197** (16:07:41Z, PR #1031): #1024 + #1028 + #1023. Master `a318010a2`.
     - **#1024** (Stream 3): master's red iOS SwiftLint is fixed.
