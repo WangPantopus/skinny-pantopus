@@ -4679,6 +4679,90 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
   }
 }
 
+// Account deletion (DELETE /account below). Columns that reference User(id)
+// with no ON DELETE rule, so PostgreSQL's default NO ACTION blocks the User
+// delete: these are authorship and audit attributions, set to NULL.
+const ACCOUNT_DELETE_NULLIFY = [
+  // Business audit / admin columns
+  { table: 'BusinessAuditLog', column: 'actor_user_id' },
+  { table: 'BusinessPage', column: 'published_by' },
+  { table: 'BusinessPageRevision', column: 'published_by' },
+  { table: 'BusinessPermissionOverride', column: 'created_by' },
+  { table: 'BusinessTeam', column: 'invited_by' },
+  { table: 'BusinessSeat', column: 'invited_by_seat_id' },
+  // Gig audit columns
+  { table: 'Gig', column: 'cancelled_by' },
+  { table: 'GigBid', column: 'countered_by' },
+  { table: 'GigChangeOrder', column: 'requested_by' },
+  { table: 'GigChangeOrder', column: 'reviewed_by' },
+  { table: 'GigIncident', column: 'reported_by' },
+  { table: 'GigIncident', column: 'reported_against' },
+  { table: 'GigIncident', column: 'resolved_by' },
+  { table: 'GigQuestion', column: 'asked_by' },
+  { table: 'GigQuestion', column: 'answered_by' },
+  // Home audit columns
+  { table: 'HomeAccessSecret', column: 'created_by' },
+  { table: 'HomeAsset', column: 'created_by' },
+  { table: 'HomeBill', column: 'created_by' },
+  { table: 'HomeBusinessLink', column: 'created_by' },
+  { table: 'HomeCalendarEvent', column: 'created_by' },
+  { table: 'HomeDevice', column: 'created_by' },
+  { table: 'HomeDocument', column: 'created_by' },
+  { table: 'HomeEmergency', column: 'created_by' },
+  { table: 'HomeIssue', column: 'reported_by' },
+  { table: 'HomeMaintenanceTemplate', column: 'created_by' },
+  { table: 'HomePackage', column: 'created_by' },
+  { table: 'HomeResidencyClaim', column: 'reviewed_by' },
+  { table: 'HomeSubscription', column: 'created_by' },
+  { table: 'HomeTask', column: 'created_by' },
+  { table: 'HomeVendor', column: 'created_by' },
+  // Listing
+  { table: 'ListingQuestion', column: 'answered_by' },
+  // Payment / refund audit columns
+  { table: 'Payment', column: 'escrow_released_by' },
+  { table: 'Refund', column: 'approved_by' },
+  { table: 'Refund', column: 'initiated_by' },
+  // Relationship
+  { table: 'Relationship', column: 'blocked_by' },
+  // Attributions on tables added after this list was first written
+  { table: 'AssetPhoto', column: 'uploaded_by' },
+  { table: 'BusinessProfile', column: 'personal_user_id' },
+  { table: 'BusinessProfile', column: 'verified_by' },
+  { table: 'BusinessVerificationEvidence', column: 'reviewed_by' },
+  { table: 'ChatMessage', column: 'actor_user_id' },
+  { table: 'HomeSeasonalChecklistItem', column: 'completed_by' },
+  { table: 'PaymentRefundRequest', column: 'actor_id' },
+  { table: 'Post', column: 'business_author_id' },
+  { table: 'TrustAnomalyFlag', column: 'reviewed_by' },
+  { table: 'VacationHold', column: 'forward_user_id' },
+];
+
+// NOT NULL references whose rows belong to the person and go with the account:
+// their own upvotes, endorsements and reactions, and the stop notices addressed
+// to them (like their Notification rows, which cascade).
+const ACCOUNT_DELETE_OWN_ROWS = [
+  { table: 'GigQuestionUpvote', column: 'user_id' },
+  { table: 'NeighborEndorsement', column: 'endorser_user_id' },
+  { table: 'NeighborEndorsement', column: 'business_user_id' },
+  { table: 'CommunityReaction', column: 'user_id' },
+  { table: 'GigStopDelivery', column: 'user_id' },
+];
+
+// The rows steps 2c and 3 delete besides those: the person's chat messages,
+// wallet ledger, payouts, subscriptions and seeder configs, and payments (only
+// reached when no payment history is kept). account_deletion_dry_run replays
+// all of these before anything changes.
+const ACCOUNT_DELETE_OTHER_ROWS = [
+  { table: 'ChatMessage', column: 'user_id' },
+  { table: 'Payment', column: 'payer_id' },
+  { table: 'Payment', column: 'payee_id' },
+  { table: 'WalletTransaction', column: 'user_id' },
+  { table: 'Payout', column: 'user_id' },
+  { table: 'Subscription', column: 'user_id' },
+  { table: 'seeder_config', column: 'curator_user_id' },
+];
+const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
+
 router.delete('/account', verifyToken, requireStepUp('delete_account'), requireStrongestStepUpForDeletion, async (req, res) => {
   const userId = req.user.id;
   logger.info('Account deletion requested', { userId, stepUpMethod: req.stepUp?.method || null });
@@ -4787,53 +4871,54 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       }
     }
 
+    // A support train's organizer can't be removed from the train here; the train
+    // side decides what happens to it (Stream 1).
+    const { count: organizedTrains, error: trainsError } = await supabaseAdmin
+      .from('SupportTrain')
+      .select('id', { count: 'exact', head: true })
+      .eq('organizer_user_id', userId);
+    if (trainsError) throw trainsError;
+    if (organizedTrains > 0) {
+      return res.status(409).json({
+        error: 'You organize a support train. Close it or hand it to a co-organizer first.',
+        code: 'SUPPORT_TRAIN_ORGANIZER',
+      });
+    }
+
+    // ── 1b. Dry run: would the delete below succeed? ────────────
+    // A row the steps below don't clear (a stop request, a stop receipt on one
+    // of the person's tasks, a record kept for someone else) makes the User
+    // delete in step 4 fail after steps 2-3 have erased data. The dry run
+    // replays steps 2-4 in a transaction it always rolls back, so every
+    // cascade, constraint and guard runs, and refuses before anything changes.
+    // Until the function is deployed the route deletes as before.
+    const { data: dryRun, error: dryRunError } = await supabaseAdmin.rpc('account_deletion_dry_run', {
+      p_user_id: userId,
+      p_nullify: pairNames(ACCOUNT_DELETE_NULLIFY),
+      p_delete: pairNames([...ACCOUNT_DELETE_OWN_ROWS, ...ACCOUNT_DELETE_OTHER_ROWS]),
+    });
+    if (dryRunError && dryRunError.code !== 'PGRST202') throw dryRunError;
+    if (dryRunError) logger.warn('account_deletion_dry_run unavailable; deleting without it', { userId });
+    if (dryRun && dryRun.ok === false) {
+      logger.info('Account deletion refused before any change', {
+        userId, sqlstate: dryRun.sqlstate, table: dryRun.table, constraint: dryRun.constraint,
+      });
+      // Constraint, check and guard failures mean records that must stay;
+      // anything else (a lock timeout, say) is worth a retry.
+      if (!/^(23|P0)/.test(String(dryRun.sqlstate || ''))) {
+        return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+      }
+      return res.status(409).json({
+        error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
+        code: 'ACCOUNT_RECORDS_RETAINED',
+      });
+    }
+
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────
     // These columns reference User(id) without an ON DELETE rule,
     // meaning PostgreSQL defaults to NO ACTION which blocks deletion.
     // We SET NULL so the User row can be deleted afterwards.
-    const nullifyOps = [
-      // Business audit / admin columns
-      { table: 'BusinessAuditLog', column: 'actor_user_id' },
-      { table: 'BusinessPage', column: 'published_by' },
-      { table: 'BusinessPageRevision', column: 'published_by' },
-      { table: 'BusinessPermissionOverride', column: 'created_by' },
-      { table: 'BusinessTeam', column: 'invited_by' },
-      { table: 'BusinessSeat', column: 'invited_by_seat_id' },
-      // Gig audit columns
-      { table: 'Gig', column: 'cancelled_by' },
-      { table: 'GigBid', column: 'countered_by' },
-      { table: 'GigChangeOrder', column: 'requested_by' },
-      { table: 'GigChangeOrder', column: 'reviewed_by' },
-      { table: 'GigIncident', column: 'reported_by' },
-      { table: 'GigIncident', column: 'reported_against' },
-      { table: 'GigIncident', column: 'resolved_by' },
-      { table: 'GigQuestion', column: 'asked_by' },
-      { table: 'GigQuestion', column: 'answered_by' },
-      // Home audit columns
-      { table: 'HomeAccessSecret', column: 'created_by' },
-      { table: 'HomeAsset', column: 'created_by' },
-      { table: 'HomeBill', column: 'created_by' },
-      { table: 'HomeBusinessLink', column: 'created_by' },
-      { table: 'HomeCalendarEvent', column: 'created_by' },
-      { table: 'HomeDevice', column: 'created_by' },
-      { table: 'HomeDocument', column: 'created_by' },
-      { table: 'HomeEmergency', column: 'created_by' },
-      { table: 'HomeIssue', column: 'reported_by' },
-      { table: 'HomeMaintenanceTemplate', column: 'created_by' },
-      { table: 'HomePackage', column: 'created_by' },
-      { table: 'HomeResidencyClaim', column: 'reviewed_by' },
-      { table: 'HomeSubscription', column: 'created_by' },
-      { table: 'HomeTask', column: 'created_by' },
-      { table: 'HomeVendor', column: 'created_by' },
-      // Listing
-      { table: 'ListingQuestion', column: 'answered_by' },
-      // Payment / refund audit columns
-      { table: 'Payment', column: 'escrow_released_by' },
-      { table: 'Refund', column: 'approved_by' },
-      { table: 'Refund', column: 'initiated_by' },
-      // Relationship
-      { table: 'Relationship', column: 'blocked_by' },
-    ];
+    const nullifyOps = ACCOUNT_DELETE_NULLIFY;
 
     // Run all nullify operations in parallel
     const nullifyResults = await Promise.allSettled(
@@ -4854,11 +4939,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     });
 
     // ── 2b. Delete rows from tables with bare FK where column is NOT nullable ──
-    await Promise.allSettled([
-      supabaseAdmin.from('GigQuestionUpvote').delete().eq('user_id', userId),
-      supabaseAdmin.from('NeighborEndorsement').delete().eq('endorser_user_id', userId),
-      supabaseAdmin.from('NeighborEndorsement').delete().eq('business_user_id', userId),
-    ]);
+    await Promise.allSettled(
+      ACCOUNT_DELETE_OWN_ROWS.map(({ table, column }) => supabaseAdmin.from(table).delete().eq(column, userId))
+    );
 
     // ── 2c. ChatMessage: user_id is NOT NULL; legacy FK used ON DELETE SET NULL ──
     await supabaseAdmin.from('ChatMessage').delete().eq('user_id', userId);
@@ -4894,17 +4977,6 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // Delete regional seeder config where this user is the curator (RESTRICT on curator_user_id)
     await supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId);
 
-    // ── 3b. Persistent login: sign out everywhere first ──────────
-    // Revoke every session/device/grant, delete all PushToken rows, kick
-    // sockets, record `account_deleted` (rows are FK'd to auth.users, so this
-    // must run before admin.deleteUser; done here so it also happens while
-    // the User row still exists).
-    await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
-      userId,
-      accessToken: accessTokenFromRequest(req),
-      req,
-    }));
-
     // ── 4. Delete User row ───────────────────────────────────────
     // This triggers ON DELETE CASCADE for ~70+ tables (Posts, Gigs,
     // Wallet, Listings, Notifications, Chat participants, etc.)
@@ -4917,6 +4989,18 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       logger.error('User row deletion failed', { userId, error: deleteError.message });
       return res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
     }
+
+    // ── 4b. Persistent login: sign out everywhere ────────────────
+    // Only now that the User row is gone: a failed delete above leaves the
+    // account and its sessions as they were, so the person isn't signed out
+    // of an account that still exists. Revoke every session/device/grant,
+    // delete PushToken rows, kick sockets, record `account_deleted`. These
+    // rows are FK'd to auth.users, so this runs before admin.deleteUser.
+    await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
+      userId,
+      accessToken: accessTokenFromRequest(req),
+      req,
+    }));
 
     // ── 5. Delete Supabase Auth user ─────────────────────────────
     try {
