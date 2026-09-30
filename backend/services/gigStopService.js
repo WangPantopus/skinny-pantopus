@@ -384,7 +384,7 @@ async function noteReplayFailure(payment, failure) {
   const { data, error } = await db.rpc('note_gig_fee_replay_failure', { p_payment_id: payment.id, p_error: failure.code || 'REVIEW' });
   if (error || !data || data.error || !data.parked) return;
   logger.error('Reserved no-show fee parked for support review', {
-    paymentId: payment.id, gigId: payment.gig_id, failures: data.failures, code: failure.code || null });
+    paymentId: payment.id, gigId: payment.gig_id, failures: data.failures, errorCode: failure.code || null });
   await sendAlert({ severity: SEVERITY.WARNING, title: 'No-show fee needs support review',
     message: 'A reserved poster no-show fee could not be confirmed after three scheduled attempts. Its task stays held until support resolves it.',
     metadata: { paymentId: payment.id, gigId: payment.gig_id, code: failure.code || null },

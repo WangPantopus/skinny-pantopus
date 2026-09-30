@@ -36,7 +36,7 @@ async function replayStalledNoShowFees() {
       await gigStop.reconcileNoShowFee(payment.id, { replay: true });
     } catch (error) {
       logger.error('retryCaptureFailures: reserved no-show fee needs reconciliation', {
-        paymentId: payment.id, gigId: payment.gig_id, code: error.code || null, error: error.message,
+        paymentId: payment.id, gigId: payment.gig_id, errorCode: error.code || null, error: error.message,
       });
     }
   }

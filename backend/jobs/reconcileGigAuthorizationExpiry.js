@@ -10,7 +10,7 @@ async function reconcileGigAuthorizationExpiry() {
     if (data.length === 0) break;
     for (const paymentId of data) {
       try { await gigExpiry.recover(paymentId); }
-      catch (error) { logger.warn('Gig authorization expiry requires reconciliation', { paymentId, code: error.code || 'EXPIRY_UNKNOWN' }); }
+      catch (error) { logger.warn('Gig authorization expiry requires reconciliation', { paymentId, errorCode: error.code || 'EXPIRY_UNKNOWN' }); }
       checked += 1;
     }
     if (data.length < 100) break;

@@ -183,7 +183,7 @@ router.delete('/tenant/home/:homeId/lease-files/:uploadId', verifyToken, ids, se
 router.use((error, _req, res, _next) => {
   const status = error instanceof multer.MulterError ? (error.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : error.status || 503;
   const code = error instanceof multer.MulterError ? 'LEASE_FILE_INVALID' : 'LEASE_FILE_UNAVAILABLE';
-  logger.warn('Lease file operation failed', { code, status });
+  logger.warn('Lease file operation failed', { errorCode: code, status });
   res.set('Cache-Control', 'private, no-store');
   res.status(status).json({ code, error: error.status ? error.message : 'Could not complete the lease file operation. Please retry.' });
 });
