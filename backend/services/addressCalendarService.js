@@ -17,6 +17,7 @@
 //     city default rather than the household's own pickup day.
 // ============================================================
 
+const crypto = require('crypto');
 const { RRule } = require('rrule');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
@@ -102,9 +103,21 @@ function daysBetween(fromDay, toDay) {
   return Math.round((noonUtc(toDay).getTime() - noonUtc(fromDay).getTime()) / 86400000);
 }
 
+// The household schedule a calendar shows. Every save replaces the household's
+// pickup rules (new ids) and a reset removes them, so their ids identify it. A
+// save that sends this back is refused if the schedule changed meanwhile. Must
+// match SQL home_pickup_schedule_version: md5 of the ids in uuid order.
+function pickupScheduleVersion(rules, homeId) {
+  const ids = rules
+    .filter((r) => r.scope_type === 'home' && String(r.scope_key) === String(homeId) && PICKUP_KINDS.has(r.kind))
+    .map((r) => String(r.id).toLowerCase())
+    .sort();
+  return ids.length ? crypto.createHash('md5').update(ids.join(',')).digest('hex') : 'none';
+}
+
 /**
  * The address calendar for a home.
- * @returns {Promise<{upcoming: object[], next: object|null, needs_pickup_day: boolean, window_days: number, rule_count: number}>}
+ * @returns {Promise<{upcoming: object[], next: object|null, needs_pickup_day: boolean, pickup_version: string, window_days: number, rule_count: number}>}
  */
 async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null } = {}) {
   const today = localToday(home, now);
@@ -161,6 +174,7 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
     next: upcoming[0] || null,
     needs_pickup_day: !garbage,
     pickup_schedule: pickupSchedule,
+    pickup_version: pickupScheduleVersion(loaded, home.id),
     window_days: windowDays,
     rule_count: rules.length,
     today,
@@ -185,7 +199,7 @@ function invalidPickup(message) {
   return Object.assign(new Error(message), { code: 'INVALID_PICKUP' });
 }
 
-async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', recyclingNextDate = null, userId = null, now = new Date() }) {
+async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', recyclingNextDate = null, userId = null, expectedVersion = null, now = new Date() }) {
   const wd = String(weekday || '').toUpperCase();
   if (!WEEKDAYS[wd]) throw invalidPickup('weekday must be one of MO TU WE TH FR SA SU');
   if (!['not_set', 'weekly', 'biweekly'].includes(recyclingFrequency)) throw invalidPickup('Choose a recycling frequency.');
@@ -228,7 +242,7 @@ async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', rec
       rrule: `FREQ=WEEKLY;INTERVAL=${recyclingFrequency === 'biweekly' ? 2 : 1};BYDAY=${recyclingDay}`,
     });
   }
-  await pickupMutation(home.id, userId, rows.map(({ scope_type: _scopeType, scope_key: _scopeKey, ...rest }) => rest));
+  await pickupMutation(home.id, userId, rows.map(({ scope_type: _scopeType, scope_key: _scopeKey, ...rest }) => rest), expectedVersion);
   return { weekday: wd, dtstart, rules: rows.length };
 }
 
@@ -252,13 +266,29 @@ async function getPickupContext(homeId, userId) {
   return context;
 }
 
-async function pickupMutation(homeId, userId, rows) {
-  if (!userId) throw pickupError(true);
-  return pickupRpc('mutate_home_pickup_calendar', { p_home_id: homeId, p_user_id: userId, p_rows: rows });
+function pickupChanged() {
+  return Object.assign(new Error('The pickup schedule changed since you opened it. Review the current schedule and try again.'), {
+    code: 'PICKUP_SCHEDULE_CHANGED', statusCode: 409,
+  });
 }
 
-async function clearPickupDay(home, userId) {
-  await pickupMutation(home.id, userId, null);
+// With an expected version (the schedule the form loaded), nothing is written
+// if another save or reset landed meanwhile. Without one, older clients keep
+// the last-write-wins save.
+async function pickupMutation(homeId, userId, rows, expectedVersion = null) {
+  if (!userId) throw pickupError(true);
+  if (expectedVersion == null) {
+    return pickupRpc('mutate_home_pickup_calendar', { p_home_id: homeId, p_user_id: userId, p_rows: rows });
+  }
+  const result = await pickupRpc('mutate_home_pickup_calendar_if_unchanged', {
+    p_home_id: homeId, p_user_id: userId, p_rows: rows, p_expected_version: expectedVersion,
+  });
+  if (result.changed === true) throw pickupChanged();
+  return result;
+}
+
+async function clearPickupDay(home, userId, expectedVersion = null) {
+  await pickupMutation(home.id, userId, null, expectedVersion);
   return true;
 }
 

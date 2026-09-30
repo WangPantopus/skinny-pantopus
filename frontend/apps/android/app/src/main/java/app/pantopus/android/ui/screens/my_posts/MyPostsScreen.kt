@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.posts.MyPostDto
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
@@ -39,9 +42,13 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.delay
 
 /** Test tag on the My posts root container. */
 const val MY_POSTS_TAG = "my-posts"
+
+/** How long a failed-action toast stays, as on the post page. */
+private const val TOAST_MILLIS = 2_500L
 
 /**
  * T5.3.3 — My posts. Thin wrapper around [ListOfRowsScreen]. Two tabs
@@ -68,6 +75,7 @@ fun MyPostsScreen(
     val deleteTarget by viewModel.deleteTarget.collectAsStateWithLifecycle()
     val showFilterSheet by viewModel.showFilterSheet.collectAsStateWithLifecycle()
     val activityFilter by viewModel.activityFilter.collectAsStateWithLifecycle()
+    val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.bindCallbacks(
@@ -76,6 +84,13 @@ fun MyPostsScreen(
             onEditPost = onEditPost,
         )
         viewModel.load()
+    }
+
+    LaunchedEffect(toast) {
+        if (toast != null) {
+            delay(TOAST_MILLIS)
+            viewModel.dismissToast()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().testTag(MY_POSTS_TAG)) {
@@ -91,6 +106,12 @@ fun MyPostsScreen(
             fab = fab,
             onBack = onBack,
         )
+        toast?.let { message ->
+            Toast(
+                message = ToastMessage(text = message, kind = ToastKind.Error),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+            )
+        }
     }
 
     val target = kebabTarget

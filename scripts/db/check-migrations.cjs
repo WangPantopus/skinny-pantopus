@@ -32,6 +32,48 @@ function enablesRowLevelSecurity(sql, table) {
     .some(match => (!match[1] || identifier(match[1]) === 'public') && identifier(match[2]) === table);
 }
 
+// From this version on, a migration that creates or replaces a SECURITY DEFINER function in
+// public must revoke EXECUTE on it from PUBLIC, anon and authenticated in the same file.
+// PostgREST exposes every function a client role can execute as /rest/v1/rpc/<name>, a DEFINER
+// function runs as its owner past row-level security, and the project's default privileges grant
+// new functions to anon and authenticated explicitly, so revoking PUBLIC alone is not enough
+// (#996). An explicit GRANT to anon or authenticated in the same file marks a deliberate
+// exception, such as a boolean helper that row-level-security policies call.
+const DEFINER_REVOKE_REQUIRED_FROM = '20260930176000';
+// Row-level-security policies call these boolean helpers, so client roles must keep EXECUTE on them.
+// Redefining one does not require a revoke; this is the complete set of SECURITY DEFINER functions the
+// policies referenced on 2026-09-30.
+const RLS_POLICY_HELPERS = new Set(['gig_creator_has_current_authority', 'has_home_permission',
+  'home_bill_has_finance_permission', 'home_can_see_visibility', 'home_has_permission', 'home_is_active_member',
+  'home_member_can', 'is_home_member']);
+function definerFunctions(sql) {
+  const text = withoutLineComments(sql);
+  const create = new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:${IDENT}\s*\.\s*)?${IDENT}\s*\(`, 'gi');
+  const names = [];
+  for (const match of text.matchAll(create)) {
+    if (match[1] && identifier(match[1]) !== 'public') continue;
+    const body = /\bAS\s+(\$[A-Za-z0-9_]*\$)/ig; body.lastIndex = match.index + match[0].length;
+    const start = body.exec(text);
+    if (!start) continue;
+    const end = text.indexOf(start[1], start.index + start[0].length);
+    const tail = end < 0 ? '' : text.slice(end + start[1].length, text.indexOf(';', end + start[1].length) + 1 || undefined);
+    if (/\bSECURITY\s+DEFINER\b/i.test(text.slice(match.index, start.index) + tail)) names.push(identifier(match[2]));
+  }
+  return names;
+}
+function clientsCannotExecute(sql, fn) {
+  const text = withoutLineComments(sql);
+  const named = list => [...list.matchAll(new RegExp(String.raw`(?:${IDENT}\s*\.\s*)?${IDENT}\s*\(`, 'g'))]
+    .some(match => (!match[1] || identifier(match[1]) === 'public') && identifier(match[2]) === fn);
+  const revoked = new Set();
+  for (const match of text.matchAll(/\bREVOKE\s+(?:ALL(?:\s+PRIVILEGES)?|EXECUTE)\s+ON\s+(?:FUNCTION|ROUTINE)\s+([\s\S]*?)\s+FROM\s+([^;]*);/gi)) {
+    if (named(match[1])) for (const role of match[2].split(',')) revoked.add(role.trim().toLowerCase());
+  }
+  if (['public', 'anon', 'authenticated'].every(role => revoked.has(role))) return true;
+  return [...text.matchAll(/\bGRANT\s+(?:ALL(?:\s+PRIVILEGES)?|EXECUTE)\s+ON\s+(?:FUNCTION|ROUTINE)\s+([\s\S]*?)\s+TO\s+([^;]*);/gi)]
+    .some(match => named(match[1]) && /\b(?:anon|authenticated)\b/i.test(match[2]));
+}
+
 function validate(policy, files) {
   const errors = [];
   if (!['legacy', 'baselined'].includes(policy.mode)) return ['Unknown database adoption mode'];
@@ -71,6 +113,13 @@ function validate(policy, files) {
         errors.push(`Document compatibility with the currently deployed app: ${name}`);
       }
       if (!/lock_timeout/i.test(sql)) errors.push(`Set a bounded lock_timeout: ${name}`);
+      if (match[1] >= DEFINER_REVOKE_REQUIRED_FROM) {
+        for (const fn of definerFunctions(sql)) {
+          if (!RLS_POLICY_HELPERS.has(fn) && !clientsCannotExecute(sql, fn)) {
+            errors.push(`Revoke EXECUTE on SECURITY DEFINER function public."${fn}" from PUBLIC, anon and authenticated in the same migration: ${name}`);
+          }
+        }
+      }
       if (match[1] >= RLS_REQUIRED_FROM) {
         for (const table of createdPublicTables(sql)) {
           if (!enablesRowLevelSecurity(sql, table)) {

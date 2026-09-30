@@ -18,6 +18,8 @@ export interface SetPickupDayRequest {
   weekday: PickupWeekday;
   recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
   recycling_next_date?: string;
+  /** The calendar's `pickup_version` when the form opened; a change made meanwhile gives 409. */
+  expected_version?: string;
 }
 
 export interface AddressCalendarResponse {
@@ -39,6 +41,7 @@ export async function setPickupDay(
   return put(`/api/homes/${homeId}/calendar/pickup-day`, data);
 }
 
-export async function clearPickupDay(homeId: string): Promise<AddressCalendarResponse> {
-  return del(`/api/homes/${homeId}/calendar/pickup-day`);
+export async function clearPickupDay(homeId: string, expectedVersion?: string): Promise<AddressCalendarResponse> {
+  const query = expectedVersion ? `?expected_version=${encodeURIComponent(expectedVersion)}` : '';
+  return del(`/api/homes/${homeId}/calendar/pickup-day${query}`);
 }

@@ -166,7 +166,8 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
     // MARK: - Buckets
 
     /// RN parity — `share.tsx:47`: `status == 'active'` AND either no end
-    /// stamp or an end stamp still in the future.
+    /// stamp or an end stamp still in the future. A scheduled pass (its start
+    /// is still ahead) stays here too, as on the web Share Center.
     var activePasses: [GuestPassDTO] {
         passes.filter { Self.isActive($0, now: now()) }
     }
@@ -177,7 +178,9 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
     }
 
     static func isActive(_ pass: GuestPassDTO, now: Date) -> Bool {
-        guard (pass.status ?? "active") == "active" else { return false }
+        // A scheduled link becomes usable at its start, so it stays current
+        // and revocable instead of being filed under Past as "Expired".
+        guard ["active", "scheduled"].contains(pass.status ?? "active") else { return false }
         guard let endAt = pass.endAt, let end = parseISO(endAt) else { return true }
         return end > now
     }
@@ -190,7 +193,11 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
         guard case let .loaded(sections, _) = state,
               let active = sections.first(where: { $0.id == GuestPassesSection.active }) else { return nil }
         let ids = Set(active.rows.map(\.id))
-        return passes.filter { ids.contains($0.id) }.compactMap { $0.endAt.flatMap(Self.parseISO) }.min()
+        let current = now()
+        // A scheduled row also re-projects when it starts ("Starts …" → time left).
+        return passes.filter { ids.contains($0.id) }.flatMap { pass in
+            [pass.endAt, pass.startAt].compactMap { $0.flatMap(Self.parseISO) }.filter { $0 > current }
+        }.min()
     }
 
     func refreshExpiry() {
@@ -265,7 +272,7 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
                     self?.pendingEvent = .confirmRevoke(passId: pass.id, label: label)
                 }
             },
-            body: Self.expiryLabel(endAt: pass.endAt, now: now()),
+            body: Self.activeBodyLabel(pass, now: now()),
             subtitleIcon: .userCheck,
             bodyIcon: .clock
         )
@@ -312,10 +319,21 @@ public final class GuestPassesListViewModel: ListOfRowsDataSource {
     }
 
     /// RN parity — `share.tsx:167`: "Revoked" for a revoked pass,
-    /// "Expired" for everything else in the Past bucket.
+    /// "Expired" for everything else in the Past bucket, except a link the
+    /// list reports as `reissue_required` ("Needs new link", as on the web).
     static func pastStatusLabel(_ pass: GuestPassDTO) -> String {
         if pass.status == "revoked" || pass.revokedAt != nil { return "Revoked" }
+        if pass.status == "reissue_required" { return "Needs new link" }
         return "Expired"
+    }
+
+    /// A pass whose start is still ahead says when it starts (the web's
+    /// "Starts …"); every other current pass shows its time left.
+    static func activeBodyLabel(_ pass: GuestPassDTO, now: Date) -> String {
+        if let startAt = pass.startAt, let start = parseISO(startAt), start > now {
+            return "Starts \(start.formatted(.dateTime.month(.abbreviated).day().hour().minute()))"
+        }
+        return expiryLabel(endAt: pass.endAt, now: now)
     }
 
     /// RN parity — `share.tsx:93-99` (`formatExpiry`).
