@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** [#906](https://github.com/WangPantopus/skinny-pantopus/pull/906) (issues E5: send only changed fields) and [#907](https://github.com/WangPantopus/skinny-pantopus/pull/907) (Maintenance rows keyboard), with the coordinator since 2026-09-30T08:48Z. Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904 (master `88149d747`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none (the typed-draft fix, branch `claude/stream4-dashboard-issue-draft` at `3ce02567e`, waits for its runtime proof). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -100,7 +100,7 @@
    - **Why:** losing typed text on every tab switch is a real annoyance that costs reports, and this keeps the security design intact.
    - Found in bundle `20260930-stream4-home-l1-l4-r1`. (a), dropping drafts, and (c), not resetting on hide, were rejected.
 
-Shared with Stream 3 (routed to the Stream 1 coordinator 2026-09-30 under the same direction; Stream 4 doesn't edit shared tokens):
+Shared with Stream 3. **Decided by the Stream 1 coordinator** (2026-09-30T08:54Z): WCAG-AA brand-colour values, implemented app-wide by Stream 1, and a staging pass before launch for hosted and provider behavior. The earlier views, for the record:
 1. Brand colors that fail contrast (all streams): Stream 1 carries one design-token recommendation. Stream 4's view: adopt WCAG-AA values; the lowest measured on this stream's screens is the health chip's amber at 1.87:1.
 2. When to verify hosted and provider behavior (both streams). Stream 4's view: a staging pass before launch (safer than a launch-day checklist).
 
@@ -192,7 +192,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Bill benchmark: Home opt-in and Place Money signals | ✅ E1 R1 (#619, 0927 f02-member-finance, 0929 f02-ios-retry-late-delivery)<br>✅ E4 (f02-member-finance)<br>⬜ E5 permission change (open work item 1)<br>❓ R2, and whether native offers the opt-in | ✅ E1 R1 (#619)<br>✅ E4 (f02-member-finance)<br>⬜ E5 (item 1; the 09-30 capture is unsealed)<br>❓ R2 | ✅ E1 R1 (#602)<br>✅ E4 (f02-member-finance, 0930 f02-home-dashboard-bills)<br>✅ E5 (0929 f02-same-account-permission, 0927 f04-withdrawal)<br>✅ R2 (0927 f01-bill-cohort, f04-withdrawal)<br>❓ E2 E3 on the opt-in save |
 | Place dashboard and section details (weather, air, alerts, civic, property; read-only) | ✅ R1 (#619, #638)<br>✅ R2 stale sun label (0927 sun-day-label)<br>✅ E4 (f02-member-finance)<br>⬜ election date parsing (iOS rejects date-only; #875 limits)<br>– write cases | ✅ R1 (#619, #638)<br>✅ R2 (#543, sun-day-label)<br>✅ E4<br>– write cases | ✅ R1 (#602)<br>✅ R2 (#543, sun-day-label)<br>✅ E4, with the refusal worded as a permission and no retry on the dashboard, sections and Pulse (#896)<br>✅ election day shown as that day (#875)<br>– write cases |
 | Address calendar: pickup day (set, change, clear) | ✅ E1 E2 E3 E6 (0927 place-pickup)<br>✅ E4, generic wording (place-pickup)<br>✅ R1 (#737)<br>❓ R2<br>⬜ E5 | ✅ E1 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>❓ E2 E4 R2<br>⬜ E5 | ✅ E1 E2 E3 E6 (place-pickup)<br>✅ R1 (#737)<br>❓ E4 R2<br>⬜ E5 |
-| Home issues (report, edit, status, dismiss) | ✅ E1 malformed replies (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen (API 409 only)<br>– cost edit | ✅ E1 (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen<br>– cost edit | ✅ E1 (#654, #769)<br>✅ E2 (#740, #654)<br>✅ E3 E6 (#654)<br>✅ E4 (#482, #654, #835)<br>✅ R1 (#680, 0929 web-false-empty-sweep-r2)<br>✅ R2 (#529)<br>✅ E5: a stale edit no longer undoes another device's change (#906, with the coordinator) |
+| Home issues (report, edit, status, dismiss) | ✅ E1 malformed replies (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen (API 409 only)<br>– cost edit | ✅ E1 (#769)<br>✅ E2 (#740)<br>✅ E4 (#482)<br>✅ R1 (#680, #701)<br>❓ E3 E6<br>⬜ E5 on screen<br>– cost edit | ✅ E1 (#654, #769)<br>✅ E2 (#740, #654)<br>✅ E3 E6 (#654)<br>✅ E4 (#482, #654, #835)<br>✅ R1 (#680, 0929 web-false-empty-sweep-r2)<br>✅ R2 (#529)<br>✅ E5: a stale edit no longer undoes another device's change (#906, merged in batch 159) |
 | Emergency info (add, delete) | ✅ R1 (#698)<br>❓ add and delete E cases | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>❓ E2 | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 (#871)<br>✅ E1 E3, no change (0930 emergency-access-denied)<br>✅ E4: a permission sentence, no Retry or Add (#904) |
 | Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>❓ E3<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>❓ E3 E6<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>❓ E3 |
 | Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>❓ R2<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>❓ E3 R2<br>⛔ E4 E6 API only | – no manual-log screen on web |
@@ -212,7 +212,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, with the coordinator; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
+| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
 | Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>🔷 A3 |
 | Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 partial (#809)<br>🔷 A3 |
 | Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 (not swept) |
@@ -268,6 +268,12 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T08:58Z — #906 and #907 merged; native toolchains are ready.**
+  - #906 and #907 merged in batch 159 ([#909](https://github.com/WangPantopus/skinny-pantopus/pull/909), tip `0f302700c`, 08:51:58Z, master `add968868`).
+  - The coordinator decided the two shared items: WCAG-AA brand colours (Stream 1 implements them) and a staging pass before launch.
+  - **Toolchains ready** (hub `177c17d44`). Streams 3 and 4 share AVD `pantopus_s34` (port 5562) and simulator "Pantopus S34" (iPhone 17, `DA8C2A5F-39BC-421D-9F18-EB4B481E506F`) under the runtime lease. Boot only after `device-slot.sh acquire`; builds go through `heavy-slot.sh`. The native queue (open work item 9) is unblocked.
+  - The typed-draft fix (decision 5) is at `3ce02567e` and waits for the runtime lease (Stream 3 holds it).
 
 - **2026-09-30T08:50Z — [#906](https://github.com/WangPantopus/skinny-pantopus/pull/906) and [#907](https://github.com/WangPantopus/skinny-pantopus/pull/907) are with the coordinator; Stream 4's pending decisions are decided.** The user's direction (~08:36Z) was to decide for the best UX, safety, security and retention, record the decision, and keep working. Lease 08:34:48Z–08:47:30Z.
   - **#906 (issues E5).** Head `e995dbd266326b417185279c2b658c09972789e6`. Bundle `20260930-stream4-issue-changed-meanwhile-r1`, MANIFEST `0acf0d98b3e0f33c6983f34394306178d9c50a122c56604c170607994ac6daed`.
