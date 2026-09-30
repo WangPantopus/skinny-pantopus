@@ -52,7 +52,11 @@ export default function ScopedShareModal({
     return `/shared/${encodeURIComponent(t)}`;
   };
 
+  // A new passcode needs at least 6 characters (the API refuses shorter ones).
+  const passcodeTooShort = passcode.trim().length > 0 && passcode.trim().length < 6;
+
   const handleCreate = async () => {
+    if (passcodeTooShort) return;
     setCreating(true);
     setError('');
     try {
@@ -168,6 +172,7 @@ export default function ScopedShareModal({
                     className="w-full rounded-lg border border-app-border px-3 py-2 text-sm font-mono"
                     placeholder="Leave blank for no passcode"
                   />
+                  <p className="text-[10px] text-app-text-muted mt-0.5">At least 6 characters</p>
                 </div>
 
                 <p className="text-xs text-app-text-secondary">Recipients can view this item. Editing is not included.</p>
@@ -182,7 +187,7 @@ export default function ScopedShareModal({
                   </button>
                   <button
                     onClick={handleCreate}
-                    disabled={creating}
+                    disabled={creating || passcodeTooShort}
                     className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition"
                   >
                     {creating ? 'Creating...' : 'Create Link'}

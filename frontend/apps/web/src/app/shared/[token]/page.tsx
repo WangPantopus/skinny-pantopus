@@ -114,8 +114,11 @@ export default function SharedResourcePage() {
       setState('success');
     } catch (err: unknown) {
       if (request !== generation.current) return;
-      if (isPasscodeChallenge(shareFailure(err))) {
+      const details = shareFailure(err);
+      if (isPasscodeChallenge(details)) {
         setPasscodeError('Incorrect passcode. Please try again.');
+      } else if (details.code === 'SHARE_PASSCODE_ATTEMPTS') {
+        setPasscodeError(details.message || 'Too many passcode attempts. Try again in 15 minutes.');
       } else {
         applyFailure(err);
       }

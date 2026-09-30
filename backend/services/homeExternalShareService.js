@@ -14,6 +14,7 @@ const MESSAGES = {
   SHARE_NOT_STARTED: 'This share link is not active yet.',
   SHARE_VIEW_LIMIT: 'This share link has reached its view limit.',
   SHARE_PASSCODE_REQUIRED: 'Enter the correct passcode to view this share link.',
+  SHARE_PASSCODE_TOO_SHORT: 'Use a passcode of at least 6 characters.',
 };
 function failure(code = 'SHARE_UNAVAILABLE', status = 503) {
   return Object.assign(new Error(MESSAGES[code] || 'Could not load the share link. Please retry.'), {
@@ -52,6 +53,10 @@ async function mutate({ homeId, actorId, kind, action, shareId = null, payload =
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw failure('SHARE_INVALID', 400);
   const token = action === 'create' ? randomToken() : null;
   const { passcode, token_hash, passcode_hash, ...details } = payload;
+  // New passcodes need at least 6 characters; existing ones keep working when read.
+  if (action === 'create' && typeof passcode === 'string' && passcode !== '' && passcode.trim().length < 6) {
+    throw failure('SHARE_PASSCODE_TOO_SHORT', 400);
+  }
   const result = await rpc('mutate_home_external_share', {
     p_home_id: homeId, p_actor_id: actorId, p_kind: kind, p_action: action, p_share_id: shareId,
     p_payload: action === 'create' ? { ...details, token_hash: hash(token), passcode_hash: passcodeHash(passcode) } : details,
