@@ -16,6 +16,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +25,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -50,6 +54,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -1079,7 +1085,8 @@ private fun LostFoundToggle(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
-                    .border(width = 1.dp, color = PantopusColors.appBorder, shape = RoundedCornerShape(Radii.md)),
+                    .border(width = 1.dp, color = PantopusColors.appBorder, shape = RoundedCornerShape(Radii.md))
+                    .selectableGroup(),
         ) {
             PulseLostFoundKind.entries.forEach { kind ->
                 val isActive = kind == active
@@ -1089,7 +1096,7 @@ private fun LostFoundToggle(
                             .weight(1f)
                             .heightIn(min = 36.dp)
                             .background(if (isActive) PantopusColors.primary600 else PantopusColors.appSurface)
-                            .clickable { onSelect(kind) }
+                            .selectable(selected = isActive, role = Role.RadioButton) { onSelect(kind) }
                             .testTag("composePulseLostFoundKind_${kind.key}")
                             .semantics { contentDescription = "${kind.label} item" },
                     contentAlignment = Alignment.Center,
@@ -1583,7 +1590,14 @@ private fun BodyEditor(
     val focusManager = LocalFocusManager.current
     val onEditingEnded = LocalPulseBodyEditingEnded.current
     val snapshot = fields[PulseComposeField.Body] ?: FormFieldState(id = PulseComposeField.Body.key)
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+    // Named like PantopusTextField, so a screen reader hears what the field is for.
+    Column(
+        modifier =
+            Modifier.semantics {
+                contentDescription = snapshot.error?.let { "$label, error: $it" } ?: label
+            },
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
         Text(
             text = label,
             style = PantopusTextStyle.caption,
@@ -1620,14 +1634,18 @@ private fun BodyEditor(
                     Modifier
                         .fillMaxWidth()
                         .onFocusChanged { if (!it.isFocused) onEditingEnded() },
+                // The placeholder sits inside the field, so it's read with the field.
+                decorationBox = { inner ->
+                    if (snapshot.value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = PantopusTextStyle.body,
+                            color = PantopusColors.appTextMuted,
+                        )
+                    }
+                    inner()
+                },
             )
-            if (snapshot.value.isEmpty()) {
-                Text(
-                    text = placeholder,
-                    style = PantopusTextStyle.body,
-                    color = PantopusColors.appTextMuted,
-                )
-            }
         }
         if (snapshot.error != null) {
             Text(
@@ -1684,7 +1702,8 @@ private fun DateRow(
                             if (!allowPast) datePicker.minDate = System.currentTimeMillis()
                         }.show()
                     }.padding(horizontal = Spacing.s3)
-                    .testTag("composePulseField_${field.key}"),
+                    .testTag("composePulseField_${field.key}")
+                    .semantics { contentDescription = "$label, ${snapshot.value.ifEmpty { "not set" }}" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1692,7 +1711,7 @@ private fun DateRow(
                 style = PantopusTextStyle.body,
                 color =
                     if (snapshot.value.isEmpty()) PantopusColors.appTextMuted else PantopusColors.appText,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).clearAndSetSemantics {},
             )
             if (snapshot.value.isNotEmpty()) {
                 Text(
@@ -1766,7 +1785,8 @@ private fun DateTimeRow(
                     ).clickable { showPicker = true }
                     .padding(horizontal = Spacing.s3)
                     .alpha(if (snapshot.value.isEmpty()) 0.65f else 1f)
-                    .testTag("composePulseField_${field.key}"),
+                    .testTag("composePulseField_${field.key}")
+                    .semantics { contentDescription = "$label, ${snapshot.value.ifEmpty { "not set" }}" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1774,6 +1794,7 @@ private fun DateTimeRow(
                 style = PantopusTextStyle.body,
                 color =
                     if (snapshot.value.isEmpty()) PantopusColors.appTextMuted else PantopusColors.appText,
+                modifier = Modifier.clearAndSetSemantics {},
             )
         }
         if (snapshot.error != null) {
@@ -1813,6 +1834,7 @@ private fun parsePickerDateTime(raw: String): LocalDateTime? {
     return runCatching { LocalDateTime.parse(trimmed.replaceFirst(" ", "T")) }.getOrNull()
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipRow(
     label: String,
@@ -1827,7 +1849,12 @@ private fun ChipRow(
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        // Wraps onto more lines at large text sizes, so every choice stays visible and reachable.
+        FlowRow(
+            modifier = Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
             options.forEach { (key, displayLabel) ->
                 val isActive = key == activeKey
                 Box(
@@ -1841,7 +1868,7 @@ private fun ChipRow(
                                 color = if (isActive) Color.Transparent else PantopusColors.appBorder,
                                 shape = RoundedCornerShape(Radii.pill),
                             )
-                            .clickable { onSelect(key) }
+                            .selectable(selected = isActive, role = Role.RadioButton) { onSelect(key) }
                             .padding(horizontal = Spacing.s3, vertical = Spacing.s1)
                             .testTag("${identifierPrefix}_$key")
                             .semantics { contentDescription = displayLabel },
@@ -1856,6 +1883,8 @@ private fun ChipRow(
                             } else {
                                 PantopusColors.appTextStrong
                             },
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }

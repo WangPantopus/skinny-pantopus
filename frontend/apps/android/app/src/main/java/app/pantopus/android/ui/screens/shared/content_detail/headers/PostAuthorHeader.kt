@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -147,7 +148,10 @@ fun PostAuthorHeader(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        StatusChip(text = intent.label.uppercase(), variant = intent.chipVariant, icon = intent.icon)
+        // Named by the post's type; the chip's colour tone isn't content ("LOST & FOUND, error").
+        Box(modifier = Modifier.clearAndSetSemantics { contentDescription = "${intent.label} post" }) {
+            StatusChip(text = intent.label.uppercase(), variant = intent.chipVariant, icon = intent.icon)
+        }
     }
 }
 

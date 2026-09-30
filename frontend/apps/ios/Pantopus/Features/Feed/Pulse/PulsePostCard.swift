@@ -438,12 +438,12 @@ public struct PulsePostCard: View {
         if reaction.isInteractive {
             Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active) }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(reaction.label.isEmpty ? "React" : reaction.label), \(reaction.count)")
+                .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
                 .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.id.rawValue)")
         } else {
             reactionLabel(reaction, active: false)
                 .accessibilityElement()
-                .accessibilityLabel("\(reaction.label.isEmpty ? "Count" : reaction.label), \(reaction.count)")
+                .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
         }
     }
 

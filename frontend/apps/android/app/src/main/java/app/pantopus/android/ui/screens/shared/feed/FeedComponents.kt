@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -30,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -142,7 +146,8 @@ fun FeedChipRow(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+                    .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
+                    .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             if (skeleton) {
@@ -157,7 +162,7 @@ fun FeedChipRow(
                     Box(
                         modifier =
                             Modifier
-                                .height(28.dp)
+                                .heightIn(min = 28.dp)
                                 .clip(RoundedCornerShape(Radii.pill))
                                 .background(if (active) PantopusColors.primary600 else PantopusColors.appSurface)
                                 .then(
@@ -167,7 +172,7 @@ fun FeedChipRow(
                                         Modifier.border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                                     },
                                 )
-                                .clickable { onSelect(chip.id) }
+                                .selectable(selected = active, role = Role.RadioButton) { onSelect(chip.id) }
                                 .padding(horizontal = 14.dp)
                                 .testTag("feedChip_${chip.id}"),
                         contentAlignment = Alignment.Center,

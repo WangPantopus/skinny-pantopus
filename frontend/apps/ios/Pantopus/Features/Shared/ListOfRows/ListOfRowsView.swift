@@ -981,7 +981,7 @@ struct RowView: View {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 rowContent
                 Spacer(minLength: Spacing.s2)
-                TrailingView(trailing: row.trailing, onSecondary: row.onSecondary, rowTitle: row.title)
+                TrailingView(trailing: row.trailing, onSecondary: row.onSecondary, rowTitle: row.accessibleName)
             }
             .frame(minHeight: row.title.isEmpty && row.body != nil ? 0 : 60)
             if let note = row.note {
@@ -1376,7 +1376,7 @@ private struct TrailingView: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("More actions for \(rowTitle)")
+                .accessibilityLabel(rowTitle.isEmpty ? "More actions" : "More actions for \(rowTitle)")
             }
         case .none:
             EmptyView()
@@ -1894,5 +1894,18 @@ private struct FABButton: View {
         case .home: Theme.Color.home
         case .business: Theme.Color.business
         }
+    }
+}
+
+extension RowModel {
+    /// A row's name for its controls ("More actions for …"): the title, or
+    /// the start of the body when the row has no title (My posts rows lead
+    /// with the post's text).
+    var accessibleName: String {
+        if !title.trimmingCharacters(in: .whitespaces).isEmpty { return title }
+        let line = (body ?? "").split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+        return line.count > 60 ? String(line.prefix(60)).trimmingCharacters(in: .whitespaces) + "…" : line
     }
 }
