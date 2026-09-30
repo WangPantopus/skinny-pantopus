@@ -12,7 +12,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
 
 ## 1a. Latest state (2026-09-30T07:52Z, first Stream 4 session) — read this before §2
 - **Runtime:** rebuilt by Stream 3 at 06:12Z. It runs master; migration ledger 94. Fixture accounts: the owner (s2resumeowner) and member B (s2resumemember). There are no retained Homes; every run creates and exactly cleans its own.
-- **Merged today (9 PRs):**
+- **Merged today (10 PRs, with #896 below):**
   - #854 (I07 web activity labels);
   - #860 (I07 health/activity follow saves on the page);
   - #863 (D09 activity rows);
@@ -23,7 +23,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - #882 (D09 health/checklist readers);
   - #885 (compose: a pending claim is not a member).
 
-  Open since 08:00Z: [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording, with the coordinator; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`). Check `gh pr view 896` before relying on this.
+  Then [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`) merged in batch 155 (master `66d57bcfe`, 08:02Z). No Stream 4 PR is open.
 - **Verification-only seals:**
   - I04 DST: `20260930-stream4-address-calendar-dst-r1`;
   - I05 local parts: `…-property-local-r1`;
