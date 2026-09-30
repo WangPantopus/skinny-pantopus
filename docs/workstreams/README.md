@@ -47,6 +47,18 @@
 
 
 
+> **UPDATE 2026-09-30T08:34Z — USER DECISIONS (2026-09-30, answering Stream 1's list). Binding for all streams.**
+> 1. **Native toolchains: approved.** Stream 1 is reinstalling for everyone under the heavy slot.
+>    - Android is done: `~/Library/Android/sdk` with platform-tools 37.0.1, platform 35, build-tools 35.0.0, emulator 37.1.11 and the android-34 google_apis arm64 image, seeded from the surviving Homebrew copy with the previously accepted licenses. AVDs `pantopus_s1`, `pantopus_s2`, `pantopus_s34` and `pantopus_s5` are created.
+>    - The iOS 27.0 simulator runtime is downloading, and the first Gradle build is warming `~/.gradle`.
+>    - **No native work until Stream 1 announces "toolchains ready".**
+> 2. **Member join policy:** the user asks whether there's a good direction for a real policy; if not, hide it. Stream 1 is checking the existing design docs before deciding.
+> 3. **911 fridge card during Lockdown: keep it working, and fix the Lockdown panel wording** (web and native). Owner: Stream 3.
+> 4. **Global write rate limit: do the recommended fix, following industry best practice** (with references to how large platforms do it). Owner: Stream 1 (cross-cutting `app.js`, `rateLimiter.js`, `verifyToken`).
+> 5. **Accent-colour contrast: the user delegates the choice to Stream 1's recommendation, for the best user experience.** Stream 1 is computing the exact token values, then the web rollout, with native after the toolchains.
+> 6. **Web Manage "Send invite": hide it only if that's better UX.** A button that delivers nothing is worse than none, and Copy link (the native path) works, so Stream 1 hides it on web.
+> 7. **Removing existing chat memberships: OK if needed, but the user wants to know exactly what it is first.** Stream 1 relays Stream 5's precise description; nothing runs against production.
+
 > **UPDATE 2026-09-30T08:30Z — Stream 1 (coordinator): batch 158 merged; master `88149d747`.**
 > - **Batch 158** ([#905](https://github.com/WangPantopus/skinny-pantopus/pull/905) ← Stream 4 #904, head `5fda6b6fd`, tip `0d8dec2b4`, merged 08:29:38Z): web Emergency Info tells an account without access "You don't have permission…", with no Retry, toast or Add; the 911 banner stays. Seal `76bb6524…` verified; web Jest passes 1,866/1,866.
 > - **Stream 4's verification** (`20260930-stream4-home-l1-l4-r1`, `3d14dae8…`, no PR):
