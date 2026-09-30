@@ -5,10 +5,13 @@
 --
 -- No app reads the database with the anon key. Web, iOS and Android call the
 -- API, and none ships a Supabase client or the key. The backend's anon client
--- makes only GoTrue calls, with one exception: four gigs.js routes (launch cut #4,
--- or unused) read through it. Row-level security already hides every row from
--- those reads, so they return nothing today. After this they report the refusal
--- as an error instead (Stream 2 agreed).
+-- mostly makes GoTrue calls. Three gigs.js routes still read through it:
+-- /nearby, /user/me and /assignments/me (launch cut #4, or unused). Row-level
+-- security already hides every row from them, so they return nothing today;
+-- after this they report the refusal as an error instead (Stream 2 agreed).
+-- offers.js also uses it, but the lowercase gigs and offers tables it names
+-- don't exist, so it fails before and after this. debug.js answers 404 in
+-- production.
 --
 -- Until now, anyone holding the anon key could still read, straight through
 -- PostgREST, whatever the anon-admitting policies expose: published business
