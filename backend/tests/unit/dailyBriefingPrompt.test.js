@@ -18,6 +18,7 @@ jest.mock('../../utils/logger', () => ({
 jest.mock('../../services/context/providerOrchestrator', () => ({
   getHubToday: jest.fn(),
   composeScheduledBriefing: jest.fn(),
+  clearHubTodayCache: jest.fn(),
 }));
 
 const express = require('express');
