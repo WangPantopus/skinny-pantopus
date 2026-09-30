@@ -9,6 +9,29 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #977/#978 merged; RLS-enable #985 ready; trio proven on the final heads, 2026-09-30T13:01:25Z
+
+- **Merged:** [#977](https://github.com/WangPantopus/skinny-pantopus/pull/977) (chat writes only through the API) and [#978](https://github.com/WangPantopus/skinny-pantopus/pull/978) (account, social and business-profile writes only through the API; closes the self-promotion to admin). Batch 181, 12:50:47Z, master `113706f04`.
+- **Trio re-run done on the final heads.** [#976](https://github.com/WangPantopus/skinny-pantopus/pull/976) is at `9b72153d2`, rebased onto #974 `28f92e4e0`, with #968 `ab0a5b097`. #968's renumbered `33a43a569` has the same migration blob `bcaf51243…` (`162000` → `172000`) and the same `homeRecordService.js`.
+  - Seal `c2162508…` (87 files). Local tree `b84f386ae`. All six cases pass:
+    1. owner + unverified member: `deleted`;
+    2. owner + verified member: 409;
+    3. owner + pin + pending applications: `purged`, with the claim and request closed and the notices sent;
+    4. member with a photo: `kept`, and `uploaded_by` shows null;
+    5. last member with a former member in the chat: `purged`, chat closed;
+    6. owner_id-only: `kept`.
+  - Jest 341/6286, 0 failures. Waiting for Stream 1's batch.
+- **New security finding, in PR [#985](https://github.com/WangPantopus/skinny-pantopus/pull/985)** (head `95fdcb33b`, migration `20260930173000`, seal `467c3b2f…`):
+  - **74 public tables had row-level security OFF.** anon/authenticated kept their grants, so the anon key alone could read and write them: wallets, earnings, invoices, Support Train funds, mail, map pins, reports and trust flags. Locally, 72 tables were readable, and a pin was changed with only the anon key.
+  - **The fix:** enable RLS on 73. `spatial_ref_sys` belongs to PostGIS and is left out. There are no policies, so the result is deny-all.
+  - **The scan found no backend impact.** 509 of 510 uses go through supabaseAdmin. Anon RPCs, invoker views, invoker triggers and Realtime are all clear.
+  - **After the change:** anon sees 0 rows, and the cross-stream API smoke (trains, earnings, mail, vacation, reviews, pins) is all 200.
+  - Stream 1 recorded the decision and assigned it to me. The PR lists the tables by owning stream.
+- **Next (Stream 1 assigned, security track):**
+  1. The write sweep for the other 111 tables. Evaluate a grant-level default-deny: REVOKE INSERT/UPDATE/DELETE/TRUNCATE from anon/authenticated, plus ALTER DEFAULT PRIVILEGES, keeping SELECT. Gate it on the same scan (invoker functions that write as anon/authenticated, and anon-client writes). Send the table lists to the owning streams before any merge.
+  2. A `check-migrations.cjs` rule that flags `CREATE TABLE public.…` without `ENABLE ROW LEVEL SECURITY`.
+- **Runtime:** API 18134 runs the local trio tree `b84f386ae`. The DB has the trio's migration (recorded as `162000`, same blob as #968's `172000`) plus `170000`, `171000` and `173000`. Return it to master, and relabel the `162000` row, after the merges.
+
 ## LIVE — security: direct database writes could make a user a platform admin; #977 and #978 close Stream 5's tables. Trio re-run pending, 2026-09-30T12:45:47Z
 
 - **Security finding (local reproduction, disposable accounts, reverted by exact id):**
