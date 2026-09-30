@@ -319,7 +319,10 @@ const mapboxProvider = {
 
     const data = await r.json();
     const f = (data.features || [])[0];
-    if (!f) throw new Error('No result for address');
+    if (!f) {
+      // Callers tell "no such address" apart from a lookup failure by this code.
+      throw Object.assign(new Error('No result for address'), { code: 'GEO_NO_RESULT' });
+    }
 
     return featureToNormalized(f, 'mapbox_geocode', mode);
   },

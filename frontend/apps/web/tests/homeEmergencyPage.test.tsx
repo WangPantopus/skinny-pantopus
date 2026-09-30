@@ -76,7 +76,7 @@ test('adding a medical entry saves first_aid with its details through the API an
   fireEvent.change(screen.getByPlaceholderText('Details (optional)'), { target: { value: 'Fridge door' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Emergency Info' }));
   await waitFor(() => expect(api.homeProfile.createHomeEmergency).toHaveBeenCalledWith('home',
-    { type: 'first_aid', label: 'Insulin', details: { phone: '+1 555 0100', notes: 'Fridge door' } }));
+    { type: 'first_aid', label: 'Insulin', details: { phone: '+1 555 0100', notes: 'Fridge door' }, clientRequestId: expect.any(String) }));
   expect(await screen.findByText('Insulin')).toBeInTheDocument();
   expect(screen.getByText('Fridge door')).toBeInTheDocument();
   expect(toast.success).toHaveBeenCalledWith('Emergency info added');
@@ -92,7 +92,7 @@ test('a contact entry maps to emergency_contacts and a refused type reports the 
   fireEvent.change(screen.getByPlaceholderText('Title'), { target: { value: 'Neighbour' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Emergency Info' }));
   await waitFor(() => expect(api.homeProfile.createHomeEmergency).toHaveBeenCalledWith('home',
-    { type: 'emergency_contacts', label: 'Neighbour', details: {} }));
+    { type: 'emergency_contacts', label: 'Neighbour', details: {}, clientRequestId: expect.any(String) }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This emergency type is not supported.'));
   expect(screen.queryByText('Neighbour')).not.toBeInTheDocument();
   expect(toast.success).not.toHaveBeenCalled();

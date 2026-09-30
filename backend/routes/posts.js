@@ -1926,15 +1926,13 @@ router.get('/map', verifyToken, async (req, res) => {
     // Fetch homes with location and apply bounding box filter in JS.
     // Privacy (docs/location-privacy-matrix.md, "Home Pin Rules"): home pins are only
     // for the viewer's own household. Another Home's coordinates or street are never
-    // returned, whatever its visibility.
+    // returned, whatever its visibility. The household is the one shared rule
+    // (getAccessibleHomeIds: trusted occupancies only, never a pending claim that any
+    // signed-in caller can file on any Home; fails closed).
     if (enabledLayers.includes('homes')) {
-      const { data: occupancies, error: occupancyErr } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('home_id')
-        .eq('user_id', userId)
-        .eq('is_active', true);
-      const ownHomeIds = [...new Set((occupancies || []).map((o) => o.home_id))];
-      const { data: homes, error: homeErr } = occupancyErr ? { data: null, error: occupancyErr } : await supabaseAdmin
+      const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+      const ownHomeIds = await getAccessibleHomeIds(userId);
+      const { data: homes, error: homeErr } = await supabaseAdmin
         .from('Home')
         .select('id, address, city, state, location, home_type')
         .not('location', 'is', null)
