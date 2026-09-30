@@ -38,6 +38,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -72,6 +74,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -290,21 +293,22 @@ private fun TabStrip(
                 .fillMaxWidth()
                 .background(PantopusColors.appSurface)
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.s4),
+                .padding(horizontal = Spacing.s4)
+                .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
         tabs.forEach { tab ->
+            val active = tab.id == selectedId
             Column(
                 modifier =
                     Modifier
-                        .clickable { onSelect(tab.id) }
+                        .selectable(selected = active, role = Role.Tab) { onSelect(tab.id) }
                         .sizeIn(minHeight = 44.dp)
                         .padding(vertical = Spacing.s2)
                         .testTag("tab.${tab.id}")
-                        .semantics { contentDescription = tab.label },
+                        .semantics { contentDescription = tab.count?.let { "${tab.label}, $it" } ?: tab.label },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val active = tab.id == selectedId
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
                     Text(
                         text = tab.label,
@@ -1164,7 +1168,7 @@ internal fun RowView(
             TrailingView(
                 trailing = row.trailing,
                 onSecondary = row.onSecondary,
-                rowTitle = row.title,
+                rowTitle = row.accessibleName(),
             )
         }
         if (row.note != null) {
@@ -1577,6 +1581,19 @@ private fun ThumbnailView(leading: RowLeading.Thumbnail) {
 
 // ─── Trailing view ─────────────────────────────────────────────
 
+/** Longest row text used to name a row's controls. */
+private const val ROW_NAME_MAX = 60
+
+/**
+ * A row's name for its controls ("More actions for …"): the title, or the start of the body
+ * when the row has no title (My posts rows lead with the post's text).
+ */
+private fun RowModel.accessibleName(): String {
+    if (title.isNotBlank()) return title
+    val line = body?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() } ?: return ""
+    return if (line.length > ROW_NAME_MAX) line.take(ROW_NAME_MAX).trimEnd() + "…" else line
+}
+
 @Composable
 private fun TrailingView(
     trailing: RowTrailing,
@@ -1600,7 +1617,9 @@ private fun TrailingView(
                         Modifier
                             .size(44.dp)
                             .clickable(onClick = onSecondary)
-                            .semantics { contentDescription = "More actions for $rowTitle" },
+                            .semantics {
+                                contentDescription = if (rowTitle.isBlank()) "More actions" else "More actions for $rowTitle"
+                            },
                     contentAlignment = Alignment.Center,
                 ) {
                     PantopusIconImage(

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
@@ -44,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -543,7 +546,7 @@ private fun FeedSurfaceTabs(
     onSelect: (FeedSurface) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3).selectableGroup()) {
             FeedSurface.toggleSurfaces.forEach { tab ->
                 val isActive = tab == active
                 val tint = if (isActive) PantopusColors.primary600 else PantopusColors.appTextSecondary
@@ -552,7 +555,7 @@ private fun FeedSurfaceTabs(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { onSelect(tab) }
+                                .selectable(selected = isActive, role = Role.Tab) { onSelect(tab) }
                                 .padding(vertical = 10.dp)
                                 .semantics { contentDescription = tab.toggleLabel }
                                 .testTag("pulseSurfaceTab_${tab.name.lowercase()}"),
@@ -734,7 +737,8 @@ private fun ViewModeToggle(
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                 .padding(3.dp)
-                .testTag("pulseViewModeToggle"),
+                .testTag("pulseViewModeToggle")
+                .selectableGroup(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -745,7 +749,7 @@ private fun ViewModeToggle(
                     Modifier
                         .clip(RoundedCornerShape(Radii.pill))
                         .background(if (selected) PantopusColors.primary600 else PantopusColors.appSurfaceSunken)
-                        .clickable { onSelect(mode) }
+                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(mode) }
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                         .testTag("pulseViewModeSegment_${mode.key}"),
                 verticalAlignment = Alignment.CenterVertically,

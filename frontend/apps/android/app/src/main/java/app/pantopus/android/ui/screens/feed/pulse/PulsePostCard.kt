@@ -507,7 +507,7 @@ private fun ReactionPill(
     val base =
         Modifier
             .semantics {
-                contentDescription = "${reaction.label.ifEmpty { "Count" }}, ${reaction.count}"
+                contentDescription = "${reaction.label.ifEmpty { "Heart reaction" }}, ${reaction.count}"
             }
     val withClick =
         if (onClick != null) {
