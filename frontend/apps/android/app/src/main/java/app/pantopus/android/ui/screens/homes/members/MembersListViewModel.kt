@@ -784,6 +784,9 @@ class MembersListViewModel
             return RowModel(
                 id = request.id,
                 title = name,
+                // The owner decides who joins the household, so the requester's
+                // whole name shows, as on the Pending tab.
+                titleMaxLines = Int.MAX_VALUE,
                 subtitle = "Wants to join as $identity",
                 template = RowTemplate.StatusChip,
                 leading =

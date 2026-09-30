@@ -743,7 +743,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                     background: Theme.Color.homeBg,
                     foreground: Theme.Color.home
                 )
-            )
+            ),
+            // The owner decides who joins the household, so the requester's
+            // whole name shows, as on the Pending tab.
+            titleLineLimit: nil
         )
     }
 
