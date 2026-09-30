@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none (#854 merged 2026-09-30T06:26:57Z, master `67e3a458a`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none yet for the compose-recipients privacy fix (branch pushed; real-API proof waits for the lease). Merged today: #854, #860, #863.
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -192,6 +192,19 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T06:57Z — #860 and #863 merged; the compose-recipients privacy fix is waiting for the runtime lease.**
+  - **[#860](https://github.com/WangPantopus/skinny-pantopus/pull/860) (I07), merged in batch 142 ([#861](https://github.com/WangPantopus/skinny-pantopus/pull/861), master `68f2daa24`):** web Home health and Home activity now follow saves made on the dashboard. Head `18db71759`, bundle `20260930-stream4-dashboard-summary-refresh-r1` (`badd163e…`, 39 files).
+    - Before, on master in real Chrome: after Report Issue, health stayed "55 /100" (the server said 45); after Add Task, activity still said "No activity recorded yet". Both corrected only on reload.
+    - My hypothesis that the Today counts were also stale was wrong: the useHomeData reducer already recomputes them, so no count change was made.
+    - Fix: re-read health after an issue save, and the timeline after a task save or delete (the existing reloadSummary).
+  - **[#863](https://github.com/WangPantopus/skinny-pantopus/pull/863) (D09/I07), merged in batch 143 ([#864](https://github.com/WangPantopus/skinny-pantopus/pull/864), master `eff3f69f5`):** a malformed Home activity row no longer takes down the web dashboard. Head `881b4dcb1`, bundle `20260930-stream4-timeline-reader-shape-r1` (`5048251f…`, 26 files).
+    - Before, with EMULATED malformed 200s: a null row, or a row without action/time, made the whole app show "We hit a page error"; an unreadable time rendered "INVALID DATE".
+    - After: the card's own "could not be loaded" state and Retry take over.
+  - **Security, routed by the coordinator:** `GET /api/mailbox/compose/recipients` returned any Home's occupants with its street address for a two-letter query, with no membership check.
+    - I also found that its general search attached every matched user's Home, street address and photo.
+    - Fix on `claude/stream4-compose-recipients-privacy` (head `b027d95a9`, one file): the household block uses the household mail rule (`getAccessibleHomeIds`), and general matches carry no Home or address. Connections are unchanged.
+    - Backend Jest (341 suites) and the privacy gates pass. The real-API before/after waits for the runtime lease, which Stream 3 holds for the D06 map exposure.
 
 - **2026-09-30T06:26:57Z — #854 merged** (batch 139, [#855](https://github.com/WangPantopus/skinny-pantopus/pull/855), exact tip `710d80d4f`; master `67e3a458a`). Stream 1 verified the seal (38 files, integrity OK) and the batch (1 file, blob-equal).
 
