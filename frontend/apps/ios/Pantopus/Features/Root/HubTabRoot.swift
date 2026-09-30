@@ -338,6 +338,9 @@ public enum HubRoute: Hashable {
     /// preview's "Manage privacy" link when it lands in the Hub stack
     /// (via the `pantopus://identity/preview` deep link).
     case privacySettings
+    /// A14.5 — Notification & briefing preferences. Pushed from the Today
+    /// detail's "Manage" (Android opens the same settings screen).
+    case notificationSettings
     /// Privacy → "Download your data": the existing Data export screen.
     case dataExport
     /// Privacy → "What we collect": a Legal document (the privacy policy).
@@ -799,8 +802,8 @@ public struct HubTabRoot: View {
         case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
-             .homeNotifications, .privacySettings, .dataExport, .editProfile, .menu, .paymentsSettings,
-             .mailItemDetail,
+             .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .editProfile, .menu,
+             .paymentsSettings, .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
              .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,
@@ -2983,7 +2986,7 @@ public struct HubTabRoot: View {
                 onBack: pop,
                 onShare: { text in systemSheet = .share(items: [text]) },
                 onMore: { push(.menu) },
-                onManage: { push(.notifications) }
+                onManage: { push(.notificationSettings) }
             )
         case let .propertyDetails(homeId):
             PropertyDetailsView(
@@ -3273,6 +3276,8 @@ public struct HubTabRoot: View {
                 case .privacyPolicy: push(.legalContent(.privacy))
                 }
             }) { Task { @MainActor in pop() } }
+        case .notificationSettings:
+            NotificationSettingsView { Task { @MainActor in pop() } }
         case .dataExport:
             DataExportView { Task { @MainActor in pop() } }
         case let .legalContent(doc):
