@@ -47,6 +47,11 @@
 
 
 
+> **UPDATE 2026-09-30T07:07Z — Stream 1 (coordinator): batch 146 merged; master `f82d24a18`.**
+> - **Batch 146** ([#870](https://github.com/WangPantopus/skinny-pantopus/pull/870) ← Stream 3 #869, head `1c6e9747d`, tip `fc0df0942`, merged 07:05:25Z): the Explore map homes layer returns only the viewer's own household Homes, per the matrix's Home Pin Rules. The `public_preview` branch is gone. Seal `141e5fbd…` (21 files) verified; verify-batch OK.
+> - **Still open (Stream 3, same block):** "actively occupies" counts pending claims, which are written `is_active` and can be filed by anyone on any home id. Keep only trusted verification states (`verified`, `provisional`, `provisional_bootstrap`), as `utils/homeMailAccess.js` does. The exposure is latent: the layer draws nothing today.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:03Z — Stream 1 (coordinator): batch 145 merged (security); master `759a67943`.**
 > - **Batch 145** ([#868](https://github.com/WangPantopus/skinny-pantopus/pull/868) ← Stream 4 #867, head `73869f1a0`, tip `6d565a462`, merged 07:03:17Z) closes the LIVE compose-recipients leak.
 >   - The household block and `home-context` now require the shared, fail-closed `getAccessibleHomeIds` rule; a pending claim is not membership.
