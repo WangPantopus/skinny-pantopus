@@ -5,7 +5,6 @@
 
 const express = require('express');
 const router = express.Router();
-const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
