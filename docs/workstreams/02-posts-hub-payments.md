@@ -7,9 +7,179 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T20:58Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT RESUME — HANDOFF 2026-09-30T21:31Z (successor: start here)
 
-- **Latest (2026-09-30T20:58Z):**
+The session "Stream 2: Posts, Hub and payments" handed over at the user's request. **Nothing is in progress:** all code is pushed, and one PR (#1096) waits for Stream 1's batch. The next-agent prompt is [`NEXT-STREAM2-PROMPT-2026-09-30-evening.md`](NEXT-STREAM2-PROMPT-2026-09-30-evening.md). Newest dated text wins. **Re-verify every SHA, PR, slot and process live.**
+
+### 1. Where things stand (checked at 21:27–21:31Z)
+
+- **Master** is `11e2b72f6` (batch 219). Every `claude/stream2-*` branch on origin is an ancestor of master except `claude/stream2-web-post-edit`.
+- **The only open PR is [#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096): web can edit your own post.**
+  - Head `c26c706e4968af49a049105bacc3014f79112e2f`. Seal `406c0939ba649052f7f5dcda10ee3fbc3e19f7184bf82e8e16e9593421861a91` (bundle `20260930-stream2-web-post-edit-r1`, 58 files).
+  - CI: "Web (lint, typecheck gate, Jest)" and "Web E2E" pass (run 36778944709); the other jobs skip (web-only).
+  - Stream 1 has it for its next batch. Stream 1's rule is "please don't merge any yourself".
+- **Merged this evening:**
+  - batch 211: #1038, #1047;
+  - batch 214: #1073;
+  - batch 215: #1078;
+  - batch 218: #1075, #1085, #1086, #1088, #1091.
+- **Checklist (this file's section below):**
+  - U02: 81 done, 2 boundary. iOS Payments & wallet sit behind the simulator's device-passcode prompt, and Android wallet screenshots are blocked by the secure screen.
+  - U03: 54 done, 1 to do, 2 not offered. The to-do is "Edit a post → Web" = #1096.
+  - U04: 16 done.
+- **Acceptance rows P01–P10** are unchanged: money journeys reuse the accepted evidence. Their hosted and provider parts need the user's environments. For U05, the inventory is Stream 2's input, and Stream 1 assembles the release manifest.
+
+### 2. First steps
+
+1. **Read-only checks:**
+   - `date -u`;
+   - `git fetch`, master, `gh pr view 1096`;
+   - `bash /private/tmp/pantopus-tools/heavy-slot.sh status`;
+   - `zsh /private/tmp/pantopus-tools/device-slot.sh status` (it's a zsh script; bash fails on its `(N)` glob);
+   - `ListAgents`.
+
+   Introduce yourself to Stream 1 as "Stream 2: Posts, Hub and payments".
+2. **When #1096 merges:**
+   1. In `checklists/data_s2.py`, change U03 "Edit a post" → Web to `done`, with evidence `#1096 merged (batch N), seal 406c0939`.
+   2. Run `python3 checklists/gen.py check`.
+   3. Render with `gen.py md 2 "$(date -u +%Y-%m-%dT%H:%MZ)" https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu` and paste it over this file's checklist section.
+   4. Commit by explicit paths and push `codex/workstream-coordination`.
+   5. Ask Stream 1, the holder of the review page, to republish it.
+   6. Mark the inventory row "Web · post edit" FIXED.
+
+   If Stream 1 asks for #1096 changes: the branch is checked out in worktree `…/stream-2-posts-hub-payments-76db95`, and Next on 18169 serves that worktree.
+3. **Then the backlog below, in order.** Reproduce before repairing, make the smallest repair, and send each head and seal to Stream 1.
+
+### 3. Backlog (ordered; my recommendation; full rows in the inventory)
+
+1. **Web deal expiry copy** (candidate; source read, not reproduced):
+   - The composer's deal expiry placeholder says "Expires (optional)" (`DealFields.tsx`).
+   - The Place-feed create path returns 400 "Deals must include an expiration date." without one (`backend/routes/posts.js`).
+   - Reproduce on web first, then fix the copy or client validation.
+2. **Native posting-eligibility check** (candidate, not reproduced). Web's stale "last answer wins" (fixed in #1078) exists natively too, but there it only drives a warning banner. Check before changing anything.
+3. **iOS Today "Manage"** has no route to Notification settings; it opens the inbox. Android opens Notification settings. After #1075, the briefing push shows only Back and Share.
+4. **Native post page "SHARE" chip** (UX candidate). The detail chip collapses seven types into "SHARE", while the feed card says Rec/Deal/Win and web says "RECOMMENDATION". It's presentation: decide under the standing direction, record the decision, and keep it separate from functional repairs.
+5. **Web post page type strip in dark mode** stays light (presentation; contrast passes). Stream 1 owns the palette, so coordinate first.
+6. **Web feed map popup:** near the top of the map, the "Search this area" pill covers the popup's type chip (layout).
+7. **Later / only if needed:**
+   - Align the unscheduled SQL twin `auto_archive_expired_posts()` with #1086's 32 h grace if it's ever scheduled.
+   - The radon line's EPA link needs a new client field.
+   - After launch: true instants with the poster's zone and end-of-local-day expiry (data migration + all clients).
+8. **Carried notes (act only if reproduced):**
+   - web `/api/location/resolve` ignores a stale unpinned area (parity note);
+   - the post-save toggle race 500 (every client guards double taps);
+   - iOS `ChatConversationView(…, onUseAIDraft:)` trailing closure binds to `onBack` (chat files are Stream 5's).
+
+### 4. Runtime (left running for you; verify live)
+
+- **Stack** `pantopus-stream2-posts-20260930` (7 containers; workdir `/private/tmp/pantopus-stream2-posts-db-20260930`):
+  - API 64581, Postgres 64582, shadow 64580. Range 64580–64589 is Stream 2's.
+  - The newest applied migration is `20260930184000`, which is master's newest at 21:28Z.
+- **Private runtime** `/private/tmp/pantopus-stream2-runtime-20260930`. PIDs are in `PIDS.txt`; logs are in `logs/`.
+  - Never print or copy `.keys.env`, `.local-secrets.env`, `.fixture-password`, `.webhook-secret`, `.tokens-*` or `.webstate-*`.
+  - **Backend 18160** (`/health` 200): `start-backend.sh`.
+    - env -i allowlist, TZ=UTC, jobs and cron off.
+    - Egress guard and Stripe guard; a placeholder `sk_test_` key, with api.stripe.com blocked.
+  - **Fault proxy 18168** (`/health` 200): `node fault-proxy.cjs`, run from the runtime dir.
+    - Controlled with `fault.py add|clear|rules|log|seq`.
+    - Actions: status (custom body/count), delay, hold, reset, lose.
+  - **Next dev 18169:** `start-web.sh`, TZ America/Los_Angeles. Its `/api` is rewritten to 18168. The first compile of a route takes about 25 s.
+  - **Restart or re-point:**
+    - Both start scripts take `WT=<worktree>`.
+    - Stop a process by its PID after checking `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
+    - Start again with `WT=… nohup ./start-….sh > logs/<name>-$(date -u +%Y%m%dT%H%M%SZ).log 2>&1 &`, then update `PIDS.txt`.
+- **Fixtures:**
+  - Alice/Bob/Dana `f9300c02-0000-4000-8000-00000000000{1,2,3}` (`s2.posts.*.0930@example.com`), all viewing Vancouver, WA. The password is in the 0600 file; never print it.
+  - Now: Post 3 (the seed), Gig 0, Payment 0, PostComment 0, Notification 0.
+  - Sign-in bookkeeping remains (AuthSession 85, AuthSecurityEvent 115, AuthDpopJti 74). Remove it at the final teardown only.
+- **Helpers (runtime dir):**
+  - `api.py login|<actor> METHOD path [json]`, `snapshot.sh`, `seal.py <dir> <branch> <commit> <boundary>`, `money-ui-fixtures.py create|cleanup <dir>`, `run-node.sh <script>`.
+  - `webcap.mjs` (steps goto/click/clickText/clickRole/fill/fillPh/press/wait/waitText/waitUrl/eval/shot/sh/fault; cfg.geolocation).
+  - `a11ycap.mjs` (axe; **no eval step, it's silently ignored**; `A11Y_BASE=http://localhost:18169 A11Y_STATE_SUFFIX=-localhost`), `a11ycap-geo.mjs` (Vancouver GPS fix), `modalcap.mjs`.
+  - Android: `aui.py dump|tap|has|shot`, `a11y-tree.py`, `native-build-iosu02.sh`, `android-build-iosu02.sh`.
+  - **Never copy** `run-node.sh`, `api.py`, `webcap.mjs` or `android-switch.py` into bundles, or webcap network logs. Redact token, password and session paths in any runner copy.
+- **Devices:**
+  - Slot 3 lease "stream2: pantopus_s2 emulator-5560 U03/U04 native cells" (since 09:19:53Z). `emulator-5560` is up with the APK of `35a9f5f1c` (#1085's head), Alice signed in.
+  - If it's restarted: `-no-window -crash-report-mode disabled -no-metrics`, and never consent to a crash dialog.
+  - Release it with `zsh device-slot.sh release "stream2:"` after shutting the device down.
+  - No iOS simulator access in this session; Stream 1 runs Stream 2's iOS cells.
+  - Heavy slot: nothing of Stream 2's is held or queued (Stream 4 held it at 21:19Z).
+- **Teardown** (only when Stream 2's runtime is ended):
+  1. Stop Next, proxy and backend by PID.
+  2. `docker stop` the 7 `*_pantopus-stream2-posts-20260930` containers, and never any other.
+  3. Shut the emulator down and release slot 3.
+
+### 5. Decisions recorded this session (per the user's standing direction)
+
+1. **F6:** the iOS tip sheet draws on the opaque app surface, not system glass.
+2. **F8:** the refund reasons list inline.
+3. **F7:** the empty-history line is "No requests yet." on all three clients.
+4. The web composer A3 was measured with a fresh GPS fix, never by loosening the Place rule.
+5. **Deal auto-archive** waits 32 h past the stored midnight (Stream 1's rule).
+6. **Web shows stored event and deal times as typed** (UTC wall clock), and the composer sends an explicit `Z`.
+7. **A Place preview follow-up names only what claiming really gives.**
+8. **Web post edit:**
+   - author-only; the composer in edit mode;
+   - only changed fields are sent, so untitled stays untitled;
+   - audience, location, photos, an alert's type and a lost-and-found contact stay as posted, and the form says so;
+   - one automatic retry for a lost reply or a 5xx;
+   - the backdrop doesn't close the dialog.
+9. The native "SHARE" chip mapping stays a recorded candidate.
+
+### 6. Lessons
+
+- **Through the Next proxy, a dropped upstream reply reaches the browser as a 500, not a network error.** Retry logic must treat 5xx as possibly committed, and the retried call must be safe to repeat.
+- **webcap:**
+  - composer creation on this runtime needs "Location" → "Use current location";
+  - scope dialog clicks with `[role=dialog] button:text-is("Save")`, because the card behind has its own "Save";
+  - the PostCard root is `<article>`.
+- **axe can't measure a chip covered by another element** (the map pill). Sample rendered pixels instead (scratch `pngpix.py`).
+- **Build hygiene:** Android ktlint wants `LiveRegionMode` imported before `clearAndSetSemantics`. Make every commit compile on its own. Run the covering web Jest suites (or all, about 10 s) before pushing.
+- **zsh:**
+  - quote git paths containing `:`;
+  - heredocs with UUIDs misparse, so write configs from python;
+  - `device-slot.sh` needs zsh.
+- **`aui.py tap "<text>"` can hit a notice carrying the same words.** Tap by bounds.
+- **The Place preview API returns 503 on this stack** (no geocoder). Use a labelled stand-in preview that carries the service's own card.
+- **modalcap needs a fresh `.webstate-alice.json`.** Refresh it with a webcap login.
+
+### 7. Evidence from this session
+
+Bundles are in `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. The seal is the MANIFEST sha256.
+
+| Bundle | Seal | PR |
+|---|---|---|
+| `20260930-stream2-web-post-edit-r1` | `406c0939` | #1096 (open) |
+| `20260930-stream2-place-preview-truth-r1` | `ccfadc25` | #1091 |
+| `20260930-stream2-web-post-dates-r1` | `4c7f54d7` | #1088 |
+| `20260930-stream2-deal-archive-pacific-day-r1` | `d9c215dc` | #1086 |
+| `20260930-stream2-ios-u02-fixes-r1` | `1d07a1ac` | #1085 (Stream 1's iOS pass: `e3137445`) |
+| `20260930-stream2-web-tip-sheet-dark-sunken-r1` | `db86c5f9` | (after Stream 1's #1082) |
+| `20260930-stream2-web-place-eligibility-race-r1` | `fe6ecd1e` | #1078 |
+| `20260930-stream2-web-composer-a3-r1` | `7d308e46` | (measurement) |
+| `20260930-stream2-large-text-dialogs-r1` | `42bb8b0b` | #1075 |
+| `20260930-stream2-web-recommend-chip-contrast-r1` | `a0260faa` | #1073 |
+| `20260930-stream2-web-a3-master-recheck-r1` | `daf7aa08` | (measurement) |
+| `20260930-stream2-posts-followups-r1` | `a67de577` | #1047 |
+| `20260930-stream2-hub-today-truth-r2` | `88bd4642` | #1038 |
+
+Stream 1's iOS evidence for these cells:
+- `20260930-stream1-ios-u02-stream2-r1` (`3df1ecfb`);
+- the #1085 pass `e3137445`;
+- `20260930-stream1-ios-primary-ink-r1` (MANIFEST `3be31394`; #1061, and #1075's briefing view shows only Back and Share).
+
+The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
+
+## CURRENT STATE — 2026-09-30T21:31Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+
+- **Latest (2026-09-30T21:31Z): handed over** at the user's request; start from "CURRENT RESUME — HANDOFF" above.
+  - **Merged in batch 218** (#1094, master `d0a39aa4e`): [#1075](https://github.com/WangPantopus/skinny-pantopus/pull/1075), [#1085](https://github.com/WangPantopus/skinny-pantopus/pull/1085), [#1086](https://github.com/WangPantopus/skinny-pantopus/pull/1086), [#1088](https://github.com/WangPantopus/skinny-pantopus/pull/1088) and [#1091](https://github.com/WangPantopus/skinny-pantopus/pull/1091). Master is now `11e2b72f6` (batch 219).
+  - **[#1096](https://github.com/WangPantopus/skinny-pantopus/pull/1096)** head `c26c706e4`, seal `406c0939…`: web can edit your own post (Stream 1's conditions met).
+    - Verified in Chrome: an untitled post stays untitled; E1 (a failed save keeps the edit), E2 (a lost reply is retried once and saved once) and E5 (deleted meanwhile says so).
+    - axe found the composer's event start input unnamed (the create form shares it). After naming the date inputs: 0 in light and dark.
+    - CI passes. It is with Stream 1 for its next batch.
+  - **Checklist:** U02 81 done / 2 boundary; U03 54 done / 1 to do (#1096); U04 16 done. The inventory now marks every fixed row and lists the follow-ups.
+- **Earlier (2026-09-30T20:58Z):**
   - **With Stream 1** (its merge order: #1061 → Trains U02 → #1075 → #1085 → #1086 → #1088, then #1091):
     - **[#1085](https://github.com/WangPantopus/skinny-pantopus/pull/1085):** Stream 1 passed the iOS after-checks on candidate 63585f622. The U02 addendum is resealed as e3137445.
     - **[#1086](https://github.com/WangPantopus/skinny-pantopus/pull/1086):** deal archive (backend review first).
@@ -405,6 +575,8 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 
 ## Open work at the split
 
+> **2026-09-30T21:31Z:** items 1, 3, 4, 5 and 6 are done or in #1096 (see the checklist and CURRENT STATE). What is still open is in "CURRENT RESUME — HANDOFF" §3.
+
 1. **The checklist's to-do cells** (below):
    - U03: Pulse web R1/R2 on the main feed; create a post E6 (all three clients); edit E1/E2/E5 (iOS) and E2/E5 (Android); delete E1 (all three); comment photo-attachment failure (iOS, Android); the public post page R1 and E4 for a private post (web); Hub cards R1 (all three).
    - U04: Posts L4 (iOS, Android) and web L1 (draft kept across tabs); Start and Place preview L2/L3 (all three); Hub L2/L3 (iOS, Android) and L2 (web).
@@ -421,6 +593,8 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 6. **Parity observation, not built:** web has no post edit action (the API exists).
 
 ## Runtime and devices (set up after Docker is back)
+
+> **2026-09-30T21:31Z:** this runtime exists and is running. Its live details, restart and teardown are in "CURRENT RESUME — HANDOFF" §4 above. The rules below still hold.
 
 - **Ports reserved for Stream 2** (free at the split): backend **18160**, fault proxy **18168**, Next **18169**.
 - **Worktrees:** add Stream 2's own (never remove any, and never modify the protected checkout `/Users/yingpengwang/skinny-pantopus`).
@@ -442,7 +616,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T20:58Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T21:29Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -456,7 +630,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | **Posts and Pulse** | | | |
 | Pulse feed, My posts, counts | ✅ Cold-start Pantopus tips (seeded facts) opened "We couldn't find this post" (Stream 1): info cards with a dismiss (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8)<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, Stream 1 bundle 9d03a647)<br>✅ Lost & Found: contact line (selectable) and FOUND chip (#1005, Stream 1 bundle e95f5d0f)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Cold-start tips opened a post that doesn't exist (reproduced, 404): info cards with a working dismiss (#1047 merged (batch 211), seal a67de577)<br>✅ My posts: archived posts stay after a reload (vanished from both tabs before) (#1016, seal b74e23c0)<br>✅ Lost & Found: post page shows how to reach the owner; found posts no longer labelled LOST (#1005 (merged), seal 903a2201)<br>✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Cold-start tips rendered as full posts with no dismiss: info cards with a dismiss X (#1047 merged (batch 211), seal a67de577)<br>✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
 | Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: typed (555) 555-0123 stored as digits; the post page shows the contact line (Stream 1 iOS run, no change) (Stream 1 bundle 3ee82fc9)<br>✅ My posts → Write a post always made an Ask post: the purpose picker shows (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1 E2 E3 (#657, #718)<br>✅ E6 on device: typed (555) 555-0123 accepted, stored as digits (seal ee9a6767) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
-| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>✅ A post saved without a title (web's general posts) couldn't be edited: the Headline stays empty, Save sends PATCH 200 (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>✅ A post saved without a title couldn't be edited (reproduced, 0 writes): the title stays null (#1047 merged (batch 211), seal 176cd103) | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
+| Edit a post | ✅ E1 a failed save keeps the edit; E2 a lost reply is retried once; E5 deleted elsewhere says so (Stream 1 iOS run, no change) (Stream 1 bundle 4b8ed58a)<br>✅ A post saved without a title (web's general posts) couldn't be edited: the Headline stays empty, Save sends PATCH 200 (#1047 merged (batch 211), Stream 1 iOS seal 47c730f8) | ✅ E1, audience kept (#657, #659)<br>✅ E2 lost reply kept + safe retry; E5 deleted meanwhile says so (seal 04b91511)<br>✅ A post saved without a title couldn't be edited (reproduced, 0 writes): the title stays null (#1047 merged (batch 211), seal 176cd103) | ⬜ Web had no post edit action; built in #1096 with Stream 1's approval (author-only, the composer in edit mode, only changed fields sent, untitled stays untitled; E1/E2/E5 and axe verified in Chrome; seal 406c0939), waiting to merge |
 | Delete a post | ✅ E2 (#709)<br>✅ E1 My posts says when a delete, archive or restore fails; Delete really deletes (it sent nothing before) (#980, Stream 1 bundle d172244f) | ✅ E2 (#709)<br>✅ E1 post page: keeps the post and says "Couldn't delete the post"; retry deletes (no change) (seal 569a60a4)<br>✅ E1 My posts: says when a delete, archive or restore fails (#980, seal 54995229) | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the iOS comment composer is text-only; web comment photos still display) (Stream 1 bundle e4825b97) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>– Photo attachment failure: not offered (the Android comment composer is text-only) | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
@@ -481,24 +655,24 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Pulse feed | ✅ A1–A4: fixed text, nothing clips at AX5; dark readable; contrast passes; named (Stream 1 bundle e43f4f13) | ✅ A4 selected states + heart names; A1 chips no longer clipped at font 2.0 (#1027, seal a966aa19)<br>✅ A2: stays light and readable in system dark mode (#1013 + seal a966aa19)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08)<br>✅ A4 the active chip's mute control is its own button (user approved); toast names the topic (#919) |
 | Post detail and comments | ✅ A1 kept as is (your decision)<br>✅ A2 A3 A4: dark readable; the Share chip is 4.57:1; named, and the comment field is labelled (Stream 1 bundle e43f4f13) | ✅ A1 A2 comments (#667)<br>✅ A4: chip tone no longer read (#1027, seal a966aa19)<br>✅ A4: a Share post's chip read "Share post", like the Share button; it reads "Post type: Share" (#1038 merged (batch 211))<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>✅ A3: brand blue passes after #1052; the Recommendation chip went from 4.33:1 to 6.12:1 (#92400E; map chips 4.29/4.46 → 6.06/6.29) (#1073 merged (batch 214), seals daf7aa08, a0260faa) |
 | Post composer | ✅ A1 kept as is (your decision)<br>✅ A2 A3 A4: dark readable; contrast passes; named (Stream 1 bundle e43f4f13) | ✅ A4 states and names; A1 contact choices ("Phone" was zero-width at font 2.0) (#1027, seal a966aa19)<br>✅ A2: readable in system dark mode (#1013)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>✅ A3: the composer at rest and with Recommend chosen, measured with a fresh GPS fix (the posting rule unchanged): 0 contrast failures in light and dark (seal 7d308e46)<br>✅ "Use my location" could leave an eligible viewer without the composer (a stale load-time eligibility answer landed last; reproduced): only the latest check decides; the area line says "Current location" (#1078 merged (batch 215), seal fe6ecd1e) |
-| My posts | ✅ A1 A2 A4: no clipping; dark readable; named, with the Selected trait on the active tab (Stream 1 bundle e43f4f13)<br>⬜ A3: the dark selected tab "Active" is 4.22:1; Stream 1's #1061 | ✅ A4 row names + tab states (#1027, seal a966aa19)<br>✅ A1: readable at font 2.0 (no change needed) (seal a966aa19)<br>✅ A2: delete dialog and options sheet readable in dark mode (luminance 43 → 225/240) (#1013, seal a966aa19)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08) |
+| My posts | ✅ A1 A2 A4: no clipping; dark readable; named, with the Selected trait on the active tab (Stream 1 bundle e43f4f13)<br>✅ A3: the dark selected tab is fixed in the shared ListOfRows tab strip by Stream 1's #1061 (merged, batch 218; verified on My trains 4.13 → 7.99; My posts shares the strip, not captured separately) (Stream 1 bundle 3be31394 (ios-primary-ink-r1)) | ✅ A4 row names + tab states (#1027, seal a966aa19)<br>✅ A1: readable at font 2.0 (no change needed) (seal a966aa19)<br>✅ A2: delete dialog and options sheet readable in dark mode (luminance 43 → 225/240) (#1013, seal a966aa19)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; the closed post panel is inert (was focusable off-screen) (#879)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08) |
 | Report a post | ✅ A1–A4: the system dialog scales; dark reasons 5.25–5.39:1 after #1056 (merged); named (Stream 1 bundle e43f4f13) | ✅ A1 readable at font 2.0; A4 reasons and Cancel named (no change) (seal a966aa19)<br>✅ A2: stays light and readable in dark mode (seal 607283e7)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A3 A4 A5; close button named (#829) |
 | **Start and Hub** | | | |
-| Start funnel and Place preview | ✅ A1 A2: fixed text, the arrival offer scales; dark readable (Stream 1 bundle e43f4f13)<br>⬜ A4: the preview Back, the address clear ✕ and the address field were unnamed or placeholder-only (F1–F3): named on branch claude/stream2-ios-u02-fixes (build queued; Stream 1 iOS run next)<br>⬜ A3: dark "Sign in" and "Save it to get updates." under 4.5:1 (F4); Stream 1's #1061 | ✅ A1 "Sign in" stays on one line at font 2.0; A4 the address field is named (#1034 merged (batch 201), seal 607283e7)<br>✅ A4 other controls named (seal a966aa19)<br>✅ A2: stays light and readable in dark mode (seal 607283e7)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
+| Start funnel and Place preview | ✅ A1 A2: fixed text, the arrival offer scales; dark readable (Stream 1 bundle e43f4f13)<br>✅ A4: the preview Back, the address clear ✕ and the address field are named (F1–F3) (#1085 merged (batch 218), seal 1d07a1ac; iOS verified by Stream 1, e3137445)<br>✅ A3 dark: Start "Sign in" 4.44 → 8.59; preview "Save it to get updates." 4.13 → 7.99 (Stream 1's #1061, merged batch 218) (Stream 1 bundle 3be31394 (ios-primary-ink-r1)) | ✅ A1 "Sign in" stays on one line at font 2.0; A4 the address field is named (#1034 merged (batch 201), seal 607283e7)<br>✅ A4 other controls named (seal a966aa19)<br>✅ A2: stays light and readable in dark mode (seal 607283e7)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
 | Hub (the former Stream 1 cards) | ✅ A1–A4: no clipping; dark readable; "Explore Map" 4.62:1; named (Stream 1 bundle e43f4f13) | ✅ A4 filter state; A1 tile captions no longer lose words (#1027, seal a966aa19)<br>✅ A2: stays light and readable in dark mode (#1013)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08) |
-| Today detail | ✅ Truth: real sun times, a true share line, no private signal or summary in Share, loads with action signals, Back from a briefing push, chip "Post type: Share" (Stream 1 iOS run on #1038) (Stream 1 bundle aeb2d308)<br>✅ A1 A2 A4: no clipping; dark readable; named (Stream 1 bundle e43f4f13)<br>⬜ A3: the dark hero label is 4.22:1; Stream 1's #1061<br>⬜ More and Manage did nothing on the briefing push: shown only where they lead, in #1075 (seal 42bb8b0b); iOS run by Stream 1 next | ✅ A4 controls named (no change) (today bundle before/)<br>✅ Truth, share privacy and the action-signal decode (#1038 merged (batch 211), seals 44bc9f8b, 88bd4642)<br>✅ A2: stays light and readable in dark mode (seal 44bc9f8b)<br>⬜ A1: at font 2.0 the Sun & sky captions touched: an 8 dp gap in #1075 (seal 42bb8b0b), waiting to merge<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08) |
+| Today detail | ✅ Truth: real sun times, a true share line, no private signal or summary in Share, loads with action signals, Back from a briefing push, chip "Post type: Share" (Stream 1 iOS run on #1038) (Stream 1 bundle aeb2d308)<br>✅ A1 A2 A4: no clipping; dark readable; named (Stream 1 bundle e43f4f13)<br>✅ A3 dark: the hero label 4.13 → 7.99 (Stream 1's #1061 commit 3a0cfbd03, merged batch 218) (Stream 1 bundle 3be31394 (ios-primary-ink-r1))<br>✅ More and Manage did nothing on the briefing push: now shown only where they lead; Stream 1's capture of the briefing view on a build with #1075 shows only Back and Share (#1075 merged (batch 218), seal 42bb8b0b; Stream 1 bundle 3be31394 (ios-primary-ink-r1) ios/cand1-01-today-briefing-light-tree.txt) | ✅ A4 controls named (no change) (today bundle before/)<br>✅ Truth, share privacy and the action-signal decode (#1038 merged (batch 211), seals 44bc9f8b, 88bd4642)<br>✅ A2: stays light and readable in dark mode (seal 44bc9f8b)<br>✅ A1: at font 2.0 the Sun & sky captions keep an 8 dp gap (#1075 merged (batch 218), seal 42bb8b0b)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>✅ A3: no contrast failure in light or dark after #1052 (brand blue, emerald) (axe on master 2693fcbcf, seal daf7aa08) |
 | **Money screens (viewing only, no payments)** | | | |
-| Tip sheet | ✅ A1: no clipping; the disabled amounts are exempt (the helper has no payouts, and the sheet says so) (Stream 1 bundle e43f4f13)<br>⬜ A2/A3 dark: system glass put "Custom amount" at 4.01 and "Not now" at 2.32 (F6: opaque app surface, agreed with Stream 1); A4 the custom amount was placeholder-only (F3): fixed on #1085 (seal 1d07a1ac; Android and web verified; iOS verified by Stream 1, e3137445), waiting to merge | ✅ A1 A2, dark title fixed (PR198)<br>✅ A4: amounts, custom field, send and Not now named; disabled state announced with its reason (seal 1e9293bd)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>✅ A2 dark: after Stream 1's #1082 the presets fill #080E20 on the sheet's #0F172A (as subtle as light); axe 0 light and dark; Escape closes (seal db86c5f9) |
-| Payment card and refund sheet | ✅ A2: dark readable (Stream 1 bundle e43f4f13)<br>⬜ A1 reason cut at AX5 (F8), A4 refund amount placeholder-only (F3), no feedback from Check status (F7): fixed on #1085 (seal 1d07a1ac; Android and web verified; iOS verified by Stream 1, e3137445), waiting to merge; F7 also on Android and web<br>⬜ A3: dock buttons (F4) and counterparty initials 2.77:1 (F5); Stream 1's #1061 | ✅ A1 A2 (Sep22)<br>✅ A4: task-progress steps read done / current step / not yet; refund reasons named; other controls named (#1034 merged (batch 201), seals 1e9293bd, 607283e7)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable (#889) |
+| Tip sheet | ✅ A1: no clipping; the disabled amounts are exempt (the helper has no payouts, and the sheet says so) (Stream 1 bundle e43f4f13)<br>✅ A2/A3 dark: the tip sheet draws on the opaque app surface (F6; Stream 1 measured dark 6.81 from 2.32/4.01, light 7.63); A4 the custom amount is named (F3) (#1085 merged (batch 218), seal 1d07a1ac; iOS verified by Stream 1, e3137445) | ✅ A1 A2, dark title fixed (PR198)<br>✅ A4: amounts, custom field, send and Not now named; disabled state announced with its reason (seal 1e9293bd)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>✅ A2 dark: after Stream 1's #1082 the presets fill #080E20 on the sheet's #0F172A (as subtle as light); axe 0 light and dark; Escape closes (seal db86c5f9) |
+| Payment card and refund sheet | ✅ A2: dark readable (Stream 1 bundle e43f4f13)<br>✅ A1 the refund reasons list inline and wrap at AX5 (F8); A4 the refund amount is named and its instruction visible (F3); Check status says "No requests yet." (F7, also Android and web) (#1085 merged (batch 218), seal 1d07a1ac; iOS verified by Stream 1, e3137445)<br>✅ A3: dock "Send a tip" 4.08 → 5.67 (F4) and counterparty initials 2.74 → 5.67 in both schemes (F5) (Stream 1's #1061, merged batch 218) (Stream 1 bundle 3be31394 (ios-primary-ink-r1)) | ✅ A1 A2 (Sep22)<br>✅ A4: task-progress steps read done / current step / not yet; refund reasons named; other controls named (#1034 merged (batch 201), seals 1e9293bd, 607283e7)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable (#889) |
 | Payments and wallet settings | ⛔ Behind the OS device-passcode prompt on the simulator; Stream 1 doesn't type into it (boundary) | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>✅ A4: controls named; balance reads "Available to withdraw: 0.00 USD" (seal a966aa19)<br>✅ A3: brand blue is now #0369A1: 5.93:1 on white, 5.54:1 on the page background, white on it 5.93:1; status colours 5.1–7.4:1 (#1029, token check on master 1e1b6bacc) | ✅ A1 A2 A4 A5; filter and back-button names (#829)<br>✅ A3: wallet and payment settings have no contrast failure in light or dark after #1052 (emerald, brand blue) (axe on master 2693fcbcf, seal daf7aa08) |
 
 **Outside this plan:** Money journeys: Tips, task payments, refunds, disputes and wallet reuse the accepted P02-P10 evidence. Nothing is rerun, and there is still no capture. Their hosted and provider parts stay with the P rows. Crew Day and rebooking a known crew: Not built yet: no screen or route calls it (Stream 3, Sep27). There's nothing to check. Launch cuts: Marketplace, Open Gigs, the business directory, and Hub or Pulse entry points into them stay excluded. The "WINNER" badge note belongs to bids, so it's dropped. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 54, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 3
+- U03 items: done 54, confirm from existing evidence 0, to do 1, your call 0, boundary 0, not offered 2
 - U04 items: done 16, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 0
-- U02 items: done 72, confirm from existing evidence 0, to do 9, your call 0, boundary 2, not offered 0
+- U02 items: done 81, confirm from existing evidence 0, to do 0, your call 0, boundary 2, not offered 0
 
 ## Inventory and history
 
