@@ -23,38 +23,6 @@ const HOME_ADDRESS_VERIFICATION_REQUIRED_CODE = 'HOME_ADDRESS_VERIFICATION_REQUI
 const HOME_ADDRESS_VERIFICATION_REQUIRED_MESSAGE =
   'Verify your home address before sending mail. Open Homes and finish address verification, then try sending again.';
 
-/**
- * Get the sender's active home IDs (via HomeOccupancy + Home ownership).
- */
-async function getSenderHomeIds(userId) {
-  const homeIdSet = new Set();
-
-  const [occupancyRes, ownerRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id')
-      .eq('user_id', userId)
-      .eq('is_active', true),
-    supabaseAdmin
-      .from('Home')
-      .select('id')
-      .eq('owner_id', userId),
-  ]);
-
-  if (occupancyRes.status === 'fulfilled') {
-    for (const row of occupancyRes.value?.data || []) {
-      if (row?.home_id) homeIdSet.add(row.home_id);
-    }
-  }
-  if (ownerRes.status === 'fulfilled') {
-    for (const row of ownerRes.value?.data || []) {
-      if (row?.id) homeIdSet.add(row.id);
-    }
-  }
-
-  return Array.from(homeIdSet);
-}
-
 async function hasVerifiedSenderHome(userId) {
   const [occupancyRes, ownerRes] = await Promise.allSettled([
     supabaseAdmin
@@ -340,9 +308,9 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       });
     }
 
-    // Verify sender has access: occupant, owner, or connected to a resident
-    const senderHomeIds = await getSenderHomeIds(senderId);
-    const isOccupantOrOwner = senderHomeIds.includes(homeId);
+    // Verify sender has access: a member the household mail rule admits (a pending
+    // claim is not membership), or connected to a resident
+    const isOccupantOrOwner = (await getAccessibleHomeIds(senderId)).includes(homeId.toLowerCase());
 
     let hasAccess = isOccupantOrOwner;
 
