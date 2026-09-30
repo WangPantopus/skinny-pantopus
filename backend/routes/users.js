@@ -25,6 +25,7 @@ const authPolicy = require('../config/authPolicy');
 const { verifyDpop } = require('../middleware/dpop');
 const { requireStepUp, mintStepUpToken } = require('../middleware/stepUp');
 const authDeviceService = require('../services/authDeviceService');
+const { retireHomeForDeletedAccount } = require('../services/homeAuthorityService');
 const authSessionService = require('../services/authSessionService');
 
 async function getOrCreateMailPreferences(userId) {
@@ -4914,6 +4915,46 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
         error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
         code: 'ACCOUNT_RECORDS_RETAINED',
       });
+    }
+
+    // ── 1c. Homes the person created or lives in ────────────────
+    // retireHomeForDeletedAccount (Stream 3) decides for each one:
+    //   - 'deleted': it goes through the product's "delete my home" (a home still in
+    //     private setup, or one they may delete);
+    //   - 'purged': they were its last member and it can't be deleted, so its
+    //     household records are removed (Stream 4) and a later resident never sees them;
+    //   - 'kept': others still live there, and their shared records stay without the
+    //     person's name.
+    // Before step 2: eligibility recognizes setup records by their author. A failure
+    // stops the deletion here, before the person's other data changes.
+    const [createdHomes, occupiedHomes] = await Promise.all([
+      supabaseAdmin.from('Home').select('id').eq('created_by_user_id', userId),
+      supabaseAdmin.from('HomeOccupancy').select('home_id').eq('user_id', userId).eq('is_active', true),
+    ]);
+    if (createdHomes.error) throw createdHomes.error;
+    if (occupiedHomes.error) throw occupiedHomes.error;
+    const homeIds = [...new Set([
+      ...(createdHomes.data || []).map((h) => h.id),
+      ...(occupiedHomes.data || []).map((o) => o.home_id),
+    ])];
+    for (const homeId of homeIds) {
+      try {
+        const retired = await retireHomeForDeletedAccount(homeId, userId);
+        logger.info('Account deletion: home retired', { userId, homeId, action: retired.action, reason: retired.reason });
+      } catch (err) {
+        const status = err.statusCode || err.status;
+        logger.warn('Account deletion refused: home could not be retired', { userId, homeId, code: err.code, status });
+        if (status === 409) {
+          return res.status(409).json({
+            error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
+            code: 'ACCOUNT_RECORDS_RETAINED',
+          });
+        }
+        if (status === 503) {
+          return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+        }
+        throw err;
+      }
     }
 
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────
