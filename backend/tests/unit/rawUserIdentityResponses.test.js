@@ -432,12 +432,22 @@ describe('raw User response audit', () => {
       handle: 'raw-poster',
       displayName: 'Poster Name',
     });
-    expect(res.body.gig.acceptedBy).toMatchObject({
+    // Someone outside the task never learns who the worker is.
+    expect(res.body.gig.acceptedBy).toBeNull();
+    expect(res.body.gig.accepted_by).toBe('assigned');
+    expectNoPrivateUserPayload(res.body);
+
+    const posterRes = await request(app)
+      .get('/api/gigs/gig-1')
+      .set('x-test-user-id', 'poster-user');
+
+    expect(posterRes.status).toBe(200);
+    expect(posterRes.body.gig.acceptedBy).toMatchObject({
       type: 'local',
       handle: 'raw-worker',
       displayName: 'Worker Public',
     });
-    expectNoPrivateUserPayload(res.body);
+    expectNoPrivateUserPayload(posterRes.body);
   });
 
   test('chat messages serialize sender identity and strip internal actor ids', async () => {
