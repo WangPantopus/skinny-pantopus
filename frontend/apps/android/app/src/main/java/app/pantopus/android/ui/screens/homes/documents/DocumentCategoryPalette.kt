@@ -48,7 +48,8 @@ enum class DocumentCategory(
         label = "Warranties & manuals",
         icon = PantopusIcon.BadgeCheck,
         background = Color(0xFFFEF3C7),
-        foreground = Color(0xFFA16207),
+        // Yellow-800: yellow-700 (A16207) was 4.42:1 on this tint, under AA's 4.5:1 for the chip's small text.
+        foreground = Color(0xFF854D0E),
         sortOrder = 2,
     ),
     Tax(
