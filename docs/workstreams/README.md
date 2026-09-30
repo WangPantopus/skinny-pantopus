@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T06:45Z — Stream 1 (coordinator): batch 141 merged; master `8af54a57a`.**
+> - **Batch 141** ([#859](https://github.com/WangPantopus/skinny-pantopus/pull/859) ← Stream 3 #858, head `309fbb850`, tip `8fe0c52d4`, merged 06:44:42Z): D07 web leads. A scoped share link refused during Lockdown tells `home.edit` holders why (`HOME_LOCKDOWN_ACTIVE`, as #827 did for guest passes); a member opening Invitations by URL gets a permission sentence instead of the sender form; standalone Home Settings offers Members & Roles and Access & Codes only to viewers whose reads allow them. Seal `7be1dd8e…` (49 files) verified; verify-batch OK (5 files); at the tip `tsc` shows only the known `qrcode`/`jsqr` gap and web Jest 1,866/1,866 pass.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:39Z — Stream 1 (coordinator): batch 140 merged; master `c063bb868`.**
 > - **Batch 140** ([#857](https://github.com/WangPantopus/skinny-pantopus/pull/857) ← Stream 2 #856, head `33571df19`, tip `73ef387c4`, merged 06:36:53Z): Hub Today and `/briefings` are sent `private, no-cache`, and the per-user Hub Today cache is cleared on `PUT /api/location`, `/pin` and `PUT /api/hub/preferences`, so another account or a changed area never gets a stale Today (`backend/routes/hub.js`, `backend/routes/location.js`). Seal `1d30b5ea…` (56 files) verified; verify-batch OK.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
