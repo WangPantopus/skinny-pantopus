@@ -9,6 +9,22 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1012 fixes blind username/phone/email checks; Stream 2's #1011 reviewed, 2026-09-30T14:05:57Z
+
+- **New open:** [#1012](https://github.com/WangPantopus/skinny-pantopus/pull/1012) (`50e55104f`, seal `02f2c233…`, no migration). users.js's `isUsernameAvailable`, `isPhoneAvailable` and `isEmailAvailable` read User through the anon client, which sees no rows under RLS, so every check said "available".
+  - **Before:** a taken username created and then rolled back an auth user (a confirmation email in production), and a taken phone gave 500.
+  - **After:** refused up front with 400; a fresh username gives 201 and a free phone 200.
+  - chats.js drops an unused anon import. Found during the anon-client inventory for Stream 1's end state.
+- **Reviewed:** Stream 2's #1011 (REVOKE SELECT on PostLike/PostComment, step 2) is correct. All 21 reads at master are supabaseAdmin, and no policy, view or client-called function depends on those tables. Stream 2's #1009, which moved posts.js off the anon client, merged in batch 191.
+- **Anon-client inventory after #1012:**
+  - app.js /health: harmless;
+  - debug.js: dev only;
+  - verifyToken/optionalAuth and users.js: auth calls only;
+  - gigs.js: Stream 2 is checking Open Gigs, a launch cut;
+  - mailbox.js: an unused import, told Stream 4;
+  - offers.js: dead tables.
+- **Open from Stream 5:** #1000, #1001, #1002, #1012.
+
 ## LIVE — step 1 of closing all-rows read policies is open as #1002; step 2 sent to Stream 2, 2026-09-30T13:39:30Z
 
 - **Open:** [#1002](https://github.com/WangPantopus/skinny-pantopus/pull/1002) (`ea6d913e9`, migration `20260930179000`, seal `d2b72eee…`). REVOKE SELECT on FileThumbnail, TransactionReview and ReputationScore from client roles.
