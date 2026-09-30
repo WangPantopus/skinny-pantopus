@@ -21,6 +21,7 @@ import {
   PRESET_SLOT_DEFAULTS,
   normalizeGenerateSlotsPreset,
   buildSupportTrainGenerateSlotsPayload,
+  weekdaysEnabledForPreset,
 } from '@/components/support-trains/scheduleUtils';
 
 // ============================================================
@@ -198,6 +199,9 @@ export default function NewSupportTrainPage() {
       const preset = normalizeGenerateSlotsPreset(d.suggested_schedule);
       const def = PRESET_SLOT_DEFAULTS[preset];
       setSchedulePreset(preset);
+      // The preset's days, as choosing its chip sets them: "Every dinner" with no day selected
+      // read as a contradiction and listed "Schedule days" as missing.
+      setScheduleWeekdays(weekdaysEnabledForPreset(preset));
       setScheduleSlotStart(def.start);
       setScheduleSlotEnd(def.end);
 
