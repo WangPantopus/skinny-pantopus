@@ -660,7 +660,7 @@ public struct HomeResidencyAddressSnapshot: Codable, Sendable, Hashable {
 /// The handler (`backend/routes/home.js:635` / `:661`) returns
 /// `{ status, home_id?, is_multi_unit, formatted_address? }` where
 /// `status` is one of `HOME_NOT_FOUND | HOME_FOUND_UNCLAIMED |
-/// HOME_FOUND_CLAIMED`. The older `exists / homeCount /
+/// HOME_FOUND_CLAIMED | HOME_FOUND_PRIVATE`. The older `exists / homeCount /
 /// hasVerifiedMembers` triple is kept as a derived (and still
 /// decodable) convenience so existing call sites keep compiling.
 public struct CheckAddressResponse: Decodable, Sendable, Hashable {
@@ -693,9 +693,17 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
         status == Self.statusFoundUnclaimed
     }
 
+    /// `status === 'HOME_FOUND_PRIVATE'` — an "Invite only" Home is
+    /// registered here. The server sends no id or address for it, so
+    /// there is nothing to join or claim from the wizard.
+    public var isPrivateHome: Bool {
+        status == Self.statusFoundPrivate
+    }
+
     public static let statusNotFound = "HOME_NOT_FOUND"
     public static let statusFoundUnclaimed = "HOME_FOUND_UNCLAIMED"
     public static let statusFoundClaimed = "HOME_FOUND_CLAIMED"
+    public static let statusFoundPrivate = "HOME_FOUND_PRIVATE"
 
     public init(
         status: String? = nil,
@@ -744,7 +752,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
             NormalizedAddressDTO.self,
             forKey: .normalizedAddress
         )
-        let foundStatuses = [Self.statusFoundClaimed, Self.statusFoundUnclaimed]
+        let foundStatuses = [Self.statusFoundClaimed, Self.statusFoundUnclaimed, Self.statusFoundPrivate]
         exists = try container.decodeIfPresent(Bool.self, forKey: .exists)
             ?? (status.map(foundStatuses.contains) ?? false)
         homeCount = try container.decodeIfPresent(Int.self, forKey: .homeCount)

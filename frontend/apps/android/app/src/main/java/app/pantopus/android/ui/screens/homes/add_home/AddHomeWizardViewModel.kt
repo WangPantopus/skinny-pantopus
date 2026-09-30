@@ -809,13 +809,17 @@ open class AddHomeWizardViewModel
                     response.status in
                         listOf(
                             CheckAddressResponse.STATUS_NOT_FOUND, CheckAddressResponse.STATUS_FOUND_CLAIMED,
-                            CheckAddressResponse.STATUS_FOUND_UNCLAIMED,
+                            CheckAddressResponse.STATUS_FOUND_UNCLAIMED, CheckAddressResponse.STATUS_FOUND_PRIVATE,
                         ),
                 )
-                check(if (response.status == CheckAddressResponse.STATUS_NOT_FOUND) response.homeId == null else validId(response.homeId))
+                val unnamed = response.status == CheckAddressResponse.STATUS_NOT_FOUND || response.isPrivateHome
+                check(if (unnamed) response.homeId == null else validId(response.homeId))
                 check(response.homeId == null || response.residencyAddress?.isValid() == true)
-                check(validation.verdict.status != "CONFLICT" || response.homeId != null)
-                if (!matchesRequiredHome(response.homeId)) {
+                check(validation.verdict.status != "CONFLICT" || response.homeId != null || response.isPrivateHome)
+                if (response.isPrivateHome) {
+                    // An "Invite only" Home isn't named to people outside it.
+                    _state.update { it.copy(errorMessage = PRIVATE_HOME_MESSAGE) }
+                } else if (!matchesRequiredHome(response.homeId)) {
                     rejectDifferentHome()
                 } else {
                     _state.update {
@@ -1468,6 +1472,8 @@ open class AddHomeWizardViewModel
             }
 
         companion object {
+            const val PRIVATE_HOME_MESSAGE =
+                "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation."
             private const val MIN_SEARCH_CHARACTERS = 3
             private const val SEARCH_DEBOUNCE_MILLIS = 300L
             private const val KEY_SCOPE = "addHome.sessionScope"

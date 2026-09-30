@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import type { AddressVerdict } from '@pantopus/api';
 
 type ConflictAction = 'request_join' | 'claim_owner' | 'claim_manager';
 
@@ -90,15 +89,12 @@ const ACTION_OPTIONS: {
 ];
 
 export default function AlreadyClaimed({
-  verdict,
   onAction,
   onBack,
 }: {
-  verdict: AddressVerdict;
   onAction?: (action: ConflictAction, message?: string) => void;
   onBack: () => void;
 }) {
-  const household = verdict.existing_household;
   const [selectedAction, setSelectedAction] = useState<ConflictAction | null>(null);
   const [message, setMessage] = useState('');
 
@@ -114,16 +110,8 @@ export default function AlreadyClaimed({
       description="Someone has already registered a home at this address. Choose how you'd like to proceed."
       onBack={onBack}
     >
-      {household && (
-        <div className="mt-3 p-3 bg-blue-50 rounded-lg flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-          </svg>
-          <p className="text-sm text-blue-700">
-            {household.member_count} {household.member_count === 1 ? 'member' : 'members'} currently registered
-          </p>
-        </div>
-      )}
+      {/* The household's member count is no longer sent to people outside it
+          (it told any signed-in user how many people live at an address). */}
 
       {onAction ? (
         <div className="mt-4 space-y-3">
