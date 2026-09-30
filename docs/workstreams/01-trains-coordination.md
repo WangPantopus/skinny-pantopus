@@ -9,6 +9,42 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T20:33Z (Stream 1).**
+  - **Merged:**
+    - **Batch 215** (20:10:38Z, PR #1079), **security**: #1076 (Stream 5).
+      - Crew page buttons follow the owner's action.
+      - The API rejects non-http(s) links. Before, `window.open` ran a stored `javascript:` URL.
+      - No Directions to a home-based crew.
+    - **Batch 215**, same PR: #1078 (Stream 2), the Place eligibility race.
+    - **Batch 216** (20:23:04Z, PR #1083): #1077 (Stream 5), light cards get dark stops; and my **#1082**:
+      - dark `--app-surface-sunken` is a step below the surface. That's the last piece of the 09-30 token decision;
+      - the AI assistant is themed. #1052's hue flip had left its draft card label at 1.79:1. Seal `813666aa`.
+    - **Batch 217** (20:29:26Z, PR #1084): #1080 (Stream 5), the real profile-completion percentage; it no longer console-logs the profile's PII.
+    - Master is `e514e033b`.
+  - **#1061 (iOS primary ink) is verified on build `7e01e77f2`:**
+    - in dark: the tab strip 4.13 → 7.99; dock/Share/"Sign up" fills 4.08 → 5.67; the task "AS" initials 2.74 → 5.67 in both schemes;
+    - Start "Sign in" 4.44 → 8.59; the preview's "Save it" 4.13 → 7.99;
+    - My trains light is pixel-identical below the status bar.
+    - Added since: `273ac93f4` (the list FAB uses the Solid twins: sky 4.08, home ≈1.9 in dark) and `3a0cfbd03` (the Today hero kicker). Both are verified in candidate 1.
+  - **In the heavy slot:**
+    - **Candidate 1** `63585f622` = #1061 + my Trains U02 branch `ba476f213` + Stream 2's #1075 + F-branch `35a9f5f1c`. iOS app, APK and Android lint.
+    - **Candidate 2** `f002e2a9e` = my `primary700` sweep `0862b1a65` + Stream 5's #1081.
+  - **My Trains iOS U02 pass** (`20260930-stream1-ios-u02-trains-r1`, before build `5ab430ed2`), found:
+    - T1: the organizers stood in as helpers in the signup strip ("1 neighbors", "All neighbors confirmed"). iOS and Android.
+    - T2: raw "17:00:00" times in Manage. iOS and Android; Android before-shots are in the bundle.
+    - T3: a dimmed "Hosted by".
+    - T4: placeholder-only fields: search, wizard, sign-up sheet, Manage.
+    - T5: dark Manage chip 2.88 and date line 3.40.
+    - The fixes are on branch `codex/trains-u02-a11y-20260930`. The PR comes after candidate 1's after-run.
+  - **New sweep:** `primary700` text is about 2.9:1 in dark. A new `primaryInkStrong` token (#075985 / #7dd3fc) covers 78 sites; launch-cut areas are excluded.
+  - **Decisions:**
+    - Stream 2 builds web post edit (author-only, reusing the composer and `updatePost`).
+    - Event and deal dates render in UTC wall-clock on web.
+    - Deal auto-archive keeps a deal through its stated day in US Pacific (`+32h`). True instants come after launch.
+    - `NearbyProvidersCard` is launch cut #6 (a Pulse entry point into the directory) and stays untouched.
+  - **Held for seals:** Stream 3's #1058, #1064 with #1065, #1067 and #1070.
+  - **The U02 bundle for Stream 2 is resealed** at `e43f4f13`. The addendum shows F1/F2 are unnamed Buttons (VoiceOver says "Button"), not invisible.
+
 - **Update 2026-09-30T19:32Z (Stream 1).**
   - **Merged** (every seal verified against its PR head; build-batch/verify-batch RESULT OK):
     - **Batch 208** (18:35:23Z, PR #1057): #1036 (Stream 3, Home names at large text) and my #1052 (web hue contrast).
