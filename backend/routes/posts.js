@@ -1923,11 +1923,26 @@ router.get('/map', verifyToken, async (req, res) => {
     // ── Homes layer ──
     // Home table stores coordinates as geography(Point,4326), not separate lat/lon columns.
     // Fetch homes with location and apply bounding box filter in JS.
+    // Privacy (the /api/homes/discover rule): the viewer's own Homes, and any other
+    // Home only when its owner made it discoverable, shown with the street but never
+    // the house number or unit.
     if (enabledLayers.includes('homes')) {
-      const { data: homes, error: homeErr } = await supabaseAdmin
+      const { redactStreet } = require('../utils/addressRedaction');
+      const { data: occupancies, error: occupancyErr } = await supabaseAdmin
+        .from('HomeOccupancy')
+        .select('home_id')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+      const ownHomeIds = new Set((occupancies || []).map((o) => o.home_id));
+      const { data: homes, error: homeErr } = occupancyErr ? { data: null, error: occupancyErr } : await supabaseAdmin
         .from('Home')
-        .select('id, address, city, state, location, home_type')
+        .select('id, owner_id, address, city, state, location, home_type')
         .not('location', 'is', null)
+        .or([
+          `owner_id.eq.${userId}`,
+          ownHomeIds.size ? `id.in.(${[...ownHomeIds].join(',')})` : null,
+          'and(visibility.eq.public_preview,privacy_mask_level.eq.normal,home_status.eq.active)',
+        ].filter(Boolean).join(','))
         .limit(lim * 3);
       if (homeErr) {
         logger.error('Error fetching map homes', { error: homeErr.message });
@@ -1946,12 +1961,13 @@ router.get('/map', verifyToken, async (req, res) => {
             }
           }
           if (lat != null && lon != null && lat >= s && lat <= n && lon >= w && lon <= e) {
+            const own = h.owner_id === userId || ownHomeIds.has(h.id);
             results.push({
               layer_type: 'home',
               id: h.id,
               latitude: lat,
               longitude: lon,
-              address: h.address,
+              address: own ? h.address : redactStreet(h.address),
               city: h.city,
               state: h.state,
               home_type: h.home_type,
