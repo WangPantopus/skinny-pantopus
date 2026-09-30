@@ -269,6 +269,14 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T20:31:32Z — Sent to Stream 2 (owner of the Start and Place preview rows): the preview's radon card promises a reminder that doesn't exist.**
+  - `placePreviewService.js` `lead_radon` `follow_up`, :311 and :320 on master `20e7b4768`: "Claim it and we'll remind you when a test kit is due."
+  - The founder's 09-26 launch-boundary amendment A3 removes it. Its interim line is "The EPA recommends testing every home, whatever the zone."
+  - Also since the last entry:
+    - The 7-branch fixes build is green: iOS build; Android assemble, ktlint, detekt and unit tests; Paparazzi verify of `place.*` and `homes.*` (95 snapshot tests, no golden changes).
+    - The 8-branch build (with the warranty chip and its re-recorded golden) is first in the heavy queue.
+    - U04 native drivers for my rows are drafted and not yet run on devices: `tools/s4-u04-android.sh` and `tools/s4-u04-ios.sh`, on Stream 3's step tools and fixture tool.
+
 - **2026-09-30T20:12:21Z — Three stale checklist cells corrected from code and PR history; no runtime was used, since Stream 3 holds the lease.**
   - **iOS Place election date → ✅.** My own #922 (merged 09:40:00Z; bundle `20260930-stream4-ios-civic-date-r1`, MANIFEST `750ef739…`) already shows a date-only Election Day. The ⬜ was never updated.
   - **Web A3 🔷 → ⬜ live re-measure only:** master `20e7b4768`'s source passes after Stream 1's #1044 and #1052.
