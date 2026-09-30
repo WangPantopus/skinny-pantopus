@@ -40,6 +40,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - #1081's check 2 ran as a non-member only. I accepted it because the owner's own view follows the same rule and has no privacy stake (recorded in RESULT and the PR).
 - **Runtime:** API 18134 and web 18131 on master `11e2b72f6` (API receipt 21:15:34Z); DB at `20260930184000`; proxy allowances disabled. No fixtures remain from today's runs.
   - One unexplained crew is left alone: "S5 Crew Biz" (`s5_gig_biz_dfa0bf`, created 08:42Z).
+- **Cleanup at handoff (22:46:57Z, user request):** removed the old native build caches and app builds from the runtime directory (10 GB → 135 MB) and the merged worktree `pantopus-stream3-chat-keyboard-r1` (2.1 GB). The runtime the next agent uses stays up. Details are in the kit README.
 - **Kit:** `tools/stream5-e2e/README.md` and `ci-record.sh` hold today's E2E patterns: the `/b/` substitution, one real write through a read-only page, the WebSocket stub, gradient-aware contrast, and the 60 s profile cache.
 
 ## LIVE — S3-22 #1076 merged (batch 215); #1077 (light cards) and #1080 (profile completion truth) sealed; #1081 (native crew links + Directions) waiting on CI and Stream 1's device run, 2026-09-30T20:20:10Z
