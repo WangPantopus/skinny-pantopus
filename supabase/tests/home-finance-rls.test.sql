@@ -184,6 +184,9 @@ BEGIN
   END LOOP;
   IF (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission" r)
     IS DISTINCT FROM (SELECT rows FROM finance_reference_before) THEN RAISE EXCEPTION 'Role grants changed'; END IF;
+  -- The 9 write policies stay as defense in depth. No client has held a write
+  -- grant since 20260930174000, so today they admit nothing; don't restore
+  -- client grants to exercise them, because writes go through the API.
   IF (SELECT count(*) FROM pg_policies WHERE schemaname='public'
     AND tablename IN ('HomeBill','HomeSubscription','HomeBillSplit')) <> 12
     OR EXISTS (SELECT FROM pg_policies WHERE schemaname='public'
