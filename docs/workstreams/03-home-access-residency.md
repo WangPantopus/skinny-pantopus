@@ -290,6 +290,30 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T11:23Z — native session done on both apps; four PRs wait only on iOS unit tests and my last cleanup.**
+  - **D06 add-home address checks (`46cd0b548`)**, native round (own fixture, cleaned 11:19:22Z). Address validation was EMULATED by fault-proxy rule `s3-validate` using the real route's body from the in-process harness; `check-address` was real.
+    - iOS master (`edab09b8e` build, backend `c399b2fe6`): member B got "This address has an existing Home — Confirm your address and relationship to request household access."
+    - iOS fix: "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation." (Continue disabled).
+    - Android: the same before (backend `00bf2d6ff`) and after.
+    - Android `AddHomeWizardViewModelTest` 22/22.
+  - **Audit labels (`f372b8810`):**
+    - iOS before: "Home access secret create/delete". After: "Access code added/deleted", the API's own descriptions.
+    - Android: the same before and after. `MembersListViewModelTest` 48/48.
+  - **Row VoiceOver (`aeb8ce319`):**
+    - Requests row, before: one Button `rowVerticalAction_Invite-rowVerticalAction_Decline`. After: row text, "Invite" and "Decline" as separate elements. Decline still works (stored `rejected`).
+    - Access codes rows also split, into text, "Copy …" and "More actions for …".
+  - **Join-policy iOS round (`edab09b8e`):** Ownership & Security shows Privacy & Discoverability and Owner claims only; the Home settings subtitle reads "Discoverability and owner claims".
+  - **#943 on devices:** iOS and Android Access codes list a Wi-Fi code whose `created_by` is NULL.
+  - **Runtime:**
+    - applied master's `20260930134000`, `140000` and `151000` with `--include-all` (schema-only): ledger 103;
+    - backend on master `00bf2d6ff` (PID 74306);
+    - lease with Stream 4 since 11:21:15Z for their launch-critical reads.
+    - Cleanup order agreed: their fixture first, then my native-session fixture.
+    - A stray MailPreferences row from my member-B Android session, which blocked their cleanup, was deleted by exact scope at their request (11:22:50Z).
+  - **Next:**
+    - iOS unit tests under the heavy slot (queued third);
+    - after Stream 4's cleanup: my native-session cleanup, then seal and open the PRs (address check, audit labels, row VoiceOver, join-policy native), plus the Settings dead-switch Chrome proof and its PR.
+
 - **2026-09-30T10:53Z — #945 and #943 merged; native session half done; runtime lent to Stream 4.**
   - **Merged:**
     - [#945](https://github.com/WangPantopus/skinny-pantopus/pull/945) in batch 170 (master `c2f8fa5c9`);
