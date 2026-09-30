@@ -269,6 +269,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T11:10Z — [#954](https://github.com/WangPantopus/skinny-pantopus/pull/954) (iOS lint unblock) sent to the coordinator.** Head `7aadd787c297fb64f58e606b0fed76efba20aa88`, a one-character change.
+  - "ios / Lint (SwiftLint + SwiftFormat)" failed on master `af4e76f0c` and every PR. The cause is my own #922: a `//` note on `PlaceCivicDetailContent.monthAbbrev` that SwiftFormat 0.61.1's docComments rule rejects. Now `///`.
+  - Check: the file went from `1/1` to `0/1`, and the whole iOS tree is `0/2249`. Found by Stream 2 on #953 and confirmed by the coordinator.
+  - #952's native builds passed (iOS 11:06:33Z, Android 11:07:56Z, compiled at `a64f32e39`); its native reads wait for Stream 3's lease.
+
 - **2026-09-30T10:59Z — account deletion (launch-critical): [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) open, head `a64f32e39000b347b0bd74c3d0969710f87b6aa5` (rebased on master `af4e76f0c`), migration `20260930153000`.** Not yet in the queue: native reads, cleanup and seal come first.
   - **Scope:** the 15 attribution columns become nullable with ON DELETE SET NULL (the 12 Home columns plus HomeMapPin, CommunityMailItem and MailAssetLink). Also:
     - task/event guards allow clearing the author, never rewriting it;
