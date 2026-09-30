@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T08:37Z — STANDING USER DIRECTION (2026-09-30): decide and keep working.** The user: for anything that seems to need their decision, choose what's best for user experience, safety and security practice, and retention, record it, and don't stop. The coordinator (Stream 1) decides cross-stream items; each stream records its own decisions in its status file.
+> - **Decided under it (Stream 1):**
+>   1. **Member join policy: hide the control on web, iOS and Android.** It has no effect; owners already approve claims through household review; a false control gives false security. The three-level design (open_invite / admin_approval / verified_only) is recorded for after launch. Owner: Stream 3 (web now, native after toolchains).
+>   2. **Guest-pass passcodes: at least 6 characters for new passcodes** (existing ones keep working). Plus a per-link wrong-passcode limit (10 per 15 minutes) and the passcode in a header, not the query. Owner: Stream 3.
+>   3. **Leftover strangers in assigned tasks' chat rooms: remove them** with a reviewed, idempotent forward migration, after the read-side rule merges. It takes a dry-run count first, keeps the owner, the worker and owner actors, and excludes business-owned tasks, which get reviewed. Owner: Stream 5.
+>   4. **Design tokens (the accent contrast) are owned by Stream 1** as one app-wide change. Stream 2's plan to do it is superseded; its cells close from Stream 1's evidence.
+
 > **UPDATE 2026-09-30T08:34Z — USER DECISIONS (2026-09-30, answering Stream 1's list). Binding for all streams.**
 > 1. **Native toolchains: approved.** Stream 1 is reinstalling for everyone under the heavy slot.
 >    - Android is done: `~/Library/Android/sdk` with platform-tools 37.0.1, platform 35, build-tools 35.0.0, emulator 37.1.11 and the android-34 google_apis arm64 image, seeded from the surviving Homebrew copy with the previously accepted licenses. AVDs `pantopus_s1`, `pantopus_s2`, `pantopus_s34` and `pantopus_s5` are created.
