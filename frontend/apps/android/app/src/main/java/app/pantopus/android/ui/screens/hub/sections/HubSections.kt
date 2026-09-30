@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -748,7 +751,8 @@ private fun DiscoveryFilterTabs(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.s4)
-                .testTag("hubDiscoveryFilters"),
+                .testTag("hubDiscoveryFilters")
+                .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         HubDiscoveryFilter.visibleTabs.forEach { tab ->
@@ -763,7 +767,7 @@ private fun DiscoveryFilterTabs(
                             if (selected) PantopusColors.primary600 else PantopusColors.appBorder,
                             RoundedCornerShape(Radii.pill),
                         )
-                        .clickable { onSelect(tab) }
+                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(tab) }
                         .padding(horizontal = 14.dp, vertical = 7.dp)
                         .testTag("hubDiscoveryFilter_${tab.queryValue}"),
             ) {
