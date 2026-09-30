@@ -157,12 +157,13 @@ class SupportTrainsViewModel
             }
 
         /**
-         * Where Nearby searches from: the device's last fix, like the Tasks feed.
-         * Returning null skips the Nearby fetch and the tab asks for a location;
-         * the My-trains tab still renders. Tests replace it.
+         * Where Nearby searches from: a recent device fix, or a fresh one when location
+         * is already allowed (without the permission the provider answers null and never
+         * prompts). Null skips the Nearby fetch and the tab asks for a location; the
+         * My-trains tab still renders. Tests replace it.
          */
         var locationProvider: suspend () -> Pair<Double, Double>? = {
-            location.cachedCoordinate()?.let { it.latitude to it.longitude }
+            (location.cachedCoordinate() ?: location.requestCurrent())?.let { it.latitude to it.longitude }
         }
 
         /** Set by the screen: ask for the permission if needed, then [useMyLocation]. */

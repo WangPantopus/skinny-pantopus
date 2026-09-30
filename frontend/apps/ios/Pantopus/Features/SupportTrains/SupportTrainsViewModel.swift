@@ -109,16 +109,19 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     private var mineFailed = false
     private var nearbyFailed = false
 
-    /// Nearby searches from the device's location, like the Tasks feed. Without
-    /// permission there's no cached fix, and nothing prompts until the person
-    /// taps "Use my location".
+    /// Nearby searches from the device's location, like the Tasks feed: a recent fix,
+    /// or a fresh one when location is already allowed. Nothing prompts until the
+    /// person taps "Use my location".
     init(
         api: APIClient = .shared,
         onStartTrain: @escaping @MainActor () -> Void = {},
         onOpenTrain: @escaping @MainActor (String) -> Void = { _ in },
         onSearch: @escaping @MainActor () -> Void = {},
         locationProvider: @escaping @MainActor () async -> (latitude: Double, longitude: Double)? = {
-            DeviceLocationProvider.shared.cachedCoordinate().map { (latitude: $0.latitude, longitude: $0.longitude) }
+            let device = DeviceLocationProvider.shared
+            let fix = device.cachedCoordinate()
+            let current = if fix == nil, device.isAuthorized { await device.requestCurrent() } else { fix }
+            return current.map { (latitude: $0.latitude, longitude: $0.longitude) }
         },
         locationRequester: @escaping @MainActor () async -> (latitude: Double, longitude: Double)? = {
             await DeviceLocationProvider.shared.requestCurrent().map { (latitude: $0.latitude, longitude: $0.longitude) }
