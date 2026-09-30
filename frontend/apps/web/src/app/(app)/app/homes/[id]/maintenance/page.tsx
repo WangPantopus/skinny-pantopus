@@ -10,13 +10,16 @@ import { confirmStore } from '@/components/ui/confirm-store';
 
 type MaintTab = 'open' | 'scheduled' | 'history';
 
-const STATUS_META: Record<string, { icon: typeof AlertCircle; color: string; label: string }> = {
-  suggested:   { icon: AlertCircle,  color: '#f59e0b', label: 'Open' },
-  open:        { icon: AlertCircle,  color: '#f59e0b', label: 'Open' },
-  scheduled:   { icon: CalendarDays, color: '#0284c7', label: 'Scheduled' },
-  in_progress: { icon: Wrench,       color: '#7c3aed', label: 'In Progress' },
-  resolved:    { icon: CheckCircle,  color: '#16a34a', label: 'Completed' },
-  canceled:    { icon: XCircle,      color: '#6b7280', label: 'Dismissed' },
+// Theme tokens, not raw hexes: each badge label clears AA on its tint in both
+// schemes (four of the five hexes read 2.0 to 4.4:1 on their own tint in
+// light mode). In progress keeps its violet through the business identity tokens.
+const STATUS_META: Record<string, { icon: typeof AlertCircle; stripe: string; badge: string; label: string }> = {
+  suggested:   { icon: AlertCircle,  stripe: 'bg-app-warning',       badge: 'text-app-warning bg-app-warning-bg',               label: 'Open' },
+  open:        { icon: AlertCircle,  stripe: 'bg-app-warning',       badge: 'text-app-warning bg-app-warning-bg',               label: 'Open' },
+  scheduled:   { icon: CalendarDays, stripe: 'bg-app-info',          badge: 'text-app-info bg-app-info-bg',                     label: 'Scheduled' },
+  in_progress: { icon: Wrench,       stripe: 'bg-app-business',      badge: 'text-app-business bg-app-business-bg',             label: 'In Progress' },
+  resolved:    { icon: CheckCircle,  stripe: 'bg-app-success',       badge: 'text-app-success bg-app-success-bg',               label: 'Completed' },
+  canceled:    { icon: XCircle,      stripe: 'bg-app-border-strong', badge: 'text-app-text-secondary bg-app-surface-sunken', label: 'Dismissed' },
 };
 
 function MaintenanceContent() {
@@ -166,12 +169,12 @@ function MaintenanceContent() {
             const StatusIcon = meta.icon;
             return (
               <div key={item.id} className="flex items-start gap-3 bg-app-surface border border-app-border rounded-xl p-4">
-                <div className="w-1 h-10 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: meta.color }} />
+                <div className={`w-1 h-10 rounded-full flex-shrink-0 mt-0.5 ${meta.stripe}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text">{item.title}</p>
                   {item.description && <p className="text-xs text-app-text-secondary mt-1 line-clamp-2">{item.description}</p>}
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded" style={{ color: meta.color, backgroundColor: meta.color + '15' }}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${meta.badge}`}>
                       <StatusIcon className="w-3 h-3" />{meta.label}
                     </span>
                     {item.updated_at && <span className="text-xs text-app-text-muted">{new Date(item.updated_at).toLocaleDateString()}</span>}

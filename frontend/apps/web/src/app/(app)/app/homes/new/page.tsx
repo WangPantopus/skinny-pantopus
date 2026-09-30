@@ -830,7 +830,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 s.id === step
                   ? 'bg-black text-white'
                   : s.id < step
-                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-900'
                   : 'bg-app-surface-sunken text-app-text-muted'
               }`}
             >
@@ -1180,7 +1180,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                       onClick={() => toggleAmenity(a.key)}
                       className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm transition-colors ${
                         amenities[a.key]
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-medium'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-medium'
                           : 'border-app-border text-app-text-secondary hover:border-app-border'
                       }`}
                     >

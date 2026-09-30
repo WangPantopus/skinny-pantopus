@@ -76,14 +76,19 @@ module.exports = {
       // ── WCAG AA accents ─────────────────────────────────────────
       // Fills that carry white text, and text on the app's surfaces, use the
       // theme-aware variables in globals.css ("Accent utilities"): one step
-      // darker than the palette, with text flipping light in dark mode. Only
-      // these utilities change; borders, rings and tints keep the palette.
+      // darker than the palette, with text flipping light in dark mode. The
+      // 50/100 tints deepen in dark mode so that flipped text stays readable
+      // on them. Borders, rings and gradients keep the palette.
       backgroundColor: {
         primary: {
+          50: 'rgb(var(--accent-primary-tint) / <alpha-value>)',
+          100: 'rgb(var(--accent-primary-tint-strong) / <alpha-value>)',
           600: 'rgb(var(--accent-primary-fill) / <alpha-value>)',
           700: 'rgb(var(--accent-primary-fill-hover) / <alpha-value>)',
         },
         emerald: {
+          50: 'rgb(var(--accent-emerald-tint) / <alpha-value>)',
+          100: 'rgb(var(--accent-emerald-tint-strong) / <alpha-value>)',
           600: 'rgb(var(--accent-emerald-fill) / <alpha-value>)',
           700: 'rgb(var(--accent-emerald-fill-hover) / <alpha-value>)',
         },
