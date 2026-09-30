@@ -84,6 +84,11 @@ data class HomeAuditEntryDto(
     @Json(name = "target_id") val targetId: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     val actor: HomeAuditActorDto? = null,
+    /**
+     * The server's plain-words description of the action (`describeHomeActivity`,
+     * e.g. "Access code deleted"), the same wording the web audit log shows.
+     */
+    val description: String? = null,
 )
 
 /**
@@ -97,8 +102,12 @@ fun HomeAuditEntryDto.actorDisplayName(): String {
     return "System"
 }
 
-/** `OWNERSHIP_CLAIM_SUBMITTED` → "Ownership claim submitted". */
+/**
+ * The server's description when it sends one; otherwise the verb in words,
+ * `OWNERSHIP_CLAIM_SUBMITTED` → "Ownership claim submitted".
+ */
 fun HomeAuditEntryDto.actionLabel(): String {
+    if (!description.isNullOrEmpty()) return description
     val spaced =
         action
             .replace('_', ' ')
