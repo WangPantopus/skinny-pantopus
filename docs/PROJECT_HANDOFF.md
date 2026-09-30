@@ -16,9 +16,9 @@
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
 
 
-## CURRENT RESUME POINT — 2026-09-30T07:52Z, updated 2026-09-30T07:56Z (five streams running; Stream 1 merged batches 140–154, master `b04c2c136`)
+## CURRENT RESUME POINT — 2026-09-30T07:52Z, updated 2026-09-30T08:02Z (five streams running; Stream 1 merged batches 140–155, master `66d57bcfe`)
 
-- **Where things stand.** Master is `b04c2c136` (batch 154 added Stream 2's #894: the payee no longer sees the payer's card or provider ids). The merge queue is empty apart from #841 (Stream 1; native Start a train, waiting for one iOS run) and #842 (Stream 5 DRAFT; never batch). The per-batch record, with each PR's head, seal and checks, is in the [live hub README](workstreams/README.md) (UPDATE blocks dated 2026-09-30).
+- **Where things stand.** Master is `66d57bcfe`. Batch 154 added Stream 2's #894 (the payee no longer sees the payer's card or provider ids); batch 155 added Stream 4's #896 (a web Place this account can't read says so). The merge queue is empty apart from #841 (Stream 1; native Start a train, waiting for one iOS run) and #842 (Stream 5 DRAFT; never batch). The per-batch record, with each PR's head, seal and checks, is in the [live hub README](workstreams/README.md) (UPDATE blocks dated 2026-09-30).
 - **Security and privacy fixes merged today (found by Stream 3, routed by Stream 1):**
   - **Mail compose recipient search** (live leak). Any signed-in user with a Home id could list its residents plus the street address. Fixed by #867, #872 and #885: household rule only, connections see City/State, and pending claimants count as nobody.
   - **Explore map homes layer** (latent: it draws nothing today because `location` arrives as EWKB hex). It would have returned every Home's exact coordinates and street. Fixed by #865, #869 and #874 to return only the viewer's own household (trusted occupancies), per `docs/location-privacy-matrix.md`.

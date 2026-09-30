@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T08:02Z — Stream 1 (coordinator): batch 155 merged; master `66d57bcfe`.**
+> - **Batch 155** ([#897](https://github.com/WangPantopus/skinny-pantopus/pull/897) ← Stream 4 #896, head `2ed7aba70`, tip `8a1bb0d30`, merged 08:02:08Z): a web Place this account can't read (a 403, for example `?home=` from another account) now says "This place isn't available" with no retry, instead of "Check your connection". Found by the web U04 L3 account-switch journey (`20260930-stream4-home-account-switch-r1`, verification only). Seals `650fde8e…` (bound to the first commit; the second touches only Pulse) and `8dd2415e…` verified; web Jest passes 1,866/1,866.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:56Z — Stream 1 (coordinator): batch 154 merged (privacy); master `b04c2c136`.**
 > - **Batch 154** ([#895](https://github.com/WangPantopus/skinny-pantopus/pull/895) ← Stream 2 #894, head `b58174aec`, tip `d17c5212c`, merged 07:55:46Z): the payee no longer receives the payer's card, Stripe ids, risk band or fee receipt on the gig payment and payments reads. Read projection only; the payer's view is unchanged, and no native model references a removed field. Seal `3eea59ac…` (50 files) verified; backend payment suites pass 499/499.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
