@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T06:50Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T06:59Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -30,6 +30,9 @@
   - The API strips non-digits from `contactPhone`, so the native apps' typed "(555) 555-0123" stops failing.
   - Seal `20260930-stream2-posts-web-create-bad-input-r1`, 44 files, `778875ca…abfa`.
 - **Web Hub L2 (cold start) verified without code change:** seal `20260930-stream2-hub-web-cold-restart-r1`, 16 files, `42571869…ca43`.
+- **#862 merged** in batch 143 (#864, master `eff3f69f5`, 2026-09-30T06:53:44Z).
+- **Web delete E1 verified without code change:** the feed card, the post page and My Pulse each keep the post and say "Failed to delete post"; a retry deletes it. Seal `20260930-stream2-posts-web-delete-e1-r1`, 30 files, `32dfeb43…7127`.
+- **Web L1 verified without code change:** post and comment drafts are kept while another tab runs a session refresh, and both send once. Seal `20260930-stream2-posts-web-draft-across-tabs-r1`, 15 files, `d0895b51…4d64`.
 - **Web Hub R1 verified without code change:** the payload, the Today card and detail, and the Action Queue all fail truthfully; Discover's Posts tab makes no read. Seal `20260930-stream2-hub-web-reads-r1`, 31 files, `890d21cb…abe7`.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
@@ -113,7 +116,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T06:50Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T06:59Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -128,7 +131,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Pulse feed, My posts, counts | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
 | Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E1 E2 E3 (#657, #718)<br>⬜ E6 on device (the API now accepts the typed phone, #862) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>✅ E6: Lost & Found contact fixed; four tags reported truthfully (#862) |
 | Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>⬜ E2 E5 | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
-| Delete a post | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 |
+| Delete a post | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>✅ E1: feed card, post page and My Pulse keep the post and say so; retry deletes (no change) (bundle 32dfeb43) |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
 | Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ✅ Public post page: E4 private post kept; R1 now "Couldn't load" with Try Again (#851) |
@@ -140,7 +143,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4 | ✅ L1 L2 L3 (#667, Sep27)<br>⬜ L4 | ✅ L2 L3 L4 (Sep27, #785)<br>⬜ L1 draft kept across tabs |
+| Posts and comments | ✅ L1 L2 L3 (Sep27-28)<br>⬜ L4 | ✅ L1 L2 L3 (#667, Sep27)<br>⬜ L4 | ✅ L2 L3 L4 (Sep27, #785)<br>✅ L1 post and comment drafts kept while another tab refreshes the session (no change) (bundle d0895b51) |
 | Start and Place preview | ⬜ L2 L3 | ⬜ L2 L3 | ⬜ L2 L3 |
 | Hub (the former Stream 1 cards) | ⬜ L3<br>⬜ L2 | ⬜ L3<br>⬜ L2 | ✅ L3 (Sep27 late Hub reply)<br>✅ L3 Today no longer reused across accounts; area change and Refresh re-read (#856)<br>✅ L2 cold start shows current state (no change) (bundle 42571869) |
 
@@ -167,8 +170,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 33, confirm from existing evidence 0, to do 11, your call 0, boundary 0, not offered 1
-- U04 items: done 6, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 0
+- U03 items: done 34, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 1
+- U04 items: done 7, confirm from existing evidence 0, to do 9, your call 0, boundary 0, not offered 0
 - U02 items: done 15, confirm from existing evidence 0, to do 25, your call 7, boundary 1, not offered 0
 
 
