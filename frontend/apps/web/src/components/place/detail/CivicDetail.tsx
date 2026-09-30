@@ -222,7 +222,7 @@ function NoElection() {
         <CalendarCheck size={24} strokeWidth={2} className="text-app-text-muted" />
       </span>
       <div className="text-base font-bold text-app-text -tracking-[0.01em]">No upcoming election</div>
-      <div className="text-[13.5px] text-app-text-secondary leading-5 mt-1 max-w-[280px]">There&apos;s nothing on your ballot right now. We&apos;ll surface your polling place and ballot here as soon as a date is set.</div>
+      <div className="text-[13.5px] text-app-text-secondary leading-5 mt-1 max-w-[280px]">There&apos;s nothing on your ballot right now. We&apos;ll show the date here as soon as one is set.</div>
     </div>
   );
 }

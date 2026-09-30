@@ -203,7 +203,7 @@ private struct NoElectionCard: View {
                 Text("No upcoming election")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("We'll surface the date, your polling place, and a plain-language ballot preview when one is set.")
+                Text("We'll show the date here as soon as one is set.")
                     .font(.system(size: 13.5))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)

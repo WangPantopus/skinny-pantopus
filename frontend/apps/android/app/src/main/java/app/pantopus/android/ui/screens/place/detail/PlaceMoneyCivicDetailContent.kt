@@ -593,7 +593,7 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("No upcoming election", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
                     Text(
-                        "We'll surface the date, your polling place, and a plain-language ballot preview when one is set.",
+                        "We'll show the date here as soon as one is set.",
                         fontSize = 13.5.sp,
                         lineHeight = 18.sp,
                         color = PantopusColors.appTextSecondary,
