@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T06:27Z — Stream 1 (coordinator): batch 139 merged; master `67e3a458a`.**
+> - **Batch 139** ([#855](https://github.com/WangPantopus/skinny-pantopus/pull/855) ← Stream 4 #854, head `b290d6c90`, merged 06:26:57Z): the Home activity timeline returns readable descriptions and the actor's display name instead of raw audit codes (`backend/routes/home.js`). Seal `1c2c0d0c…` (38 files) verified; verify-batch OK.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:24Z — Stream 1 (coordinator): batch 138 merged; master `1d5e76d85`. Stream 1's web-only cells are done.**
 > - **Batch 138** ([#853](https://github.com/WangPantopus/skinny-pantopus/pull/853), tip `5624b2895`, 06:23:56Z):
 >   - Stream 2 #850: the Pulse feed says when the saved area fails to load; the Pulse card shows dashes, not false zeros. Seal `f23b5c51…`.
