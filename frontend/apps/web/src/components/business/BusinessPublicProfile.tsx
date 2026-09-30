@@ -195,6 +195,21 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
       setOpeningChat(false);
     }
   };
+  // The page's contact form: the typed message is sent into the same inquiry chat, which then opens.
+  const handleSendContactMessage = async (text: string): Promise<boolean> => {
+    if (!currentUser) { router.push('/login'); return false; }
+    if (!business?.id) return false;
+    try {
+      const resp = await api.businesses.startBusinessInquiry(String(business.id), `Inquiry for @${username}`) as Record<string, any>;
+      if (!resp?.roomId) throw new Error('Chat room was not created');
+      await api.chat.sendMessage({ roomId: resp.roomId, messageText: text, messageType: 'text' });
+      router.push(`/app/chat/${resp.roomId}`);
+      return true;
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send message');
+      return false;
+    }
+  };
 
   // Build tabs
   const tabs: { key: string; label: string }[] = [
@@ -237,6 +252,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
     business,
     profile,
     onContact: handleOpenInquiry,
+    onSendMessage: handleSendContactMessage,
     canContact: !!currentUser,
   };
 
