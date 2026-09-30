@@ -83,6 +83,14 @@
   --accent-emerald-fill-hover: 6 95 70;
   --accent-emerald-text: 4 120 87;
   --accent-emerald-text-hover: 6 95 70;
+  /* `bg-primary-50` / `-100` and `bg-emerald-50` / `-100`: the palette in
+     light mode. In dark mode they deepen (below), because the accent and
+     app text on them flips light there: at the light tints the flipped
+     text read 1.3 to 1.6:1 (the Home header's Owner chip 1.34:1). */
+  --accent-primary-tint: 240 249 255;
+  --accent-primary-tint-strong: 224 242 254;
+  --accent-emerald-tint: 236 253 245;
+  --accent-emerald-tint-strong: 209 250 229;
 
   /* ── Semantic ────────────────────────────────────────────── */
   /* Same two roles as the identity tokens below. The base token is the
@@ -207,6 +215,14 @@
     --accent-primary-text-strong: 186 230 253;
     --accent-emerald-text: 52 211 153;
     --accent-emerald-text-hover: 110 231 183;
+    /* Tints deepen, like the semantic and identity tints below, so the
+       flipped text on them clears AA: accent text 6.26+ / 6.98+, and
+       app text, secondary and muted 10.8+ / 5.2+ / 4.59+. The -50 tints
+       match the info and success tints. */
+    --accent-primary-tint: 18 37 64;
+    --accent-primary-tint-strong: 22 48 75;
+    --accent-emerald-tint: 11 43 33;
+    --accent-emerald-tint-strong: 16 53 42;
     /* Identity tints: deep versions of the pillar colours so text tokens
        that flip (text-app-text etc.) stay readable on top. Matches the
        iOS asset catalogue's dark appearance for Identity/HomeBg. */
