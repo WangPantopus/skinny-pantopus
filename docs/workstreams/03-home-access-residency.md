@@ -5,7 +5,8 @@
 >   - the 40-row inventory, 20 rows each;
 >   - the 24 S2-xx UX items;
 >   - the open work and leads;
->   - the 10 decisions waiting on the user.
+>   - the 10 decisions waiting on the user;
+>   - and, added 2026-09-30T04:36:26Z, the cross-cutting rows the hub's records give the former Stream 2: U01 is Stream 3's alone, and each stream owns its own screens' cells of U02–U05 (see "Cross-cutting rows" below).
 > - The former Stream 2 file is now frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split). In it, "Stream 2" / "S2" means the stream before the split.
 > - The former **Stream 3** (Accounts and Social) is now **Stream 5** ([`05-accounts-social.md`](05-accounts-social.md)). In records dated before 2026-09-30, "Stream 3" / "S3" means Stream 5, not the new Stream 3.
 > - Names that contain `stream2` or `S2-` keep them so nothing breaks: the runtime kit, stage folders, audit bundles, existing branches and UX IDs.
@@ -23,7 +24,8 @@
 - residency claims and reviews, leaving and rejoining, ownership claims and transfer, landlord and lease approvals, and residency letters and passes (R01–R06);
 - Home settings (D05), privacy (D06), and members, permissions, security and Lockdown (D07);
 - the guest-pass lifecycle and sharing (D08, M02);
-- deleting a home (D10).
+- deleting a home (D10);
+- Home and unit identity on finished screens (U01), and this stream's cells of U02–U05.
 
 **State at the split.**
 - Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. The most recent in this area:
@@ -33,7 +35,8 @@
   - #835: members opening a page they can't see get a permission sentence.
 
   Evidence and seals are in the history file.
-- **Strict progress for this stream:** 8 of 20 rows closed (H01–H06, R01–R02), 12 partial, 0 cut.
+- **Refreshed 2026-09-30T04:25:38Z:** the split's docs PRs #843 and #844 merged at 04:24:12Z (master `15711c8dc`), so Stream 3 has **no open PRs**. The user's own #430 is not a stream PR: its Home-editor part was repaired by #626, and the coordinator leaves it untouched.
+- **Strict progress for this stream:** 8 of 20 rows closed (H01–H06, R01–R02), 12 partial, 0 cut. U01 and this stream's U02–U05 cells have their own section and are not in these counts, so the former Stream 2's 12-of-36 figure keeps its meaning.
 - Nothing of Stream 3's is open in the database.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
@@ -60,7 +63,15 @@
    - D10: linked-resource cleanup (Crew payments belong to Stream 1);
    - R04: the remaining transfer, device-auth and recovery boundaries (the dispute flow waits on decision 3);
    - R05: attachment lifetimes.
-8. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
+8. **U01, Home and unit identity** (all of it is Stream 3's). Reproduce each item on finished screens, not loading placeholders, on web, iOS and Android; any of them may already be fixed:
+   - personal residency cards that can't be told apart;
+   - the narrow-screen member label/badge overlapping the floating chat button;
+   - the verified-member screen's separate unverified-property label (the "property-verification wording");
+   - long native activity identities.
+
+   Sources: `docs/REMAINING_WORK_2026-09-11.md` §10 and `docs/home-dashboard-current-summary-2026-09-11.md`. Keep the designs; propose any layout change.
+9. **U02–U05, this stream's cells.** Start with the two recorded VoiceOver gaps: the iOS residency review sheet's Close/Reload and the Members top bar are each one merged accessibility group. Then do native large text, screen readers and dark mode, and the U03 and U04 cases no row covers yet. Itemize the cells in this file the way Stream 1 itemized its own (the user approved Stream 1's lists on 2026-09-29), using the case names in `checklists/data.py` (A1–A5; E1–E6 and R1–R2; L1–L4). Don't write to Stream 1's generator. U05 starts when the launch flags are on master.
+10. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
 
 **Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
@@ -119,6 +130,21 @@ State at the split, copied verbatim from the former file's "September 22 exact �
 | S2-17 | Home notification links land one level up or on the wrong tab | fixed by #453 |
 | S2-23 | Waiting room "Request help" only flashes an email address | fixed by #380 (already on master at the 2026-09-26 check) |
 
+## Cross-cutting rows (`REMAINING_WORK` §10): U01, and Stream 3's cells of U02–U05
+
+Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, not in the former Stream 2's file, so the split's first proof (40 rows and 24 S2-xx items) didn't cover them.
+- Stream 1's records give U01's "Home/unit identity, floating chat and verification wording" to the former Stream 2 (coordination commit `7c88a08c7`, its U reconciliation).
+- Stream 1's U02–U04 checklists (`checklists/`) cover only Streams 1 and 2's screens. For U05, each stream inventories its own screens.
+- `check-stream2-split.py` now also proves that U01 has one owner and that both files carry U02–U05.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| U01 | **Partial/open — Stream 3's alone.** Accepted: the indistinguishable unit cards (API, browser, iPhone and Android; `docs/home-list-unit-identity-2026-09-11.md`) and complete recipient identities on both native Pending invitation lists. In Stream 1's U reconciliation the former Stream 2 confirmed no current U01 work; nothing has been rechecked since. | Personal residency cards that can't be told apart; the narrow-screen member label/badge and floating-chat overlap; the verified-member screen's separate unverified-property label; long native activity identities. Finished screens on all three clients, with current rendered evidence. |
+| U02 | **Partial/open — web evidence; not itemized.** The former Stream 2 ran real-Chrome sweeps of its 37 retained web routes: dark-mode contrast ([#809](https://github.com/WangPantopus/skinny-pantopus/pull/809), `20260929-stream2-web-dark-link-contrast-r1`, `db25f76e…`: 12 targeted texts now pass, low-contrast styles 112 → 95), accessible names ([#819](https://github.com/WangPantopus/skinny-pantopus/pull/819), `20260929-stream2-web-a11y-names-r1`, `549cdcdb…`: 19 unnamed controls → 0) and a 390×844 layout sweep for owner and member (same seal: no horizontal overflow). Stream 3's own dark-mode repairs: [#801](https://github.com/WangPantopus/skinny-pantopus/pull/801) residency and ownership-evidence choices (`c02dbcea…`), [#807](https://github.com/WangPantopus/skinny-pantopus/pull/807) the Home editor's Visibility choice (`3d351f7d…`) and [#822](https://github.com/WangPantopus/skinny-pantopus/pull/822) Members and Owners role and tier accents (`6e8b95ee…`). | Native large text (Dynamic Type, font 2.0), VoiceOver and TalkBack, native dark mode and keyboard focus on this stream's screens. Recorded, not fixed: the iOS residency review sheet's Close/Reload and the Members top bar are each one merged VoiceOver group. The remaining low-contrast styles are the brand-colour decision Stream 1 carries. |
+| U03 | **Partial/open — recorded per row; not itemized.** Error, retry, lost-reply, duplicate and cold-restart cases are accepted inside R03, R06, D05, D07, D08 and M02 (their bundles are in the checklist above). | Loading, empty, partial, unavailable, offline, slow, cancel, back, double-tap and process-death cases on this stream's screens where no row covers them yet. |
+| U04 | **Partial/open — recorded per row; not itemized.** The bounded Home account-switch and session lifetimes that the U04 row already accepts; R06's restart request identity is sealed on Android (`20260930-stream2-r06-request-identity-r1`, `8365b5ca…`). | Long-lived sessions, background and foreground, and concurrent device or account changes beyond the bounded Home tests; the R06 iOS restart (open work item 1). |
+| U05 | **Not started — waits for the launch flags on master.** | This stream's screen and action inventory in the final release build on web, iOS and Android, for the release manifest Stream 1 assembles. |
+
 ## Runtime, devices and kit (shared with Stream 4; lease label `stream3-home:`)
 
 - **Kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/` ([README](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md)). Tools are in `tools/`, stages in `runtime/`. The audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Names containing `stream2` keep them.
@@ -131,6 +157,8 @@ State at the split, copied verbatim from the former file's "September 22 exact �
   - Take it with `zsh tools/runtime-lease.sh acquire '<label>: <purpose>'` before creating or cleaning fixtures, setting fault rules, restarting the backend, switching that worktree's branch, taking a whole-DB baseline or driving the devices below.
   - Release it with `zsh tools/runtime-lease.sh release '<label>'`, and check the holder with `status`.
   - A baseline is valid only inside the lease it was taken in.
+- **Code and the shared worktree:** write code in your own session worktree, on a branch from current master. Check your pushed branch out in the shared worktree above, or edit it, only while holding the runtime lease, and keep its uncommitted `.claude/launch.json`.
+- **Labels:** `stream2:` and `claude/stream2-…` now belong to the new Stream 2 (Posts, Hub and payments). The kit's `stream2` path names are history only.
 - **Devices,** only while holding the runtime lease:
   - emulator-5556 (AVD `Pantopus_Home_Recurrence_Acceptance`) and iOS sim 6F914A30, both through `/private/tmp/pantopus-tools/device-slot.sh`;
   - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
@@ -162,6 +190,10 @@ State at the split, copied verbatim from the former file's "September 22 exact �
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T04:36:26Z — U01 and this stream's U02–U05 cells added (split completeness).** These cross-cutting rows sat in the former Stream 1's inventory, and Stream 1's records give U01 to the former Stream 2, so the first split proof missed them. U01 is Stream 3's alone (the source report places its "property-verification wording" on the verified-member screen). Each stream now carries its own U02–U05 cells, citing the recorded web sweeps and row evidence. `check-stream2-split.py` proves it. Master is `d1ba0b28d`: #846 split the former Stream 1 into Streams 1 and 2, with no change to this stream's rows. Docker still isn't answering, and nothing is held.
+
+- **2026-09-30T04:25:38Z — the split's docs PRs are merged; prompts refreshed.** #843 and #844 merged at 04:24:12Z, so master `15711c8dc` carries the split. No Stream 3 PR is open. The resume prompt now names the new Stream 2's `stream2:` label and the shared-worktree rule. The runtime-lease lock moved to `/private/tmp/pantopus-stream3-stream4-runtime-lease`.
 
 - **2026-09-30T04:16:32Z — Stream 3 created by splitting the former Stream 2** (user direction).
   - Rows: H01, H02, H03, H04, H05, H06, H07, H08, R01, R02, R03, R04, R05, R06, D05, D06, D07, D08, D10, M02.
