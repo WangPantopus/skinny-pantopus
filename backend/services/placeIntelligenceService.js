@@ -364,10 +364,16 @@ function buildTodayEnvelopes({ weather, aqi, alerts, asOf = null, hub = null, ho
 // The hub payload is fetched ONCE in composeHomeIntelligence and passed
 // down (it used to be re-fetched per composer; the memo never absorbed it).
 async function composeToday(userId, home, hub) {
+  // An alerts list is only an all-clear when the alerts fetch worked. On a failed fetch the orchestrator still returns
+  // `alerts: []` (with 'alerts' in meta.partial_failures), and its empty result (no location, or an unexpected error)
+  // never asked a provider; both read as "No active alerts" before.
+  const alertsChecked = Boolean(hub)
+    && !(hub.location && hub.location.source === 'none')
+    && !((hub.meta && hub.meta.partial_failures) || []).includes('alerts');
   return buildTodayEnvelopes({
     weather: hub && hub.weather ? hub.weather : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
-    alerts: hub ? (hub.alerts || []) : null,
+    alerts: alertsChecked ? (hub.alerts || []) : null,
     asOf: (hub && hub.fetched_at) || null,
     hub,
     home,

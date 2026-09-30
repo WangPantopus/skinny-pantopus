@@ -216,12 +216,23 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
         let tab = MaintenanceTab(rawValue: selectedTab) ?? .scheduled
         let filtered = tasks.filter { passes($0, tab: tab, now: nowDate) }
         if filtered.isEmpty {
+            // "No maintenance logged yet" only when the whole log is empty; an empty tab next to logged
+            // entries says which tab is empty, so the entries under the other tab aren't hidden behind it.
+            let logEmpty = !tasks.contains { passes($0, tab: .all, now: nowDate) }
+            let (headline, subcopy): (String, String) = if logEmpty {
+                ("No maintenance logged yet",
+                 "Track HVAC tune-ups, gutter cleans, filter swaps and " +
+                     "inspections. Build a service history that protects warranties and resale value.")
+            } else if tab == .completed {
+                ("Nothing completed yet", "Scheduled maintenance moves here once it's done.")
+            } else {
+                ("Nothing scheduled", "Your logged maintenance is under Completed.")
+            }
             state = .empty(
                 ListOfRowsState.EmptyContent(
                     icon: .hammer,
-                    headline: "No maintenance logged yet",
-                    subcopy: "Track HVAC tune-ups, gutter cleans, filter swaps and " +
-                        "inspections. Build a service history that protects warranties and resale value.",
+                    headline: headline,
+                    subcopy: subcopy,
                     ctaTitle: "Log maintenance"
                 ) { [onAddTask] in onAddTask() }
             )

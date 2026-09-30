@@ -1972,6 +1972,18 @@ private fun NavHostController.navigateToRootTab(
     }
 }
 
+/** A verify-sheet door opens its real flow (Wedge v2 D3); the Place dashboard and the Place detail pages share it. */
+private fun NavHostController.openPlaceVerify(
+    method: PlaceVerifyMethod,
+    homeId: String,
+) {
+    when (method) {
+        PlaceVerifyMethod.DOCUMENT -> navigate(ChildRoutes.verifyResidency(homeId))
+        PlaceVerifyMethod.MAIL -> navigate(ChildRoutes.postcardVerification(homeId))
+        PlaceVerifyMethod.LANDLORD -> navigate(ChildRoutes.verifyLandlord(homeId))
+    }
+}
+
 /**
  * Re-tapping the lit bar tab returns to that tab's first screen, as tab bars
  * usually do. Place's first screen is the Place dashboard when the W3
@@ -2841,13 +2853,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onSwitchHome = { id -> navController.navigate(ChildRoutes.placeDashboard(id)) },
                         onAddPlace = { navController.navigate(ChildRoutes.ADD_HOME) },
                         // Wedge v2 D3: each door is a real flow, never a status mock-up.
-                        onStartVerify = { method, _ ->
-                            when (method) {
-                                PlaceVerifyMethod.DOCUMENT -> navController.navigate(ChildRoutes.verifyResidency(homeId))
-                                PlaceVerifyMethod.MAIL -> navController.navigate(ChildRoutes.postcardVerification(homeId))
-                                PlaceVerifyMethod.LANDLORD -> navController.navigate(ChildRoutes.verifyLandlord(homeId))
-                            }
-                        },
+                        onStartVerify = { method, _ -> navController.openPlaceVerify(method, homeId) },
                         onOpenPulse = { navController.navigate(ChildRoutes.placePulse(homeId)) },
                         onComposeMessage = { address ->
                             navController.navigate(ChildRoutes.neighborCompose(homeId, address))
@@ -2872,8 +2878,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(PLACE_DETAIL_HOME_ID_KEY) { type = NavType.StringType },
                             navArgument(PLACE_DETAIL_SLUG_KEY) { type = NavType.StringType },
                         ),
-                ) {
-                    PlaceDetailScreen(onBack = { navController.popBackStack() })
+                ) { entry ->
+                    val homeId = entry.arguments?.getString(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
+                    PlaceDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
+                        onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
+                    )
                 }
                 composable(
                     route = ChildRoutes.PLACE_PULSE,

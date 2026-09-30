@@ -86,7 +86,7 @@ fun PlaceBlockFoundersSection(
                     "verified homes keep their number forever.",
             cta = "Verify address",
             icon = PantopusIcon.Ribbon,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
         return
     }

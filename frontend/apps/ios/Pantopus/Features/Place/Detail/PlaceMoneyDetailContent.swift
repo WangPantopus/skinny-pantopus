@@ -103,7 +103,7 @@ struct PlaceMoneyDetailContent: View {
                     title: "Rate watch",
                     reason: "Verify your address to watch the market against the month your loan was recorded — only the proven resident can watch a home.",
                     cta: "Verify address",
-                    onTap: nil
+                    onTap: vm.verifyAction
                 )
             }
             PlaceSourceNote(name: "Freddie Mac Primary Mortgage Market Survey", asOf: "weekly")

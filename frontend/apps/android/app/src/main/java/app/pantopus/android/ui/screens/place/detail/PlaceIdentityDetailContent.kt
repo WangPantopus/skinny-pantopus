@@ -126,7 +126,7 @@ private fun ResidencySections(
             reason = "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
             cta = "Verify address",
             icon = PantopusIcon.FileText,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
     }
 
@@ -142,7 +142,7 @@ private fun ResidencySections(
                     "county — behind a live-checked link.",
             cta = "Verify address",
             icon = PantopusIcon.IdCard,
-            onTap = null,
+            onTap = LocalPlaceDetailVerify.current,
         )
     }
 }

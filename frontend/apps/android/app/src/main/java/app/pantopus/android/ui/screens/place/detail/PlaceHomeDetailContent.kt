@@ -35,7 +35,6 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
-import app.pantopus.android.ui.screens.place.components.PlaceSparkline
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -207,13 +206,7 @@ private fun ValueCard(data: PlaceYourHomeData) {
                         Text("$lo – $hi", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
                     }
                 }
-                PlaceSparkline()
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                PlaceDot(PantopusColors.home, 8.dp)
-                Text("Your home", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
-                PlaceDot(PantopusColors.appBorder, 8.dp)
-                Text("Block median", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
+                // No trend line or block comparison: there is no value history to chart.
             }
         }
     }
