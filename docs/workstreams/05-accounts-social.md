@@ -9,6 +9,19 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1043 (Business Profiles names each business) open, CI running; #1042 awaiting review, 2026-09-30T17:49:32Z
+
+- **#1043** ([PR](https://github.com/WangPantopus/skinny-pantopus/pull/1043)), head `0a67f06d9`, a follow-up to #1037.
+  - After #1037 every new owner's seat is named "Owner", so Profiles & Privacy → Business Profiles (and the iOS Professional card) read "Owner · Owner" with no business name.
+  - The identity center now names each row by its business, and the seat name stays on the Team tab.
+  - Only `identityCenter.js` changes; the shared seat serializer used for feed and post authors is untouched.
+- **Evidence** (bundle `20260930-stream5-business-profiles-names-r1`, not yet sealed):
+  - before: row `Owner`, web "Owner · Owner";
+  - after: `S5 Profiles fixture`, web "S5 Profiles fixture · Owner".
+  - The fixture was removed at 17:47:54Z. Identity suites pass 37/37.
+- **Public crew badge:** no finding to repair. No client reads `verifiedResident` from `GET /api/businesses/public/:username`; web, iOS and Android read only business id, hours and catalog. The broken county/tier block is dead. If a sole-proprietor badge is ever built, follow Stream 1's privacy call: a server-computed boolean, never a place.
+- **Runtime:** API 18134 on `0a67f06d9` (17:47:29Z). The web tree is on `5e476f975` (#1042). Both return to master after the merges.
+
 ## LIVE — N04 report queue #1042 green, sealed (d641c192) and handed to Stream 1; #1037 merged, 2026-09-30T17:43:48Z
 
 - **#1037 merged** in batch 201 (PR #1039, master `ed08ad438`). Stream 1 verified the seal and the seat grants (service_role only). Batch 202 then moved master to `416898752`.
