@@ -158,9 +158,15 @@ END $foreign$;
 RESET ROLE;
 SET LOCAL ROLE anon;
 SELECT set_config('request.jwt.claim.sub','',true);
-DO $$ BEGIN
-  IF EXISTS (SELECT FROM public."HomeBill") OR EXISTS (SELECT FROM public."HomeSubscription")
-    OR EXISTS (SELECT FROM public."HomeBillSplit") THEN RAISE EXCEPTION 'Anonymous finance read allowed'; END IF;
+-- Since 20260930181000 anon holds no privilege on public tables, so the grant
+-- refuses the read before row-level security is consulted.
+DO $$ DECLARE v_relation text; BEGIN
+  FOREACH v_relation IN ARRAY ARRAY['HomeBill','HomeSubscription','HomeBillSplit'] LOOP
+    BEGIN
+      EXECUTE format('SELECT 1 FROM public.%I LIMIT 1',v_relation);
+      RAISE EXCEPTION 'Anonymous % read allowed',v_relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  END LOOP;
 END $$;
 RESET ROLE;
 DO $preservation$
@@ -174,6 +180,9 @@ BEGIN
     IF has_table_privilege('authenticated',format('public.%I',v_relation),'TRUNCATE')
       OR has_table_privilege('anon',format('public.%I',v_relation),'TRUNCATE') THEN
       RAISE EXCEPTION 'Client retained TRUNCATE privilege outside finance RLS';
+    END IF;
+    IF has_any_column_privilege('anon',format('public.%I',v_relation),'SELECT') THEN
+      RAISE EXCEPTION 'Anonymous role regained a % read grant',v_relation;
     END IF;
     IF has_any_column_privilege('authenticated',format('public.%I',v_relation),'INSERT,UPDATE')
       OR has_any_column_privilege('anon',format('public.%I',v_relation),'INSERT,UPDATE')

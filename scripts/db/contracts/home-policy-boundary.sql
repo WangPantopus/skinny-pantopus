@@ -31,10 +31,13 @@ VALUES ('admin', 'home.edit', true)
 ON CONFLICT (role_base, permission) DO UPDATE SET allowed = true;
 
 SET LOCAL ROLE anon;
+-- Since 20260930181000 anon holds no privilege on public tables, so the grant
+-- refuses the read before row-level security is consulted.
 DO $$ BEGIN
-  IF EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
+  BEGIN
+    PERFORM 1 FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
     RAISE EXCEPTION 'Anonymous role can read a private home';
-  END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 
