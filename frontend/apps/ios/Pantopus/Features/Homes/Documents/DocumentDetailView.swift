@@ -708,8 +708,10 @@ private struct MetadataGrid: View {
     private var uploadedByLabel: String {
         // A member who deleted their account leaves the document with the household.
         guard dto.createdBy != nil else { return "Former member" }
+        // The server's display name; never the raw user id.
+        if let name = dto.uploadedByName, !name.isEmpty { return name }
         if let uploader = dto.details["uploaded_by"], !uploader.isEmpty { return uploader }
-        return dto.createdBy ?? "—"
+        return "—"
     }
 
     private var uploadedLabel: String {

@@ -3369,7 +3369,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
 
     const query = supabaseAdmin
       .from('HomeDocument')
-      .select('*')
+      .select('*, uploader:created_by(id, username, name, first_name, middle_name, last_name)')
       .eq('home_id', homeId)
       .in('visibility', visibility.allowed)
       .order('created_at', { ascending: false });
@@ -3380,7 +3380,14 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    res.json({ documents: (data || []).map(serializeHomeDocument) });
+    // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
+    // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
+    res.json({
+      documents: (data || []).map(({ uploader, ...document }) => ({
+        ...serializeHomeDocument(document),
+        uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,
+      })),
+    });
   } catch (err) {
     logger.error('Documents fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch documents' });

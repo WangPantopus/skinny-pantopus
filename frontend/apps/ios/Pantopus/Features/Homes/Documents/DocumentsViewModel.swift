@@ -403,15 +403,16 @@ final class DocumentsViewModel: ListOfRowsDataSource {
     }
 
     private static func formatUploadedLabel(dto: HomeDocumentDTO) -> String? {
+        let uploader = [dto.uploadedByName, dto.details["uploaded_by"]].compactMap { $0 }.first { !$0.isEmpty }
         guard let iso = dto.createdAt, let date = parseDate(iso) else {
-            return dto.details["uploaded_by"].map { "by \($0)" }
+            return uploader.map { "by \($0)" }
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "MMM d"
         let day = formatter.string(from: date)
-        if let uploader = dto.details["uploaded_by"], !uploader.isEmpty {
+        if let uploader {
             return "\(day) · by \(uploader)"
         }
         return day
