@@ -47,6 +47,15 @@
 
 
 
+> **UPDATE 2026-09-30T12:17Z — Stream 1 (coordinator): batch 180 merged; master `81cf2e959`.**
+> - **Batch 180** ([#975](https://github.com/WangPantopus/skinny-pantopus/pull/975), 12:16:11Z), Stream 3:
+>   - #970: add-home address checks stop revealing private households; `HOME_FOUND_PRIVATE`, fail-closed.
+>   - #971: the member join policy is hidden natively.
+>   - #972: native audit logs use plain-words descriptions.
+>   - #973: iOS row inline buttons are reachable with VoiceOver.
+>   - All seals verified; 22 files blob-equal.
+> - **Held for the decision-9 batch:** #974 (Stream 3), #968 (Stream 4), and Stream 5's route PR once its combined E2E is sealed.
+
 > **UPDATE 2026-09-30T12:05Z — Stream 1 (coordinator): batches 177–179 merged; master `7709e55fb`. Master's CI reds are fixed.**
 > - **Batch 177** (#963): **Stream 3 #962**. Home Settings has no dead notification switches; the Settings tab shows native's "not live yet" caption.
 > - **Batch 178** (#965): **Stream 5 #964**. Empty direct and parentless group chat rooms are deleted once no member is left. Migration `161000`.
