@@ -16,6 +16,11 @@ const CATEGORY_META: Record<string, { icon: typeof Wifi; color: string; label: s
   other:   { icon: KeyRound, color: '#6b7280', label: 'Other' },
 };
 
+// The API sends each code's access_type; door and gate codes share one group.
+const CATEGORY_OF_TYPE: Record<string, string> = {
+  wifi: 'wifi', alarm: 'alarm', door_code: 'gate', gate_code: 'gate', lockbox: 'lockbox', garage: 'garage',
+};
+
 function AccessContent() {
   const router = useRouter();
   const { id: homeId } = useParams<{ id: string }>();
@@ -69,7 +74,7 @@ function AccessContent() {
   };
 
   const grouped = secrets.reduce<Record<string, any[]>>((acc, s) => {
-    const cat = s.category || 'other';
+    const cat = CATEGORY_OF_TYPE[s.access_type] || 'other';
     (acc[cat] = acc[cat] || []).push(s);
     return acc;
   }, {});
