@@ -325,20 +325,50 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         defer { auth.accountDeletionInFlight = false }
         do {
             _ = try await api.request(AuthMethodsEndpoints.deleteAccount(stepUpToken: stepUpToken))
-            isDeleteSheetPresented = false
-            // An explicit sign-out that also forgets the deleted account's
-            // remembered "Welcome back" hint.
-            if let deletedUserID {
-                await auth.removeRememberedAccount(userId: deletedUserID)
-            } else {
-                await auth.signOut()
-            }
-            appLock.clearTransientState()
         } catch {
-            deleteAccountError = Self.message(
-                for: error,
-                fallback: "Failed to delete account. Please try again."
-            )
+            if await signedOutByDeletion(despite: error) {
+                // No answer confirms the deletion finished, and it can still
+                // fail after the sign-out: forget the account on this device
+                // and let the login screen say the deletion is unconfirmed.
+                isDeleteSheetPresented = false
+                if let deletedUserID {
+                    await auth.removeRememberedAccount(userId: deletedUserID)
+                } else {
+                    await auth.signOut()
+                }
+                auth.setSessionEndReason(.accountDeletionUnconfirmed)
+                appLock.clearTransientState()
+            } else {
+                deleteAccountError = Self.message(
+                    for: error,
+                    fallback: "Failed to delete account. Please try again."
+                )
+            }
+            return
+        }
+        isDeleteSheetPresented = false
+        // An explicit sign-out that also forgets the deleted account's
+        // remembered "Welcome back" hint.
+        if let deletedUserID {
+            await auth.removeRememberedAccount(userId: deletedUserID)
+        } else {
+            await auth.signOut()
+        }
+        appLock.clearTransientState()
+    }
+
+    /// Whether the server has already signed this account out although no
+    /// success came back: the DELETE's answer was lost (timeout, dropped
+    /// connection) or a retry was refused as signed out. The server revokes
+    /// the account's sessions before it deletes it, so a rejected refresh
+    /// means the deletion started; a working session means it never did.
+    private func signedOutByDeletion(despite error: any Error) async -> Bool {
+        guard let apiError = error as? APIError else { return false }
+        switch apiError {
+        case .transport, .unauthorized:
+            return await auth.refreshIfPossible() == .authRejected
+        default:
+            return false
         }
     }
 
