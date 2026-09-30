@@ -109,10 +109,18 @@ DO $$ DECLARE p public."Payment"; r uuid:='aaf10000-0000-4000-8000-000000000405'
  OR (x->'payment'->>'refunded_amount')::int<>0 THEN RAISE EXCEPTION 'Hold release reported money returned'; END IF;
 END $$;
 RESET ROLE;
+-- The API returns the payer's refund receipts as service_role: exactly the four rows the refund
+-- read policies would admit for the payer.
+DO $$ BEGIN
+ IF (SELECT count(*) FROM public."Refund" r WHERE r.initiated_by='aaf10000-0000-4000-8000-000000000001'
+   OR r.payment_id IN (SELECT id FROM public."Payment" WHERE payer_id='aaf10000-0000-4000-8000-000000000001'
+     OR payee_id='aaf10000-0000-4000-8000-000000000001'))<>4 THEN RAISE EXCEPTION 'Payer receipt records lost'; END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aaf10000-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public."Refund")<>4 THEN RAISE EXCEPTION 'Payer receipt reads lost'; END IF;
+ -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+ BEGIN PERFORM 1 FROM public."Refund"; RAISE EXCEPTION 'Payer read refund receipts directly'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN INSERT INTO public."Refund"(payment_id,amount,initiated_by,refund_status) VALUES
  ('aaf10000-0000-4000-8000-000000000301',100,'aaf10000-0000-4000-8000-000000000001','succeeded');
  RAISE EXCEPTION 'Client forged refund'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

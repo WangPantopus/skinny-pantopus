@@ -102,11 +102,11 @@ describe('Canonical baseline through real SDK, PostgREST JWT roles and Following
   it('keeps raw Beacon rows hidden from browser roles, including the owner', async () => {
     const { data, error } = await service.from('Post').select('id').eq('user_id', owner);
     assert.ifError(error); assert.equal(data.length, 5);
-    // anon holds no privilege on public tables since 20260930181000, so its read is refused outright.
-    const [anonymous, signedIn] = browsers;
-    assert.equal((await anonymous.from('Post').select('id,content').eq('user_id', owner)).error?.code, '42501');
-    const result = await signedIn.from('Post').select('id,content').eq('user_id', owner);
-    assert.ifError(result.error); assert.deepEqual(result.data.map(row => row.id), [ids.personal]);
+    // Neither browser role holds a privilege on public tables (anon since 20260930181000,
+    // authenticated since 20260930182000), so both reads are refused outright.
+    for (const browser of browsers) {
+      assert.equal((await browser.from('Post').select('id,content').eq('user_id', owner)).error?.code, '42501');
+    }
   });
   it('denies direct owner publication and conversion into a Beacon', async () => {
     const browser = browsers[1];

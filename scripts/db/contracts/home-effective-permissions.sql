@@ -15,6 +15,13 @@ DO $$ BEGIN
     OR NOT has_function_privilege('service_role', 'public.home_effective_access(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Effective resolver must remain service-only';
   END IF;
+  -- The read policies (defense in depth since 20260930182000) and the checks below call these
+  -- SECURITY DEFINER helpers as the signed-in role, so they must stay executable by it.
+  IF NOT has_function_privilege('authenticated','public.home_is_active_member(uuid,uuid)','EXECUTE')
+    OR NOT has_function_privilege('authenticated','public.home_has_permission(uuid,public.home_permission,uuid)','EXECUTE')
+    OR NOT has_function_privilege('authenticated','public.home_can_see_visibility(uuid,public.home_record_visibility,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'Home read-policy helpers must stay executable by authenticated';
+  END IF;
 END $$;
 
 INSERT INTO auth.users (id, email)
@@ -211,8 +218,12 @@ BEGIN
   FOREACH relation IN ARRAY ARRAY['HomeBill','HomeSubscription'] LOOP
     existing_id := CASE relation WHEN 'HomeBill' THEN 'ddb00000-0000-4000-8000-000000000301'::uuid
       ELSE 'ddb00000-0000-4000-8000-000000000302'::uuid END;
-    EXECUTE format('SELECT count(*) FROM public.%I WHERE id=$1',relation) INTO affected USING existing_id;
-    IF affected <> 1 THEN RAISE EXCEPTION 'Finance viewer lost the existing % read',relation; END IF;
+    -- Since 20260930182000 clients hold no read grant either, so even the viewer's read is refused by
+    -- the grant; the read policy's predicate (finance.view, asserted above) still admits the viewer.
+    BEGIN
+      EXECUTE format('SELECT count(*) FROM public.%I WHERE id=$1',relation) INTO affected USING existing_id;
+      RAISE EXCEPTION 'Finance viewer read % directly',relation;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
     BEGIN
       IF relation = 'HomeBill' THEN
         INSERT INTO public."HomeBill" (home_id,bill_type,amount,created_by) VALUES (h,'other',20,u);
@@ -313,8 +324,15 @@ BEGIN
   IF NOT public.home_is_active_member(h) OR public.home_my_role(h) <> 'restricted_member'
     OR NOT public.is_home_member(h) OR public.has_home_permission(h,'manage_tasks')
     OR public.home_member_can(h,'view_sensitive') THEN RAISE EXCEPTION 'Own-safe legacy wrappers disagree'; END IF;
-  IF (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h) <> 2 THEN
-    RAISE EXCEPTION 'Real child document RLS visibility or recursion boundary failed: % rows; permissions %', (SELECT count(*) FROM public."HomeDocument" WHERE home_id=h), public.home_get_user_permissions(h);
+  -- Since 20260930182000 the grant refuses direct reads; the read policy stays as defense in depth,
+  -- and its predicate over the four fixture documents' visibilities still admits exactly two.
+  BEGIN
+    PERFORM 1 FROM public."HomeDocument" WHERE home_id=h;
+    RAISE EXCEPTION 'Child read Home documents directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  IF (SELECT count(*) FROM unnest(ARRAY['members','managers','sensitive','public']::public.home_record_visibility[]) v
+      WHERE public.home_has_permission(h,'docs.view') AND public.home_can_see_visibility(h,v)) <> 2 THEN
+    RAISE EXCEPTION 'Child document visibility under the read policy''s predicate changed; permissions %', public.home_get_user_permissions(h);
   END IF;
   -- Since #992 clients reach HomeDocument only through the API, so the grant refuses this, not RLS.
   BEGIN
@@ -338,9 +356,13 @@ SELECT set_config('request.jwt.claim.sub','ddb00000-0000-4000-8000-000000000005'
 DO $$ BEGIN
   IF public.home_my_role('ddb00000-0000-4000-8000-000000000101') IS NOT NULL
     OR public.home_can_see_visibility('ddb00000-0000-4000-8000-000000000101','public')
-    OR EXISTS (SELECT FROM public."HomeDocument" WHERE home_id='ddb00000-0000-4000-8000-000000000101') THEN
+    OR public.home_has_permission('ddb00000-0000-4000-8000-000000000101','docs.view') THEN
     RAISE EXCEPTION 'Outsider gained default guest role or public Home document visibility';
   END IF;
+  BEGIN
+    PERFORM 1 FROM public."HomeDocument" WHERE home_id='ddb00000-0000-4000-8000-000000000101';
+    RAISE EXCEPTION 'Outsider read Home documents directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 SET LOCAL ROLE anon;
@@ -359,4 +381,4 @@ DO $$ BEGIN
   END IF;
 END $$;
 ROLLBACK;
-SELECT 'PASS: exact defaults, current shared residency, age/owner/override ceilings, own-safe wrappers, finance reads with API-only writes and HomeDocument RLS' AS result;
+SELECT 'PASS: exact defaults, current shared residency, age/owner/override ceilings, own-safe wrappers, finance and document read predicates through their helpers, every direct client read and write refused' AS result;

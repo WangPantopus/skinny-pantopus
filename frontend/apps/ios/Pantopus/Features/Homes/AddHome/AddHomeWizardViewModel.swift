@@ -830,31 +830,41 @@ final class AddHomeWizardViewModel: WizardModel {
                 rejectDifferentHome()
                 return
             }
-            addressCheck = response
-            validatedAddressId = addressId
-            geocodedAddress = AddHomeGeocodedAddress(
-                street: response.residencyAddress?.line1 ?? address.line1,
-                unit: response.residencyAddress?.line2 ?? address.line2 ?? "",
-                city: response.residencyAddress?.city ?? address.city,
-                state: response.residencyAddress?.state ?? address.state,
-                zipCode: response.residencyAddress?.postalCode ?? address.zip,
-                latitude: address.lat,
-                longitude: address.lng,
-                isMultiUnit: response.isMultiUnit
-            )
-            existingHomeId = response.homeId
-            if response.isAlreadyClaimed {
-                showsClaimedModal = true
-            } else if response.isFoundUnclaimed {
-                isClaimingExistingHome = true
-            }
-            if !showsClaimedModal, !isClaimingExistingHome { await loadPropertySuggestions() }
+            await applyAddressCheck(response, address: address, addressId: addressId)
         } catch {
             guard addressIsCurrent(revision) else { return }
             validatedAddressId = nil
             geocodedAddress = nil
             errorMessage = "Could not check this address. Try again."
         }
+    }
+
+    /// The checked address becomes the wizard's; an existing claimed or
+    /// unclaimed Home switches the flow, and otherwise property suggestions load.
+    private func applyAddressCheck(
+        _ response: CheckAddressResponse,
+        address: HomeAddressValidationResponse.Address,
+        addressId: String
+    ) async {
+        addressCheck = response
+        validatedAddressId = addressId
+        geocodedAddress = AddHomeGeocodedAddress(
+            street: response.residencyAddress?.line1 ?? address.line1,
+            unit: response.residencyAddress?.line2 ?? address.line2 ?? "",
+            city: response.residencyAddress?.city ?? address.city,
+            state: response.residencyAddress?.state ?? address.state,
+            zipCode: response.residencyAddress?.postalCode ?? address.zip,
+            latitude: address.lat,
+            longitude: address.lng,
+            isMultiUnit: response.isMultiUnit
+        )
+        existingHomeId = response.homeId
+        if response.isAlreadyClaimed {
+            showsClaimedModal = true
+        } else if response.isFoundUnclaimed {
+            isClaimingExistingHome = true
+        }
+        if !showsClaimedModal, !isClaimingExistingHome { await loadPropertySuggestions() }
     }
 
     static let privateHomeMessage =

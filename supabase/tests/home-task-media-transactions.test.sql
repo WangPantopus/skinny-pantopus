@@ -169,7 +169,9 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','ddf10001-0000-4000-8000-000000000001',true);
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."File" WHERE id='ddf10001-0000-4000-8000-000000000300') THEN RAISE EXCEPTION 'Direct own File SELECT leaked private attachment'; END IF;
+ -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+ BEGIN PERFORM 1 FROM public."File" WHERE id='ddf10001-0000-4000-8000-000000000300';
+  RAISE EXCEPTION 'Direct own File SELECT leaked private attachment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 DO $$ BEGIN
