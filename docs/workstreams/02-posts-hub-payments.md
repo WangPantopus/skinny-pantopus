@@ -7,7 +7,7 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T07:24Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+## CURRENT STATE — 2026-09-30T07:57Z (Stream 2 session "Stream 2: Posts, Hub and payments")
 
 - **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
 - **Stream 2 runtime (new, own):**
@@ -41,10 +41,28 @@
 - **Found for other owners:** Scout and /unlisted still turn a geocoder outage into "add the city and state" (inventory row).
 - **[#879](https://github.com/WangPantopus/skinny-pantopus/pull/879)** head `ec5c6b91dd85f8ddf1a30a9af9d0494f0f28620b` (sent to Stream 1): the closed post detail panel is `inert`. Before, it was only slid off-screen, so a keyboard walk of My Pulse reached "Close post" at x=1800. Web My posts U02 A1/A2/A4/A5 are done; A3 is the brand-blue token. Seal `20260930-stream2-posts-web-my-posts-a11y-r1`, 29 files, `678c1c3b…2bad`.
 - **Web Hub R1 verified without code change:** the payload, the Today card and detail, and the Action Queue all fail truthfully; Discover's Posts tab makes no read. Seal `20260930-stream2-hub-web-reads-r1`, 31 files, `890d21cb…abe7`.
+- **#879 merged** in batch 149 (#880, master `3bf2cde34`, 2026-09-30T07:25:43Z).
+- **[#884](https://github.com/WangPantopus/skinny-pantopus/pull/884) merged** in batch 150 (#886, master `b06b9f3e5`, 2026-09-30T07:34:27Z). The web tip sheet is now a named modal dialog: focus moves in and stays in, Escape closes it only when Skip/Close would, the custom amount has its label, and the payout error is announced.
+  - Seal `20260930-stream2-tips-web-money-a11y-r1`, 51 files, `27d8588c…ae22`.
+  - U02 web A1/A3/A4/A5 are done. A2 goes to the token decision: in dark mode `--app-surface-sunken` equals `--app-surface`, so the $5/$10/$20 presets lose their fill (the class is used 772 times).
+- **[#889](https://github.com/WangPantopus/skinny-pantopus/pull/889) merged** in batch 152 (#891, master `919305835`, 2026-09-30T07:42:55Z; hub record `13fe4c266`). On the task page, "Request a refund" moves focus into the form and Cancel returns it. The progress stepper's done/current labels use the existing dark variants (they were 3.55:1 and 3.0:1).
+  - Seal `20260930-stream2-payments-web-card-refund-a11y-r1`, 33 files, `56a9edad…e3f5`. U02 web A1–A5 are done.
+  - An early before-run carried uncommitted edits across a branch switch; it was discarded and the reason recorded.
+- **[#894](https://github.com/WangPantopus/skinny-pantopus/pull/894) merged** in batch 154 (#895, master `b04c2c136`, 2026-09-30T07:55:46Z; head `b58174aec4d262cf28f28fcf17119c4d9ba1e74b`; hub record `9e74d794e`): **payee privacy repair** (found during the payment card check).
+  - Bob's (the payee's) Earnings Breakdown showed the payer's "Visa ···· 4242".
+  - `GET /api/gigs/:gigId/payment` kept the payer's card, payment-method id and risk band for the worker.
+  - `GET /api/payments/:paymentId` and `GET /api/payments?type=received` gave the payee every Stripe id, the card, the risk band, and the fee receipt (`metadata.gig_fee` with the fee's provider charge id and request id).
+  - Fix: `payeePayment()` removes those 11 fields and the receipt for anyone who isn't the payer. The payer and `gigs.manage` delegates are unchanged. Amounts, the public `gig_fee` and the web layout are unchanged; the payee just has no card line.
+  - Seal `20260930-stream2-payments-worker-card-privacy-r1`, 50 files, `3eea59ac…0d60`.
+  - Checks: backend Jest 341 suites. Native not run: no native model references the removed fields.
+  - Decisions: the fee receipt was folded into the same PR (same leak class and routes); failure code/message are hidden from the payee; managers keep the full view.
+  - Stream 1's review note (not blocking): `GET /api/payments/:paymentId` compares `payer_id === userId` while the list uses `String()`. Both are strings today; keep them consistent if either is touched again.
 - **Decided per the standing instruction** (recorded in the PR bodies too):
   - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
   - For #851, the button row may wrap instead of squeezing four labels.
-- **Next:** the remaining web cells (Hub R1/L2, Start L2/L3, post create E6, delete E1, web L1 draft across tabs, web My posts and money-screen a11y), then native once Stream 1 reports the toolchains are back.
+- **Next:**
+  - Every Stream 2 web checklist cell is now done or waiting on the user's decisions (brand-blue, emerald and sunken tokens; the Pulse chip structure). The remaining to-do cells are native (iOS/Android) and start once Stream 1 reports the toolchains are back.
+  - Until then: a bounded privacy check of the other money reads a payee or a stranger can reach (tips, refunds, wallet, earnings, task detail, Hub). Only reproduced leaks get a repair.
 
 ## STATE AT THE SPLIT — 2026-09-30T04:18Z
 
@@ -123,7 +141,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:24Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:55Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -169,8 +187,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Hub (the former Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
 | Today detail | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>🔷 A3 brand-blue token |
 | **Money screens (viewing only, no payments)** | | | |
-| Tip sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Payment card and refund sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2 (Sep22)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Tip sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ✅ A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced (#884)<br>🔷 A2 dark: the sunken surface token equals the card surface, so the $5/$10/$20 presets lose their fill |
+| Payment card and refund sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2 (Sep22)<br>⬜ A3 A4 | ✅ A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable (#889) |
 | Payments and wallet settings | ⬜ A1 A2 A3 A4 | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>⬜ A3 A4 | ✅ A1 A2 A4 A5; filter and back-button names (#829)<br>🔷 A3 emerald token |
 
 **Outside this plan:** Money journeys: Tips, task payments, refunds, disputes and wallet reuse the accepted P02-P10 evidence. Nothing is rerun, and there is still no capture. Their hosted and provider parts stay with the P rows. Crew Day and rebooking a known crew: Not built yet: no screen or route calls it (Stream 3, Sep27). There's nothing to check. Launch cuts: Marketplace, Open Gigs, the business directory, and Hub or Pulse entry points into them stay excluded. The "WINNER" badge note belongs to bids, so it's dropped. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
@@ -179,8 +197,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 35, confirm from existing evidence 0, to do 10, your call 0, boundary 0, not offered 1
 - U04 items: done 8, confirm from existing evidence 0, to do 8, your call 0, boundary 0, not offered 0
-- U02 items: done 16, confirm from existing evidence 0, to do 24, your call 8, boundary 1, not offered 0
-
+- U02 items: done 18, confirm from existing evidence 0, to do 22, your call 9, boundary 1, not offered 0
 
 ## Inventory and history
 

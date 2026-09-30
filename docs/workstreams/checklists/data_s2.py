@@ -38,8 +38,8 @@ U02 = [
         ("Today detail", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("todo", "A1 A2 A3 A4")], "Web": [c("done", "A1 A2 A4 A5", "U02 web bundle ddbfe77a"), c("decide", "A3 brand-blue token")]}),
     ]),
     ("Money screens (viewing only, no payments)", [
-        ("Tip sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2, dark title fixed", "PR198"), c("todo", "A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
-        ("Payment card and refund sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2", "Sep22"), c("todo", "A3 A4")], "Web": [c("todo", "A1 A2 A3 A4 A5")]}),
+        ("Tip sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2, dark title fixed", "PR198"), c("todo", "A3 A4")], "Web": [c("done", "A1 A3 A4 A5; the sheet is a named modal dialog that keeps focus, Escape closes it, errors are announced", "#884"), c("decide", "A2 dark: the sunken surface token equals the card surface, so the $5/$10/$20 presets lose their fill")]}),
+        ("Payment card and refund sheet", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2", "Sep22"), c("todo", "A3 A4")], "Web": [c("done", "A1 A2 A3 A4 A5; refund form keeps keyboard focus, dark progress labels readable", "#889")]}),
         ("Payments and wallet settings", {"iOS": [c("todo", "A1 A2 A3 A4")], "Android": [c("done", "A1 A2 by accessibility tree", "Sep27"), c("block", "Screenshots blocked (secure screen)"), c("todo", "A3 A4")], "Web": [c("done", "A1 A2 A4 A5; filter and back-button names", "#829"), c("decide", "A3 emerald token")]}),
     ]),
 ]
