@@ -1,6 +1,6 @@
 # Resume prompt for the next Stream 5 session — Accounts and Social (formerly Stream 3)
 
-Rewritten 2026-09-30T15:25Z (first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams. Until 2026-09-30 this stream was **Stream 3**. The user renumbered it because the former Streams 1 and 2 were each split in two (now Streams 1–4). Scope, accepted evidence, decisions, kit and runtime carried over.
+Rewritten 2026-09-30T15:23:12Z (commit time; first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams. Until 2026-09-30 this stream was **Stream 3**. The user renumbered it because the former Streams 1 and 2 were each split in two (now Streams 1–4). Scope, accepted evidence, decisions, kit and runtime carried over.
 
 Every fact here is a snapshot. Verify the live state (branch, worktrees, remote PRs, CI, leases) before acting.
 
@@ -10,7 +10,7 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
 3. `AGENTS.md` and `docs/PROJECT_HANDOFF.md`: the verification-first rules.
 4. The private kit README: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream3-runtime-kit/README.md`. The path keeps `stream3`. Never print or dump the fixture credential files.
 
-## 2. State at 15:25Z on 2026-09-30
+## 2. State at 2026-09-30T15:23:12Z
 - **Merged today** (details and seals in the status file):
   - chat privacy and account deletion: #908–#950, #964, #966, and the Home-retirement trio #974/#976/#968;
   - the security track: #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002, #1012, #1015;
