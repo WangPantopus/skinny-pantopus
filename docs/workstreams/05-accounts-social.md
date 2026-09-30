@@ -9,6 +9,33 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — task chat privacy: #908 and #912 merged, #923 open (released worker's chat); native pass next, 2026-09-30T09:27:02Z
+
+- **Owner:** Stream 5 owns the gig-room privacy work (chat), by the coordinator's LOCKED decision of 08:22:50Z. The finding and the entry-point fix (#899) are Stream 2's.
+  - **[#908](https://github.com/WangPantopus/skinny-pantopus/pull/908) merged** 08:53:32Z (merge commit `59eec5f41`, batch 160). Once a task has an accepted worker, its gig room admits only that worker or an owner actor, on every REST path, the socket and the badge. Evidence `20260930-stream5-gig-room-privacy-r1`, seal `31e40087…`.
+  - **[#912](https://github.com/WangPantopus/skinny-pantopus/pull/912) merged** 08:55:48Z (`dce2eabed`, batch 161). A forward migration removes leftover members from assigned tasks' rooms. Tasks with a business owner or worker are skipped for review. Seal `45ffccf7…`.
+  - **[#923](https://github.com/WangPantopus/skinny-pantopus/pull/923) opened** 09:26:19Z, for Stream 1's queue. It retires a task's room when its worker changes (Stream 2's review of #908, finding 1).
+    - On master `4a681a48d`, after a real `worker_release`, earlier askers, new askers and the next worker all read the previous worker's chat, and the released worker lost it.
+    - Evidence `20260930-stream5-gig-room-rotation-r1`, seal `11f00c7ecc06802ce25b22a635375672a788d9026a251330ff9cfdba15d5dc28`. PASS on API, real sockets and real Chrome, including a clean run with a new owner. iOS and Android are pending.
+- **Decisions taken without asking** (user's standing direction of 2026-09-30: best UX, safety and security; record them; keep working):
+  1. **#908 rule.** One rule for REST, the socket and badges, in one new shared file, `services/chatGigRoomAccess.js`, because the routes and the socket export no helpers.
+     - It fails closed: a failed task lookup refuses access, and a send then notifies nobody.
+     - An owner actor includes `gigs.post`, the same as chat's existing business rule. Stream 2 confirmed `#899` admits the same actors and retracted finding 2.
+     - `asBusinessUserId` counts only after `canActAsBusiness`.
+     - Leftover members are hidden from member lists.
+  2. **#912 migration.** Leftover rows are removed by a separate, reviewed forward migration that lands after #908. Business-owner and business-worker tasks are skipped for review.
+  3. **#923 approach: retire, don't filter.** The old room becomes an inactive `group` room (`gig_id` and name kept), and only the owner and the previous worker stay in it. Every task-room lookup selects `type='gig'`, so the next phase starts in a fresh room with no edits to Stream 2's stop, acceptance, fee or dispute code.
+     - A retired room takes no new messages (403 `ROOM_INACTIVE`, "This chat has closed. Message them directly to keep talking."). Group rooms have neither block checks nor business identity; direct messages carry the conversation on.
+     - Rejected: keeping `gig` with a marker (Stream 2's lookups would need edits, and the dispute service's `maybeSingle` would break), filtering messages per phase, and converting the room to `direct`.
+  4. **Rooms mixed before #923 deploys are not changed.** The founder runs the read-only `scripts/dry-run-existing-rooms.sql` first. A follow-up proposal would retire `open_now` rooms; `reassigned` rooms can't be split without moving messages.
+  5. **Private-tool changes.** The proxy's chat-audit `callers` list now names the `GIGROOM1` fixture ids, including Erin. `fx.py` was restored from the kit into the runtime fixtures folder.
+- **Flagged to Stream 2 (their file):** `stripe/disputeService.js` should take a payment's chat room from `GigPaymentAcceptance.room_id`, so evidence for a released worker's payment finds the retired conversation.
+- **Runtime:**
+  - Stack `pantopus-stream3-block-r1` (Kong 64531, DB 64532), rebuilt from master's 95 migrations 08:25:11–08:25:47Z. Local applies: `20260930093000` at 08:52:40Z and `20260930101500` at 09:13:37Z.
+  - Services: API 18134 on `7647498e8`, proxy 18130, web 18131 (Next dev on `88149d747`; its chat files equal master's).
+  - Fixture `GIGROOM1`: 6 accounts (alice, bob, dana, biz, carl, erin) and tasks gig1–gig7. It stays for the native pass, then is removed by exact ids, and chat-audit goes back to disabled.
+- **Next:** the native pass for #908 and #923 on AVD `pantopus_s5` (port 5564) and simulator "Pantopus S5" (`F7C15A4C…`), under `device-slot.sh` and `heavy-slot.sh` with the `stream5:` label (Stream 1 announced toolchains ready; hub `177c17d44`). Then fixture cleanup.
+
 ## LIVE — Docker came back empty; Stream 5 runtime stopped; #843 merged, 2026-09-30T05:55:23Z
 
 - **Docker (reported by Stream 2, Posts/Hub/payments):** Docker Desktop came back at about 05:51Z with **no containers, images or volumes**. Its disk image was recreated, so every local Supabase stack is gone, including Stream 5's and the founder's (64521/64522). No pg_dump archive was found.
