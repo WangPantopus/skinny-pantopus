@@ -9,11 +9,12 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — HANDOFF: #1080, #1087, #1089, #1090 and #1092 merged (batches 217–219, master `11e2b72f6`); #1081 (native) sealed with Stream 1's device results (all 4 checks pass on iOS and Android) and handed to Stream 1; next = sweep backlog, 2026-09-30T21:41:10Z
+## LIVE — HANDOFF: every Stream 5 PR merged (#1080, #1087, #1089, #1090, #1092 and #1081; batches 217–221, master `c054fe318`); none open; next = sweep backlog, 2026-09-30T21:42:08Z
 
 - **Read [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md) first.** It holds the full state, runtime, rules, backlog and lessons.
 - **Merged since the last block:** #1080, "the profile completion card shows the real percentage", in batch 217 (PR #1084, 20:29:26Z, master `e514e033b`). Stream 1 verified seal `7d730cad…`.
   - Then #1087, #1089 and #1090 in batch 218 (PR #1094, 21:10:17Z) and #1092 in batch 219 (PR #1095, 21:10:58Z), master `11e2b72f6`. Stream 1 checked each head against its seal.
+  - Then #1081 in batch 221 (PR #1100, 21:40:34Z), master `c054fe318`. The head matched seal `e82a960c…`.
 - **What the four merged PRs fixed** (evidence in each bundle):
   - **#1087, "a public profile's trust signals are true":** head `0ccc4d928`, CI 36775249193, seal `7fbf14f0…`.
     - The public routes now send the User's worker counters. These are already public via `/api/gigs/reliability/:userId`; Stream 1 confirmed this in review.
@@ -22,14 +23,14 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - **#1089, "a failed connection action says why":** head `0d8c493ab`, CI 36775674336, seal `95da3278…`. A withdrawn request's Accept gets 404 from the API; master showed nothing, and the fix shows a toast and refreshes the list.
   - **#1090, "the crew dashboard Inbox":** head `a17a7d73b`, CI 36776269108, seal `a63a3c35…`. Rows read "? Unknown" and opened a 403 room on master; the fix shows the name and preview and opens the crew's chat.
   - **#1092, the stale "skills aren't saved" note removed:** head `be13de394`, CI 36776925247, seal `470e0df6…`. On master, skills save through the UI (200/200) and are listed after a reload.
-- **#1081 sealed and handed to Stream 1** (iOS + Android page editors keep a button's `url`; the Directions chip opens Maps and is hidden for home-based crews).
+- **#1081, merged in batch 221** (iOS + Android page editors keep a button's `url`; the Directions chip opens Maps and is hidden for home-based crews).
   - Head `7fb117fa7`, seal `e82a960cc0b14f18e02069644f0c51d3535848f0b3d5c07be9f8fb945305095b`, bundle `20260930-stream5-native-crew-links-r1`, base `e631ac2b6` (19 files, 21:39:18Z).
   - **Devices:** Stream 1's run passed all four checks on iOS and Android at this head (candidate `f002e2a9e`). Its bundle is `20260930-stream1-native-1081-devices-r1`, and I re-verified MANIFEST `a33acbb7…`. Stream 1 also posted the table on PR #1081.
   - **CI run 36771770835** was partial at the seal:
     - passed: Android lint, test and assemble; the database job; the safeguards;
     - Android instrumented: failed on a CI emulator hang (21/61 passed, 0 failed);
     - iOS jobs still queued.
-  - **Next agent:** once the run completes, `gh run rerun 36771770835 --failed`. If an iOS job fails, fix it and re-seal.
+  - **Next agent:** the PR run is only informational now. Check the iOS jobs in master's push run 36780940453 (`c054fe318`), and fix forward only if one fails on #1081's files.
 - **Sweep of Stream 5's web screens** (read-only, 22 candidates, each confirmed before any fix): 5 fixed (above and #1080). The remaining items are in the prompt's section 5, in priority order: crew page placeholder blocks and the contact form; Services/Portfolio dead ends; block Appearance settings; the dead hero upload; checklist dead links; SeatCard keyboard access; preview hard-coding. Stream 1's device run added an iOS page-blocks editor item: unnamed buttons, and chips without a Selected trait (the prompt's item 2).
 - **Decisions recorded:**
   - Reliability shows only from real history.

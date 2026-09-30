@@ -1,6 +1,6 @@
 # Resume prompt for the next Stream 5 session — Accounts and Social (formerly Stream 3)
 
-Updated 2026-09-30T21:41:10Z (commit time; rewritten 21:10:15Z, first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams (until 2026-09-30 this was **Stream 3**; history says "Stream 3"/"S3"). Scope: accounts, sign-in/sessions, profiles and privacy, connections and blocks, chat, notifications, reports, crews (business accounts: public crew page, crew dashboard/owner tools, seats/teams, endorsements). Every fact here is a snapshot: verify the live state (branch, worktrees, remote PRs, CI, leases) before acting.
+Updated 2026-09-30T21:42:08Z (commit time; rewritten 21:10:15Z, first version 04:05:05Z). You are **Stream 5**, one of the user's parallel workstreams (until 2026-09-30 this was **Stream 3**; history says "Stream 3"/"S3"). Scope: accounts, sign-in/sessions, profiles and privacy, connections and blocks, chat, notifications, reports, crews (business accounts: public crew page, crew dashboard/owner tools, seats/teams, endorsements). Every fact here is a snapshot: verify the live state (branch, worktrees, remote PRs, CI, leases) before acting.
 
 ## 1. Read first
 1. [05-accounts-social.md](05-accounts-social.md) in this checkout (branch `codex/workstream-coordination`; pull with `--ff-only`, commit by explicit path, push). The top LIVE block is the current state.
@@ -8,8 +8,8 @@ Updated 2026-09-30T21:41:10Z (commit time; rewritten 21:10:15Z, first version 04
 3. `AGENTS.md` and `docs/PROJECT_HANDOFF.md` in the app repo: verification-first rules.
 4. The private kit: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream3-runtime-kit/README.md` and **`tools/stream5-e2e/README.md`** (the E2E patterns and `ci-record.sh` used today). Never print or dump the fixture credential files.
 
-## 2. State at 2026-09-30T21:41:10Z
-- **Merged today after 16:00Z** (Stream 1's batches; master was `e631ac2b6`, batch 220, at 21:37:21Z; check the live head):
+## 2. State at 2026-09-30T21:42:08Z
+- **Merged today after 16:00Z** (Stream 1's batches; master was `c054fe318`, batch 221, at 21:40:34Z; check the live head):
   - #1037 (crew seats), #1042 (report queue), #1043 (Business Profiles names), #1046 (one report alert, dead crew block);
   - #1053 (a crew's private data stays with its team, security batch 207) and #1060 (unpublished crew → 404 for outsiders, batch 210);
   - #1055 (S3-62: only a **verified** resident can endorse; the refusal shows in a toast, batch 211) and #1066 (the 14-day endorse rule counts from the occupancy's `verified_at`; a null `verified_at` counts as not yet 14 days, batch 212);
@@ -21,25 +21,17 @@ Updated 2026-09-30T21:41:10Z (commit time; rewritten 21:10:15Z, first version 04
   - **#1089** a failed connection action says why: head `0d8c493ab`, CI 36775674336, seal `95da3278001c18543122b6624c192495560ffa24570f160e913020fcb4339d68`, bundle `…-connections-errors-r1`.
   - **#1090** crew dashboard Inbox: head `a17a7d73b`, CI 36776269108, seal `a63a3c35e9107b065bf33e87f1642900dfddfe6e8f5e3d94a6e6fd6d12d0d5f6`, bundle `…-crew-inbox-r1`.
   - **#1092** stale "skills aren't saved" note removed: head `be13de394`, CI run 36776925247 success, seal `470e0df6a442884d2ae14e8efc618eac37d3d6c1ac01ede676abbbf9abef3fa9`, bundle `…-skills-note-r1`.
-- **#1081 sealed and handed to Stream 1** (iOS + Android: page editors keep a button's `url` and get a Link address field; the crew profile's Directions chip opens Maps and is hidden for home-based crews).
-  - Branch `claude/stream5-native-crew-links-directions`, head `7fb117fa72018aca67a6593097d22ba1b01fa4b9`.
-  - Bundle `20260930-stream5-native-crew-links-r1`, seal `e82a960cc0b14f18e02069644f0c51d3535848f0b3d5c07be9f8fb945305095b` (19 files, base `e631ac2b6`, 21:39:18Z).
-  - **Devices:** Stream 1 ran the four checks at this head (candidate `f002e2a9e`), and all pass on iOS and Android.
-    - Its bundle is `20260930-stream1-native-1081-devices-r1`. I re-verified MANIFEST `a33acbb7…`.
-    - The table is also in [its PR comment](https://github.com/WangPantopus/skinny-pantopus/pull/1081#issuecomment-5920132779).
+- **#1081 merged** in batch 221 (PR #1100, 21:40:34Z; master `c054fe318`). iOS + Android: page editors keep a button's `url` and get a Link address field; the crew profile's Directions chip opens Maps and is hidden for home-based crews.
+  - Head `7fb117fa7` matched seal `e82a960cc0b14f18e02069644f0c51d3535848f0b3d5c07be9f8fb945305095b` (bundle `20260930-stream5-native-crew-links-r1`). Stream 1's verify-batch: 12 files, 11 blob-equal and 1 hunk-proved.
+  - **Devices:** all four checks pass on iOS and Android (Stream 1's bundle `20260930-stream1-native-1081-devices-r1`, MANIFEST `a33acbb7…`, which I re-verified; [PR comment](https://github.com/WangPantopus/skinny-pantopus/pull/1081#issuecomment-5920132779)).
     - Check 2 ran as a non-member only. I accepted it because the owner's own view follows the same rule and has no privacy stake.
-  - **CI run 36771770835** was partial at the seal:
-    - passed: Android lint, test and assemble; the database job; the safeguards;
-    - Android instrumented: failed on a CI emulator hang (21/61 passed, 0 failed);
-    - iOS "Build iOS test bundles" and "Lint": still queued.
-  - **What is left for you:**
-    1. When the run completes, run `gh run rerun 36771770835 --failed` and note the outcome in the PR body and the status file.
-    2. If an iOS job fails, fix it on the branch, rerun what's affected, and re-seal. Send Stream 1 the new head; it proves the change with range-diff or rebuilds.
-    3. Otherwise just follow Stream 1's merge.
-    - Merging is Stream 1's call. CI isn't required under the user's 2026-09-27 policy.
+  - **CI:**
+    - The PR's run 36771770835 is only informational now: the Android instrumented job hit a CI emulator hang, and the iOS jobs were still queued at merge.
+    - **The real signal is master's push run 36780940453 on `c054fe318`.** Check its iOS jobs ("Build iOS test bundles", "Lint (SwiftLint + SwiftFormat)"). If one fails on #1081's files, fix it forward in a new PR; Stream 1 runs any device check.
+- **No Stream 5 PR is open** except draft #842.
 
 ## 3. Runtime (Stream 5's own; reserved ports)
-- **Stack** `pantopus-stream3-block-r1` (Kong 64531, DB 64532), migrations through `20260930184000` (= master's newest; batches 218–220 added none). New migrations: copy into `/private/tmp/pantopus-stream5-db-r1/supabase/migrations` and `supabase migration up --local` from there. Ask Stream 1 for a migration number before creating one.
+- **Stack** `pantopus-stream3-block-r1` (Kong 64531, DB 64532), migrations through `20260930184000` (= master's newest; batches 218–221 added none). New migrations: copy into `/private/tmp/pantopus-stream5-db-r1/supabase/migrations` and `supabase migration up --local` from there. Ask Stream 1 for a migration number before creating one.
 - **API 18134**: point `/private/tmp/pantopus-stream3-chat-realtime-r1` at the wanted commit (`git checkout --detach <sha>`, clean backend), stop the running API (`kill` the pid listening on 18134), then from `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1` run `S3_SRC=/private/tmp/pantopus-stream3-chat-realtime-r1 S3_BACKEND_TREE_OF=<sha> S3_LOCAL_STORAGE=1 nohup python3 api-launch-private.py > <log>` (receipt `api-start-isolation-safe.json`). It runs master `11e2b72f6` (receipt `at` 21:15:34Z; loopback only, cron and pg-boss off, no provider credentials). **About 10 logins per API process trip the limiter (429): restart between journeys.**
 - **Web 18131** (Next dev, HMR) serves `/private/tmp/pantopus-stream3-web-chat-names-r1`; move it with `git checkout --detach <sha>` (wait ~12 s). It is on master `11e2b72f6`. Browse it as `http://stream3.localhost:18131` (the scripts rewrite the dev host).
 - **Proxy 18130** (`no-send-proxy.cjs`) refuses writes except per-caller allowances read from `endorse-check.json` / `report-check.json` (both **disabled**).
@@ -80,7 +72,7 @@ Done and merged: fake response time / reliability / crew-as-person (#1087), crew
 - iOS crew profile: the Contact / "Hire to review" failure toast may sit behind the floating tab bar — needs a device screenshot (Stream 1) before any fix.
 
 ## 7. Next, in order
-1. Message Stream 1 that you are the new Stream 5 session, then follow #1081 (section 2): rerun the failed Android job when the run completes, and watch the iOS jobs.
+1. Message Stream 1 that you are the new Stream 5 session. Check master CI run 36780940453's iOS jobs for #1081 (section 2); fix forward only if one fails on #1081's files.
 2. Work the sweep backlog (section 5) one PR at a time: confirm, fix the smallest thing, E2E before/after through the real API and web, clean fixtures by exact id, seal, hand off.
 3. Rerun the drift scanners (`tools/drift-scanners/`) after big merges; treat hits as candidates.
 4. Update the status file's LIVE block, this prompt and memory at each milestone.
