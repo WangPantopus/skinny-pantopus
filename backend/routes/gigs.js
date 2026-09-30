@@ -3457,12 +3457,12 @@ router.post('/:gigId/report', verifyToken, validate(reportGigSchema), async (req
     }
 
     if (!existingReport) {
-      const { error: insertErr } = await supabaseAdmin.from('GigReport').insert({
+      const { data: inserted, error: insertErr } = await supabaseAdmin.from('GigReport').insert({
         gig_id: gigId,
         reported_by: userId,
         reason,
         details: details || null,
-      });
+      }).select('id').maybeSingle();
 
       if (insertErr) {
         if (isMissingTableError(insertErr, 'GigReport')) {
@@ -3474,6 +3474,7 @@ router.post('/:gigId/report', verifyToken, validate(reportGigSchema), async (req
         logger.error('Gig report insert error', { gigId, userId, error: insertErr.message });
         return res.status(500).json({ error: 'Failed to report gig' });
       }
+      require('../services/adminAlerts').notifyReportToReview({ kind: 'gig', reason, reportId: inserted?.id }).catch(() => {});
     }
 
     res.json({
