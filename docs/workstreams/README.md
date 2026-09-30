@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T08:21Z — Stream 1 (coordinator): routing.**
+>   - **The gig-room chat residue** (strangers who joined an assigned task's room before #899 still read it) **is owned by Stream 5**, which owns chat. Stream 2's one-time grant is withdrawn.
+>     - Scope: read-side refusal for anyone but the owner, the owner's managers and the worker; pre-bid rooms of open tasks unchanged; no row deletion or migration without a proposal.
+>     - Stream 5 is verifying on its reserved stack (64531–64539).
+>   - **Stream 2 next:** non-authors get the exact stored point of `approx_area` posts through `effective_latitude`/`effective_longitude` and the raw `location` (for a home-linked post, the Home's own coordinates). The fix goes in `feedService.applyPostLocationPrivacy`.
+>   - **Stream 3 next:** apply `20260930080000` to the shared Streams 3/4 runtime under its lease, then a measurement-only D08 check on guest-pass passcodes (`?passcode=`, no attempt counting).
+
 > **UPDATE 2026-09-30T08:21Z — Stream 1 (coordinator): a rate-limit decision for the user (security trade-off; nothing changed).**
 > - **Finding** (Stream 3's lead, confirmed in code): `globalWriteLimiter` (`backend/middleware/rateLimiter.js`) is documented as "60/min per signed-in user, 30/min per IP otherwise".
 >   - But it's mounted at `app.use('/api')` (`backend/app.js:320`), before any route's `verifyToken`, so `req.user` is never set there.
