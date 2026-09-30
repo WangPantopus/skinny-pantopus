@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/toast-store';
 import AccountDeleteModal from '@/components/profile/AccountDeleteModal';
 import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
 import ErrorState from '@/components/ui/ErrorState';
+import { ACCOUNT_DELETED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
 import type { User } from '@pantopus/types';
 
 export default function SettingsPage() {
@@ -133,14 +134,35 @@ export default function SettingsPage() {
       setDeleting(false);
       return;
     }
+    // /login shows the outcome. The server signs this session out before it
+    // deletes the account (and the deletion can still fail after that), so
+    // the client's own sign-out can reload the page at any moment: leave a
+    // one-shot notice rather than a toast that reload would drop. A session
+    // that ends while the DELETE is pending proves only that it started.
+    const leaveNotice = (kind: 'deleted' | 'unconfirmed') => {
+      try {
+        sessionStorage.setItem(ACCOUNT_DELETED_NOTICE_KEY, `${kind}:${Date.now()}`);
+      } catch { /* storage disabled: /login simply shows no notice */ }
+    };
+    const stopWatching = api.onTokenChange((nextToken) => {
+      if (nextToken === null) leaveNotice('unconfirmed');
+    });
     try {
       await api.users.deleteAccount(stepUpToken);
+      stopWatching();
+      leaveNotice('deleted');
       if (!confirmation.current()) return;
       clearPendingPlaces();
       clearAuthToken();
-      toast.success('Account deleted successfully');
-      router.push('/login');
+      // The server leaves the session cookies behind on deletion. Drop the
+      // JS-readable session flag (as /session/refresh does) so the middleware
+      // serves /login rather than sending a "signed-in" visitor to /app/place,
+      // then load it fresh, like that sign-out does, so the two can't race.
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `pantopus_session=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+      hardNavigate('/login');
     } catch (err: unknown) {
+      stopWatching();
       if (!confirmation.current()) return;
       toast.error((err as { message?: string })?.message || 'Account deletion failed');
       deleteOperation.current = null;
