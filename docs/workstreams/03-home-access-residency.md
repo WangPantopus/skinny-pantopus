@@ -59,7 +59,7 @@
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
-   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; with the coordinator). The mail-compose recipients leak is Stream 4's.
+   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) (merged, batch 144) and its follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) (household members only, per `docs/location-privacy-matrix.md`; merged, batch 146, master `f82d24a18`). In progress: the second follow-up, trusted occupancies only (a pending claim, which anyone can file, must not count as household). The mail-compose recipients leak is Stream 4's.
    - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
      - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
      - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
@@ -209,6 +209,8 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T07:10Z — #869 merged** (batch 146, [#870](https://github.com/WangPantopus/skinny-pantopus/pull/870), tip `fc0df0942`, 07:05:25Z; master `f82d24a18`; Stream 1 verified the seal, 21 files). The coordinator found one more latent gap in the same block: "actively occupies" meant `is_active`, which includes pending claims (`pending_approval`/`pending_postcard` rows are written active, and `POST /api/homes/:id/claim` lets any signed-in caller file one on any Home). Fix written on `claude/stream3-home-d06-map-trusted-occupancy` (the block uses the shared, fail-closed `getAccessibleHomeIds`); reproduction through a real claim waits for the runtime lease (Stream 4 holds it). D07 follows.
 
 - **2026-09-30T07:05Z — #865 merged; follow-up [#869](https://github.com/WangPantopus/skinny-pantopus/pull/869) is with the coordinator.**
   - **#865:** merged in batch 144 ([#866](https://github.com/WangPantopus/skinny-pantopus/pull/866), tip `ac927ea82`, 07:00:24Z; master `81c414506`). Stream 1 verified the seal (23 files) with an exact-hunk batch proof; the post suites pass 77/77.
