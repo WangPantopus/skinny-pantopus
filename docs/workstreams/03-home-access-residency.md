@@ -135,6 +135,8 @@
 5. **Lockdown visibility (D07): the Home stays private after Lockdown ends.** The owner reopens it deliberately, and the panel already says so (#828).
    - Why: an automatic restore could re-expose a Home before its owner has reviewed what happened.
    - Post-launch idea: a one-tap "Restore previous visibility" after disabling.
+6. **iOS large text (U02 A1), decided 2026-09-30:** keep the fixed-size type ramp on Stream 3's iOS screens. This follows the user's 09-29 decision for Posts ("keep the current layout"). A1 checks that nothing essential is clipped and every action is reachable at the largest accessibility size; screens that cut text get the smallest local repair (whole names; capping growth on the three Review claims links).
+   - Post-launch idea: Dynamic Type across the iOS design system as one designed change.
 
 Shared with Stream 4:
 1. Brand colors that fail contrast (all streams): Stream 1 carries one design-token recommendation.
@@ -317,6 +319,36 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T15:25Z — U02 native A1/A2: the iOS pass is done, and four display fixes are built. Master's red iOS SwiftLint is fixed in [#1024](https://github.com/WangPantopus/skinny-pantopus/pull/1024).**
+  - **Setup:** stage `runtime/stream3-home-u02-native-a1a2-r1` (not sealed yet). DECISION.md was written at 14:18Z and the baseline taken at 14:19:10Z.
+    - Fixture Home `d5a1aae2…` "S3 U02 Hawthorne Garden House", set up through the real API: B's join request and household claim, an invitation, 2 access codes, an active and a scheduled pass, and the owner's pass and letter.
+  - **iOS on S34, app `c8498a3d3`:** 19 Stream 3 screens in three modes: base, largest accessibility text (xl) and dark.
+    - The app's own text uses fixed sizes (`Theme.Font` = `Font.system(size:)`), so only system-styled text grows. Following the user's 09-29 decision for Posts ("keep the current layout"), A1 checks clipping and reachability; the type ramp is not converted (Decisions).
+  - **Findings, all reproduced:**
+    - the Requests row cut the requester's name at default size ("Stream2 Resume me…");
+    - Transfer ownership cut the Home name to one line (Android clips it with no ellipsis);
+    - at xl, Review claims' three recovery links cut their own labels ("Residency decisions and r…");
+    - the Homes list read "Unit Unit S3U02" (all three clients add "Unit " before address2, so "Apt 4B" would read "Unit Apt 4B"), and iOS status chips cut "Ownership verified" to "Ownership ver…".
+  - **Branch `claude/stream3-home-u02-full-names`** (not pushed yet; heads `e94bd8815`, `45d21d287`, `c49aefccb`, `5d6047490`):
+    - the Requests row shows the whole name;
+    - the whole Home name shows on Transfer;
+    - Review claims' links stop growing at the largest standard size;
+    - one unit label and wrapping status chips.
+  - **Checks so far:**
+    - Android `e94bd8815`: MembersListViewModelTest 48/48, the Transfer tests, ktlint, detekt and Paparazzi verify.
+    - iOS `45d21d287`: 93 tests, 0 failures. The after captures show the full name, the wrapped Home name and readable links.
+    - Web: tsc, ESLint, and Jest 1,951/1,951.
+    - `c49aefccb` (a six-line limit, so the role chip isn't squeezed) and `5d6047490` wait for the next heavy slot and the Android pass.
+  - **A2 (dark), iOS:** all 19 screens are readable.
+  - **A3, sent to Stream 1 (token owner):** the dark-mode Approve button (`success` fill with `appTextInverse` text) is 1.92:1; light mode is 5.48:1.
+  - **System-rendering boundaries at xl:**
+    - the Delete home confirmation clips its message;
+    - the add-guest email placeholder truncates;
+    - the residency sheet's title truncates.
+  - **[#1024](https://github.com/WangPantopus/skinny-pantopus/pull/1024):** master's iOS SwiftLint job was red on #970's AddHomeWizard complexity and #999's guest-pass chain, found by Stream 5. It's a lint-only refactor with no behavior change, and it's with the coordinator.
+  - **Runtime:** lease, slot 4 and S34 lent to Stream 4 at 15:14:15Z. My fixture stays in place and Stream 4 excludes it.
+  - **Next:** heavy slot → iOS/Android builds → Android base/xl/dark pass on pantopus_s34 → after-fix captures → exact cleanup → seal → PR.
 
 - **2026-09-30T14:03Z — the five open Stream 3 decisions are settled; #999 merged (batch 188).**
   - **Decided under the standing instruction:**
