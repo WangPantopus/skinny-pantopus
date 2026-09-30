@@ -1,4 +1,5 @@
 const db = require('../config/supabaseAdmin');
+const logger = require('../utils/logger');
 
 const MESSAGES = {
   MEMBERS_MANAGE_REQUIRED: 'You do not have permission to manage members.',
@@ -67,6 +68,106 @@ async function deleteHome(homeId, actorId) {
   throw fail();
 }
 
+// Account deletion (decision 9, 2026-09-30): a Home that nobody else keeps goes
+// with the person deleting their account. Called by DELETE /api/users/account for
+// each Home they created or occupy, after its dry run and before it nulls their
+// attribution columns (private-setup records are still recognisable as theirs).
+// - Anyone else still has access or verified ownership: nothing changes; their
+//   records stay -> 'kept'.
+//   Checked first: a primary owner may delete a Home with members in it, but an
+//   account deletion never takes a Home away from the people who still live there.
+// - Deletable (private setup, or the primary owner as the last member): deleted
+//   exactly like the owner's Delete Home, stored files included -> 'deleted'.
+// - Not deletable and nobody else keeps it: the household records and files are
+//   purged (homeRecordService) and the shell stays, so a later resident never
+//   inherits them. Applications nobody can review any more are then closed
+//   (closeStrandedApplications) -> 'purged'.
+// A Home that no longer exists needs nothing ('kept', HOME_NOT_FOUND). Any other
+// failure throws, so the account deletion stops before anything is removed.
+async function retireHomeForDeletedAccount(homeId, userId) {
+  if (await othersKeepHome(homeId, userId)) return { action: 'kept', reason: 'OTHER_MEMBERS' };
+  const eligibility = await deleteEligibility(homeId, userId);
+  if (eligibility.allowed) {
+    await deleteHome(homeId, userId);
+    return { action: 'deleted', reason: eligibility.code || null };
+  }
+  if (eligibility.code === 'HOME_NOT_FOUND') return { action: 'kept', reason: 'HOME_NOT_FOUND' };
+  const purge = await require('./homeRecordService').purgeHouseholdRecords(homeId, userId);
+  const closed = await closeStrandedApplications(homeId, userId);
+  return { action: 'purged', reason: eligibility.code || null, purge, closed };
+}
+
+// After a purge nobody is left to review the Home's household applications, so
+// they are closed the way a reviewer's decline closes them, with the same notice
+// types (a notice failure is logged; the decision stands):
+// - pending household-review residency claims are rejected. The person keeps
+//   their pending occupancy and can resubmit, which routes them to verify by
+//   mail because the Home has no reviewers;
+// - pending household access requests are rejected.
+// Occupancies are not ended: that would stop the person from applying again.
+// Claims already on the mail route, and ownership claims (platform review),
+// still have a way forward and are left as they are. Only pending rows change,
+// so a retry after a failure repeats nothing.
+async function closeStrandedApplications(homeId, userId) {
+  const at = new Date().toISOString();
+  let claims; let requests;
+  try {
+    [claims, requests] = await Promise.all([
+      db.from('HomeResidencyClaim').update({
+        status: 'rejected', reviewed_by: null, reviewed_at: at, review_note: 'No household reviewer remains', updated_at: at,
+      }).eq('home_id', homeId).eq('status', 'pending').is('cold_start_mode', null).neq('user_id', userId)
+        .select('id, user_id'),
+      db.from('HomeHouseholdAccessRequest').update({ status: 'rejected', resolved_by: null, resolved_at: at, updated_at: at })
+        .eq('home_id', homeId).eq('status', 'pending').neq('requester_user_id', userId).select('id, requester_user_id'),
+    ]);
+  } catch (_) { throw fail(); }
+  if (claims?.error || requests?.error || !Array.isArray(claims?.data) || !Array.isArray(requests?.data)) throw fail();
+  const { createNotification } = require('./notificationService');
+  const notices = [
+    ...claims.data.map(claim => ({
+      userId: claim.user_id, type: 'residency_rejected', title: 'Verification update',
+      body: 'No one at this home can review your request anymore. You can verify by mail instead.',
+      icon: '📬', link: `/homes/${homeId}/waiting-room`, metadata: { home_id: homeId, claim_id: claim.id },
+      idempotencyKey: `home-reviewers-gone:residency:${claim.id}`,
+    })),
+    ...requests.data.map(request => ({
+      userId: request.requester_user_id, type: 'home_access_request_rejected', title: 'Request not approved',
+      body: 'Your request to join this home was closed because no one there can approve it anymore.',
+      icon: '🏠', metadata: { home_id: homeId, request_id: request.id },
+      idempotencyKey: `home-reviewers-gone:access-request:${request.id}`,
+    })),
+  ];
+  for (const notice of notices) {
+    try { await createNotification(notice); } catch (err) { logger.error('Stranded application notice failed', { code: err.code }); }
+  }
+  return { residencyClaims: claims.data.length, accessRequests: requests.data.length };
+}
+
+// Who keeps a Home is the same test as purge_home_household_records' guard
+// (HOME_PURGE_HOUSEHOLD_PRESENT), so the two can't disagree: any other verified
+// owner (a person or a business), or anyone else home_effective_access still
+// lets in, among the other occupants and a legacy Home.owner_id owner. A pending
+// or unverified occupant has no access, so they don't keep it.
+async function othersKeepHome(homeId, userId) {
+  let occupancies; let owners; let home;
+  try {
+    [occupancies, owners, home] = await Promise.all([
+      db.from('HomeOccupancy').select('user_id').eq('home_id', homeId).neq('user_id', userId),
+      db.from('HomeOwner').select('subject_type, subject_id').eq('home_id', homeId).eq('owner_status', 'verified'),
+      db.from('Home').select('owner_id').eq('id', homeId).maybeSingle(),
+    ]);
+  } catch (_) { throw fail(); }
+  if (occupancies?.error || owners?.error || home?.error || !Array.isArray(occupancies?.data) || !Array.isArray(owners?.data)) throw fail();
+  if (owners.data.some(row => row.subject_type !== 'user' || row.subject_id !== userId)) return true;
+  const others = new Set(occupancies.data.map(row => row.user_id).filter(Boolean));
+  if (home.data?.owner_id && home.data.owner_id !== userId) others.add(home.data.owner_id);
+  for (const other of others) {
+    const access = await rpc('home_effective_access', { p_home_id: homeId, p_user_id: other });
+    if (access.has_access === true) return true;
+  }
+  return false;
+}
+
 function throwDeleteResult(result) {
   if (result.allowed !== false || typeof result.code !== 'string') throw fail();
   const status = result.code === 'HOME_NOT_FOUND' ? 404
@@ -75,4 +176,4 @@ function throwDeleteResult(result) {
   throw fail(result.code, status);
 }
 
-module.exports = { mutateMember, deleteEligibility, deleteHome };
+module.exports = { mutateMember, deleteEligibility, deleteHome, retireHomeForDeletedAccount };
