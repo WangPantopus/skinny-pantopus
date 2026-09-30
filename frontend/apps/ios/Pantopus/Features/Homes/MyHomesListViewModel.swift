@@ -206,7 +206,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let fallback = Self.pendingVerification(for: entry) == .residency ? "Residency request · \(entry.id.suffix(8))" : "Home"
         let title = personal?.label ?? home.name?.nilIfEmpty ?? home.address?.nilIfEmpty ?? fallback
         let locality = [home.city, home.state].compactMap { $0?.nilIfEmpty }.joined(separator: ", ").nilIfEmpty
-        let unit = entry.accessKind == "verification" ? nil : home.address2?.nilIfEmpty.map { "Unit \($0)" }
+        let unit = entry.accessKind == "verification" ? nil : home.address2?.nilIfEmpty.map { Self.unitText($0) }
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
@@ -277,9 +277,26 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             onTap: { [weak self] in Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) } },
             onSecondary: secondary,
             chips: chips.isEmpty ? nil : chips,
+            // Status chips wrap instead of cutting "Ownership verified" to
+            // "Ownership ver…", which reads the same as a pending one.
+            wrapChips: true,
             footer: footer
         )
     }
+
+    /// "301" reads "Unit 301"; a unit stored with its own designator
+    /// ("Apt 4B", "Unit 12", "#3") stays as it is instead of "Unit Apt 4B".
+    static func unitText(_ unit: String) -> String {
+        unit.range(of: unitDesignatorPattern, options: [.regularExpression, .caseInsensitive]) == nil ? "Unit \(unit)" : unit
+    }
+
+    /// USPS secondary-unit designators (and their long forms), or a leading "#".
+    private static let unitDesignatorPattern = "^(#|(" + [
+        "apt", "apartment", "unit", "ste", "suite", "bldg", "building", "fl", "floor", "rm", "room",
+        "lot", "spc", "space", "trlr", "trailer", "ph", "penthouse", "bsmt", "basement", "dept", "ofc",
+        "office", "lowr", "lower", "uppr", "upper", "frnt", "front", "rear", "side", "pier", "slip",
+        "hngr", "hangar", "lbby", "lobby", "key", "stop"
+    ].joined(separator: "|") + #")(?=[\s.#0-9]|$))"#
 
     private func roleLabel(for entry: MyHome) -> String? {
         if entry.accessKind == "private_setup" { return "Your private Home" }

@@ -102,3 +102,16 @@ export function validHomeCreationDraft(value: unknown, origin: string, actorId: 
       && (value.outcome === undefined || validHomeCreationOutcome(value.outcome, value as unknown as HomeCreationDraft));
   } catch { return false; }
 }
+
+// USPS secondary-unit designators (and their long forms), or a leading "#".
+const UNIT_DESIGNATOR = new RegExp(`^(#|(${[
+  'apt', 'apartment', 'unit', 'ste', 'suite', 'bldg', 'building', 'fl', 'floor', 'rm', 'room',
+  'lot', 'spc', 'space', 'trlr', 'trailer', 'ph', 'penthouse', 'bsmt', 'basement', 'dept', 'ofc',
+  'office', 'lowr', 'lower', 'uppr', 'upper', 'frnt', 'front', 'rear', 'side', 'pier', 'slip',
+  'hngr', 'hangar', 'lbby', 'lobby', 'key', 'stop',
+].join('|')})(?=[\\s.#0-9]|$))`, 'i');
+
+/** "301" reads "Unit 301"; a unit stored with its own designator ("Apt 4B", "Unit 12", "#3") stays as it is. */
+export function unitText(unit: string): string {
+  return UNIT_DESIGNATOR.test(unit) ? unit : `Unit ${unit}`;
+}
