@@ -59,6 +59,15 @@
    - Accepted limit: the Lockdown retry control is gone after a page reload.
 3. **D05, Home settings:** recovery, concurrent edits from two clients, retained intent and explicit clearing on native.
 4. **D06, privacy:** every remaining exposed privacy control and its native and other consumers.
+   - **Done out of order (coordinator, 2026-09-30):** the Explore map homes layer, [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865). The mail-compose recipients leak is Stream 4's (in progress there).
+   - **Leads from a read-only code inventory (2026-09-30; each needs reproduction before any change):**
+     - `POST /api/homes/check-address` returns `home_id` and claimed status for an exact address, whatever the mask ("Invite only — completely hidden");
+     - `member_attach_policy` (web and both native "Member join/attach policy" controls) has no reader outside an unused service;
+     - 8 of the 9 `HomePrivacy` toggles have no reader (no UI either); the address-precision toggle affects only the members-only Place header;
+     - `default_visibility` ("Default Visibility for New Items", web) has no effect, because record creation hardcodes `members`;
+     - the public fridge-card link is not covered by Lockdown although the panel says existing share links stop working (unsure whether it counts as a share link);
+     - `/discover` treats `members` visibility like `private`, and native apps have no visibility control;
+     - per-Home notification preferences are saved but never read.
 5. **R03, leaving and rejoining:** the remaining re-entry and occupancy lifecycle, and the old reviewer-original release. Membership renewal is paused (decision 1 below).
 6. **H07, H08, M02 and D08, local parts:** remaining onboarding combinations, the exact copied link and public rendering, passcodes and scheduled start. Their hosted parts stay named.
 7. **D10 and R04, R05:**
@@ -200,6 +209,19 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T06:58Z — D06 Explore map homes layer: [#865](https://github.com/WangPantopus/skinny-pantopus/pull/865) is with the coordinator** (coordinator-assigned, done ahead of D07). Head `5ef4c2ac9d4410bff3861813ce5e901ee5a5e6a3`, base `68f2daa24`; `git merge-tree` clean against master `eff3f69f5`. Sealed bundle `20260930-stream3-home-d06-map-homes-privacy-r1`, 23 files, MANIFEST `3835ac272eaa4d5c97cccaee0ec24af57a43dcc6fc57a69797e38e1e2c289d95`.
+  - **Found by a read-only D06 code inventory:** `GET /api/posts/map?layers=homes`, which the iOS and Android Explore maps request, selects every Home with a location and returns its street and exact coordinates. It checks no visibility, mask, status or membership.
+  - **Reproduced (lease 06:51:00Z, two SQL fixture Homes: private + invite-only, and public preview):**
+    - real API as non-member B and as the owner: 200 with no Home for anyone, because PostgREST returns `location` as EWKB hex, which the route's parser can't read. The exposure is **latent**;
+    - the real handler on the real DB with EWKB decoding EMULATED: B would get the private invite-only Home's full street and exact coordinates.
+  - **Fix (the coordinator's one-time grant, homes block only, +19/−3):** the `/discover` rule. The viewer's own Homes, plus `public_preview` + `normal` + `active` Homes with `redactStreet` for non-members. The parser is unchanged.
+  - **After:**
+    - the harness shows B no longer selects the private Home, and sees "Synthetic Preview Lane"; the owner still sees both in full;
+    - the real API is unchanged (empty), with no query error logged.
+  - **Also confirmed LIVE through the real API:** `GET /api/mailbox/compose/recipients?homeId=<private Home>` gave non-member B the owner's id, username, name and street. The coordinator routed it to Stream 4 (Stream 4's 629ce8909: fix in progress).
+  - **Cleanup:** exact (4 rows; 351/353, login history only). The lease was released at 06:56:05Z, and the runtime is back on master (backend PID 33664).
+  - **Leads:** Explore's homes layer draws nothing even for the viewer's own Homes (the EWKB parser); a drawn discoverable Home would still get an exact pin. The other inventory leads are listed under open work item 4.
 
 - **2026-09-30T06:47Z — #858 merged** (batch 141, [#859](https://github.com/WangPantopus/skinny-pantopus/pull/859), tip `8fe0c52d4`, merged 06:44:42Z; #858 MERGED at head `309fbb850` 06:44:43Z; master `8af54a57a`). Stream 1 verified the seal (49 files, integrity OK) and the batch (5 files, blob-equal). D07's three web leads are closed; its row gains the evidence below. Next: D07's racing Lockdown commands and failed audit write (waiting for the runtime lease, which Stream 4 holds since 06:41:19Z).
 
