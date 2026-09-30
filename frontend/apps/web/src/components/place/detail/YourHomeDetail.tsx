@@ -74,26 +74,6 @@ function FactsCard({ data }: { data: PlaceYourHomeData }) {
   );
 }
 
-// ── Value vs block — decorative qualitative trend (not data-bound) ──
-function ValueSparkline() {
-  const home = '0,30 24,28 48,26 72,21 96,18 120,12 144,9 168,4';
-  const block = '0,33 24,32 48,31 72,29 96,28 120,26 144,25 168,23';
-  return (
-    <svg width="100%" height="62" viewBox="0 0 168 40" preserveAspectRatio="none" className="overflow-visible text-app-home" aria-hidden="true">
-      <defs>
-        <linearGradient id="place-home-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.14" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,40 ${home} 168,40`} fill="url(#place-home-fill)" />
-      <polyline points={block} fill="none" stroke="rgb(var(--app-border-strong))" strokeWidth="1.6" strokeDasharray="3 3" strokeLinecap="round" />
-      <polyline points={home} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="168" cy="4" r="3" fill="currentColor" stroke="rgb(var(--app-surface))" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
 function ValueCard({ data }: { data: PlaceYourHomeData }) {
   const value = usd(data.estimated_value);
   const low = usd(data.value_low);
@@ -102,18 +82,8 @@ function ValueCard({ data }: { data: PlaceYourHomeData }) {
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
       <div className="text-[13px] font-semibold text-app-text-secondary">Estimated market value</div>
       <div className="text-[34px] leading-10 font-bold -tracking-[0.02em] text-app-text mt-1">{value ?? 'Not estimated yet'}</div>
-      {low && high ? <div className="text-[13px] text-app-text-muted mb-3.5">Range {low}–{high}</div> : <div className="mb-3.5" />}
-      <ValueSparkline />
-      <div className="flex gap-[18px] mt-3 pt-3 border-t border-app-border-subtle">
-        <div className="flex items-center gap-1.5">
-          <span className="w-4 h-[3px] rounded-full bg-app-home-solid" />
-          <span className="text-[12.5px] font-medium text-app-text-strong">Your home</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-4 h-[3px] rounded-full bg-app-border-strong" />
-          <span className="text-[12.5px] font-medium text-app-text-secondary">Block median</span>
-        </div>
-      </div>
+      {/* The value and its range only: there is no value history or block series to chart. */}
+      {low && high ? <div className="text-[13px] text-app-text-muted">Range {low}–{high}</div> : null}
     </div>
   );
 }

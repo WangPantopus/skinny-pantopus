@@ -3,7 +3,7 @@
 //  Pantopus
 //
 //  C4 — Your home detail. Property facts (2×2), the value estimate with
-//  range + trend sparkline, the tax assessment, and the device-local
+//  its range (no trend line: there is no value history), the tax assessment, and the device-local
 //  equity calculator (private to the resident, never sent to the server
 //  — the codebase's deliberate privacy stance for equity).
 //
@@ -188,24 +188,9 @@ private struct ValueCard: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    PlaceSparkline()
                 }
-                HStack(spacing: 6) {
-                    legendDot(solid: true)
-                    Text("Your home")
-                    legendDot(solid: false)
-                    Text("Block median")
-                }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.Color.appTextMuted)
             }
         }
-    }
-
-    private func legendDot(solid: Bool) -> some View {
-        Circle()
-            .fill(solid ? Theme.Color.home : Theme.Color.appBorder)
-            .frame(width: 8, height: 8)
     }
 }
 
