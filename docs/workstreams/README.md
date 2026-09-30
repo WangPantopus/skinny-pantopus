@@ -30,6 +30,42 @@
 
 
 
+> **UPDATE 2026-09-30T03:40Z — Stream 1: batches 130–134 merged; native Start a train fixed (PR #841 open, one iOS run left); Docker Desktop is down after the disk filled.**
+> - **Coordinator merges.** Every head was reviewed, its seal verified and its batch proven with verify-batch. Master is `8e44382ce`.
+>   - Batch 130 (#832 ← S3 #831) at 01:32:11Z: the native Notifications settings banner when the phone blocks Pantopus notifications (a user-approved design addition).
+>   - Batch 131 (#834 ← S3 #833) at 02:14:50Z: web account deletion shows its outcome on the sign-in page.
+>   - Batch 132 (#837 ← S1 #836) at 02:44:04Z: Start a train create takes an optional `client_request_id`, so a retry after a lost create reply reaches the same draft (U03 web E2). Seal `61061a00…`, 80 files.
+>   - Batch 133 (#838 ← S2 #835) at 03:11:52Z: a member opening a Home page they can't read gets a permission sentence instead of "could not be loaded". The review follow-up `fcb889636` shows the Lockdown reason on the Share page. Seal `cd3a8c63…`, 47 files.
+>   - Batch 134 (#840 ← S3 #839) at 03:36:27Z: native account deletion when the answer is lost ("We couldn't confirm your account was deleted…"). Seal `cf7d9ce8…`, 232 files.
+>     - **Open follow-up** (S3 recommendation, security-sensitive, not changed): revoke sessions only after the deletion commits.
+> - **Stream 1 PR #841 (open): native Start a train.** Head `7ef7d3010`, 5 commits, 7 files. Bundle `20260929-stream1-train-native-start-retry-r1`, unsealed.
+>   - **Before (master Start code, real apps).** The apps decoded `{ id }`, but the route answers `{ support_train_id }`. Every launch errored after the server's 201, and each retry made another draft: iOS `66d18363`/`9e79a7b3`, Android `826f3b02`/`96b00ced`. With that read fixed, publish failed with 422 `NO_RECIPIENT_PROFILE`.
+>   - **Fix:**
+>     - Read `support_train_id`; send and keep `client_request_id` until a reply arrives.
+>     - When a later call fails, delete the half-built draft, and remember it if that delete fails.
+>     - The server's create always writes the recipient-profile row.
+>     - `recipient_summary` is null until the household size is known. "Household of ?" was showing on web and was quoted on native cards as if the organizer wrote it. The native card skips an empty quote box.
+>   - **Verified, Android:** before, after, E1 (publish 503, then DELETE 200, then one train), E2 (held create, then a retry with the same id: one train), E3 (double tap, one create) and the card on the final APK `99ced5d9`.
+>   - **Verified, iOS:** before, after, E1 (the real 422, then DELETE 200), E2 and the card on the final build.
+>   - **Verified, web and API:** the summary before and after.
+>   - **Checks:** cleanup exact (19/19 Train fingerprints equal the 01:44:29Z baseline). SwiftLint `--strict`, SwiftFormat, ktlint and detekt are clean.
+>   - **Left:** one iOS run on the final build `fd5a402a` (normal launch, publish failure and retry, double tap), because the SwiftLint length fix changed the iOS draft-delete helper. Then seal and batch.
+> - **Stream 2 reviews (manifests re-hashed):**
+>   - F02 web Home dashboard bill consumer (`12a3a6bd…`): accepted as web evidence for F02's "other consumers"; native remains.
+>   - R06 Identity ANR repro (`f6f5b638…`): not reproduced in 3 runs at normal load; kept as a watch item.
+>   - R06 request identity (`8365b5ca…`): the account boundary and the Android restart pass. The iOS restart run is still to do.
+>   - S2's F02 native fixture is still in S2's DB and gets cleaned when Docker returns.
+> - **Docker Desktop is down.**
+>   - The data volume filled at about 03:29–03:30Z. Docker logged "no space left on device" and stopped its engine, so every local Supabase stack is unreachable (S1, S2, S3 and the founder's). Stream 1's backend lost Kong 64561 at 03:29:16Z, and its Android app was signed out by the failed refresh.
+>   - S1, S2 and S3 each freed only their own disposable build outputs: about 4 GB, 12 GB and 12.9 GB by du. `df` barely moved because a Time Machine local snapshot from 03:33:11Z still holds the blocks.
+>   - Free space is about 17 GiB and falling while five external CreatorPlatform emulators (not ours) and Stream 1's emulator grow their disk images.
+>   - Nobody restarted Docker Desktop.
+> - **Needs the user:**
+>   1. Restart Docker Desktop (the founder's stack is on it), after freeing space. Removing the 03:33Z local snapshot, or letting macOS purge it, returns about 16 GB of already-deleted S1/S2 build outputs; S3's 8.3 GiB was freed before the snapshot.
+>   2. Unchanged from 23:55Z: the design-token decision, web "Send invite", and S2's Lockdown visibility option.
+> - **Checklist:** U03 Start a train is now done for Android E1/E2/E3, iOS E1/E2 (E3 pending on the final build) and web E2 (#836).
+> - **Next, once Docker returns:** the iOS run, seal and batch #841. Then native R1/R2 on the train lists; a candidate to reproduce is Android "My trains" showing the empty state when only its own read fails. Then co-organizer E1–E5, helper/delivery E3, U04 lifetimes and native U02.
+
 > **UPDATE 2026-09-29T23:55Z — Stream 1: batches 124–129 merged; CI green again; web accessibility for Posts, Hub, Start and money screens; native Start retry in progress.**
 > - **Coordinator merges.** Every head was reviewed, its seal verified and its batch proven with verify-batch.
 >   - Batch 124 (#818 ← S2 #816, S1 #817) at 22:16:47Z.
