@@ -120,6 +120,8 @@
       - a legacy `Home.owner_id` owner with access.
 
       Pending, provisional and unverified occupants have no access, so they don't keep it.
+  - **U01 web chat-button overlap (2026-09-30):** closed with no code change. Nothing meaningful stays covered at the end of any Stream 3 page at 375×548 or 390×664, and extra padding would change the whole app's AppShell layout.
+  - **D08 scheduled passes (#999):** native lists follow the web: a scheduled pass stays current, shows "Starts …" and stays revocable; `reissue_required` shows "Needs new link".
     - **LIF-02** (Stream 5's route): only a current verified occupant blocks an owner's account deletion. Pending people have nobody to be handed to, the "remove the other residents" message pointed at people the owner can't see, and App Store 5.1.1(v) forbids needless obstacles to deleting an account.
     - **After a 'purged' Home**, `retireHomeForDeletedAccount` closes the remaining pending standing with the existing lifecycle transitions and notices, so nobody waits forever in a Home with no owner: non-verified occupancies, pending residency and ownership claims, and household access requests. #968 stays records-only.
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
@@ -304,6 +306,32 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T13:29Z — #974, #982 and #983 merged; D08 scheduled passes is PR #999; U01's web chat-button overlap closed.**
+  - **Merged:**
+    - [#974](https://github.com/WangPantopus/skinny-pantopus/pull/974) in batch 182 (inside #976 with #968, PR #986, 13:03:26Z);
+    - [#982](https://github.com/WangPantopus/skinny-pantopus/pull/982) (D05 native rename) and [#983](https://github.com/WangPantopus/skinny-pantopus/pull/983) (Homes list failure logging) in batch 184 (PR #991, master `0c95b18ca`).
+  - **[#983](https://github.com/WangPantopus/skinny-pantopus/pull/983)** (open item 10), `c15462283`, bundle `20260930-stream3-home-list-failure-logging-r1` (`649294ca…`).
+    - Before: `homeListService` logged nothing on failure. An unreachable DB and a TypeError bug both gave the same 503 with 0 log lines.
+    - After: one line per failed request, carrying the cause.
+    - **Cross-cutting lead, taken by Stream 1:** `redactLogMeta` redacts every key named `code`, so no error code reaches any log.
+  - **[#999](https://github.com/WangPantopus/skinny-pantopus/pull/999), D08 scheduled start,** `6e6a577f3`, bundle `20260930-stream3-home-d08-scheduled-start-r1` (`03967b56…`).
+    - **Before, on both apps:** a pass the API lists as `scheduled` (starts later; created with the weekend or custom preset) went under Past as "Expired", with no Revoke. The web already kept it current.
+    - **After:** it is current, shows "Starts <date>", and stays revocable. Revoke was proven on iOS and Android with real API writes. `reissue_required` passes now show "Needs new link".
+    - Passes were created through the real API; the guest link before its start is 403 `SHARE_NOT_STARTED`.
+    - Exact cleanup at 13:27:13Z.
+  - **U01 web chat-button overlap: closed with no code change,** bundle `20260930-stream3-home-u01-fab-overlap-r2` (`e36c0888…`).
+    - Real Chrome at 375×548 (iPhone SE Safari) and 390×664. These heights make even a two-member Home's pages scroll, which is the case a "long member list" creates.
+    - At the end of the Home page, `/members`, `/access` and `/settings`, no control or meaningful text stays covered. The `/members` end-of-scroll row icons come free with a small scroll.
+    - **Decided under the standing instruction:** no app-wide padding change.
+  - **Self-corrections, recorded:**
+    - I first sealed D08 with a hand-typed base SHA. Before anyone saw it, I deleted my own copy and resealed with `git rev-parse` values.
+    - Two live-entry headers had carried a later minute than `date -u` (fixed earlier).
+  - **Runtime:** lease released at 13:27:20Z (Stream 4 has it). No device or heavy slot held.
+  - **Next:**
+    - U01: the residency cards recheck and the long native activity identities;
+    - the local parts of R04/R05/H07/H08;
+    - the two D10 leads.
 
 - **2026-09-30T12:54Z — #974 final for the decision-9 trio; D05 native rename is PR #982; lease released.**
   - **[#974](https://github.com/WangPantopus/skinny-pantopus/pull/974), final head `28f92e4e0`,** r2 bundle `20260930-stream3-home-d10-retire-home-r2`, MANIFEST `348bc8e6…`. The coordinator batches it with #968 and #976 after Stream 5's rerun.
