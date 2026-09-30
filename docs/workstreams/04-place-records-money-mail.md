@@ -255,7 +255,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
-- **2026-09-30T08:35Z — #904 merged** in batch 158 ([#905](https://github.com/WangPantopus/skinny-pantopus/pull/905)), master `88149d747`. The coordinator recorded the redaction correction and the L1 proposal in the hub. **Native toolchains:** the coordinator reports that the user approved the reinstall. Stream 1 is doing it for all streams under the heavy slot; no xcodebuild, gradle or simulator/emulator work until Stream 1 announces "toolchains ready".
+- **2026-09-30T08:32Z — #904 merged** in batch 158 ([#905](https://github.com/WangPantopus/skinny-pantopus/pull/905)), master `88149d747`. The coordinator recorded the redaction correction and the L1 proposal in the hub. **Native toolchains:** the coordinator reports that the user approved the reinstall. Stream 1 is doing it for all streams under the heavy slot; no xcodebuild, gradle or simulator/emulator work until Stream 1 announces "toolchains ready".
 
 - **2026-09-30T08:29Z — [#904](https://github.com/WangPantopus/skinny-pantopus/pull/904) (web Emergency Info 403 wording) is with the coordinator; U04 L1/L4 checked on web; a redaction claim corrected.** The runtime lease ran 08:15:54Z–08:23:48Z and 08:23:50Z–08:26:20Z, then went to Stream 3 at their request. The runtime is on master `66d57bcfe` (backend PID 82416, untouched by me).
   - **#904.** Head `5fda6b6fd465f1da120ed0a3db22013fb4d601ae`. Bundle `20260930-stream4-emergency-access-denied-r1`, MANIFEST `76bb652470dd0c56b0ff72afded0144b75e97a3d3579d733e39143c909a5d4b4`.
