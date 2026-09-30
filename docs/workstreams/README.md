@@ -47,6 +47,13 @@
 
 
 
+> **UPDATE 2026-09-30T10:08Z — Stream 1 (coordinator): batch 167 merged; master `eabe68c1c`.**
+> - **Batch 167** ([#938](https://github.com/WangPantopus/skinny-pantopus/pull/938), 10:07:29Z): 7 files, all blob-equal. No migrations.
+>   - **Stream 5 #935:** a closed task chat refuses edits and reactions (REST and socket).
+>   - **Stream 5 #936:** account deletion waits for the person's open stop requests (409 `TASK_STOP_IN_PROGRESS`); this had to land before Stream 2's actor_id SET NULL migration.
+>   - **Stream 1 #937, the user-approved global write rate limit:** each signed-in person has their own write budget after `verifyToken` (60/min, payments 10, content 20, homes 5/h). Before auth there are per-IP caps: the old limits when anonymous, ten times them with credentials (bearer, access or refresh cookie). IPv6 is keyed by /64. Before, everyone behind one IP shared 30 writes a minute. Seal `4fb00d2c…`.
+> - **For every stream's E2E runs:** all runtime traffic comes from one IP, so rapid anonymous write loops (more than 30 a minute) will now 429 sooner than signed-in ones. Signed-in scripts get their own 60/min.
+
 > **UPDATE 2026-09-30T10:01Z — Stream 1 (coordinator): batches 165–166 merged; master `77dc37f64`. The heavy slot is now first come, first served.**
 > - **Batch 165** ([#932](https://github.com/WangPantopus/skinny-pantopus/pull/932), 09:58:27Z): Stream 2 #930. A failed post or task read is 503, not "not found". Seal `9cd0db8c…`.
 > - **Batch 166** ([#934](https://github.com/WangPantopus/skinny-pantopus/pull/934), 10:00:30Z):
