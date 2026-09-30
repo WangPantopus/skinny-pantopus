@@ -215,7 +215,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>🔷 A3 brand-colour token (health chip amber 1.87:1; routed to the coordinator) |
 | Place dashboard and section details (incl. Money, civic, address-calendar editor) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>🔷 A3 |
 | Records pages: Issues (Maintenance), Emergency Info, Documents | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>🔷 A3 |
-| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>🔷 A3: white on primary-600 is 4.09:1 (Copy link) and primary-600 on grey is 3.82:1 (the public page's "What is Pantopus?"); both go to Stream 1's approved AA token change |
+| Fridge card and its public page | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>⬜ A3: re-measure on master's tokens. The sweep ran on the runtime's `00bf2d6ff`, which predates #979; there the 4.09:1 (Copy link) and 3.82:1 (the public page link) pairs failed. #979 maps both utilities to `#0369A1`, which computes to 5.93:1 and 5.53:1. |
 | Maintenance history (app only) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
 
@@ -268,6 +268,13 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T14:20Z — correction to the 14:15Z fridge a11y entry.** The sweep ran on the shared runtime at `00bf2d6ff`, which predates Stream 1's #979 (AA tokens, batch 184).
+  - My "fridge code identical to master" check covered the fridge files but **not the shared design tokens** (`tailwind.config.js`, `globals.css`).
+  - The two failing pairs (4.09:1 and 3.82:1) are the old `primary-600`. Master maps `bg-`/`text-primary-600` to `#0369A1`: 5.93:1 white-on-fill and 5.53:1 on `#f6f7f9`, computed, not yet measured.
+  - A3 is back to ⬜ until a re-measure on master's tokens: the next lease window, with the two token files patched into the shared web.
+  - The sealed bundle stays as is; this entry is the correction.
+  - **Lesson:** for any visual or a11y check on the shared runtime, diff the design-token files too, not only the feature files.
 
 - **2026-09-30T14:15Z — three web verifications sealed, no code change.** Lease 14:01:01Z–14:08:47Z.
   - **Home health E1/E3/E4/E5** (`20260930-stream4-health-e1e3e4e5-r1`, MANIFEST `6363e3964f78dd53ad935c5aa0141b9d4e0e98e52560cb3d11873990a33d1f77`):
