@@ -32,7 +32,7 @@ export default function ReliabilityPanel({ profile, reliabilityLabel, reliabilit
         {reliabilityScore != null && (
           <span
             className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
-            title="Calculated from no-shows, late cancels, disputes, and on-time rate over the last 90 days."
+            title="Calculated from no-shows and late cancellations as a worker."
           >
             Score available
           </span>

@@ -391,6 +391,11 @@ const PUBLIC_USER_PROFILE_SELECT = [
   'average_rating',
   'followers_count',
   'social_links',
+  // Worker history, already public through GET /api/gigs/reliability/:userId.
+  'gigs_completed',
+  'no_show_count',
+  'late_cancel_count',
+  'reliability_score',
 ].join(', ');
 
 const FOLLOW_USER_SELECT = 'id, username, name, first_name, last_name, profile_picture_url, city, state, account_type';
@@ -3159,14 +3164,12 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
     const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
-    const [postedRes, completedRes, skillsRes] = await Promise.allSettled([
+    const [postedRes, skillsRes] = await Promise.allSettled([
       supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id),
-      supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id).eq('status', 'completed'),
       supabaseAdmin.from('UserSkill').select('skill_name').eq('user_id', userData.id).order('display_order', { ascending: true }),
     ]);
 
     const gigsPosted = postedRes.status === 'fulfilled' ? (postedRes.value.count || 0) : 0;
-    const gigsCompleted = completedRes.status === 'fulfilled' ? (completedRes.value.count || 0) : 0;
     const profileSkills = skillsRes.status === 'fulfilled' ? (skillsRes.value.data || []) : [];
 
     // Fetch reviews for this user
@@ -3238,7 +3241,11 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       show_phone: publicUserData.show_phone || false,
       created_at: publicUserData.created_at,
       gigs_posted: gigsPosted,
-      gigs_completed: gigsCompleted,
+      // Tasks done as the worker (User's own counter), not the person's posted tasks that got done.
+      gigs_completed: publicUserData.gigs_completed || 0,
+      no_show_count: publicUserData.no_show_count || 0,
+      late_cancel_count: publicUserData.late_cancel_count || 0,
+      reliability_score: publicUserData.reliability_score ?? null,
       average_rating: averageRating || publicUserData.average_rating || 0,
       review_count: reviewCount,
       followers_count: publicUserData.followers_count || 0,
@@ -3958,14 +3965,12 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
     const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
-    const [postedRes, completedRes, skillsRes2] = await Promise.allSettled([
+    const [postedRes, skillsRes2] = await Promise.allSettled([
       supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id),
-      supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id).eq('status', 'completed'),
       supabaseAdmin.from('UserSkill').select('skill_name').eq('user_id', userData.id).order('display_order', { ascending: true }),
     ]);
 
     const gigsPosted = postedRes.status === 'fulfilled' ? (postedRes.value.count || 0) : 0;
-    const gigsCompleted = completedRes.status === 'fulfilled' ? (completedRes.value.count || 0) : 0;
     const profileSkills2 = skillsRes2.status === 'fulfilled' ? (skillsRes2.value.data || []) : [];
 
     // Fetch reviews for this user
@@ -4039,7 +4044,11 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       show_phone: publicUserData.show_phone || false,
       created_at: publicUserData.created_at,
       gigs_posted: gigsPosted,
-      gigs_completed: gigsCompleted,
+      // Tasks done as the worker (User's own counter), not the person's posted tasks that got done.
+      gigs_completed: publicUserData.gigs_completed || 0,
+      no_show_count: publicUserData.no_show_count || 0,
+      late_cancel_count: publicUserData.late_cancel_count || 0,
+      reliability_score: publicUserData.reliability_score ?? null,
       average_rating: averageRating || publicUserData.average_rating || 0,
       review_count: reviewCount,
       followers_count: publicUserData.followers_count || 0,

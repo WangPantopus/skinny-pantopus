@@ -27,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -115,6 +117,12 @@ private fun RefundStatus(
     state.requests.forEach { Text(RefundValidation.receiptMessage(it)) }
     state.error?.let { Text(it, color = PantopusColors.error) }
     if (state.unconfirmed) Text("This request has not been confirmed yet.")
+    if (state.hasNoRequests) {
+        Text(
+            "No requests yet.",
+            modifier = Modifier.testTag("gigRefund.noRequests").semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
     TextButton(onClick = coordinator::checkStatus, enabled = !state.busy, modifier = Modifier.testTag("gigRefund.checkStatus")) {
         Text(if (state.busy) "Checking…" else "Check status")
     }

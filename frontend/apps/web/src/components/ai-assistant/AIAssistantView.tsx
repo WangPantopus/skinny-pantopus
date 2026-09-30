@@ -72,15 +72,15 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
   }, [startNewConversation]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-app-surface">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-indigo-50">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border-subtle bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40">
         {onBack && (
           <button
             onClick={onBack}
-            className="p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-app-surface/60 transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-app-text-secondary" />
           </button>
         )}
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -88,17 +88,17 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-gray-900 truncate">
+            <h2 className="text-sm font-semibold text-app-text truncate">
               Pantopus Assistant
             </h2>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-app-text-muted">
               {isStreaming ? 'Thinking…' : 'Ask me to draft gigs, listings, posts, or summarize mail'}
             </p>
           </div>
         </div>
         <button
           onClick={handleNewConversation}
-          className="p-2 rounded-lg hover:bg-white/60 transition-colors text-gray-500 hover:text-gray-700"
+          className="p-2 rounded-lg hover:bg-app-surface/60 transition-colors text-app-text-muted hover:text-app-text-strong"
           title="New conversation"
         >
           <Plus className="w-4 h-4" />
@@ -115,10 +115,10 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center mb-4">
               <Sparkles className="w-8 h-8 text-violet-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg font-semibold text-app-text mb-2">
               Hi! I&apos;m Pantopus
             </h3>
-            <p className="text-sm text-gray-500 mb-6 max-w-sm">
+            <p className="text-sm text-app-text-muted mb-6 max-w-sm">
               I can help you draft gigs, create listings, write posts, and
               summarize your mail. Just describe what you need!
             </p>
@@ -151,7 +151,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
+      <div className="border-t border-app-border-subtle px-4 py-3 bg-app-surface-raised/50">
         <div className="flex items-end gap-2 max-w-3xl mx-auto">
           <div className="flex-1 relative">
             <textarea
@@ -161,7 +161,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder="Describe what you need…"
-              className="w-full resize-none rounded-xl border border-gray-200 bg-white pl-4 pr-12 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-gray-400 max-h-32 scrollbar-thin"
+              className="w-full resize-none rounded-xl border border-app-border bg-app-surface pl-4 pr-12 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-app-text-muted max-h-32 scrollbar-thin"
               style={{
                 height: 'auto',
                 minHeight: '40px',
@@ -188,7 +188,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
             <button
               onClick={handleSend}
               disabled={!input.trim()}
-              className="flex-shrink-0 w-10 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:bg-gray-200 disabled:cursor-not-allowed text-white disabled:text-gray-400 flex items-center justify-center transition-colors"
+              className="flex-shrink-0 w-10 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:bg-app-border disabled:cursor-not-allowed text-white disabled:text-app-text-muted flex items-center justify-center transition-colors"
               title="Send"
             >
               <Send className="w-4 h-4" />

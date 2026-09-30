@@ -571,62 +571,72 @@ private struct HostedByRow: View {
     let onMessageHost: (@MainActor () -> Void)?
 
     var body: some View {
-        Button {
-            onMessageHost?()
-        } label: {
-            HStack(spacing: Spacing.s2) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Theme.Color.errorLight, Theme.Color.error],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Text(content.organizerInitials)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
+        // Only the host's contact line is tappable, and only when it can open a chat.
+        // Otherwise it's plain text, not a disabled button, so it keeps full contrast.
+        if let onMessageHost {
+            Button(action: onMessageHost) { row }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityText)
+                .accessibilityIdentifier("supportTrainHostedBy")
+        } else {
+            row
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityText)
+                .accessibilityIdentifier("supportTrainHostedBy")
+        }
+    }
 
-                HStack(spacing: Spacing.s1) {
-                    Text("Hosted by ")
+    private var accessibilityText: String {
+        "Hosted by \(content.organizerDisplayName)\(content.neighborHint.map { ", \($0)" } ?? "")"
+    }
+
+    private var row: some View {
+        HStack(spacing: Spacing.s2) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Theme.Color.errorLight, Theme.Color.error],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Text(content.organizerInitials)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
+            }
+            .frame(width: 24, height: 24)
+            .accessibilityHidden(true)
+
+            HStack(spacing: Spacing.s1) {
+                Text("Hosted by ")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                Text(content.organizerDisplayName)
+                    .pantopusTextStyle(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                if let hint = content.neighborHint {
+                    Text("· \(hint)")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                    Text(content.organizerDisplayName)
-                        .pantopusTextStyle(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.appTextStrong)
-                    if let hint = content.neighborHint {
-                        Text("· \(hint)")
-                            .pantopusTextStyle(.caption)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if onMessageHost != nil {
-                    Icon(.messageSquare, size: 14, color: Theme.Color.appTextMuted)
                 }
             }
-            .padding(.horizontal, Spacing.s3)
-            .padding(.vertical, Spacing.s2)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if onMessageHost != nil {
+                Icon(.messageSquare, size: 14, color: Theme.Color.appTextMuted)
+            }
         }
-        .buttonStyle(.plain)
-        // Only the host's contact line is tappable, and only when it can
-        // open a chat.
-        .disabled(onMessageHost == nil)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Hosted by \(content.organizerDisplayName)\(content.neighborHint.map { ", \($0)" } ?? "")")
-        .accessibilityIdentifier("supportTrainHostedBy")
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s2)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
+        )
     }
 }
 

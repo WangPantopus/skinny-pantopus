@@ -428,6 +428,7 @@ struct ManageFundSection: View {
                         .padding(Spacing.s2)
                         .background(Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                        .accessibilityLabel("Gift fund goal in dollars, optional")
                         .accessibilityIdentifier("manageTrainFundGoalField")
                     ManagePillButton(
                         title: isEnabled ? "Update goal" : "Enable fund",

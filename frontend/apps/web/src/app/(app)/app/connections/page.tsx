@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { Handshake, Mailbox, Send, Ban } from 'lucide-react';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { toast } from '@/components/ui/toast-store';
 import { queryKeys } from '@/lib/query-keys';
 import type { Relationship, ConnectionRequest, RelationshipUser } from '@pantopus/types';
 
@@ -91,13 +92,19 @@ function ConnectionsPageContent() {
     ]);
   };
 
+  // Say why an action failed (a request can be withdrawn, say) and refresh the lists so they match.
+  const reportFailure = async (err: unknown, fallback: string) => {
+    toast.error(err instanceof Error && err.message ? err.message : fallback);
+    await loadData().catch(() => {});
+  };
+
   const handleAccept = async (requestId: string) => {
     setActionLoading(requestId);
     try {
       await api.relationships.acceptRequest(requestId);
       await loadData();
     } catch (err) {
-      console.error('Failed to accept:', err);
+      await reportFailure(err, 'Couldn\u2019t accept this request. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -109,7 +116,7 @@ function ConnectionsPageContent() {
       await api.relationships.rejectRequest(requestId);
       await loadData();
     } catch (err) {
-      console.error('Failed to reject:', err);
+      await reportFailure(err, 'Couldn\u2019t decline this request. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -123,7 +130,7 @@ function ConnectionsPageContent() {
       await api.relationships.disconnect(relationshipId);
       await loadData();
     } catch (err) {
-      console.error('Failed to disconnect:', err);
+      await reportFailure(err, 'Couldn\u2019t remove this connection. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -135,7 +142,7 @@ function ConnectionsPageContent() {
       await api.relationships.unblock(relationshipId);
       await loadData();
     } catch (err) {
-      console.error('Failed to unblock:', err);
+      await reportFailure(err, 'Couldn\u2019t unblock. Please try again.');
     } finally {
       setActionLoading(null);
     }

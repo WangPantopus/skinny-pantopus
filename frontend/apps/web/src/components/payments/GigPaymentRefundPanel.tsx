@@ -216,6 +216,7 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
       {requests.map((r) => <p key={r.requestId} className="text-sm text-app-text-secondary">{receiptText(r)}</p>)}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {attempt && !activeReceipt && <p className="text-sm">This request has not been confirmed yet.</p>}
+      {ready && !requests.length && !attempt && <p role="status" className="text-sm text-app-text-secondary">No requests yet.</p>}
       {<button type="button" onClick={() => void loadHistory()} disabled={busy}
         className="text-sm font-medium text-app-primary disabled:opacity-50">{busy ? 'Checking…' : 'Check status'}</button>}
       {ready && attempt && (!activeReceipt || (isPending(activeReceipt) && activeReceipt.canRetry)) && (

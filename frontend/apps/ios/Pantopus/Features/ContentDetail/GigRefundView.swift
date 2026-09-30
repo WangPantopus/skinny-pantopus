@@ -57,9 +57,15 @@ struct GigRefundView: View {
         Section {
             if let error = model.error { Text(error).foregroundStyle(Theme.Color.error) }
             if model.hasUnconfirmedRequest { Text("This request has not been confirmed yet.") }
-            Button(model.busy ? "Checking…" : "Check status") { Task { await model.checkStatus() } }
-                .disabled(model.busy)
-                .accessibilityIdentifier("gigRefund.checkStatus")
+            if model.hasNoRequests { Text("No requests yet.").accessibilityIdentifier("gigRefund.noRequests") }
+            Button(model.busy ? "Checking…" : "Check status") {
+                Task {
+                    await model.checkStatus()
+                    announceStatus()
+                }
+            }
+            .disabled(model.busy)
+            .accessibilityIdentifier("gigRefund.checkStatus")
             if model.mayRetry {
                 Button("Retry this request") { Task { await model.retry() } }
                     .accessibilityIdentifier("gigRefund.retry")
@@ -80,18 +86,27 @@ struct GigRefundView: View {
     private var requestForm: some View {
         Section {
             if !model.isRelease {
-                TextField("Amount in USD (blank for remaining amount)", text: $amount)
+                TextField("Amount in USD", text: $amount)
                     .keyboardType(.decimalPad)
+                    .accessibilityLabel("Refund amount in US dollars")
                     .accessibilityIdentifier("gigRefund.amount")
-                Text("Up to \(PaymentRefundRequestDTO.money(model.remaining)) is available to request.")
+                Text("Up to \(PaymentRefundRequestDTO.money(model.remaining)) is available to request. "
+                    + "Leave the amount blank to request all of it.")
             }
             Picker("Reason", selection: $reason) {
                 ForEach(PaymentRefundReason.allCases, id: \.self) { Text($0.label).tag($0) }
             }
+            .pickerStyle(.inline)
             Button("Continue") { confirming = true }
                 .disabled(!validAmount)
             Button("Cancel", role: .cancel) { editing = false }
         }
+    }
+
+    /// A tap on Check status otherwise changes nothing a VoiceOver user hears when there's no news.
+    private func announceStatus() {
+        let status = model.error ?? (model.hasNoRequests ? "No requests yet." : "Status updated.")
+        AccessibilityNotification.Announcement(status).post()
     }
 
     private var validAmount: Bool {

@@ -68,7 +68,7 @@ function GigDraftCard({ draft }: { draft: GigDraft }) {
   };
 
   return (
-    <div className="w-full rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-white overflow-hidden">
+    <div className="w-full rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-app-surface dark:from-violet-950/40 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-3.5 py-2 bg-violet-100/50 border-b border-violet-100">
         <Briefcase className="w-3.5 h-3.5 text-violet-600" />
@@ -80,10 +80,10 @@ function GigDraftCard({ draft }: { draft: GigDraft }) {
 
       {/* Body */}
       <div className="px-3.5 py-3 space-y-2">
-        <h4 className="font-semibold text-gray-900 text-sm leading-snug">
+        <h4 className="font-semibold text-app-text text-sm leading-snug">
           {draft.title}
         </h4>
-        <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+        <p className="text-xs text-app-text-secondary leading-relaxed line-clamp-3">
           {draft.description}
         </p>
 
@@ -145,7 +145,7 @@ function ListingDraftCard({ draft }: { draft: ListingDraft }) {
   };
 
   return (
-    <div className="w-full rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white overflow-hidden">
+    <div className="w-full rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-app-surface dark:from-emerald-950/40 overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-100/50 border-b border-emerald-100">
         <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
         <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
@@ -155,11 +155,11 @@ function ListingDraftCard({ draft }: { draft: ListingDraft }) {
       </div>
 
       <div className="px-3.5 py-3 space-y-2">
-        <h4 className="font-semibold text-gray-900 text-sm leading-snug">
+        <h4 className="font-semibold text-app-text text-sm leading-snug">
           {draft.title}
         </h4>
         {draft.description && (
-          <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+          <p className="text-xs text-app-text-secondary leading-relaxed line-clamp-3">
             {draft.description}
           </p>
         )}
@@ -203,7 +203,7 @@ function PostDraftCard({ draft }: { draft: PostDraft }) {
   };
 
   return (
-    <div className="w-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-white overflow-hidden">
+    <div className="w-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-app-surface dark:from-blue-950/40 overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2 bg-blue-100/50 border-b border-blue-100">
         <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
         <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
@@ -214,11 +214,11 @@ function PostDraftCard({ draft }: { draft: PostDraft }) {
 
       <div className="px-3.5 py-3 space-y-2">
         {draft.title && (
-          <h4 className="font-semibold text-gray-900 text-sm leading-snug">
+          <h4 className="font-semibold text-app-text text-sm leading-snug">
             {draft.title}
           </h4>
         )}
-        <p className="text-xs text-gray-600 leading-relaxed line-clamp-4">
+        <p className="text-xs text-app-text-secondary leading-relaxed line-clamp-4">
           {draft.content}
         </p>
 
@@ -252,7 +252,7 @@ function PostDraftCard({ draft }: { draft: PostDraft }) {
 
 function MailSummaryCard({ summary }: { summary: MailSummary }) {
   const urgencyColors = {
-    none: 'bg-gray-100 text-gray-600',
+    none: 'bg-app-surface-sunken text-app-text-secondary',
     due_soon: 'bg-amber-100 text-amber-700',
     overdue: 'bg-red-100 text-red-700',
     time_sensitive: 'bg-orange-100 text-orange-700',
@@ -269,7 +269,7 @@ function MailSummaryCard({ summary }: { summary: MailSummary }) {
   };
 
   return (
-    <div className="w-full rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white overflow-hidden">
+    <div className="w-full rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-app-surface dark:from-amber-950/40 overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-100/50 border-b border-amber-100">
         <Mail className="w-3.5 h-3.5 text-amber-600" />
         <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
@@ -285,7 +285,7 @@ function MailSummaryCard({ summary }: { summary: MailSummary }) {
       </div>
 
       <div className="px-3.5 py-3 space-y-3">
-        <p className="text-sm text-gray-800 leading-relaxed">
+        <p className="text-sm text-app-text leading-relaxed">
           {summary.summary}
         </p>
 
@@ -294,10 +294,10 @@ function MailSummaryCard({ summary }: { summary: MailSummary }) {
           <div className="space-y-1">
             {summary.key_facts.map((fact, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="text-gray-500 font-medium min-w-[80px]">
+                <span className="text-app-text-muted font-medium min-w-[80px]">
                   {fact.field}:
                 </span>
-                <span className="text-gray-800">{fact.value}</span>
+                <span className="text-app-text">{fact.value}</span>
               </div>
             ))}
           </div>
@@ -309,7 +309,7 @@ function MailSummaryCard({ summary }: { summary: MailSummary }) {
             {summary.recommended_actions.map((action, i) => (
               <button
                 key={i}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-xs font-medium text-amber-800 hover:bg-amber-50 transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-app-surface border border-amber-200 text-xs font-medium text-amber-800 hover:bg-amber-50 transition-colors"
                 title={action.reason}
               >
                 {actionIcons[action.type] || <CheckCircle className="w-3 h-3" />}
@@ -339,7 +339,7 @@ function Chip({
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
         color === 'green'
           ? 'bg-green-100 text-green-700'
-          : 'bg-gray-100 text-gray-600'
+          : 'bg-app-surface-sunken text-app-text-secondary'
       }`}
     >
       {icon}

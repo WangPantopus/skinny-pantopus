@@ -158,7 +158,9 @@ object ManageOrganizerProjection {
             .map { slot ->
                 val date = parseDate(slot.slotDate)
                 val window =
-                    listOfNotNull(slot.startTime, slot.endTime).filter { it.isNotBlank() }.joinToString(" – ")
+                    listOfNotNull(slot.startTime, slot.endTime)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" – ") { displayTime(it) }
                 val filled = slot.filledCount ?: 0
                 val badge =
                     when {
@@ -189,6 +191,15 @@ object ManageOrganizerProjection {
     }
 
     fun longDateLabel(date: Date): String = utc("EEEE, MMMM d").format(date)
+
+    /** "17:00:00" → "5:00 pm", the way the train's detail shows a slot's times. */
+    fun displayTime(value: String): String {
+        val parsed =
+            listOf("HH:mm:ss", "HH:mm").firstNotNullOfOrNull { pattern ->
+                runCatching { utc(pattern).parse(value) }.getOrNull()
+            } ?: return value
+        return utc("h:mm a").format(parsed).lowercase(Locale.US)
+    }
 
     /** `yyyy-MM-dd` for `slot_date`. */
     fun isoDate(date: Date): String = utc("yyyy-MM-dd").format(date)

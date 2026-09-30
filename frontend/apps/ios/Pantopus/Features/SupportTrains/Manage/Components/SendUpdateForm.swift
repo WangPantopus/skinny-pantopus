@@ -193,6 +193,7 @@ public struct SendUpdateForm: View {
                     .padding(.vertical, Spacing.s2)
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appText)
+                    .accessibilityLabel("Update message")
                     .accessibilityIdentifier("manageTrainMessageField")
             }
             .frame(height: 108)
@@ -288,7 +289,7 @@ struct FlowingChipsRow: View {
                 }
                 Text(chip.label)
                     .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? Theme.Color.primary700 : Theme.Color.appTextStrong)
+                    .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appTextStrong)
                 Text(chip.count)
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()

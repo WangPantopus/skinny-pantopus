@@ -235,9 +235,9 @@ export function InlineDraftHelper({
         <button
           type="button"
           onClick={() => { setExpanded(false); setError(null); }}
-          className="p-0.5 rounded hover:bg-white/60 transition-colors"
+          className="p-0.5 rounded hover:bg-app-surface/60 transition-colors"
         >
-          <X className="w-3.5 h-3.5 text-gray-400" />
+          <X className="w-3.5 h-3.5 text-app-text-muted" />
         </button>
       </div>
 
@@ -254,7 +254,7 @@ export function InlineDraftHelper({
               ? 'e.g. "barely used Dyson V15 vacuum, $200"'
               : 'e.g. "looking for hiking buddies this weekend"'
           }
-          className="flex-1 px-2.5 py-1.5 rounded-md border border-gray-200 bg-white text-gray-900 text-xs placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-300"
+          className="flex-1 px-2.5 py-1.5 rounded-md border border-app-border bg-app-surface text-app-text text-xs placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-300"
           disabled={loading}
         />
         <button

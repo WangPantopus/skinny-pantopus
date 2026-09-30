@@ -7,7 +7,6 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainContribut
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainModesDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainMyReservationDto
-import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizerDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.ui.components.SlotCalendarDay
 import app.pantopus.android.ui.components.SlotCalendarState
@@ -23,13 +22,10 @@ import java.util.TimeZone
  *
  * PROJECTION GAPS (degrade gracefully): `/:id` omits the per-slot helper /
  * dish and the contributor roster, so covered rows render without a dish
- * author, the contributor strip is built from `organizers`, and the
- * recipient identity defaults to Home.
+ * author, the contributor strip shows the signup count without faces
+ * (organizers aren't helpers), and the recipient identity defaults to Home.
  */
 object SupportTrainDetailProjection {
-    private val CONTRIBUTOR_TONES =
-        listOf(ContributorTone.Warning, ContributorTone.Primary, ContributorTone.Business, ContributorTone.Success)
-
     private const val MILLIS_PER_DAY = 1000L * 60 * 60 * 24
 
     fun project(dto: SupportTrainDetailDto): SupportTrainDetailContent {
@@ -50,8 +46,8 @@ object SupportTrainDetailProjection {
                 daysLeft = daysLeft(slots),
                 slotsFilled = covered,
                 slotsTotal = total,
-                contributors = contributors(organizers),
-                extraCount = maxOf(0, covered - minOf(organizers.size, 4)),
+                contributors = emptyList(),
+                extraCount = 0,
                 status = dto.status,
             )
         val isFull = typeDates.isFullyCovered
@@ -203,16 +199,6 @@ object SupportTrainDetailProjection {
             modes.homeCookedMeals == true || modes.takeout == true -> SupportTrainKind.Meals
             modes.groceries == true -> SupportTrainKind.Errands
             else -> SupportTrainKind.Generic
-        }
-
-    private fun contributors(organizers: List<SupportTrainOrganizerDto>): List<ContributorBubble> =
-        organizers.take(4).mapIndexed { index, organizer ->
-            val display = organizer.user?.let { it.name ?: it.username } ?: "Helper"
-            ContributorBubble(
-                id = organizer.id,
-                initials = initials(display),
-                tone = CONTRIBUTOR_TONES[index % CONTRIBUTOR_TONES.size],
-            )
         }
 
     private fun calendar(

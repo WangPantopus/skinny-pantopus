@@ -148,26 +148,32 @@ public struct TypeDatesCard: View {
 
     private var contributorStrip: some View {
         HStack(spacing: Spacing.s2) {
-            ZStack(alignment: .leading) {
-                ForEach(Array(content.contributors.prefix(4).enumerated()), id: \.element.id) { index, bubble in
-                    contributorDisc(bubble)
-                        .offset(x: CGFloat(index) * 15)
-                }
-                if content.extraCount > 0 {
-                    extraDisc
-                        .offset(x: CGFloat(min(content.contributors.count, 4)) * 15)
-                }
+            if !content.contributors.isEmpty || content.extraCount > 0 {
+                contributorDiscs
             }
-            .frame(
-                width: contributorRowWidth,
-                height: 22,
-                alignment: .leading
-            )
 
             Text(contributorHelperLine)
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
+    }
+
+    private var contributorDiscs: some View {
+        ZStack(alignment: .leading) {
+            ForEach(Array(content.contributors.prefix(4).enumerated()), id: \.element.id) { index, bubble in
+                contributorDisc(bubble)
+                    .offset(x: CGFloat(index) * 15)
+            }
+            if content.extraCount > 0 {
+                extraDisc
+                    .offset(x: CGFloat(min(content.contributors.count, 4)) * 15)
+            }
+        }
+        .frame(
+            width: contributorRowWidth,
+            height: 22,
+            alignment: .leading
+        )
     }
 
     private func contributorDisc(_ bubble: ContributorBubble) -> some View {
@@ -198,8 +204,13 @@ public struct TypeDatesCard: View {
         return CGFloat(count - 1) * 15 + 22
     }
 
+    /// Counts signups only: a covered slot is reserved, not yet confirmed.
     private var contributorHelperLine: String {
-        content.isFullyCovered ? "All neighbors confirmed" : "\(content.slotsFilled) neighbors signed up"
+        switch content.slotsFilled {
+        case 0: "No one has signed up yet"
+        case 1: "1 neighbor signed up"
+        default: "\(content.slotsFilled) neighbors signed up"
+        }
     }
 
     private var metaLine: String {

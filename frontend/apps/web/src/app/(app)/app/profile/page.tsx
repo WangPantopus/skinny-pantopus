@@ -35,14 +35,6 @@ export default function MyProfilePage() {
       }
 
       const userData = await api.users.getMyProfile();
-      console.log('✅ User data loaded:', userData);
-      console.log('📋 User fields:', {
-        username: userData.username,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        name: userData.name,
-        email: userData.email,
-      });
       setUser(userData);
 
       // Load user stats
@@ -188,6 +180,17 @@ export default function MyProfilePage() {
   
   const initial = fullName?.[0]?.toUpperCase() || 'U';
 
+  // What Edit Profile can fill in. The photo counts as this page shows it: /api/users/profile's `avatar_url` is
+  // always null (User has no such column); the picture comes as `profilePicture`.
+  const completionItems = [
+    { completed: !!(user.avatar_url || user.profilePicture), text: 'Add profile picture' },
+    { completed: !!user.bio?.trim(), text: 'Write a bio' },
+    { completed: !!(user.skills && user.skills.length > 0), text: 'Add skills' },
+  ];
+  const completionPercent = Math.round(
+    (completionItems.filter((item) => item.completed).length / completionItems.length) * 100,
+  );
+
   return (
     <div className="bg-app text-app">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -208,7 +211,7 @@ export default function MyProfilePage() {
                     className="w-32 h-32 rounded-full object-cover border-4 border-app-border mb-4"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-app-border mb-4">
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-app-border mb-4">
                     {initial}
                   </div>
                 )}
@@ -442,34 +445,35 @@ export default function MyProfilePage() {
               </div>
             </div>
 
-            {/* Profile Completion */}
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-16 h-16 rounded-full bg-app-surface border-4 border-blue-300 flex items-center justify-center">
-                    <span className="text-2xl font-bold text-blue-600">65%</span>
+            {/* Profile Completion (hidden once everything is filled in) */}
+            {completionPercent < 100 && (
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40 rounded-xl border border-blue-200 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-16 h-16 rounded-full bg-app-surface border-4 border-blue-300 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-blue-600">{completionPercent}%</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-app-text mb-2">Complete Your Profile</h3>
+                    <p className="text-sm text-app-text-secondary mb-4">
+                      A complete profile helps you get more gigs and build trust with clients.
+                    </p>
+                    <ul className="space-y-2 text-sm">
+                      {completionItems.map((item) => (
+                        <CompletionItem key={item.text} completed={item.completed} text={item.text} />
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => router.push('/app/profile/edit')}
+                      className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+                    >
+                      Complete Profile
+                    </button>
                   </div>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-app-text mb-2">Complete Your Profile</h3>
-                  <p className="text-sm text-app-text-secondary mb-4">
-                    A complete profile helps you get more gigs and build trust with clients.
-                  </p>
-                  <ul className="space-y-2 text-sm">
-                    <CompletionItem completed={!!user.avatar_url} text="Add profile picture" />
-                    <CompletionItem completed={!!user.bio} text="Write a bio" />
-                    <CompletionItem completed={!!(user.skills && user.skills.length > 0)} text="Add skills" />
-                    <CompletionItem completed={false} text="Add portfolio items" />
-                  </ul>
-                  <button
-                    onClick={() => router.push('/app/profile/edit')}
-                    className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
-                  >
-                    Complete Profile
-                  </button>
-                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </main>
