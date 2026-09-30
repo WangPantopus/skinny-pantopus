@@ -32,7 +32,7 @@ export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessCon
 
   switch (block.block_type) {
     case 'hero':
-      return <PublicHero data={d} business={ctx.business} />;
+      return <PublicHero data={d} business={ctx.business} ctx={ctx} />;
     case 'text':
       return <PublicText data={d} />;
     case 'gallery':
@@ -44,7 +44,7 @@ export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessCon
     case 'locations_map':
       return <PublicLocationsMap data={d} locations={ctx.locations} />;
     case 'cta':
-      return <PublicCta data={d} onContact={ctx.onContact} />;
+      return <PublicCta data={d} ctx={ctx} />;
     case 'faq':
       return <PublicFaq data={d} />;
     case 'reviews':
@@ -67,9 +67,77 @@ export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessCon
 }
 
 
+// ─── Button actions ───────────────────────────
+
+/** An owner-entered link, only if it is a plain http(s) web address. */
+export function safeHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+type CtaTarget = { href: string; external?: boolean } | { onClick: () => void | Promise<void> };
+
+/**
+ * Where a hero or CTA-block button goes, from the action picked in the page editor. A button whose target
+ * is missing (no public phone, no mappable location, no valid link) isn't shown. Message, and any other
+ * action (Book among them: public scheduling is not offered), opens the inquiry chat, as the CTA block did.
+ */
+function ctaTarget(c: Record<string, any>, ctx: BusinessContext): CtaTarget | null {
+  const action = (c?.action as string) || (c?.url ? 'link' : 'message');
+  const primary = (ctx.locations || []).find((l) => l.is_primary) || (ctx.locations || [])[0];
+  if (action === 'call') {
+    const phone = String(ctx.profile?.public_phone || primary?.phone || '').replace(/[^\d+]/g, '');
+    return phone ? { href: `tel:${phone}` } : null;
+  }
+  if (action === 'directions') {
+    // A home-based business's public point is deliberately approximate, so it gets no directions.
+    const point = primary && !primary.is_home_based ? primary.location : null;
+    return point?.latitude != null && point?.longitude != null
+      ? { href: `https://maps.google.com/?q=${point.latitude},${point.longitude}`, external: true }
+      : null;
+  }
+  if (action === 'link') {
+    const href = safeHttpUrl(c?.url);
+    return href ? { href, external: true } : null;
+  }
+  return ctx.onContact ? { onClick: ctx.onContact } : null;
+}
+
+function CtaButton({ target, className, children }: { target: CtaTarget; className: string; children: React.ReactNode }) {
+  if ('href' in target) {
+    return (
+      <a
+        href={target.href}
+        className={`${className} text-center`}
+        {...(target.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={() => void target.onClick()} className={className}>
+      {children}
+    </button>
+  );
+}
+
+function actionableCtas(list: unknown, ctx: BusinessContext) {
+  return (Array.isArray(list) ? list : [])
+    .map((c: Record<string, any>) => ({ c, target: ctaTarget(c, ctx) }))
+    .filter((x): x is { c: Record<string, any>; target: CtaTarget } => x.target !== null);
+}
+
+
 // ─── Public Block Components ──────────────────
 
-function PublicHero({ data, business }: { data: Record<string, any>; business: Record<string, any> | null }) {
+function PublicHero({ data, business, ctx }: { data: Record<string, any>; business: Record<string, any> | null; ctx: BusinessContext }) {
+  const ctas = actionableCtas(data.cta, ctx);
   return (
     <section className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 text-white">
       {data.background_file_id && (
@@ -82,11 +150,12 @@ function PublicHero({ data, business }: { data: Record<string, any>; business: R
         {data.subhead && (
           <p className="mt-3 text-lg md:text-xl text-white/80 max-w-2xl">{data.subhead as string}</p>
         )}
-        {Array.isArray(data.cta) && data.cta.length > 0 && (
+        {ctas.length > 0 && (
           <div className="mt-6 flex flex-wrap gap-3">
-            {(data.cta as Record<string, any>[]).map((c, i: number) => (
-              <button
+            {ctas.map(({ c, target }, i: number) => (
+              <CtaButton
                 key={i}
+                target={target}
                 className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
                   i === 0
                     ? 'bg-app-surface text-app-text hover:bg-app-hover'
@@ -94,7 +163,7 @@ function PublicHero({ data, business }: { data: Record<string, any>; business: R
                 }`}
               >
                 {(c.label as string) || 'Learn More'}
-              </button>
+              </CtaButton>
             ))}
           </div>
         )}
@@ -294,23 +363,18 @@ function PublicLocationsMap({ data, locations }: { data: Record<string, any>; lo
   );
 }
 
-function PublicCta({ data, onContact }: { data: Record<string, any>; onContact?: () => void | Promise<void> }) {
+function PublicCta({ data, ctx }: { data: Record<string, any>; ctx: BusinessContext }) {
+  const buttons = actionableCtas(data.buttons, ctx);
   return (
     <section className="py-8 px-8 rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 text-center">
       <h2 className="text-2xl font-bold text-app-text">{(data.heading as string) || 'Get in touch'}</h2>
       {data.subhead && <p className="text-app-text-secondary mt-2 max-w-lg mx-auto">{data.subhead as string}</p>}
-      {Array.isArray(data.buttons) && data.buttons.length > 0 && (
+      {buttons.length > 0 && (
         <div className="mt-5 flex justify-center gap-3">
-          {(data.buttons as Record<string, any>[]).map((b, i: number) => (
-            <button
+          {buttons.map(({ c: b, target }, i: number) => (
+            <CtaButton
               key={i}
-              onClick={() => {
-                if (b?.url) {
-                  window.open(b.url as string, '_blank', 'noopener,noreferrer');
-                  return;
-                }
-                if (onContact) void onContact();
-              }}
+              target={target}
               className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
                 i === 0
                   ? 'bg-violet-600 text-white hover:bg-violet-700'
@@ -318,7 +382,7 @@ function PublicCta({ data, onContact }: { data: Record<string, any>; onContact?:
               }`}
             >
               {(b.label as string) || 'Button'}
-            </button>
+            </CtaButton>
           ))}
         </div>
       )}

@@ -8,6 +8,7 @@
 
 import React from 'react';
 import type { BlockData } from './BlockPreview';
+import { safeHttpUrl } from './PublicBlockRenderer';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 interface BlockEditorProps {
@@ -391,8 +392,8 @@ function CtaListEditor({
   onChange,
   label = 'CTAs',
 }: {
-  ctas: { label: string; action?: string }[];
-  onChange: (ctas: { label: string; action?: string }[]) => void;
+  ctas: { label: string; action?: string; url?: string }[];
+  onChange: (ctas: { label: string; action?: string; url?: string }[]) => void;
   label?: string;
 }) {
   const add = () => onChange([...ctas, { label: '', action: '' }]);
@@ -414,26 +415,43 @@ function CtaListEditor({
       ) : (
         <div className="space-y-2">
           {ctas.map((c, i) => (
-            <div key={i} className="flex gap-1.5 items-start bg-app-surface-raised rounded-lg p-2">
-              <input
-                value={c.label}
-                onChange={(e) => update(i, 'label', e.target.value)}
-                placeholder="Label"
-                className="flex-1 rounded border border-app-border px-2 py-1 text-xs"
-              />
-              <select
-                value={c.action || ''}
-                onChange={(e) => update(i, 'action', e.target.value)}
-                className="w-24 rounded border border-app-border px-1 py-1 text-xs"
-              >
-                <option value="">Action</option>
-                <option value="message">Message</option>
-                <option value="call">Call</option>
-                <option value="directions">Directions</option>
-                <option value="link">Link</option>
-                <option value="book">Book</option>
-              </select>
-              <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
+            <div key={i} className="bg-app-surface-raised rounded-lg p-2">
+              <div className="flex gap-1.5 items-start">
+                <input
+                  value={c.label}
+                  onChange={(e) => update(i, 'label', e.target.value)}
+                  placeholder="Label"
+                  className="flex-1 rounded border border-app-border px-2 py-1 text-xs"
+                />
+                <select
+                  value={c.action || ''}
+                  onChange={(e) => update(i, 'action', e.target.value)}
+                  className="w-24 rounded border border-app-border px-1 py-1 text-xs"
+                >
+                  <option value="">Action</option>
+                  <option value="message">Message</option>
+                  <option value="call">Call</option>
+                  <option value="directions">Directions</option>
+                  <option value="link">Link</option>
+                  <option value="book">Book</option>
+                </select>
+                <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
+              </div>
+              {c.action === 'link' && (
+                <>
+                  <input
+                    type="url"
+                    value={c.url || ''}
+                    onChange={(e) => update(i, 'url', e.target.value)}
+                    placeholder="https://example.com"
+                    aria-label="Link address"
+                    className="mt-1.5 w-full rounded border border-app-border px-2 py-1 text-xs"
+                  />
+                  {!safeHttpUrl(c.url) && (
+                    <p className="mt-1 text-[10px] text-app-text-muted">Visitors see this button once it has a web address starting with https://</p>
+                  )}
+                </>
+              )}
             </div>
           ))}
         </div>
