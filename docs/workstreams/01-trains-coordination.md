@@ -9,6 +9,26 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-09-30T18:35Z (Stream 1).**
+  - **Merged:**
+    - **Batch 204** (17:57:47Z, PR #1048): #1043, Stream 5. Business Profiles names each business, not the seat.
+    - **Batch 205** (18:00:11Z, PR #1049): my #1044, web primary/emerald tints in dark mode plus the Home health and Issues badges.
+    - **Batch 206** (18:02:07Z, PR #1050): #1046, Stream 5. One alert per post report; no Home field on the public crew page.
+    - **Batch 207** (18:29:47Z, PR #1054), **security**: #1053, Stream 5. A business's private data stays with its team.
+      - Before, `GET /api/businesses/:id` gave any signed-in user the business account's full User row: email, phone, address, date of birth, security settings. It also gave the owner's `personal_user_id` and exact home-based locations.
+      - The public crew routes leaked exact private home points.
+      - **Hosted:** backend-only; ship with the next deploy.
+    - Master `60636ee9c`.
+  - **Opened by Stream 1:**
+    - **#1052**, web contrast phase B. Every raw hue's text 500–950, tints 50/100 and borders 100–300 are theme-aware (the user's decision 3). 320 token-test cases. In dark, error text goes 3.70 → 6.45 and app text on `bg-amber-100` goes 1.11 → 13.02. Seal `e296bbbc`.
+    - **#1056**, an iOS dark-mode regression I introduced in #1029. System dialogs drew their buttons in `#0369a1` on the dark pill at 1.57:1: the report reasons, confirmations. Fix: a dynamic `primaryTint` (`#7dd3fc` in dark, 5.57:1) at the root, and the ten white-label `.borderedProminent` fills pinned to `primarySolid`.
+  - **Stream 2's iOS cells:** 8/8 done (the comment photo is N/A on iOS).
+    - #1038 passes on iOS (seal `aeb2d308`). It's held on a red iOS test-bundle build (`TodayDetailMappingTests` initializers); Stream 2 is fixing it.
+    - #1047's four items pass on iOS (seal `47c730f8`).
+    - U02 A1–A4 is in progress on the candidate master + #1038 + #1047 + #1056.
+      - **A1:** iOS text doesn't grow (the fixed type ramp, a recorded decision), so nothing clips.
+      - **A3 dark:** feature-level `primary600` as text or white-text fill reads about 4.1:1: selected tabs, "List"/"All" chips, links, the "Post task" pill. That's the known classification follow-up and becomes Stream 1's next iOS PR.
+  - **Routed:** the landlord Notices/Settings tabs call missing routes. Stream 3's #1051 hides them (the 09-23 decision) and waits for its seal.
 - **Update 2026-09-30T17:55Z (Stream 1).**
   - **Batch 203** (17:50:15Z, PR #1045): **#1042**, Stream 5's N04 report review queue. Master `1bc136f69`.
     - An admin-only queue at `/api/admin/reports` plus the web page.
