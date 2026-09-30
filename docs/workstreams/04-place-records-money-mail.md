@@ -269,7 +269,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
-- **2026-09-30T08:58Z — #906 and #907 merged; native toolchains are ready.**
+- **2026-09-30T08:55Z — #906 and #907 merged; native toolchains are ready.**
   - #906 and #907 merged in batch 159 ([#909](https://github.com/WangPantopus/skinny-pantopus/pull/909), tip `0f302700c`, 08:51:58Z, master `add968868`).
   - The coordinator decided the two shared items: WCAG-AA brand colours (Stream 1 implements them) and a staging pass before launch.
   - **Toolchains ready** (hub `177c17d44`). Streams 3 and 4 share AVD `pantopus_s34` (port 5562) and simulator "Pantopus S34" (iPhone 17, `DA8C2A5F-39BC-421D-9F18-EB4B481E506F`) under the runtime lease. Boot only after `device-slot.sh acquire`; builds go through `heavy-slot.sh`. The native queue (open work item 9) is unblocked.
