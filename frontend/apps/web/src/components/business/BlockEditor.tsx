@@ -195,8 +195,7 @@ function BlockTypeFields({
       return (
         <>
           <EditorField label="Heading" value={d.heading || ''} onChange={(v) => updateData({ heading: v })} />
-          <EditorField label="Image count" value={String(d.image_count || 6)} onChange={(v) => updateData({ image_count: Number(v) || 6 })} type="number" />
-          <ImagePlaceholder label="Gallery images" fileId={null} note="Image uploads available in media manager" />
+          <p className="text-[10px] text-app-text-muted">Photos can&apos;t be added to a gallery yet, so visitors don&apos;t see this block.</p>
         </>
       );
 
@@ -271,7 +270,7 @@ function BlockTypeFields({
       return (
         <>
           <EditorField label="Heading" value={d.heading || ''} onChange={(v) => updateData({ heading: v })} />
-          <p className="text-[10px] text-app-text-muted">Team members are pulled from your business team settings.</p>
+          <p className="text-[10px] text-app-text-muted">Your team isn&apos;t listed on your public page yet, so visitors don&apos;t see this block.</p>
         </>
       );
 
@@ -279,7 +278,7 @@ function BlockTypeFields({
       return (
         <>
           <EditorField label="Heading" value={d.heading || ''} onChange={(v) => updateData({ heading: v })} />
-          <p className="text-[10px] text-app-text-muted">Messages will be sent to your business email.</p>
+          <p className="text-[10px] text-app-text-muted">Signed-in visitors can send you a message here. It arrives in your Inbox as a chat.</p>
         </>
       );
 
@@ -287,7 +286,7 @@ function BlockTypeFields({
       return (
         <>
           <EditorField label="URL" value={d.url || ''} onChange={(v) => updateData({ url: v })} placeholder="https://youtube.com/watch?v=..." type="url" />
-          <p className="text-[10px] text-app-text-muted">Supports YouTube, Vimeo, Google Maps, and other embeddable URLs.</p>
+          <p className="text-[10px] text-app-text-muted">YouTube and Vimeo videos play on your page. Any other web address shows as a link.</p>
         </>
       );
 
@@ -295,7 +294,7 @@ function BlockTypeFields({
       return (
         <>
           <EditorField label="Heading" value={d.heading || ''} onChange={(v) => updateData({ heading: v })} />
-          <EditorField label="Max items" value={String(d.max_items || 5)} onChange={(v) => updateData({ max_items: Number(v) || 5 })} type="number" />
+          <p className="text-[10px] text-app-text-muted">Posts aren&apos;t shown on your public page yet, so visitors don&apos;t see this block.</p>
         </>
       );
 

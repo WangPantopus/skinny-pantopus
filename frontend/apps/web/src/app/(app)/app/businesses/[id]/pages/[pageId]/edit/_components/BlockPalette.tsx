@@ -1,6 +1,7 @@
 'use client';
 
 import { BLOCK_TYPE_REGISTRY } from '@/components/business/BlockPreview';
+import { BLOCKS_NOT_SHOWN_TO_VISITORS } from '@/components/business/PublicBlockRenderer';
 
 interface BlockPaletteProps {
   onAddBlock: (blockType: string) => void;
@@ -13,7 +14,7 @@ export default function BlockPalette({ onAddBlock }: BlockPaletteProps) {
         <div className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider">Add Blocks</div>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-        {BLOCK_TYPE_REGISTRY.map((reg) => (
+        {BLOCK_TYPE_REGISTRY.filter((reg) => !BLOCKS_NOT_SHOWN_TO_VISITORS.has(reg.type)).map((reg) => (
           <button
             key={reg.type}
             onClick={() => onAddBlock(reg.type)}

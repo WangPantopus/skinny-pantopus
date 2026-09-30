@@ -24,10 +24,20 @@ interface BusinessContext {
   business: Record<string, any> | null;
   profile: Record<string, any> | null;
   onContact?: () => void | Promise<void>;
+  /** Sends the contact form's message into the inquiry chat; true once it is sent. */
+  onSendMessage?: (text: string) => Promise<boolean>;
   canContact?: boolean;
 }
 
+/**
+ * Block types with nothing to show visitors yet: the public page gets no team members or posts, and a
+ * gallery can't hold photos (the editor has no uploader). Visitors see nothing rather than a placeholder,
+ * and the page editor no longer offers them.
+ */
+export const BLOCKS_NOT_SHOWN_TO_VISITORS = new Set(['gallery', 'team', 'posts_feed']);
+
 export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessContext }) {
+  if (BLOCKS_NOT_SHOWN_TO_VISITORS.has(block.block_type)) return null;
   const d = block.data || {};
 
   switch (block.block_type) {
@@ -35,8 +45,6 @@ export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessCon
       return <PublicHero data={d} business={ctx.business} ctx={ctx} />;
     case 'text':
       return <PublicText data={d} />;
-    case 'gallery':
-      return <PublicGallery data={d} />;
     case 'catalog_grid':
       return <PublicCatalogGrid data={d} catalog={ctx.catalog} />;
     case 'hours':
@@ -51,16 +59,19 @@ export function PublicBlock({ block, ctx }: { block: BlockData; ctx: BusinessCon
       return <PublicReviews data={d} business={ctx.business} />;
     case 'stats':
       return <PublicStats data={d} />;
-    case 'team':
-      return <PublicTeam data={d} />;
     case 'contact_form':
-      return <PublicContactForm data={d} onContact={ctx.onContact} canContact={ctx.canContact} />;
+      return (
+        <PublicContactForm
+          data={d}
+          onContact={ctx.onContact}
+          onSendMessage={ctx.onSendMessage}
+          canContact={ctx.canContact}
+        />
+      );
     case 'divider':
       return <hr className="my-6 border-app-border" />;
     case 'embed':
       return <PublicEmbed data={d} />;
-    case 'posts_feed':
-      return <PublicPostsFeed data={d} />;
     default:
       return null; // Unknown blocks are hidden on public pages
   }
@@ -78,6 +89,31 @@ export function safeHttpUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A YouTube or Vimeo video's player address (their privacy-enhanced players), from an owner-entered link.
+ * Any other address has no player.
+ */
+export function videoEmbedUrl(value: unknown): string | null {
+  const href = safeHttpUrl(value);
+  if (!href) return null;
+  const url = new URL(href);
+  const host = url.hostname.replace(/^(www|m)\./, '');
+  let youtubeId: string | null = null;
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    youtubeId = url.pathname === '/watch'
+      ? url.searchParams.get('v')
+      : url.pathname.match(/^\/(?:embed|shorts|live)\/([^/]+)/)?.[1] ?? null;
+  } else if (host === 'youtu.be') {
+    youtubeId = url.pathname.split('/')[1] || null;
+  }
+  if (youtubeId && /^[A-Za-z0-9_-]{11}$/.test(youtubeId)) return `https://www.youtube-nocookie.com/embed/${youtubeId}`;
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    const vimeoId = url.pathname.match(/^\/(?:video\/)?(\d+)(?:\/|$)/)?.[1];
+    if (vimeoId) return `https://player.vimeo.com/video/${vimeoId}?dnt=1`;
+  }
+  return null;
 }
 
 type CtaTarget = { href: string; external?: boolean } | { onClick: () => void | Promise<void> };
@@ -180,26 +216,6 @@ function PublicText({ data }: { data: Record<string, any> }) {
       )}
       <div className="text-app-text-secondary leading-relaxed whitespace-pre-wrap">
         {(data.body as string) || ''}
-      </div>
-    </section>
-  );
-}
-
-function PublicGallery({ data }: { data: Record<string, any> }) {
-  const count = (data.image_count as number) || 6;
-  return (
-    <section className="py-6">
-      {data.heading && (
-        <h2 className="text-2xl font-bold text-app-text mb-4">{data.heading as string}</h2>
-      )}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {Array.from({ length: Math.min(count, 9) }).map((_, i) => (
-          <div key={i} className="aspect-square rounded-xl bg-app-surface-sunken flex items-center justify-center">
-            <svg className="w-8 h-8 text-app-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -464,75 +480,108 @@ function PublicStats({ data }: { data: Record<string, any> }) {
   );
 }
 
-function PublicTeam({ data }: { data: Record<string, any> }) {
-  return (
-    <section className="py-6">
-      {data.heading && (
-        <h2 className="text-2xl font-bold text-app-text mb-4">{data.heading as string}</h2>
-      )}
-      <p className="text-sm text-app-text-secondary">Team members will be displayed here.</p>
-    </section>
-  );
-}
-
+/**
+ * The typed message goes into the same inquiry chat as the Message button, and the chat, not a form,
+ * carries who sent it. A signed-out visitor gets only the log-in button, so nothing typed is lost.
+ */
 function PublicContactForm({
   data,
   onContact,
+  onSendMessage,
   canContact,
 }: {
   data: Record<string, any>;
   onContact?: () => void | Promise<void>;
+  onSendMessage?: (text: string) => Promise<boolean>;
   canContact?: boolean;
 }) {
+  const [text, setText] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const messageId = React.useId();
+  const message = text.trim();
+
+  const send = async () => {
+    if (!canContact) {
+      if (onContact) void onContact();
+      return;
+    }
+    if (!onSendMessage || !message || sending) return;
+    setSending(true);
+    try {
+      if (await onSendMessage(message)) setText('');
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <section className="py-6">
       {data.heading && (
         <h2 className="text-2xl font-bold text-app-text mb-4">{data.heading as string}</h2>
       )}
       <div className="rounded-xl border border-app-border bg-app-surface p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-1">Name</label>
-          <input type="text" className="w-full rounded-lg border border-app-border px-3 py-2 text-sm" placeholder="Your name" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-1">Email</label>
-          <input type="email" className="w-full rounded-lg border border-app-border px-3 py-2 text-sm" placeholder="your@email.com" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-1">Message</label>
-          <textarea className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none" rows={4} placeholder="How can we help?" />
-        </div>
+        {canContact && (
+          <div>
+            <label htmlFor={messageId} className="block text-sm font-medium text-app-text-strong mb-1">Message</label>
+            <textarea
+              id={messageId}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={10000}
+              className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
+              rows={4}
+              placeholder="How can we help?"
+            />
+          </div>
+        )}
         <button
-          onClick={() => {
-            if (onContact) void onContact();
-          }}
-          className="px-5 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition"
+          type="button"
+          onClick={() => void send()}
+          disabled={canContact && (!message || sending)}
+          className="px-5 py-2.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {canContact ? 'Send Message' : 'Log in to Contact'}
+          {canContact ? (sending ? 'Sending…' : 'Send Message') : 'Log in to Contact'}
         </button>
       </div>
     </section>
   );
 }
 
+/** A YouTube or Vimeo video plays in place; any other web address is a link to it. */
 function PublicEmbed({ data }: { data: Record<string, any> }) {
-  if (!data.url) return null;
+  const player = videoEmbedUrl(data.url);
+  if (player) {
+    return (
+      <section className="py-6">
+        <div className="rounded-xl overflow-hidden border border-app-border bg-app-surface-sunken aspect-video">
+          <iframe
+            src={player}
+            title="Embedded video"
+            className="w-full h-full"
+            loading="lazy"
+            referrerPolicy="strict-origin-when-cross-origin"
+            sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+          />
+        </div>
+      </section>
+    );
+  }
+  const href = safeHttpUrl(data.url);
+  if (!href) return null;
+  const address = new URL(href);
   return (
     <section className="py-6">
-      <div className="rounded-xl overflow-hidden border border-app-border bg-app-surface-sunken aspect-video flex items-center justify-center">
-        <span className="text-sm text-app-text-muted">Embedded content: {data.url}</span>
-      </div>
-    </section>
-  );
-}
-
-function PublicPostsFeed({ data }: { data: Record<string, any> }) {
-  return (
-    <section className="py-6">
-      {data.heading && (
-        <h2 className="text-2xl font-bold text-app-text mb-4">{data.heading as string}</h2>
-      )}
-      <p className="text-sm text-app-text-secondary">Posts will appear here when available.</p>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface p-4 text-sm text-violet-600 hover:bg-app-hover transition"
+      >
+        <span className="break-all">{address.hostname + (address.pathname === '/' ? '' : address.pathname)}</span>
+        <span aria-hidden="true">↗</span>
+      </a>
     </section>
   );
 }
