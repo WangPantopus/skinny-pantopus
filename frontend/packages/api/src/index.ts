@@ -251,7 +251,7 @@ export type { TranslationResult, CommunityMailItem, CommunityType, HomeAssetSumm
 export type { TenantHomeStatus, TenantLease, TenantLeaseState, LandlordInfo } from './endpoints/tenant';
 
 // Types from addressValidation
-export type { AddressVerdictStatus, AddressVerdict, NormalizedAddress, ValidateAddressResponse, AddressCandidate, ExistingHousehold, AddressClaim, MailVerificationStatus, MailVerifyStartResponse, MailVerifyConfirmResponse, MailVerifyStatusResponse } from './endpoints/addressValidation';
+export type { AddressVerdictStatus, AddressVerdict, NormalizedAddress, ValidateAddressResponse, AddressCandidate, AddressClaim, MailVerificationStatus, MailVerifyStartResponse, MailVerifyConfirmResponse, MailVerifyStatusResponse } from './endpoints/addressValidation';
 export { validateAddress, validateUnit, claimAddress, startMailVerification, confirmMailVerification, resendMailVerification, getMailVerificationStatus } from './endpoints/addressValidation';
 
 // Convenience exports from businessSeats (Identity Firewall)

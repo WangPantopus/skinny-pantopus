@@ -125,7 +125,6 @@ function makeValidateResponse(
         confidence: 0.92,
         normalized: makeNormalized({ line1: '321 Elm St' }),
         deliverability: makeDeliverability(),
-        existing_household: { home_id: 'home-existing', member_count: 3, active_roles: ['owner', 'member'] },
         candidates: [],
         next_actions: ['join_existing', 'dispute'],
       },
@@ -593,8 +592,8 @@ test.describe('TEST 5: Conflict flow', () => {
     await expect(page.getByText('Address already has a household')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/someone has already registered/i)).toBeVisible();
 
-    // Should show member count
-    await expect(page.getByText(/3 members currently registered/)).toBeVisible();
+    // The household's size is not shown (the server no longer sends it)
+    await expect(page.getByText(/currently registered/)).toHaveCount(0);
 
     // Should show three options
     await expect(page.getByText('Request to Join')).toBeVisible();

@@ -821,6 +821,11 @@ final class AddHomeWizardViewModel: WizardModel {
             ))
             guard addressIsCurrent(revision) else { return }
             try Self.validateLookup(response, verdictStatus: validation.verdict.status)
+            // An "Invite only" Home isn't named to people outside it.
+            if response.isPrivateHome {
+                errorMessage = Self.privateHomeMessage
+                return
+            }
             guard matchesRequiredHome(response.homeId) else {
                 rejectDifferentHome()
                 return
@@ -852,17 +857,24 @@ final class AddHomeWizardViewModel: WizardModel {
         }
     }
 
+    static let privateHomeMessage =
+        "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation."
+
     private static func validateLookup(_ response: CheckAddressResponse, verdictStatus: String) throws {
+        let unnamed = [CheckAddressResponse.statusNotFound, CheckAddressResponse.statusFoundPrivate]
         guard let status = response.status,
               [
                   CheckAddressResponse.statusNotFound,
                   CheckAddressResponse.statusFoundClaimed,
-                  CheckAddressResponse.statusFoundUnclaimed
+                  CheckAddressResponse.statusFoundUnclaimed,
+                  CheckAddressResponse.statusFoundPrivate
               ].contains(status),
-              status == CheckAddressResponse.statusNotFound ? response.homeId == nil : UUID(uuidString: response.homeId ?? "") != nil
+              unnamed.contains(status) ? response.homeId == nil : UUID(uuidString: response.homeId ?? "") != nil
         else { throw APIError.invalidResponse }
         // A validation conflict must never turn into a create-a-new-Home offer.
-        guard verdictStatus != "CONFLICT" || response.homeId != nil else { throw APIError.invalidResponse }
+        guard verdictStatus != "CONFLICT" || response.homeId != nil || response.isPrivateHome else {
+            throw APIError.invalidResponse
+        }
         guard response.homeId == nil || response.residencyAddress?.isValid == true else { throw APIError.invalidResponse }
     }
 

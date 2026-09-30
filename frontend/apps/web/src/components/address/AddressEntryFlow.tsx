@@ -317,7 +317,6 @@ export default function AddressEntryFlow({
     case 'CONFLICT':
       return (
         <AlreadyClaimed
-          verdict={verdict}
           onAction={onConflictAction}
           onBack={reset}
         />

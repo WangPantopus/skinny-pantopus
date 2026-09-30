@@ -555,7 +555,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 
           conflictFallbackResult = {
             status: 'HOME_FOUND_CLAIMED',
-            home_id: verdict.existing_household?.home_id,
             is_multi_unit:
               verdict.classification?.building_type === 'multi_unit' ||
               !!resolvedLine2,
@@ -645,10 +644,19 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
         zip_code: resolvedZip,
       });
       if (!current()) return false;
+      // An "Invite only" Home isn't named to people outside it, and a household
+      // the address check can't name has nothing to join or claim from here.
+      if (result.status === 'HOME_FOUND_PRIVATE' || (conflictFallbackResult && !result.home_id)) {
+        resetAddressValidation();
+        setError(result.status === 'HOME_FOUND_PRIVATE'
+          ? 'This address has a private Home on Pantopus. Ask someone in that household to send you an invitation.'
+          : 'This address already has a household on Pantopus. Ask someone in that household to send you an invitation.');
+        return false;
+      }
       const resolvedResult =
         result.status === 'HOME_FOUND_CLAIMED' || !conflictFallbackResult
           ? result
-          : conflictFallbackResult;
+          : { ...conflictFallbackResult, home_id: result.home_id, residency_address: result.residency_address };
 
       const requestedHome = new URLSearchParams(window.location.search).get('joinHome');
       if (requestedHome && resolvedResult.home_id !== requestedHome) {
@@ -657,7 +665,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
         return false;
       }
       setAddressCheckResult(resolvedResult);
-      setExistingHomeId(resolvedResult.home_id || conflictFallbackResult?.home_id || null);
+      setExistingHomeId(resolvedResult.home_id || null);
 
       if (resolvedResult.is_multi_unit && !resolvedUnit && !attestedNoUnit) {
         setFieldErrors({ unit_number: 'This address needs a unit or apartment number.' });
