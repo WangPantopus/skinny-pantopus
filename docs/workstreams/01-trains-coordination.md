@@ -9,10 +9,10 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
-- **Master** `b16eca646` (batch 147, 2026-09-30T07:18Z: #872, #874, #871, #873). The queue is empty apart from the items below.
+- **Master** `444059705` (batch 148, 2026-09-30T07:23Z: Stream 4's #875 and Stream 1's #877, the gift-fund fix). The queue is empty apart from the items below.
 - **Docker is back but was reset (2026-09-30T05:57Z):** every local stack, the founder's included, was lost with Docker's data; the Android SDK, all AVDs, `~/.gradle` and every iOS simulator runtime and device were deleted too. Stream 1's stack is rebuilt on the same ports with fresh fixtures (Alice/Bob/Dana, original ids and password); backend and web work. Native checks, including #841's last iOS run, wait for the iOS runtime and Android SDK downloads (needs the user's OK).
 - **Open PR #841** (`codex/train-native-start-retry-20260929`, head `7ef7d3010`): native Start a train finishes, and a failed or retried launch leaves one train; plus "Household of ?" removed. Android is fully verified; left: one iOS run on the final build (dylib `fd5a402a`: launch, publish-503 retry, double tap), then seal bundle `20260929-stream1-train-native-start-retry-r1` (its `RESULT.md` is drafted with two placeholders; product-delete round-2 train `e5121131` and rediff against the 01:44:29Z baseline) and batch it.
-- **Queue:** #843 and #844 merged in batch 135, #846 in batch 136, #848 in batch 137, #850/#851/#852 in batch 138, #854 in batch 139, #856 in batch 140, #858 in batch 141, #860 in batch 142, #862/#863 in batch 143, #865 in batch 144, #867 in batch 145, #869 in batch 146, #871–#874 in batch 147. Open: #841 (waits for native tooling). Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
+- **Queue:** #843 and #844 merged in batch 135, #846 in batch 136, #848 in batch 137, #850/#851/#852 in batch 138, #854 in batch 139, #856 in batch 140, #858 in batch 141, #860 in batch 142, #862/#863 in batch 143, #865 in batch 144, #867 in batch 145, #869 in batch 146, #871–#874 in batch 147, #875/#877 in batch 148. Open: #841 (waits for native tooling). Stream 5's [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) is a DRAFT — don't batch it until it is verified or the user approves. Unrelated #46, #429, #430 and #625 stay untouched.
 - **Parked launch-cut branches** (pushed 2026-09-30 so nothing is lost; no PR by design) belong to Stream 2's cut areas; they are listed in Stream 2's file.
 
 ## Scope
@@ -89,7 +89,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T06:12Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T07:24Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -112,7 +112,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Pause, resume, back to draft, archive, delete, close | ✅ E2 pause and delete (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 all; E2 resume, back to draft, archive | ✅ E2 all five (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 | ✅ Delete: E2 E5 (#783)<br>✅ Delete: E1 E3 (U03 web bundle bbdbf2d2)<br>– Close, pause, resume, back to draft, archive not offered |
 | Co-organizers (People picker (approved)) | ✅ Picker add, remove, empty state, invite share (#812)<br>⬜ E1 E2 E3 E4 E5 | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ Remove no longer crashes the app (#813)<br>⬜ E1 E2 E3 E4 E5 | – No co-organizer editor on web |
 | Remind helpers (Nudge draft and send) | ⛔ Needs an AI provider | ⛔ Needs an AI provider | ⛔ Needs an AI provider |
-| Gift fund: turn on, turn off | ⬜ E1 E2 E3<br>⛔ Contributions move money | ⬜ E1 E2 E3<br>⛔ Contributions move money | – Fund status is read-only on web<br>⛔ Contributions move money |
+| Gift fund: turn on, turn off | ⬜ E1 E2 E3<br>⛔ Contributions move money | ⬜ E1 E2 E3<br>⛔ Contributions move money | ✅ Turn on from Start a train; the pages follow on/off; a failed fund step removes the draft (#877)<br>– Turning it off or on later is app-only<br>⛔ Contributions move money |
 
 **U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
 
@@ -137,7 +137,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 52, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
+- U03 items: done 53, confirm from existing evidence 0, to do 17, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
 - U02 items: done 7, confirm from existing evidence 0, to do 12, your call 6, boundary 0, not offered 3
 

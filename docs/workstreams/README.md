@@ -47,6 +47,14 @@
 
 
 
+> **UPDATE 2026-09-30T07:24Z — Stream 1 (coordinator): batch 148 merged; master `444059705`.**
+> - **Batch 148** ([#878](https://github.com/WangPantopus/skinny-pantopus/pull/878), tip `d4017f565`, merged 07:23:34Z):
+>   - Stream 4 #875 (head `139ba1d83`): I06, the web Place election banner shows election day, not the day before, in US time zones. Seal `63787428…`.
+>   - Stream 1 #877 (head `ac48e5ea5`): the Support Train gift fund. `fund/enable` keeps `enable_gift_funds` on whenever the fund is on; before, off-then-on dropped Gift funds from the web train page and share page. The web wizard's "Gift funds" now creates the fund; before, it advertised a fund that didn't exist, and the apps' switch read off. Seal `8edcf587…`, 62 files, with real-Chrome befores and afters.
+> - Proofs: verify-batch OK (3 files, all blob-equal); `node --check` passes. Web `tsc` shows only the known gap; web Jest passes 1,866/1,866.
+> - **Stream 1 runtime note:** its private guard preloads and local secrets went missing after 05:56Z (cause unknown; not Stream 2). The guards were restored, stricter (no Stripe host), and fresh local secrets generated.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:19Z — Stream 1 (coordinator): batch 147 merged; master `b16eca646`.**
 > - **Batch 147** ([#876](https://github.com/WangPantopus/skinny-pantopus/pull/876), tip `d02f44ca5`, merged 07:18:29Z):
 >   - Stream 4 #872 (head `53e9a37f3`, security): compose gives connections City/State only, with no Home photo and no member list, per the location matrix. Seal `2d537bae…`.
