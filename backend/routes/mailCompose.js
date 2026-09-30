@@ -14,7 +14,9 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { escapeIlike } = require('../utils/escapeIlike');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
+// verification state. A pending claim (anyone can file one on any Home) is not a household member.
+const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -153,7 +155,8 @@ router.get('/recipients', verifyToken, async (req, res) => {
           // added_by_user_id, and an unqualified embed fails as ambiguous.
           .select('user_id, role, User!HomeOccupancy_user_id_fkey!inner(id, name, username, verified, profile_picture_url)')
           .eq('home_id', homeId)
-          .eq('is_active', true),
+          .eq('is_active', true)
+          .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES),
         supabaseAdmin
           .from('Home')
           .select('id, address, city, state, primary_photo_url')
@@ -210,7 +213,8 @@ router.get('/recipients', verifyToken, async (req, res) => {
             .from('HomeOccupancy')
             .select('user_id, home_id, Home!inner(id, city, state)')
             .in('user_id', connUserIds)
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
 
           if (occupancies) {
             for (const occ of occupancies) {
@@ -319,7 +323,8 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
         .from('HomeOccupancy')
         .select('user_id')
         .eq('home_id', homeId)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
 
       if (residents) {
         for (const r of residents) {
@@ -344,7 +349,8 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       .from('HomeOccupancy')
       .select('user_id, role, User!HomeOccupancy_user_id_fkey!inner(id, name, username)')
       .eq('home_id', homeId)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
 
     const members = (occupants || []).map((o) => ({
       userId: o.User.id,

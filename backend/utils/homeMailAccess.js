@@ -343,7 +343,7 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
   }
 }
 
-module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, restorableMail,
+module.exports = { MAIL_TRUSTED_VERIFICATION_STATUSES, getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, restorableMail,
   isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,
 };
