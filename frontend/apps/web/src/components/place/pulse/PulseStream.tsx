@@ -167,11 +167,17 @@ export default function PulseStream() {
   }
 
   if (pulseQuery.isError || !pulseQuery.data) {
+    // A 403 means this account can't see the place: say so, without a retry.
+    const denied = (pulseQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" address={address} backHref="/app/place" />
         <div className="px-4 sm:px-5">
-          <ErrorState message="We couldn't load your pulse. Check your connection and try again." onRetry={() => pulseQuery.refetch()} />
+          {denied ? (
+            <ErrorState title="This place isn't available" message="You don't have permission to view this place." />
+          ) : (
+            <ErrorState message="We couldn't load your pulse. Check your connection and try again." onRetry={() => pulseQuery.refetch()} />
+          )}
         </div>
       </StreamShell>
     );
