@@ -77,7 +77,16 @@
   - For #851, the button row may wrap instead of squeezing four labels.
 - **Next:**
   - Every Stream 2 web checklist cell is now done or waiting on the user's decisions (brand-blue, emerald and sunken tokens; the Pulse chip structure). The remaining to-do cells are native (iOS/Android) and start once Stream 1 reports the toolchains are back.
-  - The bounded privacy checks are done: money reads (#899, #900) and post locations (#902). Next: the remaining stranger-reachable Posts/Hub reads (comments, saved posts, Hub Discover), then the native cells once the toolchains are back. Task-side review of Stream 5's gig-room PR when it arrives.
+  - The bounded privacy checks are done: money reads (#899, #900) and post locations (#902; saved posts and Hub Discover go through the same fixed function). Task-side review of Stream 5's gig-room PR when it arrives.
+  - **Native (the user approved the toolchain reinstall on 2026-09-30; Stream 1 installs, and nobody builds or runs devices until it announces "toolchains ready"):**
+    - Prepared, no build: `frontend/apps/ios/.env` (API and socket → `http://127.0.0.1:18168`, Sentry empty, `pk_test_` key) plus `make bootstrap` (XcodeGen only), and `frontend/apps/android/local.properties` (`sdk.dir`). All gitignored.
+    - Android builds must set `PANTOPUS_API_BASE_URL`/`PANTOPUS_SOCKET_URL=http://10.0.2.2:18168`; the Gradle default is the founder's `:8000`.
+    - Order once ready, one heavy build at a time:
+      1. Build both apps.
+      2. U03: E6 typed phone (both), delete E1 (both), edit E1/E2/E5 (iOS) and E2/E5 (Android), comment photo failure (both), Hub R1 (both).
+      3. U04: Posts L4, Start L2/L3, Hub L2/L3 (both).
+      4. Native checks of #899 (a stranger's task chat opens a direct room) and #900.
+      5. U02 native a11y cells, plus the decided Android task-progress wrap-only fix.
 
 ## STATE AT THE SPLIT — 2026-09-30T04:18Z
 
