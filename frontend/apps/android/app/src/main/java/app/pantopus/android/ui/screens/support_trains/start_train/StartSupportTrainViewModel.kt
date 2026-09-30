@@ -411,7 +411,7 @@ class StartSupportTrainViewModel
                     canAdvanceFromWhoAndWhy() ||
                         _form.value.beneficiaryQuery.isNotEmpty() ||
                         _form.value.reason.isNotEmpty() ||
-                        _form.value.selectedReason != StartSupportTrainReason.Surgery ||
+                        _form.value.selectedReason != StartSupportTrainReason.MealTrain ||
                         !_form.value.inviteOnly ||
                         _form.value.blockVisible
                 StartSupportTrainStep.WhatAndWhen, StartSupportTrainStep.ReviewAndLaunch -> true
