@@ -627,11 +627,13 @@ public struct GigDetailView: View {
                     Text("$")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityHidden(true)
                     TextField("0.00", text: $tipCustomAmountText)
                         .disabled(viewModel.hasTipOriginal || viewModel.tipBusy)
                         .keyboardType(.decimalPad)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
+                        .accessibilityLabel("Custom tip amount in dollars")
                         .accessibilityIdentifier("tip.amount.customInput")
                 }
                 .padding(.horizontal, Spacing.s3)
@@ -667,6 +669,7 @@ public struct GigDetailView: View {
         .padding(Spacing.s5)
         .frame(maxWidth: .infinity)
         .presentationDetents([.height(410)])
+        .presentationBackground(Theme.Color.appSurface)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tip.amount")
         .task {
