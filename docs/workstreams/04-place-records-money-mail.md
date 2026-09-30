@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #939 (iOS Emergency Info writes; request id on iOS/Android create) merged in batch 168 (master `185676c04`). **Now: launch-critical account deletion** (assigned by the coordinator): [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952), migration `20260930153000`, head `a64f32e39`. DB, real-route and web proof are done; the iOS/Android "Former member" reads, cleanup and seal are next (see the live block). Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none; #939 (iOS Emergency Info writes; request id on iOS/Android create) merged in batch 168 (master `185676c04`). **Account deletion (launch-critical):** [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) sealed and with the coordinator (head `a22ad2054`, migration `20260930153000`); [#954](https://github.com/WangPantopus/skinny-pantopus/pull/954) (iOS lint unblock) merged in batch 173. Merged today also: #918 (batch 162, master `fd7de8790`). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -268,6 +268,16 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T11:34Z — [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) (account deletion, Home records) is with the coordinator.** Head `a22ad205485a7a08e90b9748303620a8175833b6` on master `00bf2d6ff`, migration `20260930153000`. Bundle `20260930-stream4-account-delete-home-records-r1`, 51 files, MANIFEST `b2949875b0b3816259228144a1e18096ef507ce334a5355259cc23eaf3d4a600`.
+  - **Native** (lease 11:21:15Z–11:32:06Z). pantopus_s34 and "Pantopus S34", owner signed in. Master-code builds show "Uploaded by —" for the former member's document; the branch shows **"Uploaded by Former member"**. On S34 I reset its keychain first (it had kit member B signed in; Stream 3 agreed), so the app never ran as B.
+  - **Owner deletes the orphaned document:** 200, storage object removed.
+  - **Exact cleanup** (11:31:38Z): 349/353 tables equal the 10:51:19Z baseline (auth history only). No storage objects remain, and the disposable member has no rows. Cleanup ran before Stream 3's, as agreed. Stream 3 removed their own stray member-B MailPreferences row first (11:22:50Z).
+  - **Runtime ledger:** `20260930143000` renamed to `20260930153000` (ledger 103, newest 153000); the stack file is renamed with the same bytes.
+  - **Observation, no change:** a Home activity row whose actor left shows the action without a name (Android's generic "PA" avatar). This is existing behaviour for anyone no longer in the household.
+  - **Tooling:**
+    - `s4-secret-scan.py` takes extra private env files; pass the disposable member's credentials only, since ids are evidence.
+    - New `ios-s34-document.py` and `android-s34-document.py`. Android labels the dashboard tile "Docs".
 
 - **2026-09-30T11:10Z — [#954](https://github.com/WangPantopus/skinny-pantopus/pull/954) (iOS lint unblock) sent to the coordinator.** Head `7aadd787c297fb64f58e606b0fed76efba20aa88`, a one-character change.
   - "ios / Lint (SwiftLint + SwiftFormat)" failed on master `af4e76f0c` and every PR. The cause is my own #922: a `//` note on `PlaceCivicDetailContent.monthAbbrev` that SwiftFormat 0.61.1's docComments rule rejects. Now `///`.
