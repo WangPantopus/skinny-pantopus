@@ -4,7 +4,6 @@
 
 const express = require('express');
 const router = express.Router();
-const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
@@ -1677,7 +1676,9 @@ router.post('/:id/save', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const { data: saved, error } = await supabase.rpc('toggle_listing_save', {
+    // The function is SECURITY DEFINER and no longer executable by client roles; it takes the
+    // person from the verified token (userId), never from the request body.
+    const { data: saved, error } = await supabaseAdmin.rpc('toggle_listing_save', {
       p_listing_id: id,
       p_user_id: userId,
     });
