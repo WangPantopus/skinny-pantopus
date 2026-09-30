@@ -380,6 +380,8 @@ export default function PostDetailPanel({
 
       <aside
         ref={panelRef}
+        // Closed, the panel only slides off-screen; inert keeps its controls out of the tab order and screen readers.
+        inert={!open}
         className={`fixed top-0 right-0 bottom-0 z-[61] w-full max-w-xl bg-surface border-l border-app shadow-2xl transform transition-transform duration-250 ease-out flex flex-col ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
