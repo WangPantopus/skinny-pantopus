@@ -61,7 +61,7 @@ const linkPreviewRoutes = require('./routes/linkPreview');               // Link
 const {
   globalWriteLimiter, financialWriteLimiter, contentCreationLimiter,
   homeCreationLimiter, ownershipClaimLimiter, postcardLimiter,
-  verificationAttemptLimiter, authEndpointLimiter, previewLimiter,
+  verificationAttemptLimiter, authEndpointLimiter, previewLimiter, userWriteLimits,
 } = require('./middleware/rateLimiter');
 
 // Import APM middleware
@@ -317,6 +317,9 @@ const requestIdMiddleware = require('./middleware/requestId');
 app.use('/api', requestIdMiddleware);
 
 // ============ GLOBAL RATE LIMITING (write endpoints) ============
+// These run before authentication, so they cap per client IP; verifyToken applies the per-person
+// half once the user is verified (see middleware/rateLimiter.js).
+app.locals.userWriteLimits = userWriteLimits;
 app.use('/api', globalWriteLimiter);
 
 // Stricter limiters for financial and content endpoints
