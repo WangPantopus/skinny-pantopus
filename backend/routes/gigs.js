@@ -7506,13 +7506,18 @@ router.get('/:id/my-bid', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const { data, error } = await supabase
+    // The service client, filtered to the caller's own bid: GigBid has no read
+    // policy, so the anon client always saw "no bid". A withdrawal keeps its row
+    // and a re-bid adds one, so the newest row is the caller's current bid.
+    const { data, error } = await supabaseAdmin
       .from('GigBid')
       .select(
         'id, gig_id, user_id, bid_amount, message, proposed_time, status, created_at, updated_at'
       )
       .eq('gig_id', gigId)
       .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {

@@ -32,13 +32,22 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'bbb00000-0000-4000-8000-000000000001', true);
   FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     EXECUTE format('SET LOCAL ROLE %I', role_name);
-    IF EXISTS (SELECT FROM public."Post"
-      WHERE user_id = 'bbb00000-0000-4000-8000-000000000001'
-        AND id <> 'bbb00000-0000-4000-8000-000000000020') THEN
-      RAISE EXCEPTION 'Browser role can read raw Beacon content';
-    END IF;
-    IF NOT EXISTS (SELECT FROM public."Post" WHERE id = 'bbb00000-0000-4000-8000-000000000020') THEN
-      RAISE EXCEPTION 'Ordinary public post access changed';
+    IF role_name = 'anon' THEN
+      -- Since 20260930181000 anon holds no privilege on public tables, so even the
+      -- ordinary public post is refused by the grant before RLS is consulted.
+      BEGIN
+        PERFORM 1 FROM public."Post" WHERE user_id = 'bbb00000-0000-4000-8000-000000000001';
+        RAISE EXCEPTION 'Anonymous role can read Post rows';
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    ELSE
+      IF EXISTS (SELECT FROM public."Post"
+        WHERE user_id = 'bbb00000-0000-4000-8000-000000000001'
+          AND id <> 'bbb00000-0000-4000-8000-000000000020') THEN
+        RAISE EXCEPTION 'Browser role can read raw Beacon content';
+      END IF;
+      IF NOT EXISTS (SELECT FROM public."Post" WHERE id = 'bbb00000-0000-4000-8000-000000000020') THEN
+        RAISE EXCEPTION 'Ordinary public post access changed';
+      END IF;
     END IF;
     FOREACH rpc_call IN ARRAY ARRAY[
       'SELECT public.auto_archive_expired_posts()',
@@ -85,4 +94,4 @@ BEGIN
 END $$;
 RESET ROLE;
 ROLLBACK;
-SELECT 'PASS: raw Beacon reads/writes denied to browser roles, ordinary public reads preserved, backend storage access preserved' AS result;
+SELECT 'PASS: raw Beacon reads/writes denied to browser roles, anon refused outright, ordinary public reads preserved for signed-in readers, backend storage access preserved' AS result;

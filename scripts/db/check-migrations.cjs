@@ -74,6 +74,19 @@ function clientsCannotExecute(sql, fn) {
     .some(match => named(match[1]) && /\b(?:anon|authenticated)\b/i.test(match[2]));
 }
 
+// From this version on, a migration may not give anon or PUBLIC any privilege on a public table,
+// view or sequence, including through ALTER DEFAULT PRIVILEGES. 20260930181000 revoked all of them
+// from anon (writes were already gone since #992), and no app reads with the anon key, so such a
+// grant would only reopen direct PostgREST access for anyone who has it. Function, schema and type
+// grants are not covered here; the DEFINER rule above handles functions.
+const ANON_TABLE_GRANTS_REFUSED_FROM = '20260930181000';
+function anonTableGrants(sql) {
+  const skip = /^(?:FUNCTIONS?|ROUTINES?|PROCEDURES?|ALL\s+(?:FUNCTIONS|ROUTINES|PROCEDURES)\b|SCHEMAS?|TYPES?|DOMAIN|LANGUAGE|FOREIGN|DATABASE|TABLESPACE|LARGE\s+OBJECT|PARAMETER)\b/i;
+  return [...withoutLineComments(sql).matchAll(/\bGRANT\s+([^;]*?)\s+ON\s+([^;]*?)\s+TO\s+([^;]*);/gi)]
+    .filter(match => !skip.test(match[2].trim()) && /\b(?:anon|public)\b/i.test(match[3]))
+    .map(match => match[2].trim().replace(/\s+/g, ' '));
+}
+
 function validate(policy, files) {
   const errors = [];
   if (!['legacy', 'baselined'].includes(policy.mode)) return ['Unknown database adoption mode'];
@@ -125,6 +138,11 @@ function validate(policy, files) {
           if (!enablesRowLevelSecurity(sql, table)) {
             errors.push(`Enable row-level security on public."${table}" in the migration that creates it: ${name}`);
           }
+        }
+      }
+      if (match[1] >= ANON_TABLE_GRANTS_REFUSED_FROM) {
+        for (const target of anonTableGrants(sql)) {
+          errors.push(`Do not grant anon or PUBLIC privileges on ${target}; clients read and write through the API: ${name}`);
         }
       }
     }

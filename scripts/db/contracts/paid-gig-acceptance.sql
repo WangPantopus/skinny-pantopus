@@ -337,9 +337,11 @@ RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',true);
 SET LOCAL ROLE anon;
 DO $$ BEGIN
- IF EXISTS(SELECT FROM public."Gig" WHERE id IN('aae10000-0000-4000-8000-000000000101','aae10000-0000-4000-8000-000000000102'))
-  OR public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
-  RAISE EXCEPTION 'Anonymous caller acquired private proof/authority'; END IF;
+ -- Since 20260930181000 anon holds no privilege on public tables, so the grant refuses this, not RLS.
+ BEGIN PERFORM 1 FROM public."Gig" WHERE id IN('aae10000-0000-4000-8000-000000000101','aae10000-0000-4000-8000-000000000102');
+  RAISE EXCEPTION 'Anonymous caller read private proof'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
+  RAISE EXCEPTION 'Anonymous caller acquired private authority'; END IF;
 END $$;
 RESET ROLE;
 DO $$ BEGIN
