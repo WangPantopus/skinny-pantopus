@@ -269,6 +269,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T12:07Z — #968 is queued for the decision-9 joint batch** (with Stream 3's retireHomeForDeletedAccount PR and Stream 5's route PR, after Stream 5's combined E2E is sealed).
+  - **Known limit (coordinator: not a blocker).** The purge and account deletion tombstone the legacy Home media Files that came through the old generic files route: the Home gallery (`HomeMedia`) and the Home row's Wi-Fi QR and house-rules files. No recovery job covers them, so their bytes stay in S3. Nobody can reach them through the app, since their rows are soft-deleted and the Home no longer links them.
+  - The private document and task-media buckets are collected by the existing recovery jobs (every 5 minutes).
+  - **Possible follow-up:** an S3 cleanup job for tombstoned legacy home files.
+
 - **2026-09-30T12:07Z — [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) sealed and with the coordinator for the joint batch.** Head `b410aae70a49870fef3770a4fd3c06cc6d78d143`. Bundle `20260930-stream4-household-data-r1`, 17 files, MANIFEST `b759067e2b4b6dcbf7de685a5cdb98ca9397070a4e7998f255c954c892ded99c`.
   - **Adopted Stream 5 decision 10:** the purge closes and detaches the household chat instead of deleting it.
   - **Personal data trigger widened** (now `delete_personal_home_data`): the departing person's attention-only letters at a Home go too, since otherwise nobody could ever read them.
