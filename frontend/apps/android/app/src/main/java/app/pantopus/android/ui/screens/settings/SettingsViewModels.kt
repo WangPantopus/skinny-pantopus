@@ -11,8 +11,10 @@ import app.pantopus.android.core.security.StepUpCoordinator
 import app.pantopus.android.data.account.AccountDeletionRepository
 import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.components.ToastKind
@@ -601,21 +603,40 @@ class PrivacySettingsViewModel
                     _deletingAccount.value = false
                     return@launch
                 }
-                when (val result = accountDeletion.deleteAccount(stepUpToken)) {
-                    is NetworkResult.Success -> {
-                        _deletingAccount.value = false
-                        _deleteSheetVisible.value = false
-                        authRepository.eraseAllLocalState()
-                        appLock.clearTransientState()
-                        _accountDeleted.value = true
+                val deletedUserId = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
+                val result = accountDeletion.deleteAccount(stepUpToken)
+                // The server revokes the account's sessions before it deletes it
+                // (and the deletion can still fail after that). When no success
+                // comes back (timeout, dropped connection, a 401), a rejected
+                // refresh only shows the deletion started.
+                val signedOutByDeletion =
+                    when (result) {
+                        is NetworkResult.Success -> false
+                        is NetworkResult.Failure -> {
+                            val noAnswer = result.error is NetworkError.Transport || result.error == NetworkError.Unauthorized
+                            noAnswer && authRepository.refreshTokens() is AuthRepository.RefreshOutcome.AuthRejected
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        _deletingAccount.value = false
-                        _deleteAccountError.value =
-                            result.error.message.ifBlank {
-                                "Failed to delete account. Please try again."
-                            }
-                    }
+                if (result is NetworkResult.Success) {
+                    _deletingAccount.value = false
+                    _deleteSheetVisible.value = false
+                    authRepository.eraseAllLocalState()
+                    appLock.clearTransientState()
+                    _accountDeleted.value = true
+                } else if (signedOutByDeletion) {
+                    // Forget the account on this device; the login banner says
+                    // the deletion is unconfirmed rather than failed or done.
+                    _deletingAccount.value = false
+                    _deleteSheetVisible.value = false
+                    authRepository.signOut(SessionEndReason(SessionEndReason.ACCOUNT_DELETION_UNCONFIRMED, isSecurity = false))
+                    deletedUserId?.let { authRepository.removeRememberedAccount(it) }
+                    appLock.clearTransientState()
+                } else if (result is NetworkResult.Failure) {
+                    _deletingAccount.value = false
+                    _deleteAccountError.value =
+                        result.error.message.ifBlank {
+                            "Failed to delete account. Please try again."
+                        }
                 }
             }
         }
