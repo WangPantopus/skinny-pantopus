@@ -4548,7 +4548,7 @@ September15 coordinator review of Stream3 `dfc860bfe8025ed65e5b3f31781221ecfec15
 branch `codex/workstream-accounts-social`, based on master `0616d6e79`.
 [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) remains **draft and
 unmerged**; N04/Stream3 remain incomplete. The author owns
-[the live status](workstreams/03-accounts-social.md). This section integrates a
+[the live status](workstreams/05-accounts-social.md). This section integrates a
 bounded source/evidence review, not a new backlog or release approval.
 
 The existing profile/chat Block wrote UserBlock, while the existing Settings

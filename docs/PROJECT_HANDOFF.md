@@ -1,5 +1,10 @@
 # Pantopus project handoff
 
+> **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub and the live handoff are `docs/workstreams/README.md` and `docs/PROJECT_HANDOFF.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `docs/workstreams/05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
+
+> **2026-09-30 — the former Stream 2 (Home and household) is split into Streams 3 and 4.** Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](workstreams/03-home-access-residency.md)) owns rows H01–H08, R01–R06, D05–D08, D10 and M02. Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](workstreams/04-place-records-money-mail.md)) owns rows I01–I07, D01–D04, D09, F01–F05, M01, M03 and M04. That's 20 each; together they are the former 40. The former file is history at [`former-stream2-home-household.md`](workstreams/former-stream2-home-household.md) (moved from `02-home-household.md`). The live copies are on the `codex/workstream-coordination` branch.
+
+
 **September 26 product research — Porchlight (documentation only):** the founder asked for product vision, not implementation. [The Porchlight product design](product/porchlight-product-design-2026-09-26.md) proposes watching over the homes of people you love with daily check-ins, address alerts and verified neighbors who knock, built on existing verified homes, gigs, mailbox, chat and civic data. Revised the same day after an outside review (direct competitors Snug, Iamfine and Life360; corrected status and scam-check overclaims; first version cut to 7 features; trial-then-paid pricing). Next: founder decisions (doc "Open decisions"), then a small hand-run pilot with families' existing trusted contacts and announced drills before any build. Limits: no codebase audit, no application change, no acceptance count change.
 
 **September 24 local Git recovery:** preserved the original `new designs` commit `34e3a1860` on `codex/backup-designs-before-sync-20260924` and merged remote master `fd48ccfd2` into the owner checkout. Both handoff contributions are retained. Verification: original design-file Git blobs remain unchanged; remote changes are incorporated; no application acceptance rerun. Remote CI [35968123763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35968123763) passed on the fetched remote head, not this local merge. Next: before publishing, remove the accidentally committed Chrome profile from outgoing history while retaining its local files and private recovery copy. Nothing was pushed during recovery.
@@ -79,8 +84,8 @@ The founder requested that all three streams summarize **all implemented fixes, 
 Read the current summary at the top of each existing status file:
 
 - [Stream1 — payments, gigs and coordinator](workstreams/01-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
-- [Stream2 — Home and household](workstreams/02-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
-- [Stream3 — accounts, social and notifications](workstreams/03-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
+- [Stream2 — Home and household](workstreams/former-stream2-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
+- [Stream 5 (formerly Stream 3) — accounts, social and notifications](workstreams/05-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
 
 **Acceptance count remains9 closed /71 partial-open out of80.** Closed: H01–H06,R01–R02,G02. P01 is a completed bounded tip-reservation milestone and is not counted as a whole closed row. The existing [80-row backlog](REMAINING_WORK_2026-09-11.md) remains authoritative; PRs, checks and partial journeys are different units, so there is no defensible percentage of total functionality inferred from them. This documentation pass closes no acceptance row.
 
@@ -586,8 +591,8 @@ migration filenames, conflicting). PR46 is a separate founder PR. No other PRs o
 1. Read the top of [docs/workstreams/README.md](workstreams/README.md) (newest section
    first) — every review, grant, merge and acceptance since 2026-09-15 is there.
 2. Stream status files: [01-gigs-payments](workstreams/01-gigs-payments.md),
-   [02-home-household](workstreams/02-home-household.md),
-   [03-accounts-social](workstreams/03-accounts-social.md). Newest section at the top
+   [02-home-household](workstreams/former-stream2-home-household.md),
+   [03-accounts-social](workstreams/05-accounts-social.md). Newest section at the top
    (03 appends at the bottom).
 3. Durable evidence bundles with hash manifests live in the main checkout under
    `.pantopus-recovery/audits/<date>-<stream>-<slug>-rN/`; each has a `result.md`.

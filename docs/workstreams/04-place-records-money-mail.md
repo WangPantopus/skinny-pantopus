@@ -1,0 +1,180 @@
+# Stream 4 — Place, home records, money and mail (split from the former Stream 2 on 2026-09-30)
+
+> **Split (user direction, 2026-09-30).** The former **Stream 2** (Home and household) is split into **Stream 3 — Home access, residency and security** ([`03-home-access-residency.md`](03-home-access-residency.md)) and **Stream 4 — Place, records, money and mail** ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)).
+> - Together their checklists are exactly the former Stream 2's, and nothing is shared or dropped:
+>   - the 40-row inventory, 20 rows each;
+>   - the 24 S2-xx UX items;
+>   - the open work and leads;
+>   - the 10 decisions waiting on the user.
+> - The former Stream 2 file is now frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split). In it, "Stream 2" / "S2" means the stream before the split.
+> - The former **Stream 3** (Accounts and Social) is now **Stream 5** ([`05-accounts-social.md`](05-accounts-social.md)). In records dated before 2026-09-30, "Stream 3" / "S3" means Stream 5, not the new Stream 3.
+> - Names that contain `stream2` or `S2-` keep them so nothing breaks: the runtime kit, stage folders, audit bundles, existing branches and UX IDs.
+> - **This stream from now on:**
+>   - branches `claude/stream4-<topic>`;
+>   - audit bundles `YYYYMMDD-stream4-<topic>-rN`;
+>   - device and heavy lease label `stream4:`, which is also its runtime-lease label;
+>   - session name "Stream 4: Place, records, money and mail";
+>   - resume prompt [`NEXT-STREAM4-PROMPT-2026-09-30.md`](NEXT-STREAM4-PROMPT-2026-09-30.md).
+
+## CURRENT RESUME — Stream 4 (start here; written 2026-09-30T04:16:32Z)
+
+**Scope.** What a home knows and keeps:
+- Place and home intelligence: the health score and seasonal checklist, the address calendar, property data, weather/air/alerts/civic, and timeline freshness (I01–I07);
+- home records: issues and emergency info, issue media, maintenance history, and the document/issue/access/share readers (D01, D02, D04, D09);
+- money signals and the bill benchmark (F01, F02, F04, F05);
+- mail, kept only for postcards, welcome cards and the digest (M01).
+- D03, F03, M03 and M04 are fully cut for launch.
+
+**Launch-scope owner:** Stream 4 checks cut #7 (Household extras) and cut #8 (Mail extras) for the former Stream 2's area. Never verify, test or fix them.
+
+**State at the split.**
+- Master `8e44382ce`. Every former Stream 2 PR is merged; none is open.
+- **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04).
+- **One fixture is open in the database (clean it first):** the F02 native re-run in `runtime/f02-native-permission-r1` left:
+  - member B's occupancy `7a6417c0` on cohort Home 9d885f71;
+  - the `finance.view` override, now `allowed=false`;
+  - 2 `member_override` audit rows.
+
+  Its Android journey was captured 03:07–03:10Z on 2026-09-30, but is unsealed:
+  - Money showed neighborhood-only figures, then "Your electric bills average 12% above" with finance, then neighborhood-only again after the revoke;
+  - the Home dashboard showed its Bills stat and tab only while finance was granted.
+
+  The Android app is signed back in as the owner.
+
+**Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
+1. **F02 native re-run, iOS part.**
+   - Take the runtime lease.
+   - Sign member B in on sim 6F914A30 through the real login screen. Type from the private file only after a focus check, and take no raster on the login screen.
+   - The owner toggles View finance on the web with `tools/web-f02-home-dashboard.cjs` and `OUT_DIR`. B opens Money and the Home dashboard before, with finance, and after the revoke.
+   - Sign the iOS app back in as the owner.
+   - Then run the exact cleanup: adapt `tools/cleanup-f02-home-dashboard.py`; its PropertyIntelligenceCache read-side refresh rule applies. Seal Android + iOS and hand the result to the coordinator.
+   - If iOS can't run in the first lease, clean the fixture exactly first and recreate it later (one SQL row plus two UI toggles).
+   - Remaining after this: the hosted and provider boundaries. Web Home-dashboard consumer evidence is sealed as `20260930-stream2-f02-home-dashboard-bills-r1` (`12a3a6bd…`).
+2. **I07, freshness:** mounted-view and cache invalidation without navigation, semantic labels, concurrent pagination and time zones.
+3. **D09, readers:** the remaining malformed-success readers and a complete cross-client pass. The share and access reader files are Stream 3's area; coordinate any change to them.
+4. **D01, records:** remaining create/edit/delete coverage for issues and emergency info. Its guest-pass record part touches Stream 3's D08/M02; coordinate.
+5. **D04, maintenance history:** one truthful lifecycle across `HomeMaintenanceLog` and `HomeIssue` with competing readers and writers.
+6. **I04, the address calendar:** daylight-saving and holiday edge cases for pickup days. Provider holiday data stays named.
+7. **I05, property data, local parts:** stale cache, absent or wrong property, and verification wording.
+8. **Latent and cut notes:**
+   - web Mail due dates use `new Date(<SQL date>)`, but no product route writes `Mail.due_date`, and bill blocks in letters are cut;
+   - the native Dismiss confirm wording is cut (#8).
+
+**Waiting on the user.** These are Stream 4's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
+1. Photos and files on issues at launch (D02): approve a media contract, or scope D02 to issues without media.
+2. Printed postcards, welcome cards and the street digest (M01): build them, or move them after launch.
+3. Bill benchmark eligibility and retention (F04): which homes join a comparison, and for how long figures are kept.
+
+Shared with Stream 3:
+1. Brand colors that fail contrast (all streams): Stream 1 carries one design-token recommendation.
+2. When to verify hosted and provider behavior (both streams): a staging pass before launch, or a launch-day checklist.
+
+**Hosted and provider boundaries.** These rows can't close locally; name them and never turn them into passes:
+- I04: provider holiday data.
+- I05: property providers.
+- I06: weather, air, alert and civic providers across regions.
+- F04: hosted scale.
+- F05: hosted workers and released app versions.
+- M01: print and delivery provider.
+- D02: the media contract.
+
+## Checklist — the inventory rows owned by Stream 4 (20 of the former Stream 2's 40)
+
+State at the split, copied verbatim from the former file's "September 22 exact … 40-row inventory". From now on, update each row only here. D03, F03, M03 and M04 are fully cut: never verify them.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| I01 | **Closed — verified/preserve within retained scope.** Three-app uncertain generation/completion recovery6fd4b5e2 plus accepted first-load/race evidence complete this row; no new code. **Repaired and merged:** [#587](https://github.com/WangPantopus/skinny-pantopus/pull/587) (batch 39) and [#611](https://github.com/WangPantopus/skinny-pantopus/pull/611) (batch 41: a closed task's item is released before scoring). Post-merge check `20260927-stream2-post-merge-check-r1`. 2026-09-27, reproduced on web with a new synthetic Home. The first dashboard showed "50/100 · No seasonal checklist created yet" next to the checklist it had just created, because health was computed 25 ms before the checklist read created the rows. The fix creates the season's rows inside the health read (idempotent). After the fix, the first load shows 55, "2 of 2 incomplete", and 4 concurrent creators leave 2 rows. Every client forces the score, so the 5-minute cache has no visible lag. Bundle `…-i01-first-health-r1`. | None within retained I01 scope. Nested metadata/I02, generic account lifetime/I07 and external release/provider boundaries remain separate. |
+| I02 | **Closed — verified/preserve within reachable retained scope.** #661 persisted title/key/order guard: actual3-app error/Retry recovery, own fixture cleanup and79-file9f70d348 evidence reviewed and merged batch58/#663.  2026-09-27: retained checklist icon/hover color repair [#629](https://github.com/WangPantopus/skinny-pantopus/pull/629), bundle `20260927-stream2-home-icon-color-r1`; presentation-only, no row closure. 2026-09-27:<br>• Carryover renders, expands and acts on web, Android and iOS (bundles `…-rpc-catch-saves-r1`, `…-native-f01-carryover-r1`).<br>• Generation race verified: 5 concurrent first reads return one set of 2 rows, with the 23505 path logged ×4 (`…-i01-first-health-r1`).<br>• Malformed-card/read evidence is reused.<br>• Noticed: after a Skip, iOS keeps "1 remaining" until reload. 2026-09-27: native carryover "remaining" count fixed ([#620](https://github.com/WangPantopus/skinny-pantopus/pull/620), batch 42; bundle `…-native-carryover-count-r1`). | Blank title/key/order covered by #661; optional completiondate #669 actual3-app afters e3fdac04 ready. SQL/caller mapping in SCOPE.md: currentseason/year/progress derived; historySDK has no appcaller; checklist has no pagination UI (timeline separate). Reviewed19:47Z: no remaining reachable I02 criterion. History endpoint is unexposed, timeline pagination belongsI07; no history acceptance/new UI. |
+| I03 | **Closed within retained scope — checklist accounted in I01/I02; Hire remains cut.** Web + API repaired and verified 2026-09-27 in #574 (bundle `20260927-stream2-checklist-hire-link-r1`) and #575 (invisible Hire button, `…-checklist-button-color-r1`). Hire now carries the item's title and category, and the posted task is linked (item hired). Closing the task puts the item back to pending. A failed link keeps the task and shows a note. The API refuses other people's, closed and unknown tasks and callers without home.edit. | **Launch scope: the Hire path OUT (cut 4, Open Gigs); the checklist itself stays.** Merged 2026-09-27: #574 #575 (batch 38), native [#609](https://github.com/WangPantopus/skinny-pantopus/pull/609) and [#611](https://github.com/WangPantopus/skinny-pantopus/pull/611) (batch 41); post-merge E2E on master passed. No remaining Hire action is queued while cut. Retained checklist verification is accounted in I01/I02; no duplicate journey under I03. |
+| I04 | **Partial/open.** Weekly recycling verified in all3 actual clients and independently accepted by the coordinator:100-file35958b24,11 source bindings/216 reused files; seven date choices, real saved weekly recurrence and reload/cold. No application change; exact4-row cleanup/351of353 hashes restored.  Web DETAIL read-retry [#737](https://github.com/WangPantopus/skinny-pantopus/pull/737) exact78c484771/69fileda2b423d: actual0→1GET each, both unchangednativecalendarretries/recovery pass;349nonauthhashes unchanged/no writes. Realreadyempty Portlandcontrol, provider/account breadth stillopen. Retained pickup three-app bounded acceptance8158b065: saved/failed/retry/clear, iOS restart/real403; no app change. Six pickup source bindings reconfirmed unchanged in84-fileca30aed5; existing provider holiday disclaimer preserved. Holiday-provider/DST/read/account breadth remains. D03 bill date/amount bounded repairs are accepted; they do not close calendar policy. 2026-09-26: the dashboard Calendar card parsed bill `due_date` (SQL date) as UTC, showing every bill a day early ("TODAY … 5:00 PM", a false "1 day overdue" from 5 PM the evening before, Week view on the previous day) and in "$". Fixed with the existing bill helpers ([#547](https://github.com/WangPantopus/skinny-pantopus/pull/547), bundle `20260926-stream2-calendar-dates-r1`). Web Mail due dates have the same root cause (CURRENT RESUME §3B item 6). | **Launch scope: the general Home calendar and bill dates OUT (cut 7); the address calendar (pickup day, holiday moves, DST) stays.** Local date rules, dashboard boundaries, recurrence and DST transitions. |
+| I05 | **Partial/open.** Source/provider boundary4fileea61cecc: current web/native readers already exist; ATTOMconfiguration/real-provider/stale/wrong-parcel acceptance remains unverified, no duplicate implementation. Accepted543geometryblock unchanged. Existing property/detail readers are preserved. 2026-09-26: a Home without coordinates got Null Island (0,0) section data ([#543](https://github.com/WangPantopus/skinny-pantopus/pull/543), bundle `20260926-stream2-place-null-coords-r1`). | Provider/data acceptance, stale cache, absent/wrong-property and verification wording. |
+| I06 | **Partial/open.** 2026-09-26: daylight, EPA facilities, heat/cold, seismic, wildfire and civic districts no longer compute at 0,0 for coordinate-less Homes ([#543](https://github.com/WangPantopus/skinny-pantopus/pull/543)). Stale Sun wording was repaired on all three apps in accepted bundle20260927-stream2-sun-day-label-r1 (3b5bae8b2); do not reopen that candidate. | Weather, air quality, alerts, daylight and civic sections across geography/provider states. |
+| I07 | **Partial/open.** #773 mounted finite-authority expiry repaired and actual web/Android/iOS before/after accepted within160-file5dadb5b8 limits; finalb3b245a3f reviewed/merged batch106/#775. Earlierofbothfields, deniedRetry/cold and actualweb late200 covered; shared globalcontext remains separate. WebHomeTimeline actual64-row pagination/reload/503/Retry verified30-fileab71dcee, no appchange/all353unchanged; finalextraDOM timing and stickyheadercapturesqualified. Distinctfrom Membersaudit/nativeUpcoming. #755 emergency-only Overview repaired after actual UI/API/SQL reproduction,47-filed8966910 seal/full353 cleanup; merged batch98/#756. #638 repairs native Home-tools-return projection, actual both-platform failure/retry/restart evidence af14517d; broader mounted/account races remain. Individual stale-reader repairs are recorded, including D09 response-integrity controls. 2026-09-26: the Android Today tab never refetched while mounted; it now has pull-to-refresh like iOS ([#544](https://github.com/WangPantopus/skinny-pantopus/pull/544), bundle `20260926-stream2-today-refresh-r1`). | Mounted-view/cache invalidation without navigation, semantic labels, concurrent pagination/authority and timezone boundaries beyond accepted static64-row/retry. |
+| D01 | **Partial/open.** #769 one-SDKfile receiptguard191-file3afd7334: fourwebfalse-successbefores/21malformedafters/realsavesandreloads; unchangednative structuralparitywith2faultoverlapcellsqualified/exclusivelycompleted. Exactly3ownissues0/349outside4Authrestored; broadidentity/account/concurrent/durableboundariesopen. #740 same-draft issue creation131-fileb8cb3456: bothweb+Android+iOS actual lost201/manualretry preserves1 original full row; reload/restarts/API concurrency controls pass, exact13cleanup/16retained unchanged. In-memory draft scope only; no broad lifecycle closure. #654 web explicit clears/zero estimate actual UI/API/SQL verified (85ee0497), exact fixture cleanup; merged batch55/#656.  Package permission/status controls, Emergency PUT/DELETE and guest-pass repairs are real end-to-end; PR192 is the current preservation milestone. 2026-09-26: issue status contract ([#467](https://github.com/WangPantopus/skinny-pantopus/pull/467)) and issue permissions with native Issues entries ([#482](https://github.com/WangPantopus/skinny-pantopus/pull/482)). | **Launch scope: packages OUT (cut 7); issues, emergency and guest passes stay.** Remaining Home-entity mutations, receipts and complete create/edit/delete coverage. |
+| D02 | **Partial/open.** #769 webissuefailed-receiptdraftretention and realretry/reload191/3afd7334 accepted within recordedfourcaller scope; no newmedia contract. #654 cleared-draft503/403/retry/cancel/uncertain-save evidence85ee0497; existing media contract still unapproved.  Existing panel error/draft retention is reused where verified. | **Launch scope: bill and package media OUT (cut 7); issue media stays.** Issue media contract remains a design-stage requirement; do not introduce attachments without an approved existing contract. Remaining in-scope write/lifecycle cases only; cut bill/package media are excluded. |
+| D03 | **Partial/open.** Standalone bill-unit/date behavior and package `in_transit` contract are repaired and evidenced. | **Launch scope: OUT (bills and packages, cut 7). Don't verify.** Final cross-client/server contract and remaining native/provider boundaries. |
+| D04 | **Partial/open.** Native manual Delete112-file27164512 now verifies actual cancel/strict503/full-row preservation and committedlost204/manualretry/cold on both platforms, qualified iOS original helper sequence plus fresh unfinishedcontrols. Exactly3ownlogs productgone/all349outside4Auth restored, no code/build. #743 mounted manual-create timeout/retry101-file57d87133: both installednative before2→after1 identicalrow/cold, APIguards/concurrentfirstinsertpass; exact7productdeletes/all349outside4Auth restored. In-memorydraft scope; broaderaccount/concurrent/Gig/otherlifecycle open. #687 native original-read gate covers failed/missing/pending loads and recovered saves/create eligibility;155-file999ae0a6, ownlog deleted204/fivefullhashes restored.  2026-09-27 optionalcost/vendorclears, zerodistinction, concurrentomission and bothnativecoldreread verified in#683 (163files6bb4a244), ownlog204deleted/fivefullhashesequal. 2026-09-27 concurrent native title/cost/vendor edits and current-vendor display repaired in #677;149-file d819c144 evidence, one ownlog product-deleted204 and five full baseline hashes restored. Explicit null clearing now covered by#683; wider lifecycle remains unverified. 2026-09-27 manual completiondate/UTCday/YTD repair verified on installed Android/iOS;173-file5ab0d849 evidence, all4ownlogs productdeleted/fullbaseline restored. Eight existingfiles, no schema/design change. 2026-09-26 candidate: the health card's maintenance action counts HomeIssue rows, but on iOS/Android it opens the HomeMaintenanceLog list ("No maintenance logged yet"). Fixed and accepted in merged #563 (`20260927-stream2-health-view-issues-r1`, seal `08d77b43…`); no new rerun was needed for unchanged source. | One truthful lifecycle across HomeMaintenanceLog/HomeIssue and competing readers/writers. |
+| D09 | **Partial/open.** #758 separateShareCenter missing/object/null-memberguard actualthreebefore/afters/retries/reload34-file5154af44/all353unchanged; acceptedstandalone/nativecollectionsreused, merged batch99/#760. #717 same-draft uncertain issue73-file9b341a41: actual web/Android/iOS lost committed201/manualretry preserves one original row; scoped API guards,6owned cleaned/six hashes restored. In-memory scope only; restart/account/first-insert race open. #715 web malformed issue201 guard46-file33e5e1b:3before/afters+realvalidAPI/SQL,unchangedAndroid3parity,1exactcleanup/sixhashes; iOS missing/null/empty actualUI nowverified34-fileb7ccaf52,8unchangedbindings/119priorfiles reused/all353unchanged/zero writes; same-mounted-draft uncertainissue is covered by#717. #711 same-Home revoke receipt repair47-file9c7cd14f: actual web lost-reply baseline, original mounted three-client recovery, permission/missing/concurrent API cases; one fixture cleaned/six hashes restored. Fridge issue/revoke/public lifecycle117-file8327964d: three apps/three owned cards,48receipts/16bindings, exact cleanup and six whole hashes restored; capture and uncertain/account limits explicit. #707 persisted fridge-card reader:85-file541079bd,18 web/native assertions/14bindings/41GETs/six unchanged hashes; web query+existing error/Retry and Android response guard. #705 optional fridge Emergency prefill:59-filec0ea704c,15 web/native assertions/14bindings/22GETs/six unchanged hashes; one existing web effect guard. #703 dashboard Emergency/Access optional members:52-filea4670cb7,15 Chrome assertions/eight bindings/44GETs/six unchanged full hashes; only two retained hook readers changed. #701 four Android native collection null-member guards:129-file6c21cb56,24 installed Android/unchanged iOS null-object-retry assertions,31 GETs and eight unchanged full hashes. #680 missing-list/web cases reused via source bindings; nested/identity/other-consumer limits remain. #698 Emergency web collection/Android null-member guards:96-file1dfd1368,22assertions, installed Android/unchanged iOS parity, real recovery/cold and five unchanged full table hashes. Other nested member-shape boundaries remain open. #694 web settings envelope/name/type guard has five actual malformed/retry cases,42-file8722e5a7 and four unchanged complete table hashes.  #680 repairs four standalone web list-shape guards and Android missing Access/Issues arrays;148-file659bf82b evidence, real web12cases/retry and native4reader missing/recovery, eightwholefingerprints unchanged. Nested semantics/write receipts/other consumers remain open. Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. 2026-09-26: web Documents delete really deletes, and Documents/Issues/Access/Share show unavailable instead of empty ([#529](https://github.com/WangPantopus/skinny-pantopus/pull/529), bundle `20260926-stream2-home-docs-r1`). The empty Documents and Access & Codes pages no longer point to web actions that don't exist ([#541](https://github.com/WangPantopus/skinny-pantopus/pull/541)).| **Launch scope: pets and polls OUT (cut 7); documents, issues, access and share readers stay.** Remaining malformed-success readers and complete cross-client verification.  Native Fridge failure lifetime#713 sealed76/91bddc2d: visible after6s/retry clears,2owned cleaned/six hashes restored; placement/account/uncertain-issue limits explicit. |
+| F01 | **Closed — verified/preserve within retained Place arithmetic scope.** 2026-09-27, user-approved SQL cohort in cell c20fbj (9 synthetic neighbor Homes + 9d885f71). Web Home bill card: "1 more neighbor needed" → "$150 vs $133.35, 12% above"; the opt-in toggle needs #578. Place Money signals card and detail show "12% above / $150 per month" on web, Android and iOS. Bundles `…-f01-bill-cohort-r1` and `…-native-f01-carryover-r1`. The Money detail now names the real period ([#613](https://github.com/WangPantopus/skinny-pantopus/pull/613), batch 41). | Fractional/mixed-currency/unequal-period arithmetic verified in64-file7b4dbb42; final exactfixturecleanup complete. Coordinator accepted retained F01 closure19:47Z; current Place explicitlyUSD-only and rounded. Earlier Android actualANR remains a separate unresolved reliability boundary. |
+| F02 | **Partial/open.** 2026-09-27 bounded cohort-member candidate passes on web/Android/iOS (bundle `20260927-stream2-f02-member-finance-r1`, seal `48d40790…`): neighborhood-only figures, personal trends denied, error/retry and retired-member403; exact occupancy cleaned and retained fingerprints equal. Existing privacy/error distinctions are reused where recorded. 2026-09-27: the Place "Try again" on a section that failed to load did nothing on web (it opened the cached detail page), iOS or Android. Fixed and merged: web [#602](https://github.com/WangPantopus/skinny-pantopus/pull/602) (batch 40) and native [#619](https://github.com/WangPantopus/skinny-pantopus/pull/619) (batch 42). The native Place previews (Stream 1's Start/launch area) are handed to Stream 1. 2026-09-29 (Claude Stream 2): iOS successful delivery after logout sealed `20260929-stream2-f02-ios-retry-late-delivery-r1` (edec37f4, no code): Money's Try-again read held across a real logout and delivered 4.1 s after it; no owner values after logout or for the next member (403). Web same-account permission **accepted by S1** `20260929-stream2-f02-same-account-permission-r1` (fe2bd74c, no code): a request-time 200 delivered 17.7 s after a real-UI revoke stays only until that page's next read; fresh reads and the Place dashboard enforce the revoke. | Remaining: native permission-change re-run and consumers beyond the Place dashboard (e.g. Hub); iOS late delivery after a new-account login is unreachable (20 s request timeout); hosted/provider boundaries. (Earlier text: Place financial failures, source absence, access retirement and joint Home/Place privacy. The bounded no-finance member journey is already accepted48d40790; web held-success/account case now acceptede9922741, no app change; Android held-success after logout now accepted `edee4120…`; iOS cancellation beforelogout/member403-retry/cold-return nowaccepted82-file699bb0f7. iOS successful delivery afterlogout or newaccountlogin, same-account permission and other-consumer boundaries remain.)|
+| F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. 2026-09-27: the native Add Bill review no longer promises bill splits, which nothing can create ([#621](https://github.com/WangPantopus/skinny-pantopus/pull/621), batch 42). | **Launch scope: OUT (full bill management, cut 7). Don't verify.** Place bill splits, malformed input, currency changes and permission-limited actions. |
+| F04 | **Partial/open.** 2026-09-27, withdrawal on web (cohort Home 9d885f71): turning off "Share bill data anonymously" takes effect on the next read. The Home card falls back to "1 more neighbor needed", Place Money signals folds the bill benchmark into "Coverage is expanding here", and no cached comparison is served. Turning it back on restores "12% above" on both. Bundle `20260927-stream2-f04-withdrawal-r1` (`a32a429e…`). | Read-only binding59036ee0 reuses existing local thresholds, deletion/restoration, paid-status/location corrections, snapshot freshness and indexed-query evidence. Product eligibility/retention policy and hosted scale remain unverified; no new blanket closure. |
+| F05 | **Partial/open.** Read-only binding `20260927-stream2-bill-release-binding-r1` (seal `59036ee0…`) accounts for accepted local current/legacy HTTP format behavior, current format2 callers and retired compatibility worker; current job registration has no old-worker reference. Four accepted bundles/133 files verified, no repeated journey. | **Launch scope: recurring full-bill schedules OUT (cut 7); benchmark release compatibility stays.** Hosted migration-before-reader deployment, retirement of old deployed worker schedules and released client/API version bindings remain unverified. Source/local SQL equality is not hosted release proof. |
+| M01 | **Partial/open.** Retained boundary/source-reuse bundlec300f084: acceptedR02postal clients unchanged; printedcrew/welcomecard/streetdigest are design-stage requirements, no new system authorized. Providerdelivery unverified. Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. 2026-09-26: party-assign privacy fix ([#457](https://github.com/WangPantopus/skinny-pantopus/pull/457)); native read state ([#464](https://github.com/WangPantopus/skinny-pantopus/pull/464)); recoverable household-letter delete/dismiss with notices ([#512](https://github.com/WangPantopus/skinny-pantopus/pull/512), batch 27, bundle `20260926-stream2-mail-recoverable-delete-r1`). **Known gap, deferred by the user on 2026-09-26:** web Family Mail Party is dormant (banner never appears; `/app/mailbox/party` unlinked); Android works. Maybe a future build; no piecemeal fixes (CURRENT RESUME §2c). | **Launch scope: household letters OUT (cut 8); only postcards, welcome cards and the digest stay.** Printed crew postcards/welcome cards/street digest remain design-stage requirements; physical delivery/hosted providers are unverified. Accepted postal verification is reused under R02. No cut-letter acceptance task remains. |
+| M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | **Launch scope: mail history OUT (cut 8), and deferred by the user.** Large-household/history ordering, performance and cross-resource scale checks. |
+| M04 | **Partial/open.** 2026-09-26: certified Received/Read/Signed and recipient-only signing on all three platforms ([#503](https://github.com/WangPantopus/skinny-pantopus/pull/503), bundle `20260926-stream2-certified-statuses-r1`). | **Launch scope: OUT (e-signing, certified and ceremonial letters, cut 8). Don't verify.** Reachable conversions, translations, physical-mail and neighbor-request behavior; no production path sends certified mail yet. |
+
+## Former S2-xx UX items owned by Stream 4 (18 of 24; all resolved, owned for any regression)
+
+| ID | Item (UX inventory 2026-09-23) | Disposition |
+|---|---|---|
+| S2-02 | Records "Add photo" fails silently (its backend route never existed) | fixed by #323 and #347 |
+| S2-03 | Earn dashboard: help, refer, offer a service and "See all" open placeholders | fixed by #461 |
+| S2-04 | Mail translation: "Reply" opens a placeholder; chips toast success for nothing | moot (no Translate entry; #369, #388); translation is cut (#8) |
+| S2-07 | Mail action buttons announce success for actions that only log a click | fixed by #320 |
+| S2-08 | Mail detail overflow menus are full of items that do nothing | fixed by #445 (and #388) |
+| S2-09 | Home dashboard tabs never show their content | fixed by #321 |
+| S2-11 | Dismissed mail stays in the Mailbox list | fixed by #445; household-letter Dismiss is now cut (#8) |
+| S2-12 | A failed mailbox load says "Mailbox is empty", with no retry | fixed by #369 |
+| S2-13 | Mail star, archive and delete failures are silent | web fixed by #369; the native household-letter parts are cut (#8) |
+| S2-14 | Today tab tells residents to "Claim your address" when the homes call fails | closed after its merge (coordinator accounting, 2026-09-23/24) |
+| S2-15 | Home dashboard "Property details" does nothing when opened from You | fixed by #422 |
+| S2-16 | Unboxing and ceremonial-letter icons that do nothing | fixed by #451; ceremonial letters are cut (#8) |
+| S2-18 | Opening a letter posts an invalid action, so lists and unread counts stay stale | web fixed by #369; native letter read state is cut (#8) |
+| S2-19 | "File to Vault" and Translate fail silently | web fixed by #369/#388; the rest is household letters, cut (#8) |
+| S2-20 | Home Issue, Bill and Package panels accept attachments that are never uploaded | fixed by #380 (the honest D02 constraint) |
+| S2-21 | Place dashboard has no pull-to-refresh and stays stale after verification flows | fixed by #422 |
+| S2-22 | Mail list: a failed "load more" replaces the whole list | fixed by #445 |
+| S2-24 | "Property insights coming soon" when there is simply no valuation | fixed by #380 (already on master at the 2026-09-26 check) |
+
+## Runtime, devices and kit (shared with Stream 3; lease label `stream4:`)
+
+- **Kit:** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/` ([README](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md)). Tools are in `tools/`, stages in `runtime/`. The audit store is `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. Names containing `stream2` keep them.
+- **Isolated runtime** (never production; restart recipe in the kit README and the history file's 2026-09-27 CURRENT RESUME §3):
+  - DB 64554 (`supabase_db_pantopus-stream2-native-resume-r2`, Kong 64553);
+  - fault proxy 18142 (rules via `POST /__s2fault/set|clear`);
+  - backend 18143 (log restarts in `runtime/backend-restarts.log`);
+  - web 18144, which hot-reloads the checked-out branch of `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`.
+- **Exclusive runtime lease** (new 2026-09-30; the two streams share one runtime):
+  - Take it with `zsh tools/runtime-lease.sh acquire '<label>: <purpose>'` before creating or cleaning fixtures, setting fault rules, restarting the backend, switching that worktree's branch, taking a whole-DB baseline or driving the devices below.
+  - Release it with `zsh tools/runtime-lease.sh release '<label>'`, and check the holder with `status`.
+  - A baseline is valid only inside the lease it was taken in.
+- **Devices,** only while holding the runtime lease:
+  - emulator-5556 (AVD `Pantopus_Home_Recurrence_Acceptance`) and iOS sim 6F914A30, both through `/private/tmp/pantopus-tools/device-slot.sh`;
+  - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
+  - the shared iOS driver by announcing the take and the release to the other streams.
+  - On 2026-09-30 the per-cell build copies and the iOS DerivedData were deleted to free disk, so the next native builds are full rebuilds.
+- **Retained fixtures** (keep them; don't delete):
+  - Home105 "S2 First Load Home 2";
+  - Home70 "Stream2 Resume Home" (owner + member B as a verified member);
+  - cohort Home 9d885f71 with 9 neighbor homes (the F01 benchmark);
+  - SQL Homes abe5a8c9 and d4eaed7e.
+  - The accounts are in `runtime/accounts.env`: never print it; type values with the kit's secret tools only.
+- **State at the split:** Docker Desktop has been down since ~03:30Z on 2026-09-30 (disk full), so the runtime is unreachable until the user restarts it. No runtime lease, device slot, heavy slot or iOS driver is held.
+
+## Rules carried over from the former Stream 2
+
+- Read `AGENTS.md`, `docs/PROJECT_HANDOFF.md` and the hub [README](README.md) (the renumbering notice and the 2026-09-27 LAUNCH SCOPE block at the top).
+- **Launch scope (2026-09-27):** never verify, test or fix the eight cut features. If a finding lands in a cut area, note it as cut and move on.
+- **Verify before changing:** reproduce first, then make the smallest repair in the existing implementation. No new screens, schemas, migrations, services or replacement architectures, and no duplicate trackers. Preserve designs; propose any unavoidable design change.
+- **Evidence protocol:**
+  1. Write `DECISION.md` first, with its time from `date -u` (from the lease log).
+  2. Take a whole-DB baseline with `tools/fp.py snap`.
+  3. Capture befores and afters in the real apps.
+  4. Run the exact cleanup: preimage digests, and every non-auth table equal to the baseline before COMMIT.
+  5. Seal with `tools/seal-bundle.py`.
+  6. Open a PR whose body ends with the Claude Code line.
+  7. Hand the head and seal to the coordinator, then add an entry at the top of this file's live block.
+- **Merge policy:** required CI is off. A PR merges once it's verified end to end in the real apps with sealed evidence and reviewed. The Stream 1 queue owner (the coordinator) batches and merges; send it head + seal.
+- **Never:** the physical iPhone; the founder's environment (docker stack `pantopus-home-gig-replay` on 64521/64522, backend :8000, simulator EB5AD759); production providers; real user or payment data; credentials, tokens, raw logs or DB archives in Git or chat (never print `runtime/accounts.env`); destructive git (reset, stash, clean, gc, worktree removal).
+- **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
+
+## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T04:16:32Z — Stream 4 created by splitting the former Stream 2** (user direction).
+  - Rows: I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03, F04, F05, M01, M03, M04.
+  - UX items: S2-02, S2-03, S2-04, S2-07, S2-08, S2-09, S2-11, S2-12, S2-13, S2-14, S2-15, S2-16, S2-18, S2-19, S2-20, S2-21, S2-22, S2-24.
+  - Decisions: 3 own + 2 shared.
+  - The open F02 fixture (above) is this stream's first item.
+  - History up to the split: the "Live continuation — 2026-09-27, Codex Stream 2" block in [`former-stream2-home-household.md`](former-stream2-home-household.md). Docker is down; nothing is held.
