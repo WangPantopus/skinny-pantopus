@@ -4871,20 +4871,6 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       }
     }
 
-    // A support train's organizer can't be removed from the train here; the train
-    // side decides what happens to it (Stream 1).
-    const { count: organizedTrains, error: trainsError } = await supabaseAdmin
-      .from('SupportTrain')
-      .select('id', { count: 'exact', head: true })
-      .eq('organizer_user_id', userId);
-    if (trainsError) throw trainsError;
-    if (organizedTrains > 0) {
-      return res.status(409).json({
-        error: 'You organize a support train. Close it or hand it to a co-organizer first.',
-        code: 'SUPPORT_TRAIN_ORGANIZER',
-      });
-    }
-
     // A stop request the person made that hasn't completed (waiting on its payment
     // step, or in review) is replayed with its original actor, so it has to finish
     // before the account can go (Stream 2's rule for its stop receipts).
