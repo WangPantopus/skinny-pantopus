@@ -9,6 +9,32 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — account deletion reaches most users; #935/#936/#947 merged, #949/#950 open; Android native pass done, iOS waits for the user's simulator grant, 2026-09-30T10:54:37Z
+
+- **Merged since the last block:**
+  - [#935](https://github.com/WangPantopus/skinny-pantopus/pull/935) (10:07:28Z, `effb6a991`): a closed task chat also refuses edits and reactions.
+  - [#936](https://github.com/WangPantopus/skinny-pantopus/pull/936) (10:07:28Z, `069fc26c6`): account deletion waits for an open task stop (409 `TASK_STOP_IN_PROGRESS`).
+  - [#947](https://github.com/WangPantopus/skinny-pantopus/pull/947) (10:39:05Z, `32903f11f`): a Support Train organizer can delete their account. The interim guard is gone, and the full route is proven: the co-organizer train passed to Erin; the draft and the no-co-organizer train were removed.
+- **Open:**
+  - [#949](https://github.com/WangPantopus/skinny-pantopus/pull/949): `BusinessAuditLog.actor_user_id` becomes nullable with SET NULL (migration `20260930151000`), and the web Activity views show "Former member". Real route 409 → 200; real Chrome shows "Former member". Seal `9b9499e8…`.
+  - [#950](https://github.com/WangPantopus/skinny-pantopus/pull/950): the delete confirmation says what stays, on web, iOS and Android. It shows the shared-home line (Stream 4's) and, for live-train organizers, Stream 1's paragraph. Verified in real Chrome. The native builds are queued behind heavy. Seal `3c2d467c…`.
+- **Launch-critical deletion finding:** 19 of the route's 45 "set to NULL" columns are NOT NULL, so most active users got 409 "contact support". Reproduced with a home-task author (bundle `20260930-stream5-delete-home-history-r1`, seal `81ac038d…`). Stream 1 assigned owners:
+  - Stream 2: five Gig/Refund columns (PR B), and the stop records in [#944](https://github.com/WangPantopus/skinny-pantopus/pull/944), which I reviewed and approved. #944 must be renumbered above 141000.
+  - Stream 3: `HomeAccessSecret`. Merged as #943 (141000).
+  - Stream 4: the other Home columns, plus a trigger that keeps home documents' files (143000).
+  - Stream 5: `BusinessAuditLog` (#949).
+  - The dry run's 409 stays as the safety net until every part lands.
+- **Acceptance evidence (A02):** "deletion from two devices at once" passes at the API level (both 200, both sessions 401, account gone). Bundle `20260930-stream5-delete-two-devices-r1`, seal `1bab2bd0…`.
+- **Native pass for #908 and #923:**
+  - Android PASS on `pantopus_s5`: Dana is refused the business room and closed rooms; Bob keeps his retired room, and a send gets the closed notice; Carl gets a fresh task chat and an error on the retired link. Bundle `20260930-stream5-native-pass-r1`, seal `268657d6…`.
+  - **iOS: blocked.** The user hasn't granted Claude access to the "Pantopus S5" simulator; the attach was refused. Nothing was driven around that permission.
+- **Decisions taken without asking (the standing direction):**
+  - Implement Stream 1's organizer notice myself, because I own the delete screens.
+  - Word the disclosure to cover every retained record type.
+  - Change the web business-activity fallback to "Former member".
+  - Keep native on-device display of the deletion 409 unverified. The Android path to the sheet runs through Identity Center, which my proxy blocks for accounts without a local profile (a harness guard).
+- **Needs the user:** grant "Let Claude use it" for the "Pantopus S5" simulator in the simulator panel, so the iOS pass can run.
+
 ## LIVE — #923 and #931 merged; #935 and #936 queued; native pass waiting for a device slot, 2026-09-30T10:06:01Z
 
 - **Task chat privacy:**
