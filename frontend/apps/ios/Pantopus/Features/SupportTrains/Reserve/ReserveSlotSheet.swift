@@ -211,6 +211,7 @@ public struct ReserveSlotSheet: View {
                     .padding(Spacing.s3)
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                    .accessibilityLabel(mode == .cook ? "What are you making?" : "Dish name")
                     .accessibilityIdentifier("supportTrainReserveDishField")
             }
             if mode == .takeout {
@@ -220,6 +221,7 @@ public struct ReserveSlotSheet: View {
                     .padding(Spacing.s3)
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                    .accessibilityLabel("Restaurant name")
                     .accessibilityIdentifier("supportTrainReserveRestaurantField")
             }
             Toggle(isOn: $hasArrivalTime) {
@@ -244,6 +246,7 @@ public struct ReserveSlotSheet: View {
                 .padding(Spacing.s2)
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+                .accessibilityLabel("Note to recipient")
                 .accessibilityIdentifier("supportTrainReserveNoteField")
         }
     }
