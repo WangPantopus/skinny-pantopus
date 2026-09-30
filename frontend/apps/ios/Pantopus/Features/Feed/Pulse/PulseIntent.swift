@@ -61,6 +61,12 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
         }
     }
 
+    /// The card chip's word for one post: a found Lost & Found post says
+    /// "Found", not "Lost".
+    public func chipLabel(lostFoundType: String?) -> String {
+        self == .lost && lostFoundType == "found" ? "Found" : cardChipLabel
+    }
+
     /// Backend `post_type` filter value sent on `/api/posts/feed`. `all`
     /// returns `nil` so the backend skips the filter.
     public var postType: String? {
