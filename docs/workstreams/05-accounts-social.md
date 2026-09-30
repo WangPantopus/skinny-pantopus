@@ -9,6 +9,39 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — N04 report queue #1042 green, sealed (d641c192) and handed to Stream 1; #1037 merged, 2026-09-30T17:43:48Z
+
+- **#1037 merged** in batch 201 (PR #1039, master `ed08ad438`). Stream 1 verified the seal and the seat grants (service_role only). Batch 202 then moved master to `416898752`.
+- **N04, "who processes reports":** a verified gap. Reports were write-only; no admin route, job or notification read them.
+  - **Decision** (the user's standing direction, approved by Stream 1): the platform admin, the founder at launch, processes reports, with a **target of acting within 24 hours**.
+- **PR [#1042](https://github.com/WangPantopus/skinny-pantopus/pull/1042)**, head `5e476f975`. No table, column or migration.
+  - **Queue:** `GET /api/admin/reports?status=…` behind requireAdmin, plus resolve (`resolved`/`dismissed`; a repeat returns 409 unchanged).
+  - **Kinds:**
+    - UserReport, where DM reports land;
+    - PostReport;
+    - GigReport;
+    - neighbor-message flags, listed view-only;
+    - ListingReport stays out (Marketplace is cut).
+  - **Alert:** one per new report through the existing `adminAlerts` / `ADMIN_ALERT_EMAIL` channel, with only the kind, the reason category, the report id and the queue link.
+  - **Web:** `/app/admin/reports`.
+  - **Hooks** in users.js, posts.js and gigs.js (Stream 2 OK'd) and neighborMessages.js (Stream 4 OK'd).
+- **E2E:**
+  - web report → admin resolves it in the page;
+  - non-admin 403, and the page shows "Admins only";
+  - all four kinds through the API;
+  - a log-only alert per report.
+  - Fixtures removed at 17:39:23Z and hs13b's role restored.
+  - CI run 36752584313 green. Bundle `20260930-stream5-report-queue-r1`.
+- **UX fix from the E2E:** the page first copied review-claims' 403 → `router.back()`, which from the alert's direct link leaves the app. It now shows an inline "Admins only" message; review-claims is untouched.
+- **Follow-ups (recorded, not started):**
+  1. **Takedown:** hide a post and restrict an account, which needs product rules. Until then the admin acts from the queue.
+  2. **Closing neighbor-message reports:** needs a review status on the flag, since clearing `reported_at` would flip the recipient's "reported" state.
+  3. **Native report entry points on a device:** not run in this session (no simulator grant); they call the same routes. Offered to Stream 1.
+  4. **Public crew badge:** Stream 1's privacy call is to return only a server-computed boolean (active verified residency) and never a place.
+  5. **The #1037 follow-up backfill,** for people who already hold a binding, once the API is deployed.
+- **Harness:** the runtime proxy gained a `report-check` allowance (now disabled), and the launcher an optional `S3_ADMIN_ALERT_EMAIL` pass-through.
+- **Runtime:** DB at `20260930184000`, equal to master. API 18134 and web 18131 run `5e476f975` until #1042 merges, then go back to master.
+
 ## LIVE — #1037 green, sealed (61fefcd1) and handed to Stream 1; fixtures removed, 2026-09-30T17:13:39Z
 
 - **CI run 36748636022** at head `6135591cd`, all green.

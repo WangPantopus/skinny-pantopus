@@ -17,7 +17,13 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
 - **Open (as of 17:07Z):**
-  - **#1037**, the crew seat repair, migration `20260930184000`: CI green, sealed (`61fefcd1…`) and handed to Stream 1; fixtures removed. After it merges, return API 18134 to master and write the follow-up backfill (people who already hold a binding), to apply after the API deploys.
+  - **#1042**, the N04 report queue: CI green, sealed (`d641c192…`) and handed to Stream 1; fixtures removed. After it merges, return API 18134 and web 18131 (the tree at `/private/tmp/pantopus-stream3-web-chat-names-r1`) to master.
+  - Follow-ups:
+    - takedown (product rules);
+    - closing neighbor-message reports;
+    - native report entry points on a device (offered to Stream 1);
+    - the public crew badge as a boolean only (Stream 1's privacy call);
+    - #1037's backfill for people who already hold a binding, after the API deploys.
   - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
 - **Merged since the first rewrite:**
   - #1022, the anon default-deny (batch 196);
@@ -32,7 +38,7 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
 - **API 18134:**
   1. Point the source checkout `/private/tmp/pantopus-stream3-chat-realtime-r1` at the wanted commit (detached, clean backend).
   2. From `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`, run `S3_SRC=<checkout> S3_BACKEND_TREE_OF=<sha> S3_LOCAL_STORAGE=1 nohup python3 api-launch-private.py`. The receipt is `api-start-isolation-safe.json`.
-  3. It currently runs `6135591cd`, the #1037 head (started 16:59:16Z).
+  3. It currently runs `5e476f975`, the #1042 head (started 17:37:51Z), with `S3_ADMIN_ALERT_EMAIL` set.
   4. About 10 logins per API process trip the rate limiter; restart before a new journey.
 - **Proxy and web:** proxy 18130 (deletion check disabled), web 18131.
 - **Fixture accounts still present:** solo2, hs2b, hs4b, hs6, hs9b, hs11b, hs12, hs12b, hs13b, hs15b, rls1, rls2. Earlier deletion journeys removed the rest (dm*, hs1–5, org1 and others).
@@ -71,7 +77,7 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. #1037 is green, sealed, handed off and its fixtures are removed; wait for Stream 1's merge. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
+1. #1037 is merged (batch 201). #1042 is green, sealed and handed off; wait for Stream 1's merge, then return the runtime to master. The runtime DB is at 184000 (182000's chat section went in as a delta), and API 18134 runs `6135591cd` (the #1037 head); return it to master after the merge. Then the follow-up backfill (people who already hold a binding) once the API is deployed.
 2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;
