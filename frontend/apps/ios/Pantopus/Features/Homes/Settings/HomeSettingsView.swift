@@ -147,11 +147,11 @@ struct HomeSettingsIdentityCard: View {
 
     private var identityChip: some View {
         HStack(spacing: 4) {
-            Icon(.home, size: 11, strokeWidth: 2.2, color: Theme.Color.primary700)
+            Icon(.home, size: 11, strokeWidth: 2.2, color: Theme.Color.primaryInkStrong)
             Text("HOME")
                 .font(.system(size: 10.5, weight: .bold))
                 .kerning(0.4)
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 3)

@@ -63,7 +63,7 @@ struct MailboxRootHeader: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                         .fill(Theme.Color.primary50)
-                    Icon(.mailbox, size: 16, strokeWidth: 2.2, color: Theme.Color.primary700)
+                    Icon(.mailbox, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInkStrong)
                 }
                 .frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 1) {

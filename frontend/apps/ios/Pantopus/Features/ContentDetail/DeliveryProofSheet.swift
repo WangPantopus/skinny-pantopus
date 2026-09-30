@@ -303,12 +303,12 @@ public struct DeliveryProofSheetView: View {
 
     private var trustLine: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.shieldCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.primary700)
+            Icon(.shieldCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInkStrong)
             Text(target.paid
                 ? "Payment is released once the poster confirms — usually within a few hours."
                 : "The poster confirms the task once they've seen your proof.")
                 .font(.system(size: 11.5))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, Spacing.s3)

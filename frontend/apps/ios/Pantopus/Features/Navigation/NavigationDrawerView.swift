@@ -235,7 +235,7 @@ struct NavigationDrawerView: View {
                 )
                 Text(item.label)
                     .font(.system(size: 14.5, weight: item.isActive ? .bold : .medium))
-                    .foregroundStyle(item.isActive ? Theme.Color.primary700 : Theme.Color.appText)
+                    .foregroundStyle(item.isActive ? Theme.Color.primaryInkStrong : Theme.Color.appText)
                 Spacer(minLength: Spacing.s2)
                 if item.isActive {
                     Circle()
@@ -280,7 +280,7 @@ struct NavigationDrawerView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Back to Hub")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Theme.Color.primary700)
+                            .foregroundStyle(Theme.Color.primaryInkStrong)
                         Text("Return to your personal hub")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.Color.appTextSecondary)

@@ -234,7 +234,7 @@ private struct VerifyWhyWeAskRow: View {
                         Text("Why verify your landlord?")
                             .pantopusTextStyle(.body)
                             .fontWeight(.semibold)
-                            .foregroundStyle(Theme.Color.primary700)
+                            .foregroundStyle(Theme.Color.primaryInkStrong)
                         Text("Verified rentals get safer payouts and dispute support.")
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)

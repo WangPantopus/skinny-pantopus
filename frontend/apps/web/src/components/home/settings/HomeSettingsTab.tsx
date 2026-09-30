@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import * as api from '@pantopus/api';
 import type { HomeMember } from '@pantopus/types';
 import TransferAdminWizard from './TransferAdminWizard';
@@ -476,6 +477,26 @@ export default function HomeSettingsTab({
           Per-home notification routing isn&apos;t live yet — these switches don&apos;t change what you receive.
         </p>
       </SettingsSection>
+
+      {/* ===== Security & Privacy (security.manage) =====
+          Discoverability and the owner-claim policy live on their own page, which
+          nothing else in the app links to; iOS and Android list them in Home settings. */}
+      {can('security.manage') && (
+        <SettingsSection title="Security & Privacy" icon="🔒">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-app-text">Discoverability and owner claims</div>
+              <div className="text-[10px] text-app-text-muted">Who can find this home, and whether ownership claims need review</div>
+            </div>
+            <Link
+              href={`/app/homes/${homeId}/settings/security`}
+              className="px-3 py-1.5 rounded-lg border border-app-border text-xs font-medium text-app-text-strong hover:bg-app-hover transition"
+            >
+              Manage
+            </Link>
+          </div>
+        </SettingsSection>
+      )}
 
       {/* ===== Section 5: Data Management (admins only) ===== */}
       {canManageDataDestruction && (

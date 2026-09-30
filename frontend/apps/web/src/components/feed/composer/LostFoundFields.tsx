@@ -26,12 +26,18 @@ interface LostFoundFieldsProps {
   onContactPrefChange: (v: LostFoundContactPref) => void;
   contactPhone: string;
   onContactPhoneChange: (v: string) => void;
+  /**
+   * When editing: the stored contact preference, shown read-only. The edit API can't save a phone
+   * number with it, so a change there would silently lose the number.
+   */
+  contactLocked?: string;
 }
 
 export default function LostFoundFields({
   lostFoundType, onLostFoundTypeChange,
   contactPref, onContactPrefChange,
   contactPhone, onContactPhoneChange,
+  contactLocked,
 }: LostFoundFieldsProps) {
   return (
     <div className="mx-4 mb-3 p-3 bg-yellow-50 rounded-xl space-y-2 border border-yellow-100">
@@ -39,6 +45,12 @@ export default function LostFoundFields({
         <button onClick={() => onLostFoundTypeChange('lost')} className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition flex items-center justify-center gap-1.5 ${lostFoundType === 'lost' ? 'bg-yellow-600 text-white border-yellow-600' : 'border-yellow-300 text-yellow-700'}`}><Search className="w-4 h-4" /> Lost</button>
         <button onClick={() => onLostFoundTypeChange('found')} className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition flex items-center justify-center gap-1.5 ${lostFoundType === 'found' ? 'bg-yellow-600 text-white border-yellow-600' : 'border-yellow-300 text-yellow-700'}`}><CheckCircle className="w-4 h-4" /> Found</button>
       </div>
+      {contactLocked !== undefined ? (
+        <p className="text-xs text-yellow-800">
+          Contact: <span className="font-semibold">{lostFoundContactLabel(contactLocked)}</span> (can&apos;t be changed here)
+        </p>
+      ) : (
+      <>
       <p id="lost-found-contact-label" className="text-xs font-medium text-yellow-800">How should people contact you?</p>
       <div role="radiogroup" aria-labelledby="lost-found-contact-label" className="flex flex-wrap gap-2">
         {CONTACT_OPTIONS.map((option) => (
@@ -65,6 +77,8 @@ export default function LostFoundFields({
           value={contactPhone}
           onChange={(e) => onContactPhoneChange(e.target.value)}
         />
+      )}
+      </>
       )}
     </div>
   );

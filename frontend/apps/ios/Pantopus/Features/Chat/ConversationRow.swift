@@ -88,13 +88,13 @@ public struct ConversationRow: View {
             HStack(spacing: 6) {
                 Text(content.displayName)
                     .font(.system(size: 16, weight: content.unread > 0 || isAIRow ? .bold : .medium))
-                    .foregroundStyle(isAIRow ? Theme.Color.primary700 : Theme.Color.appText)
+                    .foregroundStyle(isAIRow ? Theme.Color.primaryInkStrong : Theme.Color.appText)
                     .lineLimit(1)
                 if isAIRow {
                     // A15.3 `.ai-badge` — primary identity, not business purple.
                     Text("AI")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(Theme.Color.primary50, in: Capsule())

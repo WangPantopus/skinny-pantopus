@@ -52,6 +52,9 @@ function SecurityContent() {
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [loadDenied, setLoadDenied] = useState(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -59,8 +62,13 @@ function SecurityContent() {
     if (!homeId) return;
     try {
       const res = await api.homeOwnership.getSecuritySettings(homeId);
+      setLoadError(null);
+      setLoadDenied(false);
       setSecurity(res.security);
-    } catch { toast.error('Failed to load security settings'); }
+    } catch (err: unknown) {
+      if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this home’s security settings.'); return; }
+      setLoadDenied(false);
+      setLoadError('Current security settings could not be loaded. Retry to check current information.'); toast.error('Failed to load security settings'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchSettings().finally(() => setLoading(false)); }, [fetchSettings]);
@@ -80,16 +88,31 @@ function SecurityContent() {
     finally { setSaving(false); }
   }, [homeId, security]);
 
-  if (loading || !security) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+
+  const header = (
+    <div className="flex items-center gap-3 mb-6">
+      <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+      <h1 className="text-xl font-bold text-app-text">Security & Privacy</h1>
+    </div>
+  );
+
+  // A failed or empty read says so, instead of spinning forever.
+  if (!security) return (
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      {header}
+      <div className="text-center py-16">
+        <p className="text-sm text-app-text-secondary">{loadError || 'Current security settings could not be loaded. Retry to check current information.'}</p>
+        {!loadDenied && (<button type="button" onClick={() => { setLoading(true); fetchSettings().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>)}
+      </div>
+    </div>
+  );
 
   const claimWindowActive = security.claim_window_active;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
-        <h1 className="text-xl font-bold text-app-text">Security & Privacy</h1>
-      </div>
+      {header}
 
       {/* Privacy */}
       <OptionGroup

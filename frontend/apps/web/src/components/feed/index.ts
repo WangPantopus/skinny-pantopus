@@ -1,4 +1,5 @@
 export { default as PostComposer } from './PostComposer';
+export { default as EditPostDialog } from './EditPostDialog';
 export { default as PostCard } from './PostCard';
 export { default as PostDetailPanel } from './PostDetailPanel';
 export { default as CommentThread } from './CommentThread';

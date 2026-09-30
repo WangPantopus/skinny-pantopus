@@ -139,11 +139,11 @@ private struct UseCurrentLocationPill: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s2) {
-                Icon(.mapPin, size: 16, color: Theme.Color.primary700)
+                Icon(.mapPin, size: 16, color: Theme.Color.primaryInkStrong)
                 Text("Use current location")
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(Theme.Color.primary50)
@@ -407,7 +407,7 @@ private struct ManualFallbackRow: View {
                     Text("Add manually")
                         .pantopusTextStyle(.body)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                     Text("We'll geocode it and mail a verification code.")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)

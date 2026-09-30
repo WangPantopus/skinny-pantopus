@@ -90,8 +90,9 @@ function postFormReducer(state: PostFormState, action: PostFormAction): PostForm
   }
 }
 
-export function usePostForm() {
-  const [state, dispatch] = useReducer(postFormReducer, INITIAL_STATE);
+/** `initial` seeds the form once, e.g. with a saved post being edited. */
+export function usePostForm(initial?: Partial<PostFormState>) {
+  const [state, dispatch] = useReducer(postFormReducer, initial, (seed) => (seed ? { ...INITIAL_STATE, ...seed } : INITIAL_STATE));
 
   const setField = useCallback(<K extends keyof PostFormState>(field: K, value: PostFormState[K]) => {
     dispatch({ type: 'SET_FIELD', field, value });

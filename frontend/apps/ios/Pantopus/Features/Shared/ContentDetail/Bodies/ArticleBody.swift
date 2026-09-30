@@ -119,10 +119,10 @@ public struct ArticleBody: View {
         ContentDetailFlowLayout(spacing: 6) {
             ForEach(content.tags, id: \.self) { tag in
                 HStack(spacing: Spacing.s1) {
-                    Icon(.tag, size: 11, color: Theme.Color.primary700)
+                    Icon(.tag, size: 11, color: Theme.Color.primaryInkStrong)
                     Text(tag)
                         .font(.system(size: PantopusTextStyle.caption.size, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s1)

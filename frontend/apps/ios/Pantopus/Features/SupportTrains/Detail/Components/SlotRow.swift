@@ -107,7 +107,7 @@ public struct SlotRow: View {
                         Text("Your slot")
                             .font(.system(size: 9, weight: .bold))
                             .textCase(.uppercase)
-                            .foregroundStyle(Theme.Color.primary700)
+                            .foregroundStyle(Theme.Color.primaryInkStrong)
                             .padding(.horizontal, Spacing.s1)
                             .padding(.vertical, 1)
                             .background(Theme.Color.primary50)
@@ -165,7 +165,7 @@ public struct SlotRow: View {
                 label: {
                     Text("Edit")
                         .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                         .padding(.horizontal, Spacing.s2)
                         .frame(height: 30)
                         .background(Theme.Color.appSurface)

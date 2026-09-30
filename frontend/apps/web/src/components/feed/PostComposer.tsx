@@ -7,6 +7,7 @@ import type {
   Audience,
   FeedSurface,
   PersonalPostAs,
+  Post,
   PostingIdentity,
   PostType,
   PostVisibility,
@@ -16,7 +17,7 @@ import { Trophy } from 'lucide-react';
 import PostLocationPicker from './PostLocationPicker';
 import type { SportsComposerMetadata, TopicKey } from '@/constants/feedTopics';
 import { SPORTS_COMPOSER_INLINE_INTENTS } from '@/constants/feedTopics';
-import { usePostForm, type ProfileVisibilityScope } from './composer/usePostForm';
+import { usePostForm, type PostFormState, type ProfileVisibilityScope } from './composer/usePostForm';
 import IntentSelector, { INTENTS } from './composer/IntentSelector';
 import EventFields from './composer/EventFields';
 import SafetyAlertFields from './composer/SafetyAlertFields';
@@ -27,7 +28,7 @@ import VisibilityPicker from './composer/VisibilityPicker';
 import PostPrecheck from './composer/PostPrecheck';
 import MediaUpload from './composer/MediaUpload';
 import { InlineDraftHelper } from '@/components/ai-assistant';
-import { PURPOSE_TO_POST_TYPE } from '@pantopus/ui-utils';
+import { PURPOSE_TO_POST_TYPE, getPostTypeConfig } from '@pantopus/ui-utils';
 
 const POST_TYPE_TO_API_PURPOSE: Record<PostType, string> = {
   ask_local: 'ask',
@@ -57,6 +58,74 @@ function asStoredWallClock(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return `${value}:00Z`;
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return `${value}Z`;
   return value;
+}
+
+/** A stored event time or deal expiry as the date/time input shows it (the same UTC wall clock). */
+function storedWallClockToInput(value: string | null | undefined, kind: 'datetime' | 'date'): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const iso = date.toISOString();
+  return kind === 'date' ? iso.slice(0, 10) : iso.slice(0, 16);
+}
+
+function parseTags(value: string): string[] {
+  return value.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+const TITLE_POST_TYPES = ['event', 'alert', 'deal', 'service_offer', 'announcement', 'lost_found'];
+const SERVICE_CATEGORY_POST_TYPES = ['service_offer', 'ask_local', 'recommendation'];
+
+/** Fields the update API takes that the composer edits. */
+export type PostEditPatch = Parameters<typeof api.posts.updatePost>[1];
+
+/** Seeds the form from a saved post being edited; the post type stays as posted. */
+function formStateFromPost(post: Post): Partial<PostFormState> {
+  return {
+    expanded: true,
+    selectedIntent: post.post_type,
+    content: post.content ?? '',
+    title: post.title ?? '',
+    eventVenue: post.event_venue ?? '',
+    eventDate: storedWallClockToInput(post.event_date, 'datetime'),
+    eventEndDate: storedWallClockToInput(post.event_end_date, 'datetime'),
+    behaviorDesc: post.safety_behavior_description ?? '',
+    dealExpires: storedWallClockToInput(post.deal_expires_at, 'date'),
+    dealBusinessName: post.deal_business_name ?? '',
+    lostFoundType: post.lost_found_type === 'found' ? 'found' : 'lost',
+    serviceCategory: post.service_category ?? '',
+    tags: (post.tags ?? []).join(', '),
+  };
+}
+
+/**
+ * Only what the person changed, so nothing the composer can't show (media, audience, location,
+ * an alert's type, a lost-and-found contact) is touched. An untitled post stays untitled.
+ */
+function buildEditPatch(post: Post, seed: Partial<PostFormState>, f: PostFormState): PostEditPatch {
+  const patch: PostEditPatch = {};
+  const differs = (now: string, before: string | undefined) => now.trim() !== (before ?? '').trim();
+  if (differs(f.content, seed.content)) patch.content = f.content.trim();
+  if (differs(f.title, seed.title)) patch.title = f.title.trim() || null;
+  if (post.post_type === 'event') {
+    if (differs(f.eventDate, seed.eventDate)) patch.eventDate = f.eventDate ? asStoredWallClock(f.eventDate) : null;
+    if (differs(f.eventEndDate, seed.eventEndDate)) patch.eventEndDate = f.eventEndDate ? asStoredWallClock(f.eventEndDate) : null;
+    if (differs(f.eventVenue, seed.eventVenue)) patch.eventVenue = f.eventVenue.trim() || null;
+  }
+  if (post.post_type === 'alert' && differs(f.behaviorDesc, seed.behaviorDesc)) {
+    patch.safetyBehaviorDescription = f.behaviorDesc.trim() || null;
+  }
+  if (post.post_type === 'deal') {
+    if (differs(f.dealExpires, seed.dealExpires)) patch.dealExpiresAt = f.dealExpires ? asStoredWallClock(f.dealExpires) : null;
+    if (differs(f.dealBusinessName, seed.dealBusinessName)) patch.dealBusinessName = f.dealBusinessName.trim() || null;
+  }
+  if (post.post_type === 'lost_found' && f.lostFoundType !== seed.lostFoundType) patch.lostFoundType = f.lostFoundType;
+  if (SERVICE_CATEGORY_POST_TYPES.includes(post.post_type) && differs(f.serviceCategory, seed.serviceCategory)) {
+    patch.serviceCategory = f.serviceCategory.trim() || null;
+  }
+  const tags = parseTags(f.tags);
+  if (tags.join('\n') !== parseTags(seed.tags ?? '').join('\n')) patch.tags = tags;
+  return patch;
 }
 
 function apiPurposeForPostType(postType: PostType | null | undefined): string | undefined {
@@ -124,7 +193,16 @@ export interface PostComposerSubmitData {
 }
 
 interface PostComposerProps {
-  onPost: (data: PostComposerSubmitData) => Promise<boolean | void>;
+  /** Creates a post (not used when `editPost` is set). */
+  onPost?: (data: PostComposerSubmitData) => Promise<boolean | void>;
+  /**
+   * Edits this saved post instead of creating one: the form opens filled in, the post type stays as
+   * posted, and only fields the update API takes are shown.
+   */
+  editPost?: Post | null;
+  /** Saves an edit; resolves to a message to show (the edit stays in the form) or null when saved. */
+  onSaveEdit?: (patch: PostEditPatch) => Promise<string | null>;
+  onCancelEdit?: () => void;
   isPosting?: boolean;
   user?: { name?: string; first_name?: string; username?: string; profile_picture_url?: string } | null;
   activeSurface?: FeedSurface;
@@ -181,11 +259,15 @@ function isPersonalZoneIdentity(identity: PostingIdentity): boolean {
 
 export default function PostComposer({
   onPost, isPosting, user, activeSurface,
+  editPost = null, onSaveEdit, onCancelEdit,
   initialTopic = null, initialSportsScope = null, initialSportsMetadata,
   initialSportsContentSeed = null, initialSportsPostType = null,
   onLeaveSportsTopic,
 }: PostComposerProps) {
-  const { state: f, setField, selectIntent, reset, addMedia, removeMedia, dismissPrecheck } = usePostForm();
+  const isEdit = editPost != null;
+  const [editSeed] = useState(() => (editPost ? formStateFromPost(editPost) : undefined));
+  const { state: f, setField, selectIntent, reset, addMedia, removeMedia, dismissPrecheck } = usePostForm(editSeed);
+  const [savingEdit, setSavingEdit] = useState(false);
   const createCommand = useRef<string | null>(null);
   const [identities, setIdentities] = useState<PostingIdentity[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState<PostingIdentity | null>(null);
@@ -236,13 +318,16 @@ export default function PostComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const precheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isNetworkSurface = activeSurface === 'connections';
-  const isGlobalComposer = activeSurface == null;
-  const networkVisibility = activeSurface === 'connections'
+  // An edit keeps the post's surface, identity and audience, so none of those pickers apply.
+  const isNetworkSurface = activeSurface === 'connections' && !isEdit;
+  const isGlobalComposer = activeSurface == null && !isEdit;
+  const networkVisibility = isNetworkSurface
     ? 'connections'
     : null;
 
-  const activeIntent = INTENTS.find((i) => i.key === f.selectedIntent);
+  // A saved post's type may be one the create picker doesn't offer; it still edits, styled as a general post.
+  const activeIntent = INTENTS.find((i) => i.key === f.selectedIntent)
+    ?? (isEdit ? INTENTS.find((i) => i.key === 'general') : undefined);
   // selectedIdentity is filtered to personal-zone identities only (see
   // useEffect below), so the type narrows to PersonalPostAs.
   const activePostAs: PersonalPostAs = (selectedIdentity?.type as PersonalPostAs | undefined) || 'personal';
@@ -356,6 +441,8 @@ export default function PostComposer({
   ]);
 
   useEffect(() => {
+    // A pending AI draft belongs to the next new post, not to one being edited.
+    if (isEdit) return;
     try {
       const raw = sessionStorage.getItem('ai_post_draft');
       if (!raw) return;
@@ -368,13 +455,15 @@ export default function PostComposer({
     } catch {
       // ignore parse errors
     }
-  }, [setField, selectIntent]);
+  }, [isEdit, setField, selectIntent]);
 
   useEffect(() => {
     if (f.selectedIntent && textareaRef.current) textareaRef.current.focus();
   }, [f.selectedIntent]);
 
   useEffect(() => {
+    // The edit form lives in its own dialog and never collapses back to the purpose chips.
+    if (isEdit) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (composerRef.current && !composerRef.current.contains(target)) {
@@ -387,7 +476,7 @@ export default function PostComposer({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [f.content, setField]);
+  }, [isEdit, f.content, setField]);
 
   /** Legacy UI used `public`; align with mobile + API (connections only). */
   useEffect(() => {
@@ -397,7 +486,7 @@ export default function PostComposer({
   }, [f.visibility, setField]);
 
   useEffect(() => {
-    if (!f.content || f.content.length < 30 || !f.selectedIntent) return;
+    if (isEdit || !f.content || f.content.length < 30 || !f.selectedIntent) return;
     if (precheckTimerRef.current) clearTimeout(precheckTimerRef.current);
     precheckTimerRef.current = setTimeout(async () => {
       try {
@@ -418,7 +507,7 @@ export default function PostComposer({
     return () => {
       if (precheckTimerRef.current) clearTimeout(precheckTimerRef.current);
     };
-  }, [f.content, f.selectedIntent, activeSurface, setField]);
+  }, [isEdit, f.content, f.selectedIntent, activeSurface, setField]);
 
   useEffect(() => {
     if (!canUseGlobalAudience || activePostAs !== 'home') return;
@@ -440,7 +529,7 @@ export default function PostComposer({
     '?';
 
   const handlePost = async () => {
-    if (!f.content.trim() || !f.selectedIntent) return;
+    if (!onPost || !f.content.trim() || !f.selectedIntent) return;
 
     setSubmitError(null);
 
@@ -559,6 +648,29 @@ export default function PostComposer({
     if (saved !== false) resetComposer();
   };
 
+  const editPatch = editPost && editSeed ? buildEditPatch(editPost, editSeed, f) : null;
+  const editChanged = editPatch != null && Object.keys(editPatch).length > 0;
+
+  const handleSaveEdit = async () => {
+    if (!editPatch || !editChanged || !onSaveEdit || savingEdit || !f.content.trim()) return;
+    if (parseTags(f.tags).length > 3) {
+      setSubmitError('Use up to 3 tags.');
+      return;
+    }
+    if (editPost?.post_type === 'deal' && editSeed?.dealExpires && !f.dealExpires) {
+      setSubmitError('A deal needs an expiry date.');
+      return;
+    }
+    setSubmitError(null);
+    setSavingEdit(true);
+    try {
+      const failure = await onSaveEdit(editPatch);
+      if (failure) setSubmitError(failure);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const globalIdentityChip = useMemo(() => {
     if (!selectedIdentity) return null;
     if (selectedIdentity.type === 'home') return <Home className="h-4 w-4" />;
@@ -570,7 +682,7 @@ export default function PostComposer({
 
   return (
     <div ref={composerRef} className="relative">
-      {sportsTopicActive && (
+      {sportsTopicActive && !isEdit && (
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 dark:border-primary-700/40 dark:bg-primary-500/10 dark:text-primary-200">
           <Trophy className="h-3.5 w-3.5" />
           <span>Posting to Sports</span>
@@ -595,7 +707,7 @@ export default function PostComposer({
         </div>
       )}
 
-      {!f.expanded && (
+      {!f.expanded && !isEdit && (
         <IntentSelector onSelect={selectIntent} user={user} activeSurface={activeSurface} />
       )}
 
@@ -608,10 +720,12 @@ export default function PostComposer({
             <div className="flex items-center gap-2">
               <span>{activeIntent.icon}</span>
               <span className="text-sm font-semibold" style={{ color: activeIntent.textColor }}>
-                {activeIntent.label === 'Share' ? 'General Post' : activeIntent.label}
+                {editPost
+                  ? getPostTypeConfig(editPost.post_type).label
+                  : activeIntent.label === 'Share' ? 'General Post' : activeIntent.label}
               </span>
             </div>
-            {!isNetworkSurface && (
+            {!isNetworkSurface && !isEdit && (
               <div className="flex items-center gap-1">
                 {INTENTS.filter((intent) => intent.key !== f.selectedIntent && allowedPostTypes.includes(intent.key)).slice(0, 3).map((intent) => (
                   <button
@@ -771,22 +885,24 @@ export default function PostComposer({
             </div>
           </div>
 
-          <div className="px-4 pb-1">
-            <InlineDraftHelper
-              mode="post"
-              compact
-              seed={f.content}
-              context={{ postType: f.selectedIntent || undefined, existingContent: f.content || undefined }}
-              onDraft={(fields) => {
-                if (fields.content) setField('content', fields.content);
-                if (fields.title) setField('title', fields.title);
-              }}
-            />
-          </div>
+          {!isEdit && (
+            <div className="px-4 pb-1">
+              <InlineDraftHelper
+                mode="post"
+                compact
+                seed={f.content}
+                context={{ postType: f.selectedIntent || undefined, existingContent: f.content || undefined }}
+                onDraft={(fields) => {
+                  if (fields.content) setField('content', fields.content);
+                  if (fields.title) setField('title', fields.title);
+                }}
+              />
+            </div>
+          )}
 
-          <PostPrecheck suggestions={f.precheckSuggestions} onDismiss={dismissPrecheck} />
+          {!isEdit && <PostPrecheck suggestions={f.precheckSuggestions} onDismiss={dismissPrecheck} />}
 
-          {f.selectedIntent && (
+          {f.selectedIntent && !isEdit && (
             <div className="flex items-center gap-2 px-4 pb-2 text-sm">
               <span className="text-xs font-medium text-app-muted">Post visibility:</span>
               {(['local_context', 'connections'] as const).map((scope) => (
@@ -871,7 +987,7 @@ export default function PostComposer({
             </div>
           )}
 
-          {['event', 'alert', 'deal', 'service_offer', 'announcement', 'lost_found'].includes(f.selectedIntent || '') && (
+          {(TITLE_POST_TYPES.includes(f.selectedIntent || '') || !!editPost?.title) && (
             <input
               className="w-full border-b border-app bg-transparent px-4 py-2 text-sm font-semibold text-app outline-none placeholder:text-app-muted"
               placeholder="Title (optional)"
@@ -899,6 +1015,7 @@ export default function PostComposer({
               onSafetyKindChange={(v) => setField('safetyKind', v)}
               behaviorDesc={f.behaviorDesc}
               onBehaviorDescChange={(v) => setField('behaviorDesc', v)}
+              kindLocked={isEdit}
             />
           )}
           {f.selectedIntent === 'deal' && (
@@ -917,6 +1034,7 @@ export default function PostComposer({
               onContactPrefChange={(v) => setField('contactPref', v)}
               contactPhone={f.contactPhone}
               onContactPhoneChange={(v) => setField('contactPhone', v)}
+              contactLocked={editPost ? (editPost.lost_found_contact_pref || 'dm') : undefined}
             />
           )}
           {['service_offer', 'ask_local', 'recommendation'].includes(f.selectedIntent || '') && (
@@ -938,7 +1056,7 @@ export default function PostComposer({
             />
           </div>
 
-          {!isNetworkSurface && !canUseGlobalAudience && f.visibility === 'neighborhood' && (
+          {!isNetworkSurface && !canUseGlobalAudience && !isEdit && f.visibility === 'neighborhood' && (
             <div className="flex gap-3 border-t border-app px-4 py-2">
               <label className="flex cursor-pointer items-center gap-1.5 text-xs text-app-muted">
                 <input
@@ -952,7 +1070,7 @@ export default function PostComposer({
             </div>
           )}
 
-          <MediaUpload mediaFiles={f.mediaFiles} onAddMedia={addMedia} onRemoveMedia={removeMedia} />
+          {!isEdit && <MediaUpload mediaFiles={f.mediaFiles} onAddMedia={addMedia} onRemoveMedia={removeMedia} />}
 
           <div className="space-y-2 border-t border-app bg-surface-muted/60 px-4 py-3">
             {submitError && (
@@ -967,7 +1085,7 @@ export default function PostComposer({
               </div>
             )}
 
-            {!canUseGlobalAudience && !isNetworkSurface && f.location && (
+            {!canUseGlobalAudience && !isNetworkSurface && !isEdit && f.location && (
               <div className="flex items-center">
                 <PostLocationPicker value={f.location} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
               </div>
@@ -975,7 +1093,15 @@ export default function PostComposer({
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {!canUseGlobalAudience && !isNetworkSurface && (
+                {isEdit && (
+                  <span className="text-xs text-app-muted">
+                    {editPost && (editPost.media_urls?.length ?? 0) > 0
+                      ? 'Audience, location and photos stay as they are.'
+                      : 'Audience and location stay as they are.'}
+                  </span>
+                )}
+
+                {!canUseGlobalAudience && !isNetworkSurface && !isEdit && (
                   <VisibilityPicker
                     visibility={f.visibility}
                     showVisibility={f.showVisibility}
@@ -991,7 +1117,7 @@ export default function PostComposer({
                   <PostLocationPicker value={null} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
                 )}
 
-                {!canUseGlobalAudience && !isNetworkSurface && !f.location && (
+                {!canUseGlobalAudience && !isNetworkSurface && !isEdit && !f.location && (
                   <PostLocationPicker value={null} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
                 )}
 
@@ -1004,19 +1130,31 @@ export default function PostComposer({
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={resetComposer}
+                  onClick={isEdit ? onCancelEdit : resetComposer}
+                  disabled={isEdit && savingEdit}
                   className="px-3 py-1.5 text-xs font-medium text-app-muted transition hover:text-app"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handlePost}
-                  disabled={!f.content.trim() || isPosting}
-                  className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ background: activeIntent.color }}
-                >
-                  {isPosting ? 'Posting…' : activeIntent.cta}
-                </button>
+                {isEdit ? (
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={!f.content.trim() || !editChanged || savingEdit}
+                    className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ background: activeIntent.color }}
+                  >
+                    {savingEdit ? 'Saving…' : 'Save'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePost}
+                    disabled={!f.content.trim() || isPosting}
+                    className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ background: activeIntent.color }}
+                  >
+                    {isPosting ? 'Posting…' : activeIntent.cta}
+                  </button>
+                )}
               </div>
             </div>
           </div>

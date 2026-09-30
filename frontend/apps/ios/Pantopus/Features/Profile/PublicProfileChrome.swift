@@ -601,7 +601,7 @@ struct LocalProfileTabStrip: View {
                             HStack(spacing: Spacing.s1) {
                                 Text(tab.label)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(isActive ? Theme.Color.primary700 : Theme.Color.appTextSecondary)
+                                    .foregroundStyle(isActive ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary)
                                 if let count = badgeCount(for: tab) {
                                     Text("\(count)")
                                         .font(.system(size: 10.5))

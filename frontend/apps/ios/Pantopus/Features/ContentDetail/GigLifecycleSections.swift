@@ -156,7 +156,7 @@ struct GigOwnerBidsPanel: View {
                 Text("BEST MATCH")
                     .font(.system(size: 9, weight: .bold))
                     .kerning(0.5)
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                     .padding(.horizontal, Spacing.s2)
                     .padding(.vertical, 2)
                     .background(Theme.Color.primary50)
@@ -1574,7 +1574,7 @@ struct GigChangeOrderSheet: View {
                 } label: {
                     Text(candidate.label)
                         .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(selected ? Theme.Color.primary700 : Theme.Color.appTextSecondary)
+                        .foregroundStyle(selected ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
                         .background(selected ? Theme.Color.primary50 : Theme.Color.appSurfaceSunken)
