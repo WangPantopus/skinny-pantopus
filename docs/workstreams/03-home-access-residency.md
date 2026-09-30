@@ -305,7 +305,7 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
-- **2026-09-30T12:55Z — #974 final for the decision-9 trio; D05 native rename is PR #982; lease released.**
+- **2026-09-30T12:54Z — #974 final for the decision-9 trio; D05 native rename is PR #982; lease released.**
   - **[#974](https://github.com/WangPantopus/skinny-pantopus/pull/974), final head `28f92e4e0`,** r2 bundle `20260930-stream3-home-d10-retire-home-r2`, MANIFEST `348bc8e6…`. The coordinator batches it with #968 and #976 after Stream 5's rerun.
     - **One keeper rule, shared with #968's guard** (`home_effective_access`). The legacy `owner_id`-only Home went from 'purged' (r1) to 'kept'. An unverified occupant is not a keeper.
     - **After 'purged':** pending household-review claims and access requests are rejected with the reviewers' own notice types, and occupancies are kept. A retry is idempotent.
