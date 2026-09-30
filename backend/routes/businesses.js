@@ -285,12 +285,19 @@ const updatePageSchema = Joi.object({
   theme: Joi.object(),
 }).min(1);
 
+// A hero (`cta`) or CTA-block (`buttons`) button's link is opened by every client, so it can only be an
+// http(s) web address, never javascript:, data: or another scheme. The rest of block data stays free-form.
+const blockButtonsSchema = Joi.array().items(Joi.object({
+  url: Joi.string().trim().uri({ scheme: ['http', 'https'] }).allow('', null)
+    .messages({ 'string.uri': 'A button link must be a web address starting with https://', 'string.uriCustomScheme': 'A button link must be a web address starting with https://' }),
+}).unknown(true));
+
 const blockSchema = Joi.object({
   id: Joi.string().uuid().optional(), // for existing blocks
   block_type: Joi.string().valid(...VALID_BLOCK_TYPES).required(),
   schema_version: Joi.number().integer().min(1).optional(),
   sort_order: Joi.number().integer().min(0).required(),
-  data: Joi.object().required(),
+  data: Joi.object({ cta: blockButtonsSchema, buttons: blockButtonsSchema }).unknown(true).required(),
   settings: Joi.object().optional(),
   location_id: Joi.string().uuid().optional().allow(null),
   show_from: Joi.string().isoDate().optional().allow(null),
