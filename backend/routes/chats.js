@@ -1527,12 +1527,19 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
 
     const { data: room, error: roomError } = await supabaseAdmin
       .from('ChatRoom')
-      .select('id, type, gig_id')
+      .select('id, type, gig_id, is_active')
       .eq('id', roomId)
       .single();
 
     if (roomError) throw blockCheckUnavailable();
     if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    // A task chat retired when its worker was released or bidding reopened keeps its
+    // history for the owner and that worker but takes no new messages; direct messages
+    // (with their block checks and business identity) carry the conversation on.
+    if (room.is_active === false) {
+      return res.status(403).json({ error: 'This chat has closed. Message them directly to keep talking.', code: 'ROOM_INACTIVE' });
+    }
 
     // ─── Block check for direct chats ───
     // For gig/group chats, blocking is handled differently (not enforced here).

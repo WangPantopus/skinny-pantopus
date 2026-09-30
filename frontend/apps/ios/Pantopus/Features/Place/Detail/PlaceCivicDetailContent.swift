@@ -179,16 +179,20 @@ private struct ElectionCard: View {
         }
     }
 
+    // Election Day arrives date-only ("2026-11-03"): read and show it as that calendar day.
     private var monthAbbrev: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
+        guard let d = PlacePresentation.parseCalendarDay(data.date) else { return "" }
         let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "MMM"
         return f.string(from: d).uppercased()
     }
 
     private var dayNumber: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
-        return "\(Calendar.current.component(.day, from: d))"
+        guard let d = PlacePresentation.parseCalendarDay(data.date) else { return "" }
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
+        return "\(utc.component(.day, from: d))"
     }
 }
 

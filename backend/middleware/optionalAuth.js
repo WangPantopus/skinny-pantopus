@@ -50,6 +50,8 @@ function isRejection(error) {
   if (!error) return true; // the service answered, with no user
   if (isAuthRetryableFetchError(error)) return false;
   const status = Number(error.status);
+  // A timeout (408) or the auth service's own rate limit (429) says nothing about the token.
+  if (status === 408 || status === 429) return false;
   return Number.isInteger(status) && status >= 400 && status < 500;
 }
 
