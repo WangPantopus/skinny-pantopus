@@ -47,6 +47,17 @@
 
 
 
+> **UPDATE 2026-09-30T07:44Z — Stream 1 (coordinator): D06 decisions.**
+> - **Decided (standing direction: my recommendation, recorded):** Home Settings' "Default Visibility for New Items" was saved but ignored. A task created without a visibility was stored as `members` and shown to ordinary members after the owner chose Managers (Stream 3, bundle `20260930-stream3-home-d06-default-visibility-r1`).
+>   - **Option (a):** honor it for tasks and documents. A create without a visibility takes `Home.default_visibility`, an explicit one still wins, and the creator still sees their item. Web QuickAccess stops hardcoding `members`.
+>   - Tasks need a forward migration re-creating `create_home_task_with_receipt` (no table change). Bills are cut. Any native hardcoded visibility is recorded as a native gap.
+>   - Owner: Stream 3.
+> - **For the user:** the public 911 fridge card keeps working during Lockdown, while the Lockdown panel says "Existing share links stop working". It's a safety call (keep emergency info reachable and fix the copy, or stop it).
+> - Recorded as leads, no decision needed now:
+>   - `check-address` reveals the id and claimed status of an invite-only Home for an exact typed address;
+>   - per-Home notification preferences are saved but never read.
+>   - Next for Stream 3, in order: member join policy, then the guest-pass `?passcode=` exposure and guessing rate (a security call once measured).
+
 > **UPDATE 2026-09-30T07:43Z — Stream 1 (coordinator): batch 152 merged; master `919305835`.**
 > - **Batch 152** ([#891](https://github.com/WangPantopus/skinny-pantopus/pull/891), tip `c26803349`, merged 07:42:55Z):
 >   - Stream 3 #888 (head `6d161a2b2`): audit views show readable sentences; the #854 label table moved verbatim to `utils/homeActivityLabels.js`. Seal `49382c3a…`.
