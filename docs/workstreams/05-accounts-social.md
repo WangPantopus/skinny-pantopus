@@ -9,6 +9,27 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — security track: the trio, #985, #988 and #992 merged; #994 (migration RLS guard) open, 2026-09-30T13:18:41Z
+
+- **Merged since the last block:**
+  - the decision-9 trio: #968 `33a43a569` + #976 `9b72153d2` (containing #974 `28f92e4e0`), batch 182, 13:03:26Z;
+  - [#985](https://github.com/WangPantopus/skinny-pantopus/pull/985): RLS on for the 73 tables that had it off. Batch 183, 13:04:38Z.
+  - [#988](https://github.com/WangPantopus/skinny-pantopus/pull/988): an owner can delete their own file again. `DELETE /api/files/:id` answered 404 for everyone, because it called the invoker `soft_delete_file` through the anon client; it now uses supabaseAdmin, and a non-owner is still refused. This is the profile tabs' delete on iOS and Android. Batch 184.
+  - [#992](https://github.com/WangPantopus/skinny-pantopus/pull/992): clients can no longer write public tables directly. REVOKE INSERT/UPDATE/DELETE/TRUNCATE from anon/authenticated on every public table, plus default privileges so future tables start closed; SELECT is kept.
+    - Before, direct own-row Post, Listing and UserPrivacySettings inserts were 201. After, they get 403 `42501`.
+    - All 67 SQL contracts pass before and after, and the API's writes across streams succeed.
+    - Streams 2 and 3 confirmed no impact; each stream got its list of now-inert policies.
+    - Batch 185, 13:15:43Z, master `dd8090e17`.
+- **Open:** [#994](https://github.com/WangPantopus/skinny-pantopus/pull/994) (`101976b4e`, seal `0cd4df83…`). The `check-migrations.cjs` guard: from `20260930174000` on, a migration that creates a public table must ENABLE ROW LEVEL SECURITY in the same file. Existing tests 8/8; eight synthetic cases behave as intended.
+- **Process (Stream 1):** ask the coordinator for a migration number before creating a migration file. I had picked 174000 myself.
+- **Native pass:** Stream 1 will run these on its iOS/Android devices after Stream 2's #980:
+  - (a) account deletion for an account with a private-setup Home;
+  - (b) the #950 delete-sheet copy;
+  - (c) the portfolio delete.
+- **Next (offered to Stream 1, awaiting the go-ahead):** a read-only scan of SECURITY DEFINER functions executable by anon/authenticated through PostgREST RPC (same anon-key threat model).
+- **Runtime:** API 18134 runs master+#988 `3dfa0ecad`. The DB matches master's migrations through 174000; the `162000` row was relabeled to `172000`.
+- **Fixtures:** DELBLOCK1 plus GIGROOM1. Remove by exact ids later.
+
 ## LIVE — #977/#978 merged; RLS-enable #985 ready; trio proven on the final heads, 2026-09-30T13:01:25Z
 
 - **Merged:** [#977](https://github.com/WangPantopus/skinny-pantopus/pull/977) (chat writes only through the API) and [#978](https://github.com/WangPantopus/skinny-pantopus/pull/978) (account, social and business-profile writes only through the API; closes the self-promotion to admin). Batch 181, 12:50:47Z, master `113706f04`.
