@@ -41,7 +41,7 @@
   If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
-**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** none (the typed-draft fix, branch `claude/stream4-dashboard-issue-draft` at `3ce02567e`, waits for its runtime proof). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
+**Runtime:** rebuilt by Stream 3 at 2026-09-30T06:12:19Z from master `ed5ea9ec5`, with no Homes or fixtures (see the live block). **Open Stream 4 PRs:** [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918) (the typed new-issue draft survives the dashboard's access re-check; with the coordinator since 2026-09-30T09:07Z). Merged today: #854, #860, #863, #867, #871, #872, #875, #882, #885, #896, #904, #906, #907 (batch 159, master `add968868`).
 1. **F02 native re-run, iOS part.**
    - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
    - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
@@ -94,7 +94,7 @@
      - **(b):** 60 s re-reads of the summary cards through `reloadSummary`.
      - **(c):** a `home:<id>` socket room carrying payload-free "changed" events. The existing gig rooms join without a membership check, so they are not a model for private Home data.
      - All options keep the accepted 2026-09-11 access retirement (d681da444).
-5. **Typed text in Home dashboard panels when the tab is hidden (U04 L1): option (b), being built.**
+5. **Typed text in Home dashboard panels when the tab is hidden (U04 L1): option (b), built and verified in [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918)** (bundle `20260930-stream4-issue-draft-restore-r1`, `56ca55c7…`).
    - Keep only the member's own typed new-issue draft, which is not private Home data, across the hide-time re-check. Put it back into a reopened Report Issue panel only when the re-check confirms the same account and the same Home; otherwise drop it.
    - Private content still unmounts, and no old panel reappears on its own.
    - **Why:** losing typed text on every tab switch is a real annoyance that costs reports, and this keeps the security design intact.
@@ -204,7 +204,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>✅ L3 (0930 home-account-switch: form sign-out/in, 0 private markers in 7 captures)<br>✅ L4 (0930 home-l1-l4: 401 → refresh → the same save once)<br>✅ L1 Emergency Info form kept (0930 home-l1-l4, emulated hide)<br>⬜ L1 dashboard panels: the accepted hide-time reset (d681da444) drops typed text; decided option (b), being built ("Decided by Stream 4" item 5) |
+| Home dashboard and records (health, checklist, issues, emergency, fridge, maintenance, documents) | ✅ L2 (checklist-uncertain-recovery, #740, #743, #683, fridge)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (same)<br>⬜ L1<br>⬜ L3<br>⬜ L4 | ✅ L2 reload<br>✅ mounted access expiry (#773)<br>✅ L3 (0930 home-account-switch: form sign-out/in, 0 private markers in 7 captures)<br>✅ L4 (0930 home-l1-l4: 401 → refresh → the same save once)<br>✅ L1 Emergency Info form kept (0930 home-l1-l4, emulated hide)<br>✅ L1 dashboard Report Issue draft kept across the re-check (#918, with the coordinator; "Decided by Stream 4" item 5) |
 | Place (dashboard, sections, Money) | ✅ L2 (#638, f02-member-finance)<br>✅ L3 (0927 f02-ios-held-account, 0929 f02-ios-retry-late-delivery)<br>⬜ L1<br>⬜ L4 | ✅ L2 (#638)<br>✅ L3 (0927 f02-android-held-account)<br>⬜ L1<br>⬜ L4 | ✅ L2 reload<br>✅ L3 (0927 f02-web-held-account, 0930 home-account-switch; honest refusal #896)<br>✅ L1 (0930 home-l1-l4, emulated hide: same screen, no re-read)<br>⬜ L4 (Place's own actions not run; the shared refresh path passed on the dashboard) |
 | Address calendar | ✅ L2 restart (place-pickup)<br>⬜ L1 L3 L4 | ✅ L2 cold (0928 pickup-weekly)<br>⬜ L1 L3 L4 | ✅ L2 reload (pickup-weekly)<br>⬜ L1 L3 L4 |
 
@@ -268,6 +268,11 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T09:07Z — [#918](https://github.com/WangPantopus/skinny-pantopus/pull/918) (decision 5) is with the coordinator.** Head `3ce02567e057b691014a47a27d13d5806a4ef425`. Bundle `20260930-stream4-issue-draft-restore-r1`, MANIFEST `56ca55c746cb90d7e1b1b2afb833fda6e63375e2203bd43df2dfd4ce75a5277a`. Lease 09:02:45Z–09:06:31Z.
+  - Master lost the typed Report Issue text on hide/return. The branch restores it for the same member and Home.
+  - A closed panel stays closed. A session switched to member B while hidden never shows the owner's text, including when B can report issues.
+  - **Native, in progress:** the iOS builds (master vs the civic-date fix) are running under the heavy slot. Stream 3 hands the lease back for the "Pantopus S34" run once the builds finish. There I'll reproduce that iOS Emergency Info edit says "Saved." but never calls PUT (the backend has had the route since PR192; Android uses it).
 
 - **2026-09-30T08:55Z — #906 and #907 merged; native toolchains are ready.**
   - #906 and #907 merged in batch 159 ([#909](https://github.com/WangPantopus/skinny-pantopus/pull/909), tip `0f302700c`, 08:51:58Z, master `add968868`).
