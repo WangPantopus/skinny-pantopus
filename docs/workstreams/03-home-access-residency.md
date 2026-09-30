@@ -92,7 +92,7 @@
 10. **Minor lead:** `homeListService.checked()` swallows the underlying error (a logging gap only).
 11. **Cross-cutting (handed over):** `globalWriteLimiter` is mounted at `app.use('/api')` before any auth (`backend/app.js:320`), so `req.user` is never set there. It always keys by IP at the 30/min anonymous limit, and every signed-in member of a household behind one IP shares 30 writes a minute. The user decided on 2026-09-30 to fix it following industry practice; Stream 1 owns it. In the harness, pace writes about 2.2 s apart.
 
-**Waiting on the user.** These are Stream 3's decisions; the closure plan has the details: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
+**Decisions.** These were Stream 3's open decisions; the closure plan has the background: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
 - **Decided 2026-09-30.** The user decided these (relayed by the coordinator), then gave a standing instruction to decide for the best UX, safety and retention, record it and keep going:
   - **Member join policy:** hide it (#917 web; native next). The three-level policy is post-launch.
   - **Fridge card during Lockdown:** it keeps working, and the panel wording is fixed (#916).
@@ -125,11 +125,19 @@
   - **D08 scheduled passes (#999):** native lists follow the web: a scheduled pass stays current, shows "Starts …" and stays revocable; `reissue_required` shows "Needs new link".
     - **LIF-02** (Stream 5's route): only a current verified occupant blocks an owner's account deletion. Pending people have nobody to be handed to, the "remove the other residents" message pointed at people the owner can't see, and App Store 5.1.1(v) forbids needless obstacles to deleting an account.
     - **After a 'purged' Home**, `retireHomeForDeletedAccount` closes the remaining pending standing with the existing lifecycle transitions and notices, so nobody waits forever in a Home with no owner: non-verified occupancies, pending residency and ownership claims, and household access requests. #968 stays records-only.
-1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
-2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
-3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
-4. Guest pass "Allowed areas" on the native Add guest form (M02, D08).
-5. Should Lockdown give the home its previous visibility back when it ends (D07)? #828 states the current behavior; restoring needs the old value stored.
+**The five Stream 3 decisions, settled 2026-09-30** (by me under the standing instruction, except item 4; details in each row):
+1. **Rejoining after leaving (R03): an ended membership stays final for launch.** Invitations, join requests and residency reviews already refuse with `MEMBERSHIP_RENEWAL_REQUIRED`, and the apps say so plainly (#781, #794, #796, #799). Membership renewal moves to the post-launch list.
+   - Why: renewal needs its own re-verification design, and restoring access silently is a safety risk. Leaving already asks for confirmation.
+   - R03 can close on its remaining local checks.
+2. **What an ordinary member sees by default (D07, D06): keep least privilege.** New members get the home overview and Tasks; owners grant more. The screens already say what a member can't see (#835).
+   - Why: a household's documents, access codes and member list are its most sensitive data.
+3. **Ownership disputes at launch (R04): launch without them.** `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` defaults to `false` in `backend/config/householdClaims.js` and `.env.example`.
+   - R04 narrows to transfer and recovery.
+   - Hosted check: the production environment must not set the flag to true.
+4. **Guest pass "Allowed areas" (M02, D08): already decided by the user on 2026-09-26** (commit `2c8908956`). The chips that were never sent became the guest page's real "What they can see" sections (`included_sections`), matching the web. This item was stale.
+5. **Lockdown visibility (D07): the Home stays private after Lockdown ends.** The owner reopens it deliberately, and the panel already says so (#828).
+   - Why: an automatic restore could re-expose a Home before its owner has reviewed what happened.
+   - Post-launch idea: a one-tap "Restore previous visibility" after disabling.
 
 Shared with Stream 4:
 1. Brand colors that fail contrast (all streams): Stream 1 carries one design-token recommendation.
