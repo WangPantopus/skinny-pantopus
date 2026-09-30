@@ -366,7 +366,7 @@ function PublicLocationsMap({ data, locations }: { data: Record<string, any>; lo
 function PublicCta({ data, ctx }: { data: Record<string, any>; ctx: BusinessContext }) {
   const buttons = actionableCtas(data.buttons, ctx);
   return (
-    <section className="py-8 px-8 rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 text-center">
+    <section className="py-8 px-8 rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 text-center">
       <h2 className="text-2xl font-bold text-app-text">{(data.heading as string) || 'Get in touch'}</h2>
       {data.subhead && <p className="text-app-text-secondary mt-2 max-w-lg mx-auto">{data.subhead as string}</p>}
       {buttons.length > 0 && (
