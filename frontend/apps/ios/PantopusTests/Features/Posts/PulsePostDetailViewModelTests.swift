@@ -239,10 +239,11 @@ final class PulsePostDetailViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [.status(404, body: "{\"error\":\"missing\"}")]
         let vm = PulsePostDetailViewModel(postId: "missing", client: makeAPI())
         await vm.load()
-        guard case let .error(message) = vm.state else {
+        guard case let .error(message, retryable) = vm.state else {
             XCTFail("Expected .error")
             return
         }
         XCTAssertTrue(message.contains("couldn't find") || message.contains("Couldn't find") || message.contains("post"))
+        XCTAssertFalse(retryable, "A missing post can't come back on a retry, so there's no Try again")
     }
 }

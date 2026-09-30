@@ -2292,7 +2292,8 @@ public struct HubTabRoot: View {
                         Task { @MainActor in push(.pulsePost(postId: dto.id)) }
                     },
                     onCompose: {
-                        Task { @MainActor in push(.composePost(intent: PulseComposeIntent.ask.rawValue)) }
+                        // No preset purpose: the composer asks what the post is for.
+                        Task { @MainActor in push(.composePost(intent: PulseIntent.all.rawValue)) }
                     },
                     onEditPost: { dto in
                         Task { @MainActor in push(.editPost(postId: dto.id)) }
@@ -2980,9 +2981,7 @@ public struct HubTabRoot: View {
                     requestedKind: briefingKind
                 ),
                 onBack: pop,
-                onShare: {
-                    systemSheet = .share(items: ["Today's Pantopus briefing — \(InviteLinks.downloadURLString)"])
-                },
+                onShare: { text in systemSheet = .share(items: [text]) },
                 onMore: { push(.menu) },
                 onManage: { push(.notifications) }
             )

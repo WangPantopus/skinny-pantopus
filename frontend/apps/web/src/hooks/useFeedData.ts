@@ -447,6 +447,15 @@ export function useFeedData({
     }
   }, [showToast, removePostsFromCache]);
 
+  const handleDismissSeeded = useCallback(async (factId: string) => {
+    try {
+      await api.posts.dismissSeededFact(factId);
+      removePostsFromCache((p) => p.id === factId);
+    } catch {
+      showToast("Couldn't dismiss this tip");
+    }
+  }, [showToast, removePostsFromCache]);
+
   const handleReport = useCallback(async (
     postId: string,
     reason: Parameters<typeof api.posts.reportPost>[1]['reason'],
@@ -520,6 +529,7 @@ export function useFeedData({
     handleSave,
     handleDelete,
     handleHide,
+    handleDismissSeeded,
     handleReport,
     handleMute,
     handleMuteTopic,

@@ -539,6 +539,7 @@ export default function FeedPage() {
                               onOpenDetail={handleOpenDetail}
                               onReport={handleReport}
                               onHide={feed.handleHide}
+                              onDismissSeeded={feed.handleDismissSeeded}
                               onMute={feed.handleMute}
                               onNotHelpful={feed.handleNotHelpful}
                               onSolved={feed.handleSolved}

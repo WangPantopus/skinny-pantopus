@@ -59,10 +59,11 @@ import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
 import java.util.Locale
 
+/** [onShare] gets the text to send: today's conditions and signals (see [TodayDetailMapper.shareText]). */
 @Composable
 fun TodayDetailScreen(
     onBack: () -> Unit,
-    onShare: () -> Unit = {},
+    onShare: (String) -> Unit = {},
     onMore: () -> Unit = {},
     onManage: () -> Unit = {},
     viewModel: TodayDetailViewModel = hiltViewModel(),
@@ -75,7 +76,7 @@ fun TodayDetailScreen(
         state = state,
         headerTitle = headerTitle,
         onBack = onBack,
-        onShare = onShare,
+        onShare = { onShare(TodayDetailMapper.shareText(state)) },
         onMore = onMore,
         onManage = onManage,
         onRetry = { viewModel.refresh() },
@@ -232,8 +233,10 @@ internal fun TodayBriefing(
     ) {
         TodayHero(content)
 
-        TodaySectionCard(title = "Sun & sky", modifier = Modifier.testTag("todayDetailSunSky")) {
-            SunArc(content.sunSky)
+        content.sunSky?.let { sunSky ->
+            TodaySectionCard(title = "Sun & sky", modifier = Modifier.testTag("todayDetailSunSky")) {
+                SunArc(sunSky)
+            }
         }
 
         TodaySectionCard(

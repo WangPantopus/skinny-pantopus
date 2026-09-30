@@ -274,6 +274,8 @@ data class TodayWeatherDto(
     @Json(name = "high_f") val highF: Double? = null,
     @Json(name = "low_f") val lowF: Double? = null,
     @Json(name = "precipitation_next_6h") val precipitationNext6h: Boolean? = null,
+    @Json(name = "sunrise_utc") val sunriseUtc: String? = null,
+    @Json(name = "sunset_utc") val sunsetUtc: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -290,13 +292,17 @@ data class TodayAlertDto(
     val title: String? = null,
 )
 
+/**
+ * The wire's `action` (a `{label, route}` object on bill, task, calendar, pickup, mail, gig and local-update
+ * signals) and `data` aren't used, so they aren't decoded. Declared as a String, `action` failed the whole
+ * Today payload ("Couldn't load today") whenever a signal carried one.
+ */
 @JsonClass(generateAdapter = true)
 data class TodaySignalDto(
     val kind: String? = null,
     val label: String? = null,
     val detail: String? = null,
     val urgency: String? = null,
-    val action: String? = null,
 )
 
 // region Briefing delivery (GET /api/hub/briefings/:id — backend/routes/hub.js:612)

@@ -17,14 +17,15 @@ import SwiftUI
 struct TodayDetailView: View {
     @State private var viewModel: TodayDetailViewModel
     private let onBack: () -> Void
-    private let onShare: () -> Void
+    /// Gets the text to send: today's conditions and signals (see `TodayDetailViewModel.shareText(for:)`).
+    private let onShare: (String) -> Void
     private let onMore: () -> Void
     private let onManage: () -> Void
 
     init(
         viewModel: TodayDetailViewModel = TodayDetailViewModel(),
         onBack: @escaping () -> Void = {},
-        onShare: @escaping () -> Void = {},
+        onShare: @escaping (String) -> Void = { _ in },
         onMore: @escaping () -> Void = {},
         onManage: @escaping () -> Void = {}
     ) {
@@ -41,7 +42,7 @@ struct TodayDetailView: View {
                 title: viewModel.headerTitle,
                 dateLabel: topBarDate,
                 onBack: onBack,
-                onShare: onShare,
+                onShare: { shareBriefing() },
                 onMore: onMore
             )
             content
@@ -50,6 +51,10 @@ struct TodayDetailView: View {
         .accessibilityIdentifier("todayDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+    }
+
+    private func shareBriefing() {
+        onShare(TodayDetailViewModel.shareText(for: viewModel.state))
     }
 
     private var topBarDate: String? {
@@ -80,10 +85,12 @@ struct TodayDetailView: View {
                 TodayHero(content: content)
                     .padding(.top, Spacing.s3)
 
-                TodaySectionCard(title: "Sun & sky") {
-                    SunArcView(sunSky: content.sunSky)
+                if let sunSky = content.sunSky {
+                    TodaySectionCard(title: "Sun & sky") {
+                        SunArcView(sunSky: sunSky)
+                    }
+                    .accessibilityIdentifier("todayDetailSunSky")
                 }
-                .accessibilityIdentifier("todayDetailSunSky")
 
                 TodaySectionCard(
                     title: content.signalsTitle,
@@ -101,7 +108,7 @@ struct TodayDetailView: View {
                     .accessibilityIdentifier("todayDetailAround")
                 }
 
-                ShareCardView(share: content.share, onShare: onShare)
+                ShareCardView(share: content.share) { shareBriefing() }
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s8)

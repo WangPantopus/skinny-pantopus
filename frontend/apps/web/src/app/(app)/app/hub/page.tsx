@@ -224,6 +224,7 @@ export default function HubPage() {
           businesses={data.businesses}
           hasHome={data.availability.hasHome}
           hasBusiness={data.availability.hasBusiness}
+          userId={data.user.id}
         />
 
         <NearbyModule />

@@ -2,7 +2,8 @@
 
 /**
  * PropertyDetail — Tabbed view for a single property.
- * Tabs: Units, Requests, Leases, Notices, Settings
+ * Tabs: Units, Requests, Leases. Notices and Settings (NoticesTab, SettingsTab) have no backend routes or tables yet,
+ * so they aren't offered; a ?tab=notices|settings link opens Units (decided 2026-09-23, "route item 9").
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -13,17 +14,13 @@ import { extractApiError } from '@pantopus/ui-utils';
 import UnitsTab from './UnitsTab';
 import RequestsTab from './RequestsTab';
 import LeasesTab from './LeasesTab';
-import NoticesTab from './NoticesTab';
-import SettingsTab from './SettingsTab';
 
-type PropertyTab = 'units' | 'requests' | 'leases' | 'notices' | 'settings';
+type PropertyTab = 'units' | 'requests' | 'leases';
 
 const TAB_CONFIG: { key: PropertyTab; label: string }[] = [
   { key: 'units', label: 'Units' },
   { key: 'requests', label: 'Requests' },
   { key: 'leases', label: 'Leases' },
-  { key: 'notices', label: 'Notices' },
-  { key: 'settings', label: 'Settings' },
 ];
 
 // ── Verification tier badge ─────────────────────────────────
@@ -46,7 +43,8 @@ type Props = {
 export default function PropertyDetail({ homeId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab = (searchParams.get('tab') as PropertyTab) || 'units';
+  const requestedTab = searchParams.get('tab');
+  const tab: PropertyTab = TAB_CONFIG.find((t) => t.key === requestedTab)?.key ?? 'units';
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -227,15 +225,6 @@ export default function PropertyDetail({ homeId }: Props) {
             onRefresh={refreshCurrent}
             isCurrent={isCurrent}
           />
-        )}
-        {tab === 'notices' && (
-          <NoticesTab
-            homeId={homeId}
-            units={units}
-          />
-        )}
-        {tab === 'settings' && (
-          <SettingsTab homeId={homeId} />
         )}
       </div>
     </div>

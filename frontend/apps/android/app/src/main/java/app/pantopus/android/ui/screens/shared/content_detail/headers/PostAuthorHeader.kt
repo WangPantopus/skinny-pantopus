@@ -148,8 +148,9 @@ fun PostAuthorHeader(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        // Named by the post's type; the chip's colour tone isn't content ("LOST & FOUND, error").
-        Box(modifier = Modifier.clearAndSetSemantics { contentDescription = "${intent.label} post" }) {
+        // Named by the post's type; the chip's colour tone isn't content ("LOST & FOUND, error"), and
+        // "Share post" would read like the top bar's Share button.
+        Box(modifier = Modifier.clearAndSetSemantics { contentDescription = "Post type: ${intent.label}" }) {
             StatusChip(text = intent.label.uppercase(), variant = intent.chipVariant, icon = intent.icon)
         }
     }

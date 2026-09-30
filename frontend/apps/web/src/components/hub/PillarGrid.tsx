@@ -13,10 +13,12 @@ interface PillarGridProps {
   businesses: HubBusiness[];
   hasHome: boolean;
   hasBusiness: boolean;
+  /** Keys the Attach a Home "Later" snooze to this account. */
+  userId: string;
 }
 
 export default function PillarGrid({
-  personal, home, business, activeHomeId, businesses, hasHome, hasBusiness,
+  personal, home, business, activeHomeId, businesses, hasHome, hasBusiness, userId,
 }: PillarGridProps) {
   const bottomCards = 1 + (hasBusiness ? 1 : 0);
 
@@ -27,7 +29,7 @@ export default function PillarGrid({
         {hasHome && home ? (
           <HomeCard data={home} homeId={activeHomeId} />
         ) : (
-          <AttachHomeCTA />
+          <AttachHomeCTA userId={userId} />
         )}
         {hasBusiness && business && businesses.length > 0 && (
           <BusinessCard data={business} business={businesses[0]} />

@@ -1072,12 +1072,12 @@ router.post('/:businessId/endorsements', verifyToken, async (req, res) => {
         role_base,
         home:home_id (
           id,
-          created_at,
-          ownership_status
+          created_at
         )
       `)
       .eq('user_id', userId)
       .eq('is_active', true)
+      .eq('verification_status', 'verified')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
