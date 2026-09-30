@@ -247,8 +247,9 @@ const geoKey = (address) => `geo:${address.toLowerCase().replace(/\s+/g, ' ')}`;
 // place what you typed" and exactly one means "this is not in the United
 // States" — and callers that collapse them tell a US resident, confidently,
 // that the product is not for them. Every caller must branch on `reason`:
-//   'unplaceable' → geocoder down, no key, no result, or nonsense coordinates
-//   'outside_us'  → we placed it, and it is genuinely not in the US
+//   'unplaceable'   → no result, or nonsense coordinates
+//   'lookup_failed' → the geocoder could not answer (down, no key, rate limit)
+//   'outside_us'    → we placed it, and it is genuinely not in the US
 async function geocodeUsAddress(address) {
   const key = geoKey(address);
   const cached = previewCache.get(key);
@@ -258,11 +259,11 @@ async function geocodeUsAddress(address) {
   try {
     result = await geo.forwardGeocode(address);
   } catch (err) {
-    // No-result and infra failures both land here. For an anonymous preview we
-    // degrade gracefully rather than 500 — the address simply isn't placeable.
-    // Failures are NOT cached: a retry must be able to reach the geocoder again.
+    // No-result and infra failures both land here; only the provider's
+    // GEO_NO_RESULT means the address isn't placeable. Failures are NOT
+    // cached: a retry must be able to reach the geocoder again.
     console.warn('[public/place] geocode failed:', err.message);
-    return { ok: false, reason: 'unplaceable' };
+    return { ok: false, reason: err && err.code === 'GEO_NO_RESULT' ? 'unplaceable' : 'lookup_failed' };
   }
 
   if (!result) return { ok: false, reason: 'unplaceable' };
@@ -498,6 +499,11 @@ router.get('/place', async (req, res) => {
     // product is not for them.
     const place = await geocodeUsAddress(rawAddress);
     if (!place.ok) {
+      // A lookup outage is not "we could not find that address": answer it as
+      // a failed read so every client offers Try again instead of blaming the input.
+      if (place.reason === 'lookup_failed') {
+        return res.status(503).json({ error: 'We couldn\u2019t look up that address right now. Please try again.' });
+      }
       const unplaceable = place.reason !== 'outside_us';
       return res.json({
         status: unplaceable ? 'could_not_place' : 'unsupported_region',

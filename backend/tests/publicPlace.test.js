@@ -551,8 +551,8 @@ describe('GET /api/public/place', () => {
     // failure to READ the address, and telling a US resident during an
     // outage that the product is not for them is the same class of
     // falsehood the sibling routes were fixed for.
-    it('a geocoder that throws is "could not place", not a geographic denial', async () => {
-      geo.forwardGeocode.mockRejectedValue(new Error('No result for address'));
+    it('a geocoder with no result for the address is "could not place", not a geographic denial', async () => {
+      geo.forwardGeocode.mockRejectedValue(Object.assign(new Error('No result for address'), { code: 'GEO_NO_RESULT' }));
       const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
 
       expect(res.status).toBe(200);
@@ -585,16 +585,20 @@ describe('GET /api/public/place', () => {
       expect(countFetch('api.census.gov')).toBe(0);
     });
 
-    it('neither answer is ever a 500', async () => {
+    it('a geocoder that cannot answer is a retryable 503, never a 500 or "could not place"', async () => {
+      // An outage is a failed read, not a verdict on the address: "add the
+      // city and state" would send every visitor retyping a correct address.
       geo.forwardGeocode.mockRejectedValue(new Error('boom'));
       const res = await request(buildApp()).get('/api/public/place').query({ address: 'x' });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/try again/i);
+      expect(res.body.status).toBeUndefined();
     });
 
     it('does not cache a transient geocoder failure (a retry can still succeed)', async () => {
       geo.forwardGeocode.mockRejectedValue(new Error('boom'));
       const first = await request(buildApp()).get('/api/public/place').query({ address: 'somewhere' });
-      expect(first.body.status).toBe('could_not_place');
+      expect(first.status).toBe(503);
 
       geo.forwardGeocode.mockResolvedValue({ ...PORTLAND });
       const second = await request(buildApp()).get('/api/public/place').query({ address: 'somewhere' });
