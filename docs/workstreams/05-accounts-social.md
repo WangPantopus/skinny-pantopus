@@ -9,6 +9,28 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1053 merged (security batch 207); #1055 (S3-62 endorsements) sealed and handed off; #1060 open, CI running, 2026-09-30T18:41:00Z
+
+- **Merged:** #1053, "a business's private data stays with its team", in security batch 207 (PR #1054, 18:29:47Z, master `60636ee9c`). Stream 1 verified seal `4fbae5e1…`.
+  - A non-member reading `GET /api/businesses/:id` now gets the public projection: business 55 → 17 keys, profile 37 → 30, locations 37 → 14.
+  - Home-based locations are masked in all three public readers (fuzzed point or none, no street).
+  - The anonymous public route drops the email (unless `show_email`), the owner's personal-account link and the founding expiry.
+- **#1055, S3-62, "endorsing a crew works, and a refusal says why":** sealed `7117d6b4…` and handed to Stream 1.
+  - Head `e75977dbb`, CI run 36759345512: success.
+  - The endorse route embedded `Home.ownership_status`, a column no migration created, so every endorsement got 403, qualifying residents included.
+  - The web button reverted with no message, which is the S3-62 row. It now shows the API's reason in a toast.
+  - Checked before and after through the real API and web. The `/b/` page was loaded through the non-writing substitution, with 0 `/api/b/` requests.
+- **#1060, "an unpublished business stays hidden from outsiders"** (Stream 1's follow-up on #1053): head `f7bdbff30`, CI running.
+  - A non-member now gets 404 for an unpublished business, matching the public page and `/b/`.
+  - E2E through the real API: rls2 got 200 with the projection on master → 404 on the branch. The owner's full rows are unchanged. Once published, the business still returns the projection.
+  - iOS and Android `loadDetail` fall back to the public route only for a non-UUID id, so an unpublished business opened by id shows the existing not-found state.
+- **Next:**
+  1. #1060's seal and handoff.
+  2. Re-check Stream 5's web A3 cells in dark mode on master after #1052 (Stream 1's request).
+  3. S3-22: the crew page's hero buttons (Stream 1's order).
+- **Follow-ups:** unchanged from the block below.
+- **Runtime:** DB at `20260930184000`. API 18134 is on master `746b640ce` (18:37:18Z); web 18131 is on `60636ee9c`. No fixtures remain.
+
 ## LIVE — #1043 and #1046 merged; route-drift scan: one live gap routed; nothing open from Stream 5, 2026-09-30T18:05:56Z
 
 - **Merged:**
