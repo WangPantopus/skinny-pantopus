@@ -10,6 +10,35 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
 4. History up to the split: [former-stream2-home-household.md](former-stream2-home-household.md). "Stream 2" / "S2" there means the stream before the split. Read it for evidence, but record nothing new there.
 5. The private kit README: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit/README.md`. The path keeps `stream2`. Never print `runtime/accounts.env`.
 
+## 1a. Latest state (2026-09-30T07:52Z, first Stream 4 session) — read this before §2
+- **Runtime:** rebuilt by Stream 3 at 06:12Z. It runs master; migration ledger 94. Fixture accounts: the owner (s2resumeowner) and member B (s2resumemember). There are no retained Homes; every run creates and exactly cleans its own.
+- **Merged today (9 PRs):**
+  - #854 (I07 web activity labels);
+  - #860 (I07 health/activity follow saves on the page);
+  - #863 (D09 activity rows);
+  - #867 (SECURITY: compose recipients);
+  - #871 (D01 emergency receipt);
+  - #872 (SECURITY: compose connections City/State);
+  - #875 (I06 election date);
+  - #882 (D09 health/checklist readers);
+  - #885 (compose: a pending claim is not a member).
+
+  No Stream 4 PR is open.
+- **Verification-only seals:**
+  - I04 DST: `20260930-stream4-address-calendar-dst-r1`;
+  - I05 local parts: `…-property-local-r1`;
+  - U02 web, 12 screens: `…-web-a11y-r1`, resealed `368aa2c7…`.
+- **Checklist:** U02–U04 are itemized in the 04 file. The web U02 cells are done, and contrast is the shared token decision.
+- **Kit tools added:**
+  - `s4-owner-home-fixture.py` and `s4-cleanup-home.py` (FK-graph exact cleanup: multi-Home, extra scopes);
+  - `a11ycap-s4.mjs` (redacts account emails);
+  - the journey harnesses `web-*.cjs` and `compose-*.py`.
+  Secret scans must fail hard before sealing.
+- **Next:**
+  1. Native queue (open work item 9), once the user OKs the machine-wide reinstall.
+  2. The remaining web ❓/⬜ cells in the itemized checklist (e.g. web U04 L1/L3/L4 on the Home dashboard, issues E5 on screen).
+  3. The I07 live-updates question: web has no live updates, and adding them is architecture, so propose it rather than build it.
+
 ## 2. State at the split
 - Master `ed5ea9ec5` (refreshed 2026-09-30T04:40:59Z). Every former Stream 2 PR is merged, including the split's docs PRs #843 and #844 (merged 2026-09-30T04:24:12Z) and the U-row docs PR #848 (batch 137, #849, merged 04:40:14Z). Stream 1's own split (#846) is merged too. **Streams 3 and 4 have no open PRs**; check `gh pr list --state open` for anything newer.
 - **Added 2026-09-30T04:36:26Z:** your screens' cells of U02–U05 are yours (U01 went to Stream 3). They sat in the former Stream 1's inventory, so the first split proof missed them. See your file's "Cross-cutting rows" section and open work item 8. `check-stream2-split.py` proves the assignment.
