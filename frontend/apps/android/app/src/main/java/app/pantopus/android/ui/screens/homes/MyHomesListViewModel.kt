@@ -432,6 +432,8 @@ class MyHomesListViewModel
                         null
                     },
                 chips = chips.takeIf { it.isNotEmpty() },
+                // Status chips wrap instead of squeezing "Household access" into a sliver at large text.
+                wrapChips = true,
                 footer = footerTitle?.let { homeFooter(home, it, revision) },
             )
         }

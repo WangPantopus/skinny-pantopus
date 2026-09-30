@@ -479,6 +479,8 @@ data class RowModel(
     val inlineChip: RowChip? = null,
     /** Chip row beneath the body (intent / status / counter chips). */
     val chips: List<RowChip>? = null,
+    /** Wrap [chips] onto more lines instead of squeezing them into one (iOS `RowModel.wrapChips`). */
+    val wrapChips: Boolean = false,
     /**
      * Chip row rendered as a header **above** the title/body, in the same
      * row as the kebab. Used by My posts; mutually compatible with [chips].
