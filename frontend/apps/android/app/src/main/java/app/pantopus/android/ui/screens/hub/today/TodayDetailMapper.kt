@@ -251,6 +251,5 @@ object TodayDetailMapper {
 
     private fun parseInstant(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
-    private fun zoneFor(timezone: String?): ZoneId =
-        timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+    private fun zoneFor(timezone: String?): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
 }
