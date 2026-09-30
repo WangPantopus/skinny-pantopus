@@ -50,6 +50,24 @@ fun pendingVerificationFor(home: MyHome): PendingVerification? =
         PendingVerification.Residency
     }
 
+/**
+ * "301" reads "Unit 301"; a unit stored with its own designator ("Apt 4B",
+ * "Unit 12", "#3") stays as it is instead of "Unit Apt 4B".
+ */
+internal fun homeUnitText(unit: String): String = if (unitDesignator.containsMatchIn(unit)) unit else "Unit $unit"
+
+// USPS secondary-unit designators (and their long forms), or a leading "#".
+private val unitDesignator =
+    Regex(
+        listOf(
+            "apt", "apartment", "unit", "ste", "suite", "bldg", "building", "fl", "floor", "rm", "room",
+            "lot", "spc", "space", "trlr", "trailer", "ph", "penthouse", "bsmt", "basement", "dept", "ofc",
+            "office", "lowr", "lower", "uppr", "upper", "frnt", "front", "rear", "side", "pier", "slip",
+            "hngr", "hangar", "lbby", "lobby", "key", "stop",
+        ).joinToString("|", prefix = "^(#|(", postfix = ")(?=[\\s.#0-9]|$))"),
+        RegexOption.IGNORE_CASE,
+    )
+
 /** Current household access, private setup and personal verification are separate destinations. */
 @HiltViewModel
 class MyHomesListViewModel
@@ -432,6 +450,8 @@ class MyHomesListViewModel
                         null
                     },
                 chips = chips.takeIf { it.isNotEmpty() },
+                // Status chips wrap instead of squeezing "Household access" into a sliver at large text.
+                wrapChips = true,
                 footer = footerTitle?.let { homeFooter(home, it, revision) },
             )
         }
@@ -468,7 +488,7 @@ class MyHomesListViewModel
 
         private fun unitLabel(home: MyHome): String? {
             if (home.accessKind == "verification") return null
-            return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { "Unit $it" }
+            return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
         }
 
         private fun roleLabel(home: MyHome): String? =

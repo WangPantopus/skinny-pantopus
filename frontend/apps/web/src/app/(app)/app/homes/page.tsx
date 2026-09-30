@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/toast-store';
 import { failureMessage } from '@/components/home/share/shareFailure';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
+import { unitText } from '@/components/homes/creation/homeCreationModel';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
 
 function claimInProgress(status: string) {
@@ -265,7 +266,7 @@ export default function HomesPage() {
                       <div key={h.id} className="rounded-xl border border-app-border bg-app-surface p-5 flex flex-col sm:flex-row items-start justify-between gap-4">
                         <Link href={destination} className="min-w-0 flex-1 break-words">
                           <div className="text-base font-semibold text-app-text">{label}</div>
-                          {unit && <div className="text-sm text-app-text-secondary">Unit {unit}</div>}
+                          {unit && <div className="text-sm text-app-text-secondary">{unitText(unit)}</div>}
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full border border-app-border px-2.5 py-1 text-xs font-semibold text-app-text-strong">{occ}</div>
                           {privateSetup && <p className="mt-2 text-sm text-app-text-secondary">Start with your own tasks while verification is pending.</p>}

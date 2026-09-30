@@ -262,12 +262,13 @@ private fun HomeStrip(
             )
         }
         Column(modifier = Modifier.weight(1f)) {
+            // The whole name shows, so a long one (a unit, say) still says
+            // which Home is being handed over.
             Text(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
-                maxLines = 1,
             )
             Text(
                 text = ownerSummary,

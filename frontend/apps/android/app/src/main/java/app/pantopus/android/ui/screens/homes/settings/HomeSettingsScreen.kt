@@ -125,12 +125,14 @@ fun HomeSettingsIdentityCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
+                // Weighted, so the rename button is measured first and a long name wraps beside it
+                // instead of pushing it out of the card at large font scales.
                 Text(
                     text = identity.homeName,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appText,
-                    modifier = Modifier.testTag("homeSettingsIdentityName"),
+                    modifier = Modifier.weight(1f, fill = false).testTag("homeSettingsIdentityName"),
                 )
                 if (rename.canEdit) {
                     Box(

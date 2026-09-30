@@ -51,6 +51,9 @@ public struct HomeClaimReviewView: View {
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
+            // Above this size the three links split the screen with the
+            // queue and cut their own labels ("Residency decisions and r…").
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             Button("Residency decisions and recovery") {
                 queue.suspend()
                 residencyTarget = .live(homeId: viewModel.homeId)
@@ -58,12 +61,14 @@ public struct HomeClaimReviewView: View {
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.residencyRecovery")
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             Button("Your past residency decisions") { queue.suspend()
                 showingResidencyHistory = true
             }
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.residencyHistory")
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             if viewModel.selectedTab == .residency {
                 HomeResidencyQueueView(model: queue) { claimId, action in
