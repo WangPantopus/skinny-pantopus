@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   Copy,
   Link,
-  Mail,
   Users,
   Heart,
   DollarSign,
@@ -42,10 +41,7 @@ export default function ManageSupportTrainPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Invite form
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteUserId, setInviteUserId] = useState('');
-  const [inviting, setInviting] = useState(false);
+  // Share link
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -108,24 +104,6 @@ export default function ManageSupportTrainPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [id]);
-
-  const handleInvite = useCallback(async () => {
-    if (!inviteEmail && !inviteUserId) return;
-    setInviting(true);
-    try {
-      await api.supportTrains.createInvite(id, {
-        invitee_email: inviteEmail || undefined,
-        invitee_user_id: inviteUserId || undefined,
-      });
-      setInviteEmail('');
-      setInviteUserId('');
-      await fetchAll();
-    } catch (err: any) {
-      alert(err?.message || 'Failed to send invite');
-    } finally {
-      setInviting(false);
-    }
-  }, [id, inviteEmail, inviteUserId, fetchAll]);
 
   const handleDeleteSupportTrain = useCallback(async () => {
     if (deleting) return;
@@ -245,47 +223,6 @@ export default function ManageSupportTrainPage() {
                 </>
               )}
             </button>
-          </div>
-
-          {/* Invite by email or user ID */}
-          <p className="text-xs font-semibold text-app-text-muted uppercase tracking-wider mb-2">
-            Send invite
-          </p>
-          <div className="flex gap-2 mb-2">
-            <input
-              value={inviteEmail}
-              onChange={(e) => {
-                setInviteEmail(e.target.value);
-                setInviteUserId('');
-              }}
-              placeholder="Email address"
-              className="flex-1 p-2.5 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text placeholder:text-app-text-muted"
-            />
-            <button
-              onClick={handleInvite}
-              disabled={inviting || (!inviteEmail && !inviteUserId)}
-              className="px-4 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {inviting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Mail className="w-4 h-4" />
-                  Invite
-                </>
-              )}
-            </button>
-          </div>
-          <div className="flex gap-2 mb-4">
-            <input
-              value={inviteUserId}
-              onChange={(e) => {
-                setInviteUserId(e.target.value);
-                setInviteEmail('');
-              }}
-              placeholder="Or enter Pantopus user ID"
-              className="flex-1 p-2.5 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text placeholder:text-app-text-muted"
-            />
           </div>
 
           {/* Invite list */}
