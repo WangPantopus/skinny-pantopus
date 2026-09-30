@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T08:27Z — Stream 1 (coordinator): batch 157 merged (privacy); master `f310f01e6`.**
+> - **Batch 157** ([#903](https://github.com/WangPantopus/skinny-pantopus/pull/903) ← Stream 2 #902, head `cc4aca123`, tip `c602cb0d5`, merged 08:26:39Z): non-authors never get a post's exact point. `approx_area` posts' `effective_latitude`/`effective_longitude` (for home-linked posts, the Home's coordinates) get the existing keyed-jitter floor, and the raw PostGIS `location` is removed, on detail, feed and profile. Authors are unchanged. Seal `48f986f3…` (33 files) verified; feed, post and privacy suites pass 274/274; the privacy gates pass.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches. The gig-room chat residue is in progress with Stream 5.
+
 > **UPDATE 2026-09-30T08:21Z — Stream 1 (coordinator): routing.**
 >   - **The gig-room chat residue** (strangers who joined an assigned task's room before #899 still read it) **is owned by Stream 5**, which owns chat. Stream 2's one-time grant is withdrawn.
 >     - **Locked 08:22:50Z after crossed messages.** Stream 5 acknowledged and is implementing (recorded 2026-09-30T08:23Z); Stream 2 reviews task-side behaviour.
