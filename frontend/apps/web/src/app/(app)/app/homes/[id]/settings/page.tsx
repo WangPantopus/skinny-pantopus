@@ -11,18 +11,6 @@ import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-app-border-subtle last:border-b-0">
-      <span className="text-sm text-app-text-strong">{label}</span>
-      <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-        className={`relative w-10 h-5.5 rounded-full transition ${checked ? 'bg-emerald-600' : 'bg-gray-300'}`}>
-        <span className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-[18px]' : ''}`} />
-      </button>
-    </div>
-  );
-}
-
 function SettingsContent() {
   const router = useRouter();
   const { id: homeId } = useParams<{ id: string }>();
@@ -33,9 +21,6 @@ function SettingsContent() {
   const [nickname, setNickname] = useState('');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // Notification prefs (local state — real impl would persist)
-  const [notifs, setNotifs] = useState({ tasks: true, bills: true, packages: true, maintenance: true, polls: true });
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -161,17 +146,9 @@ function SettingsContent() {
         </div>
       </section>}
 
-      {/* Notifications */}
-      <section className="mb-6">
-        <h2 className="text-sm font-bold text-app-text mb-3">Notifications</h2>
-        <div className="bg-app-surface border border-app-border rounded-xl overflow-hidden">
-          <Toggle label="Task reminders" checked={notifs.tasks} onChange={(v) => setNotifs((n) => ({ ...n, tasks: v }))} />
-          <Toggle label="Bill due dates" checked={notifs.bills} onChange={(v) => setNotifs((n) => ({ ...n, bills: v }))} />
-          <Toggle label="Package arrivals" checked={notifs.packages} onChange={(v) => setNotifs((n) => ({ ...n, packages: v }))} />
-          <Toggle label="Maintenance alerts" checked={notifs.maintenance} onChange={(v) => setNotifs((n) => ({ ...n, maintenance: v }))} />
-          <Toggle label="New polls" checked={notifs.polls} onChange={(v) => setNotifs((n) => ({ ...n, polls: v }))} />
-        </div>
-      </section>
+      {/* No Notifications section here: its switches rendered with no height,
+          kept their state in this page only and saved nothing. The Home's
+          notification settings live in the dashboard's Settings tab. */}
 
       {/* Danger zone */}
       <section>
