@@ -76,6 +76,12 @@ class StartSupportTrainViewModel
         /** A half-built draft a failed launch couldn't delete; the next launch removes it first. */
         private var leftoverTrainId: String? = null
 
+        /**
+         * The create's request id, kept until its reply arrives: a retry after a lost reply
+         * then reaches the draft the server already made instead of making a second train.
+         */
+        private var createRequestId: String? = null
+
         private var searchJob: Job? = null
 
         // ─── Step 1 actions ─────────────────────────────────────────────
@@ -424,12 +430,15 @@ class StartSupportTrainViewModel
             _launchError.value = null
             val current = _form.value
             val trimmedReason = current.reason.trim()
+            val requestId = createRequestId ?: java.util.UUID.randomUUID().toString()
+            createRequestId = requestId
             val body =
                 CreateSupportTrainBody(
                     draftPayload = CreateSupportTrainBody.DraftPayload(story = trimmedReason),
                     title = derivedTitle(),
                     recipientUserId = _selectedBeneficiary.value?.userId,
                     sharingMode = effectiveSharingMode(current),
+                    clientRequestId = requestId,
                 )
             viewModelScope.launch {
                 try {
@@ -444,6 +453,7 @@ class StartSupportTrainViewModel
                                 return@launch
                             }
                         }
+                    createRequestId = null
                     _publishedTrainId.value = created.id
                     for (slot in generatedSlots()) {
                         val slotBody =

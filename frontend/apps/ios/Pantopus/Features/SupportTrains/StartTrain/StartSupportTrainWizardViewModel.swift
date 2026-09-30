@@ -53,6 +53,9 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public private(set) var publishedTrainId: String?
     /// A half-built draft a failed launch couldn't delete; the next launch removes it first.
     private var leftoverTrainId: String?
+    /// The create's request id, kept until its reply arrives: a retry after a lost reply
+    /// then reaches the draft the server already made instead of making a second train.
+    private var createRequestId: String?
 
     // MARK: - Constants
 
@@ -413,17 +416,21 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             leftoverTrainId = nil
         }
         let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestId = createRequestId ?? UUID().uuidString
+        createRequestId = requestId
         let body = CreateSupportTrainBody(
             draftPayload: CreateSupportTrainBody.DraftPayload(story: trimmedReason),
             title: derivedTitle,
             recipientUserId: selectedBeneficiary?.userId,
-            sharingMode: effectiveSharingMode
+            sharingMode: effectiveSharingMode,
+            clientRequestId: requestId
         )
         var createdTrainId: String?
         do {
             let created: CreateSupportTrainResponse = try await api.request(
                 SupportTrainsEndpoints.create(body: body)
             )
+            createRequestId = nil
             createdTrainId = created.id
             publishedTrainId = created.id
             for slot in generatedSlots {
