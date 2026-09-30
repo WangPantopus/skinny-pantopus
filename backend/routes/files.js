@@ -3,7 +3,6 @@ const router = express.Router();
 const multer = require('multer');
 const crypto = require('crypto');
 const path = require('path');
-const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -869,7 +868,10 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     
-    const { data, error } = await supabase.rpc('soft_delete_file', {
+    // soft_delete_file checks the file belongs to p_user_id itself. It runs as its caller, so the
+    // anon client (no user identity under row-level security) never found the row and every delete
+    // answered 404; the service client lets the function's own owner check decide.
+    const { data, error } = await supabaseAdmin.rpc('soft_delete_file', {
       p_file_id: id,
       p_user_id: userId
     });
