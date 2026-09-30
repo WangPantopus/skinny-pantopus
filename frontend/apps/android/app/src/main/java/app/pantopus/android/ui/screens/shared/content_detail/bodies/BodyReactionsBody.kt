@@ -101,6 +101,24 @@ data class PostReactionCounts(
     val userReaction: app.pantopus.android.data.api.models.posts.PostReactionKind? = null,
 )
 
+/** The optional line under the post text; selectable, so a phone number can be copied. */
+@Composable
+private fun BodyDetailLine(line: String?) {
+    if (line == null) return
+    SelectionContainer {
+        Text(
+            text = line,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appTextSecondary,
+            modifier =
+                Modifier
+                    .padding(horizontal = Spacing.s4)
+                    .testTag("pulsePostDetail-detailLine"),
+        )
+    }
+}
+
 /**
  * Pulse post body — text + media + reactions + comment composer + flat
  * thread. Pure render surface; all state lives in the host VM.
@@ -155,21 +173,7 @@ fun BodyReactionsBody(
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
         }
-        detailLine?.let { line ->
-            // Selectable, so a phone number can be copied.
-            SelectionContainer {
-                Text(
-                    text = line,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextSecondary,
-                    modifier =
-                        Modifier
-                            .padding(horizontal = Spacing.s4)
-                            .testTag("pulsePostDetail-detailLine"),
-                )
-            }
-        }
+        BodyDetailLine(detailLine)
         if (media.isNotEmpty()) {
             PostMediaGridWithViewer(
                 items = media,
