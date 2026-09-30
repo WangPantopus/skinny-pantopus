@@ -16,16 +16,16 @@
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
 
 
-## CURRENT RESUME POINT — 2026-09-30T07:52Z, updated 2026-09-30T08:02Z (five streams running; Stream 1 merged batches 140–155, master `66d57bcfe`)
+## CURRENT RESUME POINT — 2026-09-30T07:52Z, updated 2026-09-30T08:19Z (five streams running; Stream 1 merged batches 140–156, master `b7eb7a7eb`)
 
-- **Where things stand.** Master is `66d57bcfe`. Batch 154 added Stream 2's #894 (the payee no longer sees the payer's card or provider ids); batch 155 added Stream 4's #896 (a web Place this account can't read says so). The merge queue is empty apart from #841 (Stream 1; native Start a train, waiting for one iOS run) and #842 (Stream 5 DRAFT; never batch). The per-batch record, with each PR's head, seal and checks, is in the [live hub README](workstreams/README.md) (UPDATE blocks dated 2026-09-30).
+- **Where things stand.** Master is `b7eb7a7eb` (batch 156: default visibility with migration `20260930080000`, a function wrapper with no deploy order; task chat and task payment status closed to strangers). Batch 154 added Stream 2's #894 (the payee no longer sees the payer's card or provider ids); batch 155 added Stream 4's #896 (a web Place this account can't read says so). The merge queue is empty apart from #841 (Stream 1; native Start a train, waiting for one iOS run) and #842 (Stream 5 DRAFT; never batch). The per-batch record, with each PR's head, seal and checks, is in the [live hub README](workstreams/README.md) (UPDATE blocks dated 2026-09-30).
 - **Security and privacy fixes merged today (found by Stream 3, routed by Stream 1):**
   - **Mail compose recipient search** (live leak). Any signed-in user with a Home id could list its residents plus the street address. Fixed by #867, #872 and #885: household rule only, connections see City/State, and pending claimants count as nobody.
   - **Explore map homes layer** (latent: it draws nothing today because `location` arrives as EWKB hex). It would have returned every Home's exact coordinates and street. Fixed by #865, #869 and #874 to return only the viewer's own household (trusted occupancies), per `docs/location-privacy-matrix.md`.
   - **Support Trains:** a draft or back-to-draft train was readable by anyone with its link (#883).
 - **Deploy notes.**
   - `20260930070000_home_lockdown_command.sql` (#881, Lockdown as one transaction with its audit row) **must deploy before the backend**. It's function-only.
-  - Stream 3's coming default-visibility migration is expected to need no deploy order.
+  - `20260930080000_home_task_default_visibility.sql` (#898) needs no deploy order.
   - Both are backwards compatible and pass `check-migrations`.
 - **Verification limits.** Everything merged today was verified on web and the API against isolated local stacks with owned synthetic fixtures. **No iOS or Android run is possible**: the 2026-09-30 wipe removed the simulator runtimes, the Android SDK, the AVDs and `~/.gradle`. No hosted, provider, money-capture or physical-device claim.
 - **Decisions waiting for the user:**

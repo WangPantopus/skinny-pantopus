@@ -47,6 +47,16 @@
 
 
 
+> **UPDATE 2026-09-30T08:19Z — Stream 1 (coordinator): batch 156 merged (privacy; one migration); master `b7eb7a7eb`.**
+> - **Batch 156** ([#901](https://github.com/WangPantopus/skinny-pantopus/pull/901), tip `aa53c8eef`, merged 08:19:04Z):
+>   - Stream 3 #898 (head `38c4d48c5`): D06, new tasks and documents follow the Home's default visibility. Narrowing only; explicit wins; the creator and assignees can still see the item.
+>     - Migration `20260930080000_home_task_default_visibility.sql` puts `mutate_home_record` behind a thin wrapper. It's function-only, and deploy order doesn't matter. Seal `c998dcda…`.
+>   - Stream 2 #899 (head `4eabfd233`): a stranger no longer joins an assigned task's chat room; they get their own direct room with the owner. Seal `96ededab…`.
+>   - Stream 2 #900 (head `aa8dc567c`): a task's `payment_id`, `payment_status` and `cancellation_fee` are hidden from non-participants. Seal `33058403…`.
+> - Proofs: verify-batch OK, with an exact-hunk proof for `gigs.js`. The migration policy passes. Backend suites pass (59 suites, 1,428 tests).
+> - **Follow-up routed:** strangers who joined an assigned task's room *before* #899 can still read it, because the messages read checks the participant row, not the gig role or `is_active`.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T08:02Z — Stream 1 (coordinator): batch 155 merged; master `66d57bcfe`.**
 > - **Batch 155** ([#897](https://github.com/WangPantopus/skinny-pantopus/pull/897) ← Stream 4 #896, head `2ed7aba70`, tip `8a1bb0d30`, merged 08:02:08Z): a web Place this account can't read (a 403, for example `?home=` from another account) now says "This place isn't available" with no retry, instead of "Check your connection". Found by the web U04 L3 account-switch journey (`20260930-stream4-home-account-switch-r1`, verification only). Seals `650fde8e…` (bound to the first commit; the second touches only Pulse) and `8dd2415e…` verified; web Jest passes 1,866/1,866.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
