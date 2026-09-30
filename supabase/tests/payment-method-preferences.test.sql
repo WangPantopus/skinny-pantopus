@@ -32,13 +32,30 @@ DO $$ DECLARE v_function regprocedure; BEGIN
  RAISE EXCEPTION 'Clients bypass payment method admission'; END IF;
 END $$;
 SELECT set_config('request.jwt.claims','{"sub":"eef10000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+-- Clients hold no write grant on public tables (20260930174000): a profile is
+-- created and edited only through the API, which writes as service_role.
 SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  INSERT INTO public."User"(id,email,username,name,stripe_customer_id) VALUES
+   ('eef10000-0000-4000-8000-000000000003','card-contract-3@example.invalid','card_contract_3','New card profile',NULL);
+  RAISE EXCEPTION 'Client inserted its own profile directly';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
 INSERT INTO public."User"(id,email,username,name,stripe_customer_id) VALUES
  ('eef10000-0000-4000-8000-000000000003','card-contract-3@example.invalid','card_contract_3','New card profile',NULL);
 UPDATE public."User" SET name='Updated card profile' WHERE id='eef10000-0000-4000-8000-000000000003';
+RESET ROLE;
+SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT FROM public."User" WHERE id='eef10000-0000-4000-8000-000000000003' AND name='Updated card profile') THEN
- RAISE EXCEPTION 'Normal profile insertion/update was broken'; END IF;
+ RAISE EXCEPTION 'Owner cannot read the API''s profile insertion/update'; END IF;
+ BEGIN
+  UPDATE public."User" SET name='Client-forged profile' WHERE id='eef10000-0000-4000-8000-000000000003';
+  RAISE EXCEPTION 'Client edited its own profile directly';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN
   UPDATE public."User" SET stripe_customer_id='cus_stolen' WHERE id='eef10000-0000-4000-8000-000000000003';
   RAISE EXCEPTION 'Client assigned its own provider customer';
@@ -84,8 +101,11 @@ DO $$ BEGIN
    ('eef10000-0000-4000-8000-000000000004','card-contract-4@example.invalid','card_contract_4','Anonymous binding','cus_stolen');
   RAISE EXCEPTION 'Anonymous client inserted provider binding';
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
- UPDATE public."User" SET stripe_customer_id='cus_stolen' WHERE id='eef10000-0000-4000-8000-000000000001';
- IF FOUND THEN RAISE EXCEPTION 'Anonymous client updated provider binding'; END IF;
+ -- Since #992 anon holds no write grant, so the grant refuses this, not RLS matching no row.
+ BEGIN
+  UPDATE public."User" SET stripe_customer_id='cus_stolen' WHERE id='eef10000-0000-4000-8000-000000000001';
+  RAISE EXCEPTION 'Anonymous client updated provider binding';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 SET LOCAL ROLE service_role;
