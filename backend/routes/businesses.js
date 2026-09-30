@@ -1045,6 +1045,10 @@ router.get('/:businessId', verifyToken, async (req, res) => {
       .order('sort_order');
 
     if (!access.hasAccess) {
+      // A business that isn't published is not there for outsiders, as on the public page.
+      if (!profile?.is_published) {
+        return res.status(404).json({ error: 'Business not found' });
+      }
       // Never the account's private columns (date of birth, address, Stripe id, security settings), the
       // owner's personal-account link, internal fees, or a home-based business's exact point and street.
       const publicLocations = (locations || []).map(toPublicBusinessLocation);
