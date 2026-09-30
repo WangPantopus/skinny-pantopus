@@ -80,6 +80,22 @@ export default function IssueSlidePanel({
       };
       if (isEdit) {
         payload.status = status;
+        // Send only what changed since the panel opened, so an edit here can't
+        // quietly undo another member's change to a field left untouched.
+        const opened: Record<string, unknown> = {
+          title: (issue?.title || '').trim(),
+          description: (issue?.description || '').trim(),
+          severity: issue?.severity || 'medium',
+          estimated_cost: issue?.estimated_cost != null ? Number(issue.estimated_cost) : null,
+          status: issue?.status || 'open',
+        };
+        for (const field of Object.keys(payload)) {
+          if (payload[field] === opened[field]) delete payload[field];
+        }
+        if (Object.keys(payload).length === 0) {
+          onClose();
+          return;
+        }
       } else {
         const draft = JSON.stringify(payload);
         if (pendingCreate.current?.draft !== draft) {
