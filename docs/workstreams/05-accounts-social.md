@@ -34,6 +34,13 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Change the web business-activity fallback to "Former member".
   - Keep native on-device display of the deletion 409 unverified. The Android path to the sheet runs through Identity Center, which my proxy blocks for accounts without a local profile (a harness guard).
 - **Needs the user:** grant "Let Claude use it" for the "Pantopus S5" simulator in the simulator panel, so the iOS pass can run.
+- **Update 11:12Z:**
+  - [#949](https://github.com/WangPantopus/skinny-pantopus/pull/949) merged (batch 172, master `af4e76f0c`).
+  - [#950](https://github.com/WangPantopus/skinny-pantopus/pull/950) was approved by Stream 1 against its spec. The new head is `675f51155`: `runCatching` was removed from the Android train count, because it swallowed coroutine cancellation (Stream 1's review note). The native build is queued.
+  - I reviewed and approved Stream 2's [#953](https://github.com/WangPantopus/skinny-pantopus/pull/953) (the five Gig/Refund columns, 152000).
+  - **Cross-check after #944** (bundle `20260930-stream5-delete-cross-check-r1`): the real route now deletes a helper who released a task, a helper only notified of a reopen, and two owners whose tasks held stop receipts. The home-task author waits for Stream 4's 153000.
+  - **Decision (standing direction):** `AdminAccessLog.admin_user_id` and `TrustAnomalyFlag.business_user_id` stay refused by design, because they are security and trust-and-safety audit records that support closes. `PersonaDm*` is a launch cut, so it's left alone.
+  - **For the user (money/legal):** people with payment history still get "contact support" (`PAYMENT_HISTORY_RETAINED`), which may matter for App Store 5.1.1(v). My recommendation is to anonymize those accounts, keeping the payment records and removing the person. Not built.
 
 ## LIVE — #923 and #931 merged; #935 and #936 queued; native pass waiting for a device slot, 2026-09-30T10:06:01Z
 
