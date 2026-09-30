@@ -70,8 +70,9 @@ export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:
       <p className="text-sm">{vm.review.action==='withdraw'?'Withdraw this pending invitation. Existing household membership is preserved.':vm.review.action==='resend'?'Request another delivery attempt. Earlier links and the original access dates remain unchanged.':'Save this invitation and request available delivery. Delivery may remain unconfirmed.'}</p>
       <div className="flex flex-wrap gap-2"><button className={button} disabled={vm.busy} onClick={vm.cancelReview}>Back to invitations</button>
         <button className={primary} disabled={vm.busy} onClick={()=>void vm.submit(vm.context!.decision_token)}>{vm.busy?'Saving…':vm.review.action==='create'?'Confirm invitation':vm.review.action==='resend'?'Confirm resend':'Confirm withdrawal'}</button></div>
-    </section>:<CreateInvitationForm key={vm.lifetime} homeId={homeId} disabled={vm.busy} prepare={vm.prepare}/>}
-    {vm.ready&&!vm.blocked&&<section aria-label="Current invitations" className="space-y-3">
+    </section>:vm.listDenied?<p className="text-sm text-app-text-secondary">{vm.listError}</p>
+      :<CreateInvitationForm key={vm.lifetime} homeId={homeId} disabled={vm.busy} prepare={vm.prepare}/>}
+    {vm.ready&&!vm.blocked&&!vm.listDenied&&<section aria-label="Current invitations" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Current invitations</h3><button className={button} disabled={vm.busy} onClick={vm.refreshList}>Refresh invitations</button></div>
       {vm.listError?<p role="alert" className="text-sm text-amber-800">{vm.listError}</p>:vm.invitations===null?<p role="status" className="text-sm">Checking current invitations…</p>:vm.invitations.length===0?<p className="text-sm text-app-text-secondary">No pending invitations.</p>:<ul className="space-y-3">{vm.invitations.map(i=><li key={i.id} data-invitation-id={i.id} className="space-y-3 rounded-lg border border-app-border p-3">
         {terms(i)}<p className="text-xs text-app-text-secondary">Status: {i.expires_at&&Date.parse(i.expires_at)<=now?'Expired invitation':i.status}</p><div className="flex flex-wrap gap-2">
