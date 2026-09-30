@@ -60,6 +60,10 @@ function SettingsContent() {
   // Guest passes need members.manage (the server answers everyone else 403);
   // shown when the viewer's access didn't load, as before.
   const canManageGuestPasses = !myAccess || myAccess?.isOwner || myAccess?.permissions?.includes('members.manage');
+  // Likewise the Members & Roles read needs members.view, and Access & Codes needs
+  // access.view_wifi or access.view_codes.
+  const canViewMembers = !myAccess || myAccess?.isOwner || myAccess?.permissions?.includes('members.view');
+  const canViewAccess = !myAccess || myAccess?.isOwner || myAccess?.permissions?.includes('access.view_wifi') || myAccess?.permissions?.includes('access.view_codes');
 
   const saveNickname = useCallback(async () => {
     if (!nickname.trim() || !canEdit) return;
@@ -82,9 +86,9 @@ function SettingsContent() {
 
   const MENU_ITEMS = [
     canManageSecurity && { icon: ShieldCheck, color: 'text-emerald-600', label: 'Security & Privacy', href: `/app/homes/${homeId}/settings/security` },
-    { icon: Users, color: 'text-green-600', label: 'Members & Roles', href: `/app/homes/${homeId}/members` },
+    canViewMembers && { icon: Users, color: 'text-green-600', label: 'Members & Roles', href: `/app/homes/${homeId}/members` },
     canManageGuestPasses && { icon: Share2, color: 'text-purple-600', label: 'Guest Passes', href: `/app/homes/${homeId}/share` },
-    { icon: Key, color: 'text-amber-600', label: 'Access & Codes', href: `/app/homes/${homeId}/access` },
+    canViewAccess && { icon: Key, color: 'text-amber-600', label: 'Access & Codes', href: `/app/homes/${homeId}/access` },
   ].filter(Boolean) as { icon: typeof ShieldCheck; color: string; label: string; href: string }[];
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
@@ -139,8 +143,8 @@ function SettingsContent() {
         </div>
       </section>
 
-      {/* Manage links */}
-      <section className="mb-6">
+      {/* Manage links (none for a viewer who may open none of them) */}
+      {MENU_ITEMS.length > 0 && <section className="mb-6">
         <h2 className="text-sm font-bold text-app-text mb-3">Manage</h2>
         <div className="bg-app-surface border border-app-border rounded-xl overflow-hidden divide-y divide-app-border-subtle">
           {MENU_ITEMS.map((item) => {
@@ -155,7 +159,7 @@ function SettingsContent() {
             );
           })}
         </div>
-      </section>
+      </section>}
 
       {/* Notifications */}
       <section className="mb-6">
