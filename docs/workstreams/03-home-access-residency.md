@@ -522,6 +522,14 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T21:18Z — Session handed off (the user asked me to wrap up). Read "HANDOFF — Stream 3, evening of 2026-09-30" at the top.**
+  - **Five PRs** sealed today and sent to the coordinator at 21:15Z:
+    - #1058, seal `57e9a75b…`;
+    - #1064, #1065 and #1070, seal `9c25be46…`;
+    - #1067, seal `e28414b2…`.
+  - **U04 L1, L3 and L4 pass on iOS and Android.**
+  - **Runtime:** lease and slot 4 with Stream 4 since 21:10:43Z; no Stream 3 fixtures or fault rules left.
+
 - **2026-09-30T19:22Z — #1051 merged (batch 211, master `ef2022ba5`, 19:18:22Z); two more fixes opened: [#1067](https://github.com/WangPantopus/skinny-pantopus/pull/1067) and [#1070](https://github.com/WangPantopus/skinny-pantopus/pull/1070).**
   - **#1067 (native, U03 R1 for residency letters and passes):**
     - The Identity screen's letters history and passes list showed only the error text after a failed read; recovery meant leaving and re-entering (`0928 residency-pass-read`).
