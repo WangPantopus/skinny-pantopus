@@ -23,7 +23,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   - #882 (D09 health/checklist readers);
   - #885 (compose: a pending claim is not a member).
 
-  No Stream 4 PR is open.
+  Open since 08:00Z: [#896](https://github.com/WangPantopus/skinny-pantopus/pull/896) (web Place 403 wording, with the coordinator; seals `…-place-access-denied-r1` `650fde8e…` and `…-place-access-denied-pulse-r1` `8dd2415e…`). Check `gh pr view 896` before relying on this.
 - **Verification-only seals:**
   - I04 DST: `20260930-stream4-address-calendar-dst-r1`;
   - I05 local parts: `…-property-local-r1`;
@@ -36,7 +36,7 @@ Every relative path here is in the shared coordination checkout `/Users/yingpeng
   Secret scans must fail hard before sealing.
 - **Next:**
   1. Native queue (open work item 9), once the user OKs the machine-wide reinstall.
-  2. The remaining web ❓/⬜ cells in the itemized checklist (e.g. web U04 L1/L3/L4 on the Home dashboard, issues E5 on screen).
+  2. The remaining web ❓/⬜ cells in the itemized checklist (e.g. web U04 L1/L4 on the Home dashboard, issues E5 on screen). Web L3 is done (`20260930-stream4-home-account-switch-r1`).
   3. The I07 live-updates question: web has no live updates, and adding them is architecture, so propose it rather than build it.
 
 ## 2. State at the split
