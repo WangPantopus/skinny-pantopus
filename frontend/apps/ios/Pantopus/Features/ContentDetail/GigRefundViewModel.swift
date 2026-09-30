@@ -81,6 +81,11 @@ final class GigRefundViewModel: Identifiable {
         isCurrent ? summary?.releaseMessage : nil
     }
 
+    /// A successful check found no request and none is waiting to be confirmed.
+    var hasNoRequests: Bool {
+        isCurrent && ready && history.isEmpty && attempt == nil
+    }
+
     var hasUnconfirmedRequest: Bool {
         isCurrent && attempt != nil && !history.contains { $0.requestId == attempt?.requestId }
     }
