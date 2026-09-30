@@ -11,7 +11,7 @@ const LOCKDOWN_EFFECTS = [
   { icon: '🔒', text: 'Keeps existing member permissions', detail: 'Members keep the access their current permissions allow' },
   { icon: '🚫', text: 'Keeps member invitations available', detail: 'Authorized members can still create and manage invitations' },
   { icon: '🔑', text: 'Keeps your current session', detail: 'You can continue managing the home while Lockdown is active' },
-  { icon: '📋', text: 'Records Lockdown changes', detail: 'Enabling and disabling Lockdown are added to the audit log' },
+  { icon: '📋', text: 'Records Lockdown changes', detail: 'Enabling and disabling Lockdown are added to the audit log', recordsChanges: true },
 ];
 
 export default function LockdownPanel({
@@ -34,6 +34,8 @@ export default function LockdownPanel({
   const [result, setResult] = useState<{ message: string; passesRevoked?: number } | null>(null);
   // Lockdown is on but its guest-pass revoke failed; the retry below finishes it.
   const [revokePending, setRevokePending] = useState(false);
+  // Lockdown is on but its audit row wasn't written; the same retry records it.
+  const [auditPending, setAuditPending] = useState(false);
 
   const handleEnable = async () => {
     if (confirmText !== 'LOCKDOWN') return;
@@ -47,15 +49,18 @@ export default function LockdownPanel({
       }
       onLockdownChange(true);
       setRevokePending(false);
+      setAuditPending(false);
       setResult({ message: 'Lockdown enabled', passesRevoked: res.guest_passes_revoked });
       setShowConfirm(false);
       setConfirmText('');
     } catch (err: unknown) {
       // The API rejects with its own message (e.g. Lockdown is on but passes still need revoking).
       const home = (err as { data?: { home?: { id?: unknown; lockdown_enabled?: unknown } } } | null)?.data?.home;
-      if (shareFailure(err).code === 'LOCKDOWN_PASS_REVOKE_FAILED' && home?.id === homeId && home.lockdown_enabled === true) {
+      const code = shareFailure(err).code;
+      if ((code === 'LOCKDOWN_PASS_REVOKE_FAILED' || code === 'LOCKDOWN_AUDIT_FAILED') && home?.id === homeId && home.lockdown_enabled === true) {
         onLockdownChange(true);
-        setRevokePending(true);
+        setRevokePending(code === 'LOCKDOWN_PASS_REVOKE_FAILED');
+        setAuditPending(code === 'LOCKDOWN_AUDIT_FAILED');
       }
       setError(err instanceof Error ? err.message : failureMessage(err, 'Failed to enable lockdown'));
     }
@@ -72,9 +77,15 @@ export default function LockdownPanel({
       }
       onLockdownChange(false);
       setRevokePending(false);
+      setAuditPending(false);
       setResult({ message: 'Lockdown disabled' });
       setShowConfirm(false);
     } catch (err: unknown) {
+      // An unrecorded disable is refused and changes nothing; keep the state the server reports.
+      const home = (err as { data?: { home?: { id?: unknown; lockdown_enabled?: unknown } } } | null)?.data?.home;
+      if (shareFailure(err).code === 'LOCKDOWN_AUDIT_FAILED' && home?.id === homeId && typeof home.lockdown_enabled === 'boolean') {
+        onLockdownChange(home.lockdown_enabled);
+      }
       setError(err instanceof Error ? err.message : 'Failed to disable lockdown');
     }
     setToggling(false);
@@ -137,7 +148,7 @@ export default function LockdownPanel({
                   </div>
                   <div className="text-[10px] text-app-text-muted mt-0.5">{effect.detail}</div>
                 </div>
-                {lockdownEnabled && !(revokePending && effect.revokesPasses) && (
+                {lockdownEnabled && !(revokePending && effect.revokesPasses) && !(auditPending && effect.recordsChanges) && (
                   <span className="text-[10px] text-red-500 font-medium flex-shrink-0 mt-0.5">Active</span>
                 )}
               </div>
@@ -194,13 +205,15 @@ export default function LockdownPanel({
           </div>
         ) : (
           <div className="space-y-3">
-            {revokePending && (
+            {(revokePending || auditPending) && (
               <button
                 onClick={handleEnable}
                 disabled={toggling}
                 className="w-full py-3 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50 transition"
               >
-                {toggling ? 'Revoking...' : 'Finish revoking guest passes'}
+                {revokePending
+                  ? (toggling ? 'Revoking...' : 'Finish revoking guest passes')
+                  : (toggling ? 'Recording...' : 'Record this change')}
               </button>
             )}
             <button
