@@ -34,7 +34,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - Change the web business-activity fallback to "Former member".
   - Keep native on-device display of the deletion 409 unverified. The Android path to the sheet runs through Identity Center, which my proxy blocks for accounts without a local profile (a harness guard).
 - **Needs the user:** grant "Let Claude use it" for the "Pantopus S5" simulator in the simulator panel, so the iOS pass can run.
-- **Update 11:12Z:**
+- **Update (committed 11:11:35Z):**
   - [#949](https://github.com/WangPantopus/skinny-pantopus/pull/949) merged (batch 172, master `af4e76f0c`).
   - [#950](https://github.com/WangPantopus/skinny-pantopus/pull/950) was approved by Stream 1 against its spec. The new head is `675f51155`: `runCatching` was removed from the Android train count, because it swallowed coroutine cancellation (Stream 1's review note). The native build is queued.
   - I reviewed and approved Stream 2's [#953](https://github.com/WangPantopus/skinny-pantopus/pull/953) (the five Gig/Refund columns, 152000).
