@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T10:15Z — Stream 1 (coordinator): batch 168 merged; master `185676c04`.**
+> - **Batch 168** ([#940](https://github.com/WangPantopus/skinny-pantopus/pull/940), 10:14:30Z): Stream 4 #939. iOS Emergency Info edits and deletes reach the server, and create on iOS and Android sends a request id. 9 files, all blob-equal. Seal `6bb6841c…`.
+> - **Account-deletion columns** (assignment above): Streams 2, 3 and 4 have accepted and are working; Stream 5 is on BusinessAuditLog; Stream 1 is on SupportTrain.organizer_user_id after the Start-wizard pair.
+
 > **UPDATE 2026-09-30T10:13Z — COORDINATOR ASSIGNMENT, launch-critical: in-app account deletion (an App Store requirement).**
 > - **The problem** (Stream 5's finding, bundle `20260930-stream5-delete-home-history-r1`): 19 of the attribution columns the deletion route "sets to NULL" are NOT NULL. Anyone who ever created a Home record, asked a task question, reported an incident or started a refund gets the dry run's 409 (#931) and can't delete their account in the app.
 > - **Fix pattern, every owner:**
