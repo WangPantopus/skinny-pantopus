@@ -47,6 +47,23 @@
 
 
 
+> **UPDATE 2026-09-30T08:54Z — TOOLCHAINS READY (Stream 1). Native work may resume under the usual leases.**
+> - **Android:** SDK at `~/Library/Android/sdk`: platform-tools 37.0.1, platforms;android-35, build-tools 35.0.0, emulator 37.1.11, image android-34 google_apis arm64.
+>   - Set `ANDROID_SDK_ROOT`/`ANDROID_HOME` to it and use `JAVA_HOME=$(/usr/libexec/java_home -v 17)`.
+>   - `~/.gradle` is warm (the first build ran in 9 min). Proven: `:app:assembleDebug`, install and launch on a fresh AVD.
+>   - **The debug keystore was regenerated**, so a device with a pre-wipe build needs `adb uninstall app.pantopus.android.debug` first.
+> - **iOS:** the Xcode 27.0 **iOS 27.0 simulator runtime** is installed. Proven: a simulator build of master plus #841 (`** BUILD SUCCEEDED **`, 08:53:43Z). Run `make bootstrap` per worktree as before.
+> - **Devices** (created; boot only after `device-slot.sh acquire`, at most 4 booted; builds only under `heavy-slot.sh`):
+>   | Stream | Android AVD (port) | iOS simulator (UDID) |
+>   |---|---|---|
+>   | 1 | `pantopus_s1` (5558) | Pantopus S1, iPhone 17 Pro (`A189976E-697E-4DE7-8EE3-6E355B990FAD`) |
+>   | 2 | `pantopus_s2` (5560) | Pantopus S2, iPhone 17 (`63E43C11-438F-44D9-AFCF-45103211766A`) |
+>   | 3 and 4 (shared, under their runtime lease) | `pantopus_s34` (5562) | Pantopus S34, iPhone 17 (`DA8C2A5F-39BC-421D-9F18-EB4B481E506F`) |
+>   | 5 | `pantopus_s5` (5564) | Pantopus S5, iPhone 17 (`F7C15A4C-CD94-4EDA-9FCD-D8AB80428B6B`) |
+> - Emulator start: `$ANDROID_SDK_ROOT/emulator/emulator -avd <avd> -port <port> -no-snapshot-save -no-audio -no-boot-anim -gpu swiftshader_indirect`.
+> - **A pre-wipe emulator (Stream 1's `Pantopus_Stream1_Start_R2`) was still running on 5558 and has been shut down.** If you have any pre-wipe emulator or simulator process, stop it.
+> - The heavy slot is free as of this update.
+
 > **UPDATE 2026-09-30T08:37Z — STANDING USER DIRECTION (2026-09-30): decide and keep working.** The user: for anything that seems to need their decision, choose what's best for user experience, safety and security practice, and retention, record it, and don't stop. The coordinator (Stream 1) decides cross-stream items; each stream records its own decisions in its status file.
 > - **Decided under it (Stream 1):**
 >   1. **Member join policy: hide the control on web, iOS and Android.** It has no effect; owners already approve claims through household review; a false control gives false security. The three-level design (open_invite / admin_approval / verified_only) is recorded for after launch. Owner: Stream 3 (web now, native after toolchains).
