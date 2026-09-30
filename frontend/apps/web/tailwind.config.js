@@ -1,5 +1,16 @@
 const theme = require('@pantopus/theme/tailwind');
 
+// Raw hue utilities that resolve to theme-aware variables in globals.css ("Hue utilities"): text 500-950,
+// tints 50/100 and borders 100-300 for each hue below. Other steps keep the palette.
+const HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'teal', 'cyan', 'sky', 'blue', 'indigo',
+  'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+const hueScale = (kind, steps) => Object.fromEntries(HUES.map((hue) => [hue, Object.fromEntries(
+  steps.map((step) => [step, `rgb(var(--hue-${hue}-${kind}-${step}) / <alpha-value>)`]),
+)]));
+const hueText = hueScale('text', ['500', '600', '700', '800', '900', '950']);
+const hueTint = hueScale('tint', ['50', '100']);
+const hueBorder = hueScale('border', ['100', '200', '300']);
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'media',
@@ -78,8 +89,11 @@ module.exports = {
       // theme-aware variables in globals.css ("Accent utilities"): one step
       // darker than the palette, with text flipping light in dark mode. The
       // 50/100 tints deepen in dark mode so that flipped text stays readable
-      // on them. Borders, rings and gradients keep the palette.
+      // on them. The raw hues (HUES) follow the same rules through their own
+      // variables ("Hue utilities"), borders 100-300 included. Rings and
+      // gradients keep the palette.
       backgroundColor: {
+        ...hueTint,
         primary: {
           50: 'rgb(var(--accent-primary-tint) / <alpha-value>)',
           100: 'rgb(var(--accent-primary-tint-strong) / <alpha-value>)',
@@ -94,6 +108,7 @@ module.exports = {
         },
       },
       textColor: {
+        ...hueText,
         primary: {
           600: 'rgb(var(--accent-primary-text) / <alpha-value>)',
           700: 'rgb(var(--accent-primary-text-hover) / <alpha-value>)',
@@ -104,6 +119,7 @@ module.exports = {
           700: 'rgb(var(--accent-emerald-text-hover) / <alpha-value>)',
         },
       },
+      borderColor: hueBorder,
       borderRadius: theme.radii,
       keyframes: {
         fadeInUp: {

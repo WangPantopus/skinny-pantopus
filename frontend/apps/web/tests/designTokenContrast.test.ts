@@ -80,8 +80,9 @@ function webPalette(tokens: Record<string, string>): Palette {
     }
   }
   result.link = rgb(tokens['color-link']);
-  // The Tailwind accent utilities (bg-/text-primary and emerald 600-800).
-  for (const name of Object.keys(tokens).filter((k) => k.startsWith('accent-')))
+  // The Tailwind accent utilities (bg-/text-primary and emerald 600-800) and
+  // the raw hue utilities (text 500-950, tints 50/100, borders 100-300).
+  for (const name of Object.keys(tokens).filter((k) => k.startsWith('accent-') || k.startsWith('hue-')))
     result[name] = rgb(tokens[name]);
   return result;
 }
@@ -185,6 +186,23 @@ for (const [name, palette] of Object.entries({
         expect(contrast(palette[text], palette[surface])).toBeGreaterThanOrEqual(
           4.5,
         );
+      });
+    }
+    // Each raw hue's text steps clear AA on the app surfaces and on the hue's
+    // own tints, and the app inks clear AA on those tints, in both schemes.
+    const hues = [...new Set(Object.keys(palette).filter((k) => k.startsWith('hue-')).map((k) => k.split('-')[1]))];
+    for (const hue of hues) {
+      const texts = ['500', '600', '700', '800', '900', '950'].map((step) => `hue-${hue}-text-${step}`);
+      const tints = ['50', '100'].map((step) => `hue-${hue}-tint-${step}`);
+      test.each(texts)(`%s clears AA on the surfaces and the ${hue} tints`, (text) => {
+        for (const ground of [...surfaces, ...tints]) {
+          expect(contrast(palette[text], palette[ground])).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+      test.each(inks)(`%s clears AA on the ${hue} tints`, (ink) => {
+        for (const tint of tints) {
+          expect(contrast(palette[ink], palette[tint])).toBeGreaterThanOrEqual(4.5);
+        }
       });
     }
     // The 50/100 tints carry accent text and app text in both schemes.
