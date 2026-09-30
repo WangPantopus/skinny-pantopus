@@ -223,10 +223,12 @@ private struct HomeStrip: View {
                 Icon(.home, size: 15, color: Theme.Color.appTextInverse)
             }
             VStack(alignment: .leading, spacing: 1) {
+                // The whole name shows, so a long one (a unit, say) still says
+                // which Home is being handed over.
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(ownerSummary)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -247,6 +249,7 @@ private struct HomeStrip: View {
                     .stroke(Theme.Color.warningLight, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
+            .fixedSize()
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2 + 2)

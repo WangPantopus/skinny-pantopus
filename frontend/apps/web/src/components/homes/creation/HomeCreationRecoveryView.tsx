@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { useHomeCreation } from './useHomeCreation';
-import type { HomeCreationInput } from './homeCreationModel';
+import { unitText, type HomeCreationInput } from './homeCreationModel';
 import type { HomeResidencyInput } from './homeResidencySubmissionModel';
 
 export default function HomeCreationRecoveryView({ recovery, onContinue }: {
@@ -29,7 +29,7 @@ export default function HomeCreationRecoveryView({ recovery, onContinue }: {
     <h1 className="text-2xl font-semibold">{title}</h1>
     <p className="text-app-text-secondary">{explanation}</p>
     {input && <div className="space-y-1 rounded-xl border border-app-border bg-app-surface p-4 break-words">
-      <p className="font-semibold">{input.address}{input.unit_number ? ` · Unit ${input.unit_number}` : ''}</p>
+      <p className="font-semibold">{input.address}{input.unit_number ? ` · ${unitText(input.unit_number)}` : ''}</p>
       <p>{input.city}, {input.state} {input.zip_code}</p>
       <p className="text-sm text-app-text-secondary">{input.role === 'owner' ? 'Owner' : 'Renter'} · Check verification in My Homes</p>
     </div>}

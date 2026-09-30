@@ -743,7 +743,12 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                     background: Theme.Color.homeBg,
                     foreground: Theme.Color.home
                 )
-            )
+            ),
+            // The owner decides who joins the household, so the requester's
+            // whole name shows. A line count rather than nil (the Pending
+            // tab's), because nil also fixes the title's height and squeezes
+            // the role chip beside it ("Househol…").
+            titleLineLimit: 6
         )
     }
 

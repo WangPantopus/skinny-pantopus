@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -73,6 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -1241,6 +1246,9 @@ private fun ContentColumn(
             Spacer(Modifier.height(2.dp))
         }
         if (row.title.isNotEmpty()) {
+            // At large font scales the inline chip goes under the title, so it
+            // can't take the title's whole width ("Household member" at 2x).
+            val stackInlineChip = row.inlineChip != null && LocalDensity.current.fontScale >= STACKED_CHIP_FONT_SCALE
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
@@ -1259,7 +1267,7 @@ private fun ContentColumn(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (row.inlineChip != null) {
+                if (row.inlineChip != null && !stackInlineChip) {
                     ChipPill(row.inlineChip)
                 }
                 if (row.highlight is RowHighlight.Unread) {
@@ -1272,6 +1280,10 @@ private fun ContentColumn(
                                 .background(PantopusColors.primary600),
                     )
                 }
+            }
+            if (stackInlineChip && row.inlineChip != null) {
+                Spacer(Modifier.height(2.dp))
+                ChipPill(row.inlineChip)
             }
         }
         if (row.subtitle != null) {
@@ -1290,6 +1302,7 @@ private fun ContentColumn(
                 timeMeta = if (row.headerChips == null) row.timeMeta else null,
                 metaTail = row.metaTail,
                 splitWith = row.splitWith,
+                wraps = row.wrapChips,
             )
         }
     }
@@ -1664,8 +1677,9 @@ private fun TrailingView(
                 )
             }
         is RowTrailing.VerticalActions ->
+            // At least 90dp, wider when a label needs it (large font scales), so "Decline" isn't clipped.
             Column(
-                modifier = Modifier.width(90.dp),
+                modifier = Modifier.widthIn(min = 90.dp).width(IntrinsicSize.Max),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s1),
             ) {
                 CompactButton(
@@ -1784,6 +1798,7 @@ private fun IconActionButton(action: RowIconAction) {
 
 // ─── Chip row ──────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipRowView(
     bidderStack: BidderStackData?,
@@ -1797,7 +1812,30 @@ private fun ChipRowView(
      * when both are set, splitWith wins.
      */
     splitWith: SplitStackData?,
+    /** Wrap onto more lines instead of squeezing the chips into one (iOS `ChipRowView.wraps`). */
+    wraps: Boolean = false,
 ) {
+    if (wraps) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (bidderStack != null && (bidderStack.bidders.isNotEmpty() || bidderStack.overflow > 0)) {
+                InlineBidderStack(bidderStack)
+            }
+            chips.forEach { chip -> ChipPill(chip) }
+            if (metaTail != null) {
+                Text(text = metaTail, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted)
+            }
+            if (splitWith != null) {
+                SplitStackTail(splitWith)
+            } else if (timeMeta != null) {
+                Text(text = timeMeta, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted)
+            }
+        }
+        return
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
@@ -2340,3 +2378,6 @@ private fun fabTintColor(tint: FabTint): Color =
 // CompactButton + CompactButtonSize moved to
 // app.pantopus.android.ui.components.CompactButton — the canonical port
 // of `Core/Design/Components/CompactButton.swift`. Imported above.
+
+/** Font scale from which a row's inline chip sits under its title instead of beside it. */
+private const val STACKED_CHIP_FONT_SCALE = 1.3f
