@@ -89,23 +89,33 @@ public struct CreateEmergencyResponse: Decodable, Sendable {
     public let emergency: HomeEmergencyDTO
 }
 
-/// Request body for `POST /api/homes/:id/emergencies`. Backend rejects
-/// the call without `type` + `label`.
+/// Request body for `POST /api/homes/:id/emergencies` (and the PUT).
+/// Backend rejects the call without `type` + `label`. `clientRequestId`
+/// (create only) makes a retry of an unchanged draft return the saved
+/// entry instead of adding it again.
 public struct CreateEmergencyRequest: Encodable, Sendable {
     public let type: String
     public let label: String
     public let location: String?
     public let details: [String: String]?
+    public let clientRequestId: String?
 
     public init(
         type: String,
         label: String,
         location: String? = nil,
-        details: [String: String]? = nil
+        details: [String: String]? = nil,
+        clientRequestId: String? = nil
     ) {
         self.type = type
         self.label = label
         self.location = location
         self.details = details
+        self.clientRequestId = clientRequestId
     }
+}
+
+/// `DELETE /api/homes/:id/emergencies/:emergencyId` answers `{ "message" }`.
+public struct DeleteEmergencyResponse: Decodable, Sendable {
+    public let message: String?
 }

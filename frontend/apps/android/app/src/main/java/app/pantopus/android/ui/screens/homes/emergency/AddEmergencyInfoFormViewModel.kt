@@ -170,6 +170,9 @@ class AddEmergencyInfoFormViewModel
         private var onCreated: (HomeEmergencyDto) -> Unit = {}
         private var onUpdated: (EmergencyFormDraft) -> Unit = {}
 
+        /** One id per unchanged create draft; cleared after a confirmed save. */
+        private var pendingCreate: Pair<String, String>? = null
+
         init {
             // Auto-seed for edit mode by fetching the parent list and
             // finding the row by id.
@@ -326,15 +329,23 @@ class AddEmergencyInfoFormViewModel
             _state.update { it.copy(isSaving = true) }
             viewModelScope.launch {
                 val current = _state.value
+                val label = current.titleField.value.trim()
+                val details = buildDetailsMap().takeIf { it.isNotEmpty() }
+                val draftKey =
+                    (listOf(current.category.backendType, label) + (details ?: emptyMap()).toSortedMap().map { "${it.key}=${it.value}" })
+                        .joinToString("\u001F")
+                if (pendingCreate?.first != draftKey) pendingCreate = draftKey to java.util.UUID.randomUUID().toString()
                 val request =
                     CreateEmergencyRequest(
                         type = current.category.backendType,
-                        label = current.titleField.value.trim(),
+                        label = label,
                         location = null,
-                        details = buildDetailsMap().takeIf { it.isNotEmpty() },
+                        details = details,
+                        clientRequestId = pendingCreate?.second,
                     )
                 when (val result = homesRepo.createHomeEmergency(homeId, request)) {
                     is NetworkResult.Success -> {
+                        pendingCreate = null
                         onCreated(result.data.emergency)
                         _state.update {
                             it.copy(

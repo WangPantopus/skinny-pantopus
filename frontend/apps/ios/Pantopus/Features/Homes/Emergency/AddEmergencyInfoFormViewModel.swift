@@ -9,12 +9,14 @@
 //  per-field "touched" lifecycle.
 //
 //  Submit paths:
-//    .create → POST `/api/homes/:id/emergencies`
-//              (route `backend/routes/home.js:5650`).
-//    .edit   → optimistic local commit. Backend has no PUT handler for
-//              emergencies today; the detail view re-renders from the
-//              draft returned to `onUpdated`. A future patch will swap
-//              this for a real PUT call once the backend route lands.
+//    .create → POST `/api/homes/:id/emergencies` with one
+//              `clientRequestId` per unchanged draft, so a retry after a
+//              lost reply returns the saved entry instead of a duplicate.
+//    .edit   → PUT `/api/homes/:id/emergencies/:emergencyId`
+//              (route `backend/routes/home.js:3896`) with the stored type,
+//              location and details, changing only what this form edits
+//              (Android's `buildEditDetailsMap`). The detail view
+//              re-renders from the saved entry returned to `onUpdated`.
 //
 //  Verified-by is optional. The view-model lazily fetches the home's
 //  occupants via `GET /api/homes/:id/occupants` so the member picker
@@ -36,6 +38,11 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
     public let details: String
     public let verifiedByUserId: String?
     public let lastUpdated: Date
+    /// The row as stored, so an edit keeps what this form doesn't show
+    /// (another client's `phone` / `notes`, a legacy type, the location).
+    public let backendType: String?
+    public let location: String?
+    public let rawDetails: [String: String]
 
     public init(
         id: String,
@@ -44,7 +51,10 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
         severity: EmergencySeverity?,
         details: String,
         verifiedByUserId: String?,
-        lastUpdated: Date
+        lastUpdated: Date,
+        backendType: String? = nil,
+        location: String? = nil,
+        rawDetails: [String: String] = [:]
     ) {
         self.id = id
         self.category = category
@@ -53,6 +63,9 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
         self.details = details
         self.verifiedByUserId = verifiedByUserId
         self.lastUpdated = lastUpdated
+        self.backendType = backendType
+        self.location = location
+        self.rawDetails = rawDetails
     }
 
     /// Build a draft from a backend DTO. Returns nil when the DTO's
@@ -69,13 +82,39 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
             severity: EmergencySeverity.from(rawValue: dto.details["severity"]),
             details: dto.details["detail"] ?? "",
             verifiedByUserId: dto.details["verified_by"],
-            lastUpdated: Self.parseDate(dto.updatedAt) ?? Self.parseDate(dto.createdAt) ?? Date()
+            lastUpdated: Self.parseDate(dto.updatedAt) ?? Self.parseDate(dto.createdAt) ?? Date(),
+            backendType: dto.type,
+            location: dto.location,
+            rawDetails: dto.details
         )
     }
 
-    private static func parseDate(_ iso: String?) -> Date? {
+    /// `from(dto:)`, or for a legacy type (`shutoff_water` …) the raw
+    /// fields under the generic "Other" category so they still render.
+    public static func display(dto: HomeEmergencyDTO) -> EmergencyFormDraft {
+        from(dto: dto) ?? EmergencyFormDraft(
+            id: dto.id,
+            category: .other,
+            title: dto.label,
+            severity: EmergencySeverity.from(rawValue: dto.details["severity"]),
+            details: dto.details["detail"] ?? dto.location ?? "",
+            verifiedByUserId: dto.details["verified_by"],
+            lastUpdated: parseDate(dto.updatedAt) ?? parseDate(dto.createdAt) ?? Date(),
+            backendType: dto.type,
+            location: dto.location,
+            rawDetails: dto.details
+        )
+    }
+
+    /// The backend sends Postgres timestamps with microseconds
+    /// ("…17.222792+00:00"), which the default ISO parser rejects (the old
+    /// fallback showed "now" as Last updated). Keep milliseconds, then parse.
+    static func parseDate(_ iso: String?) -> Date? {
         guard let iso else { return nil }
-        return ISO8601DateFormatter().date(from: iso)
+        let trimmed = iso.replacingOccurrences(of: #"(\.\d{3})\d+"#, with: "$1", options: .regularExpression)
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: trimmed) ?? ISO8601DateFormatter().date(from: trimmed)
     }
 }
 
@@ -129,6 +168,9 @@ public final class AddEmergencyInfoFormViewModel {
     private let originalCategory: EmergencyFormCategory
     private let originalSeverity: EmergencySeverity?
     private let originalVerifiedByUserId: String?
+
+    /// One id per unchanged create draft; cleared after a confirmed save.
+    @ObservationIgnored private var pendingCreate: (draft: String, id: String)?
 
     init(
         homeId: String,
@@ -241,7 +283,7 @@ public final class AddEmergencyInfoFormViewModel {
         case .create:
             return await submitCreate()
         case let .edit(draft):
-            return submitEdit(originalDraft: draft)
+            return await submitEdit(originalDraft: draft)
         }
     }
 
@@ -268,6 +310,24 @@ public final class AddEmergencyInfoFormViewModel {
         return details
     }
 
+    /// Edit mode: the stored details with only the keys this form edits
+    /// changed, so another client's keys survive (Android's
+    /// `buildEditDetailsMap`).
+    public func buildEditDetailsMap(original: EmergencyFormDraft) -> [String: String] {
+        var details = original.rawDetails
+        if detailsField.isDirty {
+            let trimmed = detailsField.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            details["detail"] = trimmed.isEmpty ? nil : trimmed
+        }
+        if severity != originalSeverity {
+            details["severity"] = severity?.rawValue
+        }
+        if verifiedByUserId != originalVerifiedByUserId {
+            details["verified_by"] = (verifiedByUserId?.isEmpty == false) ? verifiedByUserId : nil
+        }
+        return details
+    }
+
     // MARK: - Validation
 
     static func validateTitle(_ value: String) -> String? {
@@ -287,16 +347,25 @@ public final class AddEmergencyInfoFormViewModel {
     private func submitCreate() async -> Bool {
         isSaving = true
         defer { isSaving = false }
+        let label = titleField.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let details = buildDetailsMap()
+        let draftKey = ([category.backendType, label] + details.keys.sorted().map { "\($0)=\(details[$0] ?? "")" })
+            .joined(separator: "\u{1F}")
+        if pendingCreate?.draft != draftKey {
+            pendingCreate = (draftKey, UUID().uuidString)
+        }
         let request = CreateEmergencyRequest(
             type: category.backendType,
-            label: titleField.value.trimmingCharacters(in: .whitespacesAndNewlines),
+            label: label,
             location: nil,
-            details: buildDetailsMap()
+            details: details,
+            clientRequestId: pendingCreate?.id
         )
         do {
             let response: CreateEmergencyResponse = try await api.request(
                 HomesEndpoints.createEmergency(homeId: homeId, request: request)
             )
+            pendingCreate = nil
             onCreated(response.emergency)
             toast = ToastMessage(text: "Saved.", kind: .success)
             shouldDismiss = true
@@ -310,24 +379,38 @@ public final class AddEmergencyInfoFormViewModel {
         }
     }
 
-    private func submitEdit(originalDraft: EmergencyFormDraft) -> Bool {
-        // Backend has no PUT handler today — commit locally so the
-        // detail surface re-renders with the new draft. The patched
-        // draft is surfaced back through `onUpdated` so the parent
-        // navigator can re-bind state.
-        let draft = EmergencyFormDraft(
-            id: originalDraft.id,
-            category: category,
-            title: titleField.value.trimmingCharacters(in: .whitespacesAndNewlines),
-            severity: severity,
-            details: detailsField.value,
-            verifiedByUserId: verifiedByUserId,
-            lastUpdated: Date()
+    private func submitEdit(originalDraft: EmergencyFormDraft) async -> Bool {
+        isSaving = true
+        defer { isSaving = false }
+        // Keep the stored type unless the member picked another category.
+        let type = category == originalCategory
+            ? (originalDraft.backendType ?? category.backendType)
+            : category.backendType
+        let request = CreateEmergencyRequest(
+            type: type,
+            label: titleField.value.trimmingCharacters(in: .whitespacesAndNewlines),
+            location: originalDraft.location,
+            details: buildEditDetailsMap(original: originalDraft)
         )
-        onUpdated(draft)
-        toast = ToastMessage(text: "Saved.", kind: .success)
-        shouldDismiss = true
-        return true
+        do {
+            let response: CreateEmergencyResponse = try await api.request(
+                HomesEndpoints.updateEmergency(homeId: homeId, emergencyId: originalDraft.id, request: request)
+            )
+            guard response.emergency.id == originalDraft.id else {
+                toast = ToastMessage(text: "Server returned invalid emergency info. Please try again.", kind: .error)
+                return false
+            }
+            onUpdated(EmergencyFormDraft.display(dto: response.emergency))
+            toast = ToastMessage(text: "Saved.", kind: .success)
+            shouldDismiss = true
+            return true
+        } catch {
+            toast = ToastMessage(
+                text: (error as? APIError)?.errorDescription ?? "Couldn't save.",
+                kind: .error
+            )
+            return false
+        }
     }
 
     private func rebuildAggregate() {
