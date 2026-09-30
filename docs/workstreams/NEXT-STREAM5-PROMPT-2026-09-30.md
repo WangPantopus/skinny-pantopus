@@ -16,8 +16,8 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
   - the security track: #977, #978, #985, #988, #992, #994, #996, #1000, #1001, #1002, #1012, #1015;
   - #1018: SQL contracts fixed after #992 broke four of them.
   - Stream 1's native pass of the account-deletion work passed on iOS and Android.
-- **Open (as of 16:10Z):**
-  - **#1030**, the business RPC revoke (migration `20260930183000`), plus the check-migrations auth.uid()-default rule and the `client-rpc-surface` contract. Head `f21e54fb8`, rebased onto master `a318010a2`. The stacked CI run passed; final CI is running.
+- **Open (as of 16:13Z):**
+  - **#1030**, the business RPC revoke (migration `20260930183000`), plus the check-migrations auth.uid()-default rule and the `client-rpc-surface` contract. Head `f21e54fb8`, rebased onto master `a318010a2`. Final CI is green, it's sealed (`894d9c97…`), and it sits in Stream 1's queue.
   - The old **draft #842** (S3-26 mail chips): don't merge it unless it's verified or the user accepts it.
 - **Merged since the first rewrite:**
   - #1022, the anon default-deny (batch 196);
@@ -70,7 +70,7 @@ The acceptance rows (N01–N05, A01–A05) are verified locally, but each has a 
 - **Owned elsewhere:** N03's Pulse posting belongs to Stream 1; its Beacon parts are cut.
 
 ## 6. Next
-1. #1030: once final CI is green, seal bundle `20260930-stream5-business-rpc-scan-r1`, hand it to Stream 1, and remove business fixture `ab61…` (`db/fixture-cleanup.sql`). The DB already has 181000–183000 (182000's chat section went in as a delta; replay the final files if the stack is rebuilt).
+1. #1030 is sealed and handed off, and its fixture is removed. After it merges, record it in the status file. The DB already has 181000–183000 (182000's chat section went in as a delta; replay the final files if the stack is rebuilt).
 2. #1023 is merged; nothing is left there.
 3. **Recorded, not started:**
   - move account deletion into one SECURITY DEFINER transaction, to close the narrow dry-run/delete race;
