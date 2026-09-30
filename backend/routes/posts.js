@@ -1,7 +1,6 @@
 const express = require('express');
 const { createHash, createHmac } = require('node:crypto');
 const router = express.Router();
-const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const blockService = require('../services/blockService');
 const verifyToken = require('../middleware/verifyToken');
@@ -2742,14 +2741,14 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
   try {
     const { id: postId } = req.params;
 
-    // 1. Fetch post to get matched_business_ids + service_category
-    const { data: post, error: postErr } = await supabase
-      .from('Post')
-      .select('id, service_category, matched_business_ids, matched_businesses_cache, created_at')
-      .eq('id', postId)
-      .single();
-
-    if (postErr || !post) return res.status(404).json({ error: 'Post not found' });
+    // 1. Fetch post to get matched_business_ids + service_category (only a post this viewer can see)
+    const post = await requireVisiblePost({
+      postId,
+      userId: req.user.id,
+      res,
+      select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
+    });
+    if (!post) return;
 
     // No service_category → no matches possible
     if (!post.service_category) {
@@ -2872,9 +2871,13 @@ router.get('/:id/likes', verifyToken, async (req, res) => {
     const post = await requireVisiblePost({ postId: id, userId, res });
     if (!post) return;
 
-    const { data: likes, error } = await supabase.from('PostLike')
+    // Blocks hide people from each other in both directions, as they do for posts and messages.
+    const blocked = [...await blockService.blockedUserIds(userId)];
+    let likesQuery = supabaseAdmin.from('PostLike')
       .select(`id, created_at, user:user_id (${SAFE_CREATOR_SELECT})`)
-      .eq('post_id', id).order('created_at', { ascending: false })
+      .eq('post_id', id);
+    if (blocked.length) likesQuery = likesQuery.not('user_id', 'in', `(${blocked.join(',')})`);
+    const { data: likes, error } = await likesQuery.order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     if (error) { logger.error('Error fetching likes', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to fetch likes' }); }
     res.json({ likes: (likes || []).map(serializeLikeForViewer), pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
@@ -2900,7 +2903,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     if (!post) return;
 
     if (parentCommentId) {
-      const { data: parent } = await supabase.from('PostComment').select('id, post_id').eq('id', parentCommentId).single();
+      const { data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id')
+        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle();
       if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
     }
 
