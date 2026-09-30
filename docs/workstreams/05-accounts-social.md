@@ -9,6 +9,32 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — security: direct database writes could make a user a platform admin; #977 and #978 close Stream 5's tables. Trio re-run pending, 2026-09-30T12:45:47Z
+
+- **Security finding (local reproduction, disposable accounts, reverted by exact id):**
+  - **Admin escalation.** Row-level-security write policies let a signed-in person who has the anon key write rows directly through PostgREST, around the API. With `user_update_self`, a disposable account set its own `User.role` to 'admin' (204), and the API's admin routes then answered it 200, because `requireAdmin` reads `User.role`.
+  - **Other paths with the same key:** a requester can insert a connection as already accepted, and anyone can self-verify their professional profile and set its ranking boost.
+  - **Chat:** a second `gig` room can be created for someone else's task. The other chat write policies are blocked only by an accidental `42P17` recursion.
+  - **Exposure:** no app ships the anon key or a Supabase client (iOS, Android, web and git history checked), and no real key is committed on master. But login returns the Supabase session token, so anyone who obtains the anon key gets admin.
+- **Open PRs (Stream 1 has them):**
+  - [#977](https://github.com/WangPantopus/skinny-pantopus/pull/977) (`d5864827b`, migration `20260930170000`, seal `e979677e…`): chat rows are written only through the API. It drops 11 write policies on `ChatRoom`, `ChatMessage`, `ChatParticipant`, `MessageReaction` and `ChatTyping`. Queued right after the trio.
+  - [#978](https://github.com/WangPantopus/skinny-pantopus/pull/978) (`859a8010a`, migration `20260930171000`, seal `2fc1ac8a…`): account, social and business-profile rows are written only through the API. It drops 16 policies on `User`, `UserProfessionalProfile`, `BusinessProfile`, `BusinessPageBlock`, `Relationship`, `RelationshipPermission`, `UserBlock` and `UserProfileBlock`.
+    - After it, the role PATCH changes nothing (admin 403), and the other writes get 403 `42501`.
+    - Profile update, connections and block/unblock through the API still work.
+    - I asked Stream 1 to batch it early.
+  - Both keep the read policies, and every backend write to these tables uses `supabaseAdmin` (70 writes scanned for #978).
+- **Decision (standing direction; security best practice, no product trade-off):** for Stream 5's tables, the API is the only writer.
+- **Needs a cross-stream decision (coordinator or user):** 246 user write policies existed on 124 public tables. #977 and #978 cover Stream 5's 13; the other 111 belong to other streams.
+  - Recommendation: make every server-written table API-only, one stream at a time.
+  - Each table first needs a scan for anon-client writes that rely on permissive policies without `auth.uid()`.
+  - Also consider rotating the anon key if it was ever shared outside the backend.
+- **Trio (#974 + #976 + #968) is on hold** until the heads are final (Stream 1).
+  - #968 is final at `ab0a5b097` (a deleted uploader's id shows as null; the purge refuses when someone else holds `Home.owner_id`). Its final `162000` is re-applied on my stack.
+  - #976 gained `c02af3976` (local until the rebase): LIF-02 counts only current verified co-residents (Stream 3's decision), and its queries fail closed.
+  - Waiting for #974's new head. Stream 3 is aligning `othersKeepHome` with the purge's rule, and after a purge it will close the Home's remaining pending standing.
+  - Then: rebase #976 onto it, push, and re-run the targeted cases. Fixtures hs9/hs9b and hs11–hs15 are ready.
+- **Runtime:** API 18134 is still on the local tree `a2e222885`. The DB now also has my `170000` and `171000` applied, ahead of master until #977 and #978 merge.
+
 ## LIVE — decision-9 trio proven end to end (#974 + #976 + #968, one batch pending); #950, #964 and #966 merged, 2026-09-30T12:24:13Z
 
 - **Merged since the last block:**
