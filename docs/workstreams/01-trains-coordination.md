@@ -139,7 +139,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions 2026-09-30.** Items (3) and (4) are answered by the user; the rest were decided by Stream 1 under the standing direction, which is to choose the best for user experience, safety and retention and record it.
 - (3) **Accent colours (user):** use the recommended AA values. Stream 1 implements them app-wide.
-  - **Plan (measured 2026-09-30T12:1xZ with the WCAG formula; implementation after the native Nearby fix):**
+  - **Plan (measured on 2026-09-30 with the WCAG formula; implementation after the native Nearby fix):**
     - **Web.** Tailwind compiles `bg-/text-primary-600` from `packages/theme/tailwind.cjs` hex, not from CSS variables. Emerald and amber are Tailwind built-ins. So split the palettes (`theme.extend.backgroundColor` vs `textColor`), backed by CSS variables, with no class churn in ~380 files:
       - fills: `bg-primary-600` → #0369a1 in both themes (white on it 5.93; today 4.10); `bg-primary-700` (hover) → #075985; `bg-emerald-600` → #047857 (5.48; today 3.77).
       - text: `text-primary-600` → #0369a1 in light (5.39–5.68 on the greys; today 3.72–3.92) and #38bdf8 in dark (6.83–9.42; #0369a1 would be 2.47–3.40 there). `text-emerald-600` → #047857 light and #34d399 dark.
