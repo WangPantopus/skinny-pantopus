@@ -20,6 +20,7 @@ const { normalizeAddress, computeAddressHash } = require('../utils/normalizeAddr
 const { geocodeAddress } = require('../utils/geocoding');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
+const parsePostGISPoint = require('../utils/parsePostGISPoint');
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -736,9 +737,49 @@ function buildVerdict(canonicalAddressId, normalized, coordinates, status, locat
 
 // ── Exports ──────────────────────────────────────────────────
 
+// ── Public view of a business ──────────────────────────────
+
+// Columns a public reader selects for a business location; the last three drive the masking below.
+const PUBLIC_LOCATION_COLUMNS = 'id, label, is_primary, address, address2, city, state, zipcode, country, location, '
+  + 'timezone, phone, email, location_type, show_exact_location, display_location';
+
+/**
+ * What anyone outside the business may see of one location (raw row, geography not yet parsed). A
+ * home-based business that keeps its address private (home_based_private without show_exact_location)
+ * shows only its fuzzed point and no street address, and no point at all when the fuzzed one is missing.
+ * Internal columns (address ids and hashes, verification, the masking fields) never leave the server.
+ */
+function toPublicBusinessLocation(loc) {
+  if (!loc) return loc;
+  const pub = {
+    id: loc.id,
+    label: loc.label,
+    is_primary: loc.is_primary,
+    address: loc.address,
+    address2: loc.address2,
+    city: loc.city,
+    state: loc.state,
+    zipcode: loc.zipcode,
+    country: loc.country,
+    location: loc.location ? parsePostGISPoint(loc.location) : null,
+    timezone: loc.timezone,
+    phone: loc.phone,
+    email: loc.email,
+  };
+  if (loc.location_type === INTENT_TO_TYPE.HOME_BASED_PRIVATE && !loc.show_exact_location) {
+    pub.location = loc.display_location ? parsePostGISPoint(loc.display_location) : null;
+    pub.address = null;
+    pub.address2 = null;
+    pub.is_home_based = true;
+  }
+  return pub;
+}
+
 module.exports = {
   validateBusinessAddress,
   findOrCreateCanonicalAddress,
+  PUBLIC_LOCATION_COLUMNS,
+  toPublicBusinessLocation,
   // Exposed for unit testing
   normalizeAndGeocode,
   checkDeliverability,
