@@ -608,11 +608,13 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
             displayName={actorName}
             textClassName="font-medium text-app-text hover:text-primary-600"
           />
-          {' '}
-          <span>{entry.action.replace(/_/g, ' ')}</span>
-          {entry.target_type && (
-            <span className="text-app-text-muted"> on {entry.target_type}</span>
-          )}
+          {entry.description ? <>{' · '}<span>{entry.description}</span></> : (<>
+            {' '}
+            <span>{entry.action.replace(/_/g, ' ')}</span>
+            {entry.target_type && (
+              <span className="text-app-text-muted"> on {entry.target_type}</span>
+            )}
+          </>)}
         </div>
         <div className="text-[10px] text-app-text-muted mt-0.5">
           {new Date(entry.created_at).toLocaleString(undefined, {

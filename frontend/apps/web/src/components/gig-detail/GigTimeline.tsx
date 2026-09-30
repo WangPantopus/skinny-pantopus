@@ -182,7 +182,7 @@ export default function GigTimeline({
                 {/* Label */}
                 <span
                   className={`text-[10px] sm:text-xs mt-1 text-center leading-tight font-medium ${
-                    isDone ? 'text-green-700' : isCurrent ? 'text-primary-700' : 'text-app-text-muted'
+                    isDone ? 'text-green-700 dark:text-green-400' : isCurrent ? 'text-primary-700 dark:text-primary-300' : 'text-app-text-muted'
                   }`}
                 >
                   {step.label}
