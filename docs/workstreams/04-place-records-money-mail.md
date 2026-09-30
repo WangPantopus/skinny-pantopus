@@ -269,6 +269,28 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-09-30T12:03Z — account deletion, part 2: [#968](https://github.com/WangPantopus/skinny-pantopus/pull/968) open.** Head `ae0d7ca46ab78fdcdb6d6dfb915e6d1c0c773dbd`, migration `20260930162000` (reserved). #952 merged in batch 174 (master `536ec33a1`); #954 merged in batch 173.
+  - **New blocker, reproduced** (rolled back, 11:53:51Z, in Stream 3's window): a member who ever attached a file to a Home task can't delete their account.
+    - The dry run gives 23514, from protect_home_task_media_file ("File tombstones must be retained"), cascaded from File.user_id.
+    - HomeTaskMedia.uploaded_by also cascaded: attachments vanished from household tasks, and their blobs were never collected.
+    - **Fix:** the files are released to the household at User delete, as documents are since #952. The guards accept an owner cleared on update, while inserts stay strict. uploaded_by is SET NULL.
+  - **Coordinator's privacy follow-up** (private records orphaned by deletion) **and decision 9** (the last member's Home goes, or is purged if delete-my-Home refuses).
+    - **Split agreed:**
+      - Stream 3: `homeAuthorityService.retireHomeForDeletedAccount` (5d4a6cce6);
+      - Stream 5: the route call site, after the dry run and before the null-out;
+      - Stream 4: `purgeHouseholdRecords`, plus a personal-pin trigger.
+    - **Not a User trigger:** the route nulls authors before the User delete, and triggers can't remove blobs.
+    - Porchlight's "notes can pass to the next owner" is an unbuilt design, so it doesn't block decision 9.
+  - **Rolled-back proof** (12:01:27Z):
+    - dry run 23514 → ok;
+    - purge refuses while someone else keeps the Home;
+    - every household type is removed, and other people's letters and pins are kept;
+    - a later member finds 0;
+    - after the member's deletion, the other household keeps the photo;
+    - inserts stay strict.
+    Bundle `20260930-stream4-household-data-r1` (staged; sealed with the real-route E2E). Stream 5 runs the combined route E2E for the one batch.
+  - **Waiting for a lease window:** web Documents delete E1–E3 plus a name for the icon-only delete button (axe button-name). Branch `claude/stream4-docs-delete-name` `487412267`, harness `tools/web-s4-docs-delete.cjs`.
+
 - **2026-09-30T11:34Z — [#952](https://github.com/WangPantopus/skinny-pantopus/pull/952) (account deletion, Home records) is with the coordinator.** Head `a22ad205485a7a08e90b9748303620a8175833b6` on master `00bf2d6ff`, migration `20260930153000`. Bundle `20260930-stream4-account-delete-home-records-r1`, 51 files, MANIFEST `b2949875b0b3816259228144a1e18096ef507ce334a5355259cc23eaf3d4a600`.
   - **Native** (lease 11:21:15Z–11:32:06Z). pantopus_s34 and "Pantopus S34", owner signed in. Master-code builds show "Uploaded by —" for the former member's document; the branch shows **"Uploaded by Former member"**. On S34 I reset its keychain first (it had kit member B signed in; Stream 3 agreed), so the app never ran as B.
   - **Owner deletes the orphaned document:** 200, storage object removed.
