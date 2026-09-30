@@ -16,6 +16,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -1832,6 +1834,7 @@ private fun parsePickerDateTime(raw: String): LocalDateTime? {
     return runCatching { LocalDateTime.parse(trimmed.replaceFirst(" ", "T")) }.getOrNull()
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipRow(
     label: String,
@@ -1846,7 +1849,12 @@ private fun ChipRow(
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
-        Row(modifier = Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        // Wraps onto more lines at large text sizes, so every choice stays visible and reachable.
+        FlowRow(
+            modifier = Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
             options.forEach { (key, displayLabel) ->
                 val isActive = key == activeKey
                 Box(
@@ -1875,6 +1883,8 @@ private fun ChipRow(
                             } else {
                                 PantopusColors.appTextStrong
                             },
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }

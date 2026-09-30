@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -161,7 +162,7 @@ fun FeedChipRow(
                     Box(
                         modifier =
                             Modifier
-                                .height(28.dp)
+                                .heightIn(min = 28.dp)
                                 .clip(RoundedCornerShape(Radii.pill))
                                 .background(if (active) PantopusColors.primary600 else PantopusColors.appSurface)
                                 .then(
