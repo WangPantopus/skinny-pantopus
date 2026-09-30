@@ -101,6 +101,12 @@
 - **Decided by me under the standing instruction** (each also in its PR):
   - **#915:** only wrong passcodes that were actually sent count toward the per-link limit; the header is percent-encoded, since HTTP headers can't carry non-Latin text; Create stays disabled while a passcode is 1–5 characters.
   - **#898:** only Managers/Sensitive defaults apply (a `public` default keeps members), and the default is read under the Home lock. The coordinator confirmed both.
+  - **Add-home address checks (D06, commit `46cd0b548`, PR after the native checks):**
+    - an "Invite only" Home answers `HOME_FOUND_PRIVATE`, with no id, address or claimed state, to anyone who doesn't already know it. People who already know it keep the full answer: household access or their own onboarding there, its creator, or a pending claim (the same people who can open its preview);
+    - the address validator no longer sends `existing_household` (Home id, member count, roles) to clients, for any Home;
+    - the web conflict card drops "N members currently registered";
+    - clients show "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation." and stop.
+  - **#943:** `HomeAccessSecret.created_by` becomes nullable with ON DELETE SET NULL (Stream 1's assignment). No "Former member" text is needed, because no screen names a code's creator.
 1. Rejoining after leaving (R03): build membership renewal, or confirm an ended membership is final so R03 can close on the rest.
 2. What an ordinary member sees by default (D07, D06): new members get the home overview and Tasks only.
 3. Ownership disputes at launch (R04): `HOUSEHOLD_CLAIM_CHALLENGE_FLOW` has never been audited in the deployed setting.
@@ -283,6 +289,34 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T10:33Z — #943 and #945 with the coordinator; D06 address-check leak reproduced and repaired (native checks pending); runtime maintenance.** Runtime lease held since 10:12:28Z.
+  - **[#943](https://github.com/WangPantopus/skinny-pantopus/pull/943)** (Stream 1's launch-critical assignment; found by Stream 5): saving an access code blocked deleting your account, because `HomeAccessSecret.created_by` was NOT NULL with a plain foreign key.
+    - Fix: migration `20260930131000`, nullable with ON DELETE SET NULL. No reader change: the SQL checks fail closed or use IS DISTINCT FROM, and no client shows the creator.
+    - `account_deletion_dry_run` for member B, who saved a door code through the real API: before, 23503 FK (empty lists) and 23502 NOT NULL (route lists); after, `ok:true` for both.
+    - With a NULL creator, the API list and an owner edit return 200 and real Chrome lists the code.
+    - Bundle `20260930-stream3-home-access-secret-creator-r1` (`0524caaf…`), head `31231a837`.
+  - **[#945](https://github.com/WangPantopus/skinny-pantopus/pull/945):** web Access & Codes grouped by a `category` field the API never sends, so all 7 code types sat under "Other".
+    - Fix: group by `access_type` into the page's own groups.
+    - Real Chrome before/after. Bundle `20260930-stream3-home-d07-access-code-groups-r1` (`e2c963e0…`), head `afed61737`.
+  - **D06 add-home address checks, reproduced on master, stage `runtime/stream3-home-d06-address-check-privacy-r1`, not sealed yet:**
+    - `POST /check-address` gave member B, who has no occupancy, an "Invite only" Home's id, full address and claimed status.
+    - `POST /api/v1/address/validate` gave B `existing_household {home_id, member_count 1, active_roles [owner]}` for any Home with a household. This was run through the real route and DB with Google and Smarty EMULATED in-process.
+    - Web master took B straight to "Claim this home" for the hidden Home.
+    - After `46cd0b548`:
+      - B gets `HOME_FOUND_PRIVATE` with only `status` and `is_multi_unit`;
+      - the Normal Home's answer and the owner's answer for their own invite-only Home are unchanged;
+      - the validator verdict keeps `CONFLICT`/`EXISTING_HOUSEHOLD` without `existing_household`;
+      - web shows the private-Home message and stays on step 1.
+    - Exact cleanup.
+    - The iOS and Android wizard changes join the native device session. The PR opens after that.
+  - **Runtime:**
+    - Applied master's `20260930093000`, `101500` and `110000`, then `131000` (#943), with `supabase migration up`; ledger 99.
+    - Backend back on master `c399b2fe6` (PID 2547 since 10:27:35Z), shared worktree detached there, its `.claude/launch.json` kept.
+    - Incident: running the repo's pgTAP contract `home-access-secret-transactions` against the shared runtime segfaulted one Postgres backend (signal 11) at 10:20:46Z. Postgres recovered by 10:20:47.849Z and the fingerprints show no data change. Don't run SQL contracts against the shared runtime; CI replays them on a fresh database.
+  - **Next:** once the heavy slot is mine (first in queue), one native session on S34 and pantopus_s34:
+    - builds: iOS for `edab09b8e`, `aeb8ce319`, `f372b8810` and `46cd0b548`; Android for `f372b8810` and `46cd0b548`;
+    - device checks: the join-policy hide, Requests-row VoiceOver, audit labels, the add-home private message, and Access & Codes with a NULL creator.
 
 - **2026-09-30T09:53Z — #927 merged; two more native fixes committed locally; check-address decided.**
   - **#927:** merged in batch 164 ([#929](https://github.com/WangPantopus/skinny-pantopus/pull/929), master `acd904c66`).
