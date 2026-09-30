@@ -35,6 +35,43 @@
 
 
 
+> **UPDATE 2026-09-29T23:55Z — Stream 1: batches 124–129 merged; CI green again; web accessibility for Posts, Hub, Start and money screens; native Start retry in progress.**
+> - **Coordinator merges.** Every head was reviewed, its seal verified and its batch proven with verify-batch.
+>   - Batch 124 (#818 ← S2 #816, S1 #817) at 22:16:47Z.
+>   - Batch 125 (#821 ← S2 #819, #820) at 22:27:49Z.
+>   - Batch 126 (#823 ← S2 #822) at 22:32:29Z.
+>   - Batch 127 (#824 ← S1 #798) at 22:51:53Z.
+>   - Batch 128 (#826 ← S2 #825) at 23:13:51Z.
+>   - Batch 129 (#830 ← S2 #827, #828, S1 #829) at 23:47:58Z.
+>   - Master is `8e66a93cc`.
+> - **CI is green.** #798 passed every job on its head `587d39eda`: iOS lint, build and tests on three simulators; Android lint, test, assemble and instrumented; the database replay; the migration safeguards. Master's first run on `8e66a93cc` was still in progress at 23:55Z.
+> - **Stream 1 merged:**
+>   - #817: web Start a train deletes its half-built draft when a later publish call fails (U03 E1). Seal `bbdbf2d2…`, 120 files; the same bundle has R1, E3 and delete E1/E3 passes.
+>   - #829: web accessibility for Posts, Hub, Start and money screens. Seal `ddbfe77a…`, 331 files. axe before → after: feed 37→2 light and 28→2 dark, feed map 68→4 and 19→3; Bob's post detail and report sheet reach 0 in both themes.
+>     - Post-type and composer intent text meets AA on its tints in both themes.
+>     - Named: map markers, overflow and close buttons, wallet controls, Start fields and weekday buttons.
+>     - The feed map overlays had lost their background: `bg-surface/95` generates no CSS, so they now use `bg-app-surface/95`.
+> - **Stream 2 reviews:**
+>   - F02 same-account permission (web): accepted as evidence, no code change.
+>   - R06: not closable. The row still names restart/account request identity, the Android Identity ANR, and full-day/device-clock/hosted boundaries. S2 is taking the two local items.
+>   - False-empty sweep r2 (`9c2526be…`, supersedes r1): D09 web support.
+> - **In progress: native Start E1.** On iOS and Android, a failed launch leaves its draft and Try again makes a second train, the same defect web had. The fix mirrors #817: delete the half-built draft, and remember it if that fails. It's on `codex/train-native-start-retry-20260929` (`5fe0bc7fc`, local), and both apps' installed builds match master's Start code.
+>   - The Android before-run is paused: emulator-5558 showed an ANR dialog at about 23:50Z under host load (load average about 150, 17% memory free, three emulators up). The proxy rule `and-before-publish-503` is armed, and the baseline is from 23:48:48Z.
+> - **Needs the user (recommendations recorded):**
+>   - (1) **One design-token decision.** It covers every accent below AA:
+>     - `primary-600` fills with white text (4.09:1) and `primary-600` text on greys (3.8–4.35:1);
+>     - `emerald-600` fills and text (3.51–3.77:1);
+>     - the post-type accent fills with white text: avatar initials, the composer's submit button ("Share Recommendation" on amber-500 is 2.15:1), the active feed-filter chips (2.15–4.23:1) and the map pins;
+>     - S2's header badge and the Members tab (3.52:1).
+>     - Recommended: one step darker per fill, keeping the hue.
+>   - (2) Web Manage "Send invite" delivers nothing. Recommended: hide it on web and keep Copy link.
+>   - (3) From S2, a product option: restore a home's previous visibility when Lockdown ends. Today the panel says the home stays private.
+> - **Proposals, not changed:**
+>   - The active feed-filter chip's mute "✕" is nested inside the button, so screen readers can't reach it; fixing it needs a structural change.
+>   - After Edit Manually, Start's "Every dinner" shows as selected while no weekday is.
+> - [Checklist page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu) v4. Open now: U03 34 to do, U04 18, U02 38 to do and 12 waiting on your call (mostly the one token decision).
+> - **Next:** native E1 before/after (Android first, iOS when the shared driver is free), then E2 create idempotency, then the remaining U02–U04 cells.
+
 > **UPDATE 2026-09-29T21:53Z — Stream 1: batches 118–123 merged; the greyed button, the co-organizer picker, an Android crash fix and web Train accessibility are on master `553b91504`.**
 > - **Coordinator merges.**
 >   - Batch 118 (#800 ← S2 #799) at 21:04:11Z.
@@ -1092,7 +1129,7 @@ reproduced defect. No extra hardware/provider requirement is imposed on a source
 | U04 | Sep29 #789 native lists re-read after a delete (Android on return; iOS via `supportTrainDeleted`); iOS non-delete staleness after a two-level/Search/deep-link return remains open. Sep29 S3 #785 (batch112) web stale session: one refresh and at most one sign-out across invalid/revoked/valid/transient cases, 52-file `799180dc…` (reusable). Sep28#778 bothnative cold read/persisted channel choice, same-command retries preserve single notice;301-file7915aa9b. Web tab19-filedbadacae settled/reload verified without code change,150ms transition qualified. Sep28#776 bothnative cold headers same-date1/different-date2;108-file16d79acc, no clock-change claim. Sep28#774 real native cold reads show correct empty/future/current/finished coverage;278-filea335aabc. No clock-change or early-completed-history claim. Sep28#771 actual native cold reopening preserves distinct helper counts1/2/1/0 after fixture changes;207-filee95cb74f. No command-durability or account-race claim. Sep28#767 actual native cold reopening restores correct delivered count;175-filee864bdd2. Count-only scope, no command durability claim. Sep28#765 actual iOS/Android cold completion and Chrome helper Updates/reload pass;342-file8094e494. No abandoned uncertain-command durability claim.  Sep28#762 cold native sender/detail and Chrome full Updates/reload pass,206-file735d2c8c; no full native update feed or abandoned-draft/account claim. Sep28#759 actual final iOS/Android cold reads preserve saved dates; Chrome calendar/reload parity,441-file906a79fb. No abandoned-editor or process-death command identity promise. Sep28 organizer removal119-fileaa5e preserves canceled roster/open slots across actual native cold restart; address-sharing179-fileb9bcc preserves helper address across cold restart and withdraws after actual Leave. No in-flight account or durable-draft claim. Sep28#741 actual iOS cold saved fields/assigned arrival/cleared note persist, restored Alice after Bob denial;156-file0226862e. No in-flight account-change/durable-draft claim. Sep28#733 iOS helper process-reopen and Android organizer process-reopen preserve completed Train results;123-file5dae628e, no pending-command account/process guarantee. Sep28 #709 whole-post image deletion manual web/Android and automatic iOS lost-reply retry/cold absence accepted119-file214a; all owned5Posts/onecomment/File/21objects0. Broader upload/concurrency limits remain. Sep28 iOS Post unsent draft survives actual Settings background/foreground and size/theme change; cold return discards in-memory text without a Send. [20-file7cb37839 evidence](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260928-stream1-ios-post-accessibility-r1/RESULT.md); no durable-draft promise. Sep28 ordinary Post account isolation accepted on actual Chrome/iOS/Android,46-file3f832a8c, exactPost/3comments0/full retainedhashes equal; no old-subscriber or durable-unsent promise. Sep27#699 preserves later pending drafts on actual web/iOS/Android,107-filec9b5f951; account/process-death unsent retention remains open. Sep27#695 web panel target-generation repair and unchanged native delayed-read/write navigation/cold persistence accepted,107-fileec69319a; account/process-death drafts remain open. Sep27 #671 all-client Post comment persistence after reload/cold reopen (113-file1bf8a689…); successful late old-account Hub200 after real logout/login accepted on Chrome (23-file79e9382e…), full cache/native lifetime remains separate. Accepted Home/account-switch and session lifetimes; Sep27 #667 actual Android deep-linked Post draft survives font/theme recreation, cold/warm new links and Back pass (52-file6d337d63…); #648 native Not-you lifetimes reused unchanged | Remaining multi-client foreground/background/cold-process and concurrent-account journeys; no process-death draft retention promise accepted. Physical-provider receipt is only one separate boundary. |
 | U05 | Existing screen and action catalogs | Final integrated release-build inventory on all three clients after repair integration; keep every unfinished reachable action explicit. **(LAUNCH SCOPE 2026-09-27: exclude the flagged-off screens; see the shared cut table.)** |
 
-## Stream 1 U02–U04 exit checklists — approved 2026-09-29, updated 2026-09-29T21:53Z
+## Stream 1 U02–U04 exit checklists — approved 2026-09-29, updated 2026-09-29T23:55Z
 
 Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is the canonical copy; progress is tracked here only.
 Legend: ✅ done (sealed evidence) · ❓ confirm from existing evidence before any rerun · ⬜ to do · 🔷 user decision · ⛔ named boundary · – not offered on that client.
@@ -1104,14 +1141,14 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | **Support Trains** | | | |
 | Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
-| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ⬜ E1 E2 E3 E6 |
-| Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>⬜ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>⬜ R1 on detail |
-| Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) |
+| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ✅ E6 recipient search and no match (Sep23 Train UX)<br>⬜ E1 E2 E3 | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>⬜ E2 lost create reply |
+| Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>⬜ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
+| Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
 | Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
 | Organizer dates: add, edit, remove | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>⬜ Remove: E1 E2 | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>✅ Remove: E1 (#759)<br>⬜ Remove: E2 | – Calendar is read-only on web |
 | Send update and push choice | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | – Updates are read-only on web |
 | Signups: edit, remove helper, share address | ✅ Edit: E1-E6 (#741)<br>✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747) | ✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747)<br>– Edit not offered | ✅ Roster and per-helper privacy (#747)<br>– Edit, remove, address are app-only |
-| Pause, resume, back to draft, archive, delete, close | ✅ E2 pause and delete (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 all; E2 resume, back to draft, archive | ✅ E2 all five (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 | ✅ Delete: E2 E5 (#783)<br>⬜ Delete: E1 E3<br>– Close, pause, resume, back to draft, archive not offered |
+| Pause, resume, back to draft, archive, delete, close | ✅ E2 pause and delete (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 all; E2 resume, back to draft, archive | ✅ E2 all five (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>⬜ E1 E3 | ✅ Delete: E2 E5 (#783)<br>✅ Delete: E1 E3 (U03 web bundle bbdbf2d2)<br>– Close, pause, resume, back to draft, archive not offered |
 | Co-organizers (People picker (approved)) | ✅ Picker add, remove, empty state, invite share (#812)<br>⬜ E1 E2 E3 E4 E5 | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ Remove no longer crashes the app (#813)<br>⬜ E1 E2 E3 E4 E5 | – No co-organizer editor on web |
 | Remind helpers (Nudge draft and send) | ⛔ Needs an AI provider | ⛔ Needs an AI provider | ⛔ Needs an AI provider |
 | Gift fund: turn on, turn off | ⬜ E1 E2 E3<br>⛔ Contributions move money | ⬜ E1 E2 E3<br>⛔ Contributions move money | – Fund status is read-only on web<br>⛔ Contributions move money |
@@ -1144,32 +1181,32 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | My trains, Nearby, Invitations | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
 | Train search | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | – No Train search on web |
 | Train detail and sign-up sheet | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
-| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>⬜ Later steps |
+| Start a train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>🔷 A3 brand-blue token |
 | Manage train | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
 | Review signups, edit signup | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ Signups tab: A1 A2 A3 A4 A5 |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
 | **Posts and Pulse** | | | |
-| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A3 A4 | ✅ A5 comments (Sep27)<br>⬜ A1 A2 A3 A4 |
-| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Pulse feed | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; post-type text, map markers and menus fixed (#829)<br>🔷 A3 brand-blue token<br>🔷 A4 filter chip mute control nested in the chip: structural fix proposed |
+| Post detail and comments | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ✅ A1 A2 comments (#667)<br>⬜ A3 A4 | ✅ A5 comments (Sep27)<br>✅ A1 A2 A4; type chip and dark header fixed (#829)<br>🔷 A3 brand-blue token |
+| Post composer | ✅ A1 kept as is (your decision)<br>⬜ A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; intent text and AI button fixed (#829)<br>🔷 A3 brand-blue token |
 | My posts | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Report a post | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Report a post | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5; close button named (#829) |
 | **Start and Hub** | | | |
-| Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Hub (Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Today detail | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Start funnel and Place preview | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A3 A4 A5 on /start (U02 web bundle ddbfe77a) |
+| Hub (Stream 1 cards) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5; You badge fixed (#829)<br>🔷 A3 brand-blue token |
+| Today detail | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A1 A2 A4 A5 (U02 web bundle ddbfe77a)<br>🔷 A3 brand-blue token |
 | **Money screens (viewing only, no payments)** | | | |
 | Tip sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2, dark title fixed (PR198)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
 | Payment card and refund sheet | ⬜ A1 A2 A3 A4 | ✅ A1 A2 (Sep22)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
-| Payments and wallet settings | ⬜ A1 A2 A3 A4 | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>⬜ A3 A4 | ⬜ A1 A2 A3 A4 A5 |
+| Payments and wallet settings | ⬜ A1 A2 A3 A4 | ✅ A1 A2 by accessibility tree (Sep27)<br>⛔ Screenshots blocked (secure screen)<br>⬜ A3 A4 | ✅ A1 A2 A4 A5; filter and back-button names (#829)<br>🔷 A3 emerald token |
 
 **Outside this plan:** Money journeys: Tips, task payments, refunds, disputes and wallet reuse the accepted P02-P10 evidence. Nothing is rerun, and there is still no capture. Their hosted and provider parts stay with the P rows. Remind helpers: Blocked until an AI provider is available: Send only appears after an AI draft. Crew Day and rebooking a known crew: Not built yet: no screen or route calls it (Stream 3, Sep27). There's nothing to check. Launch cuts: Marketplace, Open Gigs, the business directory, and Hub or Pulse entry points into them stay excluded. The "WINNER" badge note belongs to bids, so it's dropped. U01 and U05: U01 has no Stream 1 cells. U05 starts once your launch flags are on master.
 
-**Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (4) Open for you: the brand-blue design token. White on primary-600 is 4.09:1 and blue text on grey about 3.9:1, under AA's 4.5:1; Stream 2 measured more (emerald-600 3.77, amber-500 2.15, header badge 3.76). My recommendation: darken filled primary buttons to primary-700 (about 5.9:1) and the badge to red-600. It's app-wide and visible, so it needs your approval. (5) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
+**Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (4) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. (5) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same. (6) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 75, confirm from existing evidence 0, to do 37, your call 0, boundary 6, not offered 9
+- U03 items: done 80, confirm from existing evidence 0, to do 34, your call 0, boundary 6, not offered 9
 - U04 items: done 8, confirm from existing evidence 0, to do 18, your call 0, boundary 0, not offered 0
-- U02 items: done 12, confirm from existing evidence 0, to do 47, your call 4, boundary 1, not offered 3
+- U02 items: done 21, confirm from existing evidence 0, to do 38, your call 12, boundary 1, not offered 3
 
 ## Historical checkpoints and detailed evidence — preserved
 

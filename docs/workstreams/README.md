@@ -30,6 +30,43 @@
 
 
 
+> **UPDATE 2026-09-29T23:55Z — Stream 1: batches 124–129 merged; CI green again; web accessibility for Posts, Hub, Start and money screens; native Start retry in progress.**
+> - **Coordinator merges.** Every head was reviewed, its seal verified and its batch proven with verify-batch.
+>   - Batch 124 (#818 ← S2 #816, S1 #817) at 22:16:47Z.
+>   - Batch 125 (#821 ← S2 #819, #820) at 22:27:49Z.
+>   - Batch 126 (#823 ← S2 #822) at 22:32:29Z.
+>   - Batch 127 (#824 ← S1 #798) at 22:51:53Z.
+>   - Batch 128 (#826 ← S2 #825) at 23:13:51Z.
+>   - Batch 129 (#830 ← S2 #827, #828, S1 #829) at 23:47:58Z.
+>   - Master is `8e66a93cc`.
+> - **CI is green.** #798 passed every job on its head `587d39eda`: iOS lint, build and tests on three simulators; Android lint, test, assemble and instrumented; the database replay; the migration safeguards. Master's first run on `8e66a93cc` was still in progress at 23:55Z.
+> - **Stream 1 merged:**
+>   - #817: web Start a train deletes its half-built draft when a later publish call fails (U03 E1). Seal `bbdbf2d2…`, 120 files; the same bundle has R1, E3 and delete E1/E3 passes.
+>   - #829: web accessibility for Posts, Hub, Start and money screens. Seal `ddbfe77a…`, 331 files. axe before → after: feed 37→2 light and 28→2 dark, feed map 68→4 and 19→3; Bob's post detail and report sheet reach 0 in both themes.
+>     - Post-type and composer intent text meets AA on its tints in both themes.
+>     - Named: map markers, overflow and close buttons, wallet controls, Start fields and weekday buttons.
+>     - The feed map overlays had lost their background: `bg-surface/95` generates no CSS, so they now use `bg-app-surface/95`.
+> - **Stream 2 reviews:**
+>   - F02 same-account permission (web): accepted as evidence, no code change.
+>   - R06: not closable. The row still names restart/account request identity, the Android Identity ANR, and full-day/device-clock/hosted boundaries. S2 is taking the two local items.
+>   - False-empty sweep r2 (`9c2526be…`, supersedes r1): D09 web support.
+> - **In progress: native Start E1.** On iOS and Android, a failed launch leaves its draft and Try again makes a second train, the same defect web had. The fix mirrors #817: delete the half-built draft, and remember it if that fails. It's on `codex/train-native-start-retry-20260929` (`5fe0bc7fc`, local), and both apps' installed builds match master's Start code.
+>   - The Android before-run is paused: emulator-5558 showed an ANR dialog at about 23:50Z under host load (load average about 150, 17% memory free, three emulators up). The proxy rule `and-before-publish-503` is armed, and the baseline is from 23:48:48Z.
+> - **Needs the user (recommendations recorded):**
+>   - (1) **One design-token decision.** It covers every accent below AA:
+>     - `primary-600` fills with white text (4.09:1) and `primary-600` text on greys (3.8–4.35:1);
+>     - `emerald-600` fills and text (3.51–3.77:1);
+>     - the post-type accent fills with white text: avatar initials, the composer's submit button ("Share Recommendation" on amber-500 is 2.15:1), the active feed-filter chips (2.15–4.23:1) and the map pins;
+>     - S2's header badge and the Members tab (3.52:1).
+>     - Recommended: one step darker per fill, keeping the hue.
+>   - (2) Web Manage "Send invite" delivers nothing. Recommended: hide it on web and keep Copy link.
+>   - (3) From S2, a product option: restore a home's previous visibility when Lockdown ends. Today the panel says the home stays private.
+> - **Proposals, not changed:**
+>   - The active feed-filter chip's mute "✕" is nested inside the button, so screen readers can't reach it; fixing it needs a structural change.
+>   - After Edit Manually, Start's "Every dinner" shows as selected while no weekday is.
+> - [Checklist page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu) v4. Open now: U03 34 to do, U04 18, U02 38 to do and 12 waiting on your call (mostly the one token decision).
+> - **Next:** native E1 before/after (Android first, iOS when the shared driver is free), then E2 create idempotency, then the remaining U02–U04 cells.
+
 > **UPDATE 2026-09-29T21:53Z — Stream 1: batches 118–123 merged; the greyed button, the co-organizer picker, an Android crash fix and web Train accessibility are on master `553b91504`.**
 > - **Coordinator merges.**
 >   - Batch 118 (#800 ← S2 #799) at 21:04:11Z.
