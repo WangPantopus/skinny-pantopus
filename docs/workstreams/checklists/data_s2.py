@@ -13,14 +13,14 @@ U03 = [
         ("Post links", "", {"iOS": [c("done", "Links open the right post", "#472")], "Android": [c("done", "Links open the right post", "#472")], "Web": [c("done", "Public post page: E4 private post kept; R1 now \"Couldn't load\" with Try Again", "#851")]}),
     ]),
     ("Start and Hub", [
-        ("Start funnel and Place preview", "", {"iOS": [c("done", "R1", "#635")], "Android": [c("done", "R1", "#635")], "Web": [c("done", "R1", "#607")]}),
+        ("Start funnel and Place preview", "", {"iOS": [c("done", "R1", "#635")], "Android": [c("done", "R1", "#635")], "Web": [c("done", "R1", "#607"), c("done", "R1 address lookup failures say so (suggestions, geocoder outage)", "#873")]}),
         ("Hub cards and status pills", "Stream 1 parts only", {"iOS": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Android": [c("done", "Pills open real screens", "C-02"), c("todo", "R1")], "Web": [c("done", "Hub posts", "Sep25"), c("done", "R1: Hub payload, Today card and detail, Action Queue fail truthfully (no change)", "bundle 890d21cb")]}),
     ]),
 ]
 
 U04 = [
     ("Posts and comments", "", {"iOS": [c("done", "L1 L2 L3", "Sep27-28"), c("todo", "L4")], "Android": [c("done", "L1 L2 L3", "#667, Sep27"), c("todo", "L4")], "Web": [c("done", "L2 L3 L4", "Sep27, #785"), c("done", "L1 post and comment drafts kept while another tab refreshes the session (no change)", "bundle d0895b51")]}),
-    ("Start and Place preview", "", {"iOS": [c("todo", "L2 L3")], "Android": [c("todo", "L2 L3")], "Web": [c("todo", "L2 L3")]}),
+    ("Start and Place preview", "", {"iOS": [c("todo", "L2 L3")], "Android": [c("todo", "L2 L3")], "Web": [c("done", "L2 L3: the previewed address survives a browser restart and never moves to another account (no change)", "bundle e2c35ebc")]}),
     ("Hub (the former Stream 1 cards)", "", {"iOS": [c("todo", "L3"), c("todo", "L2")], "Android": [c("todo", "L3"), c("todo", "L2")], "Web": [c("done", "L3", "Sep27 late Hub reply"), c("done", "L3 Today no longer reused across accounts; area change and Refresh re-read", "#856"), c("done", "L2 cold start shows current state (no change)", "bundle 42571869")]}),
 ]
 
