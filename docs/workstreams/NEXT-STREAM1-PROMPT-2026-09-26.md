@@ -20,7 +20,7 @@ Your goal is the best possible app in your domain: every reachable journey works
 2. `/Users/yingpengwang/pantopus-coordination/docs/PROJECT_HANDOFF.md` → CURRENT RESUME POINT.
 3. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md` → CURRENT RESUME POINT, plus the coordination rules.
 4. **`/Users/yingpengwang/pantopus-coordination/docs/workstreams/stream1-handoff-2026-09-26.md`**, the complete takeover note (final version, 2026-09-27). **§0 is the final state (queue empty after batch 36, master `89f3c6bac`)**; the rest covers role, rules, the exact batch procedure (§4), runtime and helpers (§5), device recipes (§6), evidence (§7), history (§8), worktrees (§9), peers (§10) and lessons (§11).
-5. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/01-gigs-payments.md` → CURRENT STREAM 1 STATE.
+5. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/former-stream1-gigs-payments.md` → CURRENT STREAM 1 STATE.
 6. The living inventory: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260925-stream1-domain-inventory-r1/INVENTORY.md` (153 table rows at handoff). Read its header's merge-state note and every OPEN / candidate / note row.
 7. Memory files `stream1-peer-session-2026-09-25.md`, `pantopus-evidence-timestamps.md` and `pantopus-ios-simulator-verification-gotchas.md` in `/Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/`.
 
@@ -140,7 +140,7 @@ Where documents disagree, the newest dated section wins. **Re-verify every SHA, 
 
 ## 8. Report
 After each milestone:
-- update the three hub docs (PROJECT_HANDOFF, README, `01-gigs-payments.md`), the handoff note and memory;
+- update the three hub docs (PROJECT_HANDOFF, README, `former-stream1-gigs-payments.md`), the handoff note and memory;
 - push the coordination branch;
 - message the user with a concise status: what merged, what's open, what's unverified, and any decision needed;
 - message both peers.

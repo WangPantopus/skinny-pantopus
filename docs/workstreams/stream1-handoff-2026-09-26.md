@@ -304,7 +304,7 @@ This is the complete takeover note for the **Stream 1** session (Claude, peer of
 1. `AGENTS.md`
 2. `docs/PROJECT_HANDOFF.md` → CURRENT RESUME POINT
 3. `docs/workstreams/README.md` (coordination guide + resume point)
-4. `docs/workstreams/01-gigs-payments.md` → CURRENT STREAM 1 STATE
+4. `docs/workstreams/former-stream1-gigs-payments.md` → CURRENT STREAM 1 STATE
 5. this file
 6. the living inventory (§7)
 
@@ -342,7 +342,7 @@ Every value here was checked live when written. Re-verify Git, PR, CI, slot and 
 > - In progress: step 3, making CI green (`codex/ci-green-stream1-20260929`, not yet pushed). The fixes cover iOS SwiftLint/SwiftFormat and the stale Edit Signup tests; Android ktlint and detekt; and a byte-pinned compatibility note in the migration guard for the applied Train push-choice migration.
 
 > **UPDATE 2026-09-29T18:38Z — step 1 done: Stream 1 U02–U04 exit checklists drafted for approval.**
-> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/01-gigs-payments.md`; progress is tracked there only after approval.
+> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/former-stream1-gigs-payments.md`; progress is tracked there only after approval.
 > - Each workflow or screen has an iOS, Android and web cell: done (with seal), confirm from existing evidence, to do, your call, boundary, or not offered.
 > - Open now: U03 has 27 to-do and 22 confirm items; U04 has 14 to-do and 4 confirm; U02 has 51 to-do and 2 confirm. Roughly five to eight long working sessions.
 > - **Decisions requested:**
@@ -845,7 +845,7 @@ Rebuild both from master before native checks.
 - Trace screen → caller → API → DB, make the smallest in-place repairs, and rerun.
 - Integrate peer PRs through combined batches (§4).
 - After milestones:
-  - update the hub README, `PROJECT_HANDOFF.md` and `01-gigs-payments.md`, commit and push this branch;
+  - update the hub README, `PROJECT_HANDOFF.md` and `former-stream1-gigs-payments.md`, commit and push this branch;
   - update Claude memory;
   - message the user and the peers.
 
@@ -1232,7 +1232,7 @@ Web fixes are served the same way with HMR (no restart).
 | 36 ([#561](https://github.com/WangPantopus/skinny-pantopus/pull/561)) | → `89f3c6bac` | 557 558 559 | 02:31:01Z |
 
 **User decisions** (AskUserQuestion, 2026-09-26):
-- 1A–6A (09:48Z) and decision A (17:49Z) are merged (see the earlier history in `01-gigs-payments.md`).
+- 1A–6A (09:48Z) and decision A (17:49Z) are merged (see the earlier history in `former-stream1-gigs-payments.md`).
 - **Worktrees:** "Yes, clear all 37", done by Stream 3.
 - **Android Gigs door:** "Always open the list" (#550).
 - **Android tab re-tap:** "Go back to the tab's start" (#550).

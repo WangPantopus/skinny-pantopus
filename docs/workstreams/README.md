@@ -7,6 +7,11 @@
 >   - The former file is frozen history at [`former-stream2-home-household.md`](former-stream2-home-household.md) (moved from `02-home-household.md`, which frees `02-` for Stream 1's split).
 >   - Both streams share the former Stream 2 runtime kit under an exclusive runtime lease (`tools/runtime-lease.sh`). Their labels are `stream3-home:` and `stream4:`, their branches `claude/stream3-home-…` and `claude/stream4-…`.
 >   - Prompts: [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md) and [`NEXT-STREAM4-PROMPT-2026-09-30.md`](NEXT-STREAM4-PROMPT-2026-09-30.md).
+> - **The former Stream 1 (gigs, payments and coordination) is split into Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](01-trains-coordination.md)) and Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](02-posts-hub-payments.md)).**
+>   - Stream 1 owns rows G01–G05, O01–O06 and L01–L04, the Support Trains cells of U02–U04 and the U05 assembly, plus **the merge queue and hub status for all five streams**. Stream 2 owns rows P01–P10 and the Posts and Pulse, Start and Hub, and money-screen cells of U02–U04, plus the former Stream 1's launch-cut areas. Together that's all 30 former rows (U01 had no former Stream 1 cells). The U02–U04 checklists split 230 = 122 + 108 items; `checklists/gen.py check` proves every item went to exactly one stream.
+>   - The former file is frozen history at [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md) (moved from `01-gigs-payments.md`; links retargeted).
+>   - Stream 1 keeps the former Stream 1 runtime (ports 18132/18138/18139) and devices (iOS C2 in slot 1, `emulator-5558` in slot 4). Stream 2 gets ports 18160/18168/18169 and borrows those devices by lease until it has its own. Labels `stream1:` and `stream2:`; branches `claude/stream1-…` (or `codex/…`) and `claude/stream2-<area>-…`.
+>   - Prompts: [`NEXT-STREAM1-PROMPT-2026-09-30.md`](NEXT-STREAM1-PROMPT-2026-09-30.md) and [`NEXT-STREAM2-PROMPT-2026-09-30.md`](NEXT-STREAM2-PROMPT-2026-09-30.md).
 > - The former **Stream 3 (Accounts and Social) is now Stream 5.** Its scope, accepted evidence, decisions, kit and runtime are unchanged. Its status file moved from `03-accounts-social.md` to [`05-accounts-social.md`](05-accounts-social.md), which frees `03-` for a new stream; its resume prompt is [`NEXT-STREAM5-PROMPT-2026-09-30.md`](NEXT-STREAM5-PROMPT-2026-09-30.md).
 > - Entries dated before 2026-09-30 keep the old numbering: read "Stream 3" / "S3" there as today's Stream 5, and "three streams" as the streams at that time.
 > - Names that contain `stream3` keep them so nothing breaks: private runtime and kit paths, audit bundles, existing branches, and UX-inventory IDs such as `S3-22`. From now on Stream 5 uses `claude/stream5-…` branches and the `stream5:` device-lease label; its session is named "Stream 5: Accounts and Social".
@@ -30,7 +35,7 @@
 > | 8 | Mail extras | Personal and ceremonial letters, e-signing, the community mail stream and event invitations by mail | Postcards, welcome cards and the digest. Events come later as plans |
 >
 > **Which stream checks what:** each stream removes its own cut areas from its docs, inventory and prompts.
-> - **Stream 1:** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature.
+> - **Stream 2 (from the former Stream 1):** #3 Marketplace, #4 Open Gigs marketplace, #6 General business directory, and Hub/Discover/Pulse entry points into any cut feature. Stream 1 (Support Trains) has no cut areas.
 > - **Stream 4 (from the former Stream 2):** #7 Household extras, #8 Mail extras. Stream 3 (also from the former Stream 2) applies them wherever its rows touch a cut area.
 > - **Stream 5 (formerly Stream 3):** #1 Beacon/creator tools, #2 Personas/identity switching, #5 public scheduling for general businesses (and crew pages under #6).
 > - **When in doubt,** a flow that exists only to serve a cut feature is out; shared infrastructure that also serves an in-scope feature stays (e.g. the scheduling engine under Crew Day, payments, tips).
@@ -41,6 +46,13 @@
 
 
 
+
+> **UPDATE 2026-09-30T04:19Z — the former Stream 1 is split into Stream 1 (Support Trains and coordination) and Stream 2 (Posts, Hub and payments).**
+> - **Before the split, everything was committed and pushed.** The only open PR is #841 (native Start a train). Six older launch-cut branches with local-only commits (Marketplace and Open Gigs fixes from 2026-09-23/26, including one uncommitted Trade-modal change) were committed and pushed as parked branches, with no PR because those features are cut; Stream 2's file lists them. The rewritten 2026-09-27 successor prompt was committed unchanged.
+> - **Files:** Stream 1 → [`01-trains-coordination.md`](01-trains-coordination.md); Stream 2 → [`02-posts-hub-payments.md`](02-posts-hub-payments.md); the former file is [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md) (frozen); checklist data and proofs in [`checklists/`](checklists/README.md), where each stream edits only its own data file.
+> - **Nothing missed:** the U02–U04 checklists split U03 129 = 84 + 45, U04 26 = 11 + 15 and U02 75 = 27 + 48, and every status count adds up too (for example, to do 88 = 37 + 51 and your call 12 = 5 + 7). All 30 acceptance rows are assigned, and the open inventory rows, decisions, proposals and parked branches are listed in the two new files.
+> - **Coordination stays with Stream 1**, which has the smaller checklist remainder (37 to do vs 51) and already runs the merge queue; Stream 2 sends its PRs to Stream 1. Decided per the standing direction.
+> - **Still needs the user:** restart Docker Desktop (down since ~03:30Z, disk full).
 
 > **UPDATE 2026-09-30T03:40Z — Stream 1: batches 130–134 merged; native Start a train fixed (PR #841 open, one iOS run left); Docker Desktop is down after the disk filled.**
 > - **Coordinator merges.** Every head was reviewed, its seal verified and its batch proven with verify-batch. Master is `8e44382ce`.
@@ -143,7 +155,7 @@
 > - In progress: step 3, making CI green (`codex/ci-green-stream1-20260929`, not yet pushed). The fixes cover iOS SwiftLint/SwiftFormat and the stale Edit Signup tests; Android ktlint and detekt; and a byte-pinned compatibility note in the migration guard for the applied Train push-choice migration.
 
 > **UPDATE 2026-09-29T18:38Z — step 1 done: Stream 1 U02–U04 exit checklists drafted for approval.**
-> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/01-gigs-payments.md`; progress is tracked there only after approval.
+> - [Review page](https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu). The canonical copy is the new "Stream 1 U02–U04 exit checklists" section under the acceptance table in `docs/workstreams/former-stream1-gigs-payments.md`; progress is tracked there only after approval.
 > - Each workflow or screen has an iOS, Android and web cell: done (with seal), confirm from existing evidence, to do, your call, boundary, or not offered.
 > - Open now: U03 has 27 to-do and 22 confirm items; U04 has 14 to-do and 4 confirm; U02 has 51 to-do and 2 confirm. Roughly five to eight long working sessions.
 > - **Decisions requested:**
@@ -2849,7 +2861,7 @@ The founder requested that all three streams summarize **all implemented fixes, 
 
 Read the current summary at the top of each existing status file:
 
-- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
+- [Stream1 current summary](former-stream1-gigs-payments.md), [Stream2 current summary](former-stream2-home-household.md), [Stream 5 (formerly Stream 3) current summary](05-accounts-social.md).
 - [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
 
 ### Single live location and existing owners
@@ -3595,7 +3607,7 @@ succeeded (fully refunded) and canceled intents by customer list with the −24h
 window, recorded refunded_full/canceled receipts, zero provider writes; injected
 provider failure, lost committed reply, duplicate tap, stale retry, reload and
 worker-permission 403 all behaved as designed. Details/limits in
-[Stream1](01-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
+[Stream1](former-stream1-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
 (22 files, MANIFEST 8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039).
 No app edit/new test. P02 stays open only for hosted/L01 provider boundaries.
 
@@ -3655,7 +3667,7 @@ source/runtime limits; no guest/member/Settings journey replay.
 
 Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI
 pending. No further paid/master adoption until that run completes; ongoing peer
-work remains separate. Detailed current state/cleanup is in [Stream1](01-gigs-payments.md).
+work remains separate. Detailed current state/cleanup is in [Stream1](former-stream1-gigs-payments.md).
 
 A02 first browser creation timed out beforeauth;697 artifacts/fullEvanstate equality/
 authHTTP[] reviewed. One clean retry within the existing exactEvan/two-browser grant
@@ -5608,7 +5620,9 @@ paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social work
 | [Project handoff](../PROJECT_HANDOFF.md) | Current integrated state and next decisions | Coordinator |
 | [Remaining work](../REMAINING_WORK_2026-09-11.md) | Authoritative requirements and acceptance rows | Coordinator, using stream evidence |
 | This guide | Ownership, dependencies, integration and shared resources | Coordinator |
-| [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
+| [1. Support Trains and coordination](01-trains-coordination.md) | Current milestone, checklist and handoff (split from the former Stream 1); merge queue for all streams | Stream 1 |
+| [2. Posts, Hub and payments](02-posts-hub-payments.md) | Current milestone, checklist and handoff (split from the former Stream 1) | Stream 2 |
+| [Former Stream 1 history](former-stream1-gigs-payments.md) | Frozen history of the former Stream 1 (gigs, payments and coordination) up to the 2026-09-30 split | none |
 | [3. Home access, residency and security](03-home-access-residency.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 3 |
 | [4. Place, records, money and mail](04-place-records-money-mail.md) | Current milestone, checklist and handoff (split from the former Stream 2) | Stream 4 |
 | [Former Stream 2 history](former-stream2-home-household.md) | Frozen history of the former Stream 2 (Home and household) up to the 2026-09-30 split | none |

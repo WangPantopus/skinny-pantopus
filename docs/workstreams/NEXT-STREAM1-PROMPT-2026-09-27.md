@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-09-30.** The former Stream 1 is split: use [`NEXT-STREAM1-PROMPT-2026-09-30.md`](NEXT-STREAM1-PROMPT-2026-09-30.md) (Stream 1 — Support Trains and coordination) or [`NEXT-STREAM2-PROMPT-2026-09-30.md`](NEXT-STREAM2-PROMPT-2026-09-30.md) (Stream 2 — Posts, Hub and payments). Kept as the record of the 2026-09-27 prompt.
+
 # Successor prompt: Pantopus Stream 1 (2026-09-27)
 
 You are the next **Stream 1** agent for the Pantopus monorepo: Express/Supabase backend, Next.js web app, SwiftUI iOS app, and Compose Android app. Continue the existing verification and repair backlog. The previous session handed off after every PR it opened was merged; the recorded master is **35c5434df**, queue empty. Recheck live GitHub and worktree state before acting.
@@ -20,7 +22,7 @@ Read these sources before choosing work. Newest dated blocks take precedence ove
 2. /Users/yingpengwang/pantopus-coordination/docs/PROJECT_HANDOFF.md — launch-scope table and newest Stream 1 update.
 3. /Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md — newest update and coordination/resource rules.
 4. /Users/yingpengwang/pantopus-coordination/docs/workstreams/stream1-handoff-2026-09-26.md — read §0 and §3 first; use §1, §4, §5, §6, §7 and §11 for still-applicable procedures.
-5. /Users/yingpengwang/pantopus-coordination/docs/workstreams/01-gigs-payments.md — newest Stream 1 update and acceptance accounting.
+5. /Users/yingpengwang/pantopus-coordination/docs/workstreams/former-stream1-gigs-payments.md — newest Stream 1 update and acceptance accounting.
 6. The living inventory at /Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260925-stream1-domain-inventory-r1/INVENTORY.md, including its merge-state header and “Successor findings 2026-09-27”.
 7. Available session memory: stream1-successor-session-2026-09-27.md, founder-direction-no-stopping-2026-09-27.md, pantopus-evidence-timestamps.md, and pantopus-ios-simulator-verification-gotchas.md under /Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/.
 
@@ -96,7 +98,7 @@ After a fix, repeat the reproduced journey on every affected real client and its
 
 When a PR is needed: review the exact head; verify its sealed end-to-end evidence; prove the combined batch with the existing build-batch.sh, verify-batch.py, and lint-batch.sh procedures; then merge with the documented exact-head command. The master required CI check is off, so do not wait on run.sh or make CI a gate. Check current rules live first. Attach every PR created to this task. Do not merge unrelated user PRs.
 
-After each meaningful milestone, update the existing inventory row and the newest blocks in PROJECT_HANDOFF.md, README.md, 01-gigs-payments.md, this handoff §0, and the relevant session memory. State what changed or was accepted, what remains next, which evidence supports it, and exact verification limits. As Stream 1 coordinator, publish the ready coordination updates through the established branch workflow; commit explicit paths only and never include unrelated peer edits.
+After each meaningful milestone, update the existing inventory row and the newest blocks in PROJECT_HANDOFF.md, README.md, former-stream1-gigs-payments.md, this handoff §0, and the relevant session memory. State what changed or was accepted, what remains next, which evidence supports it, and exact verification limits. As Stream 1 coordinator, publish the ready coordination updates through the established branch workflow; commit explicit paths only and never include unrelated peer edits.
 
 ## 8. Final report
 
