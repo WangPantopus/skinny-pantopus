@@ -49,12 +49,19 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
   const [billCurrency, setBillCurrency] = useState('USD');
   const readHealth = useCallback(async () => {
     const result = await api.homeProfile.getHomeHealthScore(homeId!, { force: true });
-    if (!result || !Number.isFinite(result.score) || !result.breakdown) throw new Error('Invalid health response');
+    // The ring renders topIssue and the action's label/route directly; a non-string there would take down the page.
+    const action = result?.topAction;
+    if (!result || !Number.isFinite(result.score) || !result.breakdown
+      || (result.topIssue != null && typeof result.topIssue !== 'string')
+      || (action != null && (typeof action.label !== 'string' || typeof action.route !== 'string'))) throw new Error('Invalid health response');
     return result;
   }, [homeId]);
   const readChecklist = useCallback(async () => {
     const result = await api.homeProfile.getSeasonalChecklist(homeId!);
-    if (!result || !Array.isArray(result.items) || !result.season?.key || !result.progress) throw new Error('Invalid checklist response');
+    // Each row must be renderable (the card reads id, title, status and description), or one bad row would take down the page.
+    if (!result || !Array.isArray(result.items) || !result.season?.key || !result.progress
+      || result.items.some(item => !item || typeof item.id !== 'string' || typeof item.title !== 'string'
+        || typeof item.status !== 'string' || (item.description != null && typeof item.description !== 'string'))) throw new Error('Invalid checklist response');
     return result;
   }, [homeId]);
   const readBills = useCallback(async () => {
