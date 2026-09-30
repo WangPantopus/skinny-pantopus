@@ -212,7 +212,7 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
     func testLaunchCreatesTrainAddsSlotsPublishesAndEmitsOpenEvent() async {
         let vm = makeVM(routes: [
             "/api/activities/support-trains": [.status(201, body: "{\"id\":\"train_demo\"}", delay: 0.3)],
-            "/api/activities/support-trains/train_demo/slots": Array(repeating: .status(201, body: "{}"), count: 7),
+            "/api/activities/support-trains/train_demo/generate-slots": [.status(200, body: "{\"slots\":[],\"count\":7}")],
             "/api/activities/support-trains/train_demo/publish": [.status(200, body: "{}")],
             "/api/mailbox/compose/recipients": [.status(200, body: "{\"recipients\":[]}")]
         ])
@@ -225,7 +225,9 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
         XCTAssertEqual(vm.publishedTrainId, "train_demo")
         XCTAssertEqual(vm.step, .success)
         let requests = SequencedURLProtocol.capturedRequests
-        XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/slots" }.count, 7)
+        // The whole schedule goes in one request, not one per slot.
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/generate-slots" }.count, 1)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/slots" }.count, 0)
         XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/publish" }.count, 1)
         vm.primaryTapped() // open
         XCTAssertEqual(vm.pendingEvent, .openTrain(trainId: "train_demo"))

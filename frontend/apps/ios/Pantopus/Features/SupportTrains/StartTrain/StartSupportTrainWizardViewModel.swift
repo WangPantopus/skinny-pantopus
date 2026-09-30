@@ -48,7 +48,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     // Step 3 — Review & launch
     public var allowComments: Bool = true
-    public var visibility: StartSupportTrainVisibility = .neighbors
+    public var visibility: StartSupportTrainVisibility = .connections // "Invite only" is on by default
     public private(set) var launchError: String?
     public private(set) var publishedTrainId: String?
     /// A half-built draft a failed launch couldn't delete; the next launch removes it first.
@@ -186,12 +186,17 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         }
     }
 
+    /// Step 1's two switches and the review's Visibility are one setting, so the review shows what launches.
     public func toggleInviteOnly(_ value: Bool) {
         inviteOnly = value
+        if value { blockVisible = false }
+        visibility = .from(inviteOnly: inviteOnly, blockVisible: blockVisible)
     }
 
     public func toggleBlockVisible(_ value: Bool) {
         blockVisible = value
+        if value { inviteOnly = false }
+        visibility = .from(inviteOnly: inviteOnly, blockVisible: blockVisible)
     }
 
     public func selectInviteMethod(_ value: StartSupportTrainInviteMethod) {
@@ -230,6 +235,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     public func selectVisibility(_ value: StartSupportTrainVisibility) {
         visibility = value
+        inviteOnly = value == .connections
+        blockVisible = value == .neighbors
     }
 
     // MARK: - WizardModel
@@ -262,7 +269,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         case .reviewAndLaunch:
             step = .whatAndWhen
         case .success:
-            handleSuccessExit()
+            pendingEvent = .dismiss
         }
     }
 
@@ -274,6 +281,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         switch step {
         case .whoAndWhy:
             guard canAdvanceFromWhoAndWhy else { return }
+            // The field leaves the screen still focused, and no focus change reports it.
+            isEditingBeneficiaryQuery = false
             step = .whatAndWhen
         case .whatAndWhen:
             guard canAdvanceFromWhatAndWhen else { return }
@@ -286,11 +295,12 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         }
     }
 
+    /// "Search again" belongs to the recipient step; "Back to trains" returns to the list.
     public func secondaryTapped() {
-        if isInviteRecipientBranch {
+        if step == .whoAndWhy, isInviteRecipientBranch {
             searchAgain()
         } else if step == .success {
-            handleSuccessExit()
+            pendingEvent = .dismiss
         }
     }
 
@@ -355,7 +365,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
                 identifier: "startSupportTrainBackToList"
             )
         }
-        if isInviteRecipientBranch {
+        if step == .whoAndWhy, isInviteRecipientBranch {
             return WizardSecondaryCTA(
                 label: "Search again",
                 identifier: "startSupportTrainSearchAgain"
@@ -421,7 +431,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             draftPayload: CreateSupportTrainBody.DraftPayload(story: trimmedReason),
             title: derivedTitle,
             recipientUserId: selectedBeneficiary?.userId,
-            sharingMode: effectiveSharingMode,
+            sharingMode: visibility.sharingModeWire,
             clientRequestId: requestId
         )
         var createdTrainId: String?
@@ -432,19 +442,19 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             createRequestId = nil
             createdTrainId = created.id
             publishedTrainId = created.id
-            for slot in generatedSlots {
-                let slotBody = AddSupportTrainSlotBody(
-                    slotDate: slot.dateKey,
+            // The whole schedule in one request (a slot on every day of the range): a request
+            // per slot ran a long train into the write limits partway through.
+            if let first = generatedSlots.first, let last = generatedSlots.last {
+                let schedule = GenerateSupportTrainSlotsBody(
+                    startDate: first.dateKey,
+                    endDate: last.dateKey,
+                    startTime: first.startTime,
+                    endTime: first.endTime,
                     slotLabel: kind.defaultSlotLabel,
-                    supportMode: kind.supportMode,
-                    startTime: slot.startTime,
-                    endTime: slot.endTime
+                    supportMode: kind.supportMode
                 )
                 _ = try await api.request(
-                    SupportTrainsEndpoints.addSlot(
-                        supportTrainId: created.id,
-                        body: slotBody
-                    ),
+                    SupportTrainsEndpoints.generateSlots(supportTrainId: created.id, body: schedule),
                     as: EmptyResponse.self
                 )
             }
@@ -484,15 +494,5 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     private func displayName(_ recipient: MailRecipientDTO) -> String {
         recipient.name ?? recipient.username ?? "Recipient"
-    }
-
-    private var effectiveSharingMode: String {
-        if inviteOnly {
-            return StartSupportTrainVisibility.connections.sharingModeWire
-        }
-        if blockVisible {
-            return StartSupportTrainVisibility.neighbors.sharingModeWire
-        }
-        return visibility.sharingModeWire
     }
 }
