@@ -40,6 +40,7 @@
 - Nothing of Stream 3's is open in the database.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
+**First, if nobody has yet:** rebuild the shared runtime. The Docker reset at 2026-09-30T05:51:48Z deleted it; the steps are in the resume prompt §2.
 1. **R06, the iOS restart check.** This is the last local R06 item.
    - **Already sealed** (no code change):
      - accounts, via the real API, `20260930-stream2-r06-request-identity-r1` (MANIFEST `8365b5ca…`): the same `clientRequestId` gives the owner the same pass and another account a different one;
@@ -164,13 +165,14 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
   - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
   - the shared iOS driver by announcing the take and the release to the other streams.
   - On 2026-09-30 the per-cell build copies and the iOS DerivedData were deleted to free disk, so the next native builds are full rebuilds.
-- **Retained fixtures** (keep them; don't delete):
+- **Retained fixtures — deleted with the database by the Docker reset (2026-09-30T05:51:48Z).** Recreate only what a journey needs, from the bundle that first made it. They were:
   - Home105 "S2 First Load Home 2";
   - Home70 "Stream2 Resume Home" (owner + member B as a verified member);
   - cohort Home 9d885f71 with 9 neighbor homes (the F01 benchmark);
   - SQL Homes abe5a8c9 and d4eaed7e.
-  - The accounts are in `runtime/accounts.env`: never print it; type values with the kit's secret tools only.
+  - The fixture accounts' credentials are still in `runtime/accounts.env`, but the accounts must be recreated in the new database. Never print the file; type values with the kit's secret tools only.
 - **State at the split:** Docker Desktop has been down since ~03:30Z on 2026-09-30 (disk full), so the runtime is unreachable until the user restarts it. No runtime lease, device slot, heavy slot or iOS driver is held.
+- **Since 2026-09-30T05:51:48Z:** Docker Desktop is back but reset (empty), so the shared runtime must be rebuilt before any runtime work. The steps are in the resume prompt §2. Until then, proxy 18142, backend 18143 and web 18144 still run from before the reset, pointing at the deleted database.
 
 ## Rules carried over from the former Stream 2
 
@@ -190,6 +192,8 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T05:56:47Z — Docker was reset; the shared runtime is gone.** Docker Desktop came back with a disk image re-created at 05:51:48Z: 0 containers, 0 volumes. DB 64554 and every retained fixture and fixture account went with it; so did the founder's stack, which is the user's. The resume prompt now puts the runtime rebuild first and names the coordination checkout's full path, because a pasted prompt lost its location. Nothing is held.
 
 - **2026-09-30T04:40:59Z — #848 merged; no Stream 3 PR is open.** Batch 137 ([#849](https://github.com/WangPantopus/skinny-pantopus/pull/849)) merged at 04:40:14Z, so master is `ed5ea9ec5`. Master's copies of the five Stream 3/4 files equal coordination `20019853b`, not this branch's tip: `8b7f26d85` later added only the #848 line to each live block. My handoff note said "blob-equal to coordination" without naming the commit, and Stream 1 corrected it. The resume prompt's state line is refreshed.
 

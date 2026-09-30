@@ -32,20 +32,20 @@
 **State at the split.**
 - Master `8e44382ce`. Every former Stream 2 PR is merged; none is open. **Refreshed 2026-09-30T04:25:38Z:** the split's docs PRs #843 and #844 merged at 04:24:12Z (master `15711c8dc`), so Stream 4 has **no open PRs**.
 - **Strict progress for this stream:** 4 of 16 retained rows closed (I01–I03, F01), 12 partial, 4 rows fully cut (D03, F03, M03, M04). This stream's U02–U05 cells have their own section and are not in these counts.
-- **One fixture is open in the database (clean it first):** the F02 native re-run in `runtime/f02-native-permission-r1` left:
-  - member B's occupancy `7a6417c0` on cohort Home 9d885f71;
-  - the `finance.view` override, now `allowed=false`;
-  - 2 `member_override` audit rows.
+- **The open F02 fixture was deleted with the database by the Docker reset (2026-09-30T05:51:48Z), not by an exact cleanup.** It was member B's occupancy `7a6417c0` on cohort Home 9d885f71, the `finance.view` override (then `allowed=false`) and 2 `member_override` audit rows. Nothing is left to clean, and no after-run fingerprint comparison is possible.
 
-  Its Android journey was captured 03:07–03:10Z on 2026-09-30, but is unsealed:
+  The F02 native re-run's Android journey (stage `runtime/f02-native-permission-r1`, captured 03:07–03:10Z on 2026-09-30) is on disk but unsealed:
   - Money showed neighborhood-only figures, then "Your electric bills average 12% above" with finance, then neighborhood-only again after the revoke;
   - the Home dashboard showed its Bills stat and tab only while finance was granted.
 
-  The Android app is signed back in as the owner.
+  If you seal it, say how the fixture ended. The emulator's app was signed back in as the owner before the reset; that account no longer exists.
 
 **Open work, in order.** Each row's exact remaining boundary is its last column in the checklist below.
+**First, if nobody has yet:** rebuild the shared runtime. The Docker reset at 2026-09-30T05:51:48Z deleted it; the steps are in the resume prompt §2.
 1. **F02 native re-run, iOS part.**
-   - Take the runtime lease.
+   - Take the runtime lease. If the shared runtime hasn't been rebuilt yet, do that first (resume prompt §2).
+   - Recreate the F01 cohort: the owner's Home and its 9 neighbors with 27 paid bills in cell c20fbj. The neighbors and bills came from `fixture.sql` in bundle `20260927-stream2-f01-bill-cohort-r1` (user-approved 2026-09-27). Then add member B's occupancy.
+   - Recommended: rerun the Android part on the recreated cohort as well, so both platforms are sealed together with an exact cleanup. Keep the 03:07Z capture as supporting evidence.
    - Sign member B in on sim 6F914A30 through the real login screen. Type from the private file only after a focus check, and take no raster on the login screen.
    - The owner toggles View finance on the web with `tools/web-f02-home-dashboard.cjs` and `OUT_DIR`. B opens Money and the Home dashboard before, with finance, and after the revoke.
    - Sign the iOS app back in as the owner.
@@ -164,13 +164,14 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
   - heavy builds through `/private/tmp/pantopus-tools/heavy-slot.sh`;
   - the shared iOS driver by announcing the take and the release to the other streams.
   - On 2026-09-30 the per-cell build copies and the iOS DerivedData were deleted to free disk, so the next native builds are full rebuilds.
-- **Retained fixtures** (keep them; don't delete):
+- **Retained fixtures — deleted with the database by the Docker reset (2026-09-30T05:51:48Z).** Recreate only what a journey needs, from the bundle that first made it. They were:
   - Home105 "S2 First Load Home 2";
   - Home70 "Stream2 Resume Home" (owner + member B as a verified member);
   - cohort Home 9d885f71 with 9 neighbor homes (the F01 benchmark);
   - SQL Homes abe5a8c9 and d4eaed7e.
-  - The accounts are in `runtime/accounts.env`: never print it; type values with the kit's secret tools only.
+  - The fixture accounts' credentials are still in `runtime/accounts.env`, but the accounts must be recreated in the new database. Never print the file; type values with the kit's secret tools only.
 - **State at the split:** Docker Desktop has been down since ~03:30Z on 2026-09-30 (disk full), so the runtime is unreachable until the user restarts it. No runtime lease, device slot, heavy slot or iOS driver is held.
+- **Since 2026-09-30T05:51:48Z:** Docker Desktop is back but reset (empty), so the shared runtime must be rebuilt before any runtime work. The steps are in the resume prompt §2. Until then, proxy 18142, backend 18143 and web 18144 still run from before the reset, pointing at the deleted database.
 
 ## Rules carried over from the former Stream 2
 
@@ -190,6 +191,8 @@ Added 2026-09-30T04:36:26Z. These rows sat in the former Stream 1's inventory, n
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-09-30T05:56:47Z — Docker was reset; the shared runtime is gone.** Docker Desktop came back with a disk image re-created at 05:51:48Z: 0 containers, 0 volumes. DB 64554 and every retained fixture and fixture account went with it; so did the founder's stack, which is the user's. The open F02 fixture went with it, so it was never exactly cleaned; its unsealed Android capture is still on disk, and open work item 1 now starts by recreating the cohort. The resume prompt now puts the runtime rebuild first and names the coordination checkout's full path, because a pasted prompt lost its location. Nothing is held.
 
 - **2026-09-30T04:40:59Z — #848 merged; no Stream 4 PR is open.** Batch 137 ([#849](https://github.com/WangPantopus/skinny-pantopus/pull/849)) merged at 04:40:14Z, so master is `ed5ea9ec5`. Master's copies of the five Stream 3/4 files equal coordination `20019853b`, not this branch's tip: `8b7f26d85` later added only the #848 line to each live block. My handoff note said "blob-equal to coordination" without naming the commit, and Stream 1 corrected it. The resume prompt's state line is refreshed.
 
