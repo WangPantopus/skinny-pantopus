@@ -69,8 +69,8 @@ private struct EditProfileSkillChips: View {
                     HStack(spacing: Spacing.s1) {
                         Text(skill)
                             .font(.system(size: PantopusTextStyle.caption.size, weight: .semibold))
-                            .foregroundStyle(Theme.Color.primary700)
-                        Icon(.x, size: 12, color: Theme.Color.primary700)
+                            .foregroundStyle(Theme.Color.primaryInkStrong)
+                        Icon(.x, size: 12, color: Theme.Color.primaryInkStrong)
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 6)

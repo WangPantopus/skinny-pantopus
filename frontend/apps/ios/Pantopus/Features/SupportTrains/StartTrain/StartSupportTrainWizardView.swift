@@ -442,11 +442,11 @@ private struct StartSupportTrainWhatAndWhenStep: View {
                 Icon(
                     value.icon,
                     size: 16,
-                    color: isSelected ? Theme.Color.primary700 : Theme.Color.appTextSecondary
+                    color: isSelected ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary
                 )
                 Text(value.title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? Theme.Color.primary700 : Theme.Color.appText)
+                    .foregroundStyle(isSelected ? Theme.Color.primaryInkStrong : Theme.Color.appText)
                 Spacer()
             }
             .padding(.horizontal, Spacing.s3)

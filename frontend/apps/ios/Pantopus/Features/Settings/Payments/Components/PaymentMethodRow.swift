@@ -150,7 +150,7 @@ struct PaymentBrandBadge: View {
         case .applePay:
             Icon(.shoppingBag, size: 14, strokeWidth: 2, color: .white)
         case .bank:
-            Icon(.landmark, size: 14, strokeWidth: 2, color: Theme.Color.primary700)
+            Icon(.landmark, size: 14, strokeWidth: 2, color: Theme.Color.primaryInkStrong)
         case .stripe:
             Text("stripe")
                 .font(.system(size: 9, weight: .heavy))

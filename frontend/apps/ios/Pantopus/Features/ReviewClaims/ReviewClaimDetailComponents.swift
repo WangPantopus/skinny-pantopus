@@ -130,7 +130,7 @@ struct ClaimSummaryTile: View {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
                     Text(value)
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                     Text(descriptor)
                         .font(.system(size: 13.5, weight: .medium))
                         .foregroundStyle(Theme.Color.appTextStrong)

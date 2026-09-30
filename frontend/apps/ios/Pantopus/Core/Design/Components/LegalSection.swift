@@ -36,7 +36,7 @@ public struct LegalSection: View {
                 .foregroundColor(Theme.Color.primaryInk)
             Text(title)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Theme.Color.primary700)
+                .foregroundColor(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

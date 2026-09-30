@@ -436,7 +436,7 @@ private struct WalletPreviewCard: View {
 
     private func walletAction(icon: PantopusIcon, label: String, detail: String?) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(icon, size: 13, color: Theme.Color.primary700)
+            Icon(icon, size: 13, color: Theme.Color.primaryInkStrong)
                 .frame(width: 26, height: 26)
                 .background(Theme.Color.appSurface)
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.Color.appBorder, lineWidth: 1))

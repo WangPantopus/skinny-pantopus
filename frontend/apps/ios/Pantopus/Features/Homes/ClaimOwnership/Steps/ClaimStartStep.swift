@@ -257,7 +257,7 @@ private struct WhyWeAskSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Why we ask")
                             .pantopusTextStyle(.body)
-                            .foregroundStyle(Theme.Color.primary700)
+                            .foregroundStyle(Theme.Color.primaryInkStrong)
                         Text("Documents help a reviewer check your connection to this Home.")
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)

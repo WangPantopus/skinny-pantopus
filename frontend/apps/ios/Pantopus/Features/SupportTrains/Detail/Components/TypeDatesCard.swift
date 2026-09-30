@@ -78,7 +78,7 @@ public struct TypeDatesCard: View {
         Text(statusLabel)
             .font(.system(size: 10.5, weight: .bold))
             .textCase(.uppercase)
-            .foregroundStyle(content.isFullyCovered ? Theme.Color.success : Theme.Color.primary700)
+            .foregroundStyle(content.isFullyCovered ? Theme.Color.success : Theme.Color.primaryInkStrong)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, 3)
             .background(content.isFullyCovered ? Theme.Color.successBg : Theme.Color.primary50)
@@ -104,7 +104,7 @@ public struct TypeDatesCard: View {
                 Spacer(minLength: Spacing.s2)
                 Text("\(content.percentCovered)%")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(content.isFullyCovered ? Theme.Color.success : Theme.Color.primary700)
+                    .foregroundStyle(content.isFullyCovered ? Theme.Color.success : Theme.Color.primaryInkStrong)
                     .monospacedDigit()
             }
             progressBar

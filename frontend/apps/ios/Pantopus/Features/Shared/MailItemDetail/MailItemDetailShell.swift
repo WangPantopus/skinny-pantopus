@@ -327,7 +327,7 @@ public struct AIElfStripView: View {
                 if let badge = content.trailingBadge {
                     Text(badge)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInkStrong)
                         .padding(.horizontal, Spacing.s2)
                         .padding(.vertical, 2)
                         .background(Theme.Color.appSurface)
@@ -341,10 +341,10 @@ public struct AIElfStripView: View {
                 if let onRedo = content.onRedo {
                     Button(action: { onRedo() }) {
                         HStack(spacing: 3) {
-                            Icon(.arrowsRepeat, size: 11, color: Theme.Color.primary700)
+                            Icon(.arrowsRepeat, size: 11, color: Theme.Color.primaryInkStrong)
                             Text("Redo")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Theme.Color.primary700)
+                                .foregroundStyle(Theme.Color.primaryInkStrong)
                         }
                     }
                     .buttonStyle(.plain)
@@ -386,7 +386,7 @@ private struct AIElfBulletRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(bullet.icon, size: 10, color: Theme.Color.primary700)
+            Icon(bullet.icon, size: 10, color: Theme.Color.primaryInkStrong)
                 .frame(width: 16, height: 16)
                 .background(Theme.Color.appSurface)
                 .overlay(

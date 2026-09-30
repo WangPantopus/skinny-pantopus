@@ -144,7 +144,7 @@ private struct InfoBanner: View {
             Icon(.info, size: 18, color: Theme.Color.primaryInk)
             Text(text)
                 .font(.system(size: 12.5))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

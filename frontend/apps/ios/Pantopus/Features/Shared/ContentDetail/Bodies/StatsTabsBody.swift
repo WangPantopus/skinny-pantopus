@@ -358,7 +358,7 @@ private struct FlowingChips: View {
             ForEach(items, id: \.self) { item in
                 Text(item)
                     .font(.system(size: PantopusTextStyle.caption.size, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary700)
+                    .foregroundStyle(Theme.Color.primaryInkStrong)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 6)
                     .background(Theme.Color.primary100)

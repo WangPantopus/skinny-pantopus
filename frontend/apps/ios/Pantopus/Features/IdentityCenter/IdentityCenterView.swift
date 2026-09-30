@@ -294,7 +294,7 @@ public struct IdentityCenterView: View {
             Icon(.info, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryInk)
             Text(remaining == 1 ? "One more profile to go" : "\(remaining) more profiles to go")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Spacer(minLength: Spacing.s0)
         }
         .padding(.horizontal, Spacing.s3)

@@ -245,7 +245,7 @@ struct OwnerHeaderBanner: View {
         HStack(spacing: Spacing.s2) {
             Text(handle)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Circle().fill(Theme.Color.appTextMuted).frame(width: 3, height: 3)
             HStack(spacing: 3) {
                 Icon(.mapPin, size: 11, strokeWidth: 2, color: Theme.Color.appTextSecondary)

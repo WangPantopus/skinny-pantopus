@@ -196,7 +196,7 @@ public struct BizBannerHeader: View {
         HStack(spacing: Spacing.s2) {
             Text(handle)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.Color.primary700)
+                .foregroundStyle(Theme.Color.primaryInkStrong)
             Circle()
                 .fill(Theme.Color.appTextMuted)
                 .frame(width: 3, height: 3)

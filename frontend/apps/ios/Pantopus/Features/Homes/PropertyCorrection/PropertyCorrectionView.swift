@@ -94,7 +94,7 @@ public struct PropertyCorrectionView: View {
                 } label: {
                     Text(option.replacingOccurrences(of: "_", with: " "))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(selected == option ? Theme.Color.primary700 : Theme.Color.appTextSecondary)
+                        .foregroundStyle(selected == option ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary)
                         .padding(.horizontal, Spacing.s3)
                         .padding(.vertical, Spacing.s2)
                         .frame(maxWidth: .infinity)

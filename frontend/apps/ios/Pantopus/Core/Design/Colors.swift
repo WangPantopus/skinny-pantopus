@@ -41,6 +41,10 @@ public extension Theme.Color {
     /// (the same), `#38bdf8` in dark, where `primary600`'s `#0284c7` read 2.8
     /// to 4.9:1 on the dark page and tints; this reads 5.4 to 9.4:1 there.
     static let primaryInk = SwiftUI.Color("Primary/PrimaryInk", bundle: Theme.bundle)
+    /// Strong ink counterpart of `primary700` for text and icons: `#075985` in light
+    /// (the same), `#7dd3fc` in dark, where `primary700` resolves to `#0369a1` and
+    /// reads about 2.9:1 on the dark page and tints.
+    static let primaryInkStrong = SwiftUI.Color("Primary/PrimaryInkStrong", bundle: Theme.bundle)
     /// The app-wide tint (`RootTabView`): system dialogs, navigation-bar buttons
     /// and tinted system controls draw their text in it. `#0369a1` in light;
     /// `#7dd3fc` in dark, because a dialog's buttons sit on the dark grey system
