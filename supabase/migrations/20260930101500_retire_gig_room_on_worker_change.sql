@@ -13,18 +13,18 @@
 -- read the private conversation with the previous worker.
 --
 -- Now, when a task's accepted worker changes from someone to anyone else, its gig
--- room is retired: it becomes a 'group' room (gig_id and name kept) marked
--- inactive, and only the task owner and the previous worker stay in it. Every
--- lookup of a task's room (get_or_create_gig_chat, the paid acceptance, the
--- dispute evidence) selects type 'gig', so the task's next phase starts in a
--- fresh room. Messages stay where they are.
+-- room is retired: it becomes a 'group' room (gig_id kept, " (closed)" added to
+-- its name) marked inactive, and only the task owner and the previous worker stay
+-- in it. Every lookup of a task's room (get_or_create_gig_chat, the paid
+-- acceptance, the dispute evidence) selects type 'gig', so the task's next phase
+-- starts in a fresh room. Messages stay where they are.
 SET LOCAL lock_timeout='5s';
 
 CREATE FUNCTION public.retire_gig_chat_room_on_worker_change() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 BEGIN
  WITH retired AS (
-  UPDATE public."ChatRoom" SET type='group',is_active=false,updated_at=now()
+  UPDATE public."ChatRoom" SET type='group',is_active=false,name=left(coalesce(name,'Gig chat'),246)||' (closed)',updated_at=now()
    WHERE gig_id=OLD.id AND type='gig'
   RETURNING id
  )
