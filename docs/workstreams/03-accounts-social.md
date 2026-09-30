@@ -27,6 +27,9 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
   - iOS slot 3 + shared driver 02:55:15–03:11:24Z; then handed to Stream 2. The Owner is signed in again on iOS; sim `0AE16FA0` shut down.
   - Android slot 3 03:11:38–03:20:36Z and 03:23:19–03:27:55Z; emulator stopped.
   - Fault rules empty; deletion allowance off. Fixtures AUTH-DELETE3 through -R7, AUTH-DELETE7 and AUTH-DELETE8 deactivated; every private credential file deleted. API keys valid to 2026-10-01T19:35:48Z.
+- **Disk full / Docker down (Stream 1 report, 03:30Z):** every local Supabase stack is offline, including S3's; its API, proxy and web processes have no database until Docker restarts. Stream 1 will ask the user before restarting Docker, because the founder's stack is on it.
+  - At 03:32:46–03:33:01Z, S3 deleted only its own caches: iOS DerivedData, the SPM cache, old app copies and APKs, and the build worktree's Android outputs. Free space went 10167 → 18699 MiB.
+  - The next S3 iOS build will be clean.
 - **Next:** Stream 1 reviews and batches #839. Otherwise S3 is idle. Open rows stay at boundaries the user supplies (physical devices, provider access, policies; see the previous block).
 
 ## Previous milestone — Stream 3 close-out sweep complete: PR805 merged, 2026-09-29T21:39Z (superseded by the LIVE block above)
