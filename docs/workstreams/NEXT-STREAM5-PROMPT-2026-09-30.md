@@ -24,11 +24,11 @@ Every fact here is a snapshot. Verify the live state (branch, worktrees, remote 
 - **Evidence corrections:** the local "67/67 contracts" claims in the #992, #996, #1001 and #1002 bundles were invalid. The loop recorded basename's exit status, and the local database had crashed. Each bundle now carries CORRECTION.md and was resealed; Stream 1 recorded the new seals.
 
 ## 3. Runtime (Stream 5's own; reserved ports)
-- **Stack:** `pantopus-stream3-block-r1`, Kong 64531, DB 64532. It has master's migrations plus `20260930181000`. Apply new ones with `supabase migration up --local` from `/private/tmp/pantopus-stream5-db-r1`, after copying the file into its `supabase/migrations`.
+- **Stack:** `pantopus-stream3-block-r1`, Kong 64531, DB 64532. It has master's migrations (through `20260930181000`) plus `20260930182000`; that migration's chat-policy section went in as a delta. Apply new ones with `supabase migration up --local` from `/private/tmp/pantopus-stream5-db-r1`, after copying the file into its `supabase/migrations`.
 - **API 18134:**
   1. Point the source checkout `/private/tmp/pantopus-stream3-chat-realtime-r1` at the wanted commit (detached, clean backend).
   2. From `/private/tmp/pantopus-stream3-s351-runtime-20260925-r1`, run `S3_SRC=<checkout> S3_BACKEND_TREE_OF=<sha> S3_LOCAL_STORAGE=1 nohup python3 api-launch-private.py`. The receipt is `api-start-isolation-safe.json`.
-  3. It currently runs the #1022 branch, `0b844a532`. Return it to master after #1022 merges.
+  3. It currently runs master `8099b6516` (started 15:41:51Z).
   4. About 10 logins per API process trip the rate limiter; restart before a new journey.
 - **Proxy and web:** proxy 18130 (deletion check disabled), web 18131.
 - **Fixture accounts still present:** solo2, hs2b, hs4b, hs6, hs9b, hs11b, hs12, hs12b, hs13b, hs15b, rls1, rls2. Earlier deletion journeys removed the rest (dm*, hs1–5, org1 and others).
