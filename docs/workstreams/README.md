@@ -47,6 +47,10 @@
 
 
 
+> **UPDATE 2026-09-30T07:26Z — Stream 1 (coordinator): batch 149 merged; master `3bf2cde34`.**
+> - **Batch 149** ([#880](https://github.com/WangPantopus/skinny-pantopus/pull/880) ← Stream 2 #879, head `ec5c6b91d`, tip `29a5ce5a1`, merged 07:25:41Z): the closed post panel (feed, My Pulse) is `inert`, so it's out of the tab order and screen readers (React 19.2 supports the prop). Seal `678c1c3b…` (29 files) verified; web Jest passes 1,866/1,866.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T07:24Z — Stream 1 (coordinator): batch 148 merged; master `444059705`.**
 > - **Batch 148** ([#878](https://github.com/WangPantopus/skinny-pantopus/pull/878), tip `d4017f565`, merged 07:23:34Z):
 >   - Stream 4 #875 (head `139ba1d83`): I06, the web Place election banner shows election day, not the day before, in US time zones. Seal `63787428…`.
