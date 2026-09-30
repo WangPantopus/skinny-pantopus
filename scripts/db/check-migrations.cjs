@@ -173,7 +173,7 @@ function validate(policy, files) {
       }
       if (match[1] >= AUTH_UID_DEFAULT_GRANTS_REFUSED_FROM) {
         for (const fn of authUidDefaultGrants(sql)) {
-          errors.push(`SECURITY DEFINER function public."${fn}" defaults a parameter to auth.uid() but answers for any value a client passes; keep it service-only, or bind it to the caller and add it to CALLER_BOUND_HELPERS with a contract: ${name}`);
+          errors.push(`SECURITY DEFINER function public."${fn}" is granted to clients with a parameter defaulting to auth.uid(), which doesn't bind it to the caller; keep it service-only, or bind it to the caller and add it to CALLER_BOUND_HELPERS with a contract: ${name}`);
         }
       }
       if (match[1] >= RLS_REQUIRED_FROM) {
