@@ -295,8 +295,9 @@ export interface ReviewWithUser extends Review {
 export interface GigChangeOrder {
   id: string;
   gig_id: string;
-  requested_by: string;
-  requester?: GigUserSummary;
+  /** Null once the person who asked for the change has deleted their account. */
+  requested_by: string | null;
+  requester?: GigUserSummary | null;
   type: ChangeOrderType;
   description: string;
   amount_change?: number;
@@ -359,8 +360,9 @@ export type QuestionStatus = 'open' | 'answered';
 export interface GigQuestion {
   id: string;
   gig_id: string;
-  asked_by?: string;
-  asker?: GigUserSummary;
+  /** Null once the person who asked has deleted their account. */
+  asked_by?: string | null;
+  asker?: GigUserSummary | null;
   question: string;
   answer?: string | null;
   answered_by?: string | null;

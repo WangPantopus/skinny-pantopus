@@ -247,7 +247,8 @@ export default function ChangeOrdersSection({
                       textClassName="text-xs text-app-text-secondary hover:underline"
                     />
                   ) : (
-                    <span>{o.requester?.name || o.requester?.username || 'Someone'}</span>
+                    // No requester means the person has deleted their account.
+                    <span>{o.requester ? o.requester.name || o.requester.username || 'Someone' : 'Former member'}</span>
                   )}
                   <span>{o.created_at ? timeAgo(o.created_at) : ''}</span>
                 </div>
