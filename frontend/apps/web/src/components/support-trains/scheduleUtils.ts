@@ -22,6 +22,22 @@ export const WEEKDAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 /** Spoken names for the one-letter weekday buttons (0=Sun … 6=Sat). */
 export const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
+/** "18:00" / "18:00:00" → "6:00 pm", as the iOS and Android Train screens show it; anything else comes back unchanged. */
+export function formatSlotTime(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(hhmm.trim());
+  const hour = m ? Number(m[1]) : NaN;
+  if (!m || hour > 23) return hhmm;
+  return `${hour % 12 || 12}:${m[2]} ${hour < 12 ? 'am' : 'pm'}`;
+}
+
+/** A slot or drop-off window: "5:00 pm – 6:00 pm", "8:15 am+" without an end, "Until 6:00 pm" without a start. */
+export function formatSlotWindow(start?: string | null, end?: string | null): string | null {
+  if (start && end) return `${formatSlotTime(start)} – ${formatSlotTime(end)}`;
+  if (start) return `${formatSlotTime(start)}+`;
+  if (end) return `Until ${formatSlotTime(end)}`;
+  return null;
+}
+
 export function snapNoon(d: Date): Date {
   const x = new Date(d);
   x.setHours(12, 0, 0, 0);
