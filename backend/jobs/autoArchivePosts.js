@@ -4,7 +4,8 @@
  * Archives Nearby/local posts based on category TTL rules:
  *   - Stories:         24 hours
  *   - Events:          24 hours after event_end_date
- *   - Deals/Promos:    3 days OR at deal_expires_at (whichever first)
+ *   - Deals/Promos:    3 days OR once the stated expiry day has ended in US Pacific
+ *                      (deal_expires_at + 32h; see step 3), whichever first
  *   - Questions:       14 days (prompt "resolved" at 7 days)
  *   - Lost & Found:    14 days
  *   - Home Neighborhood: 7 days
@@ -21,6 +22,8 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
 const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
+// End of a deal's stated expiry day in US Pacific, measured from the stored midnight (see step 3).
+const DEAL_EXPIRY_GRACE_MS = 32 * 60 * 60 * 1000;
 
 async function autoArchivePosts() {
   let totalArchived = 0;
@@ -68,7 +71,13 @@ async function autoArchivePosts() {
     if (events?.length) logger.info('[autoArchive] Archived events', { count: events.length });
   }
 
-  // 3) Archive deals past their expiration
+  // 3) Archive deals once their stated expiry day has ended.
+  //    Every client stores the day the poster picked as wall-clock time labelled UTC, not an instant:
+  //    web sends the date ("2026-10-15" -> 2026-10-15T00:00Z) and the apps send 09:00Z of that date.
+  //    Archiving at deal_expires_at took a deal "expiring Oct 15" down on the evening of Oct 14 in Pacific.
+  //    Wait 32 hours past that midnight instead: the end of the stated day in US Pacific (UTC-8, so
+  //    PDT is covered too), the launch region. A deal stays visible through its whole expiry day.
+  const dealCutoff = new Date(Date.now() - DEAL_EXPIRY_GRACE_MS).toISOString();
   const { data: expiredDeals, error: dealErr } = await supabaseAdmin
     .from('Post')
     .update({
@@ -80,7 +89,7 @@ async function autoArchivePosts() {
     .is('archived_at', null)
     .in('audience', LOCAL_AUDIENCES)
     .not('deal_expires_at', 'is', null)
-    .lt('deal_expires_at', new Date().toISOString())
+    .lt('deal_expires_at', dealCutoff)
     .select('id');
 
   if (dealErr) {
