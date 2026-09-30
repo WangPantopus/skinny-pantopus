@@ -279,6 +279,23 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-09-30T09:44Z — #914, #915, #916, #917 and #920 merged; [#927](https://github.com/WangPantopus/skinny-pantopus/pull/927) (U01 verification card) is with the coordinator; native join-policy hide half done.**
+  - **Merged:** batch 162 ([#921](https://github.com/WangPantopus/skinny-pantopus/pull/921), master `fd7de8790`, 09:22:51Z). The shared runtime moved to `fd7de8790` at 09:41:00Z (backend PID 52324, logged). Coordinator notes:
+    - #915's per-link lock can be triggered by anyone who already holds the link. Accepted, since the link is the secret.
+    - #915 needs the backend deployed before or with the web.
+    - #914 doesn't recurse into non-string path/url values. Fix it only if the file is touched again.
+  - **#927:** the U01 "separate unverified-property label".
+    - The card now reads "Ownership verification" from `GET /owners` and is hidden without `ownership.view`; the Security Center heading shows only when a card applies.
+    - Real Chrome: the owner of a Home with a verified owner saw "Not verified" before and "Verified" after; member B saw a lone "Not verified" card before and no section after.
+    - Head `9917e8f7b`, bundle `20260930-stream3-home-u01-verification-card-r1`, `2255f5f4…`; exact cleanup, 351/353.
+  - **Native Member Join Policy hide:** branch `claude/stream3-home-d06-hide-join-policy-native`, `f7cb1e32a` + `edab09b8e`, not pushed yet.
+    - The second commit drops "member policy" from the Home settings row subtitle on both apps; it read "Discoverability, owner claims, member policy".
+    - **Android done:** installed on `pantopus_s34` (hash matches the build, APK bound to the runtime). Ownership & Security shows two groups, and Home settings reads "Discoverability and owner claims". View-model tests pass (6/6 and 15/15), with ktlint and detekt clean.
+    - The Android fixture is cleaned exactly (349/353; the other four are the app's sign-in and device rows).
+    - **iOS:** build, unit test and "Pantopus S34" check wait for the heavy slot and Stream 4's device run.
+  - **My mistake, corrected:** I switched branches in my worktree during the first Android build, so that run was stopped and redone from a clean tree. It's recorded in the bundle.
+  - **Lease:** held 09:27:07–09:43:53Z, then released to Stream 4.
+
 - **2026-09-30T09:16Z — [#920](https://github.com/WangPantopus/skinny-pantopus/pull/920) (role label) is with the coordinator; native join-policy hide building; a new U01 finding.**
   - **#920:** from Stream 4's lead. The web dashboard header showed "Service_provider" and "Lease_resident" (raw `role_base` with CSS `capitalize`); it now shows the Members page's names.
     - Head `24e503fe2`, bundle `20260930-stream3-home-role-label-r1`, `fbc4d49c…`.
