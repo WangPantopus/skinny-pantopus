@@ -119,7 +119,9 @@ function MembersContent() {
       const rows = val?.occupants || val?.members;
       if (Array.isArray(rows) && rows.every(m => m && m.home_id === homeId && typeof m.user_id === 'string' && m.is_active === true)) setMembers(rows);
       else setMembersError('The current member list could not be verified. Refresh to try again.');
-    } else setMembersError('The current member list could not be loaded. Refresh to check current household access.');
+    } else setMembersError((membersRes.reason as { statusCode?: number } | null)?.statusCode === 403
+      ? 'You can’t see this household’s member list.'
+      : 'The current member list could not be loaded. Refresh to check current household access.');
     if (accessRes.status === 'fulfilled') {
       const access = accessRes.value;
       if (access?.hasAccess === true && Array.isArray(access.permissions) && access.permissions.every(p => typeof p === 'string')) setMyAccess(access);
