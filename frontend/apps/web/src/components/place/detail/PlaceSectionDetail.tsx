@@ -170,11 +170,17 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   }
 
   if (intelQuery.isError || !intelQuery.data) {
+    // A 403 means this account can't see the place: say so, without a retry.
+    const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
         <div className="px-4 sm:px-5">
-          <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => intelQuery.refetch()} />
+          {denied ? (
+            <ErrorState title="This place isn't available" message="You don't have permission to view this place." />
+          ) : (
+            <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => intelQuery.refetch()} />
+          )}
         </div>
       </DetailShell>
     );
