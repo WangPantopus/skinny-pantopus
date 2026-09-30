@@ -60,7 +60,8 @@ fun RecipientCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Header(content)
-        QuoteBlock(content)
+        // A train with no story or household summary has nothing to quote.
+        if (content.quote.isNotBlank()) QuoteBlock(content)
     }
 }
 
