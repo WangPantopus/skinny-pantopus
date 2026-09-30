@@ -1505,7 +1505,7 @@ router.post(
       if (authError) {
         logger.error('Auth signup error', {
           error: authError.message,
-          code: authError.code,
+          errorCode: authError.code,
           email,
         });
 
@@ -1581,7 +1581,7 @@ router.post(
       if (dbError) {
         logger.error('Database insert error', {
           error: dbError.message,
-          code: dbError.code,
+          errorCode: dbError.code,
           details: dbError.details,
           hint: dbError.hint,
           userId,
@@ -1727,7 +1727,7 @@ router.post(
 
       logger.error('Registration error (uncaught)', {
         error: err.message,
-        code: err.code,
+        errorCode: err.code,
         cause: err.cause?.message,
         stack: err.stack,
         email,
@@ -2288,7 +2288,7 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
     if (!check.ok) {
       // Security codes terminate the session on the client; 503 = retry.
       if (check.status === 401) clearAuthCookies(res);
-      logger.warn('auth.refresh_refused', { code: check.code, sessionId: check.session?.id || null, ip: req.ip });
+      logger.warn('auth.refresh_refused', { errorCode: check.code, sessionId: check.session?.id || null, ip: req.ip });
       return res.status(check.status || 401).json({ error: check.error, code: check.code });
     }
 
@@ -4958,7 +4958,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
         });
       } catch (err) {
         const status = err.statusCode || err.status;
-        logger.warn('Account deletion refused: home could not be retired', { userId, homeId, code: err.code, status });
+        logger.warn('Account deletion refused: home could not be retired', { userId, homeId, errorCode: err.code, status });
         if (status === 409) {
           return res.status(409).json({
             error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
@@ -5273,7 +5273,7 @@ router.post(
       if (getHeader(req, 'dpop')) {
         const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
         if (result.ok) dpop = result.dpop;
-        else logger.warn('auth.logout.dpop_invalid', { code: result.code, ip: req.ip });
+        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code, ip: req.ip });
       }
 
       if (!proofUserId && !(refreshToken && dpop)) return null;

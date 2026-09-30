@@ -3881,7 +3881,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     // No row, or an id that isn't a UUID, is "not found"; a failed read is not.
     if (error && !['PGRST116', '22P02'].includes(error.code)) {
-      logger.warn('Gig read failed', { gigId: id, code: error.code });
+      logger.warn('Gig read failed', { gigId: id, errorCode: error.code });
       return res.status(503).json({ error: 'This task could not be loaded. Please try again.' });
     }
     if (!gig) {
@@ -7763,7 +7763,7 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
       logger.error('Gig chat-room: rpc error', {
         message: rpcErr?.message,
         details: rpcErr?.details,
-        code: rpcErr?.code,
+        errorCode: rpcErr?.code,
         gigId,
       });
       return res.status(500).json({ error: 'Failed to get chat room' });
@@ -7787,7 +7787,7 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
       logger.error('Gig chat-room: failed to upsert participants', {
         message: partErr.message,
         details: partErr.details,
-        code: partErr.code,
+        errorCode: partErr.code,
         gigId,
         roomId,
       });
@@ -7957,7 +7957,7 @@ for (const [action, mode] of [
       if (paymentChanged) emitGigUpdate(req, req.params.gigId, 'payment-update');
       return res.json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
     } catch (error) {
-      logger.warn('Assigned authorization recovery failed', { gigId: req.params.gigId, code: error.code });
+      logger.warn('Assigned authorization recovery failed', { gigId: req.params.gigId, errorCode: error.code });
       return res.status(error.statusCode || 503).json({
         error: error.statusCode ? error.message : 'Authorization could not be checked. Please retry.',
         code: error.code || 'authorization_unknown',
@@ -7986,7 +7986,7 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         gigId,
         userId,
         supabase: {
-          code: gigFetchErr.code,
+          errorCode: gigFetchErr.code,
           message: gigFetchErr.message,
           details: gigFetchErr.details,
           hint: gigFetchErr.hint,

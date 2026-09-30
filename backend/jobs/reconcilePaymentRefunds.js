@@ -7,6 +7,6 @@ module.exports = async function reconcilePaymentRefunds() {
   if (error) throw new Error('Refund recovery queue is unavailable');
   for (const request of data || []) {
     try { await refunds.recoverRequest(request); }
-    catch (err) { logger.warn('Refund still awaiting confirmation', { requestId: request.id, code: err.code || 'refund_pending' }); }
+    catch (err) { logger.warn('Refund still awaiting confirmation', { requestId: request.id, errorCode: err.code || 'refund_pending' }); }
   }
 };

@@ -371,7 +371,7 @@ async function recordCreateHomeOutcome(outcome) {
     address_id: outcome.address_id || null,
     outcome: outcome.outcome || 'unknown',
     verdict_status: outcome.verdict_status || null,
-    code: outcome.code || null,
+    errorCode: outcome.code || null,
     status_code: outcome.status_code ?? null,
     validation_path: outcome.validation_path || null,
     fallback_reason: outcome.fallback_reason || null,

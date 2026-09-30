@@ -404,7 +404,7 @@ router.post('/records/asset/:id/photos', verifyToken, async (req, res, next) => 
   }
 }, (req, res, next) => photoMultipart(req, res, (err) => {
   if (!err) return next();
-  logger.warn('[P3] record photo upload rejected', { code: err.code, message: err.message });
+  logger.warn('[P3] record photo upload rejected', { errorCode: err.code, message: err.message });
   return err.code === 'LIMIT_FILE_SIZE'
     ? photoError(res, 413, 'Choose a photo of 25 MB or less.')
     : photoError(res, 400, 'Choose one photo to upload.');

@@ -679,7 +679,7 @@ async function composeBillBenchmark(home, access, userId) {
     const { getHomeBillComparison } = require('./homeBillComparisonService');
     snapshot = await getHomeBillComparison(home.id, userId, 'USD');
   } catch (err) {
-    logger.warn('placeIntelligence: current bill comparison failed', { homeId: home.id, code: err.code });
+    logger.warn('placeIntelligence: current bill comparison failed', { homeId: home.id, errorCode: err.code });
     return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'error' })];
   }
   const peers = snapshot.peer_months.filter(row => row.household_count >= 10);

@@ -92,12 +92,12 @@ async function notifyCreated(result,message) {
         inviterName: result.actor_name, homeName: result.home_label, homeCity: result.home_city,
         role: invite.proposed_role, token: invite.token, message: message || null, isExistingUser: !!invite.invitee_user_id });
       emailSent = delivery?.success === true && delivery?.preview !== true;
-    } catch (err) { logger.error('Home invitation email failed after commit', { code: err.code, inviteId: invite.id }); }
+    } catch (err) { logger.error('Home invitation email failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   if (invite.invitee_user_id) {
     try { await require('./notificationService').notifyHomeInvite({ inviteeUserId: invite.invitee_user_id,
       inviterName: result.actor_name, homeName: result.home_label, homeId: invite.home_id, inviteToken: invite.token });
-    } catch (err) { logger.error('Home invitation notification failed after commit', { code: err.code, inviteId: invite.id }); }
+    } catch (err) { logger.error('Home invitation notification failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   return emailSent;
 }
@@ -130,6 +130,6 @@ async function notifyAccepted(result,actorId) {
     await require('./notificationService').notifyHomeInviteAccepted({ inviterUserId: result.inviter_id,
       accepterName: actor?.name || actor?.first_name || actor?.username || 'Someone',
       homeName: result.home_label, homeId: result.homeId });
-  } catch (err) { logger.error('Home invite acceptance notification failed after commit', { code: err.code }); }
+  } catch (err) { logger.error('Home invite acceptance notification failed after commit', { errorCode: err.code }); }
 }
 module.exports = { write, act, list, listRequests, notifyCreated, notifySenderDelivery, notifyAccepted, failure };

@@ -427,14 +427,14 @@ class LandlordAuthorityService {
           ? !data.invite?.id || data.invite.home_id !== params.p_home_id || data.invite.token_hash !== params.p_token_hash
           : !data.lease || (['approve', 'accept'].includes(params.p_action) && !data.occupancy)))) {
         logger.error('LandlordAuthorityService: lease transaction unavailable', {
-          action: params.p_action, leaseId: params.p_lease_id, code: error?.code,
+          action: params.p_action, leaseId: params.p_lease_id, errorCode: error?.code,
         });
         return { success: false, ...(params.p_action === 'invite' || params.p_file_id ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
       }
       return data;
     } catch (error) {
       logger.error('LandlordAuthorityService: lease transaction interrupted', {
-        action: params.p_action, leaseId: params.p_lease_id, code: error.code,
+        action: params.p_action, leaseId: params.p_lease_id, errorCode: error.code,
       });
       return { success: false, ...(params.p_action === 'invite' || params.p_file_id ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
     }
@@ -444,7 +444,7 @@ class LandlordAuthorityService {
     try {
       await require('../notificationService').createNotification(notification);
     } catch (error) {
-      logger.warn('LandlordAuthorityService: decision notification failed (non-fatal)', { code: error.code });
+      logger.warn('LandlordAuthorityService: decision notification failed (non-fatal)', { errorCode: error.code });
     }
   }
 

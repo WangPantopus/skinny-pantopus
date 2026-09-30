@@ -85,7 +85,7 @@ router.post('/', async (req, res) => {
 
   if (insertError) {
     if (insertError.code !== '23505') {
-      logger.error('Could not record Stripe webhook', { code: insertError.code });
+      logger.error('Could not record Stripe webhook', { errorCode: insertError.code });
       return res.status(500).json({ error: 'Webhook handler failed' });
     }
     // Duplicate stripe_event_id — look up existing row

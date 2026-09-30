@@ -61,7 +61,7 @@ async function mutate({ homeId = null, claimId, actorId, action, reviewToken = n
     try {
       await require('./notificationService')[methods[action]]({ userId: result.claimantId, homeId: result.homeId,
         homeName: 'your home', reason: action === 'reject' ? note || undefined : undefined });
-    } catch (error) { logger.warn('Claim review notification failed after commit', { claimId, code: error.code }); }
+    } catch (error) { logger.warn('Claim review notification failed after commit', { claimId, errorCode: error.code }); }
   }
   return result;
 }

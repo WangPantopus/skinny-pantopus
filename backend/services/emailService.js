@@ -43,7 +43,7 @@ if (missingSmtpVars.length === 0) {
     });
     logger.info('Email service initialized with SMTP transport');
   } catch (err) {
-    logger.error('Failed to initialize SMTP transport', { code: err.code });
+    logger.error('Failed to initialize SMTP transport', { errorCode: err.code });
   }
 } else {
   logger.warn('Email delivery is unavailable without SMTP transport.', {
@@ -60,7 +60,7 @@ async function checkDeliveryAvailability() {
     await transporter.verify();
     return { available: true };
   } catch (err) {
-    logger.error('SMTP readiness check failed', { code: err.code });
+    logger.error('SMTP readiness check failed', { errorCode: err.code });
     return { available: false, code: 'EMAIL_UNAVAILABLE' };
   }
 }
@@ -105,7 +105,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     });
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    logger.error('Failed to send email', { to, subject, code: err.code });
+    logger.error('Failed to send email', { to, subject, errorCode: err.code });
     return { success: false, error: 'EMAIL_SEND_FAILED' };
   }
 }
