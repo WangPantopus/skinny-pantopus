@@ -243,11 +243,11 @@ All D10 cells come from 0927 home-delete-three-apps. Homes list and Home identit
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Members & Security, Members, invitations, Lockdown, audit log | ⬜ A1 A2 A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ⬜ A1 A2 A3 A4 | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour |
-| Residency review, verification pages, ownership (owners, claim, transfer, dispute) | ⬜ A1 A2 A3 A4<br>✅ the review sheet's Close/Reload: not reproduced, they are separate elements (`0930 u02-navbar-probe`) | ⬜ A1 A2 A3 A4 | ✅ A2 evidence choices (#801), Strong tier (#822)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
-| Settings, privacy mirror, Home editor, Delete home | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 editor Visibility (#807), Danger Zone and Leave Home (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
-| Share center, add guest | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 partial (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5 |
-| Residency letters and passes (Identity) | ⬜ A1 A2 A3 A4 | ⬜ A1 A2 A3 A4 | ✅ A2 "Generate a residency letter" (#809)<br>⬜ A1 A4 A5 |
+| Members & Security, Members, invitations, Lockdown, audit log | ✅ A1 A2 (Members, Pending, Requests, audit log; `0930 u02-native-a1a2`); the Requests row's whole name is [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036)<br>⬜ A3 A4<br>✅ each Requests row's Invite/Decline are separate elements (#973)<br>✅ Members top bar: not reproduced; the driver's default backend flattens system navigation bars (`0930 u02-navbar-probe`) | ✅ A1 A2 (`0930 u02-native-a1a2`; #1036: the Requests name, chip and Decline at font 2.0)<br>⬜ A3 A4<br>⬜ note: the top-bar title shows as "…" at font 2.0 | ✅ A2 role accents (#822), links and danger actions (#809)<br>✅ names (#819; not a full screen-reader pass)<br>⬜ A1 A4 A5<br>🔷 A3 brand colour |
+| Residency review, verification pages, ownership (owners, claim, transfer, dispute) | ✅ A1 A2: Review claims, residency review, Owners, Transfer (`0930 u02-native-a1a2`; #1036: the Review claims links at xl, the Transfer Home name)<br>✅ A3 dark Approve 1.92:1 → 5.48:1 (#1029, Stream 1)<br>⬜ A1 A2 verification pages<br>⬜ A4<br>✅ the review sheet's Close/Reload: not reproduced, they are separate elements (`0930 u02-navbar-probe`) | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; the residency review is FLAG_SECURE, so it was checked through the accessibility tree; #1036: the Transfer Home name)<br>⬜ A1 A2 verification pages<br>⬜ A3 A4 | ✅ A2 evidence choices (#801), Strong tier (#822)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
+| Settings, privacy mirror, Home editor, Delete home | ✅ A1 A2: Home settings, the rename editor, Privacy, Ownership & Security, My homes and Delete home (`0930 u02-native-a1a2`; #1036: the Homes-list unit label and wrapping chips)<br>⛔ Delete home: at xl the system dialog clips its message (Delete stays reachable)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A1 A2: the same screens (`0930 u02-native-a1a2`; #1036: Rename stays at font 2.0, the unit label, wrapping chips)<br>⬜ privacy mirror<br>⬜ A3 A4 | ✅ A2 editor Visibility (#807), Danger Zone and Leave Home (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5<br>🔷 A3 |
+| Share center, add guest | ✅ A1 A2: Guest passes and Add guest (`0930 u02-native-a1a2`)<br>⬜ A3 A4 | ✅ A1 A2 (`0930 u02-native-a1a2`; a pass label truncates at 2 lines at 2×, and the "Dog walker" part stays visible)<br>⬜ A3 A4 | ✅ A2 partial (#809)<br>✅ names (#819)<br>⬜ A1 A4 A5 |
+| Residency letters and passes (Identity) | ✅ A1 A2 (`0930 u02-native-a1a2`)<br>⬜ A3 A4 | ✅ A1 A2 (`0930 u02-native-a1a2`)<br>⬜ A3 A4 | ✅ A2 "Generate a residency letter" (#809)<br>⬜ A1 A4 A5 |
 | Not in any sweep: waiting room, `/messages`, invitation accept, Find a Home, `/guest/:token`, public verify pages, dashboard tab contents | ⬜ | ⬜ | ⬜ A1 A2 A3 A4 A5 |
 
 The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
@@ -319,6 +319,34 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-09-30T17:02Z — U02 native A1/A2 done on 19 screens; [#1036](https://github.com/WangPantopus/skinny-pantopus/pull/1036) with the coordinator; #1024 merged (batch 197).**
+  - **Bundle:** `20260930-stream3-home-u02-native-a1a2-r1`, MANIFEST `732b0e5df0561d60ca1ae311511d20d7077e987e8e708ce14d8f5fff0f07fe10`, 1,084 files.
+  - **#1036:** head `0a4aaa553`, rebased onto master `1e1b6bacc` after #1029.
+    - The Requests row shows the whole name (iOS six lines; Android had lost the name entirely at 2×).
+    - The Transfer header shows the whole Home name.
+    - Review claims links stop growing at iOS xxxLarge.
+    - Homes list: one unit label on all three clients, and status chips that wrap.
+    - Android Home settings keeps Rename at 2×.
+    - Android shared row: from font scale 1.3 the inline chip stacks, VerticalActions grows, and `RowModel.wrapChips` exists.
+  - **Checks:**
+    - Android: 5,024 tests plus Paparazzi verify, ktlint and detekt.
+    - iOS: 125 tests, SwiftLint and SwiftFormat.
+    - Web: Jest 1,951.
+  - **A2:**
+    - iOS dark: all 19 screens readable.
+    - Android keeps its light scheme under system dark mode (#1013).
+    - The dark Approve (1.92:1) was fixed by Stream 1's #1029 (5.48:1). Stream 1 has the dark green FABs.
+  - **Decided:** keep iOS's fixed-size type ramp (Decisions 6).
+  - **Boundaries:**
+    - Android FLAG_SECURE screens (Access codes, residency review) were checked through the accessibility tree.
+    - At iOS xl the system dialog, a placeholder and a title truncate.
+  - **Still open in U02:**
+    - verification pages and the privacy mirror (A1/A2);
+    - A3/A4 on native;
+    - the Android Members top-bar title "…" at 2×.
+  - **Security probe for Stream 5** (read-only): the Home RPC helpers are caller-bound. Passing another user's id returns false.
+  - **Runtime:** lease used 14:18:53–15:14:15Z and 15:35:42–16:58:55Z. Exact cleanup at 16:58:49Z: 349/353 tables equal the baseline, and the other 4 are auth history.
 
 - **2026-09-30T15:25Z — U02 native A1/A2: the iOS pass is done, and four display fixes are built. Master's red iOS SwiftLint is fixed in [#1024](https://github.com/WangPantopus/skinny-pantopus/pull/1024).**
   - **Setup:** stage `runtime/stream3-home-u02-native-a1a2-r1` (not sealed yet). DECISION.md was written at 14:18Z and the baseline taken at 14:19:10Z.
