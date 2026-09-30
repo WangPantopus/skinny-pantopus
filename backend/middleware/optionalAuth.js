@@ -3,7 +3,9 @@
  *
  * Soft-auth: if a valid Bearer token (or httpOnly cookie) is present,
  * populate req.user = { id, email }.  Otherwise set req.user = null
- * and continue — never returns 401.
+ * and continue — never returns 401. A token the auth service rejected
+ * (invalid, expired or revoked; not an unreachable service) also sets
+ * req.authRejected, for routes whose signed-in view differs.
  *
  * Uses a short-lived in-memory token→user cache (15 s) to avoid
  * hitting Supabase auth on every request.
@@ -39,6 +41,7 @@ function setCache(token, user) {
 // ── Middleware ───────────────────────────────────────────────────
 async function optionalAuth(req, _res, next) {
   req.user = null;
+  req.authRejected = false;
 
   try {
     // Extract token: prefer Bearer header (mobile) over httpOnly cookie (web).
@@ -58,6 +61,7 @@ async function optionalAuth(req, _res, next) {
     const cached = getCached(token);
     if (cached !== undefined) {
       req.user = cached;
+      req.authRejected = cached === null; // only rejections are cached as null
       return next();
     }
 
@@ -66,6 +70,7 @@ async function optionalAuth(req, _res, next) {
 
     if (error || !data?.user) {
       setCache(token, null);
+      req.authRejected = true;
       return next();
     }
 
@@ -77,6 +82,7 @@ async function optionalAuth(req, _res, next) {
       if (state.known && state.revoked) {
         logger.debug('optionalAuth: session revoked, treating as anonymous', { session_id: claims.id });
         setCache(token, null);
+        req.authRejected = true;
         return next();
       }
     }

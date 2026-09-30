@@ -3840,6 +3840,17 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const currentUserId = req.user?.id || null;
 
+    // The owner's and the worker's view differs from everyone else's (who the worker is,
+    // access details, exact times). A rejected token (expired, invalid or revoked) or the
+    // web's session flag without its access cookie gets a 401, as verifyToken would, so the
+    // client refreshes and asks again instead of showing the worker a stranger's view. An
+    // unreachable auth service still falls back to the anonymous view.
+    const staleWebSession = req.cookies?.pantopus_session === '1'
+      && !req.cookies?.pantopus_access && !req.headers.authorization;
+    if (!currentUserId && (req.authRejected || staleWebSession)) {
+      return res.status(401).json({ error: 'Invalid or expired token', code: 'SESSION_REFRESH_REQUIRED' });
+    }
+
     // Public reads should not depend on RLS (server does not forward user JWT to Supabase).
     // Use the service role client for consistent behavior.
     const { data: gig, error } = await supabaseAdmin
