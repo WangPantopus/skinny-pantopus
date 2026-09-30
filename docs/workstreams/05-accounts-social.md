@@ -9,6 +9,34 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — security track complete except #1000 (DEFINER guard); #994 and #996 merged, 2026-09-30T13:30:04Z
+
+- **Merged since the last block:**
+  - [#994](https://github.com/WangPantopus/skinny-pantopus/pull/994) (batch 186): the check-migrations RLS guard.
+  - [#996](https://github.com/WangPantopus/skinny-pantopus/pull/996) (batch 187, 13:27:31Z, master `8ed5085bf`): client roles lost EXECUTE on ten SECURITY DEFINER functions that trusted a caller-supplied id.
+    - The read-only scan found 27 DEFINER functions executable by anon. With only the anon key, `get_user_chat_rooms` returned any person's chat list with previews and names, and `get_full_home_profile` any Home's members; the writing ones opened chats, saved posts and raised unread counts.
+    - After: 401 `42501`, no side effects. The app's calls are identical before and after (socket room list, DM, task chat, mail sessions, post save).
+    - `listings.js`'s `toggle_listing_save` moved to supabaseAdmin. It's code review only, because Marketplace is a launch cut (Stream 1's decision).
+- **Open:** [#1000](https://github.com/WangPantopus/skinny-pantopus/pull/1000) (`6b8b31d1f`, seal `0ea8f9f7…`). From `20260930176000` on, a SECURITY DEFINER function created in public needs EXECUTE revoked from PUBLIC, anon AND authenticated in the same file, or an explicit GRANT as a deliberate exception. The eight RLS helpers are exempt by name. Existing tests 8/8; eleven synthetic cases pass.
+- **Security track, 2026-09-30, all merged except #1000:**
+
+  | PR | Change |
+  | --- | --- |
+  | #977 | chat writes only through the API |
+  | #978 | account, social and business writes only through the API; closes self-promotion to admin |
+  | #985 | RLS on for 73 tables |
+  | #988 | file delete works again |
+  | #992 | grant-level default-deny for client writes |
+  | #994 | RLS guard |
+  | #996 | DEFINER RPC revoke |
+  | #1000 | DEFINER guard (open) |
+
+  Streams 2, 3 and 4 confirmed no impact on their flows.
+- **Still open from the scan (not started):** the `ChatParticipant` read-policy recursion (42P17). It affects only direct reads, which no app makes.
+- **Native pass:** Stream 1 will run (a) account deletion with a private-setup Home, (b) the #950 sheet copy and (c) the portfolio delete, on its devices after Stream 2's #980.
+- **Runtime:** API 18134 runs `f6dc29d26` (#996's head). The DB matches master's migrations through `176000`.
+- **Fixtures to remove later by exact ids:** DELBLOCK1 (rls1/rls2, hs*, solo2), GIGROOM1, the fixture letter, files, posts, tasks and DMs, and the `pantopus-home-documents` bucket row.
+
 ## LIVE — security track: the trio, #985, #988 and #992 merged; #994 (migration RLS guard) open, 2026-09-30T13:18:41Z
 
 - **Merged since the last block:**
