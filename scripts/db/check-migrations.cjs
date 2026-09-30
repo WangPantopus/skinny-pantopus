@@ -80,10 +80,14 @@ function clientsCannotExecute(sql, fn) {
 // grant would only reopen direct PostgREST access for anyone who has it. Function, schema and type
 // grants are not covered here; the DEFINER rule above handles functions.
 const ANON_TABLE_GRANTS_REFUSED_FROM = '20260930181000';
-function anonTableGrants(sql) {
+// From this version on the rule covers authenticated too: 20260930182000 revoked its table and
+// sequence privileges, and no app reads or writes as a signed-in user through PostgREST.
+const AUTHENTICATED_TABLE_GRANTS_REFUSED_FROM = '20260930182000';
+function clientTableGrants(sql, roles) {
   const skip = /^(?:FUNCTIONS?|ROUTINES?|PROCEDURES?|ALL\s+(?:FUNCTIONS|ROUTINES|PROCEDURES)\b|SCHEMAS?|TYPES?|DOMAIN|LANGUAGE|FOREIGN|DATABASE|TABLESPACE|LARGE\s+OBJECT|PARAMETER)\b/i;
+  const grantee = new RegExp(String.raw`\b(?:${roles.join('|')})\b`, 'i');
   return [...withoutLineComments(sql).matchAll(/\bGRANT\s+([^;]*?)\s+ON\s+([^;]*?)\s+TO\s+([^;]*);/gi)]
-    .filter(match => !skip.test(match[2].trim()) && /\b(?:anon|public)\b/i.test(match[3]))
+    .filter(match => !skip.test(match[2].trim()) && grantee.test(match[3]))
     .map(match => match[2].trim().replace(/\s+/g, ' '));
 }
 
@@ -141,8 +145,9 @@ function validate(policy, files) {
         }
       }
       if (match[1] >= ANON_TABLE_GRANTS_REFUSED_FROM) {
-        for (const target of anonTableGrants(sql)) {
-          errors.push(`Do not grant anon or PUBLIC privileges on ${target}; clients read and write through the API: ${name}`);
+        const roles = match[1] >= AUTHENTICATED_TABLE_GRANTS_REFUSED_FROM ? ['anon', 'authenticated', 'public'] : ['anon', 'public'];
+        for (const target of clientTableGrants(sql, roles)) {
+          errors.push(`Do not grant ${roles.slice(0, -1).join(', ')} or PUBLIC privileges on ${target}; clients read and write through the API: ${name}`);
         }
       }
     }

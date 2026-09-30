@@ -5,10 +5,13 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 SELECT plan(1);
 SELECT lives_ok($contract$
--- Finance RLS must honor exact read permissions independently of Home editing,
+-- Finance read permissions must be exact, independently of Home editing,
 -- ownership, split assignment, stale flags and overlapping old policy. Clients
--- hold no write grant on public tables (20260930174000): finance records are
--- written only through the API (service_role), which checks finance.manage.
+-- hold no privilege on public tables (writes since 20260930174000, reads since
+-- 20260930182000): finance records are read and written only through the API
+-- (service_role), which checks finance.view and finance.manage. The read
+-- policies stay as defense in depth, and their predicates are asserted per actor
+-- through the same helpers they call.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 SET LOCAL search_path = public, extensions, pg_catalog;
@@ -61,8 +64,8 @@ UNION ALL SELECT 'HomeSubscription',jsonb_agg(to_jsonb(s) ORDER BY id) FROM publ
 UNION ALL SELECT 'HomeBillSplit',jsonb_agg(to_jsonb(s) ORDER BY id) FROM public."HomeBillSplit" s;
 
 SET LOCAL ROLE authenticated;
--- Every actor's direct insert, update and delete is refused, including the
--- finance managers the write policies used to admit (actors 4, 5 and 9).
+-- Every actor's direct read, insert, update and delete is refused, including the
+-- finance viewers and managers the policies used to admit (actors 3, 4, 5 and 9).
 DO $matrix$
 DECLARE h uuid := 'ddf10000-0000-4000-8000-000000000101';
   bill uuid := 'ddf10000-0000-4000-8000-000000000201';
@@ -87,9 +90,15 @@ BEGIN
       original_id := CASE relation WHEN 'HomeBill' THEN bill
         WHEN 'HomeSubscription' THEN 'ddf10000-0000-4000-8000-000000000301'::uuid
         ELSE 'ddf10000-0000-4000-8000-000000000401'::uuid END;
-      EXECUTE format('SELECT count(*) FROM public.%I WHERE id=$1',relation) INTO affected USING original_id;
-      IF affected <> (CASE WHEN actor.can_read THEN 1 ELSE 0 END) THEN
-        RAISE EXCEPTION '% has incorrect % read access: %',actor.label,relation,affected;
+      BEGIN
+        EXECUTE format('SELECT count(*) FROM public.%I WHERE id=$1',relation) INTO affected USING original_id;
+        RAISE EXCEPTION '% read % directly',actor.label,relation;
+      EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+      -- The read policy's predicate is exactly this helper call (homebill_select and homesub_select
+      -- on the row's Home, homebsplit_select on its bill), so the matrix keeps its coverage.
+      IF (CASE relation WHEN 'HomeBillSplit' THEN public.home_bill_has_finance_permission(bill,'finance.view')
+          ELSE public.home_has_permission(h,'finance.view') END) IS DISTINCT FROM actor.can_read THEN
+        RAISE EXCEPTION '% has incorrect % read permission',actor.label,relation;
       END IF;
       inserted_id := gen_random_uuid();
       insert_sql := CASE relation
@@ -181,8 +190,9 @@ BEGIN
       OR has_table_privilege('anon',format('public.%I',v_relation),'TRUNCATE') THEN
       RAISE EXCEPTION 'Client retained TRUNCATE privilege outside finance RLS';
     END IF;
-    IF has_any_column_privilege('anon',format('public.%I',v_relation),'SELECT') THEN
-      RAISE EXCEPTION 'Anonymous role regained a % read grant',v_relation;
+    IF has_any_column_privilege('anon',format('public.%I',v_relation),'SELECT')
+      OR has_any_column_privilege('authenticated',format('public.%I',v_relation),'SELECT') THEN
+      RAISE EXCEPTION 'A client role regained a % read grant',v_relation;
     END IF;
     IF has_any_column_privilege('authenticated',format('public.%I',v_relation),'INSERT,UPDATE')
       OR has_any_column_privilege('anon',format('public.%I',v_relation),'INSERT,UPDATE')
@@ -207,7 +217,7 @@ BEGIN
     RAISE EXCEPTION 'Incorrect split permission helper privileges';
   END IF;
 END $preservation$;
-SELECT 'PASS: finance reads by exact permission, every direct client write refused, editor/owner/minor/revoked/foreign denials and complete row preservation' AS result;
+SELECT 'PASS: finance read permissions exact per actor through the policy helpers, every direct client read and write refused, editor/owner/minor/revoked/foreign denials and complete row preservation' AS result;
 
 $contract$, 'home-finance-rls.sql');
 SELECT * FROM finish();

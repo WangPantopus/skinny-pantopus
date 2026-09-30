@@ -177,8 +177,10 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','f3260000-0000-4000-8000-000000000002',true);
 DO $$ BEGIN
-  PERFORM pg_temp.check_lease_file(NOT EXISTS(SELECT FROM public."File" WHERE id::text LIKE 'f3260000-%'),
-    'Even the applicant cannot read private evidence through generic File RLS');
+  -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+  BEGIN PERFORM 1 FROM public."File" WHERE id::text LIKE 'f3260000-%';
+    PERFORM pg_temp.check_lease_file(false,'Even the applicant cannot read private evidence through a direct File read');
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 

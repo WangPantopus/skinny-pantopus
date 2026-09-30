@@ -165,7 +165,9 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub',pg_temp.ce_id(3)::text,true);
 DO $$ BEGIN
-  IF EXISTS(SELECT FROM public."File" WHERE id=pg_temp.ce_id(300)) THEN RAISE EXCEPTION 'Direct File exposed private object'; END IF;
+  -- Since 20260930182000 authenticated holds no privilege on public tables, so the grant refuses this, not RLS.
+  BEGIN PERFORM 1 FROM public."File" WHERE id=pg_temp.ce_id(300);
+    RAISE EXCEPTION 'Direct File exposed private object'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   IF has_table_privilege('authenticated','public."HomeClaimEvidenceIntent"','SELECT,INSERT,UPDATE,DELETE')
     OR has_table_privilege('authenticated','public."HomeClaimEvidenceInspection"','SELECT,INSERT,UPDATE,DELETE')
     OR has_function_privilege('authenticated','public.verify_home_claim_evidence(uuid,uuid,uuid,uuid,boolean,text,text)','EXECUTE') THEN
