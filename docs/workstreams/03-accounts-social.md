@@ -2,12 +2,12 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
-## LIVE — user-approved round complete: #831 and #833 merged, #839 (native deletion) with Stream 1, 2026-09-30T03:35Z
+## LIVE — user-approved round complete: #831, #833 and #839 all merged, 2026-09-30T03:40Z
 
 - **User direction (2026-09-29T22:09:04Z):** build the notifications-off notice, the web account-deletion confirmation and the native lost-reply deletion check; verify end to end in the real apps; no unit tests. All three are built and verified.
 - **[#831](https://github.com/WangPantopus/skinny-pantopus/pull/831) merged** (batch 130 #832, 01:32:16Z): "Notifications are off" banner with Open Settings (iOS + Android). Head `eab4f5c86`, seal `179873a4…` ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-notifications-off-notice-r1/RESULT.md)).
 - **[#833](https://github.com/WangPantopus/skinny-pantopus/pull/833) merged** (batch 131 #834, ~02:15Z, master `3a2b816ba`): web deletion outcome on `/login`. Head `c80d5a78c`, seal `9306c6b1…` ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-web-deleted-confirmation-r1/RESULT.md)).
-- **[#839](https://github.com/WangPantopus/skinny-pantopus/pull/839) open, handed to Stream 1 at 03:31Z:** native deletion when the answer is lost.
+- **[#839](https://github.com/WangPantopus/skinny-pantopus/pull/839) merged** 03:36:29Z (merge commit `244c967d6`, batch 134 [#840](https://github.com/WangPantopus/skinny-pantopus/pull/840), master `8e44382ce`). S3 verified independently: `d5d60506a` is an ancestor of master and all 4 blobs match. Native deletion when the answer is lost.
   - Head `d5d60506a`; base `a3b3a5179`; clean against master `f35f71857`. Seal `cf7d9ce81ea8673dda70f549c9e1abe7d6f1e90deaab43ddbaf2935cb55fe092`, 232 files ([RESULT](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20260929-stream3-native-delete-lost-response-r1/RESULT.md)).
   - Rule: the DELETE fails without an answer → probe refresh. Rejected → sign out, forget that account only, and show the login banner "We couldn't confirm your account was deleted. If you can still sign in, try again from Settings." Valid → the existing error. Success is unchanged.
   - Builds of the head: iOS dylib `ff8699db…`, APK `82be9358…` (heavy 02:39:21–02:54:50Z). All cases PASS:
@@ -30,7 +30,7 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 - **Disk full / Docker down (Stream 1 report, 03:30Z):** every local Supabase stack is offline, including S3's; its API, proxy and web processes have no database until Docker restarts. Stream 1 will ask the user before restarting Docker, because the founder's stack is on it.
   - At 03:32:46–03:33:01Z, S3 deleted only its own caches: iOS DerivedData, the SPM cache, old app copies and APKs, and the build worktree's Android outputs. Free space went 10167 → 18699 MiB.
   - The next S3 iOS build will be clean.
-- **Next:** Stream 1 reviews and batches #839. Otherwise S3 is idle. Open rows stay at boundaries the user supplies (physical devices, provider access, policies; see the previous block).
+- **Next:** nothing pending in S3. Stream 1 records the backend recommendation as an open security-sensitive follow-up. Docker waits on the user. Open rows stay at boundaries the user supplies (physical devices, provider access, policies; see the previous block).
 
 ## Previous milestone — Stream 3 close-out sweep complete: PR805 merged, 2026-09-29T21:39Z (superseded by the LIVE block above)
 
