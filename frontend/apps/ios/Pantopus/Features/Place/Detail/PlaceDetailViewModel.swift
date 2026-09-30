@@ -22,13 +22,29 @@ final class PlaceDetailViewModel {
     private(set) var state: State = .loading
     let homeId: String
     let group: PlaceDetailGroup
+    /// The host's real verification flows (the dashboard's verify sheet doors).
+    let onStartVerify: ((PlaceVerifyMethod) -> Void)?
+    /// A locked section's "Verify address" shows the verify sheet.
+    var showVerify = false
 
     private let api: APIClient
 
-    init(homeId: String, group: PlaceDetailGroup, api: APIClient = .shared) {
+    init(
+        homeId: String,
+        group: PlaceDetailGroup,
+        api: APIClient = .shared,
+        onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil
+    ) {
         self.homeId = homeId
         self.group = group
         self.api = api
+        self.onStartVerify = onStartVerify
+    }
+
+    /// The tap for a locked section's "Verify address"; nil where no flow is wired.
+    var verifyAction: (() -> Void)? {
+        guard onStartVerify != nil else { return nil }
+        return { [weak self] in self?.showVerify = true }
     }
 
     func load() async {

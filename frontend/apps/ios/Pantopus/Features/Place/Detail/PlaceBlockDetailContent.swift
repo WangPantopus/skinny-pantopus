@@ -33,7 +33,7 @@ struct PlaceBlockDetailContent: View {
                         bucket: data.bucket,
                         label: data.label,
                         ctaTitle: "Be one of the first to verify on your block",
-                        onTap: nil
+                        onTap: vm.verifyAction
                     )
                 } else {
                     vm.fallbackCard(density)
@@ -51,7 +51,7 @@ struct PlaceBlockDetailContent: View {
                     title: "Block founders",
                     reason: "Verify your address to claim your permanent founding place on this block, see what each locked block surface is still waiting for, and mail an invitation to a neighbor.",
                     cta: "Verify address",
-                    onTap: nil
+                    onTap: vm.verifyAction
                 )
             }
             PlaceSourceNote(name: "Pantopus verified neighbors", asOf: nil)

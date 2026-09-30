@@ -68,7 +68,7 @@ struct PlaceRiskDetailContent: View {
                     title: "The 911-ready household card",
                     reason: "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
                     cta: "Verify address",
-                    onTap: nil
+                    onTap: vm.verifyAction
                 )
             }
         }

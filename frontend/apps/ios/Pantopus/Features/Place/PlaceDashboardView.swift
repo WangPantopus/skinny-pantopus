@@ -150,8 +150,12 @@ struct PlaceDashboardView: View {
                     heroIcon: pulse.heroIcon,
                     headline: pulse.title,
                     nudgeIcon: pulse.nudgeIcon,
-                    nudgeText: pulse.nudgeText ?? ""
-                ) { viewModel.onOpenPulse() }
+                    nudgeText: pulse.nudgeText ?? "",
+                    // Both labelled: an unlabelled trailing closure fills only `onTap`, which left the nudge row's
+                    // own button with no action (Android opens Pulse from either).
+                    onNudgeTap: { viewModel.onOpenPulse() },
+                    onTap: { viewModel.onOpenPulse() }
+                )
                     .padding(.horizontal, 16)
                     .padding(.top, isClaimed ? 12 : 14)
 
