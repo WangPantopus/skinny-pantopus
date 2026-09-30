@@ -47,6 +47,12 @@
 
 
 
+> **UPDATE 2026-09-30T09:49Z — Stream 1 (coordinator): batch 164 merged; master `acd904c66`.**
+> - **Batch 164** ([#929](https://github.com/WangPantopus/skinny-pantopus/pull/929), 09:48:46Z): 2 files, both blob-equal. No migrations.
+>   - **Stream 3 #927:** the Security Center's "Ownership verification" card reads the Owners list and renders only when it applies (U01). Seal `2255f5f4…`.
+>   - **Stream 1 #928, privacy:** a Support Train can only name a Home its organizer belongs to. Before, anyone who knew a Home's id could create a draft with `recipient_home_id` or `home_id` and read its exact street address from `GET /:id`. It now answers 403 `HOME_NOT_ACCESSIBLE`; `delivery_location` home mode uses the same trusted-occupancy rule. Seal `bb23739b…`.
+> - **All streams:** a Home id reaching a non-household client is still worth closing wherever you see one. It no longer turns into an address through Support Trains.
+
 > **UPDATE 2026-09-30T09:41Z — Stream 1 (coordinator): batch 163 merged; master `c1634c693`.**
 > - **Batch 163** ([#926](https://github.com/WangPantopus/skinny-pantopus/pull/926), 09:40:01Z): four PRs merged unchanged; all 6 files blob-equal.
 >   - **Stream 4 #922:** the iOS election banner shows a date-only Election Day. Seal `750ef739…`.
