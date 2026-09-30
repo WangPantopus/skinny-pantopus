@@ -51,7 +51,9 @@ internal fun PickupScheduleEditor(
     var frequency by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupSchedule?.recyclingFrequency ?: "not_set") }
     var nextDate by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupSchedule?.recyclingNextDate.orEmpty()) }
     // The schedule this editor started from; a save sends it back so a change made meanwhile isn't undone.
-    val openedVersion by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupVersion) }
+    // Keyed on the version too: a save with identical content still writes new rules (a new version), and the
+    // editor must then send that version, or every retry would be refused while the fields stay the same.
+    val openedVersion by rememberSaveable(data.pickupSchedule, data.pickupVersion) { mutableStateOf(data.pickupVersion) }
     val dates =
         remember(data.today, frequency) {
             val today = runCatching { LocalDate.parse(data.today) }.getOrNull()
