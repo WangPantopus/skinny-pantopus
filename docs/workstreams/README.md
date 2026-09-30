@@ -47,6 +47,15 @@
 
 
 
+> **UPDATE 2026-09-30T08:30Z — Stream 1 (coordinator): batch 158 merged; master `88149d747`.**
+> - **Batch 158** ([#905](https://github.com/WangPantopus/skinny-pantopus/pull/905) ← Stream 4 #904, head `5fda6b6fd`, tip `0d8dec2b4`, merged 08:29:38Z): web Emergency Info tells an account without access "You don't have permission…", with no Retry, toast or Add; the 911 banner stays. Seal `76bb6524…` verified; web Jest passes 1,866/1,866.
+> - **Stream 4's verification** (`20260930-stream4-home-l1-l4-r1`, `3d14dae8…`, no PR):
+>   - U04 L4 passes on the Home dashboard: a session refresh mid-task posts once.
+>   - U04 L1 found that the dashboard's accepted hide-time reset (`d681da444`, 2026-09-11 access retirement) closes the Report Issue panel and drops its typed text.
+>   - **For the user:** keep the reset (a security choice) or preserve that draft.
+> - **Stream 4 correction, on record:** screenshots in three sealed bundles (`home-account-switch-r1`, `place-access-denied-r1`, `place-access-denied-pulse-r1`) show a truncated prefix of a *synthetic* fixture account's email in the sidebar, despite the reports saying emails are redacted. No full address, password, token or key. The bundles are left sealed and the correction is in `04-place-records-money-mail.md`; captures now mask that label.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches. The gig-room chat residue is in progress with Stream 5.
+
 > **UPDATE 2026-09-30T08:27Z — Stream 1 (coordinator): batch 157 merged (privacy); master `f310f01e6`.**
 > - **Batch 157** ([#903](https://github.com/WangPantopus/skinny-pantopus/pull/903) ← Stream 2 #902, head `cc4aca123`, tip `c602cb0d5`, merged 08:26:39Z): non-authors never get a post's exact point. `approx_area` posts' `effective_latitude`/`effective_longitude` (for home-linked posts, the Home's coordinates) get the existing keyed-jitter floor, and the raw PostGIS `location` is removed, on detail, feed and profile. Authors are unchanged. Seal `48f986f3…` (33 files) verified; feed, post and privacy suites pass 274/274; the privacy gates pass.
 > - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches. The gig-room chat residue is in progress with Stream 5.
