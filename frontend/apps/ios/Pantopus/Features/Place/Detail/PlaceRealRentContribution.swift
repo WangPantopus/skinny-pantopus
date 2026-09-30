@@ -76,6 +76,7 @@ struct RealRentContribution: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.Color.primarySolid)
                     .disabled(vm.isSaving || vm.rentInput.trimmingCharacters(in: .whitespaces).isEmpty)
                     if cancellable {
                         Button {
@@ -142,6 +143,7 @@ struct RealRentContribution: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.Color.primarySolid)
                     .disabled(vm.isSaving)
                     Button(role: .destructive) {
                         Task {
