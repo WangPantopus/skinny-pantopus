@@ -470,6 +470,11 @@ export default function HomeSettingsTab({
           <NotificationToggle label="Delivery alerts" description="Package delivery status updates" checked={notifDelivery} onChange={setNotifDelivery} />
           <NotificationToggle label="Guest pass activity" description="When someone views a guest pass" disabled={saving} checked={notifGuestPass} onChange={setNotifGuestPass} />
         </div>
+        {/* These choices are saved, but no notification reads them yet (the same
+            caption as the iOS and Android Home notifications screens). */}
+        <p className="text-xs text-app-text-secondary mt-2">
+          Per-home notification routing isn&apos;t live yet — these switches don&apos;t change what you receive.
+        </p>
       </SettingsSection>
 
       {/* ===== Section 5: Data Management (admins only) ===== */}

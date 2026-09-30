@@ -147,8 +147,7 @@ function SettingsContent() {
       </section>}
 
       {/* No Notifications section here: its switches rendered with no height,
-          kept their state in this page only and saved nothing. The Home's
-          notification settings live in the dashboard's Settings tab. */}
+          kept their state in this page only and saved nothing. */}
 
       {/* Danger zone */}
       <section>
