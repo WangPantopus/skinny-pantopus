@@ -30,7 +30,7 @@ class PickupScheduleEditorTest {
                 requests.add(request)
             }
 
-            override fun clearPickupDay() = Unit
+            override fun clearPickupDay(expectedVersion: String?) = Unit
         }
 
     private fun show() {

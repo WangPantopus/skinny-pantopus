@@ -50,6 +50,8 @@ internal fun PickupScheduleEditor(
     var weekday by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupSchedule?.weekday.orEmpty()) }
     var frequency by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupSchedule?.recyclingFrequency ?: "not_set") }
     var nextDate by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupSchedule?.recyclingNextDate.orEmpty()) }
+    // The schedule this editor started from; a save sends it back so a change made meanwhile isn't undone.
+    val openedVersion by rememberSaveable(data.pickupSchedule) { mutableStateOf(data.pickupVersion) }
     val dates =
         remember(data.today, frequency) {
             val today = runCatching { LocalDate.parse(data.today) }.getOrNull()
@@ -80,11 +82,13 @@ internal fun PickupScheduleEditor(
     Button(
         enabled = !busy && weekday.isNotEmpty() && (frequency == "not_set" || dates.any { it.first == nextDate }),
         onClick = {
-            actions.setPickupDay(SetPickupDayRequest(weekday, frequency, nextDate.takeIf { frequency != "not_set" }))
+            actions.setPickupDay(
+                SetPickupDayRequest(weekday, frequency, nextDate.takeIf { frequency != "not_set" }, expectedVersion = openedVersion),
+            )
         },
     ) { Text(if (busy) "Saving…" else "Save schedule") }
     if (data.pickupSchedule != null) {
-        TextButton(enabled = !busy, onClick = actions::clearPickupDay) { Text("Clear household schedule") }
+        TextButton(enabled = !busy, onClick = { actions.clearPickupDay(openedVersion) }) { Text("Clear household schedule") }
     }
 }
 

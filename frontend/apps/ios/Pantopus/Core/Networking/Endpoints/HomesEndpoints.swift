@@ -688,17 +688,27 @@ public struct SetPickupDayRequest: Encodable, Sendable {
     public let weekday: String
     public let recyclingFrequency: String
     public let recyclingNextDate: String?
+    /// The calendar's `pickupVersion` when the editor opened; the server
+    /// answers 409 if the schedule changed since. Omitted when nil.
+    public let expectedVersion: String?
 
-    public init(weekday: String, recyclingFrequency: String = "not_set", recyclingNextDate: String? = nil) {
+    public init(
+        weekday: String,
+        recyclingFrequency: String = "not_set",
+        recyclingNextDate: String? = nil,
+        expectedVersion: String? = nil
+    ) {
         self.weekday = weekday
         self.recyclingFrequency = recyclingFrequency
         self.recyclingNextDate = recyclingNextDate
+        self.expectedVersion = expectedVersion
     }
 
     private enum CodingKeys: String, CodingKey {
         case weekday
         case recyclingFrequency = "recycling_frequency"
         case recyclingNextDate = "recycling_next_date"
+        case expectedVersion = "expected_version"
     }
 }
 
@@ -717,9 +727,13 @@ public enum AddressCalendarEndpoints {
         Endpoint(method: .put, path: "/api/homes/\(homeId)/calendar/pickup-day", body: request)
     }
 
-    /// `DELETE /api/homes/:id/calendar/pickup-day`
-    public static func clearPickupDay(homeId: String) -> Endpoint {
-        Endpoint(method: .delete, path: "/api/homes/\(homeId)/calendar/pickup-day")
+    /// `DELETE /api/homes/:id/calendar/pickup-day[?expected_version=]`
+    public static func clearPickupDay(homeId: String, expectedVersion: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .delete,
+            path: "/api/homes/\(homeId)/calendar/pickup-day",
+            query: expectedVersion.map { ["expected_version": $0] } ?? [:]
+        )
     }
 }
 

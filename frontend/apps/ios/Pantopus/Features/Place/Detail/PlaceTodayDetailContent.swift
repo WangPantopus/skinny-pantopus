@@ -427,6 +427,9 @@ struct AddressCalendarCard: View {
     @State private var frequency = "not_set"
     @State private var nextDate = ""
     @State private var confirmed: PlaceAddressCalendarData?
+    /// The schedule this editor started from. A save sends it back, so a
+    /// change saved meanwhile on another device is not silently undone.
+    @State private var openedVersion: String?
     private let api = APIClient.shared
     private var calendar: PlaceAddressCalendarData {
         confirmed ?? data
@@ -456,6 +459,7 @@ struct AddressCalendarCard: View {
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
+        _openedVersion = State(initialValue: data.pickupVersion)
     }
 
     var body: some View {
@@ -470,6 +474,7 @@ struct AddressCalendarCard: View {
                     weekday = calendar.pickupSchedule?.weekday ?? ""
                     frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
                     nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                    openedVersion = calendar.pickupVersion
                     errorText = nil
                     picking.toggle()
                 }
@@ -644,18 +649,41 @@ struct AddressCalendarCard: View {
         saving = "saving"
         errorText = nil
         do {
-            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId)
+            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId, expectedVersion: openedVersion)
                 : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
                     weekday: weekday, recyclingFrequency: frequency,
-                    recyclingNextDate: frequency == "not_set" ? nil : nextDate
+                    recyclingNextDate: frequency == "not_set" ? nil : nextDate,
+                    expectedVersion: openedVersion
                 ))
             let response: AddressCalendarResponse = try await api.request(endpoint)
             confirmed = response.calendar
+            openedVersion = response.calendar.pickupVersion
             picking = false
             await onChanged()
+        } catch let APIError.clientError(status: 409, message: body) {
+            // Changed meanwhile: nothing was saved. Show the current schedule
+            // in the editor so the person can review it and try again.
+            if let current = Self.currentCalendar(inConflict: body) {
+                confirmed = current
+                weekday = current.pickupSchedule?.weekday ?? ""
+                frequency = current.pickupSchedule?.recyclingFrequency ?? "not_set"
+                nextDate = current.pickupSchedule?.recyclingNextDate ?? ""
+                openedVersion = current.pickupVersion
+            }
+            errorText = "The pickup schedule changed since you opened it. Review the current schedule and try again."
+        } catch let APIError.forbidden(message) {
+            errorText = message ?? "You don't have permission to change this household's pickup schedule."
         } catch {
             errorText = "Could not save your pickup schedule. Check the next collection date and try again."
         }
         saving = nil
+    }
+
+    /// The current calendar a 409 PICKUP_SCHEDULE_CHANGED reply carries
+    /// (`clientError`'s message is the raw body); nil if it has none.
+    private static func currentCalendar(inConflict body: String?) -> PlaceAddressCalendarData? {
+        struct Conflict: Decodable { let calendar: PlaceAddressCalendarData? }
+        guard let data = body?.data(using: .utf8) else { return nil }
+        return (try? JSONDecoder().decode(Conflict.self, from: data))?.calendar
     }
 }

@@ -28,7 +28,7 @@ class PickupScheduleSnapshotTest {
 
             override fun setPickupDay(request: SetPickupDayRequest) = Unit
 
-            override fun clearPickupDay() = Unit
+            override fun clearPickupDay(expectedVersion: String?) = Unit
         }
 
     @Test fun explicitRecyclingSchedule() {
