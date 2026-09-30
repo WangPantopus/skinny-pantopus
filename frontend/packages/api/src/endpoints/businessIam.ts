@@ -50,7 +50,8 @@ export interface BusinessTeamMember {
 export interface BusinessAuditEntry {
   id: string;
   business_user_id: string;
-  actor_user_id: string;
+  /** null once the actor's account is deleted (shown as "Former member"). */
+  actor_user_id: string | null;
   action: string;
   target_type: string | null;
   target_id: string | null;

@@ -63,7 +63,7 @@ function EntryRow({ entry }: { entry: BusinessAuditEntry }) {
               <span className="text-[9px] font-bold text-blue-600">{(actor?.name || '?').charAt(0).toUpperCase()}</span>
             </div>
           )}
-          <span className="text-sm font-semibold text-app-text truncate">{actor?.name || actor?.username || 'Unknown'}</span>
+          <span className="text-sm font-semibold text-app-text truncate">{actor?.name || actor?.username || 'Former member'}</span>
         </div>
         <p className="text-sm text-app-text-secondary">{formatDesc(entry)}</p>
         <p className="text-xs text-app-text-muted mt-0.5">{formatTimeAgo(entry.created_at)}</p>
