@@ -50,9 +50,9 @@ export function ClarifyingQuestionsPanel({
           <button
             type="button"
             onClick={onDismiss}
-            className="p-0.5 rounded hover:bg-white/60 transition-colors"
+            className="p-0.5 rounded hover:bg-app-surface/60 transition-colors"
           >
-            <X className="w-3.5 h-3.5 text-gray-400" />
+            <X className="w-3.5 h-3.5 text-app-text-muted" />
           </button>
         )}
       </div>
@@ -60,7 +60,7 @@ export function ClarifyingQuestionsPanel({
       <div className="space-y-2">
         {questions.map((q) => (
           <div key={q.id}>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-app-text-strong mb-1">
               {q.question}
             </label>
             <input
@@ -69,7 +69,7 @@ export function ClarifyingQuestionsPanel({
               onChange={(e) => handleChange(q.id, e.target.value)}
               placeholder="Your answer (optional)"
               disabled={loading}
-              className="w-full px-2.5 py-1.5 rounded-md border border-amber-200 bg-white text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50"
+              className="w-full px-2.5 py-1.5 rounded-md border border-amber-200 bg-app-surface text-xs placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -104,7 +104,7 @@ export function ClarifyingQuestionsPanel({
             type="button"
             onClick={onDismiss}
             disabled={loading}
-            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            className="text-xs text-app-text-muted hover:text-app-text-strong transition-colors"
           >
             Skip
           </button>
