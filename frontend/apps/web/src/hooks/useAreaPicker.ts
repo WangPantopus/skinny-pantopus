@@ -132,7 +132,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     }
     setViewingLat(loc.latitude);
     setViewingLng(loc.longitude);
-    setViewingLabel('Set area');
+    setViewingLabel('Current location');
     setRadiusMiles(null);
     setShowAreaPicker(false);
     setAreaQuery('');
@@ -168,7 +168,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
       setGpsTimestamp(new Date().toISOString());
       setViewingLat(coords.latitude);
       setViewingLng(coords.longitude);
-      setViewingLabel('Set area');
+      setViewingLabel('Current location');
       setRadiusMiles(null);
       return;
     }
@@ -179,7 +179,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     }
     setViewingLat(loc.latitude);
     setViewingLng(loc.longitude);
-    setViewingLabel('Set area');
+    setViewingLabel('Current location');
     setRadiusMiles(null);
   }, [refreshDeviceLocation, showToast]);
 
