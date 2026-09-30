@@ -14,6 +14,24 @@ function documentedCompatibility(policy, name, bytes) {
     && note.reason.trim() && note.sha256 === hash(bytes));
 }
 
+// From this version on, a migration that creates a public table must turn on its
+// row-level security in the same file. anon and authenticated keep SELECT on public
+// tables, so a table without it can be read by anyone who has the anon key (#985).
+const RLS_REQUIRED_FROM = '20260930174000';
+const IDENT = String.raw`("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const identifier = raw => (raw.startsWith('"') ? raw.slice(1, -1).replaceAll('""', '"') : raw.toLowerCase());
+const withoutLineComments = sql => sql.replace(/--[^\n]*/g, '');
+function createdPublicTables(sql) {
+  const create = new RegExp(String.raw`\bCREATE\s+(?:UNLOGGED\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}`, 'gi');
+  return [...withoutLineComments(sql).matchAll(create)]
+    .filter(match => !match[1] || identifier(match[1]) === 'public').map(match => identifier(match[2]));
+}
+function enablesRowLevelSecurity(sql, table) {
+  const enable = new RegExp(String.raw`\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:${IDENT}\s*\.\s*)?${IDENT}\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY`, 'gi');
+  return [...withoutLineComments(sql).matchAll(enable)]
+    .some(match => (!match[1] || identifier(match[1]) === 'public') && identifier(match[2]) === table);
+}
+
 function validate(policy, files) {
   const errors = [];
   if (!['legacy', 'baselined'].includes(policy.mode)) return ['Unknown database adoption mode'];
@@ -53,6 +71,13 @@ function validate(policy, files) {
         errors.push(`Document compatibility with the currently deployed app: ${name}`);
       }
       if (!/lock_timeout/i.test(sql)) errors.push(`Set a bounded lock_timeout: ${name}`);
+      if (match[1] >= RLS_REQUIRED_FROM) {
+        for (const table of createdPublicTables(sql)) {
+          if (!enablesRowLevelSecurity(sql, table)) {
+            errors.push(`Enable row-level security on public."${table}" in the migration that creates it: ${name}`);
+          }
+        }
+      }
     }
   }
   for (const name of Object.keys(files)) {
