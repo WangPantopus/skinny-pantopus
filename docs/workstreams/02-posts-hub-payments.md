@@ -7,7 +7,23 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT STATE — 2026-09-30T04:18Z (at the split)
+## CURRENT STATE — 2026-09-30T06:21Z (Stream 2 session "Stream 2: Posts, Hub and payments")
+
+- **Docker came back empty at ~05:51Z** (Docker.raw recreated; 0 containers, images and volumes). Every earlier local stack is gone, including the founder's 64521/64522. The iOS simulator runtimes, Android SDK, AVDs and ~/.gradle were also removed from this Mac. **Stream 1 owns the machine-wide native reinstall and is waiting for the user's OK (~14–16 GB); no stream downloads toolchains itself.** Until then Stream 2 does web and API cells only.
+- **Stream 2 runtime (new, own):**
+  - Stack `pantopus-stream2-posts-20260930` in `/private/tmp/pantopus-stream2-posts-db-20260930`, built 05:54–05:55Z from master `ed5ea9ec5` migrations (93 applied). Ports: API 64581, DB 64582, shadow 64580; range 64580–64589 is Stream 2's.
+  - Private runtime `/private/tmp/pantopus-stream2-runtime-20260930`: backend 18160, fault proxy 18168, Next 18169, all from worktree `stream-2-posts-hub-payments-76db95`. The backend uses an inert placeholder `sk_test_` key with api.stripe.com blocked by the egress guard, so no Stripe call can leave the Mac. PIDs are in `PIDS.txt`.
+  - Fixtures: Alice/Bob/Dana `f9300c02-0000-4000-8000-00000000000{1,2,3}` (`s2.posts.*.0930@example.com`, password in a private 0600 file), all viewing Vancouver, WA; three posts by Alice.
+  - Other streams' ports: Stream 1 64560–64569 + 18132/18138/18139; Streams 3/4 64550–64559 + 18142–18144; Stream 5 64531–64539 + 18130/18131/18134/18197/18198.
+- **Open PRs (sent to Stream 1 with heads and seals):**
+  - [#850](https://github.com/WangPantopus/skinny-pantopus/pull/850) head `f18c971e38ef07f9cee59f16a5e61786b9854a46`: web Pulse main feed. A failed area read no longer says "Set an area to see local posts"; it shows an error with Try Again, and skeletons while the read is in flight. The Neighborhood Pulse card no longer shows false zeros on a failed read or under a chip. Seal `20260930-stream2-pulse-web-feed-reads-r1`, 71 files, `f23b5c51…b057`.
+  - [#851](https://github.com/WangPantopus/skinny-pantopus/pull/851) head `89c76c4476f0983c369248a8a44c1bcbef66c402`: the web public post page says "Couldn't load this post" with Try Again on a failed read. Only a 403 still says "isn't publicly shareable". Seal `20260930-stream2-posts-web-public-page-r1`, 45 files, `70ca346b…024a`.
+- **Decided per the standing instruction** (recorded in the PR bodies too):
+  - For #850, the Pulse card shows a dash for an unknown count (screen readers hear "Not available"). I rejected hiding the card (layout jump) and an extra unfiltered count request.
+  - For #851, the button row may wrap instead of squeezing four labels.
+- **Next:** the remaining web cells (Hub R1/L2, Start L2/L3, post create E6, delete E1, web L1 draft across tabs, web My posts and money-screen a11y), then native once Stream 1 reports the toolchains are back.
+
+## STATE AT THE SPLIT — 2026-09-30T04:18Z
 
 - **Master** `8e44382ce` (batch 134). Stream 2 has no open PRs; this file is its starting point.
 - **Docker Desktop is down** since about 03:30Z (the disk filled), so no local database stack is reachable. Restarting Docker is the user's call because the founder's stack runs on it. Stream 2's runtime doesn't exist yet: set it up as described under "Runtime and devices" once Docker is back.
@@ -84,7 +100,7 @@ For the shared U rows, Stream 2 owns the Posts and Pulse, Start and Hub, and mon
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T04:16Z
+## Stream 2 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-09-30T06:20Z
 
 **Stream 2: Posts, Hub and payments.** Review page: https://claude.ai/artifact/WFpmhCwcUyLyakPRLjxJCu. This section is Stream 2's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -96,13 +112,13 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | **Posts and Pulse** | | | |
-| Pulse feed, My posts, counts | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>⬜ R1 R2 on the main feed |
+| Pulse feed, My posts, counts | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 (Sep26 native Pulse reads) | ✅ Comment counts (C-18)<br>✅ R1 R2 on My Pulse (Sep25)<br>✅ R1 R2 on the main feed; failed area read and false Pulse zeros fixed (#850) |
 | Create a post (Text, photo, audience, place) | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 | ✅ E1 E2 E3 (#657, #718)<br>⬜ E6 | ✅ E2 E3 (#718)<br>✅ E1 photo upload failure (#718)<br>⬜ E6 |
 | Edit a post | ⬜ E1 E2 E5 | ✅ E1, audience kept (#657, #659)<br>⬜ E2 E5 | – Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists |
 | Delete a post | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 | ✅ E2 (#709)<br>⬜ E1 |
 | Comments (Add, reply, delete, pages, photos, drafts) | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages (#671, #699, Sep27)<br>⬜ Photo attachment failure | ✅ E1 E2, delete, pages, photos (#671, #699, Sep27) |
 | Report a post | ✅ E1 E2 E3 (#642 server dedupe) | ✅ E1 E2 E3 (#642) | ✅ E1 E2 E3 (#642 server dedupe) |
-| Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ⬜ Public post page: R1, E4 for a private post |
+| Post links | ✅ Links open the right post (#472) | ✅ Links open the right post (#472) | ✅ Public post page: E4 private post kept; R1 now "Couldn't load" with Try Again (#851) |
 | **Start and Hub** | | | |
 | Start funnel and Place preview | ✅ R1 (#635) | ✅ R1 (#635) | ✅ R1 (#607) |
 | Hub cards and status pills (Stream 1 parts only) | ✅ Pills open real screens (C-02)<br>⬜ R1 | ✅ Pills open real screens (C-02)<br>⬜ R1 | ✅ Hub posts (Sep25)<br>⬜ R1 |
@@ -138,7 +154,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Android task-progress labels that break mid-word at font 2.0: a wrap-only fix when the money screens come up (my recommendation). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Proposal: the active Pulse filter chip holds its mute control inside the chip's button, so screen readers can't reach it. Fixing it means splitting the chip into two controls that look the same.
 
-- U03 items: done 29, confirm from existing evidence 0, to do 15, your call 0, boundary 0, not offered 1
+- U03 items: done 31, confirm from existing evidence 0, to do 13, your call 0, boundary 0, not offered 1
 - U04 items: done 4, confirm from existing evidence 0, to do 11, your call 0, boundary 0, not offered 0
 - U02 items: done 15, confirm from existing evidence 0, to do 25, your call 7, boundary 1, not offered 0
 

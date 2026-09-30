@@ -4,13 +4,13 @@ from data_common import c, ALL4
 
 U03 = [
     ("Posts and Pulse", [
-        ("Pulse feed, My posts, counts", "", {"iOS": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Android": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Web": [c("done", "Comment counts", "C-18"), c("done", "R1 R2 on My Pulse", "Sep25"), c("todo", "R1 R2 on the main feed")]}),
+        ("Pulse feed, My posts, counts", "", {"iOS": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Android": [c("done", "Comment counts", "C-18"), c("done", "R1 R2", "Sep26 native Pulse reads")], "Web": [c("done", "Comment counts", "C-18"), c("done", "R1 R2 on My Pulse", "Sep25"), c("done", "R1 R2 on the main feed; failed area read and false Pulse zeros fixed", "#850")]}),
         ("Create a post", "Text, photo, audience, place", {"iOS": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")], "Android": [c("done", "E1 E2 E3", "#657, #718"), c("todo", "E6")], "Web": [c("done", "E2 E3", "#718"), c("done", "E1 photo upload failure", "#718"), c("todo", "E6")]}),
         ("Edit a post", "", {"iOS": [c("todo", "E1 E2 E5")], "Android": [c("done", "E1, audience kept", "#657, #659"), c("todo", "E2 E5")], "Web": [c("na", "Web has no post edit action (Delete, Hide, Report, Mark Resolved only); the API exists")]}),
         ("Delete a post", "", {"iOS": [c("done", "E2", "#709"), c("todo", "E1")], "Android": [c("done", "E2", "#709"), c("todo", "E1")], "Web": [c("done", "E2", "#709"), c("todo", "E1")]}),
         ("Comments", "Add, reply, delete, pages, photos, drafts", {"iOS": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Android": [c("done", "E1 E2, delete, pages", "#671, #699, Sep27"), c("todo", "Photo attachment failure")], "Web": [c("done", "E1 E2, delete, pages, photos", "#671, #699, Sep27")]}),
         ("Report a post", "", {"iOS": [c("done", "E1 E2 E3", "#642 server dedupe")], "Android": [c("done", "E1 E2 E3", "#642")], "Web": [c("done", "E1 E2 E3", "#642 server dedupe")]}),
-        ("Post links", "", {"iOS": [c("done", "Links open the right post", "#472")], "Android": [c("done", "Links open the right post", "#472")], "Web": [c("todo", "Public post page: R1, E4 for a private post")]}),
+        ("Post links", "", {"iOS": [c("done", "Links open the right post", "#472")], "Android": [c("done", "Links open the right post", "#472")], "Web": [c("done", "Public post page: E4 private post kept; R1 now \"Couldn't load\" with Try Again", "#851")]}),
     ]),
     ("Start and Hub", [
         ("Start funnel and Place preview", "", {"iOS": [c("done", "R1", "#635")], "Android": [c("done", "R1", "#635")], "Web": [c("done", "R1", "#607")]}),
