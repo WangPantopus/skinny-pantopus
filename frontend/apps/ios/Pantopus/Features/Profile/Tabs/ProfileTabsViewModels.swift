@@ -196,9 +196,10 @@ public final class ProfilePortfolioViewModel {
     }
 
     /// `DELETE /api/files/:id` behind the confirm. Awaited, not
-    /// optimistic — a 403 must leave the grid untouched.
-    public func confirmDelete() async {
-        guard let item = pendingDelete, !isMutating else { return }
+    /// optimistic — a 403 must leave the grid untouched. The dialog passes
+    /// the item it presented: its dismissal clears `pendingDelete` before this runs.
+    public func confirmDelete(_ presented: PortfolioItem? = nil) async {
+        guard let item = presented ?? pendingDelete, !isMutating else { return }
         pendingDelete = nil
         isMutating = true
         defer { isMutating = false }
