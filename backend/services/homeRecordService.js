@@ -15,6 +15,8 @@ const MESSAGES = {
   HOME_TASK_MEDIA_LEGACY_CLEANUP_REQUIRED: 'This task has older public attachments that require verified storage cleanup.',
   HOME_TASK_PRIVATE_STORAGE_REQUIRED: 'Private task attachments are not available yet. Your task is saved; no files were uploaded.',
   HOME_TASK_GIG_FLOW_REQUIRED: 'Use the gig creation flow to publish this task.',
+  HOME_PURGE_INVALID: 'Check the Home and member and try again.',
+  HOME_PURGE_HOUSEHOLD_PRESENT: 'Someone else still keeps this Home, so its records stay.',
 };
 function failure(code = 'HOME_RECORD_UNAVAILABLE', status = 503) {
   return Object.assign(new Error(MESSAGES[code] || 'Could not complete the record request. Please retry.'), {
@@ -102,4 +104,16 @@ function sendError(res, error) {
     ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { list, listCollection, mutate, mutateTaskById, visibleRecords, sendError };
+// Account deletion (coordinator decision 9): when the departing person is the last member
+// of a Home that delete-my-Home refuses, the shell stays but its household records go, so a
+// later resident never inherits them. homeAuthorityService.retireHomeForDeletedAccount
+// decides and calls this. The SQL refuses while anyone else keeps the Home; stored bytes are
+// tombstoned for the document and task-media recovery jobs (every 5 minutes).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function purgeHouseholdRecords(homeId, departingUserId) {
+  if (!UUID.test(homeId || '') || !UUID.test(departingUserId || '')) throw failure('HOME_PURGE_INVALID', 400);
+  const result = await rpc('purge_home_household_records', { p_home_id: homeId, p_departing_user_id: departingUserId });
+  if (result.home_id !== homeId.toLowerCase() || !result.purged || typeof result.purged !== 'object') throw failure();
+  return { homeId, purged: result.purged };
+}
+module.exports = { list, listCollection, mutate, mutateTaskById, visibleRecords, sendError, purgeHouseholdRecords };
