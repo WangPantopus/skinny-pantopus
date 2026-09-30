@@ -41,6 +41,13 @@
     - Fault proxy :18138, with no rules.
     - Next dev :18139, served from worktree `stream1-peer-takeover-d2cb25`, now detached at `a211e1f48`.
     - Device slots 1 (`emulator-5558`) and 2 (simulator `A189976E`) are held by `stream1:`. The simulator has candidate `1d6e40d3d` installed, and the emulator its APK.
+    - **Both devices were shut down at 22:45Z to free memory.** Installed apps and Alice's sign-in persist. Boot the simulator with `xcrun simctl boot A189976E-697E-4DE7-8EE3-6E355B990FAD`, and the emulator with `~/Library/Android/sdk/emulator/emulator -avd pantopus_s1 -port 5558 -no-window -no-audio -no-boot-anim -no-snapshot-save -crash-report-mode disabled -no-metrics &`, then `adb -s emulator-5558 wait-for-device`.
+    - **Resources released at 22:45Z:**
+      - my session scratchpad (9.7 GB), including 8 clean session worktrees removed with `git worktree remove` (every branch kept);
+      - the old clean worktree `/private/tmp/pantopus-stream1-web-trade` (branch on origin);
+      - old app copies in the runtime folder (`ios-builds/`, `preserved-products/`, three APKs);
+      - the iOS cache's compiled `Build/`. Its `SourcePackages` and module caches are kept.
+    - Small helper scripts were saved to `tools/s1-kit/extra/`.
     - Heavy slot: free.
   - **Fixtures:** none live. The Trains, money and crew fixtures were all removed by exact ids; 350/353 tables equal the 19:33:34Z baseline, and the rest is sign-in bookkeeping.
   - **Peers:**

@@ -81,6 +81,7 @@ Newest dated text wins. **Re-verify every SHA, PR, lease and process live.** A h
   - `…slot.2` = simulator "Pantopus S1" `A189976E-697E-4DE7-8EE3-6E355B990FAD`.
   - Both are held under a `stream1:` label. Rewrite the owner line with your purpose when you use them.
   - Both have candidate `1d6e40d3d` installed (master minus #1081's crew changes). Alice is signed in.
+  - **Both were shut down at 22:45Z to free memory**; their apps and sign-ins persist. Boot the simulator with `xcrun simctl boot A189976E-697E-4DE7-8EE3-6E355B990FAD`, and the emulator with `~/Library/Android/sdk/emulator/emulator -avd pantopus_s1 -port 5558 -no-window -no-audio -no-boot-anim -no-snapshot-save -crash-report-mode disabled -no-metrics &`, then `adb -s emulator-5558 wait-for-device`.
 - **Heavy slot:** `bash /private/tmp/pantopus-tools/heavy-slot.sh status|acquire|release`. It was free at handoff.
 - **Fixtures:** none live; everything was removed by exact ids.
 
