@@ -1881,7 +1881,11 @@ router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) =
     if (req.body.city) updates.city = req.body.city;
     if (req.body.state) updates.state = req.body.state;
     if (req.body.zip_code) updates.zip_code = req.body.zip_code;
-    if (req.body.name !== undefined) updates.name = req.body.name;
+    // A blank name clears it (null), as the Settings tab's PATCH /:id/settings
+    // does, so the Home shows its address instead of an empty name.
+    if (req.body.name !== undefined) {
+      updates.name = typeof req.body.name === 'string' && !req.body.name.trim() ? null : req.body.name;
+    }
     if (req.body.home_type) updates.home_type = req.body.home_type;
     if (req.body.description !== undefined) updates.description = req.body.description;
     if (req.body.entry_instructions !== undefined) updates.entry_instructions = req.body.entry_instructions;

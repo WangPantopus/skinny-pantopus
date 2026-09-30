@@ -83,6 +83,10 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     public private(set) var isRenaming = false
     /// Draft the text field binds to.
     public var renameDraft = ""
+    /// The Home's own name ("" when it has none). The identity card shows the
+    /// address in that case, but the editor starts from, and compares with,
+    /// the real name, so an untouched save never stores the address as a name.
+    private var currentName = ""
     public private(set) var isSavingName = false
     /// Inline error under the field when the PATCH fails.
     public private(set) var renameError: String?
@@ -188,7 +192,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     /// viewer can't edit — RN disables the row the same way.
     public func beginRenaming() {
         guard canEditHome, !isSavingName else { return }
-        renameDraft = identity.homeName
+        renameDraft = currentName
         renameError = nil
         isRenaming = true
     }
@@ -197,17 +201,20 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     /// close button (`settings/index.tsx:103`).
     public func cancelRenaming() {
         isRenaming = false
-        renameDraft = identity.homeName
+        renameDraft = currentName
         renameError = nil
     }
 
     /// `PATCH /api/homes/:id` with the trimmed draft, then re-read the
-    /// home so every derived caption follows the new name.
+    /// home so every derived caption follows the new name. An unchanged
+    /// draft saves nothing; an empty one clears the name (the server stores
+    /// null and the Home shows its address), as the web Settings tab does.
     public func saveRenaming() async {
         let trimmed = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canEditHome, !isSavingName else { return }
-        guard !trimmed.isEmpty else {
-            renameError = "Enter a name for this home."
+        guard trimmed != currentName else {
+            isRenaming = false
+            renameError = nil
             return
         }
         guard trimmed.count <= Self.nameMaxLength else {
@@ -254,6 +261,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         canEditHome = Self.canEdit(detail: detail, access: access)
         showsGuestPasses = access?.canManageMembers ?? true
 
+        currentName = detail.base.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let homeName = detail.base.name?.nonEmpty
             ?? detail.base.address?.nonEmpty
             ?? "This home"
@@ -272,7 +280,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         resolved.propertyDetails = Self.humanizedHomeType(detail.base.homeType)
         resolved.people = Self.peopleSubtext(occupants: occupants)
         subtexts = resolved
-        if !isRenaming { renameDraft = identity.homeName }
+        if !isRenaming { renameDraft = currentName }
     }
 
     /// Human label for the viewer's role in this home (owner, else their role_base).
