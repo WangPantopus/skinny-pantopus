@@ -9,8 +9,8 @@
 //    - the `details` map is composed with the severity / verified-by
 //      keys the detail view reads
 //    - submit POSTs `/api/homes/:id/emergencies` in create mode
-//    - edit mode commits locally and surfaces the new draft to
-//      `onUpdated` (backend has no PUT today)
+//    - edit mode PUTs the entry and surfaces the saved draft to
+//      `onUpdated`
 //    - every category × severity combination round-trips through the
 //      projection without drift (snapshot-test equivalent — we can't
 //      generate iOS PNG baselines from this harness)
@@ -170,7 +170,7 @@ final class AddEmergencyInfoFormViewModelTests: XCTestCase {
         XCTAssertEqual(vm.toast?.kind, .error)
     }
 
-    func testEditModeCommitsLocallyAndSurfacesDraft() async {
+    func testEditModePutsAndSurfacesSavedDraft() async {
         let received = Locked<EmergencyFormDraft?>(nil)
         let draft = EmergencyFormDraft(
             id: "e-1",
@@ -189,6 +189,12 @@ final class AddEmergencyInfoFormViewModelTests: XCTestCase {
             onUpdated: { received.value = $0 }
         )
         vm.severity = .critical
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"emergency":{"id":"e-1","home_id":"home-1","type":"medical_condition",
+              "label":"Asthma","details":{"severity":"critical","detail":"Inhaler in go-bag."}}}
+            """)
+        ]
         let ok = await vm.submit()
         XCTAssertTrue(ok)
         XCTAssertEqual(received.value?.severity, .critical)
