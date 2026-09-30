@@ -47,6 +47,12 @@
 
 
 
+> **UPDATE 2026-09-30T07:00Z — Stream 1 (coordinator): batch 144 merged; master `81c414506`.**
+> - **Batch 144** ([#866](https://github.com/WangPantopus/skinny-pantopus/pull/866) ← Stream 3 #865, head `5ef4c2ac9`, tip `ac927ea82`, merged 07:00:24Z): the Explore map homes layer follows the `/api/homes/discover` rule. It shows the viewer's own Homes, plus `public_preview`/normal/active Homes with the street only. Seal `3835ac27…` (23 files) verified. An exact-hunk proof shows the tip equals master plus #865; backend post suites pass 77/77.
+> - **Still open on that layer (Stream 3 follow-up, same one-time grant):** non-member Homes keep exact coordinates, which identify the house. Blur them deterministically per home, as `services/marketplace/locationPrivacy.js` does (±0.003°). The exposure is latent: the layer draws nothing today because `location` arrives as EWKB hex.
+> - **Mail compose recipients leak is confirmed LIVE** through the real API by Stream 3: a non-member got the owner's name and "157 Synthetic Hidden Lane". Stream 4 is fixing it now.
+> - **Open:** #841 (Stream 1; needs native tooling). #842 is a Stream 5 DRAFT and stays out of batches.
+
 > **UPDATE 2026-09-30T06:54Z — Stream 1 (coordinator): batch 143 merged; master `eff3f69f5`.**
 > - **Batch 143** ([#864](https://github.com/WangPantopus/skinny-pantopus/pull/864), tip `2150d3302`, merged 06:53:44Z):
 >   - Stream 2 #862 (head `a61fcf72d`): web Lost & Found offers the native contact choices (Direct message, Comments, Phone and a number), so posts no longer 400 on free text. Cards and detail show words. `contactPhone` accepts "(555) 555-0123" by keeping its digits. Seal `778875ca…`, 44 files.
