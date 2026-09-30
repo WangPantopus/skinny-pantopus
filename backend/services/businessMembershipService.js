@@ -10,6 +10,109 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
+// The active seat bound to this user at this business, if any. A user holds one binding per seat, across
+// every business they belong to.
+async function findActiveSeat(businessUserId, userId) {
+  const { data: bindings, error: bindErr } = await supabaseAdmin
+    .from('SeatBinding')
+    .select('seat_id')
+    .eq('user_id', userId);
+  if (bindErr) throw bindErr;
+  if (!bindings || bindings.length === 0) return null;
+
+  const { data: seats, error: seatErr } = await supabaseAdmin
+    .from('BusinessSeat')
+    .select('id, role_base')
+    .in('id', bindings.map((b) => b.seat_id))
+    .eq('business_user_id', businessUserId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (seatErr) throw seatErr;
+  return seats?.[0] || null;
+}
+
+// A seat is named as migration 20260930184000 names the seats it backfills: by the member's team title (a
+// manager's "Front Desk", or "Owner" for the business's creator), else by their first name. display_name is
+// required.
+async function seatDisplayName(businessUserId, userId, title) {
+  let teamTitle = (title || '').trim();
+  if (!teamTitle) {
+    const { data: team } = await supabaseAdmin
+      .from('BusinessTeam')
+      .select('title')
+      .eq('business_user_id', businessUserId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    teamTitle = (team?.title || '').trim();
+  }
+  if (teamTitle) return teamTitle;
+  const { data: user } = await supabaseAdmin
+    .from('User')
+    .select('first_name, name')
+    .eq('id', userId)
+    .maybeSingle();
+  return (user?.first_name || '').trim() || (user?.name || '').trim().split(/\s+/)[0] || 'Team Member';
+}
+
+/**
+ * Make sure the member holds an active, bound seat at the business: the identity the seat-based features
+ * read (dashboard Team tab, seat invites, Profiles & Privacy, business messaging). An active seat they
+ * already hold there is kept and given the role; otherwise a seat and its binding are created.
+ *
+ * @param {Object} opts
+ * @param {string} opts.businessUserId
+ * @param {string} opts.userId
+ * @param {string} opts.roleBase
+ * @param {string} [opts.title]
+ * @param {string} [opts.notes]
+ * @param {string} opts.bindingMethod - seat_binding_method: 'owner_bootstrap' or 'iam_add'
+ * @returns {{ seat: object, binding: object|null, created: boolean }}
+ */
+async function ensureSeat({ businessUserId, userId, roleBase, title, notes, bindingMethod }) {
+  const now = new Date().toISOString();
+
+  const existing = await findActiveSeat(businessUserId, userId);
+  if (existing) {
+    if (existing.role_base !== roleBase) {
+      const { error: roleErr } = await supabaseAdmin
+        .from('BusinessSeat')
+        .update({ role_base: roleBase, updated_at: now })
+        .eq('id', existing.id);
+      if (roleErr) throw roleErr;
+    }
+    return { seat: { id: existing.id }, binding: null, created: false };
+  }
+
+  const { data: seat, error: seatErr } = await supabaseAdmin
+    .from('BusinessSeat')
+    .insert({
+      business_user_id: businessUserId,
+      role_base: roleBase,
+      display_name: await seatDisplayName(businessUserId, userId, title),
+      notes: notes || null,
+      invite_status: 'accepted',
+      accepted_at: now,
+      is_active: true,
+    })
+    .select('id')
+    .single();
+  if (seatErr) throw seatErr;
+
+  const { data: binding, error: bindErr } = await supabaseAdmin
+    .from('SeatBinding')
+    .insert({ seat_id: seat.id, user_id: userId, binding_method: bindingMethod })
+    .select('seat_id, binding_method')
+    .single();
+  if (bindErr) {
+    // An unbound seat would sit on the Team tab with nobody holding it.
+    await supabaseAdmin.from('BusinessSeat').delete().eq('id', seat.id);
+    throw bindErr;
+  }
+
+  return { seat, binding, created: true };
+}
+
 /**
  * Add a member to a business — writes to both BusinessTeam and BusinessSeat.
  *
@@ -19,11 +122,10 @@ const logger = require('../utils/logger');
  * @param {string} opts.roleBase        - Role to assign (viewer, staff, editor, admin, owner)
  * @param {string} [opts.displayName]   - Display name / title
  * @param {string} [opts.invitedBy]     - Actor who invited
- * @param {string} [opts.email]         - User's email (for seat record)
  * @param {string} [opts.notes]         - Optional notes
  * @returns {{ team: object|null, seat: object|null, binding: object|null, error: string|null }}
  */
-async function addMember({ businessUserId, userId, roleBase, displayName, invitedBy, email, notes }) {
+async function addMember({ businessUserId, userId, roleBase, displayName, invitedBy, notes }) {
   const now = new Date().toISOString();
 
   // ── 1. Primary write: BusinessTeam ──────────────────────────
@@ -91,39 +193,14 @@ async function addMember({ businessUserId, userId, roleBase, displayName, invite
   let binding = null;
 
   try {
-    const { data: seatData, error: seatErr } = await supabaseAdmin
-      .from('BusinessSeat')
-      .insert({
-        business_user_id: businessUserId,
-        role_base: roleBase,
-        display_name: displayName || null,
-        email: email || null,
-        notes: notes || null,
-        invite_status: 'accepted',
-        accepted_at: now,
-        is_active: true,
-        invited_by_seat_id: null,
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (seatErr) throw seatErr;
-    seat = seatData;
-
-    if (seat) {
-      const { data: bindData, error: bindErr } = await supabaseAdmin
-        .from('SeatBinding')
-        .insert({
-          seat_id: seat.id,
-          user_id: userId,
-          binding_method: 'iam_add',
-        })
-        .select('id')
-        .maybeSingle();
-
-      if (bindErr) throw bindErr;
-      binding = bindData;
-    }
+    ({ seat, binding } = await ensureSeat({
+      businessUserId,
+      userId,
+      roleBase,
+      title: displayName,
+      notes,
+      bindingMethod: 'iam_add',
+    }));
   } catch (seatError) {
     logger.warn('addMember: dual-write to BusinessSeat failed (non-fatal)', {
       error: seatError.message || seatError,
@@ -237,7 +314,14 @@ async function removeMember({ businessUserId, userId, reason }) {
       .eq('user_id', userId);
 
     if (bindings && bindings.length > 0) {
-      const seatIds = bindings.map((b) => b.seat_id);
+      // Only this business's seats: the member keeps the seats they hold at other businesses.
+      const { data: seats, error: seatsErr } = await supabaseAdmin
+        .from('BusinessSeat')
+        .select('id')
+        .in('id', bindings.map((b) => b.seat_id))
+        .eq('business_user_id', businessUserId);
+      if (seatsErr) throw seatsErr;
+      const seatIds = (seats || []).map((s) => s.id);
 
       for (const seatId of seatIds) {
         await supabaseAdmin
@@ -274,6 +358,7 @@ async function removeMember({ businessUserId, userId, reason }) {
 
 module.exports = {
   addMember,
+  ensureSeat,
   updateMemberRole,
   removeMember,
 };
