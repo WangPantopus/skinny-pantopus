@@ -3923,8 +3923,9 @@ router.get(
         gift_funds: st.enable_gift_funds,
       },
 
-      // Recipient info (always public)
-      recipient_summary: profile ? `Household of ${profile.household_size || '?'}` : null,
+      // Recipient info (always public). No summary until the household size is known:
+      // the clients show it as written, and "Household of ?" read as a broken sentence.
+      recipient_summary: profile?.household_size ? `Household of ${profile.household_size}` : null,
       household_size: profile?.household_size || null,
       dietary_restrictions: profile?.allergies?.items || [],
       dietary_preferences: profile?.dietary_styles?.items || [],
