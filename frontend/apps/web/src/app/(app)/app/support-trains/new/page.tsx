@@ -303,6 +303,9 @@ export default function NewSupportTrainPage() {
         preferred_dropoff_end_time: scheduleSlotEnd || null,
       } as any);
 
+      // "Gift funds" needs the fund itself; the flag alone takes no contributions.
+      if (enableGiftFunds) await api.supportTrains.enableFund(trainId);
+
       const slotPayload = buildSupportTrainGenerateSlotsPayload(
         schedulePreset,
         scheduleRangeStart,
