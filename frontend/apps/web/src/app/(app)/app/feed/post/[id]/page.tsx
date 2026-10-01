@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -32,6 +32,11 @@ function getTypeIcon(type: string): LucideIcon {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
   return LUCIDE_MAP[name] || Pencil;
 }
+
+// The type band and its chip follow the theme, like PostCard's labels (inline colors can't reach `dark:`):
+// light keeps the palette's tint and `textColor`; dark uses the type colour at 10% over the card and `darkTextColor`.
+const POST_TYPE_THEMED_BAND = 'bg-[color:var(--post-type-band)] dark:bg-[color:var(--post-type-band-dark)]';
+const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[color:var(--post-type-text-dark)]';
 
 // ═══════════════════════════════════════════════════════════════
 // POST DETAIL PAGE
@@ -437,19 +442,23 @@ export default function PostDetailPage() {
         >
           {/* Type indicator */}
           <div
-            className="flex items-center gap-2 px-5 py-3"
-            style={{ background: config.bgLight }}
+            className={`flex items-center gap-2 px-5 py-3 ${POST_TYPE_THEMED_BAND}`}
+            style={{ '--post-type-band': config.bgLight, '--post-type-band-dark': `${config.color}1A` } as CSSProperties}
           >
             <span
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: `${config.color}15`, color: config.textColor }}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${POST_TYPE_THEMED_TEXT}`}
+              style={{
+                background: `${config.color}15`,
+                '--post-type-text': config.textColor,
+                '--post-type-text-dark': config.darkTextColor,
+              } as CSSProperties}
             >
               <TypeIcon className="w-3.5 h-3.5" />
               {config.label}
             </span>
-            <span className="text-[10px] text-app-muted dark:text-slate-600">{timeAgo(post.created_at)}</span>
+            <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
             {post.is_edited && (
-              <span className="text-[10px] text-app-muted dark:text-slate-600 italic">edited</span>
+              <span className="text-[10px] text-app-muted italic">edited</span>
             )}
             {post.state === 'solved' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">

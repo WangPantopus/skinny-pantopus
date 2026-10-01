@@ -2,6 +2,8 @@ import TrustChip from '../atoms/TrustChip';
 
 interface OwnerInsightsTabProps {
   profile: Record<string, unknown>;
+  /** The public portfolio; null until it loads. */
+  portfolio: unknown[] | null;
   displayReviewCount: number;
   displayRating: number;
 }
@@ -10,16 +12,17 @@ function numberField(value: unknown): number {
   return typeof value === 'number' ? value : 0;
 }
 
-export default function OwnerInsightsTab({ profile, displayReviewCount, displayRating }: OwnerInsightsTabProps) {
+export default function OwnerInsightsTab({ profile, portfolio, displayReviewCount, displayRating }: OwnerInsightsTabProps) {
+  // Only what an owner can fill in: bio, photo and skills in Edit Profile, and portfolio photos in the app.
+  // (No account has services or availability to set, so they don't count.)
   const profileStrength = [
     profile.bio,
     profile.profile_picture_url,
     Array.isArray(profile.skills) && profile.skills.length > 0,
-    Array.isArray(profile.services) && profile.services.length > 0,
-    Array.isArray(profile.portfolio) && profile.portfolio.length > 0,
+    (portfolio?.length ?? 0) > 0,
   ].filter(Boolean).length;
 
-  const percent = Math.round((profileStrength / 5) * 100);
+  const percent = Math.round((profileStrength / 4) * 100);
 
   return (
     <div className="space-y-4">
@@ -28,10 +31,8 @@ export default function OwnerInsightsTab({ profile, displayReviewCount, displayR
         <p className="text-3xl font-bold text-app mt-1">{percent}%</p>
         <p className="text-sm text-app-secondary mt-1">Complete the next items to improve conversion.</p>
         <ul className="mt-3 text-sm text-app-secondary space-y-1">
-          <li>• Add 1–3 featured services</li>
           <li>• Add at least 3 skills</li>
-          <li>• Add one portfolio highlight</li>
-          <li>• Set availability details</li>
+          <li>• Add one portfolio highlight from the Pantopus app</li>
         </ul>
       </div>
       <div className="bg-surface rounded-xl border border-app p-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
