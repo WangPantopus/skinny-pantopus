@@ -56,7 +56,7 @@ function NotificationRow({ notif, isSelected, onClick, onDelete, deleting = fals
           e.stopPropagation();
           onDelete(notif.id);
         }}
-        className="opacity-0 group-hover:opacity-100 text-app-text-muted hover:text-red-500 p-1 flex-shrink-0 transition"
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-app-text-muted hover:text-red-500 p-1 flex-shrink-0 transition"
         title="Remove"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
