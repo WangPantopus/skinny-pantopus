@@ -8,6 +8,7 @@ import TransferAdminWizard from './TransferAdminWizard';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
 import { toast } from '@/components/ui/toast-store';
+import { notifyHomesChanged } from '@/components/ProfileToggle';
 
 // ---- Constants ----
 
@@ -305,6 +306,7 @@ export default function HomeSettingsTab({
       ));
       if (Object.keys(changes).length > 0) {
         await api.homeProfile.updateHomeSettings(homeId, changes);
+        if ('name' in changes) notifyHomesChanged();
       }
       // What was saved is no longer an unsaved edit.
       loadedSettings.current = draft;
