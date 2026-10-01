@@ -9,6 +9,26 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T07:12Z (Stream 1).**
+  - **Merged:** each seal verified, each PR's failed CI jobs read, verify-batch RESULT OK.
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 274 | #1266 | 06:50:25Z | #1261 (the monthly summary email honours the opt-out and fails closed; merged before today's 17:00Z job) |
+    | 275 | #1268 | 06:57:28Z | #1267 (web "My posts" sidebar entry, as decided) |
+    | 276 | #1272 | 07:06:14Z | #1265 (crew page editor row names), #1269 (End Lease asks first), #1271 (landlord wizard copy) |
+
+    Master is **`dc878ddb5`**; the next batch is **277**.
+  - **Mine, verification only (sealed):**
+    - `20261001-stream1-ios-u04-l1-r1` (`a8bf8e36`): **U04 L1 on iOS.** The sign-up sheet's details, Manage's update draft and Start's short note survive going to the background and back (same pid).
+    - `20261001-stream1-ios-u03-lists-detail-r1` (`5a740586`): **iOS lists R1/R2 and detail R1.** Injected 500s give errors with Try again, which recover; empty states are truthful.
+    - `20261001-stream1-ios-1248-1249-1250-r1` (`342ba49e`): Stream 2's iOS cells.
+  - **In flight:** candidate `3326f3ecc` (master `008613b81` + #1249 + #1259 + #1270). It covers #1249's Android compile and Paparazzi verify, the #1259 iOS cell, and #1270 on both apps. The iOS before for #1270 is recorded: the deep link does nothing.
+    - The simulated push can't run: the app has no notification permission on the test sim, and I don't grant OS permissions.
+  - **Infrastructure:**
+    - macOS's tmp_cleaner (local midnight, **07:00Z**) deletes files under `/private/tmp` untouched for 3 days. At 07:00Z it removed `tools/verify-bundle.py`; it's rewritten and now accepts Stream 5's manifest format too.
+    - My kit is copied (no secrets) to `.pantopus-recovery/stream1-runtime-kit`. My runtime's and `/private/tmp/pantopus-tools`' timestamps are refreshed. All streams are warned.
+    - Changing the system job is the user's call.
 - **Update 2026-10-01T06:55Z (Stream 1).**
   - **Merged:** each seal verified, each PR's failed CI jobs read, verify-batch RESULT OK.
 
@@ -592,7 +612,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T06:55Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T07:12Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -604,9 +624,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | **Support Trains** | | | |
-| Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (f439d4b5) | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
+| Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (5a740586) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (f439d4b5) | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
 | Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 failed step deletes its draft; E2 lost create reply reuses it; E3 double tap makes one train (#841, f98672ab) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 publish 503 retry, E2 lost create reply, E3 double tap: each ends with one train (#841, f98672ab) | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836) |
-| Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>⬜ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
+| Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load support train with Try again, which recovers; no partial train (5a740586) | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
 | Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
 | Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
 | Organizer dates: add, edit, remove | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>⬜ Remove: E1 E2 | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>✅ Remove: E1 (#759)<br>⬜ Remove: E2 | – Calendar is read-only on web |
@@ -621,7 +641,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>✅ L3 switch account: nothing from the previous account shows (20260930 web switch 73f2bc13) |
+| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>✅ L1 typed text survives background and return: sign-up sheet details, Manage update draft, Start short note (a8bf8e36)<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>✅ L3 switch account: nothing from the previous account shows (20260930 web switch 73f2bc13) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
@@ -640,8 +660,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 58, confirm from existing evidence 0, to do 14, your call 0, boundary 6, not offered 9
-- U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
+- U03 items: done 60, confirm from existing evidence 0, to do 12, your call 0, boundary 6, not offered 9
+- U04 items: done 6, confirm from existing evidence 0, to do 5, your call 0, boundary 0, not offered 0
 - U02 items: done 22, confirm from existing evidence 0, to do 3, your call 6, boundary 0, not offered 4
 
 ## History
