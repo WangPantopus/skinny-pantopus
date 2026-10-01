@@ -6,8 +6,9 @@
 //  120×96 mailbox illustration (shelf + body + flag + sparkles + mono
 //  "0" face) on top, "Nothing new today" h2 below, two-line body copy,
 //  a streak chip + last-scan chip row, then the `Scan today's stack`
-//  primary CTA. Below the hero card, the host renders the yesterday
-//  recap + setup nudges in their own cards.
+//  primary CTA. Without a scanner (`onScan` nil) the hero drops the CTA,
+//  the last-scan chip and the scanner copy. Below the hero card, the host
+//  renders the yesterday recap + setup nudges in their own cards.
 //
 
 import SwiftUI
@@ -15,12 +16,14 @@ import SwiftUI
 struct MailboxEmptyHero: View {
     let streakDays: Int
     let lastScanLabel: String
-    let onScan: () -> Void
+    let onScan: (() -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
             heroCard
-            scanCTA
+            if let onScan {
+                scanCTA(onScan)
+            }
         }
         .accessibilityIdentifier("mailDayEmptyHero")
     }
@@ -34,7 +37,7 @@ struct MailboxEmptyHero: View {
                 .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
-            Text("No mail has been scanned since this morning. Drop today's stack on the scanner when you're ready.")
+            Text(bodyCopy)
                 .font(.system(size: 13))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -42,7 +45,9 @@ struct MailboxEmptyHero: View {
                 .padding(.top, 6)
             HStack(spacing: 6) {
                 streakChip
-                lastScanChip
+                if onScan != nil {
+                    lastScanChip
+                }
             }
             .padding(.top, 14)
             .padding(.bottom, Spacing.s5)
@@ -56,6 +61,13 @@ struct MailboxEmptyHero: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+    }
+
+    /// The scanner copy only while a scanner is wired.
+    private var bodyCopy: String {
+        onScan == nil
+            ? "No mail needs a call right now."
+            : "No mail has been scanned since this morning. Drop today's stack on the scanner when you're ready."
     }
 
     private var streakChip: some View {
@@ -87,7 +99,7 @@ struct MailboxEmptyHero: View {
         .accessibilityLabel("Last scan \(lastScanLabel)")
     }
 
-    private var scanCTA: some View {
+    private func scanCTA(_ onScan: @escaping () -> Void) -> some View {
         Button(action: onScan) {
             HStack(spacing: 7) {
                 Icon(.scanLine, size: 17, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
@@ -244,7 +256,8 @@ struct MailboxIllustration: View {
 /// no-op for now — the route lands later.
 struct YesterdayRecapCard: View {
     let recap: YesterdayRecap
-    let onSeeHistory: () -> Void
+    /// Nil while there is no history screen: the "See full history" row is hidden.
+    let onSeeHistory: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -263,23 +276,25 @@ struct YesterdayRecapCard: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, Spacing.s3)
-            Rectangle()
-                .fill(Theme.Color.appBorderSubtle)
-                .frame(height: 1)
-            Button(action: onSeeHistory) {
-                HStack {
-                    Text("See full history")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextStrong)
-                    Spacer()
-                    Icon(.chevronRight, size: 15, strokeWidth: 2.2, color: Theme.Color.appTextMuted)
+            if let onSeeHistory {
+                Rectangle()
+                    .fill(Theme.Color.appBorderSubtle)
+                    .frame(height: 1)
+                Button(action: onSeeHistory) {
+                    HStack {
+                        Text("See full history")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(Theme.Color.appTextStrong)
+                        Spacer()
+                        Icon(.chevronRight, size: 15, strokeWidth: 2.2, color: Theme.Color.appTextMuted)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .buttonStyle(.plain)
+                .accessibilityLabel("See full history")
+                .accessibilityIdentifier("mailDayEmptyRecapSeeHistory")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("See full history")
-            .accessibilityIdentifier("mailDayEmptyRecapSeeHistory")
         }
         .background(Theme.Color.appSurface)
         .overlay(

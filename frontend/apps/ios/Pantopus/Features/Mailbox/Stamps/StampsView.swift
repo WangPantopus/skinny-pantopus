@@ -191,9 +191,13 @@ private struct StampsNav: View {
 
                 Spacer()
 
-                HStack(spacing: 2) {
-                    navIcon(.gift, label: "Gift a stamp", id: "stampsNavGift")
-                    navIcon(.moreHorizontal, label: "More actions", id: "stampsNavMore")
+                // Launch cut #8 (Mail extras): gifting belongs to the postage
+                // wallet, which is hidden for the first launch.
+                if LaunchFeatures.mailExtras {
+                    HStack(spacing: 2) {
+                        navIcon(.gift, label: "Gift a stamp", id: "stampsNavGift")
+                        navIcon(.moreHorizontal, label: "More actions", id: "stampsNavMore")
+                    }
                 }
             }
             .padding(.horizontal, Spacing.s2)

@@ -161,8 +161,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     // MARK: - Header inputs
 
+    /// Launch cut #8 (Mail extras): Earn (offers and ad earnings that never
+    /// reach the withdrawable wallet) is hidden for the first launch.
     public var drawers: [MailboxDrawer] {
-        MailboxDrawer.allCases
+        MailboxDrawer.allCases.filter { $0 != .earn || LaunchFeatures.mailExtras }
     }
 
     public var mailTabs: [MailboxTab] {

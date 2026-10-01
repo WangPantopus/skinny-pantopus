@@ -68,6 +68,10 @@ import kotlinx.coroutines.delay
  * + Scan CTA) with the yesterday recap card and two setup-nudge cards
  * beneath. No sticky bottom in the empty frame.
  *
+ * [onScan], [onSeeHistory] and [onOpenNudge] are null while there is no
+ * scanner, history screen or setup flow to open: their controls are then
+ * hidden instead of doing nothing.
+ *
  * The view drives [MailDayViewModel.tickUndo] from a `LaunchedEffect`
  * loop so the 5-second undo chip on the latest reviewed row counts
  * down once a second.
@@ -75,9 +79,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun MailDayScreen(
     onClose: () -> Unit = {},
-    onScan: () -> Unit = {},
-    onSeeHistory: () -> Unit = {},
-    onOpenNudge: (MailDaySetupNudge) -> Unit = {},
+    onScan: (() -> Unit)? = null,
+    onSeeHistory: (() -> Unit)? = null,
+    onOpenNudge: ((MailDaySetupNudge) -> Unit)? = null,
     viewModel: MailDayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -86,7 +90,7 @@ fun MailDayScreen(
     var otherChoicesItemId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        viewModel.configure(onScanRequested = onScan)
+        viewModel.configure(onScanRequested = onScan ?: {})
         viewModel.load()
     }
     LaunchedEffect(actionError) {
@@ -132,7 +136,7 @@ fun MailDayScreen(
                         content = current.content,
                         done = viewModel.done,
                         total = viewModel.total,
-                        onScan = { viewModel.requestScan() },
+                        onScan = onScan?.let { { viewModel.requestScan() } },
                         onAccept = { id -> viewModel.acceptSuggestion(id) },
                         onOtherChoices = { id -> otherChoicesItemId = id },
                         onUndoPiece = { id -> viewModel.undo(id) },
@@ -143,7 +147,7 @@ fun MailDayScreen(
                 MailDayShell(stickyBottom = null, onClose = onClose) {
                     EmptyBody(
                         content = current.content,
-                        onScan = { viewModel.requestScan() },
+                        onScan = onScan?.let { { viewModel.requestScan() } },
                         onSeeHistory = onSeeHistory,
                         onOpenNudge = onOpenNudge,
                     )
@@ -259,7 +263,7 @@ private fun PopulatedBody(
     content: MailDayContent,
     done: Int,
     total: Int,
-    onScan: () -> Unit,
+    onScan: (() -> Unit)?,
     onAccept: (String) -> Unit,
     onOtherChoices: (String) -> Unit,
     onUndoPiece: (String) -> Unit,
@@ -280,7 +284,9 @@ private fun PopulatedBody(
             done = done,
             total = total,
         )
-        ScanMoreCard(lastScanLabel = content.lastScanLabel, onClick = onScan)
+        if (onScan != null) {
+            ScanMoreCard(lastScanLabel = content.lastScanLabel, onClick = onScan)
+        }
         if (content.unreviewed.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 SectionOverline(title = "Needs a call", count = content.unreviewed.size)
@@ -320,9 +326,9 @@ private fun PopulatedBody(
 @Composable
 private fun EmptyBody(
     content: MailDayContent,
-    onScan: () -> Unit,
-    onSeeHistory: () -> Unit,
-    onOpenNudge: (MailDaySetupNudge) -> Unit,
+    onScan: (() -> Unit)?,
+    onSeeHistory: (() -> Unit)?,
+    onOpenNudge: ((MailDaySetupNudge) -> Unit)?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).testTag("mailDayEmptyBody"),
@@ -339,7 +345,7 @@ private fun EmptyBody(
                 YesterdayRecapCard(recap = recap, onSeeHistory = onSeeHistory)
             }
         }
-        if (content.setupNudges.isNotEmpty()) {
+        if (onOpenNudge != null && content.setupNudges.isNotEmpty()) {
             SetupNudgeStack(nudges = content.setupNudges, onTap = onOpenNudge)
         }
         Spacer(modifier = Modifier.height(Spacing.s5))

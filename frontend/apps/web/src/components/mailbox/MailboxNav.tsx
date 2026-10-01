@@ -49,7 +49,8 @@ const homeSection: NavEntry[] = [
 ];
 
 const profileSection: NavEntry[] = [
-  { icon: MailboxIcons.earnWallet, label: 'Earn Wallet', href: '/app/mailbox/earn/wallet', matchPrefix: '/app/mailbox/earn' },
+  // Launch cut #8 (Mail extras): Earn (offers and ad earnings) is hidden.
+  ...(launchFeatures.mailExtras ? [{ icon: MailboxIcons.earnWallet, label: 'Earn Wallet', href: '/app/mailbox/earn/wallet', matchPrefix: '/app/mailbox/earn' }] : []),
   { icon: MailboxIcons.mailDay, label: 'Mail Day', href: '/app/mailbox/settings/mail-day', matchPrefix: '/app/mailbox/settings/mail-day' },
   { icon: MailboxIcons.stamps, label: 'Stamps & Themes', href: '/app/mailbox/settings/themes', matchPrefix: '/app/mailbox/settings/themes' },
   { icon: MailboxIcons.memory, label: 'Memory', href: '/app/mailbox/memory', matchPrefix: '/app/mailbox/memory' },
@@ -114,7 +115,7 @@ export default function MailboxNav({ composeSlot }: MailboxNavProps) {
 
         {/* ── DRAWERS ──────────────────────────────────── */}
         <SectionLabel>Drawers</SectionLabel>
-        {(drawers ?? []).map((d: DrawerMeta) => {
+        {(drawers ?? []).filter((d: DrawerMeta) => d.drawer !== 'earn' || launchFeatures.mailExtras).map((d: DrawerMeta) => {
           const cfg = drawerConfig[d.drawer] ?? { icon: MailboxIcons.brand, label: d.display_name };
           return (
             <NavItem

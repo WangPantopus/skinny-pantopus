@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessUploadEvidenceReq
 import app.pantopus.android.data.api.models.businesses.BusinessUploadEvidenceResponse
 import app.pantopus.android.data.api.models.businesses.BusinessVerificationStatusResponse
 import app.pantopus.android.data.api.models.businesses.CreateBusinessInvoiceRequest
+import app.pantopus.android.data.api.models.businesses.InvoiceRecipientsResponse
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessPrivateRequest
 import app.pantopus.android.data.api.models.businesses.VoidBusinessInvoiceRequest
 import retrofit2.http.Body
@@ -99,6 +100,18 @@ interface BusinessFinanceApi {
         @Query("page_size") pageSize: Int,
         @Query("status") status: String? = null,
     ): BusinessInvoiceListResponse
+
+    /**
+     * `GET api/businesses/{businessId}/invoice-recipients` — route
+     * `backend/routes/businesses.js:4902`. Requires `profile.edit`. The people this
+     * crew already knows (invoiced, booked, hired it, messaged it) and the sender's
+     * connections, matched by [q]; never an open member search.
+     */
+    @GET("api/businesses/{businessId}/invoice-recipients")
+    suspend fun invoiceRecipients(
+        @Path("businessId") businessId: String,
+        @Query("q") q: String? = null,
+    ): InvoiceRecipientsResponse
 
     /**
      * `POST api/businesses/{businessId}/invoices` — route

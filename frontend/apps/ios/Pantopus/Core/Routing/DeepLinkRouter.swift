@@ -944,8 +944,11 @@ extension DeepLinkRouter.Destination {
         // tasks and listings, so it needs all three switched on.
         case .discoverHub:
             LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
-        // Launch cut #8 (Mail extras): letter translations.
-        case .mailTranslation:
+        // Launch cut #7 (Household extras): package unboxing.
+        case .unboxing:
+            LaunchFeatures.householdExtras
+        // Launch cut #8 (Mail extras): letter translations and Earn.
+        case .mailTranslation, .earn:
             LaunchFeatures.mailExtras
         default:
             true

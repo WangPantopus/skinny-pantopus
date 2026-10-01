@@ -82,6 +82,18 @@ public enum BusinessFinanceEndpoints {
         )
     }
 
+    /// `GET /api/businesses/:businessId/invoice-recipients?q=` — route
+    /// `backend/routes/businesses.js:4902`. Requires `profile.edit`. The people
+    /// this crew already knows (invoiced, booked, hired it, messaged it) and the
+    /// sender's connections, matched by name or username; never an open search.
+    public static func invoiceRecipients(businessId: String, query: String) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/businesses/\(businessId)/invoice-recipients",
+            query: query.isEmpty ? [:] : ["q": query]
+        )
+    }
+
     /// `POST /api/businesses/:businessId/invoices` — route
     /// `backend/routes/businesses.js:4766`. Requires `profile.edit`. The
     /// server computes `subtotal_cents` / `fee_cents` / `total_cents` from the

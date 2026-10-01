@@ -28,14 +28,17 @@ public struct MailDayView: View {
     /// The "Needs a call" piece whose "Other…" choices are showing.
     @State private var otherChoicesItemId: String?
     private let onClose: @MainActor () -> Void
-    private let onSeeHistory: @MainActor () -> Void
-    private let onOpenNudge: @MainActor (MailDaySetupNudge) -> Void
+    /// Nil while there is no history screen or setup flow to open: the
+    /// "See full history" link and the setup nudges are then hidden instead
+    /// of doing nothing (as the Scan CTAs are without a scanner).
+    private let onSeeHistory: (@MainActor () -> Void)?
+    private let onOpenNudge: (@MainActor (MailDaySetupNudge) -> Void)?
 
     public init(
         viewModel: MailDayViewModel,
         onClose: @escaping @MainActor () -> Void = {},
-        onSeeHistory: @escaping @MainActor () -> Void = {},
-        onOpenNudge: @escaping @MainActor (MailDaySetupNudge) -> Void = { _ in }
+        onSeeHistory: (@MainActor () -> Void)? = nil,
+        onOpenNudge: (@MainActor (MailDaySetupNudge) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onClose = onClose
@@ -142,8 +145,10 @@ public struct MailDayView: View {
                 done: viewModel.done,
                 total: viewModel.total
             ) { Task { await viewModel.openSettings() } }
-            ScanMoreCard(lastScanLabel: content.lastScanLabel) {
-                viewModel.requestScan()
+            if viewModel.canScan {
+                ScanMoreCard(lastScanLabel: content.lastScanLabel) {
+                    viewModel.requestScan()
+                }
             }
             if !content.unreviewed.isEmpty {
                 needsACallSection(items: content.unreviewed)
@@ -247,17 +252,16 @@ public struct MailDayView: View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             MailboxEmptyHero(
                 streakDays: content.streakDays,
-                lastScanLabel: content.lastScanLabel
-            ) {
-                viewModel.requestScan()
-            }
+                lastScanLabel: content.lastScanLabel,
+                onScan: viewModel.canScan ? { viewModel.requestScan() } : nil
+            )
             if let recap = content.yesterdayRecap {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     sectionOverline(title: "Yesterday's recap", count: recap.segments.count)
                     YesterdayRecapCard(recap: recap, onSeeHistory: onSeeHistory)
                 }
             }
-            if !content.setupNudges.isEmpty {
+            if let onOpenNudge, !content.setupNudges.isEmpty {
                 SetupNudgeStack(nudges: content.setupNudges, onTap: onOpenNudge)
             }
         }
@@ -625,13 +629,21 @@ struct FinishDayBar: View {
 #if DEBUG
 #Preview("Populated") {
     NavigationStack {
-        MailDayView(viewModel: MailDayViewModel(variant: .populated, content: MailDaySampleData.populated))
+        MailDayView(
+            viewModel: MailDayViewModel(variant: .populated, content: MailDaySampleData.populated) {},
+            onSeeHistory: {},
+            onOpenNudge: { _ in }
+        )
     }
 }
 
 #Preview("Empty") {
     NavigationStack {
-        MailDayView(viewModel: MailDayViewModel(variant: .empty, content: MailDaySampleData.empty))
+        MailDayView(
+            viewModel: MailDayViewModel(variant: .empty, content: MailDaySampleData.empty) {},
+            onSeeHistory: {},
+            onOpenNudge: { _ in }
+        )
     }
 }
 #endif

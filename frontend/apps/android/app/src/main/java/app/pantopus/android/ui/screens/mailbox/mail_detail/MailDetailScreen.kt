@@ -327,14 +327,15 @@ private fun LoadedLayout(
     // categories without a decoded ceremonial payload.
     // Launch cut #8 (Mail extras): certified mail (e-signing), community mail, ceremonial
     // keepsakes and party invitations read as plain mail. Launch cut #4 (Open Gigs): a bid
-    // by mail has no Accept.
+    // by mail has no Accept. Launch cut #7 (Household extras): package tracking (timeline,
+    // Share ETA, Report issue, virtual unboxing) reads as plain mail, as on web.
     val booklet = content.bookletDetail
     val certified = content.certifiedDetail?.takeIf { LaunchFeatures.mailExtras }
     val community = content.communityDetail?.takeIf { LaunchFeatures.mailExtras }
     val coupon = content.couponDetail
     val gig = content.gigDetail?.takeIf { LaunchFeatures.openGigs }
     val memory = content.memoryDetail?.takeIf { LaunchFeatures.mailExtras }
-    val pkg = content.packageDetail
+    val pkg = content.packageDetail?.takeIf { LaunchFeatures.householdExtras }
     val party = content.partyDetail?.takeIf { LaunchFeatures.mailExtras }
     val records = content.recordsDetail
     when {

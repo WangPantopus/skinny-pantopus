@@ -10,6 +10,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
 import { extractApiError } from '@pantopus/ui-utils';
+import { toast } from '@/components/ui/toast-store';
 import PrivateClaimEvidencePreview, { prepareEvidencePreview, type EvidencePreview } from '../home/PrivateClaimEvidencePreview';
 
 type Props = {
@@ -293,7 +294,7 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
       await api.landlord.denyLease(leaseId, authorityId, reason || undefined);
       if (isCurrent()) onRefresh();
     } catch (err: unknown) {
-      console.error('Deny failed:', err);
+      if (isCurrent()) toast.error(extractApiError(err, 'Could not deny the lease request. Please retry.'));
     }
   }, [authorityId, onRefresh, isCurrent]);
 
