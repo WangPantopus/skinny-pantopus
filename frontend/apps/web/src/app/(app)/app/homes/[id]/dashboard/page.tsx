@@ -10,6 +10,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 
 import { ShareCenter } from '@/components/home/share';
+import type { GuestPassDraft } from '@/components/home/share/CreateGuestPass';
 import { MembersSecurityTab as MembersSecurityTabComponent } from '@/components/home/members';
 import { HomeSettingsTab } from '@/components/home/settings';
 import type { SettingsDraft } from '@/components/home/settings/HomeSettingsTab';
@@ -102,6 +103,8 @@ function InvitationsLink({ homeId }: { homeId: string }) {
 type KeptIssueDraft = { homeId: string; userId: string | null; draft: IssueDraft };
 // The same for unsaved edits on the Settings tab.
 type KeptSettingsDraft = { homeId: string; userId: string | null; draft: SettingsDraft };
+// The same for a guest pass being set up on the Share tab.
+type KeptGuestPassDraft = { homeId: string; userId: string | null; draft: GuestPassDraft };
 
 function HomeDashboardContent() {
   const router = useRouter();
@@ -110,6 +113,7 @@ function HomeDashboardContent() {
   const data = useHomeData(homeId);
   const issueDraft = useRef<KeptIssueDraft | null>(null);
   const settingsDraft = useRef<KeptSettingsDraft | null>(null);
+  const guestPassDraft = useRef<KeptGuestPassDraft | null>(null);
   const { loading, error } = data;
   const accessError = error || permissionsError || (!loading && !permissionsLoading &&
     (!access || (!access.hasAccess && !access.verification_required) || homeAccessFingerprint(access) !== data.accessFingerprint)
@@ -149,14 +153,15 @@ function HomeDashboardContent() {
   }
 
   // Unmount private panels, deferred summaries and local edits whenever authority retires.
-  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} issueDraft={issueDraft} settingsDraft={settingsDraft} />;
+  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} issueDraft={issueDraft} settingsDraft={settingsDraft} guestPassDraft={guestPassDraft} />;
 }
 
-function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft }: {
+function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPassDraft }: {
   homeId: string;
   data: UseHomeDataReturn;
   issueDraft: MutableRefObject<KeptIssueDraft | null>;
   settingsDraft: MutableRefObject<KeptSettingsDraft | null>;
+  guestPassDraft: MutableRefObject<KeptGuestPassDraft | null>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -251,6 +256,28 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft }: {
   const keepSettingsDraft = useCallback((draft: SettingsDraft) => {
     settingsDraft.current = { homeId, userId: currentUserId, draft };
   }, [settingsDraft, homeId, currentUserId]);
+
+  // A guest pass being set up comes back the same way: only into the Share tab, for the same member and the same Home,
+  // while they can still manage guest passes. Leaving the Share tab drops it.
+  const canManageGuestPasses = can('members.manage');
+  const [restoredGuestPassDraft, setRestoredGuestPassDraft] = useState<GuestPassDraft | null>(null);
+  const guestPassDraftChecked = useRef(false);
+  useEffect(() => {
+    if (guestPassDraftChecked.current) return;
+    guestPassDraftChecked.current = true;
+    const kept = guestPassDraft.current;
+    guestPassDraft.current = null;
+    if (!kept || tab !== 'share' || kept.homeId !== homeId || kept.userId !== currentUserId || !canManageGuestPasses) return;
+    setRestoredGuestPassDraft(kept.draft);
+  }, [guestPassDraft, tab, homeId, currentUserId, canManageGuestPasses]);
+  useEffect(() => {
+    if (tab === 'share') return;
+    guestPassDraft.current = null;
+    setRestoredGuestPassDraft(null);
+  }, [tab, guestPassDraft]);
+  const keepGuestPassDraft = useCallback((draft: GuestPassDraft) => {
+    guestPassDraft.current = { homeId, userId: currentUserId, draft };
+  }, [guestPassDraft, homeId, currentUserId]);
 
   // When sidebar links to a card (e.g. ?tab=tasks), expand that card; when Overview, collapse
   useEffect(() => {
@@ -536,6 +563,8 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft }: {
           emergencies={emergencies}
           can={can}
           onSecretsChange={(s: Record<string, any>[]) => setSecrets(() => s)}
+          draft={restoredGuestPassDraft}
+          onDraftUnmount={keepGuestPassDraft}
         />
       )}
 
