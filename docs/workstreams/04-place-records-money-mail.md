@@ -397,6 +397,26 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T14:28:58Z — U05 groundwork: a read-only sweep (origin/master `3dc6b089e`, all launch features off) for reachable controls that do nothing and for sample data on production paths in this stream's screens.**
+  - **Being fixed now** (branches pushed, devices next):
+    - Mail Day "Route to <name>" files the letter as the triager's private mail (`claude/stream4-mailday-route-to-addressee`).
+    - Mail Day "Other…", Undo and "Undo all" (`…-mailday-undo-other`). Undo now really reverts the letter.
+    - iOS Mail Day shows sample mail on a failed load (`…-ios-mailday-no-sample`).
+    - The Stamps postage wallet is sample data (`…-stamps-wallet-flag`).
+    - The iOS maintenance reminder posts to the hidden calendar (`…-ios-maintenance-reminder-flag`).
+  - **Still open; reachable in a release build. Next to reproduce, then decide:**
+    - My Mail Day "Scan more", "Scan today's stack", "See full history" and the setup-nudge cards: the hosts pass no
+      handlers (iOS HubTabRoot/YouTabRoot, Android RootTabScreen:6280).
+    - Mailbox "Scan an item" opens unboxing with no mail id, so it always says "Nothing to unbox yet".
+    - Mail tasks "Added to calendar" reports a success that never happened. The calendar is cut #7.
+    - Package mail on native shows tracking, Share ETA, Report issue and virtual unboxing with `household_extras` off.
+      Web hides package tracking under that switch.
+    - Package copy-tracking is a no-op.
+    - Android records mail: "Read full document" and "Change folder" are no-ops, and "See all 8" is hard-coded.
+    - The iOS Issues row tap is a no-op.
+  - **Honest placeholders, to list in the manifest:** Place "Coming soon" rows (Portable ID, Deed & lien alerts) on all
+    three clients.
+
 - **2026-10-01T13:43:43Z — My Mail Day, now back in launch scope: a candidate privacy defect found by reading code. It will be reproduced next and then fixed.**
   - **Why I think it's a defect:**
     - The apps' "Route to <name>" sends `POST /mailday/items/:id/route` with no body.
