@@ -16,6 +16,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const { getActiveOccupancy, mapLegacyRole } = require('./homePermissions');
+const { getAccessibleHomeIds } = require('./homeMailAccess');
 const { isPersonaEnabled } = require('./featureFlags');
 
 // Radius in meters for "nearby" determination
@@ -102,30 +103,35 @@ async function computeTrustState(userId, latitude, longitude) {
       return result;
     }
 
-    // Fallback: query homes manually with haversine approximation
-    const { data: userHomes } = await supabaseAdmin
+    // Fallback: query homes manually with haversine approximation. Only the household
+    // counts (getAccessibleHomeIds: trusted, unexpired occupancies, never a pending claim
+    // that anyone can file on any Home; fails closed). Home stores a geography `location`.
+    const householdHomeIds = new Set(await getAccessibleHomeIds(userId));
+    const { data: occupancies } = await supabaseAdmin
       .from('HomeOccupancy')
       .select('home_id, role, role_base')
       .eq('user_id', userId)
       .eq('is_active', true);
+    const userHomes = (occupancies || []).filter(h => householdHomeIds.has(h.home_id));
 
-    if (userHomes && userHomes.length > 0) {
+    if (userHomes.length > 0) {
       const homeIds = userHomes.map(h => h.home_id);
       const { data: homes } = await supabaseAdmin
         .from('Home')
-        .select('id, latitude, longitude')
+        .select('id, location')
         .in('id', homeIds)
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+        .not('location', 'is', null);
 
       if (homes && homes.length > 0) {
         let closestHome = null;
         let closestDistance = Infinity;
 
         for (const home of homes) {
+          const point = parsePostGISPoint(home.location);
+          if (!point) continue;
           const dist = haversineMeters(
             latitude, longitude,
-            home.latitude, home.longitude
+            point.latitude, point.longitude
           );
           if (dist < closestDistance) {
             closestDistance = dist;
