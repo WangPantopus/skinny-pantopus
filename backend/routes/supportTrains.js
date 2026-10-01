@@ -1419,21 +1419,37 @@ router.post(
       });
     }
 
-    // Create campaign chat thread
+    // Create campaign chat thread. A train that went back to draft keeps its thread,
+    // so publishing again reuses it instead of splitting the conversation.
     try {
       const activityTitle = req.activity?.title || 'Support Train';
 
-      const { data: chatRoom } = await supabaseAdmin
+      const { data: existingRoom } = await supabaseAdmin
         .from('ChatRoom')
-        .insert({
-          type: 'support_train',
-          support_train_id: st.id,
-          name: activityTitle,
-          description: 'Support Train coordination thread',
-          is_active: true,
-        })
         .select('id')
-        .single();
+        .eq('type', 'support_train')
+        .eq('support_train_id', st.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      let chatRoom = existingRoom;
+      if (chatRoom) {
+        await supabaseAdmin.from('ChatRoom').update({ is_active: true }).eq('id', chatRoom.id);
+      } else {
+        const { data: createdRoom } = await supabaseAdmin
+          .from('ChatRoom')
+          .insert({
+            type: 'support_train',
+            support_train_id: st.id,
+            name: activityTitle,
+            description: 'Support Train coordination thread',
+            is_active: true,
+          })
+          .select('id')
+          .single();
+        chatRoom = createdRoom;
+      }
 
       if (chatRoom) {
         // Add participants: primary organizer + co-organizers + recipient
