@@ -65,6 +65,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -888,6 +889,20 @@ private fun LoadedList(
         }
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onEndReached() }
+
+    // A re-read that puts new rows above the first one shows them when the list was at the very top;
+    // otherwise the list stays on the old first row and the new ones sit out of sight above it. A list
+    // scrolled down keeps its place.
+    val firstRowKey = state.sections.firstOrNull()?.rows?.firstOrNull()?.id
+    val shownFirstRowKey = remember { arrayOf(firstRowKey) }
+    SideEffect {
+        if (firstRowKey != shownFirstRowKey[0]) {
+            if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+                listState.requestScrollToItem(0)
+            }
+            shownFirstRowKey[0] = firstRowKey
+        }
+    }
 
     LazyColumn(
         state = listState,
