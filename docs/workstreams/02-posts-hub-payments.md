@@ -9,6 +9,8 @@
 
 ## CURRENT RESUME — SUCCESSOR 2026-10-01T21:22:09Z
 
+- **UPDATE 2026-10-01T21:34:11Z — no-change web sweep:** seven existing resting pages (`/`, `/start`, `/app/feed`, `/app/my-pulse`, `/app/hub`, `/app/hub/today`, `/app/my-gigs`) fit390px; real in-scope reads200, expected absent payout account404. Landing/Hub/tasks vertical scan stays390; task tab wheel scroll198px/window0. Closed post-panel candidate already has inert; no repair. [RESULT.md](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20261001-stream2-web-phone-width-sweep-r1/RESULT.md), source `71b3da6976ab3ac007c1b13f300ba65fbd5a8bb4`, seal/MANIFEST `ddb86d00d0858ed7477bf267cef347a3aa0c5acabca090297f7be9b898a7acbc` (18 files). All353 full table fingerprints restored after deleting one owned MailPreferences row. Decision preserve working implementations; no extra PR or acceptance count. This is empty/resting local-web evidence only; no populated/provider/native claim. Wallet and PaymentSettings await Stream1's fixture window. Original drift tools absent in private locations and coordination Git tree; asked coordinator for reuse path, manually trace in-scope callers meanwhile. #1418 CI now fully green.
+
 - **Active:** Stream 2: Posts, Hub and payments, chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`; app checkout `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. No subagents. Stream 1 is sole merger and owns native checks.
 - **Live integration:** #1414 merged in batch317/#1415 and #1412 merged in batch318/#1417 (21:12:24Z). Master `ecd8a3d90d0ddcee32d72cc8cf25086ca9ece33a`; reuse accepted evidence. #1413 remains open at `8a98dc8946eeffc435b73a862747b9c5ceff5b1b`, native candidate32 pending. Completed CI checks green; three iOS device jobs queued. #1418 is open; web/database CI running, completed checks green.
 - **Ready for coordinator — [#1418](https://github.com/WangPantopus/skinny-pantopus/pull/1418):** `claude/stream2-pulse-preferences-names`, exact head `71b3da6976ab3ac007c1b13f300ba65fbd5a8bb4`. [Evidence RESULT.md](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20261001-stream2-pulse-preferences-names-r1/RESULT.md); seal/MANIFEST SHA256 `d51ebe7a8c0e685adc59d6a143bcf09a3fcf4f9b2880a5aaa256b454430495ad` (13 files). Actual Pulse modal had two button-name violations. Existing close button now named; existing political-content toggle uses its visible label, role=switch and aria-checked. All classes unchanged. Chrome390 Space → PUT200 → reload/SQL true; targeted axe violations0. Modal pixels identical excluding documented Next dev indicator; no full-image identity claim. 122 web Jest suites/2343 tests pass; scoped lint0 errors/3 existing warnings. Exact preferences cleanup restores all353 table fingerprints.
@@ -339,7 +341,7 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T21:22:09Z (Stream 2 successor)
+## CURRENT STATE — 2026-10-01T21:34:11Z (Stream 2 successor)
 
 - **Latest:** #1414 and #1412 merged in batches317/318; #1418 semantic Pulse control repair sealed and queued; #1413 native evidence remains with Stream1. Runtime handover released. See CURRENT RESUME for exact heads, seals, decisions, cleanup and next action. Previous entries retain their original evidence limits.
 
