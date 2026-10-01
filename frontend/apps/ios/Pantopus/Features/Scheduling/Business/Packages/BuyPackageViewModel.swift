@@ -32,6 +32,9 @@ final class BuyPackageViewModel {
     let push: @MainActor (SchedulingRoute) -> Void
     private let client: SchedulingClient
     private let presenter: any PaymentSheetPresenting
+    /// One purchase per visit: a retry (a lost reply, a second tap) reuses this
+    /// id, so the server answers with the pack it already granted.
+    private let purchaseRequestId = UUID().uuidString
 
     // MARK: State
 
@@ -110,7 +113,9 @@ final class BuyPackageViewModel {
     func pay() async {
         payState = .paying
         do {
-            let result: BuyPackageResponse = try await client.request(SchedulingEndpoints.buyPackage(id: packageId))
+            let result: BuyPackageResponse = try await client.request(
+                SchedulingEndpoints.buyPackage(id: packageId, clientRequestId: purchaseRequestId)
+            )
             guard let secret = result.clientSecret, !secret.isEmpty else {
                 // Free package — credit granted, no charge.
                 payState = .paid

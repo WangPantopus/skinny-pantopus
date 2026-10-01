@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FileText, Plus, X, Trash2 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { BusinessInvoice, InvoiceLineItem } from '@pantopus/api';
@@ -45,6 +45,9 @@ export default function InvoicesTab({ businessId }: Props) {
   const [dueDate, setDueDate] = useState('');
   const [lineItems, setLineItems] = useState([{ description: '', amount: '', quantity: '1' }]);
   const [creating, setCreating] = useState(false);
+  // A retry of the same draft (a lost reply, a second tap) keeps its request id, so
+  // the server answers with the invoice it already sent instead of sending another.
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -94,12 +97,16 @@ export default function InvoicesTab({ businessId }: Props) {
 
     setCreating(true);
     try {
-      await api.businesses.createBusinessInvoice(businessId, {
+      const payload = {
         recipient_user_id: recipientId.trim(),
         line_items: parsedItems,
         due_date: dueDate.trim() || null,
         memo: memo.trim() || null,
-      });
+      };
+      const draft = JSON.stringify(payload);
+      if (pendingCreate.current?.draft !== draft) pendingCreate.current = { draft, id: crypto.randomUUID() };
+      await api.businesses.createBusinessInvoice(businessId, { ...payload, client_request_id: pendingCreate.current.id });
+      pendingCreate.current = null;
       setShowCreate(false);
       setRecipientId(''); setMemo(''); setDueDate('');
       setLineItems([{ description: '', amount: '', quantity: '1' }]);

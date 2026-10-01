@@ -719,11 +719,15 @@ export function deletePackage(id: string, owner?: SchedulingOwnerRef) {
   );
 }
 
-/** Customer purchase (not owner-gated). Returns Stripe clientSecret when priced. */
-export function buyPackage(id: string, owner?: SchedulingOwnerRef) {
+/**
+ * Customer purchase (not owner-gated). Returns Stripe clientSecret when priced.
+ * `clientRequestId`, kept across retries of one purchase, makes a retry answer
+ * with the credit the first attempt granted instead of granting another pack.
+ */
+export function buyPackage(id: string, owner?: SchedulingOwnerRef, clientRequestId?: string) {
   return post<BuyPackageResult>(
     `${ownerBase(owner)}/packages/${encodeURIComponent(id)}/buy`,
-    {},
+    clientRequestId ? { client_request_id: clientRequestId } : {},
   );
 }
 

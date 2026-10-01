@@ -89,7 +89,7 @@ class BuyPackageViewModelTest {
     fun `free package is granted without a payment sheet`() =
         runTest(dispatcher) {
             coEvery { repo.getPackages(any()) } returns NetworkResult.Success(GetPackagesResponse(listOf(pkg(0))))
-            coEvery { repo.buyPackage(any(), "p1") } returns NetworkResult.Success(BuyPackageResponse(credit(), clientSecret = null))
+            coEvery { repo.buyPackage(any(), "p1", any()) } returns NetworkResult.Success(BuyPackageResponse(credit(), clientSecret = null))
             val model = vm()
             model.start()
             advanceUntilIdle()
@@ -104,7 +104,7 @@ class BuyPackageViewModelTest {
     fun `priced package emits a client secret to present`() =
         runTest(dispatcher) {
             coEvery { repo.getPackages(any()) } returns NetworkResult.Success(GetPackagesResponse(listOf(pkg(22000))))
-            coEvery { repo.buyPackage(any(), "p1") } returns
+            coEvery { repo.buyPackage(any(), "p1", any()) } returns
                 NetworkResult.Success(BuyPackageResponse(credit(), clientSecret = "pi_secret"))
             val model = vm()
             model.start()

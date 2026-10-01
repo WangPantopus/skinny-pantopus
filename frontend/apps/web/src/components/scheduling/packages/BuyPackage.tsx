@@ -12,7 +12,7 @@
 // public single-package read exists) — display only; the charged amount is the
 // server-created PaymentIntent, so it can't be tampered from the client.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import {
@@ -89,6 +89,9 @@ export default function BuyPackage(props: BuyPackageProps) {
   const [error, setError] = useState<string | null>(null);
   // Pre-purchase credit detection: inline upsell if credits already exist.
   const [existingCredits, setExistingCredits] = useState<number | null>(null);
+  // One purchase per visit: a retry (a lost reply, a second tap) reuses this id, so
+  // the server answers with the pack it already granted instead of granting another.
+  const purchaseRequestId = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -123,7 +126,8 @@ export default function BuyPackage(props: BuyPackageProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await api.scheduling.buyPackage(packageId, ownerRef);
+      purchaseRequestId.current ??= crypto.randomUUID();
+      const res = await api.scheduling.buyPackage(packageId, ownerRef, purchaseRequestId.current);
       if (res.credit?.remaining_sessions != null) {
         setGrantedSessions(res.credit.remaining_sessions);
       }

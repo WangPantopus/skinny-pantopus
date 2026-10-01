@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.scheduling.BookingPageResponse
 import app.pantopus.android.data.api.models.scheduling.BookingReasonRequest
 import app.pantopus.android.data.api.models.scheduling.BookingResponse
 import app.pantopus.android.data.api.models.scheduling.BookingSummaryResponse
+import app.pantopus.android.data.api.models.scheduling.BuyPackageRequest
 import app.pantopus.android.data.api.models.scheduling.CheckSlugResponse
 import app.pantopus.android.data.api.models.scheduling.CreateBlockRequest
 import app.pantopus.android.data.api.models.scheduling.CreateBookingRequest
@@ -597,11 +598,15 @@ interface SchedulingApi {
         @Path("id") packageId: String,
     ): SchedulingOkResponse
 
-    /** `POST /api/scheduling/packages/:id/buy` — customer; clientSecret if priced. */
+    /**
+     * `POST /api/scheduling/packages/:id/buy` — customer; clientSecret if priced. A retry
+     * with the same `client_request_id` answers with the first attempt's credit.
+     */
     @POST("api/{base}/packages/{id}/buy")
     suspend fun buyPackage(
         @Path(value = "base", encoded = true) base: String,
         @Path("id") packageId: String,
+        @Body body: BuyPackageRequest,
     ): app.pantopus.android.data.api.models.scheduling.BuyPackageResponse
 
     // ─── Customer self-service (personal) ───────────────────────────────────
