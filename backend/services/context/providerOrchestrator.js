@@ -262,25 +262,25 @@ async function getHubToday(userId, options = {}) {
 
   logger.debug('orchestrator: providers fetched', providerTimings);
 
-  // Track providers and failures
+  // Track providers and failures. A provider that didn't answer is a failure, never a source.
   if (weather) {
-    providersUsed.push(weather.provider || 'weather');
     if (weather.source === 'cache') cacheHits++;
     if (weather.source === 'error') partialFailures.push('weather');
+    else providersUsed.push(weather.provider || 'weather');
   } else {
     partialFailures.push('weather');
   }
 
   if (aqi) {
-    providersUsed.push('AIRNOW');
     if (aqi.source === 'cache') cacheHits++;
     if (aqi.source === 'error' || aqi.source === 'unavailable') partialFailures.push('aqi');
+    else providersUsed.push('AIRNOW');
   }
 
   if (alerts) {
-    providersUsed.push(alerts.provider || 'NOAA');
     if (alerts.source === 'cache') cacheHits++;
     if (alerts.source === 'error') partialFailures.push('alerts');
+    else providersUsed.push(alerts.provider || 'NOAA');
   } else {
     partialFailures.push('alerts');
   }
