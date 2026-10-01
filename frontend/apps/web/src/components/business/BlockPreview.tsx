@@ -147,7 +147,8 @@ function HoursPreview({ data }: { data: Record<string, any> }) {
         {days.map((d) => (
           <div key={d} className="flex justify-between text-xs">
             <span className="text-app-text-secondary font-medium">{d}</span>
-            <span className="text-app-text-secondary">9:00 AM – 5:00 PM</span>
+            {/* A placeholder like the catalog's "$--": the page shows the hours set on your locations. */}
+            <span className="text-app-text-muted">--:-- – --:--</span>
           </div>
         ))}
       </div>
@@ -204,8 +205,9 @@ function ReviewsPreview({ data }: { data: Record<string, any> }) {
     <div className="p-4">
       <h3 className="text-base font-semibold text-app-text mb-2">{(data.heading as string) || 'Reviews'}</h3>
       <div className="flex items-center gap-3 text-sm text-app-text-secondary">
-        <span className="text-yellow-500 text-lg">★★★★★</span>
-        <span>Based on customer reviews</span>
+        {/* Not a rating: the page shows your real average and review count. */}
+        <span className="text-app-text-muted text-lg">☆☆☆☆☆</span>
+        <span>Your rating and review count</span>
       </div>
     </div>
   );
