@@ -51,8 +51,8 @@ interface MailboxKeepsakeApi {
     /**
      * `POST api/mailbox/v2/p3/themes/apply` — route
      * `backend/routes/mailboxV2Phase3.js:1285`. Upserts
-     * `MailDaySettings.current_theme`; the validator (`:107`) requires a
-     * UUID `themeId`.
+     * `MailDaySettings.current_theme`. `themeId` is the theme's text id
+     * (`autumn_2026`); the theme must exist and be unlocked.
      */
     @POST("api/mailbox/v2/p3/themes/apply")
     suspend fun applyTheme(
