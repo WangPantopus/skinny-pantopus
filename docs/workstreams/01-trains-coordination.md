@@ -9,6 +9,46 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T05:00Z (Stream 1).**
+  - **Merged since 03:25Z** (each seal verified at the PR head; build-batch/verify-batch RESULT OK; SwiftLint/SwiftFormat on every changed Swift file):
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 260 | #1218 | 03:38:53Z | #1206 (Stream 5 web: tab bars say which tab is selected), #1208 (Stream 5 web: fields announced by their labels) |
+    | 261 | #1224 | 03:43:22Z | Stream 4 native: #1219 (Today's Pulse greets by the device clock), #1220 (Android Block Founders form clears after a send), #1222 (iOS invite budget plural), #1223 (a failed document delete says so) |
+    | 262 | #1225 | 03:44:26Z | #1221 (Stream 2 web: Saved paging tells the truth after Remove) |
+    | 263 | #1227 | 04:03:08Z | #1216 (Stream 5 backend: `verified_resident` means a verified residency), #1217 (Stream 5 web crew-tool fields labelled) |
+    | 264 | #1233 | 04:32:33Z | #1209 (Stream 2 native: an edit keeps the post's audience; my iOS run `4898d3ff`), #1226 (post media viewer above the header), #1228 (mail list Star by keyboard), #1229 (My pulse cards stay in step), #1231 (one residency letter per double-click), #1232 (landlord Approve modal survives a double-click) |
+    | 265 | #1235 | 04:34:30Z | #1210 (Stream 2 native Saved tab; my iOS run `4898d3ff`) |
+    | 266 | #1240 | 04:57:56Z | #1230 (chat Report usable from Chat details), #1234 (ModalShell semantics), #1236 (five Stream 5 dialogs), **my #1239** |
+
+    Master is **`2abd0edd4`**; the next batch is **267**. No migrations.
+  - **Mine, merged — #1239, Trains U02 A4, part 2** (bundle `20261001-stream1-android-u02-trains-r2`, 103 files, `f6db8244…ffade7bb`):
+    - **Android sign-up sheet** (TalkBack speech probes, before → after):
+      - the help options are radio buttons with their state ("Selected. Takeout / delivery. Radio button");
+      - Back, Next, Review and Confirm signup are Buttons;
+      - fields are named by their labels ("Edit box. Dish name. e.g. Chicken soup");
+      - each review row is one stop.
+    - **Web Start a train:** the story field, the chip ✕ ("Remove peanuts") and special instructions are named. Found by role and name: 0 → 1.
+    - Inside the sheet the pixels are identical. The before shots' larger differences are TalkBack's own overlays.
+  - **Trains backlog, seen and not fixed yet:** on Android, the sign-up sheet starts over when the activity is recreated (rotation, dark mode, font). Its `rememberSaveable` draft sits inside `ModalBottomSheet` and isn't restored. Fix: keep the draft in `SupportTrainDetailViewModel`. This is on master; it's my next Trains repair.
+  - **Device runs for peers:** `20261001-stream1-ios-1209-1210-r1` (`4898d3ff`): #1209 and #1210 pass on iOS. The 53-save case loads all 52 rows. Four iOS findings went to Stream 2:
+    - an empty first segment in row labels;
+    - the FAB covers the last row's trailing control;
+    - "Handyman" preselected for an Ask with no category;
+    - **after a save, the composer pops twice**: `onPosted` and then `onCancel`, in four hosts. Stream 2's fix is #1237.
+  - **In flight:** candidate `e8f91e70e` (master `2abd0edd4` + #1237 + #1238) is building. Then:
+    - Stream 5's #1238 Android View-as "Not shown" check;
+    - Stream 2's #1237 iOS cells: My posts → Edit → Save lands on My posts; the post → Edit → Save lands on the post; Hub compose returns to the Hub; Cancel is still one pop.
+  - **Decisions (standing direction):**
+    - Stream 2's Android `ListOfRows` fixes are approved as their own PRs: the `rememberUpdatedState` paging fix, and keeping the list at the top after a re-read *only* when it was at index 0, offset 0. I verify My trains during review.
+    - Stream 5's ModalShell PR was approved on three conditions: semantics only; verified only through StepUpPasswordModal (the gig-detail modals are launch cut #4); no focus change unless every caller gets it.
+    - At 04:16Z I freed device slot 1 for Stream 2's Android runs, then swapped my simulator for my emulator inside slot 2.
+    - The mailbox's My Mail Day summary GET writes a MailEvent (cut #8). Routed to Stream 4, which recorded it for the user's cut flags.
+  - **Lessons:**
+    - The TalkBack probes now refuse to run unless TalkBack is on. With TalkBack off, their touches are real taps: one closed a sheet, with no write.
+    - In zsh, `$H:path` is a modifier; use `"${H}:path"`.
+    - `api.py` cuts its output at about 3 KB, so take ids from the text, not from parsed JSON.
 - **Update 2026-10-01T03:25Z (Stream 1).**
   - **Merged** (each seal verified at the PR head; build-batch/verify-batch RESULT OK; SwiftLint/SwiftFormat on every changed Swift file; `node --check` on changed backend files):
 
@@ -495,7 +535,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T03:30Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T05:00Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -533,8 +573,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | **Support Trains** | | | |
 | My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>⬜ A4 shared ListOfRows repeats its tab, FAB and Nearby button labels (app-wide) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
 | Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ✅ A1 A2 A3 A4: field named, results read once (#1211, ac43ecdb) | – No Train search on web |
-| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>⬜ Sign-up sheet A1 A2 A3 A4 | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
-| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>🔷 A3 brand-blue token |
+| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>⬜ Sign-up sheet starts over when the activity is recreated (rotation, dark mode, font): keep its draft in the view model | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
+| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>🔷 A3 brand-blue token |
 | Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ✅ A1 stat labels whole (default-size clipping fixed), pills grow; A2; A3; A4 Back, tiles, field, switch and chips named with state (#1211, ac43ecdb) | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
 | Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
@@ -545,7 +585,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 57, confirm from existing evidence 0, to do 15, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
-- U02 items: done 19, confirm from existing evidence 0, to do 4, your call 6, boundary 0, not offered 4
+- U02 items: done 21, confirm from existing evidence 0, to do 4, your call 6, boundary 0, not offered 4
 
 ## History
 
