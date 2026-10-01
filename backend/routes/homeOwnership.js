@@ -945,6 +945,29 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
     const quorum = await policy.calculateQuorumRequirement('TRANSFER_OWNERSHIP', homeId);
 
     if (quorum.needed) {
+      // A repeat of this proposal (a re-sent request or a second tap) gets the open proposal it already made, so the
+      // other owners aren't asked to resolve the same transfer twice.
+      const { data: openProposal, error: openProposalError } = await supabaseAdmin
+        .from('HomeQuorumAction')
+        .select('id, required_approvals')
+        .eq('home_id', homeId)
+        .eq('proposed_by', userId)
+        .eq('action_type', 'TRANSFER_OWNERSHIP')
+        .eq('state', 'proposed')
+        .eq('metadata->>buyer_user_id', buyerUserId)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openProposalError) throw openProposalError;
+      if (openProposal) {
+        return res.status(200).json({
+          message: 'Transfer requires approval from other owners',
+          quorum_action_id: openProposal.id,
+          required_approvals: openProposal.required_approvals,
+        });
+      }
+
       const { data: action, error } = await supabaseAdmin
         .from('HomeQuorumAction')
         .insert({
