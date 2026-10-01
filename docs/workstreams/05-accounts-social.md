@@ -9,6 +9,25 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1382 (chat socket hardening) and #1371 merged (b308); #1366 #1380 sealed; #1367 passed on devices; new #1387 (reaction retry keeps the reaction), 2026-10-01T16:30:22Z
+
+- **Merged (b308, master 7b41c8b04):**
+  - **#1382:** chat socket hardening. Every chat socket event gets a validated payload and ack through one guard, and the socket reaction follows the REST rule (1 to 8 characters). Details are in the private bundle `20261001-stream5-socket-crash-guard-r1`.
+    - **The backend should be deployed soon** so production has it. Stream 1 is telling the user.
+  - **#1371:** opening a crew inquiry twice at once makes one chat.
+- **Sealed, waiting for the queue:**
+  - **#1380** (seat-invite renew + migration 20261001136000), seal 34eed941. It merges with #1381 after Stream 1's candidate 31 device check.
+  - **#1366** (invoice recipient endpoint + web picker), seal 090059b6. It merges after #1357; it will be retargeted to master and the merge proven again.
+- **#1367** (native picker) passed all five steps on iOS and Android: Stream 1 bundle `20261001-stream1-cand30-device-cells-r1`. It is sealed when CI is green.
+- **#1381:** the first head failed detekt (BusinessTeamScreen complexity 23, limit 18). New head 600150b16 moves the link handoff into a small holder with the same UI.
+- **New: #1387, the reaction retry.** Before, every reaction request toggled, so a retry after a lost reply removed the 👍 the first request had added.
+  - Now each app sends the state the tap asks for (`reacted`). The server sets it, and requests without it still toggle.
+  - Verified through the real API, socket and web: on master the web lost-reply journey ends with no 👍; on the head it shows "👍 1".
+  - Device check requested from Stream 1.
+- **Still in CI:** #1338, #1356 and #1357 (device-passed), #1367, #1381 and #1387.
+- **Next:** seal as CI turns green. Then the remaining audit items: catalog, package and scheduling-invoice re-sends, chat-media orphans, the register race, and the UserReport unique index (that needs a migration number from Stream 1).
+- **Runtime:** API 18134 and the web tree are on #1387's head; the web server is stopped. No fixtures, and every bundle's rows-since scan is empty.
+
 ## LIVE — #1349 (b301) and #1362 (b303) merged; device passes for #1356 #1357; new #1366 #1367 (invoice recipient picker), #1371 (crew inquiry once), #1380 #1381 (seat invites); all waiting on CI, 2026-10-01T15:44:00Z
 
 - **Merged:**
