@@ -125,7 +125,7 @@ Newest dated text wins. **Re-verify every SHA, PR, lease and process live**; a h
      - `MIGRATION_BASE_SHA=<master> node scripts/db/check-migrations.cjs` at the tip;
      - `node --check` on the changed backend files;
      - covering backend Jest, run from `backend/` at the detached tip in your worktree. In zsh, pass file lists as `${=F}`.
-  5. Write the body to `$R/batchNNN-body.md` (batches 301–314 are examples).
+  5. Write the body to `$R/batchNNN-body.md` (batches 301–316 are examples).
   6. `git push origin ${TIP}:refs/heads/claude/coord-merge-batch-NNN`.
   7. `gh pr create --body-file`.
   8. `gh pr merge N --merge --match-head-commit $TIP`.
@@ -178,7 +178,9 @@ Newest dated text wins. **Re-verify every SHA, PR, lease and process live**; a h
 - **Device boundaries:** the iOS Wallet is behind an OS passcode prompt; never type into it. The Android Wallet is FLAG_SECURE, so no screencaps, only dumps. Location-gated targets need a permission you must not grant.
 - **iOS input:**
   - The SwiftUI `.contextMenu` doesn't open from the bridge's synthetic long-press. Use another entry point, such as the reaction chips, which call the same view model.
-  - The iOS composer TextEditor scramble under rapid input is fixed by Stream 2's pending PR.
+  - The iOS composer TextEditor scramble under rapid input is fixed on master (#1407, batch 315).
 - **Android input:** ESC after the keyboard has already closed dismisses the bottom sheet (the draft is kept). Layouts shift with the keyboard open, so re-read bounds before typing. `&amp;` appears escaped in dumps.
 - **zsh:** `$H:path` triggers a modifier (use `${H}:`), lists need `${=F}`, and `echo ====` triggers equals-expansion.
 - **Leases:** read the full `heavy-slot.sh status` output; `head -2` hides the queue.
+- **Moved peer heads:** a peer's master merge can silently edit code, such as #1406's `#Preview` calls. Compare per-file patch-ids of the sealed patch and the new patch (`git diff <old-base> <sealed-head>` against `git diff <master> <new-head>`). Where they differ, compare only the +/- lines; differing context alone is fine.
+- **Failed CI while a run is in progress:** `gh run view --log-failed` is empty until the run completes. Read the job through `gh api repos/WangPantopus/skinny-pantopus/actions/jobs/<id>/logs` instead.
