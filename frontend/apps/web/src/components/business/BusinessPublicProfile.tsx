@@ -714,7 +714,8 @@ function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: Bu
         ))
       ) : (
         <div className="text-center py-8 text-app-text-muted text-sm">
-          No reviews yet. Be the first to leave a review!
+          {/* Reviews come from completed jobs, not from this page (the same words as the iOS and Android pages). */}
+          No reviews yet. Be the first to hire {business?.name || 'this business'}. Your review helps the next neighbor decide.
         </div>
       )}
     </div>
