@@ -188,7 +188,8 @@ public struct PulseComposeContent: View {
             if !state.isIntentLocked {
                 locationSection
             }
-            if !state.isFlowMode || state.visibility != .connections {
+            // The audience is fixed after posting (edits don't send it), so edit mode shows no selector, like web.
+            if !state.isIntentLocked, !state.isFlowMode || state.visibility != .connections {
                 visibilitySection
             }
         }
@@ -730,7 +731,7 @@ public struct PulseComposeContent: View {
         FormFieldGroup("Heads Up") {
             safetyKindChipRow
             textField(.title, label: "Headline", placeholder: "What should people nearby know?")
-            if !state.isFlowMode {
+            if !state.isFlowMode, !state.isIntentLocked {
                 audienceChipRow
             }
             bodyField(label: "Details", placeholder: "Describe what happened…", minHeight: 96)
@@ -761,7 +762,7 @@ public struct PulseComposeContent: View {
     private var announceSection: some View {
         FormFieldGroup(announceSectionTitle) {
             textField(.title, label: "Headline", placeholder: "What's the news?")
-            if !state.isFlowMode {
+            if !state.isFlowMode, !state.isIntentLocked {
                 audienceChipRow
             }
             bodyField(label: "Details", placeholder: announceBodyPlaceholder, minHeight: 96)

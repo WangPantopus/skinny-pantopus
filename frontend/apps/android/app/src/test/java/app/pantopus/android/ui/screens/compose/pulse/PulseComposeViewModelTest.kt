@@ -743,7 +743,8 @@ class PulseComposeViewModelTest {
         assertEquals("New title", request.title)
         assertEquals("Updated body.", request.content)
         assertEquals("advice", request.serviceCategory)
-        assertEquals("neighborhood", request.visibility)
+        // The audience is fixed after posting: an edit never sends visibility.
+        assertNull(request.visibility)
     }
 
     @Test fun editSubmitSendsPATCH() =

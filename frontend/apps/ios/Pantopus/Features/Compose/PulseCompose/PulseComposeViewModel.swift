@@ -1242,7 +1242,8 @@ public final class PulseComposeViewModel {
     /// Build the `PATCH /api/posts/:id` body from the active intent's
     /// field values + selectors. Sends only the keys `updatePostSchema`
     /// accepts (no `postAs` / `audience` / `purpose` / `businessName`).
-    /// Visibility comes from the announce audience for announce posts.
+    /// The audience is fixed after posting, like identity, so an edit never
+    /// sends visibility (`updatePostSchema` refuses "connections").
     func buildUpdateRequest() -> PostUpdateRequest {
         let bodyValue = trimmedValue(.body)
         let titleValue = trimmedValue(.title)
@@ -1251,14 +1252,12 @@ public final class PulseComposeViewModel {
             return PostUpdateRequest(
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
-                visibility: visibility.rawValue,
                 serviceCategory: askCategory.rawValue
             )
         case .recommend:
             let business = trimmedValue(.recommendBusiness)
             return PostUpdateRequest(
                 content: composeRecommendBody(stars: recommendRating, body: bodyValue),
-                visibility: visibility.rawValue,
                 dealBusinessName: business.isEmpty ? nil : business
             )
         case .event:
@@ -1267,7 +1266,6 @@ public final class PulseComposeViewModel {
             return PostUpdateRequest(
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
-                visibility: visibility.rawValue,
                 eventDate: dateRaw.isEmpty ? nil : isoDateTime(from: dateRaw),
                 eventVenue: venue.isEmpty ? nil : venue
             )
@@ -1275,14 +1273,12 @@ public final class PulseComposeViewModel {
             let lastSeen = trimmedValue(.lostLastSeenLocation)
             return PostUpdateRequest(
                 content: prefixLastSeen(body: bodyValue, location: lastSeen),
-                visibility: visibility.rawValue,
                 lostFoundType: lostFoundKind.rawValue
             )
         case .announce:
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue.isEmpty ? nil : titleValue,
-                visibility: announceAudience.backendVisibility
+                title: titleValue.isEmpty ? nil : titleValue
             )
         }
     }
