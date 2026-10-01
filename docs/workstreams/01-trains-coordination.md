@@ -9,6 +9,78 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T03:25Z (Stream 1).**
+  - **Merged** (each seal verified at the PR head; build-batch/verify-batch RESULT OK; SwiftLint/SwiftFormat on every changed Swift file; `node --check` on changed backend files):
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 241 | #1157 | 01:04:13Z | #1149 (Stream 5 crew setup checklist links), #1156 (Stream 2 web Visitor badge note) |
+    | 242 | #1160 | 01:19:20Z | #1150 (Stream 5 business trust step: document-verified crews only) |
+    | 243 | #1164 | 01:31:45Z | #1163 (Stream 4 SwiftFormat leftovers), #1162 (Stream 3 refused viewer gets no invite), #1121 + #1119 (Stream 5 page editors; my device run `e5c7c502`), #1155 (Stream 5 dead hero upload box) |
+    | 244 | #1171 | 01:52:01Z | **security** #1169 (Stream 2: people lane listed every account; now `[]`), #1166 (Stream 2 composer date labels) |
+    | 245 | #1175 | 01:58:52Z | #1172 (Stream 4 Pulse honesty: no all-clear when alerts weren't checked), #1173 (web Documents download), #1174 (Uploaded day only) |
+    | 246 | #1178 | 02:06:12Z | #1176 (Stream 3 postcard notice names the newcomer, never the e-mail), #1177 (web Home chip rename) |
+    | 247 | #1180 | 02:08:29Z | #1179 (Stream 2 web Place composer drops Service/Announce) |
+    | 248 | #1184 | 02:20:23Z | #1165, #1167, #1168, #1170 (Stream 5 web a11y/copy), #1181 (Place brief greeting by the viewer's clock), #1183 (one profile card) |
+    | 249 | #1187 | 02:34:08Z | #1159 (Hub Discover Posts → Pulse; backend lane removed), #1161 (native Visitor meta), #1185 (Today sources credit only answering providers), #1186 (web distances in miles); my iOS run `dd21f9b4` |
+    | 250 | #1189 | 02:39:21Z | #1158 (Stream 5 native: no dead Padding/Background chips; my device run `dd21f9b4`), #1188 (Stream 2: empty Alerts filter is never an all-clear) |
+    | 251 | #1191 | 02:45:36Z | #1182 (Stream 5 chat overlays portaled to body, 10 controls named) |
+    | 252 | #1194 | 02:48:16Z | **security** #1193 (Stream 2: Saved lists only posts the viewer can still open, fail closed) |
+    | 253 | #1197 | 02:56:48Z | #1190 (Stream 5 settings switches named with state) |
+    | 254 | #1199 | 03:00:28Z | #1198 (Stream 2 web Saved tab on My pulse; paging by raw offset) |
+    | 255 | #1202 | 03:04:13Z | #1201 (Stream 2: moderation-removed post opens only for its author), #1195 (Stream 5 page editor keyboard access) |
+    | 256 | #1205 | 03:07:58Z | #1203 (Stream 4 Block Founders invitations: reserve as `created`; code-only), #1204 (iOS byte sizes) |
+    | 257 | #1207 | 03:13:05Z | #1200 (Stream 5 notification Remove on keyboard focus) |
+    | 258 | #1212 | 03:24:13Z | #1192 (hidden block announces "Hidden from visitors"), #1196 (iOS Pages labels; my run `74673a4a`), **my #1211** (Trains U02 A1–A4 on Android) |
+
+    Master is **`58797e34c`**; the next batch is **259**. No migrations. Migration 20261001020000 was reserved for Stream 4 and **released** (code-only fix).
+  - **Mine, merged — #1211, Trains U02 A1–A4 on Android** (bundle `20260930-stream1-android-u02-trains-r1`, 294 files, `ac43ecdb…d172a463`):
+    - TalkBack (speech probes, before → after):
+      - calendar days say their state;
+      - coverage is one phrase;
+      - the recipient card is one stop;
+      - duplicates removed;
+      - Manage's field, switch and chips are named with state;
+      - Start's reason tiles are radio buttons.
+    - Font 2.0:
+      - the legend wraps;
+      - "pm" and the end date are kept;
+      - the pills grow;
+      - names get an ellipsis;
+      - stat labels grow up to 1.5×.
+    - Default size: the train page and Start are pixel-identical. Manage's stat row **already clipped its labels in half on master** and now fits them, about 12dp taller; kept as a clipped-text repair.
+    - A3: no defect. The old "Android HOME chip 4.42" is the scanner's 8-step colour binning; the tokens give 4.57:1.
+  - **Device runs for peers** (sealed bundles):
+    - `20261001-stream1-native-1119-1121-devices-r1` (`e5c7c502`);
+    - `20261001-stream1-native-1158-1159-1161-devices-r1` (`dd21f9b4`). iOS #1159's Back lands on the Nearby root, the same as the existing Pulse pillar, so it is existing navigation;
+    - `20261001-stream1-native-1192-1196-devices-r1` (`74673a4a`);
+    - `20261001-stream1-ios-edit-audience-r1` (`76f097b7`): the before for Stream 2's #1209. A text-only edit of a Connections post → 400. The red toast shows raw validation text for about 2 s; my first "no feedback" reading came after the toast had gone and was corrected.
+  - **Decisions (standing direction):**
+    - **Saved posts:** Stream 2's three-step plan is approved:
+      1. `/saved` re-checks `canViewPost` and fails closed;
+      2. a web Saved tab on My pulse;
+      3. native Saved segments.
+      All three use existing surfaces, posts only and raw-offset paging. Save existed everywhere, but its results were unreachable.
+    - **Native post edit:** the audience is fixed after posting, like identity. Edit sends no visibility, and the selector is hidden in edit, as on web. Accepting 'connections' on edit is rejected as a privacy lie. `serviceCategory` is sent only when changed (#1209).
+    - **Large text:** repair only lost content or clipped control labels, keeping the default design. This follows the user's 2026-09-29 "keep the current layout" ruling.
+    - Accepted presentation fixes for accessibility failures: #1166 (date labels) and #1179 (hide Place-refused intents). #1188: never imply an all-clear from the absence of posts.
+  - **Routed:**
+    - Block Founders 'reserved' CHECK → Stream 4 (fixed, #1203).
+    - The native Today's Pulse greeting on the server clock → Stream 4 (in progress).
+    - `verified_resident` badge = email verified (a false trust signal) → Stream 5.
+    - Portal-less fixed overlays in AppShell `<main>` (web) → Stream 2 for the post image viewer, Stream 5 for the seat/member modals.
+    - Stream 2's latent "visibility-only edit can't hide a Place post" became #1209.
+  - **Open queue:**
+    - #1209 (edit audience) and #1210 (native Saved segment): Stream 2, need my iOS after-runs once sealed.
+    - #1206 (tab bars) and #1208 (form labels): Stream 5 web, in CI.
+    - Stream 4's next three: the Pulse device greeting, invite form clearing, and Documents delete honesty.
+  - **Lessons:**
+    - A font-scale or uimode change recreates the Android screen at the top, so scroll *after* each mode change.
+    - iOS AX can stall after a reinstall; a simulator reboot fixes it.
+    - An iOS 26 confirmation popover has no Cancel button; HID Escape (`{"op":"key","code":41}`) dismisses it.
+    - Compose `clearAndSetSemantics` also clears semantics *after* it in the same chain, so put `clickable` and `testTag` before it.
+    - zsh doesn't word-split `$var`; use `${=var}`.
+    - Re-queueing a heavy job keeps its place only if nobody joined behind it.
 - **Update 2026-10-01T01:00Z (Stream 1).**
   - **Merged** (each seal verified at the PR head; build-batch/verify-batch RESULT OK):
 
