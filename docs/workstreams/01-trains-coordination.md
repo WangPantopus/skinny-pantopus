@@ -9,6 +9,38 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T00:09Z (Stream 1).**
+  - **Merged** (every seal verified at the PR head; build-batch/verify-batch RESULT OK, all files blob-equal):
+
+    | Batch | PR | Time | Contents |
+    |---|---|---|---|
+    | 224 | #1114 | 23:32:43Z | #1113 (Stream 2): web Place deal needs an end date before sending |
+    | 225 | #1120 | 23:48:30Z | #1118 (Stream 3): unsaved Home settings survive the access re-check; #1115 (Stream 5): crew page without placeholder blocks, real contact form, safe embeds |
+    | 226 | #1123 | 00:07:33Z | #1122 (Stream 2): composer location chip readable in dark |
+    | 227 | #1125 | 00:08:13Z | #1124 (Stream 2): Pulse map popup opens below the "Search this area" pill |
+
+    Master is **`e7fc87cda`**; the next batch is **228**. No migrations.
+  - **Open, mine:**
+    - #1117 T9: your own slot isn't listed again as a neighbor's (iOS, Android). Sealed `6c3137e6` (44 files), with before/after on both apps and a shared-slot case.
+    - Branch `codex/trains-start-default-banner-20260930` (`8735ef6db`, PR not opened yet):
+      - Start's reason picker starts on Meal train (was Surgery; the choice is never sent);
+      - the covered banner says "Thanks, neighbors. No more sign-ups are needed right now.";
+      - the iOS recipient Home chip in dark goes from 3.06 to 8.80 (`home` token, light unchanged).
+      - Before shots are in `20260930-stream1-trains-start-banner-chip-r1`.
+  - **Combined candidate** `e12254b59`: master + #1117 + that branch + Stream 4's #1116 (SwiftLint `trailing_closure` on master since #1103) + Stream 5's #1119/#1121 (page-blocks editor accessibility and truth; my device run). It's queued in the heavy slot, saving one full build.
+  - **Decisions (per the user's standing instruction):**
+    - Composer chip palette (#1122): light keeps every value except Safety Alert's text; dark uses the existing `darkTextColor`; Lost & Found dark ink is amber. New tokens and darker fills were rejected.
+    - The "Android HOME chip 4.42" note doesn't reproduce: Android draws 4.57:1. The real defect was iOS dark (3.06), fixed in the branch above.
+    - **Disk guard:** the data volume dropped to 14 GiB free at 23:55Z (it recovered to ~80 GiB at 23:57Z when the OS released purgeable space). `heavy-slot.sh` now refuses new acquires under 10 GiB free. Every stream deletes its DerivedData and app/build after copying artifacts.
+    - The stale 12 GB `/private/tmp/launchcut-ios-dd` (the feature-flags worktree's cache) is left for the user.
+  - **Android Trains U02, in progress** (bundle `20260930-stream1-android-u02-trains-r1`, fixture train `b735c427…`, baseline 23:42:55Z):
+    - **TalkBack-level method found:** emulator console touches (`adb emu event mouse x y 0 1|0`) go through TalkBack's touch exploration, while `adb shell input` bypasses it. TalkBack's developer setting at VERBOSE logs every utterance. Scratchpad `tbtouch.sh`/`tbscreen.py`.
+    - **First findings on the detail screen:**
+      - calendar tiles speak only the number ("8"), not "8, filled";
+      - "1" and "of 2 slots covered" are separate stops;
+      - the dock says "Sign up for a slot" twice;
+      - the Hosted-by row reads its parts twice;
+      - weekday initials read "capital S".
 - **Update 2026-09-30T23:15Z (Stream 1, new session "Stream 1 resume: Support Trains and merge queue").**
   - Resumed from the 21:55Z handoff (amended 22:22Z). Checked live: master `a211e1f48`, no Stream 1 PR open, only #46/#429/#430/#625 (unrelated) and draft #842 open. Backend :18132 (pid 49108) and proxy :18138 healthy, Next :18139 answering, DB 64562 up. Heavy slot free; device slots 1 and 2 still held by `stream1:`, both devices shut down. Disk at 92% (33 GiB free).
   - Peers online since ~23:12Z: Streams 2, 3, 4 and 5 (new sessions). None has a PR for the queue yet. Stream 4 keeps the native Pulse hero ("All clear on your block today.") as its item 5.
