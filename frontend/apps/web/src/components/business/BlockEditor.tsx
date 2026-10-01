@@ -23,10 +23,6 @@ export default function BlockEditor({ block, onUpdate, onDelete, onClose }: Bloc
     onUpdate({ ...block, data: { ...block.data, ...patch } });
   };
 
-  const updateSettings = (patch: Record<string, any>) => {
-    onUpdate({ ...block, settings: { ...block.settings, ...patch } });
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -67,43 +63,7 @@ export default function BlockEditor({ block, onUpdate, onDelete, onClose }: Bloc
           <BlockTypeFields block={block} updateData={updateData} onUpdate={onUpdate} />
         </div>
 
-        {/* Block settings (padding / background) */}
-        <details className="group border-t border-app-border-subtle pt-3">
-          <summary className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider cursor-pointer select-none flex items-center gap-1">
-            <svg className="w-3 h-3 text-app-text-muted group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Appearance
-          </summary>
-          <div className="mt-3 space-y-2">
-            <div>
-              <label className="block text-[10px] font-medium text-app-text-secondary mb-1">Padding</label>
-              <select
-                value={block.settings?.padding || 'default'}
-                onChange={(e) => updateSettings({ padding: e.target.value })}
-                className="w-full rounded-lg border border-app-border px-2 py-1.5 text-xs"
-              >
-                <option value="none">None</option>
-                <option value="small">Small</option>
-                <option value="default">Default</option>
-                <option value="large">Large</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-app-text-secondary mb-1">Background</label>
-              <select
-                value={block.settings?.background || 'default'}
-                onChange={(e) => updateSettings({ background: e.target.value })}
-                className="w-full rounded-lg border border-app-border px-2 py-1.5 text-xs"
-              >
-                <option value="default">Default (white)</option>
-                <option value="gray">Gray</option>
-                <option value="brand">Brand color</option>
-                <option value="transparent">Transparent</option>
-              </select>
-            </div>
-          </div>
-        </details>
+        {/* No Appearance (padding / background) controls: no page renders them, so they changed nothing. */}
 
         {/* Schedule (all block types) */}
         <details className="group border-t border-app-border-subtle pt-3">
