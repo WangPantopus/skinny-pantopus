@@ -47,9 +47,6 @@ const LOCAL_PROFILE_IDENTITY_SELECT = [
   'show_neighborhood',
   'show_verified_resident_badge',
   'show_gig_history',
-  'review_count',
-  'gigs_completed',
-  'marketplace_sales',
 ].join(', ');
 
 async function loadLocalIdentityMapForUsers(users) {
