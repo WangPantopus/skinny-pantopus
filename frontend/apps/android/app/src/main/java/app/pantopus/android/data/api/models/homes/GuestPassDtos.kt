@@ -48,6 +48,11 @@ data class CreateGuestPassRequest(
     @Json(name = "end_at") val endAt: String? = null,
     /** Guest page sections the pass shows; null lets the server use its default for the kind. */
     @Json(name = "included_sections") val includedSections: List<String>? = null,
+    /**
+     * One UUID per create intent, reused when that create is retried: the server then updates the
+     * intent's pass instead of minting a second live link (migration 20261001131000).
+     */
+    @Json(name = "request_id") val requestId: String? = null,
 )
 
 /**

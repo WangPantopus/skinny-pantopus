@@ -218,6 +218,8 @@ export async function createGuestPass(homeId: string, data: {
   passcode?: string;
   max_views?: number;
   permissions?: Record<string, any>;
+  /** One UUID per create intent, reused on a retry: the server then updates that intent's pass instead of minting a second link. */
+  request_id?: string;
 }): Promise<{ pass: GuestPass; token: string }> {
   return post(`/api/homes/${homeId}/guest-passes`, data);
 }

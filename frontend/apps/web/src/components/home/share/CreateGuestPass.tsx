@@ -105,6 +105,9 @@ export default function CreateGuestPass({
   const [resultPasscode, setResultPasscode] = useState('');
   const generation = useRef(0);
   const pending = useRef<number | null>(null);
+  // One create intent per opening of the panel: a retry after an error reuses it, so the server updates that
+  // intent's pass instead of minting a second live link.
+  const requestId = useRef<string | null>(null);
   const owner = useRef<string | null>(homeId);
   useEffect(() => {
     owner.current = homeId;
@@ -115,6 +118,7 @@ export default function CreateGuestPass({
   useEffect(() => {
     generation.current++;
     pending.current = null;
+    requestId.current = null;
     setCreating(false);
     if (open) {
       if (draft) {
@@ -191,6 +195,7 @@ export default function CreateGuestPass({
     const issuedHome = homeId;
     const issuedPasscode = passcode.trim();
     pending.current = request;
+    requestId.current ??= crypto.randomUUID();
     setCreating(true);
     setError('');
     try {
@@ -202,6 +207,7 @@ export default function CreateGuestPass({
         duration_hours: Number(durationHours) || TEMPLATE_DEFAULTS[kind].hours,
         passcode: issuedPasscode || undefined,
         max_views: maxViews ? Number(maxViews) : undefined,
+        request_id: requestId.current,
       });
       // A saved pass remains revocable even if its form was dismissed. Refresh
       // that Home's list without closing or replacing a newer draft.
