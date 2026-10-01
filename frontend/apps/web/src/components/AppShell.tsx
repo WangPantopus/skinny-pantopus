@@ -278,6 +278,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const showIdentityNavigation = webFeatureFlags.identityFirewall;
   const isIdentityRoute = showIdentityNavigation && (pathname.startsWith('/app/identity') || pathname.startsWith('/app/persona'));
   const isSettingsRoute = pathname.startsWith('/app/profile/settings') || pathname.startsWith('/app/settings');
+  const isMyPostsRoute = pathname.startsWith('/app/my-pulse');
 
   // ── Memoized inline style objects (avoid new identity per render) ──
   const topBarStyle = useMemo(() => ({ left: sidebarWidth }), [sidebarWidth]);
@@ -465,6 +466,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <div className="border-t border-app flex-shrink-0">
             {showIdentityNavigation && <SidebarItem icon={NavIcons.identity} label={identityCopy.profilesPrivacyTitle} active={isIdentityRoute} onClick={() => router.push('/app/identity')} showLabel={showLabels} />}
 
+            {/* Your posts and the ones you saved (the my-x screens left the main nav; native: drawer "My Pulse", You → "My posts") */}
+            <SidebarItem icon={NavIcons.myPulse} label="My posts" active={isMyPostsRoute} onClick={() => router.push('/app/my-pulse')} showLabel={showLabels} testId="sidebar-my-posts" />
+
             {/* Settings */}
             <SidebarItem icon={NavIcons.settings} label="Settings" active={isSettingsRoute} onClick={() => router.push('/app/profile/settings')} showLabel={showLabels} />
 
@@ -525,6 +529,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   showLabel
                 />
               )}
+              <SidebarItem
+                icon={NavIcons.myPulse}
+                label="My posts"
+                active={isMyPostsRoute}
+                onClick={() => {
+                  router.push('/app/my-pulse');
+                  sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false });
+                }}
+                showLabel
+              />
               <SidebarItem
                 icon={NavIcons.settings}
                 label="Settings"
