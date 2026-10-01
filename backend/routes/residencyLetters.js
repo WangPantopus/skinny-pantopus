@@ -62,9 +62,13 @@ router.post('/:id/residency-letters', verifyToken, residencyLetterIssueLimiter, 
       homeId: id,
       userId,
       purpose: req.body && req.body.purpose,
+      clientRequestId: req.body && req.body.clientRequestId,
     });
     return res.status(201).json({ letter });
   } catch (err) {
+    if (err instanceof residencyLetterService.LetterError) {
+      return res.status(err.statusCode).json({ error: err.message, code: err.code });
+    }
     logger.error('residencyLetter: issue failed', { homeId: id, userId, error: err.message });
     return res.status(500).json({ error: 'Could not issue the letter. Try again.' });
   }

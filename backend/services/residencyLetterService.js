@@ -80,6 +80,15 @@ function sanitizePurpose(purpose) {
   return p || DEFAULT_PURPOSE;
 }
 
+/** Error whose `code` the route maps to a 4xx instead of a 500. */
+class LetterError extends Error {
+  constructor(message, code, statusCode = 400) {
+    super(message);
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
 function cityStateZip(rec) {
   const cityState = [rec.city, rec.state].filter(Boolean).join(', ');
   return [cityState, rec.zipcode].filter(Boolean).join(' ');
@@ -220,7 +229,41 @@ function serializeLetter(row) {
  */
 const LETTER_VALIDITY_DAYS = Number(process.env.RESIDENCY_LETTER_VALIDITY_DAYS || 90);
 
-async function issueLetter({ homeId, userId, purpose }) {
+async function issueLetter({ homeId, userId, purpose, clientRequestId }) {
+  if (clientRequestId != null && (typeof clientRequestId !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(clientRequestId))) {
+    throw new LetterError('Invalid letter request.', 'BAD_REQUEST_ID');
+  }
+  // Reuse the existing primary key for one unchanged actor/Home command, as residency claims do: a re-sent request or
+  // a second tap gets back the letter already issued instead of a second live credential. The key covers the Home and
+  // the user, so nobody else's request can reach this letter. Hyphenated so the PDF prints the id the API returns.
+  const letterId = clientRequestId == null ? null : crypto.createHash('sha256')
+    .update('pantopus:residency-letter:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
+    .digest('hex').slice(0, 32).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+  const readRetry = async () => {
+    const { data, error } = await supabaseAdmin
+      .from('ResidencyLetter')
+      .select('id, home_id, user_id, status, purpose, resident_name, address_line1, city, state, zipcode, letter_code, issued_at, expires_at, revoked_at, pdf_sha256')
+      .eq('id', letterId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  const acknowledgeRetry = (existing) => {
+    if (existing.home_id !== homeId.toLowerCase() || existing.user_id !== userId.toLowerCase() ||
+        existing.purpose !== sanitizePurpose(purpose)) {
+      throw new LetterError('This letter request was already used for a different purpose.', 'REQUEST_CONFLICT', 409);
+    }
+    if (existing.status !== 'issued' || (existing.expires_at && new Date(existing.expires_at).getTime() <= Date.now())) {
+      throw new LetterError('This letter is no longer active. Start a new letter to issue another.', 'LETTER_INACTIVE', 409);
+    }
+    return serializeLetter(existing);
+  };
+  if (letterId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
+  }
+
   const [{ data: home, error: homeErr }, { data: user, error: userErr }] = await Promise.all([
     supabaseAdmin.from('Home').select('id, address, address2, city, state, zipcode').eq('id', homeId).maybeSingle(),
     supabaseAdmin.from('User').select('id, first_name, last_name, name, username').eq('id', userId).maybeSingle(),
@@ -228,7 +271,7 @@ async function issueLetter({ homeId, userId, purpose }) {
   if (homeErr || !home) throw new Error('Home not found');
   if (userErr || !user) throw new Error('User not found');
 
-  const id = crypto.randomUUID();
+  const id = letterId || crypto.randomUUID();
   const letterCode = generateLetterCode();
   const issuedAtIso = new Date().toISOString();
   const facts = {
@@ -262,11 +305,19 @@ async function issueLetter({ homeId, userId, purpose }) {
     pdf_base64: pdf.toString('base64'),
   };
 
-  const { data: saved, error } = await supabaseAdmin.from('ResidencyLetter').insert(row).select().single();
+  const insert = letterId
+    ? supabaseAdmin.from('ResidencyLetter').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+    : supabaseAdmin.from('ResidencyLetter').insert(row);
+  const { data: saved, error } = await insert.select().maybeSingle();
   if (error) {
     logger.error('residencyLetter: insert failed', { homeId, userId, error: error.message });
     throw new Error('Could not save the letter');
   }
+  if (!saved && letterId) {
+    const existing = await readRetry();
+    if (existing) return acknowledgeRetry(existing);
+  }
+  if (!saved) throw new Error('Could not save the letter');
   logger.info('residencyLetter: issued', { letterId: saved.id, homeId, userId });
   return serializeLetter(saved);
 }
@@ -438,6 +489,7 @@ async function revokeLettersForResidency(homeId, userId, reason = 'residency_end
 }
 
 module.exports = {
+  LetterError,
   issueLetter,
   revokeLettersForResidency,
   listLetters,
