@@ -134,6 +134,25 @@ fun StampsScreen(
                         onApply = { id -> viewModel.applyTheme(id) },
                         onRetry = { viewModel.fetchThemes() },
                     )
+                } else if (!LaunchFeatures.mailExtras) {
+                    // Launch cut #8 (Mail extras): the postage wallet (book, sheet, wallet rail, usage, issuer and the
+                    // "Buy more stamps" dock) only serves sending letters and has no backend: every figure is sample
+                    // data and "Buy" changes only local state. The first launch shows the live collection only.
+                    when (val current = collection) {
+                        is StampCollectionUiState.Error ->
+                            StampsErrorBody(message = current.message, onRetry = { viewModel.fetchCollection() })
+                        else ->
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = Spacing.s4)
+                                        .padding(top = Spacing.s3, bottom = Spacing.s4),
+                            ) {
+                                StampCollectionSection(state = current)
+                            }
+                    }
                 } else {
                     when (val current = state) {
                         is StampsUiState.Loading -> StampsLoadingBody()

@@ -58,6 +58,24 @@ public struct StampsView: View {
                 onApply: { id in Task { await viewModel.applyTheme(id: id) } },
                 onRetry: { Task { await viewModel.fetchThemes() } }
             )
+        } else if !LaunchFeatures.mailExtras {
+            // Launch cut #8 (Mail extras): the postage wallet (book, sheet, wallet
+            // rail, usage, issuer and the "Buy more stamps" dock) only serves
+            // sending letters and has no backend: every figure is sample data and
+            // "Buy" changes only local state. The first launch shows the live
+            // collection only.
+            if case let .error(message) = viewModel.collection {
+                StampsErrorBody(message: message) { Task { await viewModel.fetchCollection() } }
+            } else {
+                ScrollView {
+                    StampCollectionSection(state: viewModel.collection)
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s3)
+                        .padding(.bottom, Spacing.s4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(Theme.Color.appBg)
+            }
         } else {
             switch viewModel.state {
             case .loading:

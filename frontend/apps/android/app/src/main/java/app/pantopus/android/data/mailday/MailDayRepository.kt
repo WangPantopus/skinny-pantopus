@@ -2,6 +2,7 @@ package app.pantopus.android.data.mailday
 
 import app.pantopus.android.data.api.models.mailbox.v2.MailDayActionResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailDayFinishResponse
+import app.pantopus.android.data.api.models.mailbox.v2.MailDayRouteBody
 import app.pantopus.android.data.api.models.mailbox.v2.MailDayTodayResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
@@ -21,6 +22,16 @@ class MailDayRepository
 
         /** `POST /api/mailbox/v2/mailday/items/:itemId/route`. */
         suspend fun route(itemId: String): NetworkResult<MailDayActionResponse> = safeApiCall { api.route(itemId) }
+
+        /** `POST /api/mailbox/v2/mailday/items/:itemId/route` with `{ drawer: "home" }`. */
+        suspend fun keepForHousehold(itemId: String): NetworkResult<MailDayActionResponse> =
+            safeApiCall { api.routeToDrawer(itemId, MailDayRouteBody(drawer = "home")) }
+
+        /** `POST /api/mailbox/v2/mailday/items/:itemId/junk`. */
+        suspend fun junk(itemId: String): NetworkResult<MailDayActionResponse> = safeApiCall { api.junk(itemId) }
+
+        /** `POST /api/mailbox/v2/mailday/items/:itemId/undo`. */
+        suspend fun undo(itemId: String): NetworkResult<Unit> = safeApiCall { api.undo(itemId) }
 
         /** `POST /api/mailbox/v2/mailday/finish`. */
         suspend fun finish(): NetworkResult<MailDayFinishResponse> = safeApiCall { api.finish() }
