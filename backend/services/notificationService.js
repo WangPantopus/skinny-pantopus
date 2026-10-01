@@ -12,6 +12,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const badgeService = require('./badgeService');
 const pushService = require('./pushService');
+const { isLaunchNotificationHidden } = require('../utils/featureFlags');
 const {
   CONTEXTS: NOTIFICATION_CONTEXT_LIST,
   registerTemplate,
@@ -323,6 +324,8 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     return null;
   }
   const resolvedContext = NOTIFICATION_CONTEXTS.has(context) ? context : 'personal';
+  // Launch cuts: a notification that only a hidden feature produces is not sent.
+  if (isLaunchNotificationHidden(type, resolvedContext)) return null;
 
   // P1.14 — audience-context notifications are suppressed when the
   // recipient is currently blocked from the originating persona. Per
@@ -405,6 +408,8 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
     const rows = [];
     for (const n of notifications) {
       const resolvedContext = NOTIFICATION_CONTEXTS.has(n.context) ? n.context : 'personal';
+      // Launch cuts: a notification that only a hidden feature produces is not sent.
+      if (isLaunchNotificationHidden(n.type, resolvedContext)) continue;
       if (resolvedContext === 'audience'
           && await shouldSuppressAudienceNotification(n.userId, n.type, n.metadata || {})) {
         continue;

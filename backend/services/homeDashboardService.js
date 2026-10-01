@@ -11,6 +11,7 @@ const records = require('./homeRecordService');
 const authority = require('./homeAuthorityService');
 const { getHealthScore, canReadHealthScore } = require('./homeHealthService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
+const { isLaunchFeatureEnabled, excludeHiddenHomeActivity } = require('../utils/featureFlags');
 
 const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
@@ -179,9 +180,13 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
   const resourceCount = (table, permission) => has(permission)
     ? db.from(table).select('id', { count: 'exact', head: true }).eq('home_id', homeId).in('visibility', visibility)
     : null;
+  // Launch cut #7 (Household extras): bills, packages, the family calendar and
+  // pets stay off the Home dashboard for the first launch.
+  const extras = isLaunchFeatureEnabled('household_extras');
+  const hasExtra = permission => extras && has(permission);
   const issues = resourceCount('HomeIssue', 'maintenance.view');
-  const packages = resourceCount('HomePackage', 'packages.view');
-  const arriving = resourceCount('HomePackage', 'packages.view');
+  const packages = extras ? resourceCount('HomePackage', 'packages.view') : null;
+  const arriving = extras ? resourceCount('HomePackage', 'packages.view') : null;
   const documents = resourceCount('HomeDocument', 'docs.view');
   const [homeResult, rawMembers, tasks, events, bills, unread, guestPasses, expectedPackages, arrivingPackages, openIssues, dueBills, documentCount, petCount, activity] = await Promise.all([
     checked(db.from('Home').select(HOME_LIST).eq('id', homeId).maybeSingle()),
@@ -189,8 +194,8 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
       .select(`user_id, role, role_base, is_active, verification_status, start_at, end_at, access_start_at, access_end_at, user:user_id ( ${SAFE_CREATOR_SELECT} )`)
       .eq('home_id', homeId).eq('is_active', true).eq('verification_status', 'verified')) : [],
     has('tasks.view') ? records.list({ homeId, actorId, kind: 'task' }).then(result => result.records) : [],
-    has('calendar.view') ? records.list({ homeId, actorId, kind: 'event' }).then(result => result.records) : [],
-    has('finance.view') ? rows(db.from('HomeBill').select(HOME_BILL_LIST).eq('home_id', homeId)
+    hasExtra('calendar.view') ? records.list({ homeId, actorId, kind: 'event' }).then(result => result.records) : [],
+    hasExtra('finance.view') ? rows(db.from('HomeBill').select(HOME_BILL_LIST).eq('home_id', homeId)
       .in('status', ['due', 'overdue']).order('due_date', { ascending: true }).limit(1)) : [],
     has('mailbox.view') && access.occupancy?.verification_status === 'verified'
       && !staleAffectsTrust(access.occupancy.verified_at) ? count(unreadMailQuery(homeId, actorId, nowISO)) : 0,
@@ -199,10 +204,10 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
     packages ? count(packages.in('status', ['expected', 'in_transit', 'out_for_delivery'])) : 0,
     arriving ? count(arriving.or(`status.eq.out_for_delivery,and(status.in.(expected,in_transit),expected_at.gte.${startOfToday.toISOString()},expected_at.lte.${endOfToday.toISOString()})`)) : 0,
     issues ? count(issues.in('status', ['open', 'scheduled', 'in_progress'])) : 0,
-    has('finance.view') ? count(db.from('HomeBill').select('id', { count: 'exact', head: true }).eq('home_id', homeId).in('status', ['due', 'overdue'])) : 0,
+    hasExtra('finance.view') ? count(db.from('HomeBill').select('id', { count: 'exact', head: true }).eq('home_id', homeId).in('status', ['due', 'overdue'])) : 0,
     documents ? count(documents) : 0,
-    count(db.from('HomePet').select('id', { count: 'exact', head: true }).eq('home_id', homeId)),
-    has('security.manage') ? rows(db.from('HomeAuditLog').select('*').eq('home_id', homeId).order('created_at', { ascending: false }).limit(5)) : [],
+    extras ? count(db.from('HomePet').select('id', { count: 'exact', head: true }).eq('home_id', homeId)) : 0,
+    has('security.manage') ? rows(excludeHiddenHomeActivity(db.from('HomeAuditLog').select('*').eq('home_id', homeId)).order('created_at', { ascending: false }).limit(5)) : [],
   ]);
   const home = homeResult.data;
   if (!home) throw failure('HOME_NOT_FOUND', 404);
