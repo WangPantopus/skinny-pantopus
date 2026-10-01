@@ -149,6 +149,7 @@ export default function ProfileHeader({
                   <select
                     value={ownerPreviewContext}
                     onChange={(e) => onOwnerPreviewChange(e.target.value as ViewerContext)}
+                    aria-label="Preview profile as"
                     className="px-3 py-2 border border-app-strong rounded-lg text-sm text-app-strong"
                   >
                     <option value="owner">Preview: Owner</option>

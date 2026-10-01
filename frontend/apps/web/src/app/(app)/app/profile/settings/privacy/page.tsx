@@ -144,10 +144,11 @@ export default function PrivacySettingsPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">
+                <label htmlFor="privacy-search-visibility" className="block text-sm font-medium text-app-strong mb-2">
                   Who can find you in search?
                 </label>
                 <select
+                  id="privacy-search-visibility"
                   value={searchVisibility}
                   onChange={(e) => setSearchVisibility(e.target.value as SearchVisibilityLevel)}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -315,6 +316,7 @@ function SelectSetting({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
         className="px-3 py-1.5 border border-app-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
       >
         {options.map((opt) => (
