@@ -55,6 +55,8 @@ export interface RankedStream {
   tiers: StreamTier[];
   /** The reassuring facts shown in the "all clear" summary. */
   cleared: ClearedFact[];
+  /** False when weather alerts weren't checked (`noaa` in the pulse's partial failures): no all-clear then. */
+  alertsChecked: boolean;
   /** The pulse's own one-line summary (the all-clear subtitle). */
   summary: string;
 }
@@ -157,9 +159,10 @@ export function rankPulse(pulse: NeighborhoodPulse['pulse']): RankedStream {
   const urgent = buckets.attention.length > 0;
 
   // The all-clear facts assert only what the pulse actually reports. With
-  // nothing urgent, "No active alerts" is true by construction; air / weather
-  // are claimed only when a calm (green) signal is present.
-  const cleared: ClearedFact[] = [{ icon: BellOff, label: 'No active alerts' }];
+  // nothing urgent, "No active alerts" holds only when the weather service was
+  // checked; air / weather are claimed only when a calm (green) signal is present.
+  const alertsChecked = !(pulse.meta?.partial_failures ?? []).includes('noaa');
+  const cleared: ClearedFact[] = alertsChecked ? [{ icon: BellOff, label: 'No active alerts' }] : [];
   if (ordered.some((s) => s.signal_type === 'air_quality' && s.color === 'green')) {
     cleared.push({ icon: Wind, label: 'Air quality good' });
   }
@@ -167,5 +170,5 @@ export function rankPulse(pulse: NeighborhoodPulse['pulse']): RankedStream {
     cleared.push({ icon: CloudSun, label: 'Mild, clear weather' });
   }
 
-  return { urgent, tiers, cleared, summary: pulse.summary ?? '' };
+  return { urgent, tiers, cleared, alertsChecked, summary: pulse.summary ?? '' };
 }

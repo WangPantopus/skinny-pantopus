@@ -125,10 +125,10 @@ struct PlacePulseView: View {
     private func tiers(_ pulse: PulsePayload) -> some View {
         let sorted = pulse.signals.sorted { $0.priority > $1.priority }
         let buckets: [(String, [PulseSignal])] = [
-            ("Urgent", sorted.filter { $0.priority >= 80 }),
-            ("Worth a look", sorted.filter { $0.priority >= 50 && $0.priority < 80 }),
-            ("Around you", sorted.filter { $0.priority >= 25 && $0.priority < 50 }),
-            ("When you have a minute", sorted.filter { $0.priority < 25 })
+            ("Urgent", sorted.filter { Self.tier($0) == 0 }),
+            ("Worth a look", sorted.filter { Self.tier($0) == 1 }),
+            ("Around you", sorted.filter { Self.tier($0) == 2 }),
+            ("When you have a minute", sorted.filter { Self.tier($0) == 3 })
         ]
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(buckets, id: \.0) { title, signals in
@@ -141,6 +141,20 @@ struct PlacePulseView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+extension PlacePulseView {
+    /// The web's tiers (`ranking.ts`): the server's `priority` is a 0–10 rank, so it orders signals inside a tier but
+    /// can't choose one. A red or amber air or weather signal is urgent; the rest go by type.
+    static func tier(_ signal: PulseSignal) -> Int {
+        let urgent = ["red", "amber"].contains(signal.color.lowercased())
+        switch signal.signalType {
+        case "air_quality", "weather": return urgent ? 0 : 3
+        case "community": return 2
+        case "seasonal_suggestion", "local_services": return 1
+        default: return urgent ? 0 : 1
         }
     }
 }

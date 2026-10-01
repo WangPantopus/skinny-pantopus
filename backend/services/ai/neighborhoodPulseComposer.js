@@ -176,13 +176,16 @@ function determineOverallStatus(signals) {
 /**
  * Build a short summary string from available data.
  */
-function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx) {
+function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, alertsChecked = true) {
   const parts = [];
 
   if (weatherSignals.length > 0) {
     parts.push(weatherSignals[0].title);
-  } else {
+  } else if (alertsChecked) {
     parts.push('Your home area is quiet');
+  } else {
+    // No answer from the weather service is not a quiet day.
+    parts.push("We couldn't check for weather alerts on your block right now");
   }
 
   if (aqiSignal) {
@@ -268,6 +271,11 @@ async function compose({ homeId, userId }) {
     partialFailures.push('noaa');
     logger.error('Pulse: NOAA fetch failed', { homeId, error: noaaResult.reason?.message });
   }
+  // Alerts count as checked only when the weather service answered (live or cached). The provider resolves `error` when
+  // its fetch fails, and a Home without coordinates is never asked. Either way "no alerts" is unknown: a partial failure,
+  // so no client reads it as an all-clear.
+  const alertsChecked = noaaData?.source === 'live' || noaaData?.source === 'cache';
+  if (!alertsChecked && !partialFailures.includes('noaa')) partialFailures.push('noaa');
 
   let neighborhoodProfile = null;
   if (neighborhoodResult.status === 'fulfilled' && neighborhoodResult.value.profile) {
@@ -348,7 +356,7 @@ async function compose({ homeId, userId }) {
   if (aqiData && aqiData.fetchedAt) {
     sources.push({ provider: 'AIRNOW_AQI', updated_at: aqiData.fetchedAt });
   }
-  if (noaaData && noaaData.fetchedAt) {
+  if (alertsChecked && noaaData.fetchedAt) {
     sources.push({ provider: 'NOAA_ALERTS', updated_at: noaaData.fetchedAt });
   }
   if (neighborhoodProfile) {
@@ -356,7 +364,7 @@ async function compose({ homeId, userId }) {
   }
 
   // 9. Compose final Pulse
-  const summary = buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx);
+  const summary = buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, alertsChecked);
 
   return {
     pulse: {

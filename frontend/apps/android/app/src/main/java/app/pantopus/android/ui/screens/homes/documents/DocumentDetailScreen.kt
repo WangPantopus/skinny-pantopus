@@ -644,7 +644,8 @@ private fun MetadataGrid(
                 ?: dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() }
                 ?: "—"
         }
-    val uploadedLabel = projection.uploadedLabel ?: "—"
+    // The day alone: the "Uploaded by" row above already names the uploader.
+    val uploadedLabel = DocumentsViewModel.uploadedDayLabel(dto) ?: "—"
     val visibility =
         when (dto.visibility) {
             "managers" -> "Managers and owners"
