@@ -209,6 +209,8 @@ enum HomeResidencyReviewError: LocalizedError {
         case .unknown: "The decision is not confirmed. Retry the saved original to check its result."
         case .unavailable: "Current residency access could not be verified. Reload to check again."
         case .sessionChanged: "Your session changed. Reopen residency review to check access and recover the original."
+        case .refusal("MEMBERSHIP_RENEWAL_REQUIRED"):
+            "This person’s household membership has ended, so this claim can’t be approved. You can reject it instead."
         case .refusal: "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
         }
     }
