@@ -1154,7 +1154,8 @@ struct RowView: View {
         }
         if let time = row.timeMeta { parts.append(time) }
         if row.highlight == .unread { parts.append("unread") }
-        return parts.joined(separator: ", ")
+        // Rows without a title (My posts) would otherwise start with an empty segment.
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
