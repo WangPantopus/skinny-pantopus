@@ -197,7 +197,7 @@ export default async function PublicPostPage({
                   {post.title}
                 </h1>
               ) : null}
-              <p className="mt-3 text-base leading-7 text-app-text-secondary whitespace-pre-wrap">
+              <p className="mt-3 text-base leading-7 text-app-text-secondary whitespace-pre-wrap break-words">
                 {post.content || ''}
               </p>
             </div>
