@@ -15,9 +15,361 @@
 >   - audit bundles `YYYYMMDD-stream3-home-<topic>-rN`;
 >   - device and heavy lease label `stream3-home:`, which is also its runtime-lease label;
 >   - session name "Stream 3: Home access and residency";
->   - resume prompt [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md).
+>   - resume prompt: §7 of "HANDOFF — Stream 3, evening of 2026-10-01" below (kit copy `NEXT-STREAM3-PROMPT-2026-10-01-evening.md`); the older [`NEXT-STREAM3-PROMPT-2026-09-30.md`](NEXT-STREAM3-PROMPT-2026-09-30.md) is history.
 
-## HANDOFF — Stream 3, evening of 2026-09-30 (START HERE; written 2026-09-30T21:18:39Z)
+## HANDOFF — Stream 3, evening of 2026-10-01 (START HERE; written 2026-10-01T17:44:15Z)
+
+The session stopped here at the user's request, at a clean boundary.
+- It holds no runtime lease, no device slot, no fixture and no fault rule. Its queued lease acquire was stopped at
+  17:38Z.
+- Every Stream 3 PR is merged; none is open.
+- The one thing still queued is a plain master build in the heavy slot (§1). It runs and releases the slot by itself.
+- The 2026-09-30 evening handoff below and the older "CURRENT RESUME" are kept as history. The ordered backlog is §4
+  here.
+
+### 1. State at handoff (re-check before relying on it)
+
+- **Master:** `c5ab503df57d936391ac67f35375b39ca4340d55` (batch 314, 17:28:33Z).
+- **Merged on 2026-10-01 (Stream 3):** the evidence and decisions are in the live entries below and in §2.
+
+  | Batch | PRs |
+  |---|---|
+  | 243 | #1162 |
+  | 246 | #1176, #1177 |
+  | 259 | #1213, #1214 |
+  | 264 | #1231, #1232 |
+  | 267 | #1245 |
+  | 272 | #1260 |
+  | 276 | #1269, #1271 |
+  | 281 | #1295 |
+  | 292 | #1327, #1328 |
+  | 293 | #1333 |
+  | 303 | #1361 |
+  | 309–311 | #1388, #1390, #1393 |
+  | 313 | #1397 |
+  | 314 | #1398 |
+
+- **Open PRs:** none of Stream 3's. Draft
+  [#842](https://github.com/WangPantopus/skinny-pantopus/pull/842) (`claude/stream3-web-assistant-summary-chips`) is
+  **Stream 5's** (it predates the renumbering), and the coordinator keeps it out of batches. Leave it alone.
+- **Runtime** (shared with Stream 4; lease label `stream3-home:`):
+  - **Lease:** held by Stream 4 since 17:24:54Z (Mail Day, iOS then Android).
+  - **DB 64554:** has 20261001131000 (guest-pass request key) and 20261001137000 (ownership race), both on master. No
+    Stream 3 row remains: every fixture today was cleaned exactly.
+  - **Backend, devices, fault rules:** Stream 4 restarted the backend on master `726510e65` at 17:19:17Z; check
+    `runtime/backend-restarts.log` for the current one. The devices "Pantopus S34" (`DA8C2A5F`) and `pantopus_s34`
+    (emulator-5562) are in Stream 4's window. Stream 3 set no fault rules.
+- **Heavy slot (queued, automatic):** the job "stream3-home: master c5ab503df Android+iOS build for native U03/U02
+  checks", pids 59164 and 59167, queued behind Stream 4's build.
+  - **Script:** `tools/build-s3-master-c5ab503df.sh` (Android `:app:assembleDebug`, then the iOS bootstrap and build).
+  - **Builds in:** worktree `stream3-home-access-residency-3dab9f`. It refuses unless that worktree is clean at
+    `c5ab503df`.
+  - **Outputs:** `apks-s3/c5ab503df-app-debug.apk`, `apps-s3/c5ab503df/Pantopus.app`, and the log, receipts and endpoint
+    checks in `runtime/stream3-home-master-build-c5ab503df/`. It releases the slot on exit and writes
+    `heavy-released.txt`.
+  - **Don't change that worktree's checkout** until `heavy-released.txt` exists. While the job is still queued (see
+    `zsh /private/tmp/pantopus-tools/heavy-slot.sh status`), `kill 59164 59167` cancels it.
+  - Stream 4 was told it takes and releases the slot by itself.
+- **Worktrees:**
+  - `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream3-home-access-residency-3dab9f`: detached at `c5ab503df`,
+    clean. It's pinned by the queued build. Its local branches `claude/stream3-home-add-home-location-a11y` and
+    `claude/stream3-home-ownership-race-indexes` are merged.
+  - `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-3-home-access-627a9d`: clean, on
+    `claude/stream3-home-residency-list-retry` (merged #1067).
+    - Use it for **web Jest** (its web `node_modules` has `qrcode`/`jsqr`) and for `check-migrations.cjs` on a temporary
+      detached CI-style merge.
+    - Put it back on its branch afterwards.
+- **Kit** (local, not in Git):
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit`.
+  - **Saved builds:**
+    - `apks-s3/`: `8a500d9cf` (#1397), `8322be195`, `0fc0c997e` (the residency letter + guest pass candidate),
+      `604c0ca0b` (D05), `5928507c6`;
+    - `apps-s3/`: `0fc0c997e`, `604c0ca0b`, `80bc6a29c`, `821d329d5`, `30e39e566`;
+    - plus `c5ab503df` when the queued build finishes.
+  - **Disk:** 20 GiB free at 17:35Z. The build scripts refuse below 10 GiB.
+
+### 2. Results this session (2026-10-01 afternoon), all sealed (audit store `…/.pantopus-recovery/audits/`)
+
+| PR | What | Bundle(s), MANIFEST sha256 |
+|---|---|---|
+| [#1361](https://github.com/WangPantopus/skinny-pantopus/pull/1361) | a repeated guest-pass create returns the pass already made (request key, migration 20261001131000) | `20261001-stream3-home-guest-pass-idempotency-r3` `875eebf2cb6cba6c07fb751a5e2c0260f5b40fc8b90e826b5970a651643ce518` (r1/r2 superseded) |
+| [#1388](https://github.com/WangPantopus/skinny-pantopus/pull/1388) | a repeated residency-letter issue returns the letter already issued (residency-claim key pattern, no migration) | `20261001-stream3-home-residency-letter-idempotency-r1` `b19b68a5636328644b9330baf12330223316e3402efca31cbef25ba5b4b9cd69` |
+| [#1390](https://github.com/WangPantopus/skinny-pantopus/pull/1390) | join request notifies the owner once; a repeated co-owner invite or transfer returns the open row | `20261001-stream3-home-access-post-repeats-r1` `5a9f15cc…`, `…-post-repeats-transfer-r1` `642627db…` |
+| [#1393](https://github.com/WangPantopus/skinny-pantopus/pull/1393) | D05 native: Rename follows `/me`'s `home.edit`; "to 120 characters or fewer"; E2/E5/R1 recorded | `20261001-stream3-home-d05-native-r1` `7d73804a3473ac679ad481a9da29053a5335ef656dda2e00af69fb73953f7912` |
+| [#1397](https://github.com/WangPantopus/skinny-pantopus/pull/1397) | Android Add Home: "Use current location" and the manual address fields read once in TalkBack | `20261001-stream3-home-add-home-talkback-r1` `7d818180cd6703e52b353bdf20b02b02b93fbf9f823c10aea1ec710d756a9782` |
+| [#1398](https://github.com/WangPantopus/skinny-pantopus/pull/1398) | one open ownership claim per claimant and method, one open transfer per buyer (migration 20261001137000); routes re-read on 23505; the cleanup keeps the duplicate holding the review, evidence or votes | `20261001-stream3-home-ownership-race-r1` `3622cc466d592dbcb35d1db678b9427d8d45a9a470e1d1ec244d25ebf740d780` (API race proofs) and `…-ownership-race-cleanup-r1` `716a1f84e73a24e6ba6b97e86591975ce3453c2eb1ecb385b665325f27d148ca` (seeded-duplicate replay) |
+
+- **Correction to both race bundles' READMEs:** `SET LOCAL lock_timeout` **is** in effect under the Supabase CLI. Stream 1
+  measured `5s` inside a `migration up` batch, and the warning is cosmetic. The #1398 body and batch 314's body record
+  this.
+- **Deploy note (in batch 314):** read the 20261001137000 NOTICE counts in the `db push` output.
+
+### 3. Tools added or changed this session (kit `tools/`; none prints credentials)
+
+- **API-only sub-stages:**
+  - `s3-race-stage.sh <sub-stage> <case> [1|owner]`: baseline, fixture, case, scopes, exact cleanup.
+  - `s3-race-scopes.py <stage>`: builds exact cleanup scopes from what changed. Every changed non-auth table gets a
+    Home-tied where-clause, and its row count must equal the table's growth since the baseline. Reusable for any
+    sub-stage.
+  - `s3-race-api.py`: the four race cases.
+- **Web:**
+  - `s3-web-login.mjs owner`: run it after every backend restart. The restart drops the CSRF binding and resets the
+    in-memory rate limiters.
+  - `s3-owner-web.mjs`, `s3-guest-web.mjs`, `s3-letter-web.mjs`.
+  - **New, not yet run:** `s3-web-w2.mjs` (guest, rename-lost, identity, review e1|e3).
+- **Native:**
+  - `s3-letter-ios.py`, `s3-letter-android.py`, `s3-guest-ios.py`, `s3-guest-android.py`, `android-s3-d05-extra.py`;
+  - `android-s3-login.py <stage> OWNER|MEMBER` (focus-checked) and `android-s4-signout.py`;
+  - Stream 4's TalkBack probe `s4-tbscreen.py`.
+- **Setup:**
+  - `s3-u04-fixture.py`: `S3_STAGE`, `S3_ADD_MEMBER=1|owner`, `S3_HOME_NAME`, `S3_FIXTURE_OWNER=MEMBER`, `S3_VISIBILITY`.
+  - **New, not yet run:** `s3-w2-claim.py <stage>` (B's pending residency claim) and `s3-departed-setup.py <stage>` (B's
+    submission, then B's self-leave).
+  - `s3-u03-review.py`, `ios-s3-u03-review.py` and `android-s3-u03-review.py` now honor `S3_STAGE`. Originals are kept as
+    `*.orig-20261001`.
+- **Shared worktree and backend:**
+  - `s3-worktree-checkout.sh <stage> record|checkout`: a detached checkout of `stream2-mail-journey-18b50a`. Use it when the
+    backend's base differs from your branch's base.
+  - `s3-worktree-place.py`: whole-file placement, blob-checked.
+  - `s3-backend-restart.sh "<source>" "<reason>"`.
+- **Builds:** `build-s3-master-c5ab503df.sh` (queued), and the `build-s3-*.sh` pattern (refuses unless HEAD and a clean
+  tree match).
+- **OCR masking:** the sources are `s3-ocr-mask.swift` and `s3-ocr-find.swift`. Compile with `swiftc -O
+  -module-cache-path <dir>`; the old binaries lived in a session scratchpad.
+
+### 4. Next actions, in order
+
+1. **The queued master build:** check `heavy-slot.sh status` and the build folder. Native "before" runs use
+   `c5ab503df`, or any build whose relevant files are blob-equal to master's (record that check).
+2. **Web window, prepared:** stage `stream3-home-web-w2-r1`, `DECISION.md` written 17:29:44Z.
+   - **Cases:** the guest page's 5xx and the public rendering of the copied link (D08 ⬜×2), the D05 web E2 lost reply
+     (❓), residency review web E1/E3 at UI level (❓), and the Identity R2 decision (❓).
+   - **Re-run its code check first:** `git diff --stat <served commit> origin/master -- frontend/apps/web frontend/packages
+     backend`. Amend the DECISION if relevant files changed.
+   - **Then:** acquire the lease and message Stream 4; `node tools/s3-web-login.mjs owner`; then sequential sub-stages
+     `guest`, `rename` (`identity` read-only first, then `rename-lost`), `review-e1` and `review-e3`:
+
+     ```
+     ST=stream3-home-web-w2-r1/<sub>; mkdir -p runtime/$ST; python3 tools/fp.py snap runtime/$ST baseline-public-fingerprints
+     S3_STAGE=$ST S3_HOME_NAME="S3 W2 Home" python3 tools/s3-u04-fixture.py fixture
+     (review only) python3 tools/s3-w2-claim.py $ST
+     S3_STAGE=$ST node tools/s3-web-w2.mjs guest g1 | rename-lost r1 | identity i1 | review e1a e1 | review e3a e3
+     python3 tools/s3-race-scopes.py $ST && S3_STAGE=$ST python3 tools/s3-u04-fixture.py cleanup "$(cat runtime/$ST/cleanup-scopes.json)"
+     ```
+
+   - **Expect selector fixes on the first run** (the driver is untested). Keep failed runs in `attempts/`.
+   - **Code-read expectations:**
+     - guest 503: "Something Went Wrong / Could not load the share link. Please retry." plus Try Again;
+     - residency review: a synchronous `ctx.busy` guard, so a double-click should send one POST;
+     - edit page: `api.homes.updateHome` PATCH, "Saved successfully!".
+3. **Native departed applicant E5, prepared:** stage `stream3-home-departed-review-native-r1`, DECISION 17:36:32Z.
+   - **Setup per platform sub-stage:**
+
+     ```
+     S3_STAGE=…/ios python3 tools/s3-u03-review.py fixture 1   (after the fp.py baseline)
+     python3 tools/s3-departed-setup.py …/ios
+     S3_STAGE=…/ios python3 tools/ios-s3-u03-review.py open e5 1 approve → reviewed e5 → submit e5 → capture
+     ```
+
+     Then the same on Android (`android-s3-u03-review.py`).
+   - **Cleanup per sub-stage:** `python3 tools/s3-race-scopes.py <sub-stage>` (it reads the `homes` fixture too), then
+     `S3_STAGE=<sub-stage> python3 tools/s3-u03-review.py cleanup "$(cat runtime/<sub-stage>/cleanup-scopes.json)"`.
+     Expect B's residency submission and removal commands, the claim, the occupancy, notifications and audit rows. If B
+     signs in on a device, include B's lazy MailPreferences (`user_id = '{MEMBER}'`).
+   - **Expected defect:** the native refusal copy for 409 `MEMBERSHIP_RENEWAL_REQUIRED` is generic ("…Review the current
+     claim again.") and never mentions Reject. The web says "This person's household membership has ended, so this claim
+     can't be approved. You can reject it instead." (#796).
+   - **Smallest repair:** each app's existing refusal mapping shows that sentence for that code and keeps the path to
+     Reject. Then afters, cleanup, seal and PR.
+   - The native code map is in `explore-native-map.md` in that stage.
+4. **Native ownership E1 E2 E3 E4 E5 R1 (iOS and Android; the transfer itself is ⛔, behind device authentication):** use
+   `explore-native-map.md` for the screens, endpoints, guards and error copy. #1390 and #1398 made the server dedupe the
+   invite, claim and transfer, so E2 and E3 should now show one row. Unverified leads from the map, to reproduce before
+   any change:
+   - a failed owner removal rolls back silently, with no message (both apps);
+   - the "Invite an owner" button and the Transfer bar are shown to anyone who reaches the screen (both apps);
+   - Android doesn't refresh the Owners list after an invite;
+   - iOS's claim-wizard 409 alerts are never set;
+   - Android's transfer prompt can launch after a rejected phase check.
+5. **Landlord:** the native verification wizard's U03 cases (iOS `VerifyLandlord/`, Android `verify_landlord/`), and web E5
+   R1 R2 in the full app. Leads from the map:
+   - Android skips the "already pending/active" 409 mapping when a lease attachment draft exists;
+   - both apps show only the generic banner on 403.
+6. **Joining, web:** E3 on the residency-claim submit ("✅ Submit Claim" in `/app/homes/new` for an existing Home's address).
+   First check that the runtime's address validation resolves the fixture address. Also ❓ E6.
+7. **U02 native:**
+   - **A3/A4 sweep** on the master build: `ios-s3-u02-sweep.py` and `android-s3-u02-sweep.py` (patch them for `S3_STAGE`
+     like the review tools), Stream 4's `s4-u02-contrast.py <stage> <ios|android> <mode>` (it flags pairs under 4.5:1;
+     review each by eye), `s4-tbscreen.py` for TalkBack, and `ios-control-s34.py` `uiDescribeAll`/`uiDescribePoint` for
+     VoiceOver labels;
+   - **Setup:** use `s3-u02-a1a2.py`'s setup to fill the screens. It reads `runtime/<who>.token`, so switch it to an
+     in-memory login.
+   - **Also open:** the Add Home role rows' selected state (Android A4), the verification pages A1/A2, the privacy mirror,
+     the "Not in any sweep" row, and web A1/A4/A5 for residency letters.
+8. **Privacy D06, native gaps:** there's no native Home visibility control, and document pickers don't start from the Home
+   default. These are product and design gaps. Write a proposal for approval (AGENTS.md); don't build a control
+   unilaterally.
+9. **Then:** re-check the ☑️ cells, the R03/R04 boundaries, and U05. The launch flags are merged, so U05 can start: this
+   stream's screen and action inventory for Stream 1's release manifest.
+
+### 5. Gotchas learned this session (on top of §5 of the 2026-09-30 block)
+
+- **Backend restarts:**
+  - they reset the in-memory limiters (the residency letter issue is 10 per day) and drop the web CSRF binding;
+  - so re-run `s3-web-login.mjs owner` after each one;
+  - record each restart with `s3-backend-restart.sh`.
+- **Sub-stages run strictly one after another,** each with its own baseline and exact cleanup. Interleaving breaks the
+  whole-table checks.
+- **The shared backend is often on another stream's commit.** Placing a file from your branch onto a different base mixes
+  bases. Check out your branch's commit with `s3-worktree-checkout.sh` instead, and put theirs back exactly, with a
+  restart.
+- **Migrations:**
+  - apply on DB 64554 with `supabase migration up --workdir <kit>/stack-20260930 --local`, after copying the file in;
+  - never `migration list`, which hangs;
+  - for a duplicate cleanup, seed duplicates on a disposable `supabase db start --workdir` (DB 64555; the 64550–64559 range
+    is shared with Stream 4, so tell them) and compare the old rule in `BEGIN … ROLLBACK`;
+  - `supabase stop --no-backup` afterwards.
+- **Backend Jest in an export:** `git archive <sha> backend supabase frontend/packages`, with `node_modules` linked. Three
+  suites read files from `supabase/` and `frontend/`.
+- **TalkBack probe:** raise TalkBack's log level to VERBOSE (TalkBack settings → Advanced settings → Developer settings →
+  Log output level), and set it back to ERROR afterwards.
+- **Swift:** run `swiftformat --lint` (0.61.1) and `swiftlint lint --strict` on changed Swift files before pushing.
+- **The coordination checkout is shared and live:** other streams commit in it between your commit and `rev-parse`.
+  Confirm your commit with `git log origin/codex/workstream-coordination`.
+
+### 6. Decisions made this session (standing instruction)
+
+- **#1361:** a request id makes the guest-pass create idempotent (the migration revokes the old function).
+- **#1388:** the residency letter reuses the residency-claim request-key pattern instead of a new migration.
+  - A different purpose under the same key gets 409.
+  - A revoked or expired letter gets 409.
+  - A key that isn't a UUID gets 400.
+- **#1390:** repeats return the open row. The join-request notification is keyed by request, so a changed role still
+  notifies.
+- **#1393:** native Rename follows the effective `home.edit` from `/me`, the same projection the server uses.
+- **#1397:** Stream 4's `clearAndSetSemantics` pattern for the pill. The fields' duplicate content descriptions are
+  dropped.
+- **#1398:**
+  - partial unique indexes, with a re-read on 23505;
+  - the transfer reuses the buyer's open invite claim;
+  - the cleanup keeps the duplicate furthest in review, then with the most evidence or votes, then the newest (a live
+    proposal first). Private evidence can't be moved between claims, so the audit rows name the claim kept.
+- **Open for the successor:** the Identity R2 decision (a hidden history with no empty text). Decide after the web look.
+
+### 7. Prompt for the next Stream 3 session
+
+```text
+You are Stream 3 — Home access, residency and security, one of the user's five parallel Pantopus workstreams. Name this
+session "Stream 3: Home access and residency". You take over from the session that handed off on the evening of
+2026-10-01, at a clean boundary: every Stream 3 PR is merged through #1398 (master c5ab503df, batch 314), and no lease,
+device slot, fixture or fault rule is held.
+
+Read before doing anything else, in this order:
+1. AGENTS.md in your worktree, then the project handoff (docs/PROJECT_HANDOFF.md). The September 13 "verify existing work
+   before changing it" rules apply to everything:
+   - preserve the existing screens' design;
+   - reproduce a failure or show an unmet requirement before you change code;
+   - make the smallest repair in the existing implementation;
+   - no duplicate tables or architectures.
+2. The coordination hub, in /Users/yingpengwang/pantopus-coordination on branch codex/workstream-coordination. Run
+   `git fetch` then `git merge --ff-only`; other streams commit there too. Read `docs/workstreams/README.md`, then
+   `docs/workstreams/03-home-access-residency.md`.
+   - In 03, start at "HANDOFF — Stream 3, evening of 2026-10-01" and work its §4 in order.
+   - §1 is the state, §3 the tools, §5 the gotchas, §6 the decisions. The live entries below them carry each result's
+     evidence.
+3. Memory (it loads automatically): the "Stream 3 2026-10-01 afternoon → handoff" entry plus the Stream 3 entries it links,
+   for lessons.
+
+First checks, before relying on the handoff (record times with `date -u` and SHAs with `git rev-parse`):
+- **master and PRs:** `git fetch` and `git rev-parse origin/master`. `gh pr list --repo WangPantopus/skinny-pantopus --state
+  open` should show no Stream 3 PR. Draft #842 is Stream 5's; leave it.
+- **The queued heavy-slot build of master c5ab503df** (pids 59164/59167; `tools/build-s3-master-c5ab503df.sh`):
+  - check `zsh /private/tmp/pantopus-tools/heavy-slot.sh status` and the kit's
+    `runtime/stream3-home-master-build-c5ab503df/`;
+  - when done it leaves `apks-s3/c5ab503df-app-debug.apk` and `apps-s3/c5ab503df/Pantopus.app`;
+  - it builds inside worktree `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream3-home-access-residency-3dab9f`
+    (detached at c5ab503df). Don't change that worktree's checkout until `heavy-released.txt` exists, or cancel the job
+    while it's still queued with `kill 59164 59167`;
+  - for code changes, branch from origin/master as `claude/stream3-home-<topic>` in the worktree this session gives you,
+    or in that one once the build is done.
+- **The runtime lease:** `cd <kit> && zsh tools/runtime-lease.sh status`. Stream 4 shares it; at handoff Stream 4 held it.
+
+Your work (03 §4, in order):
+1. **The prepared web window** (stage `stream3-home-web-w2-r1`; its DECISION.md was written 17:29:44Z). It covers:
+   - the guest page's 5xx and the public rendering of the copied link;
+   - the D05 web lost reply;
+   - residency review web E1/E3;
+   - the Identity R2 decision.
+
+   Driver `tools/s3-web-w2.mjs` and helper `tools/s3-w2-claim.py` are untested, so expect selector fixes. The exact
+   commands are in §4.
+2. **The prepared native departed-applicant E5** (stage `stream3-home-departed-review-native-r1`, DECISION 17:36:32Z;
+   setup `tools/s3-departed-setup.py`, untested). The likely defect is the apps' generic refusal copy for 409
+   MEMBERSHIP_RENEWAL_REQUIRED. The repair shows the #796 sentence and keeps Reject.
+3. **Native ownership** E1 E2 E3 E4 E5 R1.
+4. **The landlord wizard:** native U03 cases, and web E5 R1 R2.
+5. **Joining web:** E3 on the residency-claim submit, and E6.
+6. **U02 native:** A3/A4 sweeps and the other open U02 cells.
+7. **Privacy D06 native gaps:** a design proposal only.
+8. **The rest:** ☑️ re-checks, R03/R04 and U05.
+
+`explore-native-map.md` in the departed stage maps the native ownership, residency-review and landlord-wizard code.
+
+Paths:
+- **The runtime kit** (local, not in Git):
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit`.
+  Stages are in `runtime/`, sealed bundles in `../audits/`, tools in `tools/`, builds in `apks-s3/` and `apps-s3/`.
+- **The isolated runtime:** DB 64554 (`tools/q.sh`, SQL on stdin), fault proxy 18142 (`tools/s3-proxy.py`), backend 18143
+  (`tools/s3-backend-restart.sh`) and web 18144. The shared worktree serving web and backend is
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream2-mail-journey-18b50a`.
+- **Accounts:** owner bb1d5fae-72f7-49b3-86ad-ee977a165e9f and member B 438f0bb1-15fd-4cf0-9a68-072d96a427cb. The
+  credentials are in `runtime/accounts.env`. Never print, cat or show that file. Tools read it themselves.
+- **Devices:** iOS simulator "Pantopus S34" (`DA8C2A5F-39BC-421D-9F18-EB4B481E506F`) and Android emulator `pantopus_s34`
+  (emulator-5562).
+- **The old worktree** `/Users/yingpengwang/estimate-rescue/skinny-pantopus/stream-3-home-access-627a9d` is clean, on its
+  merged branch. Use it for web Jest and `check-migrations.cjs` on a temporary detached CI-style merge, then put its branch
+  back.
+
+Rules (the user's; follow exactly):
+- **Do all the code, verification and fixing yourself.** Subagents may only search and gather information.
+- **Standing instruction:** when a decision would normally go to the user, make the choice that is best for user
+  experience, safety and security, and retention. Record it (the 03 file's decisions, the PR body, memory) and keep
+  working without stopping. After your backlog, help other workstreams through Stream 1 and the owning stream.
+- **Evidence protocol:**
+  1. DECISION.md first;
+  2. an `fp.py snap` baseline;
+  3. befores and afters in the real apps (web, iOS simulator "Pantopus S34", Android emulator `pantopus_s34`);
+  4. an exact cleanup;
+  5. redact fixture e-mails;
+  6. seal with `python3 tools/s4-secret-scan.py runtime/<stage> > runtime/<stage>.scan.txt && python3
+     tools/seal-bundle.py …` (only after a passing scan);
+  7. open the PR, whose body ends with "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
+  8. send the head and seal to the coordinator (Stream 1, which runs the merge queue and merges);
+  9. add a live entry at the top of the 03 file's live block.
+- **Commit trailer:** "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>".
+- **Shared resources:** share the runtime lease (`zsh tools/runtime-lease.sh acquire|release "stream3-home: …"`), a device
+  slot (`/private/tmp/pantopus-tools/device-slot.sh`) and the heavy build slot (`/private/tmp/pantopus-tools/heavy-slot.sh`;
+  run acquire in the background) with Stream 4. Message Stream 4 whenever you take or release any of them. Use
+  ListAgents and SendMessage; Stream 1 and Stream 4 are separate sessions.
+- **Never print `runtime/accounts.env`.** Never touch the founder's environment (64521/64522, backend 8000, simulator
+  EB5AD759) or the physical iPhone.
+- **No destructive git or database commands.** Delete fixtures only within your exact ownership. Keep secrets out of Git
+  and chat.
+- **Record every time from `date -u` and every SHA from `git rev-parse`.** Never estimate.
+- **Launch scope:** never verify, test or fix the eight cut features (they're flagged off).
+- **In the coordination repo, own only `docs/workstreams/03-home-access-residency.md`.** Always `git commit --only` that
+  file, because other streams' uncommitted edits live in the same checkout.
+- **No new unit tests.** Updating existing tests to intended behavior is fine.
+- **Before opening a migration,** ask Stream 1 for a number. Migrations need "Backwards compatible: yes" and must pass
+  `check-migrations.cjs` on a CI-style merge.
+- **Before pushing,** run Swift through `swiftformat --lint` (0.61.1) and `swiftlint --strict`, and run Android ktlint and
+  detekt. Run the covering web Jest suites.
+
+When you reach a meaningful milestone, update 03 (live entry, cells, §4) and memory. If the user asks you to wrap up,
+hand off the same way: a new HANDOFF block at the top of 03 with a prompt.
+```
+
+## HANDOFF — Stream 3, evening of 2026-09-30 (history: superseded by the 2026-10-01 evening handoff above; written 2026-09-30T21:18:39Z)
 
 The previous session stopped here at the user's request, at a clean boundary.
 - It holds no lease, no slot and no fixture, and no fault rules are active.
@@ -564,6 +916,11 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-10-01T17:44:15Z — Handoff at a clean boundary (the user asked for a wrap-up). The next session starts at "HANDOFF — Stream 3, evening of 2026-10-01" above.**
+  - **Nothing held:** every Stream 3 PR is merged through #1398 (master `c5ab503df`); no lease, slot, fixture or fault rule.
+  - **Queued:** the master `c5ab503df` build in the heavy slot (automatic; §1 of the handoff).
+  - **Prepared, not run:** stages `stream3-home-web-w2-r1` and `stream3-home-departed-review-native-r1`, each with its DECISION and tools (§4).
 
 - **2026-10-01T17:32:29Z — [#1397](https://github.com/WangPantopus/skinny-pantopus/pull/1397) merged in batch 313 (17:25:22Z) and [#1398](https://github.com/WangPantopus/skinny-pantopus/pull/1398) in batch 314 (17:28:34Z, master `c5ab503df`). D05 native cells marked ✅.**
   - **Correction to the 17:22:54Z entry and to both race bundles' READMEs:** `SET LOCAL lock_timeout` **is** in effect under the
