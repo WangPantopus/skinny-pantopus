@@ -565,6 +565,28 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T16:48:59Z — Residency letters [#1388](https://github.com/WangPantopus/skinny-pantopus/pull/1388), POST repeats [#1390](https://github.com/WangPantopus/skinny-pantopus/pull/1390) and D05 [#1393](https://github.com/WangPantopus/skinny-pantopus/pull/1393) merged (batches 309–311, master `ed3ed7ad6`); #1361 merged in batch 303; window 15:23:25–16:29:00Z (lease; device slot 1).**
+  - **Residency letters, #1388** (seal `20261001-stream3-home-residency-letter-idempotency-r1`, `b19b68a5…`):
+    - a lost reply then a retry made 2 letters → **1**, on API, web, Android and iOS;
+    - member B sending the owner's key gets B's own letter (Stream 1's cross-member check);
+    - 409 for a different purpose or a revoked letter; 400 for a malformed key.
+  - **POST repeats, #1390** (seals `…-post-repeats-r1` `5a9f15cc…` and `…-post-repeats-transfer-r1` `642627db…`):
+    - join request: the owner was notified 2 times → 1 (a changed role still notifies);
+    - co-owner invite: 2 claims → 1 (API and web lost reply);
+    - transfer: 2 proposals → 1 (API and web).
+  - **D05, #1393** (seal `20261001-stream3-home-d05-native-r1`, `7d73804a…`):
+    - E4: an admin no longer offered Rename, before/after on both apps;
+    - E6: the copy now says "to 120 characters or fewer";
+    - R1, E2 and E5 pass on Android (iOS was done earlier).
+  - **Cells:** the guest-pass copied-link cells were closed earlier (88a44249d).
+  - **Next:**
+    1. **Race-closing migration 20261001137000** (Stream 1 reserved it; branch `claude/stream3-home-ownership-race-indexes` `25f6f7c24`; DECISION in stage `stream3-home-ownership-race-r1`). It adds partial unique indexes, cleans duplicates with an audit trail, re-reads on 23505, and lets the transfer reuse the buyer's open invite claim. The migration check passes; runtime proofs come in a handover from Stream 4.
+    2. **Add Home TalkBack** (`claude/stream3-home-add-home-location-a11y` `8a500d9cf`). The before probe reproduced "Use current location. Use current location. Button" and "Edit box. Street address. Street address" for the manual fields. The after APK is building, then the probe and a PR.
+  - **Lessons:**
+    - a backend restart drops the web session's CSRF binding, so sign in again after each restart;
+    - B's lazy MailPreferences row belongs in the cleanup scope while B is signed in on a device;
+    - the identity page's long "Your address online" section needs position-aware scrolling.
+
 - **2026-10-01T14:52:08Z — Guest-pass fix verified end to end and sealed; [#1361](https://github.com/WangPantopus/skinny-pantopus/pull/1361) sent; residency-letter fix written on the residency-claim pattern (no migration); window 13:31:35–14:46:21Z (lease; device slot 1).**
   - **Guest passes, [#1361](https://github.com/WangPantopus/skinny-pantopus/pull/1361)** (head `0f70fca2386d57b417ec8aaf9f280fbef8ae3a11`; merge-tree clean against master `ff08ed75b`):
     - **Seal:** `20261001-stream3-home-guest-pass-idempotency-r1`, MANIFEST `94382d9582b1eb209580ded7309fc32e522b66534c5b5c14e3c6429cfc7d1be6` (secret scan: 225 files, 0 hits).
