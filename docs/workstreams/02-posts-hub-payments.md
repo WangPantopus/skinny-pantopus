@@ -173,9 +173,31 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T07:32:23Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T08:11:07Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T07:32:23Z):** master is `dc878ddb5`.
+- **Latest (2026-10-01T08:11:07Z):** master is `337c3cb9a`.
+  - **Merged:**
+    - batch 277: #1249 (FAB clearance) and #1259 (post-screen save/like sync; Stream 1's iOS cell `f76dbc3a`);
+    - batch 278: #1273 (My pulse → feed cache, plus the feed like reconcile) then [#1279](https://github.com/WangPantopus/skinny-pantopus/pull/1279), stacked on it (seal `e8e906fd`).
+  - **#1279:** web deletes, edits and comment counts made on the post page or in My pulse now update the cached feed lists. The post panel shows its existing "Post not found" on a 404/403 read and drops the post from the feed caches.
+    - Before: deleting on the post page landed on a feed still listing the post, and opening it showed the deleted post as live, with "No comments yet" and a comment box. A post deleted on another device opened the same way.
+  - **With Stream 1:** #1275 (native Saved Remove refresh) is in its candidate `82a968140`, and its iOS cell is next.
+  - **Building** (heavy slot, first behind Stream 4): candidate `c5ad8840e` = `claude/stream2-posts-native-myposts-refresh`. Native My posts Delete/Archive/Restore send the existing refresh signal after the server confirms, as the post screen's delete already does.
+    - Android reproduced on APK `22d669668`: after Delete post ("permanently removed from your profile and the Pulse feed") and Archive post, the Nearby tab's Pulse still listed both, and the deleted one opened "We couldn't find this post."
+    - Three pinned Android tests change: their list mocks now return what the server returns after the change.
+  - **Asked Stream 1:** a VoiceOver check of the iOS Pulse card. It's one combined element; are save/repost/options offered as actions? If not, I'll add explicit accessibility actions, with no visual change.
+  - **Triaged:**
+    - The visibility-only edit can't be reached from any client, so no change. Reopen if a client ever offers an audience change on edit.
+    - Stream 1's routed "post image viewer under the header" was fixed by Stream 5 in #1226.
+    - A web sweep of Place, Today, Nearby, the feed and My pulse found no error text. Its only failed request was the expected 404 "no payout account", which the Hub handles as "Set up payouts".
+  - **Decisions:**
+    - A gone post is shown as gone, with the existing state.
+    - Deletes and edits update cached lists in place, with no refetch.
+    - Native My posts refetches after its own confirmed change: one extra read, consistent with the server.
+  - **Runtime:**
+    - The emulator is stopped and the device slot released while the build waits.
+    - No live web fixtures; the native bundle's Alice posts are live until its cleanup: D2n deleted, R1n archived.
+- **Earlier (2026-10-01T07:32:23Z):** master is `dc878ddb5`.
   - **Merged:** batch 275 (master `008613b81`): [#1267](https://github.com/WangPantopus/skinny-pantopus/pull/1267), web sidebar **"My posts"**. Stream 1 approved a footer button above Settings: desktop expanded and collapsed rail, plus the mobile drawer. Seal `d6b8d91b`; light/dark, keyboard, axe 0.
     - Web users reach their posts and Saved list in-app again.
   - **Queued by Stream 1:** [#1273](https://github.com/WangPantopus/skinny-pantopus/pull/1273), web My pulse → feed cache, plus the feed like reconcile. Head `6200b4b37`, seal `568930b2`. Stream 1 said no split is needed.
