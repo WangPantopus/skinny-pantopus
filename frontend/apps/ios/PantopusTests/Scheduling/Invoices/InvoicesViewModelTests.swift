@@ -130,14 +130,14 @@ final class InvoicesViewModelTests: XCTestCase {
             ]
         ])
         var ids: [String] = []
-        for _ in 0 ..< 3 {
+        for _ in 0..<3 {
             await model.send()
             let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
             let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: String])
             let id = try XCTUnwrap(body["client_request_id"])
             XCTAssertNotNil(UUID(uuidString: id))
             ids.append(id)
-            let query = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems
+            let query = try URLComponents(url: XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems
             XCTAssertTrue(query?.contains(URLQueryItem(name: "owner_id", value: "biz1")) == true)
         }
         XCTAssertEqual(ids[0], ids[1])
