@@ -288,7 +288,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Emergency info (add, delete) | ✅ R1 (#698)<br>✅ add E2: the retry after a lost reply returns the same entry, one row; master's retry duplicated it (0930 emergency-server-writes; #939, merged in batch 168)<br>✅ add E6 blank title: Save disabled with "Title is required." (same bundle, `cap/02`)<br>⬜ add E1 E3 E4; delete E cases (only a successful delete is captured) | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>✅ E2: the retry returns the same entry, one row (0930 emergency-server-writes; #939) | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 (#871)<br>✅ E1 E3, no change (0930 emergency-access-denied)<br>✅ E4: a permission sentence, no Retry or Add (#904) |
 | Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>⬜ E3 (checked 09-30: 0928 fridge-lifecycle says duplicate clicks were not exercised)<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>⬜ E3 E6 (checked 09-30: no capture; only iOS has the empty-card state)<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>✅ E3, no change (0930 fridge-e3: a sub-frame double click sends two requests, but issue dedupes by client id and revoke answers its receipt: one card, one revocation, no error) |
 | Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>✅ R2: an empty Completed list agrees with SQL 0 (0927 maintenance-edit-read; again in 0928 maintenance-delete)<br>✅ false empty fixed: an empty Scheduled tab now says "Nothing scheduled. Your logged maintenance is under Completed." ([#1105](https://github.com/WangPantopus/skinny-pantopus/pull/1105), merged in batch 223; 0930 fixes §4)<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>✅ R2: a cold read shows the empty list, SQL 0 (0928 maintenance-delete)<br>⬜ E3 (the only repeated-tap capture is iOS)<br>✅ false empty fixed (#1105; 0930 fixes §4)<br>⛔ E4 E6 API only | – no manual-log screen on web |
-| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>✅ R2: after Retry, the real API's empty list shows "No documents yet" (0927 malformed-home-lists; again in 0927 home-list-null-members)<br>✅ detail open/share: a document with no file says so, with no dead control ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131), with the coordinator)<br>⬜ delete | ✅ R1 (#680, #701)<br>✅ R2 (same bundles: "All 0", "No documents yet")<br>✅ detail open/share: the image fallback's "Open externally" opens; a document with no file says so, Open/Share disabled ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131))<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
+| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>✅ R2: after Retry, the real API's empty list shows "No documents yet" (0927 malformed-home-lists; again in 0927 home-list-null-members)<br>✅ detail open/share: a document with no file says so, with no dead control ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131), with the coordinator)<br>✅ delete ok and E3 (a second tap can't reopen the dialog; one DELETE). E1: the client retries the idempotent DELETE by itself, so one 503 becomes success; a persistent 503 shows the error (E2 the same: retry, then success, back on the list) (`20261001-stream4-block-invite-r1` (`3dee87cc…`))<br>🔧 E1 wording: a failed delete was titled "Couldn't load this document"; fixed on `claude/stream4-document-delete-honest` `b5ec6bdaa`, after pending | ✅ R1 (#680, #701)<br>✅ R2 (same bundles: "All 0", "No documents yet")<br>✅ detail open/share: the image fallback's "Open externally" opens; a document with no file says so, Open/Share disabled ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131))<br>✅ delete ok and E3, one DELETE (`20261001-stream4-block-invite-r1` (`3dee87cc…`))<br>🔧 E1: "Couldn't load this document" on a failed delete; E2: after a lost reply the delete committed, but the screen stayed on an endless "Try again" ("This document is no longer available."). Both fixed on `claude/stream4-document-delete-honest` `b5ec6bdaa`, after pending | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
 | Home activity | – no timeline screen. The dashboard's Recent activity card showed audit codes ("HOME INVITE CREATED") over raw table names ("HomeInvite"): ✅ sentences over "Home activity" on both apps (0930 native-activity-r1 and -r2; [#1062](https://github.com/WangPantopus/skinny-pantopus/pull/1062), merged in batch 223) | – (same) | ✅ R1 (0928 home-timeline-pagination)<br>✅ labels and actor (#854)<br>✅ malformed rows (#863)<br>✅ concurrent insert (#854 bundle)<br>✅ follows on-page saves (#860)<br>✅ live updates from other devices: decided, re-read on focus/visibility/reload for launch ("Decided by Stream 4" item 4) |
 | Mail: printed postcards, welcome cards, street digest (M01) | 🔷 not built (decision 2) | 🔷 | 🔷 (compose routes are live: security repairs #867/#872 through the API; the compose UI is cut, #8) |
 
@@ -360,6 +360,45 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-10-01T03:09:41Z — [#1203](https://github.com/WangPantopus/skinny-pantopus/pull/1203) (Block Founders invitations sent) and [#1204](https://github.com/WangPantopus/skinny-pantopus/pull/1204) (iOS small-file size) merged in batch 256 ([#1205](https://github.com/WangPantopus/skinny-pantopus/pull/1205), 03:08Z, master `19aed325a`). Window 02:32:04Z–03:04:02Z (slots 3/4); bundle `20261001-stream4-block-invite-r1` (`3dee87cc…`). Native Documents delete U03 found two defects; the fix is built next.**
+  - **Block Founders, before (master `e318f26e9`):** every surface failed on the CHECK, with 5 log lines: API 502 `SEND_FAILED`;
+    web "Something went wrong…"; iOS "The postcard couldn't be sent just now…"; Android "Something went wrong…".
+  - **After (`3455c9cbf`):**
+    - Android, iOS, web and the signed-out `/no-mail/<code>` page all succeed.
+    - Every safeguard holds on the real DB: dedup, including a formatting variant; opt-out, which is idempotent and then
+      refuses; the double-tap abort, with no row; the weekly 429.
+    - No real mail: no `LOB_API_KEY`, and 6 MockMailProvider "dev mode" postcards.
+  - **Android keeps the typed address after a successful send.** Reproduced: budget 3 → 2 with all four fields still
+    filled. Fix `8e6c0a15d`; its after is pending.
+  - **iOS size:** after "193 bytes" / "Size 193 bytes" (before "0 KB").
+  - **U03 native Documents delete** (master's delete code):
+    - **ok and E3:** pass on both apps, with one DELETE each.
+    - **iOS E1 and E2:** the client retries the idempotent DELETE, which ends in success, back on the list. A persistent
+      503 shows the error screen.
+    - **Defects:**
+      1. Both apps title a failed delete "Couldn't load this document".
+      2. On Android after a lost reply (the delete committed), "Try again" says "This document is no longer available."
+         and loops.
+    - **Decision (standing instruction): `claude/stream4-document-delete-honest` `b5ec6bdaa`.**
+      - A failed delete is titled "Couldn't delete this document"; the screen is unchanged.
+      - After a failed delete, a reload that no longer finds the document finishes as deleted and returns to the list.
+      - Replace failures share the generic headline; not reproduced, so recorded as a candidate.
+  - **Recorded candidates:**
+    - iOS "1 of 3 invitation left this week." (singular);
+    - the web 502 toast is generic;
+    - an API double tap says "invited recently" though nothing was sent (clients disable the button);
+    - iOS invite-message identifiers are overridden by the form container's.
+  - **Runtime:**
+    - Login limiter: 10 logins per 15 min per IP, shared by every client on 127.0.0.1. My fixture uploads hit it; the
+      closing backend restart cleared it.
+    - Lease to Stream 3 at 03:04Z (web only).
+  - **Build queued:** `s4-build-greet-form-del` `cadd5e352` (master `19aed325a` + greeting + form clearing + delete fix).
+  - **Next window:**
+    - greeting before (`sizefix` build) and after, with the backend under `TZ=UTC`;
+    - Android form after;
+    - Documents delete after (E1 both apps, E2 Android);
+    - then more U03.
 
 - **2026-10-01T02:25:58Z — [#1172](https://github.com/WangPantopus/skinny-pantopus/pull/1172), [#1173](https://github.com/WangPantopus/skinny-pantopus/pull/1173) and [#1174](https://github.com/WangPantopus/skinny-pantopus/pull/1174) merged in batch 245 ([#1175](https://github.com/WangPantopus/skinny-pantopus/pull/1175), 01:58Z, master `c171a0056`). Two leads routed by Stream 1 are taken, both decided. Four fix branches are pushed, with device windows next.**
   - **Block Founders invitations always failed** (Stream 2's value-drift scan; launch scope, because postcards stay).
