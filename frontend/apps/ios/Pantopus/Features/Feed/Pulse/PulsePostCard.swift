@@ -500,7 +500,7 @@ private extension PulsePostCard {
     /// The card's controls as VoiceOver actions, named as their buttons are.
     @ViewBuilder var cardActions: some View {
         if let reaction = content.reactions.first(where: \.isInteractive) {
-            Button(reaction.label.isEmpty ? "Heart reaction" : reaction.label, action: onPrimaryReaction)
+            Button("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)", action: onPrimaryReaction)
         }
         if let onToggleSave {
             Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)
