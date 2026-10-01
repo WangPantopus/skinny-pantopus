@@ -34,7 +34,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     /// of a name mid-typing.
     public private(set) var isEditingBeneficiaryQuery: Bool = false
     public private(set) var selectedBeneficiary: MailRecipientDTO?
-    public var selectedReason: StartSupportTrainReason = .surgery
+    public var selectedReason: StartSupportTrainReason = .mealTrain
     public var reason: String = ""
     public var inviteOnly: Bool = true
     public var blockVisible: Bool = false
@@ -380,7 +380,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             canAdvanceFromWhoAndWhy
                 || !beneficiaryQuery.isEmpty
                 || !reason.isEmpty
-                || selectedReason != .surgery
+                || selectedReason != .mealTrain
                 || !inviteOnly
                 || blockVisible
         case .whatAndWhen, .reviewAndLaunch: true

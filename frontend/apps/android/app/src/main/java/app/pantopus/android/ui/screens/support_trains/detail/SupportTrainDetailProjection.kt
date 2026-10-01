@@ -69,8 +69,9 @@ object SupportTrainDetailProjection {
                 if (isFull) {
                     CelebrationBanner(
                         title = "Every slot is covered",
-                        // No backup sign-up exists yet (see the dock), so don't offer one.
-                        body = "Every slot is spoken for.",
+                        // No backup sign-up exists yet (see the dock), so don't offer one,
+                        // and don't repeat the title.
+                        body = "Thanks, neighbors. No more sign-ups are needed right now.",
                     )
                 } else {
                     null
@@ -255,7 +256,15 @@ object SupportTrainDetailProjection {
             out += SlotSection(id = "open", overline = "Open slots near you", actionLabel = action, rows = shown)
         }
 
-        val covered = slots.filter { it.isCovered }.sortedBy { it.slotDate ?: "" }
+        // The viewer's own signups are listed under "Your commitment". A slot only
+        // they fill isn't repeated here, where it would read as a neighbor's.
+        val mineCountBySlot = reservations.mapNotNull { it.slotId }.groupingBy { it }.eachCount()
+        val covered =
+            slots
+                .filter { slot ->
+                    val mine = mineCountBySlot[slot.id] ?: 0
+                    slot.isCovered && (mine == 0 || (slot.filledCount ?: 0) > mine)
+                }.sortedBy { it.slotDate ?: "" }
         if (covered.isNotEmpty()) {
             val shown = covered.take(4).map { slotRow(it, covered = true) }
             val action = if (covered.size > shown.size) "See all ${covered.size}" else null
