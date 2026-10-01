@@ -31,6 +31,8 @@ export default function MailListItem({
       tabIndex={0}
       onClick={() => onClick(item)}
       onKeyDown={(e) => {
+        // Keys pressed on the Open link or the Star button inside the row are theirs.
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(item); }
       }}
       className={`w-full text-left px-4 py-3 rounded-lg border transition group cursor-pointer ${
@@ -68,7 +70,7 @@ export default function MailListItem({
         </div>
         <button
           onClick={(e) => onStar(e, item)}
-          className="flex-shrink-0 p-1 opacity-0 group-hover:opacity-100 transition"
+          className="flex-shrink-0 p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition"
           title={item.starred ? 'Unstar' : 'Star'}
         >
           <Star className={`w-4 h-4 ${item.starred ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
