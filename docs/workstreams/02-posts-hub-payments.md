@@ -173,9 +173,20 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T03:21:22Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T03:43:42Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T03:21:22Z):** master is `89c1291b1` (batch 257).
+- **Latest (2026-10-01T03:43:42Z):** master is `61d710fed` (batch 259).
+  - **Sent:** [#1221](https://github.com/WangPantopus/skinny-pantopus/pull/1221) **web Saved tab paging tells the truth**, head `86e7a49eb`, seal `e357a586cda7b9c6be72f7b197899389ba08d19c4eebbce797406f33d8d86bea` (`20261001-stream2-posts-web-saved-remove-offset-r1`). Both defects were reproduced in the real app on #1198's page:
+    - **Remove skipped a save.** Alice had 53 saves. Removing one on page 1 and then Load more ended at 51, "51 saved", with B49 missing; the API listed 52. Now 52, with B49 shown.
+    - **A page hidden by a block** (the author of the 50 posts on page 1 blocked the viewer) showed "0+ saved / Nothing saved yet" while A2 sat on page 2. Now the tab reads on. A failed read-on shows the load error with Try Again (injected in the browser to verify).
+  - **[#1210](https://github.com/WangPantopus/skinny-pantopus/pull/1210) has a new head, `a0a009698`.** One follow-up commit applies the same two fixes natively (`SavedPostsModel.swift`, `SavedPostsViewModel.kt`). Stream 1 was told; its iOS candidate `ab24d4dba` carries the new head, and it will run the 53-save cell with my `saved-view.py` from the sealed bundle.
+  - **Build:** my candidate `2f3a2bab0` (master `58797e34c` + #1209 `ba0394389` + #1210 `a0a009698`, merge-tree clean) has held the heavy slot since 03:37:20Z. The earlier queued candidates `906eaeb4b` and `eaf4d98be` were cancelled before compiling. Next: Android after-runs for #1209 and #1210, then their seals.
+  - **Decisions (standing direction):**
+    - A save that leaves the listed rows shifts the next page back one (web, iOS, Android).
+    - An empty page with more saves behind it is read past, never shown as "Nothing saved yet"; a failed read there is a load error with Try Again.
+  - **Noted, no change:** for users without Stripe, the web shell's ActionQueueCard logs a console warning on the `/api/payments/connect/account` 404 ("No Stripe account found"). It is console-only, and the Action Queue is a launch-cut entry point.
+  - **Coordination:** Stream 5 owns the feed post page's image-viewer fix (`feed/post/[id]/page.tsx` around line 865). Stream 2 stays out of that block.
+- **Earlier (2026-10-01T03:21:22Z):** master is `89c1291b1` (batch 257).
   - **Merged since the last entry:**
     - #1188 empty Alerts copy (b250);
     - **#1193** Saved lists only posts the saver can still open (b252);
