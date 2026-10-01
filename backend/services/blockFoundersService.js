@@ -520,7 +520,12 @@ async function sendInvite({ home, userId, recipient }) {
       recipient_address_hash: suppressionHash,
       recipient_address: address,
       opt_out_code: optOutCode,
-      status: 'reserved',
+      // BlockInvite_status_check allows only 'created' and 'failed', so
+      // a 'reserved' status failed every invitation here. Nothing reads
+      // the status: the dedup, the weekly cap and the opt-out count rows
+      // of any status. A reservation is the row whose lob_id is still
+      // null; the confirm below sets it.
+      status: 'created',
       created_at: nowIso,
     });
   if (reserveErr) {
