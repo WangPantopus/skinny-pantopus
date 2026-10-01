@@ -3336,18 +3336,14 @@ public struct HubTabRoot: View {
             ) { showNavDrawer = true }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
-                viewModel: PlaceDetailViewModel(
-                    homeId: homeId,
-                    group: group,
+                viewModel: PlaceDetailViewModel(homeId: homeId, group: group) { method in
                     // A locked section's "Verify address" opens the same doors as the dashboard's verify sheet.
-                    onStartVerify: { method in
-                        switch method {
-                        case .document: push(.verifyResidency(homeId: homeId))
-                        case .mail: push(.postcardVerification(homeId: homeId))
-                        case .landlord: push(.verifyLandlord(homeId: homeId))
-                        }
+                    switch method {
+                    case .document: push(.verifyResidency(homeId: homeId))
+                    case .mail: push(.postcardVerification(homeId: homeId))
+                    case .landlord: push(.verifyLandlord(homeId: homeId))
                     }
-                )
+                }
             ) { pop() }
         case let .placePulse(homeId):
             PlacePulseView(
