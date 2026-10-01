@@ -53,7 +53,7 @@ export default function FinalCTASection() {
             href="/start"
             className="inline-flex items-center justify-center gap-2 h-14 px-6 rounded-[14px] text-white font-semibold text-base transition-transform hover:scale-[1.02] no-underline"
             style={{
-              background: 'var(--color-primary)',
+              background: 'var(--color-primary-700)',
               boxShadow: '0 1px 0 rgba(255,255,255,0.2) inset, var(--shadow-primary)',
               letterSpacing: '-0.005em',
               border: 0,
@@ -64,7 +64,7 @@ export default function FinalCTASection() {
           <a
             href="#pillars"
             className="inline-flex items-center gap-2 font-semibold text-[15px] no-underline group"
-            style={{ color: 'var(--color-primary)' }}
+            style={{ color: 'var(--color-primary-700)' }}
           >
             Read the trust model
             <span className="inline-block transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>

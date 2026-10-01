@@ -367,7 +367,7 @@
   --paper-pure:  #FFFDF8;
   --ink-1:       #1B1815;
   --ink-2:       #4A4640;
-  --ink-3:       #7A736A;
+  --ink-3:       #736C63;
   --ink-4:       #B8B0A4;
   --rule:        #E5DFD3;
   --rule-strong: #D6CFC0;
@@ -841,7 +841,7 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-.marketing-home ::selection { background: rgba(2,132,199,0.18); color: var(--ink-1); }
+.marketing-home ::selection { background: rgba(3,105,161,0.18); color: var(--ink-1); }
 
 .marketing-home .mh-serif {
   font-family: var(--font-serif);
@@ -888,7 +888,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-primary);
+  color: var(--color-primary-700);
   margin: 0;
 }
 
