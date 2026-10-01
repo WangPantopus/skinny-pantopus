@@ -100,7 +100,9 @@ public final class AddGuestFormViewModel {
     }
 
     /// Create is offered until this form's pass exists.
-    public var canSubmit: Bool { isValid && !didCreate }
+    public var canSubmit: Bool {
+        isValid && !didCreate
+    }
 
     /// Any input touched — drives the dirty-close confirm in `FormShell`.
     public var isDirty: Bool {
