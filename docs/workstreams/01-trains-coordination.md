@@ -9,6 +9,87 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **HANDOFF 2026-10-01T18:00Z (Stream 1), at the user's request: a clean boundary.** The resume prompt is `docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-01-evening.md`.
+  - **Master** `f88f74641` (batch 316, #1411). The **next batch is 317**. Every in-flight device cell is finished, sealed and reported. Nothing in the queue can merge right now: each open PR waits on its owner's seal or on a native compile (see the table).
+  - **Merged this session** (after the 14:15Z memory note):
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 301 | #1364 | 15:04Z | #1349 Android DPoP per attempt; #1358 web map keeps Posts |
+    | 302 | #1368 | 15:17Z | #1363 racy task actions |
+    | 303 | #1370 | 15:22Z | my #1369 raw-hex comments; #1361 guest pass (131000); #1362 trustState |
+    | 304 | #1376 | 15:27Z | #1372 Mail Day privacy |
+    | 305 | #1378 | 15:31Z | #1373 Undo/Other; #1374 Stamps wallet gate |
+    | 306 | #1384 | 16:09Z | #1359 withdraw (132000, money rule); #1365 toggles (134000); #1360; #1377 |
+    | 307 | #1385 | 16:19Z | #1379 wallet_credit replay (135000); #1383 |
+    | 308 | #1386 | 16:23Z | #1382 chat socket hardening; #1371 |
+    | 309 | #1389 | 16:34Z | #1388 residency-letter key |
+    | 310 | #1392 | 16:37Z | #1391 web video once; #1390 home POST repeats |
+    | 311 | #1394 | 16:39Z | #1393 D05 rename permission |
+    | 312 | #1399 | 17:17Z | #1395 sign-up repeat and the stuck-account race |
+    | 313 | #1404 | 17:25Z | #1397 Android Add Home TalkBack; Stream 4's #1375 #1400 #1401 #1402 #1403 |
+    | 314 | #1405 | 17:28Z | #1398 ownership race (137000) |
+    | 315 | #1409 | 17:52Z | Stream 2's #1407 iOS composer fast typing (my device pass `2a8dd3c0`) |
+    | 316 | #1411 | 17:58Z | Stream 5's #1396 crew create repeat (backend only) |
+
+  - **Deploy notes for the founder** (in the batch PRs):
+    - Migrations 131000–135000 and 137000 go before the new backend.
+    - After batch 314's `db push`, read the 137000 NOTICE duplicate counts.
+    - #1382 (batch 308) should reach production promptly.
+  - **Open queue at handoff.** All wait on their owner; verify live.
+
+    | PR | Owner | Head | What's needed |
+    |---|---|---|---|
+    | #1380 | S5 | `80f2d5822` | **Sealed and ready, but held for #1381.** Seal `0e248f90` (`20261001-stream5-seat-invite-renew-r1`) verifies at the head; renumbered to **20261001138000**; CI green, including the DB replay. Device pass `2a8dd3c0`. **Merge together with #1381.** Alone, a re-invite from a current native client would renew the seat and kill the link the inviter already shared from web, while that client shows no new link |
+    | #1381 | S5 | `736d38fea` | Needs Stream 5's seal after its iOS CI (lint and test bundles were pending at 17:55Z; Android and DB green). Device pass `2a8dd3c0`, with all 6 files blob-equal to candidate 31b |
+    | #1387 | S5 | `f8fbea665` | Needs Stream 5's seal after its iOS CI. Device pass `2a8dd3c0` |
+    | #1338 | S5 | `7f08153b7` | Needs Stream 5's seal; the head now has master merged, patch unchanged. Device pass `ca7e7b07` at `0f3fdafac`. Prove patch-id equality |
+    | #1356 | S5 | `09e1ab26a` | Needs Stream 5's seal. Device pass `63eb65e3` at `527a49520`. Patch-id check |
+    | #1357 | S5 | `88d7fedd9` | Needs Stream 5's seal. Device pass `5f400cd5` at `cc1d95716`. Patch-id check |
+    | #1366 | S5 | `ab5c3470c` | Sealed (`090059b6`). Its base is #1357's branch: merge after #1357, once Stream 5 retargets it to master |
+    | #1367 | S5 | `0c655233f` | Its base is #1366's branch; it needs Stream 5's seal. Device pass `d5c78dd1` |
+    | #1406 | S4 | `68eba7522` | **Reviewed; merge together with #1410 once both PRs' iOS build and Android assemble CI jobs pass, or after a candidate build of the combined tip.** It hides Mail Day's dead scan, history and setup controls (iOS, Android). Seal r3 `c685c3a8` (`20261001-stream4-mailday-controls-r3`) records `b5f2be447`, an ancestor of the head; the head adds a merge of master. **The move is proven:** 4 files have equal patch-ids, MailDayViewModel.swift's +/- lines are identical, and MailDayView.swift differs only in its two `#Preview` calls, which now pass `content: MailDaySampleData.*` for #1375's init. They type-check by reading, but nobody has compiled them yet |
+    | #1410 | S4 | `360f2fb02` | **Reviewed; merge with #1406 (above).** Earn, package tracking and the Stamps gift icons are hidden with their launch features off (iOS, Android, web), a launch-flag change. Seals: r4 `ce96a419` (`20261001-stream4-flaggaps-placeholder-r4`) at the head, and themes-r2 `35b44f01` covering `f431deec2`. The only change since is RootTabScreen.kt +2, the placeholder labels. **Both PRs edit RootTabScreen.kt,** in independent hunks about 80 lines apart. It also has web files (featureFlags.ts, MailboxNav.tsx, vault/page.tsx), so run web lint, typecheck and covering Jest on the tip. **CI:** "android / Instrumented tests (emulator)" failed on infrastructure, which I read and confirmed (run 36902783102, job 110505841018). sdkmanager's system-image download failed with "Error on ZipFile unknown archive", the emulator never started, and no test ran. Re-run that failed job once the run completes. On #1406 the same job passed |
+    | #1408 | S5 | `46ae1afbc` | New: catalog category/item and package creates with `client_request_id` (server, web, iOS, Android). Bundle `20261001-stream5-catalog-package-keys-r1`; its CI was just starting when Stream 5 sent it, so check it live. **Device request (iOS + Android, as a crew owner):** add a catalog item, a category and a package; a lost-reply retry of each should end with one row. Build one candidate with it |
+    | (coming) | S2 | — | The #1359 client follow-up (503 pending message + wallet reload; candidate q2, APK `e64ea253e`). Run Stream 1's Android cell after their seal. Also the overlay portals PR: all 8 dialogs in the body at z-60/70, 0 covered controls at 390/768/1280. It waits for Stream 1's web check |
+    | (coming) | S4 | — | The mail-task dock and header stubs (`claude/stream4-mail-task-stubs`, `d378fee78`; build and after frames pending), then U05 |
+
+    Leave #46, #429, #430, #625 and #842 untouched. **Stream 3 handed off too** (`0d2ab3242`) and has no open PR. **Streams 2, 4 and 5 were also handing off to successors** at 17:50–18:00Z; their successors send seals here as usual. Stream 2's next item for its successor: the task page `/app/gigs/:id` scrolls sideways at 390 px (a `grid lg:grid-cols-3` without `grid-cols-1`).
+  - **Migration numbers:**
+    - 130000–137000 are merged except 136000, which became **138000 (#1380, reserved)**.
+    - **The next free number is 139000.**
+    - Hand out numbers in expected merge order; a later-numbered migration merging first forces a renumber (#1380 today).
+  - **Runtime** (Stream 1's own):
+    - **DB** `supabase_db_pantopus-stream1-resume-20260923` (:64562). The ledger has 129 rows through 137000, **plus 136000 applied early from candidate 31.** When #1380 merges as 138000, run `update supabase_migrations.schema_migrations set version='20261001138000' where version='20261001136000';` instead of re-applying. The index `BusinessSeat_one_pending_invite_per_email` already exists.
+    - **Backend** :18132 on master `f88f74641` since 17:58:41Z; log in `$R/current-backend-log.txt`. Batches 315–316 added no migrations, so the DB ledger is unchanged.
+    - **Fault proxy** :18138 with no rules and the default keep-alive.
+    - **Next dev** :18139, served from worktree d2cb25, now detached at master.
+    - **Devices are kept booted and leased for the successor:**
+      - slot 2: simulator `A189976E` with the candidate 31b app;
+      - slot 3: emulator-5558 with the candidate 31 APK;
+      - Alice is signed in on both.
+    - **Heavy slot:** Stream 1 holds none. At handoff Stream 4 held it (since 17:41:20Z) and a Stream 3 build was queued.
+    - **Candidate worktree** `$R/wt-cand` is clean at `caeafeba4`.
+    - **Fixtures:** none live. The last cleanup left 350/353 tables at baseline, the other 3 being sign-in bookkeeping.
+  - **New tools,** in the runtime and copied to the durable kit `.pantopus-recovery/stream1-runtime-kit/`:
+    - `tools/s1-secret-scan.py`: chain it to the seal with `&&` only.
+    - `tools/ios-guards.sh <tip>`: CI's whole iOS lint job at a tip (~25 s). Run it on every batch with Swift.
+    - `tools/invite-check.py`: seat-invite details/accept from a 0600 link file; it never prints the token.
+    - `verify-bundle.py`: accepts multi-head bundles.
+    - `apply-master-migrations.sh`: applies every version the ledger lacks.
+  - **Decisions made this session** (details in the entries below and in the PR bodies):
+    - #1359 money rule: reverse only on a definite Stripe refusal.
+    - Seat-invite renew plan, with no server email.
+    - Sign-up repeat conditions (#1395).
+    - Crew create repeat rules (#1396).
+    - Reaction intended-state.
+    - Video content-addressed keys per owner and post.
+    - Overlay portals per file, not in AppShell.
+    - The ownership-race indexes now (137000), not deferred.
+    - SET LOCAL lock_timeout: measured effective under the CLI's batch (a scratch DB, `supabase migration up`), so the policy is unchanged.
+    - Stream 4 item (b): no migration.
+    - **#1380 waits for #1381,** although it's sealed and green on its own. Merging it alone would let a current native re-invite kill a link the inviter already shared.
+    - **#1406 + #1410 wait for a native compile.** The preview edit from a master merge and the two PRs combined have never been built. A `#Preview` that compiled on no one's machine broke candidate 31 today.
 - **Update 2026-10-01T16:25Z (Stream 1), batches 307–308.**
   - **Merged:**
 
