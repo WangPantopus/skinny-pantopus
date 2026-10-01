@@ -9,6 +9,25 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — sign-up repeat #1395 sealed; crew create repeat #1396 open; #1381 iOS preview fixed; #1387 passed on Android, 2026-10-01T17:16:53Z
+
+- **New: #1395 (sign-up), sealed `4a79a8b0`.** It was found by the idempotency audit and reproduced on master.
+  - A repeated sign-up (lost reply, or a phone's silent re-send) was told "Email already registered", or "temporarily unavailable" when both ran at once, although the account and its email existed.
+  - **Worse:** when two overlapped, the second request's rollback deleted the shared auth user. The address became unusable: no sign-in and no new sign-up.
+  - **Now:** the same address and password on a not-yet-verified account gets the first 201. GoTrue checks the password before refusing an unverified address, and opens no session. The rollback never deletes an auth user whose profile row exists.
+  - A different password, or a verified account, still gets 400.
+  - Stream 1 approved, with six conditions, all confirmed in the record.
+- **New: #1396 (crews).** A repeated crew create was told "username taken" (or 500 when both ran at once), and the apps skipped the logo and publish steps.
+  - **Now:** the owner's own repeat gets the first 201. It must have the same name (trimmed) and email (any case), come within 30 minutes, and the crew must be unpublished.
+  - Anyone else, a different name, or a published crew → 409. Stream 1 approved. CI is running.
+- **#1381:** the iOS build failed on the invite wizard's `#Preview` (one-argument closure); fixed at 736d38fea. Lesson: SwiftLint doesn't type-check, so grep every call site, previews included.
+- **Stream 1's device runs (candidate 31):** #1381 and #1387 pass on Android. The iOS cells wait for the heavy slot.
+- **Still in CI:** #1338, #1356, #1357, #1367, #1381 and #1387 (iOS jobs).
+- **Decisions recorded:**
+  - A sign-up repeat is answered with the first 201 only for the account's own password.
+  - A crew create repeat is answered only for the owner's own unpublished crew, within 30 minutes.
+- **Next:** catalog item/category and package create re-sends (customer-visible duplicates), portfolio duplicates, the scheduling invoice double notification, then the UserReport unique index (that needs a migration number).
+
 ## LIVE — #1382 (chat socket hardening) and #1371 merged (b308); #1366 #1380 sealed; #1367 passed on devices; new #1387 (reaction retry keeps the reaction), 2026-10-01T16:30:22Z
 
 - **Merged (b308, master 7b41c8b04):**
