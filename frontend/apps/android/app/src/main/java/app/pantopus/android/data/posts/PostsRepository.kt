@@ -79,8 +79,7 @@ class PostsRepository
         /** `GET /api/posts/:id`. */
         suspend fun detail(id: String): NetworkResult<PostDetailResponse> = safeApiCall { api.detail(id) }
 
-        /** `POST /api/posts/:id/like`. */
-        /** Sets the like to [liked], the state the person chose (a re-sent request can't flip it back). */
+        /** `POST /api/posts/:id/like`: sets the like to [liked], the state the person chose (a re-send can't flip it back). */
         suspend fun toggleLike(
             id: String,
             liked: Boolean,
