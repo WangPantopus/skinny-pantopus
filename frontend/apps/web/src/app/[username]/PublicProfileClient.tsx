@@ -113,6 +113,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // Relationship state
   const [followState, setFollowState] = useState(false);
   const [connectionState, setConnectionState] = useState<RelationshipState>('none');
+  // Connect shows only once the relationship is read, as in the apps: a failed read never offers it.
+  const [connectionKnown, setConnectionKnown] = useState(false);
   // True when the viewer's personal block list could not be read: Follow
   // fails closed rather than offering an affordance the server may refuse.
   const [followUnavailable, setFollowUnavailable] = useState(false);
@@ -219,6 +221,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     // block list first, like the native clients, so a fresh profile load
     // never offers Follow for someone this account blocked; a failed read
     // fails closed.
+    setConnectionKnown(false);
     try {
       const { blocked } = await api.blocks.getBlockedUsers();
       if ((blocked || []).some((entry) => entry.user_id === profile.id)) {
@@ -236,6 +239,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       const status = await api.users.getRelationshipStatus(profile.id);
       setFollowState(status.following);
       setConnectionState(status.relationship);
+      setConnectionKnown(true);
     } catch (err) {
       console.error('Failed to load relationship status:', err);
     }
@@ -372,6 +376,43 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         : (followState ? 'Couldn\'t unfollow.' : 'Couldn\'t follow.'));
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Connect / Requested / Accept / Connected, as the apps' profile button: send a request, accept theirs, or remove
+  // the connection after Connections' own confirmation.
+  const handleConnect = async () => {
+    if (!currentUser) { router.push('/login'); return; }
+    const targetId = profile?.id;
+    const state = connectionState;
+    if (!targetId || state === 'pending_sent' || state === 'blocked') return;
+    if (state === 'connected') {
+      const yes = await confirmStore.open({ title: 'Remove this connection?', description: 'You can reconnect by sending a new request.', confirmLabel: 'Remove', variant: 'destructive' });
+      if (!yes) return;
+    }
+    const current = captureAction();
+    setActionLoading(true);
+    try {
+      if (state === 'none') {
+        await api.relationships.sendRequest(targetId);
+        if (current()) setConnectionState('pending_sent');
+      } else if (state === 'pending_received') {
+        const pending = await api.relationships.getPendingRequests();
+        const request = (pending.requests || []).find((r) => r.requester?.id === targetId);
+        if (!request?.id) throw new Error('This request is no longer pending.');
+        await api.relationships.acceptRequest(request.id);
+        if (current()) setConnectionState('connected');
+      } else {
+        const connected = await api.relationships.getConnections();
+        const relationship = (connected.relationships || []).find((r) => r.other_user?.id === targetId);
+        if (!relationship?.id) throw new Error('You\u2019re no longer connected.');
+        await api.relationships.disconnect(relationship.id);
+        if (current()) setConnectionState('none');
+      }
+    } catch (err: unknown) {
+      if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
+    } finally {
+      if (current()) setActionLoading(false);
     }
   };
 
@@ -624,6 +665,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         reliabilityDetail={reliabilityDetail}
         followState={followState}
         canFollow={connectionState !== 'blocked' && !followUnavailable}
+        connectionState={connectionState}
+        canConnect={connectionKnown && connectionState !== 'blocked'}
+        onConnect={handleConnect}
         actionLoading={actionLoading}
         shareCopied={shareCopied}
         onFollow={handleFollow}
