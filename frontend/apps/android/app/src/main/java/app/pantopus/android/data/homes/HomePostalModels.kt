@@ -6,6 +6,9 @@ import app.pantopus.android.data.api.models.homes.HomeResidencyAddressSnapshot
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @JsonClass(generateAdapter = true)
 data class HomePostalScope(val origin: String, val actorId: String, val homeId: String) {
@@ -106,3 +109,14 @@ data class HomePostalOutcome(
 }
 
 internal fun postalDate(value: String?): Boolean = value != null && runCatching { Instant.parse(value) }.isSuccess
+
+/**
+ * A server date as people read it: the device's time zone, a medium date and a short time, as iOS shows it.
+ * Text that doesn't parse is shown as it is.
+ */
+internal fun reviewedDateLabel(value: String): String =
+    runCatching {
+        Instant.parse(value)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
+    }.getOrDefault(value)
