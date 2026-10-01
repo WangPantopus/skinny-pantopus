@@ -4584,8 +4584,9 @@ router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) =>
     }
 
     const clientUrl = process.env.CLIENT_URL || process.env.APP_URL || 'http://localhost:3000';
-    const returnUrl = `${clientUrl}/app/businesses/${businessId}?tab=payments&onboarding=success`;
-    const refreshUrl = `${clientUrl}/app/businesses/${businessId}?tab=payments&onboarding=refresh`;
+    // The crew dashboard's Payments tab: /app/businesses/:id has no page of its own, so Stripe sent people to a 404.
+    const returnUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=success`;
+    const refreshUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=refresh`;
 
     const result = await stripeService.createAccountLink(businessId, returnUrl, refreshUrl);
 

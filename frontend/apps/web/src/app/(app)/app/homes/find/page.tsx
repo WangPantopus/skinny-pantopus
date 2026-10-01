@@ -79,7 +79,7 @@ function FindContent() {
       ) : results.length > 0 ? (
         <div className="space-y-2 mb-6">
           {results.map((home: any) => (
-            <button key={home.id} onClick={() => router.push(`/app/homes/${home.id}/claim-owner`)}
+            <button key={home.id} onClick={() => router.push(`/app/homes/${home.id}/claim-owner/evidence`)}
               className="w-full flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-4 hover:bg-app-hover transition text-left">
               <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
                 <Home className="w-5 h-5 text-emerald-600" />

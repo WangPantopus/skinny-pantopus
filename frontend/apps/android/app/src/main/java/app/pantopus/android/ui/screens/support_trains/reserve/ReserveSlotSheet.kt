@@ -31,9 +31,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +72,66 @@ import app.pantopus.android.ui.theme.Spacing
  */
 enum class ReserveStep { DATE, MODE, DETAILS, CONFIRM, SUCCESS }
 
+/**
+ * The sheet's draft: its step, choices and typed details. The detail screen holds it outside the
+ * `ModalBottomSheet` window, because `rememberSaveable` inside the sheet's content isn't restored when the
+ * activity is recreated (rotation, dark mode, font size): the sheet started over and lost what was typed.
+ */
+@Stable
+class ReserveSheetDraft(
+    step: ReserveStep,
+    slotId: String?,
+    mode: String? = null,
+    dishTitle: String = "",
+    restaurantName: String = "",
+    noteToRecipient: String = "",
+    errorMessage: String? = null,
+) {
+    var step by mutableStateOf(step)
+    var slotId by mutableStateOf(slotId)
+    var mode by mutableStateOf(mode)
+    var dishTitle by mutableStateOf(dishTitle)
+    var restaurantName by mutableStateOf(restaurantName)
+    var noteToRecipient by mutableStateOf(noteToRecipient)
+    var errorMessage by mutableStateOf(errorMessage)
+
+    companion object {
+        val Saver =
+            listSaver<ReserveSheetDraft, String?>(
+                save = {
+                    listOf(it.step.name, it.slotId, it.mode, it.dishTitle, it.restaurantName, it.noteToRecipient, it.errorMessage)
+                },
+                restore = {
+                    ReserveSheetDraft(
+                        step = ReserveStep.valueOf(requireNotNull(it[0])),
+                        slotId = it[1],
+                        mode = it[2],
+                        dishTitle = it[3].orEmpty(),
+                        restaurantName = it[4].orEmpty(),
+                        noteToRecipient = it[5].orEmpty(),
+                        errorMessage = it[6],
+                    )
+                },
+            )
+    }
+}
+
+/**
+ * A new draft for each [sheetKey] (one opening of the sheet). It starts at the contribution step when a slot row was
+ * tapped, otherwise at the date step.
+ */
+@Composable
+fun rememberReserveSheetDraft(
+    preselectedSlotId: String?,
+    sheetKey: Any? = preselectedSlotId,
+): ReserveSheetDraft =
+    rememberSaveable(sheetKey, saver = ReserveSheetDraft.Saver) {
+        ReserveSheetDraft(
+            step = if (preselectedSlotId == null) ReserveStep.DATE else ReserveStep.MODE,
+            slotId = preselectedSlotId,
+        )
+    }
+
 @Composable
 fun ReserveSlotSheet(
     preselectedSlotId: String?,
@@ -78,16 +140,15 @@ fun ReserveSlotSheet(
     isSubmitting: Boolean,
     onSubmit: (String, ReserveSlotBody, (String?) -> Unit) -> Unit,
     onClose: () -> Unit,
+    draft: ReserveSheetDraft = rememberReserveSheetDraft(preselectedSlotId),
 ) {
-    var step by rememberSaveable {
-        mutableStateOf(if (preselectedSlotId == null) ReserveStep.DATE else ReserveStep.MODE)
-    }
-    var slotId by rememberSaveable { mutableStateOf(preselectedSlotId) }
-    var mode by rememberSaveable { mutableStateOf<String?>(null) }
-    var dishTitle by rememberSaveable { mutableStateOf("") }
-    var restaurantName by rememberSaveable { mutableStateOf("") }
-    var noteToRecipient by rememberSaveable { mutableStateOf("") }
-    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var step by draft::step
+    var slotId by draft::slotId
+    var mode by draft::mode
+    var dishTitle by draft::dishTitle
+    var restaurantName by draft::restaurantName
+    var noteToRecipient by draft::noteToRecipient
+    var errorMessage by draft::errorMessage
 
     val selected = remember(slotId, options) { options.firstOrNull { it.id == slotId } }
     val selectedMode = remember(mode) { SupportTrainContributionMode.entries.firstOrNull { it.wire == mode } }
