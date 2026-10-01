@@ -220,18 +220,7 @@ public struct BusinessPageBlockEditorSheet: View {
                 }
                 .tint(Theme.Color.primary600)
                 .accessibilityIdentifier("businessPageBlocks.editor.visible")
-
-                chipRow(
-                    title: "Padding",
-                    options: BusinessPageBlockOptions.padding,
-                    selected: draft.settings["padding"]?.stringValue ?? "default"
-                ) { key in draft.settings["padding"] = .string(key) }
-
-                chipRow(
-                    title: "Background",
-                    options: BusinessPageBlockOptions.background,
-                    selected: draft.settings["background"]?.stringValue ?? "default"
-                ) { key in draft.settings["background"] = .string(key) }
+                // No Padding / Background: no page renders block settings, so they changed nothing (as on the web).
             }
         }
         .padding(.top, Spacing.s3)

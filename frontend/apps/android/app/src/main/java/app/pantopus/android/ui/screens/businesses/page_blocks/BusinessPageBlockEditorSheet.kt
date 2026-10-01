@@ -548,20 +548,7 @@ private fun SettingsSection(
                     modifier = Modifier.testTag("businessPageBlocks.editor.visible"),
                 )
             }
-            ChipRow(
-                title = "Padding",
-                options = BusinessPageBlockOptions.padding,
-                selected = draft.settings["padding"] as? String ?: "default",
-            ) { value ->
-                onDraftChange(draft.copy(settings = draft.settings + ("padding" to value)))
-            }
-            ChipRow(
-                title = "Background",
-                options = BusinessPageBlockOptions.background,
-                selected = draft.settings["background"] as? String ?: "default",
-            ) { value ->
-                onDraftChange(draft.copy(settings = draft.settings + ("background" to value)))
-            }
+            // No Padding / Background: no page renders block settings, so they changed nothing (as on the web).
         }
     }
 }
