@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Shield, Clock, MoreVertical, Mail } from 'lucide-react';
 import type { SeatListItem } from '@pantopus/types';
 
@@ -37,6 +38,8 @@ export default function SeatCard({ seat, canManage, onEdit, onRemove }: SeatCard
   const isBound = seat.invite_status === 'accepted';
   const statusInfo = STATUS_MAP[seat.invite_status] || STATUS_MAP.pending;
   const roleColor = ROLE_COLORS[seat.role_base] || ROLE_COLORS.viewer;
+  // The menu also opens by click or keyboard, not only on hover, so touch and keyboard users reach Edit and Remove.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="p-4 flex items-center justify-between">
@@ -87,19 +90,39 @@ export default function SeatCard({ seat, canManage, onEdit, onRemove }: SeatCard
         </span>
 
         {canManage && seat.role_base !== 'owner' && !seat.is_you && (
-          <div className="relative group">
-            <button className="p-1 rounded-md hover:bg-surface-raised transition text-app-secondary hover:text-app">
+          <div
+            className="relative group"
+            onKeyDown={(e) => { if (e.key === 'Escape') setMenuOpen(false); }}
+            onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMenuOpen(false); }}
+          >
+            <button
+              type="button"
+              aria-label={`Actions for ${seat.display_name || 'this seat'}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+              className="p-1 rounded-md hover:bg-surface-raised transition text-app-secondary hover:text-app"
+            >
               <MoreVertical className="w-4 h-4" />
             </button>
-            <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-app bg-surface shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+            <div
+              role="menu"
+              className={`absolute right-0 top-full mt-1 w-32 rounded-lg border border-app bg-surface shadow-lg transition-all z-10 ${
+                menuOpen ? 'opacity-100 visible' : 'opacity-0 invisible group-hover:opacity-100 group-hover:visible'
+              }`}
+            >
               <button
-                onClick={() => onEdit(seat)}
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onEdit(seat); }}
                 className="w-full px-3 py-2 text-left text-sm text-app hover:bg-surface-raised rounded-t-lg transition"
               >
                 Edit
               </button>
               <button
-                onClick={() => onRemove(seat)}
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onRemove(seat); }}
                 className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 rounded-b-lg transition"
               >
                 Remove
