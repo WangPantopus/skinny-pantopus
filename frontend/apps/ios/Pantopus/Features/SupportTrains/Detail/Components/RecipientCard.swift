@@ -175,7 +175,7 @@ public struct RecipientCard: View {
     private var identityChipForeground: Color {
         switch content.identityTag {
         // `home` equals `homeDark` in light (4.57:1 on the tint) and lightens in dark;
-        // `homeDark` stays #15803D there, 3.06:1 on the dark tint.
+        // `homeDark` keeps its light-mode green there, 3.06:1 on the dark tint.
         case .home: Theme.Color.home
         case .personal: Theme.Color.primary700
         case .business: Theme.Color.businessDark

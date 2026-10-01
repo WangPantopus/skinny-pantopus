@@ -63,8 +63,7 @@ function SocialDestinations() {
 
 const SECONDARY = [
   { icon: Compass, label: 'Discover', route: '/app/discover' },
-  // Launch cut #6 (Business directory): the business map is hidden.
-  ...(launchFeatures.businessDirectory ? [{ icon: MapIcon, label: 'Map', route: '/app/map' }] : []),
+  { icon: MapIcon, label: 'Map', route: '/app/map' },
 ] as const;
 
 function areaLabel(meter: NeighborhoodMeter | undefined): string {
@@ -188,8 +187,7 @@ function UnlockedSurfaces() {
           );
         })}
       </div>}
-      {/* Launch cut #6: with Map hidden, Discover spans the row. */}
-      <div className={`grid ${SECONDARY.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5`}>
+      <div className="grid grid-cols-2 gap-2.5">
         {SECONDARY.map((a) => {
           const Icon = a.icon;
           return (

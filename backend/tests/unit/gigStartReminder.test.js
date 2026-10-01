@@ -78,6 +78,7 @@ function seedAssignedGig(overrides = {}) {
       status: 'assigned',
       started_at: null,
       scheduled_start: '2026-03-28T18:00:00.000Z',
+      last_worker_reminder_at: null,
       ...overrides,
     },
   ]);
