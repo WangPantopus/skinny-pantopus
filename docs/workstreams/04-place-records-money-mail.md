@@ -397,7 +397,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
-- **2026-10-01T17:24:00Z — Window r2 sealed (`20261001-stream4-flaggaps-themes-r2`, MANIFEST `35b44f01…`, 369 files). #1375 rechecked; four new PRs with the queue owner.**
+- **2026-10-01T17:22:43Z — Window r2 sealed (`20261001-stream4-flaggaps-themes-r2`, MANIFEST `35b44f01…`, 369 files). #1375 rechecked; four new PRs with the queue owner.**
   - **Window:** 16:29:33Z–16:48:50Z and 17:07:44Z–17:19:24Z. Stream 3 held the runtime in between, for its TalkBack probe and
     Stream 1's race proofs (migration 20261001137000 stays applied, agreed).
     - Exact cleanup at 17:19:05Z: 349 of 353 tables equal the baseline; the other four are Auth* history.
