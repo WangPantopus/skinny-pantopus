@@ -148,4 +148,36 @@ class DPoPProofBuilderTest {
         val der = EcKeyCodec.rawToDer(raw)
         assertTrue(EcKeyCodec.derToRaw(der).contentEquals(raw))
     }
+
+    @Test
+    fun `remint keeps htm htu and rth with a new jti and iat, signed by the same key`() {
+        val proof =
+            builder.build(
+                key,
+                htm = "POST",
+                htu = "https://api.pantopus.com/api/users/refresh",
+                refreshToken = "rt-1",
+                nowSeconds = 1_755_500_000L,
+                jti = "11111111-2222-3333-4444-555555555555",
+            )
+        val fresh = builder.remint(key, proof, nowSeconds = 1_755_500_007L, jti = "66666666-7777-8888-9999-000000000000")!!
+
+        val (header, payload) = fresh.split(".").let { decodeSegment(it[0]) to decodeSegment(it[1]) }
+        assertEquals(decodeSegment(proof.split(".")[0]), header)
+        assertEquals("66666666-7777-8888-9999-000000000000", payload["jti"])
+        assertEquals(1_755_500_007.0, (payload["iat"] as Number).toDouble(), 0.0)
+        assertEquals("POST", payload["htm"])
+        assertEquals("https://api.pantopus.com/api/users/refresh", payload["htu"])
+        assertEquals(DPoPProofBuilder.refreshTokenHash("rt-1"), payload["rth"])
+        val parts = fresh.split(".")
+        assertTrue(key.verify((parts[0] + "." + parts[1]).toByteArray(Charsets.US_ASCII), Base64.getUrlDecoder().decode(parts[2])))
+    }
+
+    @Test
+    fun `remint refuses a proof signed by another key or one it can't read`() {
+        val proof = builder.build(SoftwareSigningKey(), htm = "POST", htu = "https://api.pantopus.com/api/devices/register")
+
+        assertNull(builder.remint(key, proof))
+        assertNull(builder.remint(key, "not-a-proof"))
+    }
 }
