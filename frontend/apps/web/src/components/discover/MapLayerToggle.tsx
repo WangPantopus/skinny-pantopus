@@ -7,8 +7,8 @@ const LAYER_CONFIG: { key: MapLayerKey; label: string; emoji: string; color: str
   { key: 'businesses', label: 'Businesses', emoji: '🏪', color: 'bg-primary-100 text-primary-700 border-primary-300' },
   { key: 'gigs', label: 'Active Tasks', emoji: '📋', color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: 'posts', label: 'Posts', emoji: '💬', color: 'bg-surface-muted text-app-strong border-app-strong' },
-// Launch cut #4 (Open Gigs): no open-task layer.
-] satisfies { key: MapLayerKey; label: string; emoji: string; color: string }[]).filter(({ key }) => key !== 'gigs' || launchFeatures.openGigs);
+// Launch cuts #4 (Open Gigs) and #6 (Business directory): no open-task or business layer.
+] satisfies { key: MapLayerKey; label: string; emoji: string; color: string }[]).filter(({ key }) => (key !== 'gigs' || launchFeatures.openGigs) && (key !== 'businesses' || launchFeatures.businessDirectory));
 
 interface MapLayerToggleProps {
   activeLayers: Set<MapLayerKey>;
@@ -25,6 +25,9 @@ export default function MapLayerToggle({ activeLayers, onChange }: MapLayerToggl
     }
     onChange(next);
   };
+
+  // One layer left (the launch cut leaves only Posts): nothing to toggle.
+  if (LAYER_CONFIG.length < 2) return null;
 
   return (
     <div className="flex flex-col gap-1.5">

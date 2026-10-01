@@ -112,8 +112,6 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   [launchFeatures.publicScheduling, /^\/book(?:\/(?![^/]+\/packages\/)|$)|^\/booking(?:\/|$)/],
   // #5 + #7: the Home scheduling hub (household agenda, find-a-time polls).
   [launchFeatures.publicScheduling && launchFeatures.householdExtras, /^\/app\/homes\/[^/]+\/scheduling(?:\/|$)|^\/poll(?:\/|$)/],
-  // #6 Business directory: the business map.
-  [launchFeatures.businessDirectory, /^\/app\/map(?:\/|$)/],
   // #3 + #4 + #6: the Discover hub (business, task and listing rails).
   [launchFeatures.businessDirectory && launchFeatures.openGigs && launchFeatures.marketplace, /^\/app\/discover-hub(?:\/|$)/],
   // #7 Household extras, incl. the mailbox's package tracking and unboxing.
