@@ -117,6 +117,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           type="button"
           onClick={onBack}
           className="w-7 h-7 rounded-full hover:bg-surface-muted flex items-center justify-center text-app-muted transition-colors flex-shrink-0"
+          aria-label="Back"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -146,6 +147,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           type="button"
           onClick={onClose}
           className="w-7 h-7 rounded-full hover:bg-surface-muted flex items-center justify-center text-app-muted transition-colors flex-shrink-0"
+          aria-label="Close chat"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

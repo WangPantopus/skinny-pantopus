@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -332,7 +333,7 @@ export default function ConversationView({
       <div className="bg-surface border-b border-app flex-shrink-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-14 gap-3">
-            <button onClick={() => router.push(returnTo)} className="text-app-text-secondary hover:text-app p-1">
+            <button onClick={() => router.push(returnTo)} className="text-app-text-secondary hover:text-app p-1" aria-label="Back">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -464,15 +465,16 @@ export default function ConversationView({
         onClose={() => setLightboxImage(null)}
       />
 
-      {/* Conversation Drawer */}
-      {showDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setShowDrawer(false)}>
+      {/* Conversation Drawer: rendered into document.body, like the home slide panel, because inside the app's <main>
+          (its own stacking context) the app header covered the drawer's top, its title and its close button. */}
+      {showDrawer && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[60] flex justify-end" onClick={() => setShowDrawer(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <div className="relative w-full max-w-sm bg-surface h-full shadow-xl overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-5">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-app">Chat details</h2>
-                <button onClick={() => setShowDrawer(false)} className="text-app-muted hover:text-app-text-strong">
+                <button onClick={() => setShowDrawer(false)} className="text-app-muted hover:text-app-text-strong" aria-label="Close chat details">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -548,7 +550,8 @@ export default function ConversationView({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       {reportTarget && (
         <ReportModal

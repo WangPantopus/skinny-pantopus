@@ -72,7 +72,8 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
     <button
       type="button"
       onClick={() => setShowQuickPicker(!showQuickPicker)}
-      className={`absolute ${isMine ? '-left-8' : '-right-8'} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm text-sm hover:bg-surface-muted transition-all ${
+      aria-label="Add reaction"
+      className={`absolute ${isMine ? '-left-8' : '-right-8'} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm text-sm hover:bg-surface-muted transition-all focus-visible:opacity-100 focus-visible:scale-100 ${
         hovered || showQuickPicker ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
       }`}
     >
