@@ -234,6 +234,29 @@ async function syncLocalProfileFromAccount(user, changed) {
   if (error) throw error;
 }
 
+// The account's Profile Visibility (Settings: public, registered or private) is the person's choice. The LocalProfile
+// has its own profile_visibility, which no app sets and Settings never updates, so a local profile is only as visible
+// as the stricter of the two: a private account is private here too, and a registered-only one is hidden from people
+// who aren't signed in. `account` may carry profile_visibility already; otherwise it is read. Unreadable is private.
+async function localProfileVisibilityFor(profile, viewerId, account = null) {
+  let accountVisibility = account?.profile_visibility;
+  if (accountVisibility === undefined) {
+    const { data, error } = await supabaseAdmin
+      .from('User')
+      .select('profile_visibility')
+      .eq('id', profile.user_id)
+      .maybeSingle();
+    if (error) {
+      logger.warn('identity.account_visibility_lookup_error', { error: error.message });
+      return 'private';
+    }
+    accountVisibility = data?.profile_visibility;
+  }
+  if (accountVisibility === 'private') return 'private';
+  if (accountVisibility === 'registered' && !viewerId) return 'private';
+  return profile.profile_visibility || 'public';
+}
+
 async function getActivePersonaForUser(userId) {
   const { data } = await supabaseAdmin
     .from('PublicPersona')
@@ -593,6 +616,7 @@ module.exports = {
   displayNameFromUser,
   ensureLocalProfile,
   syncLocalProfileFromAccount,
+  localProfileVisibilityFor,
   getLocalProfileByUserId,
   getLocalProfileByHandle,
   getActivePersonaForUser,
