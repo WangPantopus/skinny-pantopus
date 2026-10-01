@@ -173,9 +173,27 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T02:19:32Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T02:38:35Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T02:19:32Z):** master is `f24680600` (batch 247).
+- **Latest (2026-10-01T02:38:35Z):** master is `cd57ec897` (batch 249).
+  - **Merged:**
+    - #1181 Place-brief greeting and #1183 single profile card (batch 248);
+    - **#1159** Discover Posts → Pulse, **#1161** native Visitor meta, **#1185** Today sources and **#1186** post distance units (batch 249). Stream 1's iOS device bundle `20261001-stream1-native-1158-1159-1161-devices-r1` (dd21f9b4…) passed #1159 and #1161. On iOS, Back from Pulse lands on the Nearby root, the same as the existing Pulse pillar.
+  - **Sent:** [#1188](https://github.com/WangPantopus/skinny-pantopus/pull/1188) web Pulse empty states, seal `84116e7c…`.
+    - Alerts said "Everything looks safe in the neighborhood!" and Lost & Found said "That's good news!" with no posts at all.
+    - Now: "No alerts posted — Neighbors haven't posted a safety alert here."
+  - **Recently fixed (sweep of real surfaces with owned fixtures):**
+    - #1185: the Today footer credited AirNow with no air reading;
+    - #1186: post cards printed "222m away" while everything else uses miles.
+  - **Checked, no change:**
+    - wallet, payments settings and My pulse read correctly; the Start page's promises map to real preview sections;
+    - the remaining Pulse filter empty states are honest;
+    - the Action Queue (gig bids/offers, "gig earnings") and the wallet's "Booking earnings" are launch-cut entry points, so not touched.
+  - **Decisions (standing direction):**
+    - #1186 uses the designated shared imperial formatter;
+    - #1188 never implies an all-clear from the absence of posts.
+  - **Next:** an Android master build (queued in the heavy slot) for a native Hub/Today/Pulse sweep with owned fixtures.
+- **Earlier (2026-10-01T02:19:32Z):** master is `f24680600` (batch 247).
   - **Merged:**
     - #1166 web date labels and #1169 Hub People lane (batch 244);
     - [#1179](https://github.com/WangPantopus/skinny-pantopus/pull/1179) **web Place composer drops Service/Announce** (batch 247). The Place feed always refused them: a 400 with jargon, nothing shown. Product question recorded in the batch: personal users can no longer reach those two types on web.
