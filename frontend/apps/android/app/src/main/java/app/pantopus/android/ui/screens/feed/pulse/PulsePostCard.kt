@@ -107,6 +107,8 @@ data class PulsePostCardContent(
     val actions: PulsePostActions = PulsePostActions(),
     /** The chip's word; a found Lost & Found post says "Found" ([PulseIntent.chipLabelFor]). */
     val chipLabel: String = intent.cardChipLabel,
+    /** Posted far from the author's homes; the meta line says Visitor (web shows a Visitor badge). */
+    val isVisitor: Boolean = false,
 ) {
     /** Thumbnail-preferring URL projection kept for test compatibility. */
     val mediaUrls: List<String>
@@ -602,6 +604,7 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     val parts = mutableListOf<String>()
     parts.add(content.authorName)
     if (content.chipLabel.isNotEmpty()) parts.add(content.chipLabel)
+    if (content.isVisitor) parts.add("Visitor")
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)
     if (content.mediaUrls.isNotEmpty()) {

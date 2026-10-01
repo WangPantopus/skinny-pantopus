@@ -31,6 +31,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// (`backend/routes/posts.js:84`). Those rows are dismissable, not
     /// reportable.
     public let isSeeded: Bool
+    /// The poster's homes are all far from where they posted (`feedService.js:234`); the card says Visitor.
+    public let isVisitorPost: Bool
     /// Set when the post was authored as a business (`feedService.js:115`).
     public let businessAuthorId: String?
     public let locationName: String?
@@ -59,6 +61,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasReposted
         case state
         case isSeeded = "is_seeded"
+        case isVisitorPost = "is_visitor_post"
         case businessAuthorId = "business_author_id"
         case locationName = "location_name"
         case eventDate = "event_date"
@@ -87,6 +90,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasReposted = try c.decodeIfPresent(Bool.self, forKey: .userHasReposted) ?? false
         state = try c.decodeIfPresent(String.self, forKey: .state)
         isSeeded = try c.decodeIfPresent(Bool.self, forKey: .isSeeded) ?? false
+        isVisitorPost = try c.decodeIfPresent(Bool.self, forKey: .isVisitorPost) ?? false
         businessAuthorId = try c.decodeIfPresent(String.self, forKey: .businessAuthorId)
         locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
         eventDate = try c.decodeIfPresent(String.self, forKey: .eventDate)

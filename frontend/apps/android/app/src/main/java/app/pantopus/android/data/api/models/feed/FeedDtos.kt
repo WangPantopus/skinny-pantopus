@@ -30,6 +30,8 @@ data class FeedPost(
      * reportable.
      */
     @Json(name = "is_seeded") val isSeeded: Boolean = false,
+    /** The poster's homes are all far from where they posted; the card says Visitor. */
+    @Json(name = "is_visitor_post") val isVisitorPost: Boolean = false,
     /** Set when the post was authored as a business (`feedService.js:115`). */
     @Json(name = "business_author_id") val businessAuthorId: String? = null,
     @Json(name = "location_name") val locationName: String? = null,
