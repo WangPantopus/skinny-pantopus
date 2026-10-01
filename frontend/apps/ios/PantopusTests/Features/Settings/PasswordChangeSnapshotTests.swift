@@ -4,7 +4,7 @@
 //
 //  A13.14 — structural snapshot coverage for the reshaped Change Password
 //  screen. Mirrors the two design frames: READY (current verified, strong
-//  revealed new password, confirm matches, CTA enabled, info chip) and ERROR
+//  new password, confirm matches, CTA enabled, info chip) and ERROR
 //  (form banner, wrong current password + reset shortcut, breached new
 //  password, mismatched confirm, CTA locked). Follows the existing iOS
 //  pattern of rendering the SwiftUI hierarchy in-process.
