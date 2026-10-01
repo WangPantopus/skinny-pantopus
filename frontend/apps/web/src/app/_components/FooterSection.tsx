@@ -85,11 +85,11 @@ function Column({ heading, items }: { heading: string; items: { label: string; h
         {items.map((it) => (
           <li key={`${heading}-${it.label}`} style={{ margin: '0 0 12px' }}>
             {it.internal ? (
-              <Link href={it.href} className="no-underline transition-colors hover:text-[color:var(--color-primary)]" style={{ color: 'var(--ink-1)', fontSize: '14px' }}>
+              <Link href={it.href} className="no-underline transition-colors hover:text-[color:var(--color-primary-700)]" style={{ color: 'var(--ink-1)', fontSize: '14px' }}>
                 {it.label}
               </Link>
             ) : (
-              <a href={it.href} className="no-underline transition-colors hover:text-[color:var(--color-primary)]" style={{ color: 'var(--ink-1)', fontSize: '14px' }}>
+              <a href={it.href} className="no-underline transition-colors hover:text-[color:var(--color-primary-700)]" style={{ color: 'var(--ink-1)', fontSize: '14px' }}>
                 {it.label}
               </a>
             )}
@@ -137,7 +137,7 @@ export default function FooterSection() {
         >
           <span>© 2026 Pantopus, Inc.</span>
           <span className="inline-flex items-center gap-2">
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ color: 'var(--color-primary)' }} aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ color: 'var(--color-primary-700)' }} aria-hidden="true">
               <circle cx="5.5" cy="5.5" r="4.6" />
               <circle cx="5.5" cy="5.5" r="1.6" fill="currentColor" stroke="none" />
             </svg>

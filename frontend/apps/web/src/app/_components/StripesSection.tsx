@@ -108,13 +108,13 @@ const STRIPES: Stripe[] = [
     visual: (
       <svg viewBox="0 0 280 200" fill="none" stroke="#1B1815" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
         <ellipse cx="140" cy="100" rx="110" ry="62" />
-        <ellipse cx="140" cy="100" rx="86" ry="48" stroke="#7A736A" />
+        <ellipse cx="140" cy="100" rx="86" ry="48" stroke="#736C63" />
         <ellipse cx="140" cy="100" rx="62" ry="34" stroke="#4A4640" />
         <ellipse cx="140" cy="100" rx="38" ry="22" stroke="#1B1815" />
         <ellipse cx="140" cy="100" rx="18" ry="10" />
         <circle cx="140" cy="100" r="2.4" fill="#1B1815" />
         <line x1="140" y1="22" x2="140" y2="30" stroke="#1B1815" />
-        <text x="140" y="20" textAnchor="middle" fontFamily="ui-sans-serif" fontSize="9" stroke="none" fill="#7A736A" letterSpacing="1">
+        <text x="140" y="20" textAnchor="middle" fontFamily="ui-sans-serif" fontSize="9" stroke="none" fill="#736C63" letterSpacing="1">
           N
         </text>
       </svg>
@@ -151,11 +151,11 @@ export default function StripesSection() {
                 fontSize: '12px',
                 fontWeight: 600,
                 letterSpacing: '0.16em',
-                color: 'var(--color-primary)',
+                color: 'var(--color-primary-700)',
                 marginBottom: '24px',
               }}
             >
-              <span className="inline-block" style={{ width: '22px', height: '1px', background: 'var(--color-primary)' }} />
+              <span className="inline-block" style={{ width: '22px', height: '1px', background: 'var(--color-primary-700)' }} />
               {s.num}
             </span>
             <h3

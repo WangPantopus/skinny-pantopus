@@ -97,7 +97,7 @@ export default function NavBar() {
             href="/start"
             className="inline-flex items-center h-9 px-3.5 rounded-[10px] text-white font-semibold text-sm transition-all hover:-translate-y-px"
             style={{
-              background: 'var(--color-primary)',
+              background: 'var(--color-primary-700)',
               boxShadow: '0 1px 0 rgba(255,255,255,0.2) inset',
             }}
           >
