@@ -77,7 +77,7 @@ function NewChatContent() {
     <div className="max-w-2xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition">
+        <button onClick={() => router.back()} aria-label="Back" className="p-1.5 hover:bg-app-hover rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-app-text" />
         </button>
         <h1 className="text-xl font-bold text-app-text">New Message</h1>
@@ -95,7 +95,7 @@ function NewChatContent() {
           className="flex-1 text-sm text-app-text bg-transparent outline-none placeholder:text-app-text-muted"
         />
         {query.length > 0 && (
-          <button onClick={() => { setQuery(''); setResults([]); }}>
+          <button onClick={() => { setQuery(''); setResults([]); }} aria-label="Clear search">
             <X className="w-4 h-4 text-app-text-muted hover:text-app-text" />
           </button>
         )}
