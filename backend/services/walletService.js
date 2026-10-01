@@ -63,7 +63,7 @@ const DEFINITE_TRANSFER_FAILURES = new Set([
 async function settleFailedTransfer(tx, stripeErr, { userId, amount, idempotencyKey }) {
   const { data: current, error: readErr } = await supabaseAdmin
     .from('WalletTransaction')
-    .select('id, amount, status, stripe_transfer_id, metadata')
+    .select('*')
     .eq('id', tx.id)
     .maybeSingle();
   if (readErr) {
@@ -165,7 +165,7 @@ async function settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAcco
 async function findWithdrawalByKey(idempotencyKey) {
   const { data, error } = await supabaseAdmin
     .from('WalletTransaction')
-    .select('id, amount, status, stripe_transfer_id, metadata')
+    .select('*')
     .eq('idempotency_key', idempotencyKey)
     .maybeSingle();
   if (error) {
