@@ -5146,13 +5146,15 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check for existing report
-    const { data: existingReport, error: existingErr } = await supabaseAdmin
+    // Check for existing report. limit(1), not maybeSingle(): two reports sent at once can both
+    // be stored, and maybeSingle() then fails every later report from this person.
+    const { data: existingReports, error: existingErr } = await supabaseAdmin
       .from('UserReport')
       .select('id')
       .eq('reported_user_id', userId)
       .eq('reported_by', reporterId)
-      .maybeSingle();
+      .limit(1);
+    const existingReport = existingReports?.[0] || null;
 
     if (existingErr) {
       if (isUserReportTableMissing(existingErr)) {

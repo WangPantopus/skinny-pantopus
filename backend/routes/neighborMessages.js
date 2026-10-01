@@ -370,16 +370,22 @@ router.post('/:id/report', verifyToken, validate(reportSchema), async (req, res)
     const row = await loadOwnedMessage(req.params.id, userId);
     if (!row) return res.status(404).json({ error: 'Message not found.' });
 
-    const { error } = await supabaseAdmin
+    // Only the first report stamps the message and alerts the trust team; a repeat (a re-sent
+    // request or a second tap) keeps the original time and reason and alerts no one again.
+    const { data: stamped, error } = await supabaseAdmin
       .from('NeighborMessage')
       .update({
         reported_at: new Date().toISOString(),
         report_reason: (req.body && req.body.reason) || null,
       })
-      .eq('id', row.id);
+      .eq('id', row.id)
+      .is('reported_at', null)
+      .select('id');
     if (error) throw new Error(error.message);
     // The reason here is free text, so the alert carries only the kind and the message id.
-    require('../services/adminAlerts').notifyReportToReview({ kind: 'message', reportId: row.id }).catch(() => {});
+    if ((stamped || []).length > 0) {
+      require('../services/adminAlerts').notifyReportToReview({ kind: 'message', reportId: row.id }).catch(() => {});
+    }
     return res.json({ success: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
