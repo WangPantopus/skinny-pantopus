@@ -25,6 +25,8 @@ import SwiftUI
 
 public struct MailDayView: View {
     @State private var viewModel: MailDayViewModel
+    /// The "Needs a call" piece whose "Other…" choices are showing.
+    @State private var otherChoicesItemId: String?
     private let onClose: @MainActor () -> Void
     private let onSeeHistory: @MainActor () -> Void
     private let onOpenNudge: @MainActor (MailDaySetupNudge) -> Void
@@ -162,10 +164,23 @@ public struct MailDayView: View {
                     UnreviewedItem(
                         item: item,
                         onRoute: { Task { await viewModel.acceptSuggestion(for: item.id) } },
-                        onSecondary: { /* Other-recipient sheet — out of scope */ }
+                        onSecondary: { otherChoicesItemId = item.id }
                     )
                 }
             }
+        }
+        .confirmationDialog(
+            "Where should this piece go?",
+            isPresented: Binding(
+                get: { otherChoicesItemId != nil },
+                set: { if !$0 { otherChoicesItemId = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: otherChoicesItemId
+        ) { itemId in
+            Button("Keep for the household") { Task { await viewModel.keepForHousehold(itemId) } }
+            Button("Junk it", role: .destructive) { Task { await viewModel.junk(itemId) } }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -178,7 +193,7 @@ public struct MailDayView: View {
                         item: item,
                         isLast: index == items.count - 1
                     ) {
-                        // Undo individual — out of scope
+                        Task { await viewModel.undo(item.id) }
                     }
                 }
             }
@@ -195,7 +210,7 @@ public struct MailDayView: View {
 
     private var undoAllButton: some View {
         Button(
-            action: { /* Undo all — out of scope */ },
+            action: { Task { await viewModel.undoAll() } },
             label: {
                 HStack(spacing: Spacing.s1) {
                     Icon(.arrowsRepeat, size: 12, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
