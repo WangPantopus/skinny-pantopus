@@ -9,6 +9,43 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T12:56Z (Stream 1), batches 294–296.**
+  - **Merged:**
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 294 | #1336 | 12:17:20Z | Stream 2's #1331: the landing's hero and "The foundation" stack on phones (seal `b2cd1648`) |
+    | 295 | #1337 | 12:28:20Z | **#1332, the first-launch cut flags**, solo (seal `b2b521c4`). Keys `beacon`, `personas`, `marketplace`, `open_gigs`, `public_scheduling`, `business_directory`, `household_extras`, `mail_extras`, all off unless `LAUNCH_FEATURES` / `NEXT_PUBLIC_LAUNCH_FEATURES` / `PANTOPUS_LAUNCH_FEATURES` lists them. Guide: `docs/launch-scope-flags-2026-10-01.md` |
+    | 296 | #1340 | 12:34:38Z | **My #1339**: Support Train notifications name the helper or donor and show "Fri, Oct 9" (seal `577d4fa6`). `req.user` has no name, so every helper was "A helper" |
+
+    Master is **`d8d3f5e03`**; the next batch is **297**.
+  - **Trains notifications:** the tap-through works on iOS and Android (seal `fb34d0c8`). It found the copy defect fixed in #1339.
+  - **Data loss found by Stream 5's idempotency audit, and fixed by me (not yet merged):** a publish whose reply is lost deleted the train it had just published.
+    - Android: OkHttp re-sends the POST, the re-send gets 409, and the wizard deletes the train. iOS and web: the lost reply is an error, and the wizard deletes the train.
+    - Reproduced on all three on master.
+    - Fix `02292ccd4`:
+      - publish answers a repeat on a live train with the train (200);
+      - `DELETE ?draft_only=true` keeps a train that isn't a draft (409 `NOT_A_DRAFT`);
+      - the three wizards discard with `draft_only` and treat `NOT_A_DRAFT` as launched.
+    - The web after-run and the API contract pass. The native after-runs wait for candidate 26 (master + #1338 + this fix) in the heavy slot. Bundle: `20261001-stream1-trains-publish-retry-r1`.
+  - **Decisions on Stream 5's audit:**
+    - **Shared Android cause:** OkHttp `retryOnConnectionFailure` stays on. Stream 5 owns the DPoP proof per network attempt (a network interceptor). The general fix is server-side idempotency per route, with one client key per user intent.
+    - **Stream 1's other four:** nudges/send, reveal-address, fund/enable and generate-slots, in that order after publish-retry.
+  - **Migration numbers reserved** (master's newest is `20261001100000`): `20261001130000` Stream 5 (direct-chat race), `20261001131000` Stream 3 (guest-pass `request_id`), `20261001132000` Stream 2 (`wallet_debit` replay check, `IF FOUND`). Whoever lands later renumbers above master's newest at batch time.
+  - **Money decisions** (recorded for the user):
+    - **Invoice /confirm:** marks an invoice paid only when Stripe reports the PaymentIntent `succeeded`, or `requires_capture`, which it then captures. Under the no-capture boundary only the refusal path is verified.
+    - **Crew invoice and package-buy duplicates:** made idempotent.
+    - **Wallet withdraw:** one key per withdrawal intent (Stream 2).
+  - **Launch-flag calls accepted:**
+    - the rebook rail is hidden, because its only action is the cut composer;
+    - My Mail Day and the Stamps gallery stay visible, because they cover all received mail. Stream 4 confirmed and carved out the sample-data postage wallet under `mail_extras`.
+    - The mailbox Earn `initiateWithdrawal` is cut #8, recorded only.
+  - **Stream 3's guest-pass design is approved:** a request_id per create intent, and a replay rotates the token on the same row. Its three-app check must include a quick double-send, so the link the page shows is the live one.
+  - **Waiting:**
+    - #1338 (Stream 5, password change keeps the session) needs my device check, which runs in candidate 26.
+    - Stream 2's Connections and wallet iOS cells run after that.
+    - Stream 4's shared Android a11y PR is building.
+  - **Runtime:** the peer-takeover worktree is on candidate 26 `7383e4160`, and its backend started at 12:52:42Z.
 - **Update 2026-10-01T12:10Z (Stream 1), batch 293.** Merged #1335 at 12:08:55Z: **my #1334** (no self-notifications for organizer-helpers on address share and confirm; seal `6faa66b5`) and Stream 3's #1333 (Home members web a11y). Master is **`1eaa12827`**; the next batch is **294**. The runtime worktree is on master, and its backend code is identical.
 - **Update 2026-10-01T12:10Z (Stream 1).** Android "Review signups, edit signup" A1–A4 is **not applicable** (seal `4b48bf0a`). The route is registered, but it has no caller and no deep link, and organizers manage signups in Manage, as on iOS. Stream 1's U02 is now done apart from Stream 4's 2 shared Android items.
 - **Update 2026-10-01T12:05Z (Stream 1).**
