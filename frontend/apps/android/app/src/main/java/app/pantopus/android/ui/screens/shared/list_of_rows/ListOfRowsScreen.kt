@@ -82,8 +82,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -314,7 +317,12 @@ private fun TabStrip(
                         .sizeIn(minHeight = 44.dp)
                         .padding(vertical = Spacing.s2)
                         .testTag("tab.${tab.id}")
-                        .semantics { contentDescription = tab.count?.let { "${tab.label}, $it" } ?: tab.label },
+                        // One announcement: the label and count texts below would otherwise be read again. The node keeps
+                        // its text, so lookups by the visible label still find the tab.
+                        .clearAndSetSemantics {
+                            contentDescription = tab.count?.let { "${tab.label}, $it" } ?: tab.label
+                            text = AnnotatedString(tab.label)
+                        },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
@@ -2216,8 +2224,13 @@ private fun TopBarActionButton(action: TopBarAction) {
                     .clip(RoundedCornerShape(Radii.sm))
                     .clickable(enabled = action.isEnabled, onClick = action.onClick)
                     .padding(horizontal = Spacing.s2, vertical = Spacing.s1)
-                    .semantics { contentDescription = action.contentDescription }
-                    .testTag("listOfRowsTopBarAction"),
+                    .testTag("listOfRowsTopBarAction")
+                    // One announcement: the visible label would otherwise be read again. Last in the chain, so the
+                    // modifiers above (click, test tag) keep their semantics.
+                    .clearAndSetSemantics {
+                        contentDescription = action.contentDescription
+                        text = AnnotatedString(action.label)
+                    },
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -2324,7 +2337,11 @@ private fun FabComposable(fab: FabAction) {
                         .background(tintColor)
                         .clickable(onClick = fab.onClick)
                         .padding(horizontal = Spacing.s5, vertical = Spacing.s2)
-                        .semantics { contentDescription = fab.contentDescription },
+                        // One announcement: the visible label would otherwise be read again.
+                        .clearAndSetSemantics {
+                            contentDescription = fab.contentDescription
+                            text = AnnotatedString(variant.label)
+                        },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {

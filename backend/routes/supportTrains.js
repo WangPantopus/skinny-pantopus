@@ -1430,6 +1430,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
 
+    // A publish whose reply was lost can come again (Android re-sends a POST after a dropped
+    // connection). Answer it with the train as it is, without publishing or notifying twice.
+    if (st.status === 'published' || st.status === 'active') {
+      return res.json(await readPublishedTrain(st.id));
+    }
+
     if (st.status !== 'draft') {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
@@ -1576,17 +1582,21 @@ router.post(
       payload: {},
     });
 
-    // Re-fetch
-    const { data: updated } = await supabaseAdmin
-      .from('SupportTrain')
-      .select('*, Activity!inner ( * )')
-      .eq('id', st.id)
-      .single();
-
-    const { Activity: activity, ...train } = updated || {};
-    res.json({ ...train, activity });
+    res.json(await readPublishedTrain(st.id));
   })
 );
+
+// The publish reply: the train with its Activity.
+async function readPublishedTrain(supportTrainId) {
+  const { data: updated } = await supabaseAdmin
+    .from('SupportTrain')
+    .select('*, Activity!inner ( * )')
+    .eq('id', supportTrainId)
+    .single();
+
+  const { Activity: activity, ...train } = updated || {};
+  return { ...train, activity };
+}
 
 // Unpublish (back to draft)
 router.post(
@@ -4327,6 +4337,16 @@ router.delete(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
     const userId = req.user.id;
+
+    // The Start wizards discard a half-built train with ?draft_only=true. One that went live
+    // meanwhile (its publish reply was lost) is not half-built, so it is kept.
+    if (req.query.draft_only === 'true' && st.status !== 'draft') {
+      return res.status(409).json({
+        error: 'NOT_A_DRAFT',
+        message: 'This Support Train is already published, so it was kept.',
+        status: st.status,
+      });
+    }
 
     const [
       { count: activeReservationCount, error: activeReservationError },

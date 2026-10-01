@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
 import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsBody
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mail_compose.MailComposeRepository
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
@@ -465,7 +466,15 @@ class StartSupportTrainViewModel
             viewModelScope.launch {
                 try {
                     leftoverTrainId?.let { leftover ->
-                        if (supportTrains.deleteTrain(leftover) is NetworkResult.Success) leftoverTrainId = null
+                        when (discardDraft(leftover)) {
+                            DraftDiscard.Deleted -> leftoverTrainId = null
+                            // The last launch went live; only its reply was lost.
+                            DraftDiscard.Live -> {
+                                showLaunched(leftover)
+                                return@launch
+                            }
+                            DraftDiscard.Failed -> Unit
+                        }
                     }
                     val created =
                         when (val result = supportTrains.create(body)) {
@@ -504,8 +513,12 @@ class StartSupportTrainViewModel
                             _form.value = _form.value.copy(step = StartSupportTrainStep.Success)
                         }
                         is NetworkResult.Failure -> {
-                            _launchError.value = "Couldn't publish the train. Try again."
-                            discardDraft(created.id)
+                            if (discardDraft(created.id) == DraftDiscard.Live) {
+                                // Publish went through; only its reply was lost.
+                                showLaunched(created.id)
+                            } else {
+                                _launchError.value = "Couldn't publish the train. Try again."
+                            }
                         }
                     }
                 } finally {
@@ -514,13 +527,36 @@ class StartSupportTrainViewModel
             }
         }
 
+        private enum class DraftDiscard { Deleted, Live, Failed }
+
         /**
          * Launching is several calls. If a later one fails, remove the half-built
-         * draft so trying again makes exactly one train.
+         * draft so trying again makes exactly one train. The server keeps a train
+         * that is no longer a draft (`draftOnly`), so a launch that went live is
+         * never undone.
          */
-        private suspend fun discardDraft(trainId: String) {
+        private suspend fun discardDraft(trainId: String): DraftDiscard {
             _publishedTrainId.value = null
-            if (supportTrains.deleteTrain(trainId) !is NetworkResult.Success) leftoverTrainId = trainId
+            return when (val result = supportTrains.deleteTrain(trainId, draftOnly = true)) {
+                is NetworkResult.Success -> DraftDiscard.Deleted
+                is NetworkResult.Failure -> {
+                    val error = result.error
+                    if (error is NetworkError.ClientError && error.code == 409 && error.body?.contains("NOT_A_DRAFT") == true) {
+                        DraftDiscard.Live
+                    } else {
+                        leftoverTrainId = trainId
+                        DraftDiscard.Failed
+                    }
+                }
+            }
+        }
+
+        /** The train is live after all: finish the way a launch does. */
+        private fun showLaunched(trainId: String) {
+            leftoverTrainId = null
+            _publishedTrainId.value = trainId
+            _launchError.value = null
+            _form.value = _form.value.copy(step = StartSupportTrainStep.Success)
         }
 
         private fun handleSuccessExit() {

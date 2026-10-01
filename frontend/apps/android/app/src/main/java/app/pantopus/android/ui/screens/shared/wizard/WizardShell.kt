@@ -37,13 +37,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.SegmentedProgressBar
@@ -65,6 +70,9 @@ object WizardShellTags {
 }
 
 private const val DISABLED_CTA_ALPHA = 0.5f
+
+/** From this font scale the top bar's title gets its own row, as ListOfRows switches its top-bar label at the same scale. */
+private const val LARGE_FONT_SCALE = 1.3f
 
 /**
  * Generic wizard chrome — top bar (X/back + title + N/M readout),
@@ -241,6 +249,9 @@ private fun WizardTopBar(
     onLeading: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
+    // At large font scales the centred title ran into the step count ("Start a support train1 of 5"), so it moves to
+    // its own row under the bar there. Below that scale the bar is unchanged.
+    val titleOwnRow = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     Box(
         modifier =
             Modifier
@@ -249,15 +260,17 @@ private fun WizardTopBar(
                 .background(PantopusColors.appSurface)
                 .padding(horizontal = Spacing.s2),
     ) {
-        Text(
-            text = title,
-            style = PantopusTextStyle.body,
-            color = PantopusColors.appText,
-            modifier =
-                Modifier
-                    .align(Alignment.Center)
-                    .semantics { heading() },
-        )
+        if (!titleOwnRow) {
+            Text(
+                text = title,
+                style = PantopusTextStyle.body,
+                color = PantopusColors.appText,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .semantics { heading() },
+            )
+        }
         Box(
             modifier =
                 Modifier
@@ -292,6 +305,20 @@ private fun WizardTopBar(
                         .testTag(WizardShellTags.STEP_READOUT),
             )
         }
+    }
+    if (titleOwnRow) {
+        Text(
+            text = title,
+            style = PantopusTextStyle.body,
+            color = PantopusColors.appText,
+            textAlign = TextAlign.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(PantopusColors.appSurface)
+                    .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                    .semantics { heading() },
+        )
     }
     HorizontalDivider(thickness = 1.dp, color = PantopusColors.appBorderSubtle)
 }
@@ -383,8 +410,11 @@ private fun WizardPrimaryCta(
                 .background(tint)
                 .clickable(enabled = clickable, onClick = onClick)
                 .padding(horizontal = Spacing.s4)
-                .semantics {
+                // One announcement: the visible title below would otherwise be read again ("Continue. Continue."). The
+                // node keeps the title as its text while it shows, as the merged child gave it before.
+                .clearAndSetSemantics {
                     contentDescription = title
+                    if (!isLoading) text = AnnotatedString(title)
                     role = Role.Button
                 },
         contentAlignment = Alignment.Center,
