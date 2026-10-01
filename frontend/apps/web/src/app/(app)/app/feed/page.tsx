@@ -631,7 +631,7 @@ export default function FeedPage() {
           <div className="bg-surface rounded-2xl border border-app shadow-2xl p-6 w-full max-w-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-app">Pulse Preferences</h3>
-              <button onClick={() => prefs.setShowPrefs(false)} className="text-app-muted hover:text-app transition">
+              <button onClick={() => prefs.setShowPrefs(false)} aria-label="Close Pulse preferences" className="text-app-muted hover:text-app transition">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -662,10 +662,14 @@ export default function FeedPage() {
                   <p className="text-xs font-semibold text-app-muted uppercase tracking-wider mb-2">Political Content</p>
                   <div className="flex items-center justify-between py-1.5">
                     <div>
-                      <p className="text-sm text-app">Show in Connections</p>
+                      <p id="feed-politics-connections-label" className="text-sm text-app">Show in Connections</p>
                       <p className="text-[11px] text-app-muted">Political posts are hidden by default</p>
                     </div>
                     <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!prefs.prefs.show_politics_connections}
+                      aria-labelledby="feed-politics-connections-label"
                       onClick={() => {
                         const next = !prefs.prefs!.show_politics_connections;
                         prefs.updatePref('showPoliticsConnections', next);
