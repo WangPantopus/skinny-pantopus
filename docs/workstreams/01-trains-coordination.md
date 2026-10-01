@@ -9,6 +9,37 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T05:58Z (Stream 1).**
+  - **Merged:** each seal verified, each PR's CI checked for failed jobs, verify-batch RESULT OK.
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 267 | #1246 | 05:25:37Z | #1243 (Stream 5: the name card asks before removing a connection, opens the conversation, toasts failures), #1245 (Stream 3: the shared SlidePanel ignores a double-click's second click, 11 callers) |
+    | 268 | #1247 | 05:32:04Z | #1244 (Stream 5: Discover's people results ask before removing a connection) |
+    | 269 | #1252 | 05:50:12Z | #1251 (Stream 5: crew forms, part 2, fields named) |
+
+    Master is **`a411def0e`**; the next batch is **270**.
+  - **Master's Android unit tests have been red since batch 264.**
+    - #1209 changed the edit form, but the Paparazzi golden `PulseComposeSnapshotTest.pulse_compose_edit_prefilled` wasn't re-recorded, and its own CI job showed it. I merged without reading that job.
+    - Stream 2 is re-recording the golden; it merges first.
+    - **Queue rule from now on:** read every failed job on a PR's latest run before batching, even with required CI off. Master's own CI runs are cancelled by later pushes, so the PR runs are the only signal.
+  - **Device runs for peers** (sealed):
+    - `20261001-stream1-ios-1237-r1` (`e516402f`): #1237 iOS. Saves from My posts, from a post's page, and from Hub and Pulse compose each go back one screen; Close is one pop.
+    - `20261001-stream1-android-1238-1242-r1` (`a7d17231`):
+      - #1238: TalkBack reads "Not shown. Verified neighbor" when the badge is hidden and "Verified neighbor" when it's shown.
+      - #1242: My trains shows a new train as the first visible row after a revisit.
+  - **Next native batch:** the golden fix, then #1237, #1238, #1241 and #1242 once their seals carry my bundles. Stream 2's #1248, #1249 and #1250 need my iOS cells; candidate `9b4ff70c6` is queued.
+  - **Mine, in progress: the Android sign-up sheet keeps its draft** (`2ef2925ea`, local; bundle `20261001-stream1-android-signup-draft-r1` open).
+    - **Before** (master sheet, `ee2de35da`): choose Takeout, type a dish name, rotate. The sheet comes back at "How would you like to help?" with nothing kept.
+    - **First attempt** (`542bd71b0`): it held the draft in the screen, but inside the loaded check. The screen reloads after a recreation, which took the draft out of composition, so it still reset (cand16 run).
+    - **The fix:** the draft is remembered unconditionally and keyed to each opening of the sheet. Its build is cand17 `89d58648f`, queued.
+  - **Routed:**
+    - landlord "End Lease" and staff "Remove" with no confirmation (Stream 5's scan) → Stream 3;
+    - the post screen's save/like don't reach the Pulse feed cards → Stream 2 (fix queued).
+  - **Host:**
+    - Load averages reached 141 during parallel builds and Spotlight indexing.
+    - The emulator hit a GPU-hang ANR ("stuck fence"), an environment fault.
+    - Disk is at 16–20 GiB free; I removed 3.5 GB of my old candidate apps.
 - **Update 2026-10-01T05:00Z (Stream 1).**
   - **Merged since 03:25Z** (each seal verified at the PR head; build-batch/verify-batch RESULT OK; SwiftLint/SwiftFormat on every changed Swift file):
 
