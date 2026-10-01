@@ -353,7 +353,7 @@ function CtaListEditor({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-medium text-app-text-secondary">{label}</label>
-        <button onClick={add} className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
+        <button onClick={add} aria-label="Add button" className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
       </div>
       {ctas.length === 0 ? (
         <p className="text-[10px] text-app-text-muted">No buttons yet. Click &quot;+ Add&quot; to create one.</p>
@@ -366,6 +366,7 @@ function CtaListEditor({
                   value={c.label}
                   onChange={(e) => update(i, 'label', e.target.value)}
                   placeholder="Label"
+                  aria-label={`Button ${i + 1} label`}
                   className="flex-1 rounded border border-app-border px-2 py-1 text-xs"
                 />
                 <select
@@ -381,7 +382,7 @@ function CtaListEditor({
                   <option value="link">Link</option>
                   <option value="book">Book</option>
                 </select>
-                <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
+                <button onClick={() => remove(i)} aria-label={`Remove button ${i + 1}`} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
               </div>
               {(c.action === 'link' || (!c.action && c.url)) && (
                 <>
@@ -416,6 +417,7 @@ function FaqItemsEditor({
   items: { q: string; a: string }[];
   onChange: (items: { q: string; a: string }[]) => void;
 }) {
+  const idBase = React.useId();
   const add = () => onChange([...items, { q: '', a: '' }]);
   const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
   const update = (i: number, key: 'q' | 'a', val: string) => {
@@ -428,7 +430,7 @@ function FaqItemsEditor({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-medium text-app-text-secondary">Questions</label>
-        <button onClick={add} className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
+        <button onClick={add} aria-label="Add question" className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
       </div>
       {items.length === 0 ? (
         <p className="text-[10px] text-app-text-muted">No questions yet. Click &quot;+ Add&quot; to create one.</p>
@@ -436,10 +438,11 @@ function FaqItemsEditor({
         <div className="space-y-2">
           {items.map((item, i) => (
             <div key={i} className="rounded-lg border border-app-border p-2.5 space-y-1.5 relative bg-app-surface-raised">
-              <button onClick={() => remove(i)} className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-600 text-xs">✕</button>
+              <button onClick={() => remove(i)} aria-label={`Remove question ${i + 1}`} className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-600 text-xs">✕</button>
               <div>
-                <label className="text-[10px] text-app-text-muted font-medium">Q{i + 1}</label>
+                <label htmlFor={`${idBase}-q-${i}`} className="text-[10px] text-app-text-muted font-medium">Q{i + 1}</label>
                 <input
+                  id={`${idBase}-q-${i}`}
                   value={item.q}
                   onChange={(e) => update(i, 'q', e.target.value)}
                   placeholder="What is your question?"
@@ -447,8 +450,10 @@ function FaqItemsEditor({
                 />
               </div>
               <div>
-                <label className="text-[10px] text-app-text-muted font-medium">Answer</label>
+                <label htmlFor={`${idBase}-a-${i}`} className="text-[10px] text-app-text-muted font-medium">Answer</label>
                 <textarea
+                  id={`${idBase}-a-${i}`}
+                  aria-label={`Answer ${i + 1}`}
                   value={item.a}
                   onChange={(e) => update(i, 'a', e.target.value)}
                   placeholder="Write the answer..."
@@ -486,7 +491,7 @@ function StatsEditor({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-medium text-app-text-secondary">Stats</label>
-        <button onClick={add} className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
+        <button onClick={add} aria-label="Add stat" className="text-[10px] text-violet-600 hover:underline font-medium">+ Add</button>
       </div>
       {stats.length === 0 ? (
         <p className="text-[10px] text-app-text-muted">No stats yet. Click &quot;+ Add&quot; to create one.</p>
@@ -498,15 +503,17 @@ function StatsEditor({
                 value={s.value}
                 onChange={(e) => update(i, 'value', e.target.value)}
                 placeholder="100+"
+                aria-label={`Stat ${i + 1} value`}
                 className="w-20 rounded border border-app-border px-2 py-1 text-xs font-semibold"
               />
               <input
                 value={s.label}
                 onChange={(e) => update(i, 'label', e.target.value)}
                 placeholder="Label"
+                aria-label={`Stat ${i + 1} label`}
                 className="flex-1 rounded border border-app-border px-2 py-1 text-xs"
               />
-              <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
+              <button onClick={() => remove(i)} aria-label={`Remove stat ${i + 1}`} className="text-red-400 hover:text-red-600 text-xs pt-1 flex-shrink-0">✕</button>
             </div>
           ))}
         </div>
