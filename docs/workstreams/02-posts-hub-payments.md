@@ -173,9 +173,17 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T00:27Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T00:48Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T00:27Z):**
+- **Latest (2026-10-01T00:48Z):** a schema-drift scan of Stream 2's files (127 candidates app-wide; posts.js 35, trustState.js 20, public.js 8, hub.js 1) found two real Pulse defects. Triage: `audits/20261001-stream2-posts-schema-drift-triage-r1/TRIAGE.md`.
+  - **Merged:** #1134 (toast live regions) in batch 230; [#1138](https://github.com/WangPantopus/skinny-pantopus/pull/1138) in batch 236 (#1147, 00:46:21Z). Master is `b494ba75e` or later.
+  - **#1138 — the Visitor badge works again.** Visitor detection read `HomeOccupancy.status` (nonexistent; PostgREST 400 ignored) and the home location as GeoJSON (it's WKB), so no post was ever flagged. Stream 1's review: take homes from `getAccessibleHomeIds` (trusted, unexpired; never a pending claim) — done in r2 (seal `5513f47c…`), with a pending-claim control.
+  - **Sent: [#1148](https://github.com/WangPantopus/skinny-pantopus/pull/1148)** head `4f01d8ea649b4b61d4350bf3d7b9e888e6b36076`, seal `ac3f1bdd2ff2f92986cd349e1e5d2478569ed663c4b19bfbb0259da06184e6d4`: **verified residents can post to their own Place feed without a GPS fix.** `computeTrustState` never recognised residents (RPC `get_user_homes_near_point` never defined; `Home.latitude/longitude` don't exist), so residents needed fresh GPS and web hid their composer. Now: household via `getAccessibleHomeIds` + `Home.location`. Gains: trusted members within 16 km; nobody loses; pending/unverified still need GPS (proved). Plan approved by Stream 1 first.
+  - **Routed to Stream 5:** the business step of the same function (nonexistent `BusinessProfile.user_id`, `BusinessLocation.latitude/longitude`).
+  - **Open, proposal next:** Hub Discover "Posts" tab on iOS/Android says "Nothing nearby yet" (the backend lane selects nonexistent `Post.author_id` and has no visibility filter; web points to Pulse since 09-25).
+  - **Recorded:** `/api/public/posts/:id` is dead and must use the canonical anonymous rule if revived (agreed with Stream 1); the legacy radius visibility branch is legacy-only; map task/business layers are launch-cut.
+  - **Decisions (standing direction):** visitor and resident trust both use the repo's one household rule (`getAccessibleHomeIds`), so a pending claim never changes trust; dead or launch-cut drift isn't "fixed" (fixing a column alone would unmask data).
+- **Earlier (2026-10-01T00:27Z):**
   - **Merged:** #1122 in batch 226 (#1123, 00:07:33Z), #1124 in batch 227 (#1125, 00:08:13Z), [#1127](https://github.com/WangPantopus/skinny-pantopus/pull/1127) in batch 228 (#1130, 00:21:13Z). Master is `fe75e358` (batch 229).
   - **#1127** (backlog item 5): the web post page's type band turns dark in dark mode. **Decided by Stream 1 (palette owner), option B:** band = the type colour at 10% over the card; chip text = `darkTextColor`; time/"edited" = text-app-muted; light identical (measured). Rejected: the sunken token (every band the same neutral), new tokens.
   - **With Stream 1:** [#1129](https://github.com/WangPantopus/skinny-pantopus/pull/1129) head `241b96941996d0a44117e23dde56309a2dac75a6`, seal `eda31527505bb4a72d93d6521bb18f317c7da29d63f1faf8af046c6a25580f0d` (item 3, iOS Today Manage → Notification settings). build-for-testing succeeded; Stream 1 put it in its iOS/Android candidate `68b8ac1ec` (with #1116) and runs steps A–C on its simulator (it creates its own synthetic `DailyBriefingDelivery` row for step B; recipe sent).
