@@ -21,6 +21,9 @@ const { isPersonaEnabled } = require('./featureFlags');
 // Radius in meters for "nearby" determination
 const NEARBY_RADIUS_METERS = 16000; // ~10 miles
 const GPS_PROXIMITY_METERS = 5000; // ~3.1 miles
+// A crew counts as a verified business only from document verification up: self-attested is the owner's own
+// word, and a crew's location is owner-entered, so anything weaker would let anyone claim trust anywhere.
+const { VERIFICATION_RANK } = require('./businessConstants');
 
 function parsePostGISPoint(point) {
   if (!point) return null;
@@ -146,12 +149,13 @@ async function computeTrustState(userId, latitude, longitude) {
 
     // 2) Check if user is an in-area verified business owner/team member
     const businessIds = new Set();
+    // The crew's own account (BusinessProfile is keyed by business_user_id).
     const { data: ownedBusiness } = await supabaseAdmin
       .from('BusinessProfile')
-      .select('user_id')
-      .eq('user_id', userId)
+      .select('business_user_id')
+      .eq('business_user_id', userId)
       .maybeSingle();
-    if (ownedBusiness?.user_id) businessIds.add(ownedBusiness.user_id);
+    if (ownedBusiness?.business_user_id) businessIds.add(ownedBusiness.business_user_id);
 
     // Seat-based: get all business seats for this user via SeatBinding
     const { data: seatBindings } = await supabaseAdmin
@@ -174,25 +178,26 @@ async function computeTrustState(userId, latitude, longitude) {
     }
 
     if (businessIds.size > 0) {
-      const ids = Array.from(businessIds);
-      const { data: bizLocations } = await supabaseAdmin
+      const { data: profiles } = await supabaseAdmin
+        .from('BusinessProfile')
+        .select('business_user_id, verification_status')
+        .in('business_user_id', Array.from(businessIds));
+      const ids = (profiles || [])
+        .filter((p) => (VERIFICATION_RANK[p.verification_status] || 0) >= VERIFICATION_RANK.document_verified)
+        .map((p) => p.business_user_id);
+      // BusinessLocation keeps its point only in `location` (PostGIS); there are no latitude/longitude columns.
+      const { data: bizLocations } = ids.length === 0 ? { data: [] } : await supabaseAdmin
         .from('BusinessLocation')
-        .select('business_user_id, latitude, longitude, location, is_active')
+        .select('business_user_id, location, is_active')
         .in('business_user_id', ids)
         .eq('is_active', true);
 
       let closestBiz = null;
       let closestDistance = Infinity;
       for (const loc of bizLocations || []) {
-        let lat = Number(loc.latitude);
-        let lon = Number(loc.longitude);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-          const parsed = parsePostGISPoint(loc.location);
-          if (parsed) {
-            lat = parsed.latitude;
-            lon = parsed.longitude;
-          }
-        }
+        const parsed = parsePostGISPoint(loc.location);
+        const lat = Number(parsed?.latitude);
+        const lon = Number(parsed?.longitude);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         const dist = haversineMeters(latitude, longitude, lat, lon);
         if (dist < closestDistance) {
