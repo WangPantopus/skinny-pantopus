@@ -158,7 +158,7 @@ export default function GigTimeline({
           const isCancelledStep = isCancelled && i > (currentIdx >= 0 ? currentIdx : steps.length);
 
           return (
-            <div key={step.key} className="flex items-start flex-1 min-w-0">
+            <div key={step.key} className="flex items-start flex-1 min-w-max">
               {/* Step node */}
               <div className="flex flex-col items-center min-w-[52px] sm:min-w-[64px]">
                 {/* Circle */}
