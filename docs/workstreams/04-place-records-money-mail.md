@@ -83,7 +83,7 @@ this one is kept for its still-valid recipes and lessons; its state is supersede
 
 ### Next, in order
 
-1. **Follow #1406 and #1410** through Stream 1's queue, and answer reviews.
+1. **Follow #1406 and #1410** through Stream 1's queue, and answer reviews. They merge together once CI's iOS build and Android assemble pass for both (see the newest live entry). #1410's red emulator job is infrastructure: re-run it.
 2. **Finish the mail-task stubs.**
    - Build it: `zsh tools/build-s4-native.sh <c3e7> claude/stream4-mail-task-stubs mailtask both ktlintCheck detekt :app:testDebugUnitTest --tests '*MailTask*' :app:verifyPaparazziDebug --tests '*MailTask*'`.
    - Capture after frames on both apps: open a task fixture via `pantopus://mailbox/tasks/<id>` and show only Mark done in
@@ -500,6 +500,19 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-10-01T17:59:59Z — Merge status of #1406 and #1410 after the handoff (for the next session).**
+  - **Stream 1 reviewed both** and proved their seal moves:
+    - #1406's r3 seal records `b5f2be447`, an ancestor of head `68eba7522`. The only differences are the two `#Preview`
+      calls.
+    - #1410's r4 seal verifies at the head; r2 covers `f431deec2`; since then only RootTabScreen.kt changed (+2, the
+      placeholder titles).
+  - **They merge together** once CI's iOS build and Android "Lint, test, assemble" pass for both. Nobody has compiled the
+    merged preview edit or the combination yet.
+  - **#1410's "android / Instrumented tests (emulator)" failure is infrastructure** (run 36902783102, job 110505841018).
+    sdkmanager couldn't install `system-images;android-34;google_apis;x86_64` ("Error on ZipFile unknown archive"), so the
+    emulator never booted and no test ran. Re-run that job once the run completes; Stream 1 has been told.
+  - **Next:** if a build job fails, fix it on the PR branch and tell Stream 1.
 
 - **2026-10-01T17:54:23Z — Handoff (user's request). Stream 4's state and the ordered next list are in the CURRENT RESUME at the top; the prompt is `NEXT-STREAM4-PROMPT-2026-10-01.md`.**
   - **Open with the queue owner:**
