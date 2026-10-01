@@ -24,7 +24,6 @@ export default function PrivacySettingsPage() {
   const [searchVisibility, setSearchVisibility] = useState<SearchVisibilityLevel>('everyone');
   const [findableByEmail, setFindableByEmail] = useState(true);
   const [findableByPhone, setFindableByPhone] = useState(true);
-  const [profileDefault, setProfileDefault] = useState<ProfileVisibilityLevel>('public');
   const [showGigHistory, setShowGigHistory] = useState<ProfileVisibilityLevel>('public');
   const [showNeighborhood, setShowNeighborhood] = useState<ProfileVisibilityLevel>('followers');
   const [showHomeAffiliation, setShowHomeAffiliation] = useState<ProfileVisibilityLevel>('followers');
@@ -42,7 +41,6 @@ export default function PrivacySettingsPage() {
       setSearchVisibility(s.search_visibility);
       setFindableByEmail(s.findable_by_email);
       setFindableByPhone(s.findable_by_phone);
-      setProfileDefault(s.profile_default_visibility);
       setShowGigHistory(s.show_gig_history);
       setShowNeighborhood(s.show_neighborhood);
       setShowHomeAffiliation(s.show_home_affiliation);
@@ -66,7 +64,6 @@ export default function PrivacySettingsPage() {
         search_visibility: searchVisibility,
         findable_by_email: findableByEmail,
         findable_by_phone: findableByPhone,
-        profile_default_visibility: profileDefault,
         show_gig_history: showGigHistory,
         show_neighborhood: showNeighborhood,
         show_home_affiliation: showHomeAffiliation,
@@ -181,12 +178,6 @@ export default function PrivacySettingsPage() {
             </div>
             <p className="text-sm text-app-secondary mb-4">Choose who can see specific details on your profile.</p>
             <div className="space-y-4">
-              <SelectSetting
-                label="Default profile visibility"
-                value={profileDefault}
-                onChange={(v) => setProfileDefault(v as ProfileVisibilityLevel)}
-                options={VISIBILITY_OPTIONS}
-              />
               <SelectSetting
                 label="Gig history"
                 description="Who can see your completed gigs"
