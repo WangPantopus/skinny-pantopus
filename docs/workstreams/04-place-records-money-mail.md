@@ -397,6 +397,26 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T13:43:43Z — My Mail Day, now back in launch scope: a candidate privacy defect found by reading code. It will be reproduced next and then fixed.**
+  - **Why I think it's a defect:**
+    - The apps' "Route to <name>" sends `POST /mailday/items/:id/route` with no body.
+    - The server picks the personal drawer from the piece's tint, and `resolveLinkedMail` then sets `Mail.recipient_user_id`
+      to the **acting** user and privacy to `private_to_person` (mailDay.js:265-275).
+    - Every household member is shown the same queued piece with the envelope's name (mailDayService.js:107-146).
+    - So if Alice routes a letter "to Maria", it becomes Alice's private mail and Maria can no longer see it.
+    - The queue row already knows the matched member (`MailRoutingQueue.best_match_user_id`).
+  - **Plan:**
+    - Reproduce on the isolated runtime with the owner and member B, through the API and SQL, then on a device.
+    - Then a backend repair: route to the matched member, or to the shared household drawer when no member matches, and
+      never to whoever happened to triage it.
+  - **Also on Mail Day, recorded:**
+    - "Other…", the per-row Undo and "Undo all from today" do nothing on either app.
+    - The backend's undo resets only the triage row, not the letter's drawer or the queue, so wiring the buttons as they
+      are would mislead.
+    - These are decided after the device check.
+  - **In flight:** three branches (iOS maintenance reminder `7f492bb31`, Stamps wallet gate `9676bbc21`, iOS Mail Day
+    error state `0445e0c0a`). Their before/after builds are queued on the heavy slot.
+
 - **2026-10-01T13:34:08Z — [#1354](https://github.com/WangPantopus/skinny-pantopus/pull/1354) is with the queue owner: shared Android controls read once in TalkBack, and the wizard title clears its step count at large text.** Head `b170f1ccc` on `a0eba5315`, Android only, three shared files. Seal `20261001-stream4-android-shared-a11y-r1` (`d52978cb…`).
   - **What changed:** ListOfRows tabs, the extended FAB and the labelled top-bar action; the WizardShell CTA; and the
     app-wide `PantopusButton`, which covers every EmptyState CTA.
