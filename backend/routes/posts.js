@@ -908,23 +908,27 @@ function resolveHomeCoordinates(home) {
   return { latitude: null, longitude: null };
 }
 
-// A poster is a visitor when every Home they actively belong to is more than ~35 miles
-// (0.5° of latitude or longitude) from where they post; with no active Home they aren't one.
+// A poster is a visitor when every Home of their household is more than ~35 miles
+// (0.5° of latitude or longitude) from where they post; with no such Home they aren't one.
+// The household is the one shared rule (getAccessibleHomeIds: trusted, unexpired occupancies,
+// never a pending claim that anyone can file on any Home; fails closed).
 // Home.location arrives as WKB hex, so it goes through parsePostGISPoint.
 async function isVisitorAt(userId, latitude, longitude) {
   const lat = parseFloat(latitude);
   const lng = parseFloat(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+  const homeIds = await getAccessibleHomeIds(userId);
+  if (homeIds.length === 0) return false;
   const { data, error } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('home:home_id(location)')
-    .eq('user_id', userId)
-    .eq('is_active', true);
+    .from('Home')
+    .select('id, location')
+    .in('id', homeIds);
   if (error) {
     logger.warn('Visitor detection failed', { error: error.message, userId });
     return false;
   }
-  const homes = (data || []).map((row) => parsePostGISPoint(row.home?.location)).filter(Boolean);
+  const homes = (data || []).map((home) => parsePostGISPoint(home.location)).filter(Boolean);
   return homes.length > 0
     && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
