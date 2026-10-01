@@ -6,7 +6,6 @@ package app.pantopus.android.ui.screens.support_trains.manage.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
@@ -29,6 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -227,7 +231,9 @@ private fun MessageBlock(
                 Modifier
                     .fillMaxWidth()
                     .height(108.dp)
-                    .testTag(MANAGE_TRAIN_MESSAGE_FIELD_TAG),
+                    .testTag(MANAGE_TRAIN_MESSAGE_FIELD_TAG)
+                    // The "Message" overline isn't the field's label; TalkBack said "Empty, edit box".
+                    .semantics { contentDescription = "Message" },
             isError = isOverLimit,
             textStyle = TextStyle(fontSize = 13.5.sp, color = PantopusColors.appText),
             colors =
@@ -296,7 +302,8 @@ private fun AudienceChip(
                 .clip(shape)
                 .background(background)
                 .border(BorderStroke(1.dp, border), shape)
-                .clickable(onClick = onTap)
+                // One choice of several: TalkBack now says which one is selected.
+                .selectable(selected = isSelected, role = Role.RadioButton, onClick = onTap)
                 .padding(horizontal = Spacing.s3, vertical = 7.dp)
                 .testTag(manageTrainAudienceChipTag(chip.id)),
         verticalAlignment = Alignment.CenterVertically,
@@ -338,6 +345,9 @@ private fun PushBlock(
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
                 .border(BorderStroke(1.dp, PantopusColors.appBorder), RoundedCornerShape(Radii.lg))
+                // The whole row is the switch, so TalkBack names it ("Push to phones … On, Switch")
+                // instead of an unlabelled "On, Switch".
+                .toggleable(value = isOn, role = Role.Switch, onValueChange = onToggle)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -363,7 +373,7 @@ private fun PushBlock(
         }
         Switch(
             checked = isOn,
-            onCheckedChange = onToggle,
+            onCheckedChange = null,
             modifier = Modifier.testTag(MANAGE_TRAIN_PUSH_TOGGLE_TAG),
             colors =
                 SwitchDefaults.colors(

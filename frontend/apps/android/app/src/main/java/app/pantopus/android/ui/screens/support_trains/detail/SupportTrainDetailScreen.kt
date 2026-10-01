@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
@@ -560,7 +561,7 @@ private fun RowActionButton(
                 .clickable(enabled = isEnabled, onClick = onClick)
                 .padding(horizontal = Spacing.s3)
                 .testTag(tag)
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },
@@ -736,10 +737,13 @@ private fun HostedByRow(
                 .clip(shape)
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorderSubtle, shape)
-                .clickable(enabled = onMessageHost != null) { onMessageHost?.invoke() }
+                // Clickable only when it messages the host: a disabled click read as "Button, disabled".
+                .then(if (onMessageHost != null) Modifier.clickable { onMessageHost() } else Modifier)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
-                .semantics {
-                    role = Role.Button
+                // One phrase for TalkBack (the initials and the split name were read again after it), and
+                // a button only when it messages the host.
+                .clearAndSetSemantics {
+                    if (onMessageHost != null) role = Role.Button
                     contentDescription =
                         "Hosted by ${content.organizerDisplayName}${content.neighborHint?.let { ", $it" } ?: ""}"
                 },
@@ -842,7 +846,7 @@ private fun PrimarySignUpCTA(
                 .clip(shape)
                 .background(if (enabled) PantopusColors.primary600 else PantopusColors.appBorderStrong)
                 .clickable(enabled = enabled) { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                     if (!enabled) disabled()
@@ -911,7 +915,7 @@ private fun DockSecondary(
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, shape)
                 .clickable { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },
@@ -953,7 +957,7 @@ private fun DockPrimary(
                 .clip(shape)
                 .background(PantopusColors.primary600)
                 .clickable { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },

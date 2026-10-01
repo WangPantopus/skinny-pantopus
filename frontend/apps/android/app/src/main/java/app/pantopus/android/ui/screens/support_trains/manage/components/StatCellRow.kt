@@ -22,8 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,7 +92,8 @@ private fun CellView(
         modifier =
             modifier
                 .padding(horizontal = Spacing.s1, vertical = Spacing.s3)
-                .semantics { contentDescription = "${cell.label} ${cell.value}" },
+                // One stop per cell: TalkBack read the value and its label as two ("1/2", then "SLOTS").
+                .clearAndSetSemantics { contentDescription = "${cell.label} ${cell.value}" },
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

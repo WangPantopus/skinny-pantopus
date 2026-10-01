@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,9 @@ fun RecipientCard(
                 .clip(shape)
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, shape)
-                .padding(Spacing.s3),
+                .padding(Spacing.s3)
+                // One stop for TalkBack, as on iOS (children combined).
+                .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Header(content)
@@ -116,6 +120,8 @@ private fun Avatar(content: RecipientCardContent) {
     Box(
         modifier =
             Modifier
+                // Decorative, as on iOS: the initials repeat the name beside them.
+                .clearAndSetSemantics {}
                 .size(48.dp)
                 .clip(CircleShape)
                 .background(brush = avatarGradient(content.identityTag)),

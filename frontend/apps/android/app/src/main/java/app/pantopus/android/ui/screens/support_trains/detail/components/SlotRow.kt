@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -93,6 +94,8 @@ private fun DateColumn(content: SlotRowContent) {
     Box(
         modifier =
             Modifier
+                // The row's label already says the day; TalkBack read it again after it.
+                .clearAndSetSemantics {}
                 .width(42.dp)
                 .clip(shape)
                 .background(background)
@@ -141,7 +144,8 @@ private fun DateColumn(content: SlotRowContent) {
 @Composable
 private fun RowScope.Body(content: SlotRowContent) {
     Column(
-        modifier = Modifier.weight(1f),
+        // The row's label already says who and what; TalkBack read the texts again after it.
+        modifier = Modifier.weight(1f).clearAndSetSemantics {},
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         when (content.state) {
@@ -236,7 +240,8 @@ private fun Trailing(
                         .background(if (onSignUp != null) PantopusColors.primary600 else PantopusColors.appBorderStrong)
                         .clickable(enabled = onSignUp != null) { onSignUp?.invoke() }
                         .padding(horizontal = Spacing.s3)
-                        .semantics {
+                        // The label names the day; the child "Sign up" would be read again after it.
+                        .clearAndSetSemantics {
                             role = Role.Button
                             contentDescription = "Sign up for ${content.dayLabel} ${content.dateLabel}"
                         },
@@ -261,7 +266,7 @@ private fun Trailing(
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
                         .clickable(enabled = onEdit != null) { onEdit?.invoke() }
                         .padding(horizontal = Spacing.s2)
-                        .semantics {
+                        .clearAndSetSemantics {
                             role = Role.Button
                             contentDescription = "Edit your slot"
                         },

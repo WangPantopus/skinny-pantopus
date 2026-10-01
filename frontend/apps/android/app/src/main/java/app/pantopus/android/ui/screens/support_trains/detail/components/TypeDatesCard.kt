@@ -27,6 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -184,7 +186,14 @@ private fun ProgressBlock(content: TypeDatesCardContent) {
 
 @Composable
 private fun ProgressCounts(content: TypeDatesCardContent) {
-    Row(verticalAlignment = Alignment.Bottom) {
+    // One phrase for TalkBack: the bold count and the rest were two stops ("1", then " of 2 slots covered").
+    Row(
+        verticalAlignment = Alignment.Bottom,
+        modifier =
+            Modifier.clearAndSetSemantics {
+                contentDescription = "${content.slotsFilled} of ${content.slotsTotal} slots covered"
+            },
+    ) {
         Text(
             text = content.slotsFilled.toString(),
             color = PantopusColors.appText,
