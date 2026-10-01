@@ -138,7 +138,6 @@ function BlockTypeFields({
         <>
           <EditorField label="Headline" value={d.headline || ''} onChange={(v) => updateData({ headline: v })} placeholder="Your business headline" />
           <EditorField label="Subhead" value={d.subhead || ''} onChange={(v) => updateData({ subhead: v })} placeholder="A short description" />
-          <ImagePlaceholder label="Background image" fileId={d.background_file_id} />
           <CtaListEditor ctas={d.cta || []} onChange={(ctas) => updateData({ cta: ctas })} />
         </>
       );
@@ -319,26 +318,6 @@ function EditorTextarea({
         placeholder={placeholder}
         className="w-full rounded-lg border border-app-border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 resize-none transition"
       />
-    </div>
-  );
-}
-
-function ImagePlaceholder({ label, fileId, note }: { label: string; fileId?: string | null; note?: string }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-app-text-secondary mb-1">{label}</label>
-      <div className="w-full h-20 rounded-lg border-2 border-dashed border-app-border bg-app-surface-raised flex flex-col items-center justify-center text-app-text-muted hover:border-violet-300 hover:text-violet-400 transition cursor-pointer">
-        {fileId ? (
-          <span className="text-xs font-medium text-violet-600">Image attached</span>
-        ) : (
-          <>
-            <svg className="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span className="text-[10px]">{note || 'Click to upload'}</span>
-          </>
-        )}
-      </div>
     </div>
   );
 }
