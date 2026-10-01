@@ -319,7 +319,7 @@ function PostCard({
       {/* ─── Content ─────────────────────────────────── */}
       <div className={`px-4 pb-2${tapClass}`} onClick={openFullPost}>
         <p
-          className="text-sm text-app leading-relaxed whitespace-pre-wrap"
+          className="text-sm text-app leading-relaxed whitespace-pre-wrap break-words"
         >
           {post.content.length > 400 ? (
             <>

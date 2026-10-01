@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useState,
   useEffect,
   useMemo,
@@ -28,12 +29,32 @@ type MailboxContextValue = {
 
 const MailboxContext = createContext<MailboxContextValue | null>(null);
 
+// The server keeps no dismissal for the Mail Day summary, so this browser
+// remembers the day it was dismissed; the banner returns the next day.
+const MAIL_DAY_DISMISSED_KEY = 'pantopus_mailday_summary_dismissed';
+
+function localDay(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function readMailDayDismissed(): boolean {
+  try { return window.localStorage.getItem(MAIL_DAY_DISMISSED_KEY) === localDay(); } catch { return false; }
+}
+
 // ── Provider ─────────────────────────────────────────────────
 
 export function MailboxProvider({ children }: { children: ReactNode }) {
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>('personal');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [mailDayBannerDismissed, setMailDayBannerDismissed] = useState(false);
+  const [mailDayBannerDismissed, setDismissed] = useState(readMailDayDismissed);
+  const setMailDayBannerDismissed = useCallback((dismissed: boolean) => {
+    setDismissed(dismissed);
+    try {
+      if (dismissed) window.localStorage.setItem(MAIL_DAY_DISMISSED_KEY, localDay());
+      else window.localStorage.removeItem(MAIL_DAY_DISMISSED_KEY);
+    } catch { /* Dismissal still works in memory when browser storage is unavailable. */ }
+  }, []);
 
   // Theme from API
   const { data: themeData } = useThemes();
@@ -70,7 +91,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       mailDayBannerDismissed,
       setMailDayBannerDismissed,
     }),
-    [activeDrawer, selectedItemId, activeTheme, travelModeActive, mailDayBannerDismissed],
+    [activeDrawer, selectedItemId, activeTheme, travelModeActive, mailDayBannerDismissed, setMailDayBannerDismissed],
   );
 
   return (

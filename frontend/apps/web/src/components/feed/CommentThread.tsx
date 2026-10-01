@@ -231,7 +231,7 @@ export default function CommentThread({
               ) : (
                 <span className="text-xs font-semibold text-app">{authorName}</span>
               )}
-              <p className="text-sm text-app leading-relaxed mt-0.5 whitespace-pre-wrap">
+              <p className="text-sm text-app leading-relaxed mt-0.5 whitespace-pre-wrap break-words">
                 {comment.comment}
               </p>
 

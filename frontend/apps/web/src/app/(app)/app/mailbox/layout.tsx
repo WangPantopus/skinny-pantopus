@@ -6,25 +6,12 @@ import { getAuthToken } from '@pantopus/api';
 import MailboxNav from '@/components/mailbox/MailboxNav';
 import MailboxErrorBoundary from '@/components/mailbox/MailboxErrorBoundary';
 import { MailboxToastProvider } from '@/components/mailbox/MailboxToast';
-import { MailboxProvider } from '@/contexts/MailboxContext';
+import { MailboxProvider, useMailboxContext } from '@/contexts/MailboxContext';
 import {
   useDrawerMeta,
   useMailDaySummary,
   useVacationHold,
 } from '@/lib/mailbox-queries';
-
-// The server keeps no dismissal for the Mail Day summary, so this browser
-// remembers the day it was dismissed; the banner returns the next day.
-const MAIL_DAY_DISMISSED_KEY = 'pantopus_mailday_summary_dismissed';
-
-function localDay(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function readMailDayDismissed(): boolean {
-  try { return window.localStorage.getItem(MAIL_DAY_DISMISSED_KEY) === localDay(); } catch { return false; }
-}
 
 /**
  * Route-level layout for all /mailbox/* pages.
@@ -85,7 +72,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
 
   // ── Mail Day summary banner ────────────────────────────
   const { data: mailDay } = useMailDaySummary();
-  const [mailDayDismissed, setMailDayDismissed] = useState(readMailDayDismissed);
+  const { mailDayBannerDismissed: mailDayDismissed, setMailDayBannerDismissed } = useMailboxContext();
 
   const showMailDayBanner =
     !mailDayDismissed &&
@@ -93,9 +80,8 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
     mailDay.total_new > 0;
 
   const handleDismissMailDay = useCallback(() => {
-    setMailDayDismissed(true);
-    try { window.localStorage.setItem(MAIL_DAY_DISMISSED_KEY, localDay()); } catch { /* ignore */ }
-  }, []);
+    setMailDayBannerDismissed(true);
+  }, [setMailDayBannerDismissed]);
 
   // Navigate to the drawer with the most urgent item
   const handleOpenMailDay = useCallback(() => {

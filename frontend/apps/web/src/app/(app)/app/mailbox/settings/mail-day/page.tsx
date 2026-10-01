@@ -10,6 +10,7 @@ import {
 } from '@/lib/mailbox-queries';
 import { toast } from '@/components/ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useMailboxContext } from '@/contexts/MailboxContext';
 
 // ── Timezone list (common US + intl) ─────────────────────────
 
@@ -122,7 +123,7 @@ export default function MailDayPage() {
   const updateSettings = useUpdateMailDaySettings();
   const [notifState, requestNotif] = useNotificationPermission();
 
-  const [dismissed, setDismissed] = useState(false);
+  const { mailDayBannerDismissed: dismissed, setMailDayBannerDismissed: setDismissed } = useMailboxContext();
   const [saveToast, setSaveToast] = useState(false);
 
   // Local draft settings for the form
