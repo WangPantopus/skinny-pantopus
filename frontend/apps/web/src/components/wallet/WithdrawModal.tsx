@@ -4,6 +4,18 @@ import { useState, useCallback } from 'react';
 import { wallet as walletApi } from '@pantopus/api';
 import { getErrorMessage } from '@pantopus/utils';
 
+// One withdrawal, one idempotency key. A retry after a failed or lost reply resends the same key, so
+// the server settles on the first attempt and can't pay out twice. The key is replaced after a final
+// outcome (paid out, or refused) or when the amount changes. It outlives the modal, so reopening it to
+// retry is safe too.
+let pendingWithdrawal: { key: string; amountCents: number } | null = null;
+
+/** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown. */
+function leavesWithdrawalUnsettled(err: unknown): boolean {
+  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status !== 'number' || status >= 500 || status === 408 || status === 429;
+}
+
 interface WithdrawModalProps {
   balance: number; // in cents
   onClose: () => void;
@@ -31,11 +43,16 @@ export default function WithdrawModal({ balance, onClose, onSuccess }: WithdrawM
     setError(null);
 
     try {
-      const idempotencyKey = crypto.randomUUID();
-      await walletApi.withdraw(amountCents, idempotencyKey);
+      const intent = pendingWithdrawal?.amountCents === amountCents
+        ? pendingWithdrawal
+        : { key: crypto.randomUUID(), amountCents };
+      pendingWithdrawal = intent;
+      await walletApi.withdraw(amountCents, intent.key);
+      pendingWithdrawal = null;
       setSuccess(true);
       setTimeout(() => onSuccess(), 2000);
     } catch (err: unknown) {
+      if (!leavesWithdrawalUnsettled(err)) pendingWithdrawal = null;
       const message = getErrorMessage(err).trim();
       setError(message || 'Withdrawal failed. Please try again.');
     } finally {
