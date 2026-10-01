@@ -10,6 +10,7 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
+  CloudOff,
   CloudSun,
   Wind,
   Bell,
@@ -548,7 +549,7 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
 export interface DerivedPulse {
   variant: HeroVariant;
   title: string;
-  chip: { label: string; icon?: LucideIcon };
+  chip: { label: string; icon?: LucideIcon; tone?: 'neutral' };
   mainIcon: LucideIcon;
   nudge?: { icon?: LucideIcon; text: string };
 }
@@ -604,19 +605,30 @@ export function derivePulse(intel: PlaceIntelligence): DerivedPulse {
     alerts != null && alerts.status === 'ready' &&
     (!alerts.data || (alerts.data as PlaceAlertsData).active.length === 0);
 
-  const clauses: string[] = [];
-  if (airGood) clauses.push('air is good');
-  if (alertsKnownClear) clauses.push('there are no active alerts');
-  const tail = clauses.length
-    ? ` ${clauses.join(' and ').replace(/^./, (c) => c.toUpperCase())}.`
-    : '';
-  const title = `All clear on your block today.${tail}`;
-
   const billData = bill && bill.status === 'ready' ? (bill.data as PlaceBillBenchmarkData | null) : null;
   const nudge =
     billData && billData.comparison === 'higher'
       ? { icon: TrendingUp, text: `${billData.summary}. Worth a look.` }
       : undefined;
+
+  // Alerts that weren't checked are never an all-clear: say what's unknown, in a neutral chip.
+  if (!alertsKnownClear) {
+    return {
+      variant: 'allclear',
+      mainIcon: CloudOff,
+      chip: { label: 'Alerts unavailable', tone: 'neutral' },
+      title: airGood
+        ? "Air is good on your block today. Weather alerts aren't available right now."
+        : "Air quality and weather alerts aren't available for your block right now.",
+      nudge,
+    };
+  }
+
+  const clauses: string[] = [];
+  if (airGood) clauses.push('air is good');
+  clauses.push('there are no active alerts');
+  const tail = ` ${clauses.join(' and ').replace(/^./, (c) => c.toUpperCase())}.`;
+  const title = `All clear on your block today.${tail}`;
 
   return {
     variant: 'allclear',

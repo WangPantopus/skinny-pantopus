@@ -522,19 +522,6 @@ object PlacePresentation {
             aqiData != null &&
                 (aqiData.category == AirQualityCategory.GOOD || aqiData.category == AirQualityCategory.MODERATE)
         val alertsKnownClear = alerts?.status == PlaceSectionStatus.READY && (alerts.alerts?.active?.isEmpty() ?: true)
-        val clauses =
-            buildList {
-                if (airGood) add("air is good")
-                if (alertsKnownClear) add("there are no active alerts")
-            }
-        val tail =
-            if (clauses.isEmpty()) {
-                ""
-            } else {
-                val joined = clauses.joinToString(" and ")
-                " " + joined.replaceFirstChar { it.uppercase() } + "."
-            }
-        val title = "All clear on your block today.$tail"
 
         val billData = if (bill?.status == PlaceSectionStatus.READY) bill.billBenchmark else null
         val nudge =
@@ -543,6 +530,30 @@ object PlacePresentation {
             } else {
                 null
             }
+
+        // Alerts that weren't checked are never an all-clear: say what's unknown, in a neutral chip.
+        if (!alertsKnownClear) {
+            return PlaceDerivedPulse(
+                variant = PlaceHeroVariant.ALL_CLEAR,
+                title =
+                    if (airGood) {
+                        "Air is good on your block today. Weather alerts aren't available right now."
+                    } else {
+                        "Air quality and weather alerts aren't available for your block right now."
+                    },
+                chip = PlaceChipModel(PlaceChipTone.NEUTRAL, "Alerts unavailable"),
+                heroIcon = PantopusIcon.CloudOff,
+                nudgeIcon = PantopusIcon.Lightbulb,
+                nudgeText = nudge,
+            )
+        }
+
+        val clauses =
+            buildList {
+                if (airGood) add("air is good")
+                add("there are no active alerts")
+            }
+        val title = "All clear on your block today. " + clauses.joinToString(" and ").replaceFirstChar { it.uppercase() } + "."
 
         return PlaceDerivedPulse(
             variant = PlaceHeroVariant.ALL_CLEAR,

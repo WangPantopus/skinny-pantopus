@@ -111,13 +111,15 @@ function DocsContent() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-app-text truncate">{doc.title || doc.filename || 'Untitled'}</p>
                           <div className="flex gap-2 mt-0.5">
-                            {doc.file_size && <span className="text-[11px] text-app-text-muted">{formatSize(doc.file_size)}</span>}
+                            {doc.size_bytes > 0 && <span className="text-[11px] text-app-text-muted">{formatSize(doc.size_bytes)}</span>}
                             {doc.created_at && <span className="text-[11px] text-app-text-muted">{new Date(doc.created_at).toLocaleDateString()}</span>}
                           </div>
                         </div>
-                        {doc.file_url && (
-                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 font-medium hover:underline flex-shrink-0">
-                            View
+                        {/* A stored file is served only by its authorized content route, as a download (`attachment`). Build the
+                            path from this Home and document, not from a response URL, as the apps do. */}
+                        {doc.content_url && (
+                          <a href={`/api/homes/${encodeURIComponent(homeId)}/documents/${encodeURIComponent(doc.id)}/content`} download aria-label={`Download ${doc.title || 'document'}`} className="text-xs text-emerald-600 font-medium hover:underline flex-shrink-0">
+                            Download
                           </a>
                         )}
                         <button onClick={() => handleDelete(doc.id, doc.title || doc.filename)} aria-label={`Delete ${doc.title || doc.filename || 'Untitled'}`} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">

@@ -404,18 +404,23 @@ final class DocumentsViewModel: ListOfRowsDataSource {
 
     private static func formatUploadedLabel(dto: HomeDocumentDTO) -> String? {
         let uploader = [dto.uploadedByName, dto.details["uploaded_by"]].compactMap { $0 }.first { !$0.isEmpty }
-        guard let iso = dto.createdAt, let date = parseDate(iso) else {
+        guard let day = uploadedDayLabel(dto: dto) else {
             return uploader.map { "by \($0)" }
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "MMM d"
-        let day = formatter.string(from: date)
         if let uploader {
             return "\(day) · by \(uploader)"
         }
         return day
+    }
+
+    /// The upload day alone ("Sep 30"), for Document detail: its "Uploaded by" row already names the uploader.
+    static func uploadedDayLabel(dto: HomeDocumentDTO) -> String? {
+        guard let iso = dto.createdAt, let date = parseDate(iso) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 
     private struct ExpiresInfo {

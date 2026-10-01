@@ -512,13 +512,15 @@ class DocumentsViewModel
             private fun formatUploadedLabel(dto: HomeDocumentDto): String? {
                 val uploader =
                     dto.uploadedByName?.takeIf { it.isNotEmpty() } ?: dto.details?.get("uploaded_by")?.takeIf { it.isNotEmpty() }
-                val created = dto.createdAt?.let(::parseInstant)
-                if (created == null) {
-                    return uploader?.let { "by $it" }
-                }
-                val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
-                val day = formatter.format(created.atZone(ZoneId.of("UTC")))
+                val day = uploadedDayLabel(dto) ?: return uploader?.let { "by $it" }
                 return if (uploader != null) "$day · by $uploader" else day
+            }
+
+            /** The upload day alone ("Sep 30"), for Document detail: its "Uploaded by" row already names the uploader. */
+            @JvmStatic
+            fun uploadedDayLabel(dto: HomeDocumentDto): String? {
+                val created = dto.createdAt?.let(::parseInstant) ?: return null
+                return DateTimeFormatter.ofPattern("MMM d", Locale.US).format(created.atZone(ZoneId.of("UTC")))
             }
 
             private data class ExpiresInfo(val label: String?, val urgent: Boolean)

@@ -143,16 +143,30 @@ private fun Tiers(pulse: PulsePayload) {
     val sorted = pulse.signals.sortedByDescending { it.priority }
     val buckets =
         listOf(
-            "Urgent" to sorted.filter { it.priority >= 80 },
-            "Worth a look" to sorted.filter { it.priority in 50..79 },
-            "Around you" to sorted.filter { it.priority in 25..49 },
-            "When you have a minute" to sorted.filter { it.priority < 25 },
+            "Urgent" to sorted.filter { pulseTier(it) == 0 },
+            "Worth a look" to sorted.filter { pulseTier(it) == 1 },
+            "Around you" to sorted.filter { pulseTier(it) == 2 },
+            "When you have a minute" to sorted.filter { pulseTier(it) == 3 },
         )
     buckets.forEach { (title, signals) ->
         if (signals.isNotEmpty()) {
             PlaceDetailSectionLabel(title)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { signals.forEach { SignalCard(it) } }
         }
+    }
+}
+
+/**
+ * The web's tiers (`ranking.ts`): the server's `priority` is a 0–10 rank, so it orders signals inside a tier but can't
+ * choose one. A red or amber air or weather signal is urgent; the rest go by type.
+ */
+internal fun pulseTier(signal: PulseSignal): Int {
+    val urgent = signal.color.lowercase() in setOf("red", "amber")
+    return when (signal.signalType) {
+        "air_quality", "weather" -> if (urgent) 0 else 3
+        "community" -> 2
+        "seasonal_suggestion", "local_services" -> 1
+        else -> if (urgent) 0 else 1
     }
 }
 

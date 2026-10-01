@@ -18,7 +18,7 @@
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck } from 'lucide-react';
+import { CloudOff, ShieldCheck } from 'lucide-react';
 import type { NeighborhoodPulse } from '@pantopus/types';
 import { DetailHeader, TextButton } from '@/components/archetypes/place';
 import VerifyPromptSheet from '../VerifyPromptSheet';
@@ -80,32 +80,48 @@ function Tier({ label, children }: { label: string; children: React.ReactNode })
 }
 
 // ── The calm top card: nothing urgent, here's why ──────────────
-function AllClearSummary({ summary, cleared }: { summary: string; cleared: { icon: LucideIcon; label: string }[] }) {
+// When weather alerts weren't checked it says so instead: an unchecked day is not an all-clear.
+function AllClearSummary({
+  summary,
+  cleared,
+  alertsChecked,
+}: {
+  summary: string;
+  cleared: { icon: LucideIcon; label: string }[];
+  alertsChecked: boolean;
+}) {
+  const Icon = alertsChecked ? ShieldCheck : CloudOff;
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px] mt-1">
       <div className="flex items-start gap-3">
         <span className="inline-flex items-center justify-center shrink-0 w-[46px] h-[46px] rounded-[14px] bg-app-home-bg text-app-home">
-          <ShieldCheck size={24} strokeWidth={2} />
+          <Icon size={24} strokeWidth={2} />
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-[18px] font-bold text-app-text leading-[23px] -tracking-[0.015em]">All clear today</div>
+          <div className="text-[18px] font-bold text-app-text leading-[23px] -tracking-[0.015em]">
+            {alertsChecked ? 'All clear today' : 'Weather alerts unavailable'}
+          </div>
           <p className="text-[14px] text-app-text-muted leading-5 mt-1">
             {summary ||
-              "Nothing needs your attention on your block right now. Here's what's worth a look when you have a minute."}
+              (alertsChecked
+                ? "Nothing needs your attention on your block right now. Here's what's worth a look when you have a minute."
+                : "We couldn't check for weather alerts on your block right now.")}
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-[18px] gap-y-2 mt-[15px] pt-3.5 border-t border-app-border-subtle">
-        {cleared.map((fact) => (
-          <div key={fact.label} className="flex items-center gap-1.5">
-            <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-app-home-bg text-app-home shrink-0">
-              <fact.icon size={11} strokeWidth={2.5} />
-            </span>
-            <span className="text-[13px] font-medium text-app-text-secondary">{fact.label}</span>
-          </div>
-        ))}
-      </div>
+      {cleared.length > 0 ? (
+        <div className="flex flex-wrap gap-x-[18px] gap-y-2 mt-[15px] pt-3.5 border-t border-app-border-subtle">
+          {cleared.map((fact) => (
+            <div key={fact.label} className="flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-app-home-bg text-app-home shrink-0">
+                <fact.icon size={11} strokeWidth={2.5} />
+              </span>
+              <span className="text-[13px] font-medium text-app-text-secondary">{fact.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -168,7 +184,9 @@ export default function PulseStreamView({
     <>
       <DetailHeader title="Today's Pulse" address={address} backHref="/app/place" />
       <div className="px-4 sm:px-5 pt-1 pb-16">
-        {ranked.urgent ? null : <AllClearSummary summary={ranked.summary} cleared={ranked.cleared} />}
+        {ranked.urgent ? null : (
+          <AllClearSummary summary={ranked.summary} cleared={ranked.cleared} alertsChecked={ranked.alertsChecked} />
+        )}
 
         {ranked.tiers.map((tier) => (
           <Tier key={tier.key} label={tier.label}>
