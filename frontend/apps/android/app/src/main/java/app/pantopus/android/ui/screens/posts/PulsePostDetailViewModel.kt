@@ -445,11 +445,16 @@ class PulsePostDetailViewModel
                     _state.value = PulsePostDetailUiState.Loaded(rebuildContent(result.data.post))
                 }
                 is NetworkResult.Failure -> {
+                    val gone = result.error == NetworkError.NotFound || result.error == NetworkError.Forbidden
+                    val wasGone = (_state.value as? PulsePostDetailUiState.Error)?.retryable == false
                     _state.value =
                         PulsePostDetailUiState.Error(
                             message = friendlyMessage(result.error),
-                            retryable = result.error != NetworkError.NotFound && result.error != NetworkError.Forbidden,
+                            retryable = !gone,
                         )
+                    // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
+                    // Only on the way into this state: this screen refetches on the same signal.
+                    if (gone && !wasGone) postsRefresh.notifyPostsDidChange()
                 }
             }
         }
