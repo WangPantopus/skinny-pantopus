@@ -2150,7 +2150,8 @@ router.post(
       actorUserId: is_anonymous ? null : userId,
       payload: {
         amount,
-        donor_name: is_anonymous ? 'Anonymous' : req.user.name || req.user.username,
+        // The notification names a donor who isn't anonymous from their profile.
+        donor_name: is_anonymous ? 'Anonymous' : null,
       },
     });
 
@@ -2649,7 +2650,6 @@ router.post(
         slot_id: slotId,
         slot_label: slot.slot_label,
         slot_date: slot.slot_date,
-        helper_name: req.user.name || req.user.username,
       },
     });
 
@@ -3316,7 +3316,6 @@ router.post(
         payload: {
           slot_id: reservation.slot_id,
           slot_label: slot?.slot_label,
-          helper_name: req.user.name || req.user.username,
           helper_reason: helperReason || null,
         },
       });
@@ -3529,7 +3528,8 @@ router.post(
       actorUserId: userId,
       payload: {
         reservation_id: reservationId,
-        helper_name: reservation.guest_name || req.user.name || req.user.username,
+        // A guest's delivery is named by the guest; otherwise the notification names whoever marked it.
+        helper_name: reservation.guest_name || null,
       },
     });
 
