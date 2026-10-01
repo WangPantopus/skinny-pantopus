@@ -9,6 +9,12 @@
 
 ## CURRENT RESUME — SUCCESSOR 2026-10-01T20:54:27Z
 
+- **UPDATE 2026-10-01T21:07:58Z:** [#1414](https://github.com/WangPantopus/skinny-pantopus/pull/1414) merged by Stream1 in batch317/#1415; live master `cb02fef0827d8a6f895eba9bbaee42cee70a6aed`, task head304360226 independently confirmed ancestor. Reuse its accepted task evidence; no repeated journey required.
+- **#1412 fresh successor cell:** new `20261001-stream2-web-overlays-under-shell-r2`, exact7b9ad6b372afae1e5f69784766692d96592675b6, seal/MANIFEST `ad77e0d1fb9e2ede6191ebf765398b3a249b25665b96b8310a7fcfe37f1faef6`. Real Chrome390/768/1280 unobstructed checkbox/close coordinate taps, PUT200, persisted reload;353/353 full table fingerprints restored. Only Pulse Preferences rebuilt; other r1 modal evidence remains historical. Stream1 verified the new seal and is doing its independent390px check.
+- **#1413 fresh successor cell:** new `20261001-stream2-money-withdraw-pending-message-r2`, exact8a98dc8946eeffc435b73a862747b9c5ceff5b1b, seal/MANIFEST `cd8f7a87f0fb65bb5e5867d7e7bcfe6c0e44e2d6c17ed8f06f59e8a8f5e55d2a`. Actual web Wallet/real API/SQL:1500-cent synthetic credit,1450-cent withdrawal →503/server pending sentence and balance50; close/reopen retry503; simulated settlement200, one client key and one ledger row. Different100-cent amount disabled against50. All351 non-auth table hashes equal after cleanup, only fresh login bookkeeping differs. **Provider SDK outcomes explicitly simulated; no actual provider call/capture.** Native cells belong to Stream1's candidate32. No PR code edits or full-payment claim. The “under $1” case is available balance, not withdrawal amount. Initial pre-restart CSRF sessions correctly got403/no mutation; real fresh login fixed harness state.
+- **Temporary runtime handover:** app checkout and Next18169 frozen at1412 for Stream1's independent browser cell. Backend/proxy18160/18168 remain on1413-loaded source with loopback guard and explicit local wallet provider simulator. No source switch, restart or fixture mutation until Stream1 releases this use. Wallet/task/payout/preferences fixtures are zero; two synthetic users plus4AuthSession/4AuthSecurityEvent remain. Latest private browser session is fresh; no credentials copied to evidence. Stream1 can recreate the bounded wallet fixture via private `wallet-fixture.cjs setup|state|cleanup`, and owns native checks.
+- **Decisions/next:** keep1412/1413 code unchanged after bounded checks; preserve historical seals as historical and add clearly separate r2 evidence/PR-body notes. Strengthen fresh scan binding per coordinator review (exact path/hash inventory; reject added/changed/deleted files and symlinks). Next after runtime release: reproduce/fix the unnamed Pulse switch, then bounded scope sweep; native results remain unverified until Stream1 reports them.
+
 - **Active:** Stream 2: Posts, Hub and payments (Codex chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`), app checkout `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. No subagents used. Stream 1 remains sole merger.
 - **Verified live:** master `f88f74641f019e35bcdba24d71ccec38ce5b0d8e`; #1412 `7b9ad6b372afae1e5f69784766692d96592675b6` open, applicable CI passed; #1413 `8a98dc8946eeffc435b73a862747b9c5ceff5b1b` open, completed checks green and iOS build still running at takeover. Recheck before integration.
 - **Host discrepancy:** all previous private runtime/evidence/memory paths and containers were absent. Historical acceptance and reported seals remain historical, not locally reverified. The old living inventory and named memory files could not be read; this status's existing backlog remains authoritative. Do not reconstruct missing historical evidence bytes or claim matching old seals.
@@ -337,9 +343,9 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T20:54:27Z (Stream 2 successor)
+## CURRENT STATE — 2026-10-01T21:07:58Z (Stream 2 successor)
 
-- **Latest:** fresh-host runtime recovered; #1414 ready for review. See CURRENT RESUME above for exact source, new seal, decisions, cleanup and next action. Previous entries below retain their original evidence limits.
+- **Latest:** #1414 merged in batch317; fresh #1412 browser and #1413 web/API/SQL evidence sealed; runtime lent to Stream1 for independent checks. See CURRENT RESUME above for exact source, new seal, decisions, cleanup and next action. Previous entries below retain their original evidence limits.
 
 - **Latest (2026-10-01T18:09:59Z): HANDED OFF** at the user's request. See "CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z" above and [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md).
   - Since 17:32Z:
