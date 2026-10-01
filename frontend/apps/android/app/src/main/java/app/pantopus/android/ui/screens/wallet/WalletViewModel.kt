@@ -168,7 +168,8 @@ class WalletViewModel
         fun withdraw(amountText: String? = null) {
             if (fixture != null) return
             _withdrawError.value = null
-            if (!payoutsEnabled || walletFrozen || availableCents < MIN_WITHDRAW_CENTS) {
+            // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
+            if (!payoutsEnabled || walletFrozen || (availableCents < MIN_WITHDRAW_CENTS && pendingWithdrawal == null)) {
                 _action.value =
                     WalletAction.WithdrawFailed(withdrawGateMessage(payoutsEnabled, walletFrozen))
                 return
@@ -180,8 +181,14 @@ class WalletViewModel
                     when (val parsed = parseWithdrawAmount(amountText, availableCents)) {
                         is WithdrawAmount.Valid -> parsed.cents
                         is WithdrawAmount.Invalid -> {
-                            _withdrawError.value = parsed.message
-                            return
+                            // A retry of the withdrawal in progress may exceed what's available now: its held debit
+                            // is that money, and the server settles the same key without debiting again.
+                            val held = pendingWithdrawal?.second
+                            if (held == null || parseWithdrawAmount(amountText, held) != WithdrawAmount.Valid(held)) {
+                                _withdrawError.value = parsed.message
+                                return
+                            }
+                            held
                         }
                     }
                 }
@@ -200,11 +207,11 @@ class WalletViewModel
                         loadInternal(showLoading = false)
                     }
                     is NetworkResult.Failure -> {
-                        if (!result.error.leavesWithdrawalUnsettled()) pendingWithdrawal = null
-                        val stillProcessing = result.error.withdrawalPendingMessage()
-                        _action.value = WalletAction.WithdrawFailed(stillProcessing ?: result.error.message)
-                        // The debit is held while the transfer settles: show it in the balance and activity.
-                        if (stillProcessing != null) loadInternal(showLoading = false)
+                        val unsettled = result.error.leavesWithdrawalUnsettled()
+                        if (!unsettled) pendingWithdrawal = null
+                        _action.value = WalletAction.WithdrawFailed(result.error.withdrawalPendingMessage() ?: result.error.message)
+                        // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
+                        if (unsettled) loadInternal(showLoading = false)
                     }
                 }
             }

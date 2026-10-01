@@ -200,7 +200,8 @@ public final class WalletViewModel {
     public func withdraw(amountText: String? = nil) async {
         guard sampleContent == nil, !seeded else { return }
         withdrawError = nil
-        guard payoutsEnabled, !walletFrozen, availableCents >= 100 else {
+        // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
+        guard payoutsEnabled, !walletFrozen, availableCents >= 100 || pendingWithdrawal != nil else {
             action = .withdrawFailed(message: Self.withdrawGateMessage(
                 payoutsEnabled: payoutsEnabled,
                 frozen: walletFrozen
@@ -213,8 +214,16 @@ public final class WalletViewModel {
             case let .success(cents):
                 amountCents = cents
             case let .failure(message):
-                withdrawError = message
-                return
+                // A retry of the withdrawal in progress may exceed what's available now: its held debit is that
+                // money, and the server settles the same key without debiting again.
+                guard let pending = pendingWithdrawal,
+                      case let .success(cents) = Self.parseWithdrawAmount(amountText, availableCents: pending.amountCents),
+                      cents == pending.amountCents
+                else {
+                    withdrawError = message
+                    return
+                }
+                amountCents = cents
             }
         } else {
             amountCents = availableCents
@@ -241,15 +250,15 @@ public final class WalletViewModel {
             // Re-read balance + activity (server is the source of truth).
             await fetchLive(showLoading: false)
         } catch {
-            if !Self.leavesWithdrawalUnsettled(error) { pendingWithdrawal = nil }
-            let stillProcessing = Self.withdrawalPendingMessage(error)
+            let unsettled = Self.leavesWithdrawalUnsettled(error)
+            if !unsettled { pendingWithdrawal = nil }
             action = .withdrawFailed(
-                message: stillProcessing
+                message: Self.withdrawalPendingMessage(error)
                     ?? (error as? APIError)?.errorDescription
                     ?? "Couldn't process the withdrawal."
             )
-            // The debit is held while the transfer settles: show it in the balance and activity.
-            if stillProcessing != nil { await fetchLive(showLoading: false) }
+            // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
+            if unsettled { await fetchLive(showLoading: false) }
         }
     }
 
