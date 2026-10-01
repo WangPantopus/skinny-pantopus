@@ -9,6 +9,26 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1226 + #1228 merged (batch 264); #1230, #1234, #1236 sealed and with Stream 1; #1238 (Android) waits for its device check; page-health scan clean, 2026-10-01T04:55:02Z
+
+- **Merged in batch 264** (PR #1233, master `51634ec30`):
+  - **#1226:** Stream 2's post-page media viewer, portaled, with Escape and names.
+  - **#1228:** Stream 4's mail list Star, shown on keyboard focus. The row ignores its inner controls' keys, so Enter on Star stars the mail and Enter on Open follows the link.
+- **Sealed and with Stream 1** (against master `ea52073b9`):
+  - **#1230** (seal `5e258397…`): chat Report from Chat details opened UNDER the drawer, whose backdrop took the first click. Report now closes the drawer. The drawer and ReportModal are named dialogs that Escape closes (the drawer leaves Escape to a Block confirmation over it), and the reasons get `aria-pressed`.
+  - **#1234** (seal `65b99834…`): the shared ModalShell becomes a named dialog with a close button named "Close". This follows Stream 1's conditions: semantics only, verified through the password step-up, and the gig-detail callers (cut #4) not exercised.
+  - **#1236** (seal `5eb7fcc2…`): five Stream 5 dialogs become named dialogs that Escape closes. Delete account is an `alertdialog` whose "Type DELETE to confirm" label is tied to its field. The others: Start new chat, the chat image viewer, Create Seat & Invite, Edit Seat.
+- **Waiting for Stream 1's device check: #1238** (Android View as). A hidden badge now carries `stateDescription` "Not shown"; TalkBack used to read just "Verified neighbor". Bundle `20261001-stream5-android-viewas-badge-r1`, with a device TODO.
+- **Page-health scan, no PR** (`audits/20261001-stream5-page-health-scan-r1`): 17 Stream 5 web pages.
+  - The only unexpected error is a dev-mode Next.js app-router error during the legacy `/app/businesses/new` server redirect on a full page load. The page recovers, and the users' links are clean.
+  - The proxy-refused implicit-write GETs (privacy settings, identity center, view-as) are the known harness boundary.
+- **Stale rows:** the older candidate table's S3-22 (hero CTA buttons), S3-37 (iOS banner/logo upload), S3-59 (iOS review-reply toast) and S3-62 (endorsement error toast) are already fixed on master.
+- **Decisions:**
+  - Dialogs get semantics and Escape (equal to each dialog's own Cancel/Close), with no focus trap and no change to outside clicks.
+  - A destructive confirmation is an `alertdialog`, the global ConfirmDialog's pattern.
+  - A nested overlay that covers its child is fixed by closing the parent (Report).
+- **Runtime:** API 18134 on `ea52073b9` (receipt 04:36:57Z); web 18131 on `ea52073b9`. No fixtures remain: every room, crew and mail fixture was removed by exact id, with references checked.
+
 ## LIVE — #1195 #1200 #1192 #1196 #1206 #1208 #1216 #1217 merged (to batch 263, master `65de05db7`); cross-stream help: #1226 (Stream 2's post viewer) and #1228 (Stream 4's mail list Star) in CI, 2026-10-01T04:18:00Z
 
 - **User direction (2026-10-01, ~03:40Z):** keep working while there is work, and help debug and fix other workstreams. Cross-stream fixes go through Stream 1's routing, and the owning stream is told before its file is touched.
