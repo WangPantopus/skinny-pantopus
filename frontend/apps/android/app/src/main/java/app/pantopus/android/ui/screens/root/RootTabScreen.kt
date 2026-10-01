@@ -6874,6 +6874,8 @@ private fun launchCutLabel(destination: DeepLinkRouter.Destination): String =
         DeepLinkRouter.Destination.DiscoverHub -> "Discover"
         is DeepLinkRouter.Destination.BookingDetail, DeepLinkRouter.Destination.MyBookings -> "Bookings"
         is DeepLinkRouter.Destination.MailTranslation -> "Mail translation"
+        DeepLinkRouter.Destination.Earn -> "Earn"
+        is DeepLinkRouter.Destination.Unboxing -> "Package unboxing"
         DeepLinkRouter.Destination.ViewAs -> "View as"
         else -> "Beacons"
     }
