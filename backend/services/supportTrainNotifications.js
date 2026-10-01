@@ -178,7 +178,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
       }
 
       case 'support_train.address_shared': {
-        if (payload.helper_user_id) {
+        // An organizer who is also the helper shared it with themselves: nothing to tell them.
+        if (payload.helper_user_id && payload.helper_user_id !== actorUserId) {
           const slotLabel = payload.slot_label || 'your delivery';
           const slotDate =
             typeof payload.slot_date === 'string' && payload.slot_date
@@ -230,8 +231,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
       }
 
       case 'support_train.reservation_confirmed': {
-        // Notify the helper that their delivery was confirmed
-        if (payload.helper_user_id) {
+        // Notify the helper that their delivery was confirmed, unless they confirmed it themselves as an organizer
+        if (payload.helper_user_id && payload.helper_user_id !== actorUserId) {
           await createNotification({
             userId: payload.helper_user_id,
             type: 'support_train_slot_changes',

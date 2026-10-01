@@ -562,14 +562,9 @@ function MemberRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <UserIdentityLink
-            userId={member.user_id || member.user?.id}
-            username={handle}
-            displayName={name}
-            avatarUrl={profilePic}
-            textClassName="text-sm font-medium text-app-text truncate hover:text-primary-600"
-            stopPropagation
-          />
+          {/* Plain text: the row is a button, and a link inside it can't be reached by assistive tech.
+              The profile link is in MemberDetail, the panel this row opens. */}
+          <span className="text-sm font-medium text-app-text truncate">{name}</span>
           {isOwner && <span className="text-xs">👑</span>}
         </div>
         <div className="flex items-center gap-2 mt-0.5">

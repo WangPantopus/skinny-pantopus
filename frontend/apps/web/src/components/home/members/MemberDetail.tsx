@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useId } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { removalLink } from '../member-removals/removalModel';
@@ -137,6 +137,7 @@ export default function MemberDetail({
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferConfirmText, setTransferConfirmText] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const expiryInputId = useId();
 
   const memberName = member?.user?.displayName || member?.user?.handle || member?.user?.name || member?.user?.username || member?.name || 'Member';
   const memberUsername = member?.user?.handle || member?.user?.username;
@@ -375,9 +376,10 @@ export default function MemberDetail({
 
                 {/* Access Expiry */}
                 <div>
-                  <label className="block text-xs font-medium text-app-text-secondary mb-1">Access Expiry Date</label>
+                  <label htmlFor={expiryInputId} className="block text-xs font-medium text-app-text-secondary mb-1">Access Expiry Date</label>
                   <div className="flex items-center gap-2">
                     <input
+                      id={expiryInputId}
                       type="date"
                       value={expiryDate}
                       onChange={(e) => setExpiryDate(e.target.value)}
