@@ -5,6 +5,7 @@ import { Bookmark, Tag, Flag } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import ReportModal from '@/components/ui/ReportModal';
+import { launchFeatures } from '@/lib/featureFlags';
 import { getErrorMessage } from '@pantopus/utils';
 
 type AnyObj = Record<string, any>;
@@ -61,7 +62,8 @@ export default function GigHeader({
   return (
     <>
       <div className="flex items-center gap-2 flex-shrink-0 pt-1">
-        <button
+        {/* Launch cut #4 (Open Gigs): task bookmarks are hidden; Report stays. */}
+        {launchFeatures.openGigs && <button
           onClick={handleToggleSave}
           disabled={savingGig}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
@@ -73,7 +75,7 @@ export default function GigHeader({
         >
           <span>{isSaved ? <Bookmark className="w-4 h-4 inline-block" /> : <Tag className="w-4 h-4 inline-block" />}</span>
           <span>{isSaved ? 'Saved' : 'Save'}</span>
-        </button>
+        </button>}
         <button
           onClick={() => setShowReportModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition border bg-app-surface border-app-border text-app-text-secondary hover:bg-red-50 hover:text-red-600 hover:border-red-300"

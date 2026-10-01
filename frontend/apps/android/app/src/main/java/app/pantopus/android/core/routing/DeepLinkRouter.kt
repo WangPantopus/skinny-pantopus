@@ -3,6 +3,8 @@
 package app.pantopus.android.core.routing
 
 import android.net.Uri
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.auth.OAuthSessionStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -437,6 +439,82 @@ object DeepLinkRouter {
     fun canRoute(path: String): Boolean {
         val normalized = Paths.normalizeIncoming(path)
         return !Paths.isOAuthCallback(normalized) && resolveString(normalized) !is Destination.Unknown
+    }
+
+    // ---- Launch cut (2026-09-27) --------------------------------------------
+    // Features hidden for the first launch (core/LaunchFeatures.kt). The
+    // resolver stays pure; consumers ask these before they route.
+
+    /** The cut features [destination] opens (all must be on); empty when it is in scope. */
+    fun launchFeaturesFor(destination: Destination): Set<LaunchFeature> =
+        when (destination) {
+            Destination.Beacons, Destination.CreatorAudienceMembers -> setOf(LaunchFeature.BEACON)
+            // Beacon pages and persona DMs are both Beacon (#1) and persona (#2) surfaces.
+            is Destination.BeaconProfile, Destination.CreatorInbox, is Destination.FanInbox ->
+                setOf(LaunchFeature.BEACON, LaunchFeature.PERSONAS)
+            Destination.ViewAs -> setOf(LaunchFeature.PERSONAS)
+            is Destination.Listing -> setOf(LaunchFeature.MARKETPLACE)
+            // `/gigs/new` is the public composer; a gig's detail stays for the task lifecycle.
+            is Destination.Gig -> if (destination.id == "new") setOf(LaunchFeature.OPEN_GIGS) else emptySet()
+            // The Discover hub (#6) is a rail of open tasks (#4), listings (#3) and posts.
+            Destination.DiscoverHub ->
+                setOf(LaunchFeature.BUSINESS_DIRECTORY, LaunchFeature.OPEN_GIGS, LaunchFeature.MARKETPLACE)
+            is Destination.BookingDetail, Destination.MyBookings -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
+            is Destination.MailTranslation -> setOf(LaunchFeature.MAIL_EXTRAS)
+            else -> emptySet()
+        }
+
+    /** False when [destination] opens a feature hidden for the first launch. */
+    fun isLaunchAvailable(destination: Destination): Boolean = launchFeaturesFor(destination).all(LaunchFeatures::isEnabled)
+
+    /**
+     * Notification types only a cut feature produces, beyond the prefix
+     * families below. Mirrors the backend's `LAUNCH_NOTIFICATION_TYPE_FEATURES`
+     * (`backend/utils/featureFlags.js`), which already drops them server-side.
+     */
+    private val LAUNCH_CUT_NOTIFICATION_TYPES: Map<String, Set<LaunchFeature>> =
+        mapOf(
+            "first_bid_received" to setOf(LaunchFeature.OPEN_GIGS),
+            "gig_question" to setOf(LaunchFeature.OPEN_GIGS),
+            "gig_question_answered" to setOf(LaunchFeature.OPEN_GIGS),
+            "gig_saved_search_match" to setOf(LaunchFeature.OPEN_GIGS),
+            "urgent_gig_nearby" to setOf(LaunchFeature.OPEN_GIGS),
+            "urgent_task_nearby" to setOf(LaunchFeature.OPEN_GIGS),
+            "no_bid_gig_nudge" to setOf(LaunchFeature.OPEN_GIGS),
+            "saved_search_match" to setOf(LaunchFeature.MARKETPLACE),
+            "address_revealed" to setOf(LaunchFeature.MARKETPLACE),
+            "transaction_review_prompt" to setOf(LaunchFeature.MARKETPLACE),
+            "bill_reminder" to setOf(LaunchFeature.HOUSEHOLD_EXTRAS),
+            "mail_escrow_expired" to setOf(LaunchFeature.MAIL_EXTRAS),
+            "mail_escrow_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
+            "mail_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
+        )
+
+    /**
+     * False when a notification or push of [type] linking to [link] belongs to a
+     * feature hidden for the first launch: its link opens one, or its type is a
+     * cut family (bids / counters / gig offers, listings, personas, bookings) or
+     * a cut-only type the backend lists.
+     */
+    fun isLaunchAvailable(
+        type: String?,
+        link: String?,
+    ): Boolean {
+        val key = type?.lowercase().orEmpty()
+        val typeFeatures =
+            when {
+                key.startsWith("bid_") || key.startsWith("counter_") || key.startsWith("gig_offer") ->
+                    setOf(LaunchFeature.OPEN_GIGS)
+                key.startsWith("listing") -> setOf(LaunchFeature.MARKETPLACE)
+                // Not `personal*`: those are in-scope personal-context notices.
+                key == "persona" || key.startsWith("persona_") -> setOf(LaunchFeature.BEACON, LaunchFeature.PERSONAS)
+                key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
+                else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
+            }
+        if (!typeFeatures.all(LaunchFeatures::isEnabled)) return false
+        val path = notificationPath(type, link)?.takeIf { it.isNotBlank() } ?: return true
+        val normalized = Paths.normalizeIncoming(path)
+        return Paths.isOAuthCallback(normalized) || isLaunchAvailable(resolveString(normalized))
     }
 
     fun consume(): Destination? {

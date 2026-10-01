@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
@@ -79,7 +80,10 @@ fun PlaceLaunchScreen(
     val retrying by viewModel.loadingPreview.collectAsStateWithLifecycle()
     val browse = {
         PlacePendingStore.clear()
-        app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
+        // Launch cut #1 (Beacon): with Beacon updates hidden, sign-up lands on the app's own start.
+        if (LaunchFeatures.beacon) {
+            app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
+        }
         onCreateAccount()
     }
 
@@ -664,9 +668,15 @@ private fun RegionBody(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
+            // Launch cut #1 (Beacon): no Beacon fan memberships to mention.
             Text(
                 "$message Today, home intelligence reads off U.S. sources — county records, " +
-                    "FEMA, the Census. Following, fanning, and messaging work in your region right now.",
+                    "FEMA, the Census. " +
+                    if (LaunchFeatures.beacon) {
+                        "Following, fanning, and messaging work in your region right now."
+                    } else {
+                        "Following and messaging work in your region right now."
+                    },
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = PantopusColors.appTextSecondary,

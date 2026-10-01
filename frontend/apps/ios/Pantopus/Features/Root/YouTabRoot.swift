@@ -489,8 +489,8 @@ public struct YouTabRoot: View {
                 path.append(initialRoute)
             }
             .navigationDestination(for: YouRoute.self) { route in
-                destination(for: route)
-                    .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
+                launchScopedDestination(for: route)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
             }
             .confirmationDialog(
                 "Sign out of Pantopus?",
@@ -1088,6 +1088,17 @@ public struct YouTabRoot: View {
                 verified: dest.verified,
                 online: false
             )
+        }
+    }
+
+    /// First-launch scope: a screen of a feature hidden for the first launch
+    /// renders the "not in the app yet" placeholder instead.
+    @ViewBuilder
+    private func launchScopedDestination(for route: YouRoute) -> some View {
+        if route.isAvailableAtLaunch {
+            destination(for: route)
+        } else {
+            NotYetAvailableView(tabName: "This feature", icon: .info)
         }
     }
 
@@ -2962,6 +2973,54 @@ extension YouRoute {
         switch self {
         case .addHome, .joinHome: true
         default: false
+        }
+    }
+}
+
+/// First-launch scope (`LaunchFeatures`): the screens of features hidden for
+/// the first launch. A screen serving two cut features needs both switched on.
+extension YouRoute {
+    var isAvailableAtLaunch: Bool {
+        switch self {
+        // Launch cut #1 (Beacon): audience, Beacon feeds, broadcasts, memberships.
+        case .audienceProfile, .creatorAudienceMembers, .beaconsFeed, .following, .beaconSearch,
+             .broadcastDetail, .composeBroadcast, .membershipDetail:
+            LaunchFeatures.beacon
+        // Launch cuts #1 + #2 (Personas): Beacon profiles, persona DMs, the
+        // persona editor and the persona privacy handshake.
+        case .beaconProfile, .creatorInbox, .creatorInboxConversation, .fanInbox, .editPersona,
+             .privacyHandshake:
+            LaunchFeatures.beacon && LaunchFeatures.personas
+        // Launch cut #2 (Personas): Identity Center and "View as".
+        case .identityCenter, .viewAs:
+            LaunchFeatures.personas
+        // Launch cuts #2 + #4: the professional (service-provider) profile.
+        case .professionalProfile:
+            LaunchFeatures.personas && LaunchFeatures.openGigs
+        // Launch cut #3 (Marketplace).
+        case .myListings, .listingOffers, .marketplace, .listingDetail, .composeListing, .editListing:
+            LaunchFeatures.marketplace
+        // Launch cut #4 (Open gigs): browse, post, bids and gig offers. A
+        // task's own detail (`.gigDetail`) and My tasks stay.
+        case .offers, .myBids, .gigsFeed, .gigSearch, .tasksMap, .composeTask, .composeChecklistHire,
+             .editGig, .packageGig:
+            LaunchFeatures.openGigs
+        // Launch cut #5 (Public scheduling); invoices, packages and payouts stay.
+        case let .scheduling(route):
+            route.isAvailableAtLaunch
+        // Launch cut #6 (Business directory).
+        case .discoverBusinesses:
+            LaunchFeatures.businessDirectory
+        // Launch cut #7 (Household extras): bills, pets, calendar, packages, polls.
+        case .homeBills, .billDetail, .addBill, .homePets, .homeCalendar, .addCalendarEvent,
+             .calendarEventDetail, .homePackages, .packageDetail, .logPackage, .homePolls,
+             .pollDetail, .startPoll:
+            LaunchFeatures.householdExtras
+        // Launch cut #8 (Mail extras): letters, Mail Party, community mail, translations.
+        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation:
+            LaunchFeatures.mailExtras
+        default:
+            true
         }
     }
 }

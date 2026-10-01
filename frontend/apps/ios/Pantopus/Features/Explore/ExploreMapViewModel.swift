@@ -297,6 +297,8 @@ public final class ExploreMapViewModel {
 
     private func filtered() -> [ExploreEntity] {
         allEntities.filter { entity in
+            // Launch cuts #4 / #3 / #6: task, listing and business pins are hidden.
+            guard entity.kind.isAvailableAtLaunch else { return false }
             if let activeKind, entity.kind != activeKind { return false }
             return filters.matches(entity)
         }

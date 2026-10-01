@@ -57,7 +57,7 @@ public struct ExploreFilterCriteria: Sendable, Hashable {
     }
 
     public var isKindActive: Bool {
-        !kinds.isEmpty && kinds.count < ExploreKind.allCases.count
+        !kinds.isEmpty && kinds.count < ExploreKind.launchCases.count
     }
 
     /// Number of active filter dimensions — drives the top-pill count
@@ -89,7 +89,8 @@ public struct ExploreFilterCriteria: Sendable, Hashable {
                 id: "contentType",
                 title: "Content type",
                 control: .chipGroup(
-                    options: ExploreKind.allCases.map { FilterOption(id: $0.rawValue, label: $0.pluralLabel) },
+                    // Launch cuts #4 / #3 / #6: no Tasks, Items or Spots chips.
+                    options: ExploreKind.launchCases.map { FilterOption(id: $0.rawValue, label: $0.pluralLabel) },
                     selectedIds: Set(kinds.map(\.rawValue))
                 )
             ),

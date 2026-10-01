@@ -1,12 +1,16 @@
 'use client';
 
-import { SCOPE_TABS } from './discoverTypes';
+import { SCOPE_TABS, isSearchScopeAvailable } from './discoverTypes';
 import type { SearchScope } from './discoverTypes';
 
 export function ScopePills({ value, onChange }: { value: SearchScope; onChange: (s: SearchScope) => void }) {
+  // Launch cuts: scopes of hidden features are left out; with a single scope
+  // left besides "All", the two would match the same results, so no row.
+  const tabs = SCOPE_TABS.filter((tab) => isSearchScopeAvailable(tab.key));
+  if (tabs.filter((tab) => tab.key !== 'all').length <= 1) return null;
   return (
     <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Search scope">
-      {SCOPE_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab.key}
           role="tab"

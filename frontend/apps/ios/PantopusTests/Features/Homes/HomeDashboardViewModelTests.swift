@@ -21,10 +21,13 @@ final class HomeDashboardViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // Bills, packages and the bills top action: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
     }
 
     override func tearDown() {
         SequencedURLProtocol.reset()
+        LaunchFeatures.overrideForTesting = nil
         super.tearDown()
     }
 

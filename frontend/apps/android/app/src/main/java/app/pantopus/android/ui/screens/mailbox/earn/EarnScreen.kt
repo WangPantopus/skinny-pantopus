@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BalanceHero
 import app.pantopus.android.ui.components.BalanceHeroSplitCell
 import app.pantopus.android.ui.components.ErrorState
@@ -290,12 +291,16 @@ private fun PopulatedBody(
                 Spacer(Modifier.height(Spacing.s3))
                 WeeklyGoalCard(goal = goal)
             }
-            SectionOverline(
-                title = "Ways to earn",
-                actionLabel = "Find work",
-                onAction = onBrowseTasks,
-            )
-            EarnWaysToEarnCard(items = content.waysToEarn, onSelect = onSelectWay)
+            // Launch cuts #4 (Open Gigs) / #2: "Find work" and ways into hidden features go.
+            val ways = content.waysToEarn.launchScoped()
+            if (ways.isNotEmpty()) {
+                SectionOverline(
+                    title = "Ways to earn",
+                    actionLabel = "Find work".takeIf { LaunchFeatures.openGigs },
+                    onAction = onBrowseTasks,
+                )
+                EarnWaysToEarnCard(items = ways, onSelect = onSelectWay)
+            }
             SectionOverline(title = "Recent earnings")
             if (content.earnings.isEmpty()) {
                 EarnLockedRow(
@@ -321,13 +326,16 @@ private fun PopulatedBody(
                 EarnTaxDocsRow(docs = docs, onClick = onOpenTaxDocs)
             }
         }
-        EarnBottomBar(modifier = Modifier.align(Alignment.BottomCenter)) {
-            // Cash out opens Payments, which withdraws the same wallet balance;
-            // with nothing to cash out, the next step is finding work.
-            if (content.hasCashableBalance) {
-                CashOutCta(amount = content.available, onClick = onCashOut)
-            } else {
-                BrowseCta(onClick = onBrowseTasks)
+        // Launch cut #4 (Open Gigs): with nothing to cash out, no "Browse open tasks" bar.
+        if (content.hasCashableBalance || LaunchFeatures.openGigs) {
+            EarnBottomBar(modifier = Modifier.align(Alignment.BottomCenter)) {
+                // Cash out opens Payments, which withdraws the same wallet balance;
+                // with nothing to cash out, the next step is finding work.
+                if (content.hasCashableBalance) {
+                    CashOutCta(amount = content.available, onClick = onCashOut)
+                } else {
+                    BrowseCta(onClick = onBrowseTasks)
+                }
             }
         }
     }
@@ -393,12 +401,16 @@ private fun EmptyBody(
                     .padding(horizontal = Spacing.s4)
                     .padding(top = Spacing.s3, bottom = 132.dp),
         ) {
-            SectionOverline(
-                title = "Ways to earn",
-                actionLabel = "Find work",
-                onAction = onBrowseTasks,
-            )
-            EarnWaysToEarnCard(items = waysToEarn, onSelect = onSelectWay)
+            // Launch cuts #4 (Open Gigs) / #2: "Find work" and ways into hidden features go.
+            val ways = waysToEarn.launchScoped()
+            if (ways.isNotEmpty()) {
+                SectionOverline(
+                    title = "Ways to earn",
+                    actionLabel = "Find work".takeIf { LaunchFeatures.openGigs },
+                    onAction = onBrowseTasks,
+                )
+                EarnWaysToEarnCard(items = ways, onSelect = onSelectWay)
+            }
             SectionOverline(title = "Recent earnings")
             EarnLockedRow(
                 title = "No earnings yet",
@@ -414,13 +426,28 @@ private fun EmptyBody(
                 tag = "earnTaxDocsLockedRow",
             )
         }
-        EarnBottomBar(modifier = Modifier.align(Alignment.BottomCenter)) {
-            BrowseCta(onClick = onBrowseTasks)
+        // Launch cut #4 (Open Gigs): no "Browse open tasks" bar.
+        if (LaunchFeatures.openGigs) {
+            EarnBottomBar(modifier = Modifier.align(Alignment.BottomCenter)) {
+                BrowseCta(onClick = onBrowseTasks)
+            }
         }
     }
 }
 
 // MARK: - Section header
+
+/** Launch cut (2026-09-27): the ways to earn the first launch still shows. */
+private fun List<EarnWayToEarn>.launchScoped(): List<EarnWayToEarn> =
+    filter { way ->
+        when (way.kind) {
+            // Launch cut #4 (Open Gigs): browsing open tasks.
+            EarnWayKind.Browse -> LaunchFeatures.openGigs
+            // Launch cuts #2/#4: the professional "offer a service" profile.
+            EarnWayKind.Offer -> LaunchFeatures.personas && LaunchFeatures.openGigs
+            EarnWayKind.Refer -> true
+        }
+    }
 
 @Composable
 private fun SectionOverline(

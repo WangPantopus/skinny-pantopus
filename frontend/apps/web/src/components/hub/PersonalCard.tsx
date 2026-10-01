@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { User, Calendar, MessageCircle } from 'lucide-react';
 import type { HubPersonalCard as PersonalData } from './types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface PersonalCardProps {
   data: PersonalData;
@@ -41,25 +42,26 @@ export default function PersonalCard({ data }: PersonalCardProps) {
         </div>
       </div>
 
+      {/* Launch cut #4 (Open Gigs): no "Post Task" or "Find Tasks"; Messages spans the row. */}
       <div className="flex gap-2">
-        <button
+        {launchFeatures.openGigs && <button
           onClick={() => router.push('/app/gigs-v2/new')}
           className="flex-1 py-2.5 px-3 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700 transition"
         >
           Post Task
-        </button>
+        </button>}
         <button
           onClick={() => router.push('/app/chat')}
-          className="py-2.5 px-3 bg-app-surface-sunken text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover dark:hover:bg-gray-600 transition"
+          className={`${launchFeatures.openGigs ? '' : 'flex-1 '}py-2.5 px-3 bg-app-surface-sunken text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover dark:hover:bg-gray-600 transition`}
         >
           Messages
         </button>
-        <button
+        {launchFeatures.openGigs && <button
           onClick={() => router.push('/app/gigs')}
           className="py-2.5 px-3 bg-app-surface-sunken text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover dark:hover:bg-gray-600 transition"
         >
           Find Tasks
-        </button>
+        </button>}
       </div>
     </div>
   );

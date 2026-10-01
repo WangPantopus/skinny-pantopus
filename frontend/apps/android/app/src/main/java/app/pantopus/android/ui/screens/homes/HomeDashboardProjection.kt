@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.homes
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardCountsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
@@ -56,8 +57,9 @@ object HomeDashboardProjection {
             when (tab.id) {
                 "overview" -> true
                 "tasks" -> access?.can("tasks.view") == true
-                "bills" -> access?.can("finance.view") == true
-                "packages" -> access?.can("packages.view") == true
+                // Launch cut #7 (Household extras): no Bills or Packages tab.
+                "bills" -> LaunchFeatures.householdExtras && access?.can("finance.view") == true
+                "packages" -> LaunchFeatures.householdExtras && access?.can("packages.view") == true
                 "members" -> access?.can("members.view") == true
                 "ownership" -> access?.can("ownership.view") == true
                 else -> false
@@ -90,8 +92,17 @@ object HomeDashboardProjection {
             HomeHeroStat("packages", safe.packagesExpected.toString(), "Packages"),
             HomeHeroStat("bills", safe.billsDue.toString(), "Bills"),
             HomeHeroStat("tasks", safe.tasksOpen.toString(), "Tasks"),
-        )
+        ).filter { stat ->
+            // Launch cut #7 (Household extras): no Packages or Bills count.
+            LaunchFeatures.householdExtras || stat.id !in HOUSEHOLD_EXTRAS_STAT_IDS
+        }
     }
+
+    /** Launch cut #7 (Household extras): hero stats of package tracking and bill management. */
+    private val HOUSEHOLD_EXTRAS_STAT_IDS = setOf("packages", "bills")
+
+    /** Launch cut #7 (Household extras): audit-log targets of the hidden sections. */
+    private val HOUSEHOLD_EXTRAS_AUDIT_TARGETS = setOf("HomePet", "HomePoll", "HomeBill", "HomePackage", "HomeCalendarEvent")
 
     // ── Quick actions ───────────────────────────────────────────────
 
@@ -109,10 +120,11 @@ object HomeDashboardProjection {
             if (allowed("tasks.view")) {
                 add(tile("view_tasks", "Tasks", PantopusIcon.ListChecks, QuickActionTone.Warning, safe.tasksOpen))
             }
-            if (allowed("finance.view")) {
+            // Launch cut #7 (Household extras): no Bills or Packages tile.
+            if (allowed("finance.view") && LaunchFeatures.householdExtras) {
                 add(tile("view_bills", "Bills", PantopusIcon.Receipt, QuickActionTone.Error, safe.billsDue))
             }
-            if (allowed("packages.view")) {
+            if (allowed("packages.view") && LaunchFeatures.householdExtras) {
                 add(
                     tile(
                         "view_packages",
@@ -174,8 +186,10 @@ object HomeDashboardProjection {
     fun upcoming(dashboard: HomeDashboardResponse?): List<HomeDashboardTimelineItem> {
         val today = dashboard?.today ?: return emptyList()
         val items = mutableListOf<HomeDashboardTimelineItem>()
+        // Launch cut #7 (Household extras): bills, calendar events and deliveries leave "Upcoming".
+        val extras = LaunchFeatures.householdExtras
 
-        today.nextBill?.let { bill ->
+        today.nextBill?.takeIf { extras }?.let { bill ->
             items +=
                 HomeDashboardTimelineItem(
                     id = "bill-${bill.id}",
@@ -187,7 +201,7 @@ object HomeDashboardProjection {
                 )
         }
 
-        today.nextEvents.forEach { event ->
+        today.nextEvents.takeIf { extras }.orEmpty().forEach { event ->
             items +=
                 HomeDashboardTimelineItem(
                     id = "event-${event.id}",
@@ -213,7 +227,7 @@ object HomeDashboardProjection {
                 )
         }
 
-        if (today.deliveriesArriving > 0) {
+        if (extras && today.deliveriesArriving > 0) {
             val count = today.deliveriesArriving
             items +=
                 HomeDashboardTimelineItem(
@@ -246,20 +260,23 @@ object HomeDashboardProjection {
                 }
                 .toMap()
 
-        return dashboard.recentActivity.mapIndexed { index, entry ->
-            val actorName = entry.actorUserId?.let { namesByUserId[it] }
-            val phrase = firstNonEmpty(entry.description, humanized(entry.action)) ?: entry.action
-            HomeDashboardActivityItem(
-                id = entry.id,
-                initials = initials(actorName),
-                tone = if (index % 2 == 0) QuickActionTone.Personal else QuickActionTone.Home,
-                title = actorName?.let { "$it: $phrase" } ?: phrase,
-                // `target_type` is an internal table name ("HomeInvite"), never a
-                // readable word; the title's sentence already says what happened.
-                detail = "Home activity",
-                time = relativeTime(entry.createdAt).orEmpty(),
-            )
-        }
+        return dashboard.recentActivity
+            // Launch cut #7 (Household extras): no pet, poll, bill, package or calendar activity.
+            .filter { LaunchFeatures.householdExtras || it.targetType !in HOUSEHOLD_EXTRAS_AUDIT_TARGETS }
+            .mapIndexed { index, entry ->
+                val actorName = entry.actorUserId?.let { namesByUserId[it] }
+                val phrase = firstNonEmpty(entry.description, humanized(entry.action)) ?: entry.action
+                HomeDashboardActivityItem(
+                    id = entry.id,
+                    initials = initials(actorName),
+                    tone = if (index % 2 == 0) QuickActionTone.Personal else QuickActionTone.Home,
+                    title = actorName?.let { "$it: $phrase" } ?: phrase,
+                    // `target_type` is an internal table name ("HomeInvite"), never a
+                    // readable word; the title's sentence already says what happened.
+                    detail = "Home activity",
+                    time = relativeTime(entry.createdAt).orEmpty(),
+                )
+            }
     }
 
     /**

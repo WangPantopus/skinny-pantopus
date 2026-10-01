@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -117,6 +118,28 @@ enum class NavigationDrawerDestination {
     BusinessReviews,
     BusinessPayments,
     BusinessSettings,
+    ;
+
+    /**
+     * Launch cut (2026-09-27): false when the row opens a feature hidden for
+     * the first launch; a row serving two cut features needs both on.
+     */
+    val isAvailableAtLaunch: Boolean
+        get() =
+            when (this) {
+                // Launch cut #1 (Beacon); the owner's Beacon is #2 (Personas) too.
+                BeaconUpdates -> LaunchFeatures.beacon
+                MyBeacon -> LaunchFeatures.beacon && LaunchFeatures.personas
+                // Launch cut #3 (Marketplace).
+                MyListings -> LaunchFeatures.marketplace
+                // Launch cut #4 (Open Gigs): bids, gig offers and open task posting.
+                MyBids, OffersAndBids, PostTask, BusinessPostTask -> LaunchFeatures.openGigs
+                // Launch cuts #6/#4/#3: the Discover hub browses businesses, open tasks and listings.
+                DiscoverNeighbors -> LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
+                // Launch cut #7 (Household extras): bills and package tracking.
+                HomeBills, HomePackages -> LaunchFeatures.householdExtras
+                else -> true
+            }
 }
 
 /** A full-width menu row. [slug] drives the `navDrawer.item.<slug>` test tag. */
@@ -199,6 +222,12 @@ fun NavigationDrawerContext.sections(): List<NavigationDrawerSection> =
         is NavigationDrawerContext.Personal -> personalSections
         is NavigationDrawerContext.Home -> homeSections
         is NavigationDrawerContext.Business -> businessSections
+    }.mapNotNull { section ->
+        // Launch cut (2026-09-27): rows into hidden features are dropped, and a section left without rows goes too.
+        section.items
+            .filter { it.destination.isAvailableAtLaunch }
+            .takeIf { it.isNotEmpty() }
+            ?.let { items -> section.copy(items = items) }
     }
 
 private val personalSections: List<NavigationDrawerSection> =
@@ -411,7 +440,14 @@ private fun ContextPill(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(pillar.tintBackground())
-                .then(if (onOpenProfile == null) Modifier.clickable(onClick = onOpenIdentityCenter) else Modifier)
+                // Launch cut #2 (Personas): the pill no longer opens the Identity Center.
+                .then(
+                    if (onOpenProfile == null && LaunchFeatures.personas) {
+                        Modifier.clickable(onClick = onOpenIdentityCenter)
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
                 .testTag("navDrawer.contextPill"),
     ) {
@@ -459,7 +495,10 @@ private fun ContextPill(
                 )
             }
         }
-        SwitchChip(tint = pillar.tint(), onClick = if (onOpenProfile != null) onOpenIdentityCenter else null)
+        // Launch cut #2 (Personas): no identity Switch into the Identity Center.
+        if (LaunchFeatures.personas) {
+            SwitchChip(tint = pillar.tint(), onClick = if (onOpenProfile != null) onOpenIdentityCenter else null)
+        }
     }
 }
 

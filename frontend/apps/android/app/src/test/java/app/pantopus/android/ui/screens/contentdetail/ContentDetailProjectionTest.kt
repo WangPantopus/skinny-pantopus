@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.contentdetail
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.businesses.BusinessInvoiceDto
 import app.pantopus.android.data.api.models.businesses.BusinessInvoiceLineItemDto
 import app.pantopus.android.data.api.models.businesses.BusinessInvoicePartyDto
@@ -12,11 +14,13 @@ import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.theme.PantopusIcon
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -26,6 +30,17 @@ import org.junit.Test
  * signature checks.
  */
 class ContentDetailProjectionTest {
+    // The launch cut hides bids and bid counts on a task's detail; these tests pin them.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
+
     @Test fun poster_counterparty_decodes_identity_serializer_creator() {
         val json =
             """

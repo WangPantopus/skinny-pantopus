@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAIChat } from '@/hooks/useAIChat';
 import { AIMessageBubble } from './AIMessageBubble';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface AIAssistantViewProps {
   /** Pre-fill the input with text (e.g. from Magic Task "Chat with Pantopus" link) */
@@ -92,7 +93,8 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               Pantopus Assistant
             </h2>
             <p className="text-xs text-app-text-muted">
-              {isStreaming ? 'Thinking…' : 'Ask me to draft gigs, listings, posts, or summarize mail'}
+              {/* Launch cuts #3/#4: the copy names only drafts still offered. */}
+              {isStreaming ? 'Thinking…' : launchFeatures.openGigs && launchFeatures.marketplace ? 'Ask me to draft gigs, listings, posts, or summarize mail' : `Ask me to draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')} or summarize mail`}
             </p>
           </div>
         </div>
@@ -119,8 +121,10 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               Hi! I&apos;m Pantopus
             </h3>
             <p className="text-sm text-app-text-muted mb-6 max-w-sm">
-              I can help you draft gigs, create listings, write posts, and
-              summarize your mail. Just describe what you need!
+              {/* Launch cuts #3/#4: the copy names only features still shown. */}
+              {launchFeatures.openGigs && launchFeatures.marketplace
+                ? 'I can help you draft gigs, create listings, write posts, and summarize your mail. Just describe what you need!'
+                : `I can help you ${[launchFeatures.openGigs && 'draft gigs', launchFeatures.marketplace && 'create listings', 'write posts'].filter(Boolean).join(', ')} and summarize your mail. Just describe what you need!`}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_PROMPTS.map((prompt) => (
@@ -202,11 +206,12 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
 
 // ─── Quick prompt suggestions ────────────────────────────────
 
+// Launch cuts #4 (task drafts for open posting) and #3 (listings): their prompts are hidden.
 const QUICK_PROMPTS = [
-  { label: '🛋️ Help me move something', text: 'I need help moving furniture' },
-  { label: '🏷️ Sell an item', text: 'I want to sell' },
+  ...(launchFeatures.openGigs ? [{ label: '🛋️ Help me move something', text: 'I need help moving furniture' }] : []),
+  ...(launchFeatures.marketplace ? [{ label: '🏷️ Sell an item', text: 'I want to sell' }] : []),
   { label: '📢 Post to neighbors', text: 'I want to tell my neighbors about' },
   { label: '📬 Summarize my mail', text: 'Can you summarize my recent mail?' },
   { label: '🌤️ What\'s happening nearby?', text: 'What\'s happening near my home?' },
-  { label: '🧹 Need cleaning help', text: 'I need someone to clean my house' },
+  ...(launchFeatures.openGigs ? [{ label: '🧹 Need cleaning help', text: 'I need someone to clean my house' }] : []),
 ];

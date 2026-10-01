@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { openFeedComposer } from '@/lib/feedComposerEvents';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export interface UnifiedFABAction {
   key: string;
@@ -112,21 +113,27 @@ export default function UnifiedFAB({
   });
 
   // Common actions
-  actions.push({
-    key: 'post-task',
-    icon: Hammer,
-    label: 'Post Task',
-    iconColor: 'text-primary-600',
-    onAction: () => router.push('/app/gigs/new'),
-  });
+  // Launch cut #4 (Open Gigs): "Post Task" is hidden.
+  if (launchFeatures.openGigs) {
+    actions.push({
+      key: 'post-task',
+      icon: Hammer,
+      label: 'Post Task',
+      iconColor: 'text-primary-600',
+      onAction: () => router.push('/app/gigs/new'),
+    });
+  }
 
-  actions.push({
-    key: 'snap-sell',
-    icon: ImagePlus,
-    label: 'Snap & Sell',
-    iconColor: 'text-amber-600',
-    onAction: () => router.push('/app/marketplace?snapSell=1'),
-  });
+  // Launch cut #3 (Marketplace): "Snap & Sell" is hidden.
+  if (launchFeatures.marketplace) {
+    actions.push({
+      key: 'snap-sell',
+      icon: ImagePlus,
+      label: 'Snap & Sell',
+      iconColor: 'text-amber-600',
+      onAction: () => router.push('/app/marketplace?snapSell=1'),
+    });
+  }
 
   actions.push({
     key: 'new-message',

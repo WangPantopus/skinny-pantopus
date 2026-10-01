@@ -37,6 +37,7 @@ public struct NeighborhoodTabRoot: View {
                     // hub root carries the add-home / verification CTAs.
                     rootTabs.selected = .place
                 },
+                // Launch cut #1: NeighborhoodView hides the Beacons row.
                 onOpenBeacons: { DeepLinkRouter.shared.handle(path: "/beacons") },
                 onOpenConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
             )
@@ -65,7 +66,8 @@ public struct NeighborhoodTabRoot: View {
 
     private func presentPendingSurfaceIfNeeded(_ pending: NeighborhoodDoorStore.Surface?) {
         guard let pending, rootTabs.selected == .nearby else { return }
-        presentedSurface = pending
+        // Launch cuts #3/#4: a hidden surface never opens; the door stays.
+        if pending.isAvailableAtLaunch { presentedSurface = pending }
         door.pendingSurface = nil
     }
 

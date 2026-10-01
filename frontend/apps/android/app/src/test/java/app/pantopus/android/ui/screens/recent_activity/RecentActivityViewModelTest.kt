@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.recent_activity
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.HubActivityItem
 import app.pantopus.android.data.api.models.hub.HubAvailability
 import app.pantopus.android.data.api.models.hub.HubCards
@@ -40,11 +42,14 @@ class RecentActivityViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut drops activity into hidden features (listings); these tests pin every row.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun activity(

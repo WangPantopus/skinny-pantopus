@@ -28,6 +28,17 @@ private final class StubLocationProvider: LocationProviding, @unchecked Sendable
 
 @MainActor
 final class ExploreMapMappingTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // Task, item and spot pins: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     private let anchor = UserCoordinate(latitude: 40.7484, longitude: -73.9857, accuracyMeters: 50)
 
     private func entity(_ id: String, lat: Double, lon: Double) -> ExploreEntity {

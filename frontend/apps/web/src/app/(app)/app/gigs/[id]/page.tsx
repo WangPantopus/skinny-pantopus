@@ -29,6 +29,7 @@ import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-deta
 import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import GigHeader from '@/components/gig-detail/GigHeader';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
+import { launchFeatures } from '@/lib/featureFlags';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { GigWithDetails, UserProfile } from '@pantopus/types';
 
@@ -747,9 +748,10 @@ export default function GigDetailsPage() {
             </div>
 
             {/* ─── Q&A Section ─── */}
-            <ErrorBoundary>
+            {/* Launch cut #4 (Open Gigs): task Q&A is hidden. */}
+            {launchFeatures.openGigs && <ErrorBoundary>
               <QASection gigId={gigId} isMyGig={isMyGig} currentUserId={currentUserId} />
-            </ErrorBoundary>
+            </ErrorBoundary>}
 
             {/* ─── Change Orders Section ─── */}
             {(isAssigned || isInProgress) && (isMyGig || iAmWorker) && (
@@ -840,7 +842,8 @@ export default function GigDetailsPage() {
             </ErrorBoundary>
 
             {/* Offers panel (owner only) */}
-            <ErrorBoundary>
+            {/* Launch cut #4 (Open Gigs): offers, bids and instant-accept are hidden; the lifecycle above stays. */}
+            {launchFeatures.openGigs && <ErrorBoundary>
               <OffersPanel
                 actorId={currentUserId}
                 gigId={gigId}
@@ -852,11 +855,11 @@ export default function GigDetailsPage() {
                 onOpenChat={handleOpenGigChat}
                 refreshKey={offersRefreshKey}
               />
-            </ErrorBoundary>
+            </ErrorBoundary>}
 
             {/* Bid panel (non-owner only). An open instant-accept task is claimed,
                 not bid on, as on the apps and gigs-v2: the first helper to accept gets it. */}
-            <ErrorBoundary>
+            {launchFeatures.openGigs && <ErrorBoundary>
               {gig?.engagement_mode === 'instant_accept' && gigStatus === 'open' && !isMyGig && currentUserId ? (
                 <InstantAcceptButton gigId={gigId} onAccepted={handleRefresh} />
               ) : (
@@ -870,7 +873,7 @@ export default function GigDetailsPage() {
                   onOpenChat={handleOpenGigChat}
                 />
               )}
-            </ErrorBoundary>
+            </ErrorBoundary>}
 
             <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-200">
               <h3 className="text-sm font-semibold text-yellow-900 mb-2"><Lock className="w-4 h-4 inline-block" /> Safety Tips</h3>

@@ -345,7 +345,8 @@ public struct ExploreMapView: View {
     private var typeToggle: some View {
         HStack(spacing: 2) {
             segment(kind: nil, label: "All")
-            ForEach(ExploreKind.allCases) { kind in
+            // Launch cuts #4 / #3 / #6: no Tasks, Items or Spots segments.
+            ForEach(ExploreKind.launchCases) { kind in
                 segment(kind: kind, label: kind.pluralLabel)
             }
         }

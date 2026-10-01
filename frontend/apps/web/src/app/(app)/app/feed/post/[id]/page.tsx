@@ -24,6 +24,7 @@ import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -681,14 +682,15 @@ export default function PostDetailPage() {
           )}
 
           {/* Cross-surface reference links */}
-          {post.ref_listing_id && (
+          {/* Launch cuts #3 (listings) and #4 (open tasks): their links are hidden. */}
+          {launchFeatures.marketplace && post.ref_listing_id && (
             <div className="mx-5 mb-3">
               <a href={`/app/marketplace/${post.ref_listing_id}`} className="flex items-center gap-2 px-3 py-2 bg-sky-50 rounded-xl text-xs text-sky-700 font-medium hover:bg-sky-100 transition">
                 <span>🏪</span><span>View linked listing</span><span className="ml-auto">→</span>
               </a>
             </div>
           )}
-          {post.ref_task_id && (
+          {launchFeatures.openGigs && post.ref_task_id && (
             <div className="mx-5 mb-3">
               <a href={`/app/gigs/${post.ref_task_id}`} className="flex items-center gap-2 px-3 py-2 bg-sky-50 rounded-xl text-xs text-sky-700 font-medium hover:bg-sky-100 transition">
                 <span>🔨</span><span>View linked task</span><span className="ml-auto">→</span>

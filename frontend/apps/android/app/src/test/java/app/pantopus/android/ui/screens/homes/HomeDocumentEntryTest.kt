@@ -1,13 +1,28 @@
 package app.pantopus.android.ui.screens.homes
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardCountsDto
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class HomeDocumentEntryTest {
+    // The launch cut hides the Bills and Packages tabs and tiles; these tests pin the permission map.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
+
     @Test
     fun `documents entry requires confirmed read access`() {
         val cases =

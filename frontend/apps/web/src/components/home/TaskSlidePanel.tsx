@@ -11,6 +11,7 @@ import type { HomeTask } from './tasks/homeTaskModel';
 import type { HomeTaskClient } from './tasks/HomeTaskClient';
 import { PendingHomeTaskUploadStore, type TaskUploadSnapshot } from './tasks/PendingHomeTaskUploadStore';
 import { HomeTaskRecurrenceCard } from './tasks/HomeTaskRecurrenceCard';
+import { launchFeatures } from '@/lib/featureFlags';
 
 function uploadStore(client: HomeTaskClient, taskId: string) {
   client.requireCurrent();
@@ -459,7 +460,8 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
           </button>
         </div>
       </form>
-      {form.task && form.canEdit && !form.hasUnsavedChanges && !saving && <section className="mt-6 space-y-2 border-t border-app-border pt-5 text-sm" aria-label="Gig publication">
+      {/* Launch cut #4 (Open Gigs): publishing a task as an open Gig is hidden. */}
+      {launchFeatures.openGigs && form.task && form.canEdit && !form.hasUnsavedChanges && !saving && <section className="mt-6 space-y-2 border-t border-app-border pt-5 text-sm" aria-label="Gig publication">
         <h3 className="font-semibold">Find outside help</h3>
         <p>Review public details or recover an existing publication. Private mail, files and household access details stay private.</p>
         <Link prefetch={false} className="inline-block rounded-lg border border-app-border px-3 py-2 font-medium"

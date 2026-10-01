@@ -144,9 +144,11 @@ public struct StatsTabsBody: View {
     /// Portfolio only exists once the host knows *whose* profile this is —
     /// there is no static portfolio payload to fall back on.
     private var visibleTabs: [ProfileTab] {
-        profileUserId == nil
+        (profileUserId == nil
             ? [.about, .reviews, .gigs]
-            : ProfileTab.allCases
+            : ProfileTab.allCases)
+            // Launch cut #4 (Open gigs): no Gigs tab on a profile.
+            .filter { $0 != .gigs || LaunchFeatures.openGigs }
     }
 
     public var body: some View {

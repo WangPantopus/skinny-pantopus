@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.CancelGigReason
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
@@ -116,8 +117,9 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val gig = viewModel.gigSnapshot()
     // Single source of truth with the projection: whenever this panel
     // renders, the read-only "N bids" module is suppressed above it.
+    // Launch cut #4 (Open Gigs): the owner's bids panel (accept / counter / reject) is hidden.
     val ownerSeesBidsPanel =
-        gig != null && GigDetailViewModel.Projection.ownerPanelHandlesBids(gig, viewModel.viewerIsOwner())
+        gig != null && GigDetailViewModel.Projection.ownerPanelHandlesBids(gig, viewModel.viewerIsOwner()) && LaunchFeatures.openGigs
 
     if (ownerSeesBidsPanel) {
         GigOwnerBidsPanel(

@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.io.File
 
@@ -250,7 +251,21 @@ data class ChatAIDraftCard(
     val summary: String? = null,
     val priceLabel: String? = null,
     val valid: Boolean = true,
-)
+) {
+    /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
+    val isLaunchAvailable: Boolean
+        get() =
+            when (type) {
+                "gig" -> LaunchFeatures.openGigs
+                "listing" -> LaunchFeatures.marketplace
+                else -> true
+            }
+}
+
+/** Launch cut #3 (Marketplace): a conversation topic about a listing is hidden for the first launch. */
+internal fun isTopicLaunchAvailable(topicType: String): Boolean = LaunchFeatures.marketplace || topicType !in MARKETPLACE_TOPIC_TYPES
+
+private val MARKETPLACE_TOPIC_TYPES = setOf("listing", "marketplace")
 
 @Immutable
 data class ChatReplyPreview(

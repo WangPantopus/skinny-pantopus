@@ -1,6 +1,7 @@
 package app.pantopus.android.ui.screens.hub
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.util.Locale
@@ -227,12 +228,23 @@ enum class HubDiscoveryFilter(
     Posts("posts", "Posts"),
     ;
 
+    /** Launch cut (2026-09-27): open tasks (#4) and businesses (#6) are hidden for the first launch. */
+    val isLaunchAvailable: Boolean
+        get() =
+            when (this) {
+                Gigs -> LaunchFeatures.openGigs
+                Businesses -> LaunchFeatures.businessDirectory
+                People, Posts -> true
+            }
+
     companion object {
         /**
          * Tabs the Hub shows. People is left out: `filter=people` never
-         * returns anyone today, so the tab could only ever be empty.
+         * returns anyone today, so the tab could only ever be empty. Tabs of
+         * features hidden for the first launch are left out too.
          */
-        val visibleTabs: List<HubDiscoveryFilter> = listOf(Gigs, Businesses, Posts)
+        val visibleTabs: List<HubDiscoveryFilter>
+            get() = listOf(Gigs, Businesses, Posts).filter { it.isLaunchAvailable }
     }
 }
 

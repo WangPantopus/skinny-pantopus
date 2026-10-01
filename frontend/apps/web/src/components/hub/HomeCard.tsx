@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Home, CreditCard, CheckSquare, Mail } from 'lucide-react';
 import type { HubHomeCard as HomeData } from './types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface HomeCardProps {
   data: HomeData;
@@ -14,7 +15,9 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
   const router = useRouter();
   if (!homeId) return null;
 
-  const hasSomething = data.billsDue.length > 0 || data.tasksDue.length > 0 || data.newMail > 0;
+  // Launch cut #7 (Household extras): bill management is hidden, so bills due are too.
+  const billsDue = launchFeatures.householdExtras ? data.billsDue : [];
+  const hasSomething = billsDue.length > 0 || data.tasksDue.length > 0 || data.newMail > 0;
 
   return (
     <div className="bg-app-surface border border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 shadow-sm">
@@ -29,7 +32,7 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
       <div className="space-y-2 mb-4">
         {hasSomething ? (
           <>
-            {data.billsDue.map((bill) => (
+            {billsDue.map((bill) => (
               <div key={bill.id} className="flex items-center gap-2 text-sm text-app-text-secondary">
                 <CreditCard className="w-4 h-4 flex-shrink-0" />
                 <span className="flex-1 truncate">{bill.name}</span>
@@ -113,7 +116,7 @@ export function AttachHomeCTA({ userId }: { userId: string }) {
         <h3 className="font-semibold text-app-text dark:text-white">Attach a Home</h3>
       </div>
       <p className="text-sm text-app-text-secondary mb-4">
-        Unlock mailbox, bills, household tasks, and more.
+        {launchFeatures.householdExtras ? 'Unlock mailbox, bills, household tasks, and more.' : 'Unlock mailbox, household tasks, and more.'}
       </p>
       <div className="flex gap-2">
         <button

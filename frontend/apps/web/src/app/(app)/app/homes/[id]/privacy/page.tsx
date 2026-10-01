@@ -15,6 +15,7 @@ import { ChevronLeft, EyeOff, ShieldCheck, MapPin } from 'lucide-react';
 import * as api from '@pantopus/api';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+import { launchFeatures } from '@/lib/featureFlags';
 
 function initialOf(name: string | null | undefined): string {
   const n = (name ?? '').trim();
@@ -100,7 +101,10 @@ export default function HomePrivacyMirrorPage() {
           <p className="mt-5 text-[13px] text-app-text-secondary">
             <ShieldCheck size={14} strokeWidth={2.25} className="inline-block mr-1 -mt-0.5 text-app-home" />
             Your profile and its visibility to followers live in{' '}
-            <Link href="/app/identity" className="font-semibold text-primary-600">Profiles &amp; privacy</Link>.
+            {/* Launch cut #2 (Personas): the Identity Center is hidden; privacy stays in Settings. */}
+            {launchFeatures.personas
+              ? <Link href="/app/identity" className="font-semibold text-primary-600">Profiles &amp; privacy</Link>
+              : <Link href="/app/profile/settings/privacy" className="font-semibold text-primary-600">Privacy settings</Link>}.
           </p>
         </>
       ) : null}

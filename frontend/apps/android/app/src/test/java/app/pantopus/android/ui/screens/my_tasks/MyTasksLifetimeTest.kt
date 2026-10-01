@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.my_tasks
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
@@ -39,10 +41,17 @@ class MyTasksLifetimeTest {
     private val gigsRepo: GigsRepository = mockk()
 
     @Before
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides the Magic Task FAB and boosts; these tests pin them.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
 
     @After
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() {
+        Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
+    }
 
     private fun vm(identity: () -> Pair<String, String?>? = { "u_me" to "test-session" }) =
         MyTasksViewModel(gigsRepo, gigIdentityFixture(identity))

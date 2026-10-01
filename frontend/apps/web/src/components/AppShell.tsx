@@ -43,7 +43,7 @@ import useViewerHome from '@/hooks/useViewerHome';
 import usePromoTriggers from '@/hooks/usePromoTriggers';
 import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
-import { webFeatureFlags } from '@/lib/featureFlags';
+import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, type LucideIcon } from 'lucide-react';
@@ -200,7 +200,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { unreadMessages: chatUnread } = useBadges();
   // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1).
   const audienceFlagState = useFeatureFlagState('audience_profile');
-  const audienceProfileFlag = audienceFlagState.enabled;
+  // Launch cut #1 (Beacon): the Audience bell is hidden; one bell remains.
+  const audienceProfileFlag = audienceFlagState.enabled && launchFeatures.beacon;
 
   // ── Context detection ─────────────────────────────────────
   const homeMatch = pathname.match(/^\/app\/homes\/([^/]+)/);
@@ -252,7 +253,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const openComposer = () => appDispatch({ type: 'SET_FEED_COMPOSER_OPEN', value: true });
-    const openMagicTask = () => appDispatch({ type: 'SET_COMPOSER_OPEN', value: true });
+    // Launch cut #4 (Open Gigs): the open-post task composer is hidden.
+    const openMagicTask = () => { if (launchFeatures.openGigs) appDispatch({ type: 'SET_COMPOSER_OPEN', value: true }); };
     window.addEventListener(FEED_COMPOSER_OPEN_EVENT, openComposer);
     window.addEventListener(MAGIC_TASK_OPEN_EVENT, openMagicTask);
     return () => {
@@ -275,7 +277,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const visualWidth = hoverExpanded && showCollapsed ? SIDEBAR_EXPANDED : sidebarWidth;
   // Whether to show labels (full text) in sidebar items
   const showLabels = !showCollapsed || hoverExpanded;
-  const showIdentityNavigation = webFeatureFlags.identityFirewall;
+  // Launch cut #2 (Personas): the Identity Center is hidden; privacy and
+  // blocking stay in Settings.
+  const showIdentityNavigation = webFeatureFlags.identityFirewall && launchFeatures.personas;
   const isIdentityRoute = showIdentityNavigation && (pathname.startsWith('/app/identity') || pathname.startsWith('/app/persona'));
   const isSettingsRoute = pathname.startsWith('/app/profile/settings') || pathname.startsWith('/app/settings');
   const isMyPostsRoute = pathname.startsWith('/app/my-pulse');
@@ -393,7 +397,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           className="hidden md:flex items-center gap-2 rounded-lg border border-app bg-surface-muted px-3 py-1.5 mr-3"
         >
           <Search className="w-4 h-4 text-app-muted flex-shrink-0" />
-          <input value={discoverQuery} onChange={(e) => appDispatch({ type: 'SET_DISCOVER_QUERY', value: e.target.value })} placeholder="Search profiles or businesses" className="w-48 bg-transparent text-sm text-app placeholder:text-app-muted focus:outline-none" />
+          <input value={discoverQuery} onChange={(e) => appDispatch({ type: 'SET_DISCOVER_QUERY', value: e.target.value })} placeholder={launchFeatures.businessDirectory ? 'Search profiles or businesses' : 'Search profiles'} className="w-48 bg-transparent text-sm text-app placeholder:text-app-muted focus:outline-none" />
         </form>
 
         {/* Search icon (mobile) */}
@@ -587,7 +591,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  UNIFIED FAB + COMPOSER
        * ═══════════════════════════════════════════════════════ */}
-      <UnifiedFAB showHireHelp onHireHelp={() => appDispatch({ type: 'SET_COMPOSER_OPEN', value: true })} hideOnPageFABRoutes />
+      {/* Launch cut #4 (Open Gigs): no "Hire Help" (open-post composer). */}
+      <UnifiedFAB showHireHelp={launchFeatures.openGigs} onHireHelp={() => appDispatch({ type: 'SET_COMPOSER_OPEN', value: true })} hideOnPageFABRoutes />
       <FloatingChatWidget />
       <FloatingPromoModal />
       {feedComposerOpen && (
@@ -726,9 +731,11 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/connections') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
       <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
-      {webFeatureFlags.scheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
-      {audienceFlag.enabled ? <SidebarItem icon={NavIcons.audience} label="Audience" active={startsWith('/app/audience')} onClick={() => go('/app/audience')} onPrefetch={prefetchAudience} showLabel={showLabels} accent="teal" testId="sidebar-audience" /> : null}
-      {webFeatureFlags.persona ? <SidebarItem icon={NavIcons.beacon} label="My Beacon" active={isActive('/app/persona') || startsWith('/app/persona/')} onClick={() => go('/app/persona')} showLabel={showLabels} /> : null}
+      {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
+      {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
+      {/* Launch cut #1 (Beacon): Audience and My Beacon are hidden (My Beacon is also #2). */}
+      {audienceFlag.enabled && launchFeatures.beacon ? <SidebarItem icon={NavIcons.audience} label="Audience" active={startsWith('/app/audience')} onClick={() => go('/app/audience')} onPrefetch={prefetchAudience} showLabel={showLabels} accent="teal" testId="sidebar-audience" /> : null}
+      {webFeatureFlags.persona && launchFeatures.beacon && launchFeatures.personas ? <SidebarItem icon={NavIcons.beacon} label="My Beacon" active={isActive('/app/persona') || startsWith('/app/persona/')} onClick={() => go('/app/persona')} showLabel={showLabels} /> : null}
     </div>
   );
 }
@@ -768,7 +775,8 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
       />
       <SidebarItem icon={HomeIcons.tasks} label="Tasks" active={isTabActive('tasks')} onClick={() => goTab('tasks')} accent="emerald" showLabel={showLabels} />
       <SidebarItem icon={HomeIcons.issues} label="Issues" active={isTabActive('issues')} onClick={() => goTab('issues')} accent="emerald" showLabel={showLabels} />
-      <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} />
+      {/* Launch cut #7 (Household extras): Bills and Packages are hidden. */}
+      {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} /> : null}
       <SidebarItem icon={HomeIcons.members} label="Members" active={isTabActive('members')} onClick={() => goTab('members')} accent="emerald" showLabel={showLabels} />
       <SidebarItem
         icon={HomeIcons.mailbox}
@@ -780,7 +788,8 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
         accent="emerald"
         showLabel={showLabels}
       />
-      {webFeatureFlags.scheduling ? (
+      {/* Launch cuts #5 + #7: the Home scheduling hub is hidden. */}
+      {webFeatureFlags.scheduling && launchFeatures.publicScheduling && launchFeatures.householdExtras ? (
         <SidebarItem
           icon={HomeIcons.scheduling}
           label="Scheduling"
@@ -796,7 +805,7 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
 
       <SidebarDivider showLabel={showLabels} />
 
-      <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} />
+      {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} /> : null}
       <SidebarItem icon={HomeIcons.documents} label="Documents" active={isTabActive('documents')} onClick={() => goTab('documents')} showLabel={showLabels} />
       <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />
       <SidebarItem icon={HomeIcons.emergency} label="Emergency" active={isTabActive('emergency')} onClick={() => goTab('emergency')} showLabel={showLabels} />
@@ -853,7 +862,8 @@ function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate
       <SidebarItem icon={BusinessIcons.locations} label="Locations & Hours" active={isTabActive('locations')} onClick={() => goTab('locations')} accent="violet" showLabel={showLabels} />
       <SidebarItem icon={BusinessIcons.catalog} label="Catalog" active={isTabActive('catalog')} onClick={() => goTab('catalog')} accent="violet" showLabel={showLabels} />
       <SidebarItem icon={BusinessIcons.pages} label="Pages" active={isTabActive('pages')} onClick={() => goTab('pages')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.postTask} label="Post Task" active={pathname.startsWith('/app/gigs/new') || pathname.startsWith('/app/gigs-v2/new')} onClick={() => goPath(`/app/gigs/new?beneficiary=${businessId}`)} accent="violet" showLabel={showLabels} />
+      {/* Launch cut #4 (Open Gigs): business "Post Task" is hidden. */}
+      {launchFeatures.openGigs ? <SidebarItem icon={BusinessIcons.postTask} label="Post Task" active={pathname.startsWith('/app/gigs/new') || pathname.startsWith('/app/gigs-v2/new')} onClick={() => goPath(`/app/gigs/new?beneficiary=${businessId}`)} accent="violet" showLabel={showLabels} /> : null}
       <SidebarItem icon={BusinessIcons.chat} label="Business Chat" active={pathname.startsWith(`/app/businesses/${businessId}/chat`)} onClick={() => goPath(`/app/businesses/${businessId}/chat`)} accent="violet" showLabel={showLabels} />
 
       <SidebarDivider showLabel={showLabels} />

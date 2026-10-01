@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
@@ -58,13 +60,17 @@ import com.google.maps.android.compose.rememberCameraPositionState
 // Social discovery is available in every meter state. The meter controls
 // the local marketplace and tasks preview and preserves privacy floors.
 
-private data class NearbySurface(val icon: PantopusIcon, val title: String, val subtitle: String)
+private data class NearbySurface(val icon: PantopusIcon, val title: String, val subtitle: String, val feature: LaunchFeature)
 
 private val SURFACES =
     listOf(
-        NearbySurface(PantopusIcon.ShoppingBag, "Marketplace", "Buy, sell, and lend within walking distance"),
-        NearbySurface(PantopusIcon.Briefcase, "Tasks", "Small jobs for the people next door"),
+        NearbySurface(PantopusIcon.ShoppingBag, "Marketplace", "Buy, sell, and lend within walking distance", LaunchFeature.MARKETPLACE),
+        NearbySurface(PantopusIcon.Briefcase, "Tasks", "Small jobs for the people next door", LaunchFeature.OPEN_GIGS),
     )
+
+/** Launch cuts #3 (Marketplace) / #4 (Open Gigs): the surfaces the first launch still shows. */
+private val launchSurfaces: List<NearbySurface>
+    get() = SURFACES.filter { LaunchFeatures.isEnabled(it.feature) }
 
 @Composable
 fun NearbyScreen(
@@ -99,9 +105,14 @@ internal fun NearbyContent(
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
             Text("Nearby", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
             Text(
-                "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. " +
-                    "Following Beacons needs no home address.",
+                if (LaunchFeatures.beacon) {
+                    "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. " +
+                        "Following Beacons needs no home address."
+                } else {
+                    "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
+                },
                 fontSize = 13.5.sp,
                 lineHeight = 19.sp,
                 color = PantopusColors.appTextSecondary,
@@ -110,7 +121,10 @@ internal fun NearbyContent(
         }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SocialRow("Pulse", "Browse a chosen area or catch up with your connections", PantopusIcon.Rss, onOpenPulse)
-            SocialRow("Beacons", "Find public profiles and return to the people you follow", PantopusIcon.Radio, onOpenBeacons)
+            // Launch cut #1 (Beacon): hidden for the first launch.
+            if (LaunchFeatures.beacon) {
+                SocialRow("Beacons", "Find public profiles and return to the people you follow", PantopusIcon.Radio, onOpenBeacons)
+            }
             SocialRow("Connections", "Keep up with people you know", PantopusIcon.Users, onOpenConnections)
         }
         when (val current = state) {
@@ -122,33 +136,39 @@ internal fun NearbyContent(
                         NoPlaceCard(onClaim)
                     } else {
                         current.cells?.let { NearbyCellsMap(it) }
-                        if (current.meter.unlocked) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                PantopusIconImage(
-                                    PantopusIcon.Sparkles,
-                                    null,
-                                    size = 16.dp,
-                                    strokeWidth = 2f,
-                                    tint = PantopusColors.primary600,
-                                )
-                                Text(
-                                    "Local marketplace and tasks are open — " +
-                                        "${current.meter.verifiedCount ?: 0} verified households ${areaLabel(current.meter)}.",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = PantopusColors.primary600,
-                                )
+                        // Launch cuts #3/#4: the "open" banner, the meter (it counts toward the local
+                        // marketplace and tasks) and the locked list go with the surfaces they announce.
+                        when {
+                            launchSurfaces.isEmpty() -> Unit
+                            current.meter.unlocked -> {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    PantopusIconImage(
+                                        PantopusIcon.Sparkles,
+                                        null,
+                                        size = 16.dp,
+                                        strokeWidth = 2f,
+                                        tint = PantopusColors.primary600,
+                                    )
+                                    Text(
+                                        "Local marketplace and tasks are open — " +
+                                            "${current.meter.verifiedCount ?: 0} verified households ${areaLabel(current.meter)}.",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = PantopusColors.primary600,
+                                    )
+                                }
+                                SurfaceRows(locked = false, onOpenMarketplace, onOpenTasks)
                             }
-                            SurfaceRows(locked = false, onOpenMarketplace, onOpenTasks)
-                        } else {
-                            MeterCard(current.meter)
-                            Text(
-                                "Local marketplace and tasks",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PantopusColors.appText,
-                            )
-                            SurfaceRows(locked = true, onOpenMarketplace, onOpenTasks)
+                            else -> {
+                                MeterCard(current.meter)
+                                Text(
+                                    "Local marketplace and tasks",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PantopusColors.appText,
+                                )
+                                SurfaceRows(locked = true, onOpenMarketplace, onOpenTasks)
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(96.dp))
@@ -363,6 +383,8 @@ private const val GRID_INSET = 0.9f
 private fun MeterCard(meter: NeighborhoodMeter) {
     val forming = meter.state == "forming"
     val count = meter.verifiedCount ?: 0
+    // Launch cut #1 (Beacon): no Beacons to mention for the first launch.
+    val available = if (LaunchFeatures.beacon) "Pulse and Beacons are available now." else "Pulse is available now."
     val fraction =
         if (forming) METER_MIN_FRACTION else (count.toFloat() / meter.threshold.coerceAtLeast(1)).coerceIn(METER_MIN_FRACTION, 1f)
     Column(
@@ -396,10 +418,10 @@ private fun MeterCard(meter: NeighborhoodMeter) {
         Text(
             if (forming) {
                 "Your area is just forming — be one of the first ${meter.kAnonMin} verified households here. " +
-                    "Local marketplace and tasks open at ${meter.threshold}. Pulse and Beacons are available now."
+                    "Local marketplace and tasks open at ${meter.threshold}. $available"
             } else {
                 "$count households have verified their address nearby. " +
-                    "Local marketplace and tasks open at ${meter.threshold}. Pulse and Beacons are available now."
+                    "Local marketplace and tasks open at ${meter.threshold}. $available"
             },
             fontSize = 13.5.sp,
             lineHeight = 19.sp,
@@ -417,6 +439,8 @@ private fun SurfaceRows(
     val actions = listOf(onOpenMarketplace, onOpenTasks)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SURFACES.forEachIndexed { i, s ->
+            // Launch cuts #3 (Marketplace) / #4 (Open Gigs): hidden doors.
+            if (!LaunchFeatures.isEnabled(s.feature)) return@forEachIndexed
             Row(
                 modifier =
                     Modifier
@@ -473,9 +497,14 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
             PantopusIconImage(PantopusIcon.Home, null, size = 28.dp, strokeWidth = 2f, tint = PantopusColors.home)
         }
         Text("Add a home for neighborhood context", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+        // Launch cut #1 (Beacon): no Beacons to follow for the first launch.
         Text(
             "Adding a home gives you neighborhood context and household tools. " +
-                "You can browse Pulse and follow Beacons before setting it up.",
+                if (LaunchFeatures.beacon) {
+                    "You can browse Pulse and follow Beacons before setting it up."
+                } else {
+                    "You can browse Pulse before setting it up."
+                },
             fontSize = 14.sp,
             lineHeight = 20.sp,
             textAlign = TextAlign.Center,

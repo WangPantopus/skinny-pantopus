@@ -51,6 +51,7 @@ import {
 } from "@/components/scheduling/packages/invoiceHelpers";
 import { InvoiceStatusPill } from "@/components/scheduling/packages/ui";
 import PaidFeatureGate from "@/components/scheduling/packages/PaidFeatureGate";
+import { launchFeatures } from "@/lib/featureFlags";
 
 const BASE = "/app/scheduling/invoices";
 
@@ -345,7 +346,8 @@ function Body({
       )}
 
       {/* Linked booking — only when the invoice references one */}
-      {str(invoice.booking_id) && (
+      {/* Launch cut #5 (Public scheduling): the booking detail is hidden. */}
+      {launchFeatures.publicScheduling && str(invoice.booking_id) && (
         <Section title="Booking" icon={Calendar}>
           <Link
             href={`/app/scheduling/bookings/${encodeURIComponent(String(invoice.booking_id))}`}
