@@ -512,25 +512,86 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
       return res.status(403).json({ error: 'Only the owner can invite another owner' });
     }
 
-    // Check if there's already a pending invite for this email at this business
-    const { data: existingInvite } = await supabaseAdmin
+    // A pending invite for this email at this business. limit(1): simultaneous invites can have
+    // left more than one, and a read expecting a single row would then let another one through.
+    const { data: pendingInvites, error: pendingErr } = await supabaseAdmin
       .from('BusinessSeat')
-      .select('id, invite_status')
+      .select('id, invited_by_seat_id, invite_token_hash')
       .eq('business_user_id', businessId)
       .eq('invite_email', invite_email)
       .eq('invite_status', 'pending')
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (pendingErr) {
+      logger.error('Error reading pending seat invites', { error: pendingErr.message, businessId });
+      return res.status(500).json({ error: 'Failed to create invite' });
+    }
+    let existingInvite = pendingInvites?.[0] || null;
+
+    // Invite expires in 14 days — AUTH-1.6
+    const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     if (existingInvite) {
-      return res.status(409).json({ error: 'A pending invite already exists for this email' });
+      // Another teammate's invite stays as it is, so the link they shared keeps working.
+      if (existingInvite.invited_by_seat_id !== callerSeatId) {
+        return res.status(409).json({ error: 'A pending invite already exists for this email' });
+      }
+      // The same inviter inviting the same email again (a retry after a lost reply, or sending it
+      // again) renews that invite: a new link with these details and a fresh expiry. The update is
+      // conditional on the link it read, so of two renews at once one wins; the other renews again.
+      for (let attempt = 0; attempt < 2 && existingInvite; attempt += 1) {
+        const renewal = generateInviteToken();
+        const { data: renewed, error: renewErr } = await supabaseAdmin
+          .from('BusinessSeat')
+          .update({
+            display_name,
+            role_base,
+            contact_method: contact_method || null,
+            notes: notes || null,
+            invite_token_hash: renewal.hash,
+            invite_expires_at: inviteExpiresAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingInvite.id)
+          .eq('invite_status', 'pending')
+          .eq('invite_token_hash', existingInvite.invite_token_hash)
+          .select(SEAT_LIST);
+        if (renewErr) {
+          logger.error('Error renewing seat invite', { error: renewErr.message, businessId });
+          return res.status(500).json({ error: 'Failed to create invite' });
+        }
+        if (renewed && renewed.length > 0) {
+          await writeSeatAuditLog(
+            businessId,
+            callerSeatId,
+            'renew_invite',
+            'BusinessSeat',
+            renewed[0].id,
+            { display_name, role_base, invite_email },
+          );
+          return res.status(200).json({
+            message: 'Invite renewed',
+            seat: renewed[0],
+            invite_token: renewal.token, // the new link; the previous one no longer works
+            renewed: true,
+          });
+        }
+        const { data: current } = await supabaseAdmin
+          .from('BusinessSeat')
+          .select('id, invited_by_seat_id, invite_token_hash')
+          .eq('id', existingInvite.id)
+          .eq('invite_status', 'pending')
+          .maybeSingle();
+        existingInvite = current || null;
+      }
+      // Accepted, declined or revoked meanwhile.
+      return res.status(409).json({ error: 'This invite just changed. Refresh and try again.' });
     }
 
     // Generate token
     const { token, hash } = generateInviteToken();
 
-    // Create the seat (invite expires in 14 days — AUTH-1.6)
-    const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-
+    // Create the seat
     const { data: newSeat, error: insertErr } = await supabaseAdmin
       .from('BusinessSeat')
       .insert({
