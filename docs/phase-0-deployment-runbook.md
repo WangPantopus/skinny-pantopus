@@ -24,7 +24,7 @@ deploying — the git proxy rejects `claude` pushes to `feature/*`.
    - `PERSONA_FOLLOW_VIEW_ACTIVE` — leave unset for default behaviour;
      set explicitly to `false` ONLY to force a startup error during a
      coordinated rollback.
-   - SMTP / mail env vars — required for P0.2 email job
+   - SMTP / mail env vars — needed for transactional email (the P0.2 email job is retired)
      (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, optional `SMTP_FROM`,
      `APP_URL`).
 
@@ -111,32 +111,28 @@ FROM "LocalProfile" lp
 JOIN "User" u ON u.id = lp.user_id
 JOIN "LocalProfileDisplayNameMigrationP02" mig ON mig.local_profile_id = lp.id
 LIMIT 5;
--- Expected: lp.display_name = u.username for every row.
+-- Expected right after 133: lp.display_name = u.username for every row.
+-- Migration 146 later puts readable names back, so after it this no longer holds.
 ```
 
-Now run the email job (dry-run first, ALWAYS):
+**The P0.2 email job is retired (2026-10-01). Don't send it.** Migration 146
+(`146_local_profile_display_name_name_backfill.sql`) reverted migration 133's
+switch to usernames: local profiles show readable names again. So the email's claim,
+"other users now see your username", is untrue for everyone it would reach, and its
+"Settings → Profile" link (`/settings/profile`) isn't a page. `pnpm run
+p0-2:send-emails` now logs that it is retired and sends nothing; there is no flag to
+turn it back on.
 
-```sh
-cd backend
-pnpm run p0-2:send-emails:dry-run
-# Eyeball the count + a sample row's previous_display_name in the logs.
-
-pnpm run p0-2:send-emails
-# Sends one email per pending row. Idempotent; rerun is safe.
-```
-
-Verify counts match:
+If you're checking an environment, see whether it was ever sent, so a correction can be
+considered:
 
 ```sql
 SELECT
   COUNT(*) FILTER (WHERE email_sent_at IS NOT NULL) AS sent,
   COUNT(*) FILTER (WHERE email_failed_at IS NOT NULL) AS failed,
-  COUNT(*) FILTER (WHERE email_sent_at IS NULL AND email_failed_at IS NULL) AS pending
+  COUNT(*) FILTER (WHERE email_sent_at IS NULL AND email_failed_at IS NULL) AS never_sent
 FROM "LocalProfileDisplayNameMigrationP02";
 ```
-
-Investigate any rows with `email_failed_at`. Re-run the job to retry
-(it skips already-sent rows).
 
 ## P0.6 verification (notification firewall)
 
@@ -248,7 +244,6 @@ Phase 0 is fully shipped when:
 - All 4 migrations applied without errors.
 - `pnpm run smoke:identity-firewall` shows pass on every required check.
 - P0.1 + P0.2 SQL invariants verified (zero leaks).
-- P0.2 email job ran to completion (`pending = 0`).
 - P0.6 push notification confirmed firing on staging.
 - P0.8 flag flipped on for internal team and verified per-user.
 - The five smoke-check screens render correctly on web + mobile.

@@ -22,6 +22,7 @@ const {
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
 const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
 const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { hasBlocked } = require('../services/blockService');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -196,6 +197,8 @@ async function canViewLocalProfile(profile, context) {
   if (profile.deleted_at || profile.archived_at) return false;
   if (profile.status && profile.status !== 'active' && !context.isOwner) return false;
   if (context.isOwner) return true;
+  // Someone the owner blocked doesn't see their profile, as on /api/users/:username.
+  if (context.viewerId && await hasBlocked(profile.user_id, context.viewerId)) return false;
 
   const searchVisibility = profile.search_visibility || 'everyone';
   if (searchVisibility === 'nobody') return false;

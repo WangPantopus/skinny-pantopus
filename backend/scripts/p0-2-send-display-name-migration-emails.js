@@ -2,6 +2,14 @@
 /**
  * P0.2 — Send the one-time display-name-changed notification email.
  *
+ * RETIRED (2026-10-01): this job no longer reads or sends anything. Migration 146
+ * (146_local_profile_display_name_name_backfill.sql) reverted migration 133's switch
+ * to usernames, so local profiles show readable names again and the email's claim
+ * ("other users now see your username") is untrue for everyone it would reach. Its
+ * "Settings → Profile" link (/settings/profile) is also not a page. There is no flag
+ * to turn sending back on; bringing it back needs a new decision and new copy.
+ * processRow and the email builder stay for their unit tests.
+ *
  * Consumes the LocalProfileDisplayNameMigrationP02 snapshot table populated
  * by migration 133 and sends one email per row that has not yet been
  * notified (email_sent_at IS NULL).
@@ -41,7 +49,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 }
 
 function printHelp() {
-  console.log(`P0.2 — display-name migration email sender
+  console.log(`P0.2 — display-name migration email sender (RETIRED: sends nothing; see the header)
 
 Usage:
   node backend/scripts/p0-2-send-display-name-migration-emails.js [--dry-run] [--limit N]
@@ -134,21 +142,10 @@ async function run(argv = process.argv.slice(2)) {
     printHelp();
     return 0;
   }
-  const rows = await loadPendingRows(args.limit);
-  logger.info('p0_2.email.start', { pending: rows.length, dryRun: args.dryRun });
-
-  let sent = 0;
-  let skipped = 0;
-  let failed = 0;
-  for (const row of rows) {
-    const outcome = await processRow(row, { dryRun: args.dryRun });
-    if (outcome.status === 'sent' || outcome.status === 'dry_run') sent++;
-    else if (outcome.status === 'skipped') skipped++;
-    else failed++;
-  }
-
-  logger.info('p0_2.email.done', { sent, skipped, failed, total: rows.length });
-  return failed > 0 ? 1 : 0;
+  // Retired: migration 146 made this email untrue (see the header). Nothing is read or sent.
+  logger.warn('p0_2.email.retired', { reason: 'migration 146 reverted the display-name change this email announces' });
+  console.log('P0.2 display-name email: retired, nothing sent (migration 146 reverted the change it announces).');
+  return 0;
 }
 
 if (require.main === module) {
