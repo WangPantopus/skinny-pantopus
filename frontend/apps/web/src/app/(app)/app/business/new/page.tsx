@@ -220,13 +220,14 @@ export default function BusinessOnboardingPage() {
 
           {currentStep === 'Type' && (
             <div className="space-y-4">
-              <label className="block text-sm font-medium text-app-text-strong">Business type</label>
-              <div className="flex flex-wrap gap-2">
+              <label id="business-type-label" className="block text-sm font-medium text-app-text-strong">Business type</label>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="business-type-label">
                 {BIZ_TYPES.map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setBusinessType(t)}
+                    aria-pressed={businessType === t}
                     className={`px-3 py-1.5 rounded-full text-sm border transition ${
                       businessType === t
                         ? 'bg-violet-600 text-white border-violet-600'
@@ -286,6 +287,7 @@ export default function BusinessOnboardingPage() {
                       <input
                         className="col-span-3 rounded border border-app-border px-2 py-1 text-sm"
                         type="time"
+                        aria-label={`${DAY_NAMES[h.day_of_week]} opening time`}
                         value={h.open_time}
                         disabled={h.is_closed}
                         onChange={(e) => updateHour(idx, { open_time: e.target.value })}
@@ -293,6 +295,7 @@ export default function BusinessOnboardingPage() {
                       <input
                         className="col-span-3 rounded border border-app-border px-2 py-1 text-sm"
                         type="time"
+                        aria-label={`${DAY_NAMES[h.day_of_week]} closing time`}
                         value={h.close_time}
                         disabled={h.is_closed}
                         onChange={(e) => updateHour(idx, { close_time: e.target.value })}

@@ -147,6 +147,7 @@ export default function BusinessLocationHoursPage() {
                   </label>
                   <input
                     type="time"
+                    aria-label={`${DAY_NAMES[h.day_of_week]} opening time`}
                     disabled={h.is_closed}
                     value={h.open_time || ''}
                     onChange={(e) => updateHour(idx, { open_time: e.target.value })}
@@ -154,6 +155,7 @@ export default function BusinessLocationHoursPage() {
                   />
                   <input
                     type="time"
+                    aria-label={`${DAY_NAMES[h.day_of_week]} closing time`}
                     disabled={h.is_closed}
                     value={h.close_time || ''}
                     onChange={(e) => updateHour(idx, { close_time: e.target.value })}
@@ -174,10 +176,10 @@ export default function BusinessLocationHoursPage() {
           <div className="bg-app-surface border border-app-border rounded-xl p-5">
             <h2 className="text-sm font-semibold text-app-text mb-3">Special Hours</h2>
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-3">
-              <input type="date" value={specialForm.date} onChange={(e) => setSpecialForm((f) => ({ ...f, date: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
-              <input type="text" placeholder="Label" value={specialForm.label} onChange={(e) => setSpecialForm((f) => ({ ...f, label: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
-              <input type="time" disabled={specialForm.is_closed} value={specialForm.open_time} onChange={(e) => setSpecialForm((f) => ({ ...f, open_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
-              <input type="time" disabled={specialForm.is_closed} value={specialForm.close_time} onChange={(e) => setSpecialForm((f) => ({ ...f, close_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
+              <input type="date" aria-label="Date" value={specialForm.date} onChange={(e) => setSpecialForm((f) => ({ ...f, date: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
+              <input type="text" aria-label="Label" placeholder="Label" value={specialForm.label} onChange={(e) => setSpecialForm((f) => ({ ...f, label: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
+              <input type="time" aria-label="Opening time" disabled={specialForm.is_closed} value={specialForm.open_time} onChange={(e) => setSpecialForm((f) => ({ ...f, open_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
+              <input type="time" aria-label="Closing time" disabled={specialForm.is_closed} value={specialForm.close_time} onChange={(e) => setSpecialForm((f) => ({ ...f, close_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
               <label className="inline-flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={specialForm.is_closed} onChange={(e) => setSpecialForm((f) => ({ ...f, is_closed: e.target.checked }))} />
                 Closed
