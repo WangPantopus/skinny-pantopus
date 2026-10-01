@@ -2604,6 +2604,16 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
       return res.status(500).json({ error: 'Failed to update profile' });
     }
 
+    // Posts, comments and search show the LocalProfile's copy of the name and bio.
+    const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
+    const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
+    try {
+      await syncLocalProfileFromAccount(userData, localProfileChanges);
+    } catch (syncErr) {
+      logger.error('Profile update local profile sync error', { error: syncErr.message, userId });
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+
     let mailPrefs = null;
     if (emailNotifications !== undefined || pushNotifications !== undefined) {
       const preferenceUpdates = {
