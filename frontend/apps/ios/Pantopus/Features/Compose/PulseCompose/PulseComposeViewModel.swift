@@ -400,7 +400,10 @@ public final class PulseComposeViewModel {
         self.taskShare = taskShare
         self.businessAuthorId = businessAuthorId
         self.locationProvider = locationProvider
-        activeIntent = composePurpose?.legacyIntent ?? intent
+        // A Connections post is stored as "general" (effectivePostType), so a new one starts on the
+        // general form, not the Ask form, whose category would go nowhere.
+        activeIntent = composePurpose?.legacyIntent
+            ?? (postId == nil && postingTarget?.isNetworkTarget == true ? .announce : intent)
         self.postingTarget = postingTarget
         self.composePurpose = composePurpose
         if let postingTarget {

@@ -137,12 +137,31 @@ class LandlordAuthorityService {
         .select()
         .single();
 
-      if (claimErr) {
+      let reusedClaim = null;
+      if (claimErr?.code === '23505') {
+        // The landlord already has an open landlord-portal claim on this Home (one per Home, claimant, type and
+        // method; migration 20261001137000): attach this evidence to it instead of dropping it.
+        const { data: openClaim } = await supabaseAdmin
+          .from('HomeOwnershipClaim')
+          .select('*')
+          .eq('home_id', homeId)
+          .eq('claimant_user_id', subjectId)
+          .eq('claim_type', 'owner')
+          .eq('method', 'landlord_portal')
+          .in('state', ['draft', 'submitted', 'needs_more_info', 'pending_review', 'pending_challenge_window'])
+          .is('merged_into_claim_id', null)
+          .eq('terminal_reason', 'none')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        reusedClaim = openClaim || null;
+      }
+      if (claimErr && !reusedClaim) {
         logger.error('LandlordAuthorityService.requestAuthority: claim insert failed', {
           authorityId: authority.id, error: claimErr.message,
         });
       } else {
-        claim = claimData;
+        claim = reusedClaim || claimData;
         await homeClaimCompatService.recalculateHouseholdResolutionState(homeId);
 
         await supabaseAdmin

@@ -109,11 +109,11 @@ class SavedPostsViewModel
             }
         }
 
-        /** Remove from saved: the server toggles the save, and the row leaves once it confirms. */
+        /** Remove from saved: the request asks for "not saved" (a re-send can't re-save it); the row leaves once it confirms. */
         fun remove(postId: String) {
             if (!removing.add(postId)) return
             viewModelScope.launch {
-                val result = postsRepo.toggleSave(postId)
+                val result = postsRepo.toggleSave(postId, saved = false)
                 removing.remove(postId)
                 when {
                     result is NetworkResult.Success && !result.data.saved -> {

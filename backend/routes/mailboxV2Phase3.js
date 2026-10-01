@@ -112,7 +112,8 @@ const updateMailDaySchema = Joi.object({
 
 // ── Stamps / Themes ──
 const applyThemeSchema = Joi.object({
-  themeId: Joi.string().uuid().required(),
+  // SeasonalTheme ids are text slugs ('autumn_2026'), not UUIDs.
+  themeId: Joi.string().trim().max(64).required(),
 });
 
 // ── Memory ──
@@ -1318,6 +1319,15 @@ router.get('/stamps', verifyToken, async (req, res) => {
   }
 });
 
+// A theme can be applied once it is unlocked: the default and seasonal themes
+// always, the others inside their active window.
+function isThemeUnlocked(theme, now) {
+  return theme.unlock_condition === 'default' ||
+    theme.unlock_condition === 'seasonal_auto' ||
+    Boolean(theme.active_from && theme.active_until &&
+      now >= new Date(theme.active_from) && now <= new Date(theme.active_until));
+}
+
 // GET /themes — seasonal themes
 router.get('/themes', verifyToken, async (req, res) => {
   try {
@@ -1338,10 +1348,7 @@ router.get('/themes', verifyToken, async (req, res) => {
     const now = new Date();
     const enriched = (themes || []).map(t => ({
       ...t,
-      unlocked: t.unlock_condition === 'default' ||
-        t.unlock_condition === 'seasonal_auto' ||
-        (t.active_from && t.active_until &&
-          now >= new Date(t.active_from) && now <= new Date(t.active_until)),
+      unlocked: isThemeUnlocked(t, now),
     }));
 
     res.json({
@@ -1360,23 +1367,37 @@ router.post('/themes/apply', verifyToken, validate(applyThemeSchema), async (req
     const userId = req.user.id;
     const { themeId } = req.body;
 
-    // Upsert mailday settings with theme
-    const { data: existing } = await supabaseAdmin
-      .from('MailDaySettings')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
+    const { data: theme, error: themeErr } = await supabaseAdmin
+      .from('SeasonalTheme')
+      .select('*')
+      .eq('id', themeId)
+      .maybeSingle();
+    if (themeErr) throw themeErr;
+    if (!theme) return res.status(404).json({ error: 'Theme not found' });
+    if (!isThemeUnlocked(theme, new Date())) {
+      return res.status(403).json({ error: "This theme isn't unlocked yet" });
+    }
 
-    if (existing) {
-      await supabaseAdmin
+    // Upsert. MailDaySettings is keyed by user_id and has no id column: the
+    // old select('id') always failed, so once a settings row existed every
+    // apply tried another insert, hit the primary key and still answered
+    // "Theme applied".
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from('MailDaySettings')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingErr) throw existingErr;
+
+    const { error } = existing
+      ? await supabaseAdmin
         .from('MailDaySettings')
-        .update({ current_theme: themeId })
-        .eq('user_id', userId);
-    } else {
-      await supabaseAdmin
+        .update({ current_theme: themeId, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+      : await supabaseAdmin
         .from('MailDaySettings')
         .insert({ user_id: userId, current_theme: themeId });
-    }
+    if (error) throw error;
 
     logMailEvent(userId, 'theme_applied', null, { themeId });
     res.json({ message: 'Theme applied' });

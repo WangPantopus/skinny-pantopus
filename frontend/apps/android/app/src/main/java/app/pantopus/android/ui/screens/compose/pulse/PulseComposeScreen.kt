@@ -282,6 +282,7 @@ fun PulseComposeScreen(
                                 isFlowMode = viewModel.isFlowMode,
                                 composePurpose = viewModel.flowPurpose,
                                 postingTargetLabel = viewModel.flowTargetLabel,
+                                isNetworkTarget = viewModel.isNetworkFlowTarget,
                             ),
                         actions =
                             PulseComposeActions(
@@ -396,6 +397,8 @@ internal data class PulseComposeContentState(
     val isFlowMode: Boolean = false,
     val composePurpose: PulseComposePurpose? = null,
     val postingTargetLabel: String? = null,
+    /** Composing to the Connections target: the general form reads "Post" and speaks of connections. */
+    val isNetworkTarget: Boolean = false,
 )
 
 internal data class PulseComposeSelectionActions(
@@ -862,6 +865,7 @@ private fun IntentSpecificSection(
                         fields = state.fields,
                         audience = state.announceAudience,
                         purpose = state.composePurpose,
+                        isNetworkTarget = state.isNetworkTarget,
                         showAudience = !state.isFlowMode && !state.isIntentLocked,
                         onUpdateField = onUpdateField,
                         onSelectAudience = onSelectAnnounceAudience,
@@ -1169,11 +1173,12 @@ private fun AnnounceSection(
     fields: Map<PulseComposeField, FormFieldState>,
     audience: PulseAnnounceAudience,
     purpose: PulseComposePurpose?,
+    isNetworkTarget: Boolean,
     showAudience: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectAudience: (PulseAnnounceAudience) -> Unit,
 ) {
-    FormFieldGroup(announceSectionTitle(purpose)) {
+    FormFieldGroup(if (isNetworkTarget) "Post" else announceSectionTitle(purpose)) {
         FieldRow(
             field = PulseComposeField.Title,
             label = "Headline",
@@ -1192,7 +1197,12 @@ private fun AnnounceSection(
         }
         BodyEditor(
             label = "Details",
-            placeholder = purpose?.placeholder ?: "Share what your neighbors should know…",
+            placeholder =
+                if (isNetworkTarget) {
+                    "Share with your connections…"
+                } else {
+                    purpose?.placeholder ?: "Share what your neighbors should know…"
+                },
             fields = fields,
             onUpdate = onUpdateField,
         )

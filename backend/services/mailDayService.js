@@ -74,26 +74,21 @@ function kindFor(objectType, category) {
 }
 
 /**
- * Materialise today's triage queue for a user, if it isn't already there.
+ * Bring today's triage queue up to date for a user: every unresolved letter
+ * they may see joins today's pieces, including one that needed a call after
+ * the day's first read. (Filling only an empty day left such a letter out of
+ * Mail Day, and out of the push, until the next day.)
  *
- * Idempotent: returns early when the user already has rows for `today`.
+ * Idempotent: the upsert below ignores pieces already there, reviewed or not.
  * Never throws — a failed backfill must not take down the screen that
  * calls it, nor the notification job.
  *
  * @param {string} userId
  * @param {string} today  UTC YYYY-MM-DD (matches MailDayItem.day_date)
- * @returns {Promise<number>} rows inserted (0 when nothing to do)
+ * @returns {Promise<number>} rows offered to the upsert (0 when nothing to do)
  */
 async function ensureTodayItems(userId, today) {
   try {
-    const { data: existing } = await supabaseAdmin
-      .from('MailDayItem')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('day_date', today)
-      .limit(1);
-    if (existing && existing.length > 0) return 0;
-
     const homeIds = await getAccessibleHomeIds(userId);
     // null = the read FAILED; [] = genuinely no homes. Only the second
     // is "nothing to do".
@@ -145,10 +140,11 @@ async function ensureTodayItems(userId, today) {
         updated_at: nowIso,
       };
     });
-    // Upsert-ignore, not insert: the empty-check above is a check-then-act
-    // with no lock, and this runs from every app instance's cron AND from
-    // GET /today. The unique index on (user_id, day_date, mail_id) makes
-    // the race's loser a silent no-op instead of a duplicated triage queue.
+    // Upsert-ignore, not insert: every read re-offers the day's unresolved
+    // letters, and this runs from every app instance's cron AND from
+    // GET /today. The unique index on (user_id, day_date, mail_id) makes a
+    // piece already there (or a racing writer's) a silent no-op instead of a
+    // duplicated triage queue.
     //
     // The index MUST be non-partial (migration 173) — Postgres cannot
     // infer a partial index from `ON CONFLICT (cols)` without repeating

@@ -939,6 +939,14 @@ router.post('/comment-media/:commentId', uploadLimiter, verifyToken, upload.arra
   }
 });
 
+// File extensions for the post video types s3Service allows.
+const POST_VIDEO_EXTENSIONS = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/x-msvideo': 'avi',
+  'video/webm': 'webm',
+};
+
 /**
  * POST /api/upload/post-media/:postId
  * Upload media files for a feed post (images/videos only, up to 9)
@@ -969,6 +977,9 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
 
     // Match the accepted comment upload contract: multipart filenames can
     // change after a lost reply, but sanitized bytes and MIME remain stable.
+    // Images and videos alike get a content-addressed key under this post and
+    // owner, so a re-sent upload is recognised as already attached instead of
+    // being appended again.
     const pending = new Map();
     for (const file of files) {
       const category = s3.categorizeFile(file.mimetype);
@@ -976,11 +987,12 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
         return res.status(400).json({ error: 'Post media only supports images and videos' });
       }
       const hash = crypto.createHash('sha256')
-        .update(JSON.stringify(['post-image-v1', postId, userId, file.mimetype]))
+        .update(JSON.stringify([category === 'image' ? 'post-image-v1' : 'post-video-v1', postId, userId, file.mimetype]))
         .update(file.buffer).digest('hex');
-      const key = category === 'image'
-        ? `posts/${postId}/${userId}/media_${hash}.${file.mimetype.split('/')[1].replace(/[^a-z0-9]/g, '')}`
-        : s3.generateS3Key(`posts/${postId}`, file.originalname, userId);
+      const ext = category === 'image'
+        ? file.mimetype.split('/')[1].replace(/[^a-z0-9]/g, '')
+        : POST_VIDEO_EXTENSIONS[file.mimetype];
+      const key = `posts/${postId}/${userId}/media_${hash}.${ext}`;
       pending.set(key, { file, category, url: s3.getPublicUrl(key) });
     }
     const existingUrls = new Set(postRecord.media_urls || []);

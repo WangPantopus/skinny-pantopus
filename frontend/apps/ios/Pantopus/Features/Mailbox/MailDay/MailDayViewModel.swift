@@ -41,10 +41,10 @@ public final class MailDayViewModel {
     private let api: APIClient
 
     /// - Parameters:
-    ///   - variant: Which fixture to fall back to when the fetch can't
-    ///     complete (offline / previews / tests). Defaults to `.populated`.
-    ///   - content: Optional seed (tests / previews) overriding the
-    ///     sample fixture for this variant.
+    ///   - variant: Which frame an injected `content` seed projects as
+    ///     (previews / tests). Defaults to `.populated`.
+    ///   - content: Optional seed for previews and tests. Without it, a
+    ///     failed read shows the error state, never sample mail.
     ///   - onScanRequested: Invoked when the user taps any Scan CTA
     ///     (top scan-more card or empty-hero primary). Out of scope to
     ///     wire to the real scanner here — the host hands a closure.
@@ -96,9 +96,14 @@ public final class MailDayViewModel {
                 ? .empty(content)
                 : .populated(content)
         } catch {
-            // Offline / preview / tests without a stub fall back to the
-            // fixture for this variant so the screen still renders.
-            state = projectedState()
+            // A failed read (offline, a server error, an unreadable reply)
+            // shows the error state with Try again. Sample pieces are only
+            // for previews and tests that inject `content`; real users never
+            // see invented mail (or accept a suggestion for a fixture piece).
+            state = seededContent == nil
+                ? .error(message: (error as? APIError)?.errorDescription
+                    ?? "Something went wrong. Please try again.")
+                : projectedState()
         }
     }
 
@@ -318,6 +323,44 @@ public final class MailDayViewModel {
         } catch {
             state = .populated(previous)
         }
+    }
+
+    /// "Other…" → the household keeps the letter (shared drawer).
+    public func keepForHousehold(_ itemId: String) async {
+        await decide(MailDayEndpoints.keepForHousehold(itemId: itemId), failure: "Couldn't file that for the household. Try again.")
+    }
+
+    /// "Other…" → junk the piece (the mailbox keeps Restore).
+    public func junk(_ itemId: String) async {
+        await decide(MailDayEndpoints.junk(itemId: itemId), failure: "Couldn't junk that piece. Try again.")
+    }
+
+    /// A reviewed row's Undo: the piece goes back to "Needs a call".
+    public func undo(_ itemId: String) async {
+        await decide(MailDayEndpoints.undo(itemId: itemId), failure: "Couldn't undo that. Try again.")
+    }
+
+    /// "Undo all from today": every reviewed piece goes back to "Needs a call".
+    public func undoAll() async {
+        guard case let .populated(content) = state, !content.reviewed.isEmpty else { return }
+        var failed = false
+        for row in content.reviewed {
+            do { _ = try await api.request(MailDayEndpoints.undo(itemId: row.id)) } catch { failed = true }
+        }
+        await fetch()
+        if failed { settingsToast = "Some pieces couldn't be undone. Try again." }
+    }
+
+    /// Persists one triage decision, then re-reads the day so the rows and
+    /// chips show what the server did. A failure says so; the re-read keeps
+    /// the screen truthful either way.
+    private func decide(_ endpoint: Endpoint, failure: String) async {
+        do {
+            _ = try await api.request(endpoint)
+        } catch {
+            settingsToast = failure
+        }
+        await fetch()
     }
 
     /// Close out the day: `POST /finish` bumps the streak server-side; the

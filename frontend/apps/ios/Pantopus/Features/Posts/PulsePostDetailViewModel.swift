@@ -220,7 +220,7 @@ public final class PulsePostDetailViewModel {
 
         do {
             let response = try await client.request(
-                PostsEndpoints.toggleLike(id: postId),
+                PostsEndpoints.toggleLike(id: postId, liked: !wasOn),
                 as: PostLikeResponse.self
             )
             // Reconcile with server truth.
@@ -261,7 +261,7 @@ public final class PulsePostDetailViewModel {
 
         do {
             let response = try await client.request(
-                PostsEndpoints.toggleCommentLike(postId: postId, commentId: commentId),
+                PostsEndpoints.toggleCommentLike(postId: postId, commentId: commentId, liked: !original.userReacted),
                 as: CommentLikeResponse.self
             )
             guard case let .loaded(current) = state,
@@ -356,7 +356,7 @@ public final class PulsePostDetailViewModel {
         isSaved.toggle()
         do {
             let response = try await client.request(
-                PostsEndpoints.toggleSave(id: postId),
+                PostsEndpoints.toggleSave(id: postId, saved: !original),
                 as: PostSaveResponse.self
             )
             isSaved = response.saved
@@ -375,7 +375,7 @@ public final class PulsePostDetailViewModel {
         isReposted.toggle()
         do {
             let response = try await client.request(
-                PostsEndpoints.share(id: postId, shareType: "repost"),
+                PostsEndpoints.share(id: postId, shareType: "repost", reposted: !original),
                 as: PostShareResponse.self
             )
             isReposted = response.reposted ?? !original

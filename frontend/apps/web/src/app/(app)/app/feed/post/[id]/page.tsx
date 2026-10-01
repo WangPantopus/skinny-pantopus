@@ -159,8 +159,9 @@ export default function PostDetailPage() {
     if (postId && commentCount != null) patchPostInFeedCaches(queryClient, postId, { comment_count: commentCount });
   }, [queryClient, postId, commentCount]);
 
+  // Each request carries the state the person chose, so a re-send can't flip it back.
   const likeMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleLike(postId),
+    mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
     onMutate: () => {
       setPost((p: Post | null) =>
         p
@@ -168,7 +169,7 @@ export default function PostDetailPage() {
           : p
       );
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       setPost((p: Post | null) => (p ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
       patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
@@ -185,17 +186,17 @@ export default function PostDetailPage() {
 
   const handleLike = useCallback(() => {
     if (!post) return;
-    likeMutation.mutate(post.id);
+    likeMutation.mutate({ postId: post.id, liked: !post.userHasLiked });
   }, [post, likeMutation]);
 
   const saveMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleSave(postId),
+    mutationFn: ({ postId, saved }: { postId: string; saved: boolean }) => api.posts.toggleSave(postId, saved),
     onMutate: () => {
       const prevSaved = post?.userHasSaved ?? false;
       setPost((p: Post | null) => (p ? { ...p, userHasSaved: !prevSaved } : p));
       return { prevSaved };
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       setPost((p: Post | null) => (p ? { ...p, userHasSaved: res.saved } : p));
       patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
       showToast(res.saved ? 'Post saved' : 'Removed from saved');
@@ -212,7 +213,7 @@ export default function PostDetailPage() {
   const handleSave = useCallback(() => {
     if (!post || saveInFlight.current) return;
     saveInFlight.current = true;
-    saveMutation.mutate(post.id, {
+    saveMutation.mutate({ postId: post.id, saved: !post.userHasSaved }, {
       onSettled: () => {
         saveInFlight.current = false;
       },
@@ -272,7 +273,8 @@ export default function PostDetailPage() {
   const handleCommentLike = async (commentId: string) => {
     if (!postId) return;
     try {
-      const res = await api.posts.toggleCommentLike(postId, commentId);
+      const comment = comments.find((c) => c.id === commentId);
+      const res = await api.posts.toggleCommentLike(postId, commentId, !(comment?.userHasLiked ?? false));
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId ? { ...c, userHasLiked: res.liked, like_count: res.likeCount } : c
@@ -287,7 +289,7 @@ export default function PostDetailPage() {
   const handleRepost = async () => {
     if (!post) return;
     try {
-      const res = await api.posts.repostPost(post.id);
+      const res = await api.posts.repostPost(post.id, !post.userHasReposted);
       setPost((p: Post | null) => (p ? {
         ...p,
         userHasReposted: res.reposted,

@@ -148,6 +148,8 @@ class PlaceDetailViewModel
 
         private val _isIssuing = MutableStateFlow(false)
         val isIssuing: StateFlow<Boolean> = _isIssuing.asStateFlow()
+        private var pendingLetterPurpose: String? = null
+        private var pendingLetterRequestId: String? = null
 
         fun loadLetters() {
             viewModelScope.launch {
@@ -165,12 +167,23 @@ class PlaceDetailViewModel
         ) {
             if (purpose.isBlank()) return
             viewModelScope.launch {
+                // One letter per request, as with claims: a tap while an issue is in flight is ignored, and a
+                // retry with the same purpose reuses its request id, so the server returns the letter it issued.
+                if (_isIssuing.value) return@launch
                 _isIssuing.value = true
+                if (pendingLetterPurpose != purpose) {
+                    pendingLetterPurpose = purpose
+                    pendingLetterRequestId = UUID.randomUUID().toString()
+                }
                 // A refused issue (403, rate limit, outage) must not look
                 // like a no-op: surface it like the claim/revoke paths and
                 // keep the typed purpose so the resident can retry.
-                when (val r = repo.issueResidencyLetter(homeId, purpose)) {
-                    is NetworkResult.Success -> onIssued()
+                when (val r = repo.issueResidencyLetter(homeId, purpose, pendingLetterRequestId)) {
+                    is NetworkResult.Success -> {
+                        pendingLetterPurpose = null
+                        pendingLetterRequestId = null
+                        onIssued()
+                    }
                     is NetworkResult.Failure ->
                         _actionToast.value =
                             PlaceActionToast(r.error.displayMessage("Couldn't issue the letter."), isError = true)

@@ -289,6 +289,20 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
 /// (`backend/routes/posts.js:344`).
 public struct PostShareRequest: Encodable, Sendable {
     public let shareType: String
+    /// The repost state the person chose (`shareType: "repost"`), so a re-sent request can't
+    /// flip it back. Omitted for external shares, and the server toggles when it's absent.
+    public var reposted: Bool?
+}
+
+/// Body for `POST /api/posts/:id/like` and the comment like: the state the person chose, so a
+/// re-sent request can't flip it back. Without a body the server toggles.
+public struct PostLikeStateRequest: Encodable, Sendable {
+    public let liked: Bool
+}
+
+/// Body for `POST /api/posts/:id/save`: the state the person chose (see `PostLikeStateRequest`).
+public struct PostSaveStateRequest: Encodable, Sendable {
+    public let saved: Bool
 }
 
 /// Body for `POST /api/posts/:id/report` — `reportPostSchema`

@@ -8,10 +8,11 @@
 //  the 5-second undo countdown ticks down through `tickUndo()`.
 //
 //  P3F: `load()` now reads `GET /api/mailbox/v2/mailday/today`. The fixture
-//  projection tests drive a stubbed `APIClient` whose GET fails so the
-//  view-model falls back to the `variant` sample (the offline baseline),
-//  keeping these assertions data-source-agnostic. The networked happy
-//  path (live mapping, accept-rollback, finish) is covered separately.
+//  projection tests inject the `variant` sample as `content` and drive a
+//  stubbed `APIClient` whose GET fails, so the view-model projects that
+//  seed (a failed read without a seed shows the error state), keeping
+//  these assertions data-source-agnostic. The networked happy path (live
+//  mapping, accept-rollback, finish) is covered separately.
 //
 
 import XCTest
@@ -32,10 +33,11 @@ final class MailDayViewModelTests: XCTestCase {
         )
     }
 
-    /// VM whose `load()` GET fails, falling back to the `variant` fixture.
+    /// VM seeded with the `variant` fixture whose `load()` GET fails, so it projects the seed.
     private func makeSeededVM(variant: MailDayVariant) -> MailDayViewModel {
         SequencedURLProtocol.sequence = [.status(500, body: "{}")]
-        return MailDayViewModel(variant: variant, api: makeAPI())
+        let seed = variant == .populated ? MailDaySampleData.populated : MailDaySampleData.empty
+        return MailDayViewModel(variant: variant, api: makeAPI(), content: seed)
     }
 
     // MARK: - Populated frame (fixture fallback)
@@ -116,9 +118,9 @@ final class MailDayViewModelTests: XCTestCase {
     // MARK: - Accept suggestion
 
     func test_acceptSuggestion_movesUnreviewedToReviewed() async {
-        // GET fails → populated fixture; route POST succeeds.
+        // GET fails → the injected populated fixture; route POST succeeds.
         SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(200, body: "{}")]
-        let vm = MailDayViewModel(variant: .populated, api: makeAPI())
+        let vm = MailDayViewModel(variant: .populated, api: makeAPI(), content: MailDaySampleData.populated)
         await vm.load()
 
         guard case let .populated(initial) = vm.state else {
@@ -139,7 +141,7 @@ final class MailDayViewModelTests: XCTestCase {
 
     func test_acceptSuggestion_clearsPriorCountdown() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(200, body: "{}")]
-        let vm = MailDayViewModel(variant: .populated, api: makeAPI())
+        let vm = MailDayViewModel(variant: .populated, api: makeAPI(), content: MailDaySampleData.populated)
         await vm.load()
 
         guard case let .populated(initial) = vm.state else {
@@ -159,9 +161,9 @@ final class MailDayViewModelTests: XCTestCase {
     }
 
     func test_acceptSuggestion_rollsBackOnFailure() async {
-        // GET fails → populated fixture; route POST fails → revert.
+        // GET fails → the injected populated fixture; route POST fails → revert.
         SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(500, body: "{}")]
-        let vm = MailDayViewModel(variant: .populated, api: makeAPI())
+        let vm = MailDayViewModel(variant: .populated, api: makeAPI(), content: MailDaySampleData.populated)
         await vm.load()
 
         guard case let .populated(initial) = vm.state else {
