@@ -17,6 +17,10 @@ function DiscoverPageContent() {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  // The query the shown results answer, and whether that search failed: "No results found." is only said
+  // after a search for the current text has finished, and a failed search says so instead.
+  const [searchedQuery, setSearchedQuery] = useState<string | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
 
   const [people, setPeople] = useState<UserProfile[]>([]);
@@ -41,6 +45,7 @@ function DiscoverPageContent() {
     }
 
     setLoading(true);
+    setSearchFailed(false);
     try {
       const [peopleRes, businessRes, homesRes] = await Promise.all([
         api.users.searchUsers(q, { type: 'people', limit: 20 }),
@@ -72,6 +77,13 @@ function DiscoverPageContent() {
       const bizFollowMap: Record<string, boolean> = {};
       for (const b of nextBusinesses) bizFollowMap[b.id] = !!b.following;
       setBusinessFollowing(bizFollowMap);
+      setSearchedQuery(q);
+    } catch {
+      setPeople([]);
+      setBusinesses([]);
+      setHomes([]);
+      setSearchedQuery(q);
+      setSearchFailed(true);
     } finally {
       setLoading(false);
     }
@@ -157,12 +169,15 @@ function DiscoverPageContent() {
   };
 
   const canRunSearch = query.trim().length >= 2;
+  const searchedCurrent = searchedQuery === query.trim();
+  const failedForCurrent = searchFailed && searchedCurrent;
 
   const headerText = useMemo(() => {
     if (!canRunSearch) return 'Type at least 2 characters to search.';
     if (loading) return 'Searching...';
+    if (failedForCurrent) return 'Couldn\u2019t search right now.';
     return `${totalCount} result${totalCount === 1 ? '' : 's'}`;
-  }, [canRunSearch, loading, totalCount]);
+  }, [canRunSearch, loading, totalCount, failedForCurrent]);
 
   return (
     <div className="bg-app min-h-screen">
@@ -333,7 +348,16 @@ function DiscoverPageContent() {
           </section>
         )}
 
-        {canRunSearch && !loading && totalCount === 0 && (
+        {canRunSearch && !loading && failedForCurrent && (
+          <div className="rounded-xl border border-app bg-surface p-8 text-center text-app-secondary">
+            Something went wrong on our side.{' '}
+            <button type="button" onClick={() => void runSearch()} className="font-medium text-primary-600 hover:underline">
+              Try again
+            </button>
+          </div>
+        )}
+
+        {canRunSearch && !loading && searchedCurrent && !searchFailed && totalCount === 0 && (
           <div className="rounded-xl border border-app bg-surface p-8 text-center text-app-secondary">
             No results found.
           </div>
