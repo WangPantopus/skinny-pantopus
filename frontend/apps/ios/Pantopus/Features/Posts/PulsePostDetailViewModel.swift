@@ -451,6 +451,8 @@ public final class PulsePostDetailViewModel {
         } catch let error as APIError {
             logger.warning("Post detail load failed: \(error)")
             state = .error(message: friendlyMessage(for: error), retryable: isRetryable(error))
+            // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
+            if !isRetryable(error) { PulsePostsRefresh.notifyPostsDidChange() }
         } catch {
             logger.warning("Post detail load failed: \(error)")
             state = .error(message: "Something went wrong", retryable: true)
