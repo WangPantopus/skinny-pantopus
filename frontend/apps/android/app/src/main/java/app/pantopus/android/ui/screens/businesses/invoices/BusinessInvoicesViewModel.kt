@@ -8,13 +8,17 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessInvoiceDto
 import app.pantopus.android.data.api.models.businesses.CreateBusinessInvoiceLineItem
 import app.pantopus.android.data.api.models.businesses.CreateBusinessInvoiceRequest
+import app.pantopus.android.data.api.models.businesses.InvoiceRecipientDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessFinanceRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -129,8 +133,18 @@ class BusinessInvoicesViewModel
         val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
 
         // ─── Create-invoice draft (owned here so the sheet stays dumb) ──
-        private val _recipientUserId = MutableStateFlow("")
-        val recipientUserId: StateFlow<String> = _recipientUserId.asStateFlow()
+        /** The recipient, picked from the people this crew already knows. */
+        private val _recipient = MutableStateFlow<InvoiceRecipientDto?>(null)
+        val recipient: StateFlow<InvoiceRecipientDto?> = _recipient.asStateFlow()
+
+        private val _recipientQuery = MutableStateFlow("")
+        val recipientQuery: StateFlow<String> = _recipientQuery.asStateFlow()
+
+        private val _recipientOptions = MutableStateFlow<List<InvoiceRecipientDto>>(emptyList())
+        val recipientOptions: StateFlow<List<InvoiceRecipientDto>> = _recipientOptions.asStateFlow()
+
+        private val _isSearchingRecipients = MutableStateFlow(false)
+        val isSearchingRecipients: StateFlow<Boolean> = _isSearchingRecipients.asStateFlow()
 
         private val _dueDate = MutableStateFlow("")
         val dueDate: StateFlow<String> = _dueDate.asStateFlow()
@@ -153,6 +167,7 @@ class BusinessInvoicesViewModel
         private var rows = mutableListOf<BusinessInvoiceRow>()
         private var isLoadingPage = false
         private var nextLineItemKey = 1L
+        private var recipientSearch: Job? = null
 
         /**
          * A retry of the same draft (a lost reply, a second tap) keeps its
@@ -252,8 +267,38 @@ class BusinessInvoicesViewModel
 
         // ─── Create ───────────────────────────────────────────────────
 
-        fun setRecipientUserId(value: String) {
-            _recipientUserId.value = value
+        /** Suggestions as the sheet opens, then matches as the owner types (250 ms). */
+        fun searchRecipients(immediately: Boolean = false) {
+            recipientSearch?.cancel()
+            if (_recipient.value != null) return
+            val query = _recipientQuery.value.trim()
+            _isSearchingRecipients.value = true
+            recipientSearch =
+                viewModelScope.launch {
+                    if (!immediately) delay(RECIPIENT_SEARCH_DEBOUNCE_MS)
+                    val result = repository.invoiceRecipients(businessId, query)
+                    // A newer search (or a pick) cancelled this one.
+                    if (!isActive) return@launch
+                    _recipientOptions.value = (result as? NetworkResult.Success)?.data?.people.orEmpty()
+                    _isSearchingRecipients.value = false
+                }
+        }
+
+        fun setRecipientQuery(value: String) {
+            _recipientQuery.value = value
+            searchRecipients()
+        }
+
+        fun selectRecipient(person: InvoiceRecipientDto) {
+            recipientSearch?.cancel()
+            _recipient.value = person
+            _isSearchingRecipients.value = false
+            _createError.value = null
+        }
+
+        fun clearRecipient() {
+            _recipient.value = null
+            searchRecipients(immediately = true)
         }
 
         fun setDueDate(value: String) {
@@ -294,7 +339,10 @@ class BusinessInvoicesViewModel
         }
 
         fun resetDraft() {
-            _recipientUserId.value = ""
+            recipientSearch?.cancel()
+            _recipient.value = null
+            _recipientQuery.value = ""
+            _recipientOptions.value = emptyList()
             _dueDate.value = ""
             _memo.value = ""
             _lineItems.value = listOf(InvoiceLineItemDraft(key = nextLineItemKey++))
@@ -309,9 +357,9 @@ class BusinessInvoicesViewModel
         fun createInvoice(onSent: () -> Unit) {
             viewModelScope.launch {
                 _createError.value = null
-                val recipient = _recipientUserId.value.trim()
-                if (recipient.isEmpty()) {
-                    _createError.value = "Recipient user ID is required"
+                val recipient = _recipient.value?.id
+                if (recipient == null) {
+                    _createError.value = "Choose who to invoice"
                     return@launch
                 }
                 val parsed = mutableListOf<CreateBusinessInvoiceLineItem>()
@@ -372,6 +420,7 @@ class BusinessInvoicesViewModel
 
         companion object {
             private const val PAGE_SIZE = 20
+            private const val RECIPIENT_SEARCH_DEBOUNCE_MS = 250L
             private const val CENTS_PER_UNIT = 100.0
             private const val ISO_DATE_LENGTH = 10
 

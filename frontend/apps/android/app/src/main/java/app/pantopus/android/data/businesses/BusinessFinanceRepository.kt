@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessUploadEvidenceReq
 import app.pantopus.android.data.api.models.businesses.BusinessUploadEvidenceResponse
 import app.pantopus.android.data.api.models.businesses.BusinessVerificationStatusResponse
 import app.pantopus.android.data.api.models.businesses.CreateBusinessInvoiceRequest
+import app.pantopus.android.data.api.models.businesses.InvoiceRecipientsResponse
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessPrivateRequest
 import app.pantopus.android.data.api.models.businesses.VoidBusinessInvoiceRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -63,6 +64,12 @@ open class BusinessFinanceRepository
             pageSize: Int,
             status: String?,
         ): NetworkResult<BusinessInvoiceListResponse> = safeApiCall { api.invoices(businessId, page, pageSize, status) }
+
+        /** `GET /{id}/invoice-recipients` — the people the crew already knows, for the recipient picker. */
+        open suspend fun invoiceRecipients(
+            businessId: String,
+            query: String,
+        ): NetworkResult<InvoiceRecipientsResponse> = safeApiCall { api.invoiceRecipients(businessId, query.ifEmpty { null }) }
 
         /** `POST /{id}/invoices` — create and send. */
         open suspend fun createInvoice(

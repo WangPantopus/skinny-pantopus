@@ -248,3 +248,39 @@ public struct PayInvoiceResponse: Decodable, Sendable, Hashable {
         PaymentIntentSheetParams(clientSecret: clientSecret, paymentIntentId: paymentIntentId)
     }
 }
+
+/// One person a crew can invoice, from
+/// `GET /api/businesses/:id/invoice-recipients`, with how the crew knows them.
+public struct InvoiceRecipientDTO: Decodable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let name: String
+    public let username: String
+    public let profilePictureUrl: String?
+    /// `invoiced` · `booked` · `hired` · `messaged` · `connection`.
+    public let relation: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case username
+        case profilePictureUrl = "profile_picture_url"
+        case relation
+    }
+
+    /// The row's second line after the username.
+    public var relationLabel: String {
+        switch relation {
+        case "invoiced": "Invoiced before"
+        case "booked": "Booked with you"
+        case "hired": "Hired you"
+        case "messaged": "Messaged you"
+        case "connection": "Your connection"
+        default: ""
+        }
+    }
+}
+
+/// `GET /api/businesses/:id/invoice-recipients` → `{ people }`.
+public struct InvoiceRecipientsResponse: Decodable, Sendable, Hashable {
+    public let people: [InvoiceRecipientDTO]
+}
