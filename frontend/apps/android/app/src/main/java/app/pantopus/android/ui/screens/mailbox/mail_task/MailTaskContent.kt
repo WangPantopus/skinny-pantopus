@@ -131,6 +131,9 @@ data class MailTaskContent(
     val elfDone: MailTaskElf? = null,
     val completion: MailTaskCompletion? = null,
     val nextUp: MailTaskNextUp? = null,
+    // The open dock's Snooze, Delegate and Calendar chips: the task API has
+    // no snooze picker, hand-off or calendar yet, so live tasks hide them.
+    val hasDockShortcuts: Boolean = false,
     val isDone: Boolean = false,
 ) {
     /** Total subtasks. */

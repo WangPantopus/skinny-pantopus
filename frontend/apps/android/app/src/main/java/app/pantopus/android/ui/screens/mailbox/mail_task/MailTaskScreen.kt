@@ -336,25 +336,29 @@ private fun ActionDock(
                 onClick = { viewModel.markDone() },
                 modifier = Modifier.testTag("mailTask_markDone"),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                DockChip(
-                    icon = PantopusIcon.Clock,
-                    label = "Snooze",
-                    onClick = { viewModel.snoozeFromDock() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_snooze"),
-                )
-                DockChip(
-                    icon = PantopusIcon.UserPlus,
-                    label = "Delegate",
-                    onClick = { viewModel.delegate() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_delegate"),
-                )
-                DockChip(
-                    icon = PantopusIcon.CalendarPlus,
-                    label = "Calendar",
-                    onClick = { viewModel.addToCalendar() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_calendar"),
-                )
+            // Design frames only: live tasks have no snooze picker, hand-off or
+            // calendar to open, so the chips stay hidden rather than fake it.
+            if (content.hasDockShortcuts) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    DockChip(
+                        icon = PantopusIcon.Clock,
+                        label = "Snooze",
+                        onClick = { viewModel.snoozeFromDock() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_snooze"),
+                    )
+                    DockChip(
+                        icon = PantopusIcon.UserPlus,
+                        label = "Delegate",
+                        onClick = { viewModel.delegate() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_delegate"),
+                    )
+                    DockChip(
+                        icon = PantopusIcon.CalendarPlus,
+                        label = "Calendar",
+                        onClick = { viewModel.addToCalendar() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_calendar"),
+                    )
+                }
             }
         }
     }

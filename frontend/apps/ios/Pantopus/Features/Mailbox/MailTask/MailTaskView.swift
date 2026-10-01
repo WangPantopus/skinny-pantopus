@@ -215,7 +215,7 @@ public struct MailTaskView: View {
             if task.isDone {
                 doneDock
             } else {
-                openDock
+                openDock(task)
             }
         }
         .padding(.horizontal, Spacing.s4)
@@ -227,17 +227,21 @@ public struct MailTaskView: View {
         }
     }
 
-    private var openDock: some View {
+    private func openDock(_ task: MailTaskContent) -> some View {
         VStack(spacing: Spacing.s2 + 2) {
             dockPrimary(icon: .check, title: "Mark done") { viewModel.markDone() }
                 .accessibilityIdentifier("mailTask_markDone")
-            HStack(spacing: Spacing.s2) {
-                dockChip(icon: .clock, label: "Snooze") { viewModel.snoozeFromDock() }
-                    .accessibilityIdentifier("mailTask_dock_snooze")
-                dockChip(icon: .userPlus, label: "Delegate") { viewModel.delegate() }
-                    .accessibilityIdentifier("mailTask_dock_delegate")
-                dockChip(icon: .calendarPlus, label: "Calendar") { viewModel.addToCalendar() }
-                    .accessibilityIdentifier("mailTask_dock_calendar")
+            // Design frames only: live tasks have no snooze picker, hand-off or
+            // calendar to open, so the chips stay hidden rather than fake it.
+            if task.hasDockShortcuts {
+                HStack(spacing: Spacing.s2) {
+                    dockChip(icon: .clock, label: "Snooze") { viewModel.snoozeFromDock() }
+                        .accessibilityIdentifier("mailTask_dock_snooze")
+                    dockChip(icon: .userPlus, label: "Delegate") { viewModel.delegate() }
+                        .accessibilityIdentifier("mailTask_dock_delegate")
+                    dockChip(icon: .calendarPlus, label: "Calendar") { viewModel.addToCalendar() }
+                        .accessibilityIdentifier("mailTask_dock_calendar")
+                }
             }
         }
     }
