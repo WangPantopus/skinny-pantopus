@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -211,8 +213,7 @@ private fun BlockFields(
         }
         BusinessPageBlockForm.Gallery -> {
             StringField("Heading", draft, "heading", "Gallery") { setString("heading", it) }
-            NumberField("Image Count", draft, "image_count", 6) { setNumber("image_count", it, 6) }
-            Hint("Image uploads available in the media manager")
+            Hint("Photos can't be added to a gallery yet, so visitors don't see this block")
         }
         BusinessPageBlockForm.Catalog -> {
             StringField("Heading", draft, "heading", "Our Services") { setString("heading", it) }
@@ -233,11 +234,11 @@ private fun BlockFields(
         BusinessPageBlockForm.Stats -> StatsEditor(draft, onDraftChange)
         BusinessPageBlockForm.Embed -> {
             StringField("URL", draft, "url", "https://youtube.com/…") { setString("url", it) }
-            Hint("YouTube, Vimeo, Google Maps, and other embeddable URLs")
+            Hint("YouTube and Vimeo videos play on your page. Any other web address shows as a link")
         }
         BusinessPageBlockForm.PostsFeed -> {
             StringField("Heading", draft, "heading", "Latest Updates") { setString("heading", it) }
-            NumberField("Max Items", draft, "max_items", 5) { setNumber("max_items", it, 5) }
+            Hint("Posts aren't shown on your public page yet, so visitors don't see this block")
         }
         is BusinessPageBlockForm.HeadingOnly -> {
             StringField("Heading", draft, "heading", "Section heading") { setString("heading", it) }
@@ -323,7 +324,7 @@ private fun ChipRow(
                         Modifier
                             .clip(RoundedCornerShape(Radii.pill))
                             .background(if (isActive) PantopusColors.primary600 else PantopusColors.appSurface)
-                            .clickable { onSelect(key) }
+                            .selectable(selected = isActive, role = Role.RadioButton) { onSelect(key) }
                             .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
                 )
             }

@@ -46,8 +46,10 @@ public struct MembersListView: View {
                     .padding(Spacing.s3)
                     .accessibilityIdentifier("membersListInvitationResult")
             }
-            Button("Invitation recovery") { invitationTarget = .init(action: .create, invitationId: nil) }
-                .frame(minHeight: 44).accessibilityIdentifier("membersListInvitationRecovery")
+            if !viewModel.memberListRefused {
+                Button("Invitation recovery") { invitationTarget = .init(action: .create, invitationId: nil) }
+                    .frame(minHeight: 44).accessibilityIdentifier("membersListInvitationRecovery")
+            }
             Button("Member removal recovery") { removalPresentation = .init(target: nil) }
                 .frame(minHeight: 44).accessibilityIdentifier("membersListRemovalRecovery")
             if let removalResult {

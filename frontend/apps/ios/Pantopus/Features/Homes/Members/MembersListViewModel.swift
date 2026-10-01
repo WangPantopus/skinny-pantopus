@@ -182,6 +182,11 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         isCurrent && (access?.canManageMembers ?? false)
     }
 
+    /// The server refused this viewer the member list (403) on its latest answer. The
+    /// invitation entry is then an action they can't take; removal recovery stays, since it
+    /// also covers the viewer's own leave. A refresh keeps it until a new answer arrives.
+    public private(set) var memberListRefused = false
+
     // MARK: - Dependencies
 
     private let homeId: String
@@ -421,6 +426,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             auditEntries = audit
             loadedOnce = true
             fetchError = nil
+            memberListRefused = false
             if [MembersTab.requests, MembersTab.audit].contains(selectedTab), !canManageMembers {
                 selectedTab = MembersTab.members
             }
@@ -438,6 +444,11 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             auditEntries = []
             fetchError = (error as? APIError)?.errorDescription ?? (error as? HomeInvitationSenderError)?.localizedDescription
                 ?? "Couldn't load members and invitations. Try again."
+            if let apiError = error as? APIError, case .forbidden = apiError {
+                memberListRefused = true
+            } else {
+                memberListRefused = false
+            }
             applyState()
         }
     }

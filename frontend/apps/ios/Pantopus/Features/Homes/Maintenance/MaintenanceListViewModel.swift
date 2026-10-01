@@ -220,9 +220,11 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
             // entries says which tab is empty, so the entries under the other tab aren't hidden behind it.
             let logEmpty = !tasks.contains { passes($0, tab: .all, now: nowDate) }
             let (headline, subcopy): (String, String) = if logEmpty {
-                ("No maintenance logged yet",
-                 "Track HVAC tune-ups, gutter cleans, filter swaps and " +
-                     "inspections. Build a service history that protects warranties and resale value.")
+                (
+                    "No maintenance logged yet",
+                    "Track HVAC tune-ups, gutter cleans, filter swaps and " +
+                        "inspections. Build a service history that protects warranties and resale value."
+                )
             } else if tab == .completed {
                 ("Nothing completed yet", "Scheduled maintenance moves here once it's done.")
             } else {
