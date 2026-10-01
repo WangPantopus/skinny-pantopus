@@ -592,6 +592,8 @@ async function hasExternalShare(postId) {
 
 const canViewPost = async (post, userId) => {
   if (post.user_id === userId) return true;
+  // Removed by moderation: only its author still sees it.
+  if (post.archive_reason === 'moderation') return false;
   // Profile blocks (UserBlock) hide posts in both directions, like messaging.
   if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
   if (post.identity_context_type === 'persona'
@@ -696,6 +698,7 @@ const POST_VISIBILITY_SELECT = [
   'id',
   'user_id',
   'archived_at',
+  'archive_reason',
   'post_metadata',
   'identity_context_type',
   'identity_context_id',
