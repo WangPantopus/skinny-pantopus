@@ -9,6 +9,30 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1182 (b251) and #1190 (b253) merged; #1195 (page editor keyboard) sealed; #1200 (notification Remove focus) in CI; native #1192 + #1196 wait for Stream 1's candidate, 2026-10-01T03:04:03Z
+
+- **Merged:**
+  - batch 251: #1182 (chat image viewer + Chat details drawer portaled above the app chrome; 10 chat controls named; reaction button visible on focus);
+  - batch 253: #1190 (Privacy/account toggles are named switches with state; settings back buttons and the notification close named).
+- **Sealed and handed: #1195** (web crew page editor), head `09621511b`, CI 36808007677, seal `49e78742…`, bundle `20261001-stream5-page-editor-keyboard-r1`.
+  - A block's settings opened only by mouse, and its toolbar was invisible on keyboard focus.
+  - Now the type chip is a button, "Edit hero block", with the same look, and the toolbar shows on focus-within.
+- **In CI: #1200** (web notifications), bundle `20261001-stream5-notification-remove-focus-r1`. The Remove ✕ on `/app/notifications` and in the bell was opacity 0 on keyboard focus; now `focus-visible:opacity-100`.
+- **Native, waiting for Stream 1's next candidate:**
+  - **#1192** (iOS + Android): a hidden block's row says "Hidden from visitors". This is Stream 1's 1158 finding.
+  - **#1196** (iOS): the crew Pages screen's back and delete buttons are named.
+  - Scans found nothing else unlabelled. The iOS EditFabs are labelled at their call sites, and Android has 0 unnamed IconButtons in Stream 5 screens.
+- **Checks with no defect** (`audits/20261001-stream5-notification-links-r1`): every backend notification `link:` template was run through the web resolver and matched against the `page.tsx` routes. There are no dead links in Stream 5's area. `/chat/:id` is a native push payload; `/invite/lease` has a `next.config` redirect.
+- **Decisions:**
+  - The seat dialogs aren't portaled. Many centred dialogs share the backdrop extent, and a global fix belongs in the shared AppShell; I portaled only the overlays whose controls were covered.
+  - Hover-only controls get `focus-visible`/`group-focus-within` variants, never new controls.
+- **Kit:** `stream3-runtime-kit/tools/stream5-e2e/` now has `seal-pr.sh`, `seal-pr-explained.sh`, `storage-cleanup.py`, `unnamed-buttons.cjs`, `unnamed-links.cjs` and `notif-link-scan.cjs`, with README notes (proof recipes and runtime gotchas).
+- **Candidates left:**
+  - The notification rows (page and bell) are `role="button"` containing the Remove `<button>`, a nested interactive. Fixing it is a restructure.
+  - The seat dialogs' backdrop extent (shared AppShell fix).
+  - `getPostingIdentities` drift; the logo route keeps the replaced File; web portfolio upload parity.
+- **Runtime:** API 18134 on `ddd5f96b7` (receipt 02:48:47Z); web 18131 on `3d93fe03e` (#1200's head). No fixtures remain.
+
 ## LIVE — whole sweep backlog merged (#1158 in batch 250); a11y + overlay sweep: #1165/#1167/#1168/#1170 merged (batch 248), #1182 (chat overlays + names) sealed, #1190 (privacy switches) in CI, 2026-10-01T02:43:51Z
 
 - **Merged:**
