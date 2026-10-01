@@ -173,9 +173,16 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T00:08Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T00:27Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T00:08Z):**
+- **Latest (2026-10-01T00:27Z):**
+  - **Merged:** #1122 in batch 226 (#1123, 00:07:33Z), #1124 in batch 227 (#1125, 00:08:13Z), [#1127](https://github.com/WangPantopus/skinny-pantopus/pull/1127) in batch 228 (#1130, 00:21:13Z). Master is `fe75e358` (batch 229).
+  - **#1127** (backlog item 5): the web post page's type band turns dark in dark mode. **Decided by Stream 1 (palette owner), option B:** band = the type colour at 10% over the card; chip text = `darkTextColor`; time/"edited" = text-app-muted; light identical (measured). Rejected: the sunken token (every band the same neutral), new tokens.
+  - **With Stream 1:** [#1129](https://github.com/WangPantopus/skinny-pantopus/pull/1129) head `241b96941996d0a44117e23dde56309a2dac75a6`, seal `eda31527505bb4a72d93d6521bb18f317c7da29d63f1faf8af046c6a25580f0d` (item 3, iOS Today Manage → Notification settings). build-for-testing succeeded; Stream 1 put it in its iOS/Android candidate `68b8ac1ec` (with #1116) and runs steps A–C on its simulator (it creates its own synthetic `DailyBriefingDelivery` row for step B; recipe sent).
+  - **Sent:** [#1134](https://github.com/WangPantopus/skinny-pantopus/pull/1134) head `2c26048ee891c44d581cac60d3c47401a724f728`, seal `2a0359744d8735603190c8a403713664fcc4c0e76f861d83aea900643ab0f6a9`: screen readers hear the Pulse feed's and post pages' messages. Reproduced on master: no live region on the feed, panel or post page; none of six save/unsave toasts announced. Now each sits in a mounted `role="status"` region; toasts look identical.
+  - **Decided (standing direction), item 4 — native post page "SHARE" chip: no change.** The six buckets are the A10.4 design's own spec (both apps' `PostAuthorHeader`); "Share" is the design's name for the general sharing types, not a false label; the specifics show in the body; relabelling is a two-app design change (a longer label crowds the author row at large text) with no functional defect. Revisit if design asks.
+  - **Backlog:** items 1–6 done or decided. Left: item 7 (later/only if needed) and the carried notes (act only if reproduced). Next: a defect sweep of my in-scope web journeys, and Stream 4's Hub PlaceBriefCard summary after its change lands.
+- **Earlier (2026-10-01T00:08Z):**
   - **Merged:** [#1113](https://github.com/WangPantopus/skinny-pantopus/pull/1113) in batch 224 ([#1114](https://github.com/WangPantopus/skinny-pantopus/pull/1114), 2026-09-30T23:32:43Z; master `763969f07`). Master is now `0256c4f35` (batch 225).
   - **Sent to Stream 1:**
     - [#1122](https://github.com/WangPantopus/skinny-pantopus/pull/1122) head `f0e4204e2f5abb6b5845422b45e9f2b2dfd19730`, seal `08d248356221c2d03b04768db9d36135c179804826932c2a3dde4f50152c53ee`: the composer's location chip is readable in dark mode. Measured first (`20260930-stream2-posts-web-composer-location-chip-r1`, seal `1d31013c…`): dark 0/11 intents passed (1.68–3.58), light Safety Alert 4.37. After: light identical except Safety Alert 5.86; dark 6.25–10.23; whole composer axe 0/0.
