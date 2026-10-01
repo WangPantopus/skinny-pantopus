@@ -165,6 +165,38 @@
    checklist card reads "Your change may not have been saved", not "Couldn't load the seasonal checklist" ([#1282](https://github.com/WangPantopus/skinny-pantopus/pull/1282)).
    Documents replace gets the same treatment next.
    - Rejected: a definite "Couldn't update…", which E2 proved false on both apps after a change that committed.
+8. **Mail under the launch flags (2026-10-01, asked by Stream 1 after #1332):**
+   - **My Mail Day and the Stamps earned gallery stay visible.**
+     - Native Mail Day triages unresolved `MailRoutingQueue` rows with no type filter, so it covers bills, packages,
+       postcards, magazines, flyers and envelopes. Its actions (route, finish) aren't specific to letters.
+     - `stampAwarder` counts any received mail, packages and vault filing.
+     - Both are back in launch scope for verification.
+   - **The native postage wallet inside Stamps goes under `mail_extras`.** That is the book, sheet and rail, the usage
+     ledger, "Buy more stamps", Auto-refill/Gift/Archive and "~2 sends a week". It is all sample data with no backend
+     (StampsViewModel.swift:5-27) and only serves sending letters. The code stays, per the cut policy.
+   - **Why:** the user's #8 names writing letters, e-signing, community mail and invitations; received mail isn't cut.
+     "Postcards, welcome cards and the digest" are the printed outreach pieces (M01, after launch), not in-app mail
+     types.
+   - **Next on these screens:** reproduce, then repair.
+     - iOS Mail Day shows sample mail when the day can't load (shelved `claude/stream4-mailday-no-sample-fallback`).
+     - "Other…" and "Undo all" do nothing on either app.
+     - The gallery lists 7 stamps no code awards.
+9. **The iOS maintenance form stops posting its calendar reminder while `household_extras` is off (2026-10-01):**
+   - **What the reminder does with the flag off:**
+     - nothing shows it: the dashboard, AI context and activity skip calendar events, and no job reads them;
+     - it still marks the whole household busy for 24 h in home scheduling availability;
+     - a re-tap duplicates it (Stream 5's idempotency audit).
+   - **What stays:** the next-due date still saves on the keyed maintenance row, as on Android, which never posted a
+     reminder.
+   - **Left for later:** keying `POST /homes/:id/events` goes to whoever brings the calendar back.
+10. **`POST /homes/:id/documents` has no client caller:** no change. Web, iOS and Android only GET the list and upload
+    through the keyed `/documents/upload`. A future caller must send a client key.
+11. **Shared Android TalkBack repair (Stream 1's routing, 2026-10-01):**
+    - **Scope:** the ListOfRows tab, extended FAB and labelled action, the WizardShell CTA, and the app-wide
+      `PantopusButton`, whose EmptyState CTAs said "Use my location. Use my location. Button".
+    - **Semantics kept:** each control keeps its text and test tag.
+    - **Large text:** the wizard title takes its own row from font scale 1.3, ListOfRows' top-bar threshold. Stream 4's
+      own content reflows keep 1.5 (item 3).
 
 **Decided by Stream 4 (2026-09-30T08:50Z), under the user's direction of ~08:36Z.** The direction: "go with what you think is the best decision for user experience, best safety, security practice, best to retain users … record your decision … just keep working." The earlier options and the closure plan are here: https://claude.ai/artifact/AZyYcWk2YpdwT4pc3nGGkp
 1. **Issue photos and files at launch (D02): launch without issue media.**
@@ -364,6 +396,15 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-10-01T12:52Z — The shared Android TalkBack repair is mid-run, and three decisions are recorded ("Decided by Stream 4" items 8–11).**
+  - **Before half done** on `pantopus_s34` (lease 1, 12:02:18Z–12:35:26Z, exact cleanup with 353 of 353 tables equal):
+    - TalkBack repeats on the tabs ("My trains, 0. My trains. 0."), the FAB, "Mark all read", the wizard CTA ("Continue.
+      Continue. Button") and every EmptyState button ("Use my location. Use my location. Button");
+    - at font 2.0, "Start a support train1 of 5".
+  - **Lease:** handed to Stream 3 while the after APK (`b170f1ccc`) builds. Device slot 1 stays with Stream 4.
+  - **Next:** the after half in lease 2, then the PR. After that: the iOS maintenance reminder, the Stamps wallet flag and
+    the Mail Day verification. U05 can start, since the flags are on master.
 
 - **2026-10-01T11:38:29Z — F02 native permission done on iOS and Android, so this stream's U03 and U04 tables are complete. Seal `20261001-stream4-f02-native-permission-r1` (`4c375292…`), verification only. Window 11:20:41Z–11:37:36Z, with one slot swapped from the sim to the emulator.**
   - **Cohort:** the F01 cohort was recreated by SQL (the user-approved 09-27 pattern): 10 opted-in synthetic Homes in
