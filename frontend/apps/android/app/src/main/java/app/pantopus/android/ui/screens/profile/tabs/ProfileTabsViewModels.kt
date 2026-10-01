@@ -247,7 +247,12 @@ class ProfilePortfolioViewModel
             _isMutating.value = true
             val draft =
                 listOf(
-                    userId.orEmpty(), file.filename, file.mimeType, trimmedTitle, description.trim(), category.slug,
+                    userId.orEmpty(),
+                    file.filename,
+                    file.mimeType,
+                    trimmedTitle,
+                    description.trim(),
+                    category.slug,
                     MessageDigest.getInstance("SHA-256").digest(file.bytes).joinToString("") { "%02x".format(it) },
                 )
             if (pendingUpload?.first != draft) pendingUpload = draft to UUID.randomUUID().toString()
