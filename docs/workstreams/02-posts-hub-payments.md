@@ -173,9 +173,22 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T04:45:22Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T05:10:12Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T04:45:22Z):** master is `ea52073b9` (batch 265).
+- **Latest (2026-10-01T05:10:12Z):** master is `2abd0edd4` (batch 266).
+  - **Sent, with Stream 1:**
+    - [#1237](https://github.com/WangPantopus/skinny-pantopus/pull/1237) iOS goes back one screen after a save (Stream 1 runs the iOS cells and seals);
+    - [#1241](https://github.com/WangPantopus/skinny-pantopus/pull/1241) Android list paging after the list grows (seal `cde4423e…`);
+    - [#1242](https://github.com/WangPantopus/skinny-pantopus/pull/1242) Android list keeps new top rows in view (seal `4badbf12…`; Stream 1 verifies My trains).
+  - **Building** (candidate `6c3586fd5`, heavy slot since 05:08Z; branches pushed):
+    - `claude/stream2-posts-native-ask-category` `88eaad5a8`: an Ask without a category shows none selected in edit (both apps);
+    - `claude/stream2-lists-fab-clearance` `477c0a633`: the last row clears the FAB (both shells). Reproduced on Android too: B51's Remove sat under "Write a post";
+    - `claude/stream2-lists-ios-row-label` `57be4e496`: iOS row labels drop empty parts.
+    - Android before/after and iOS by Stream 1 follow.
+  - **Checked, no defect:** the web Pulse feed card follows a save made in the post panel (`20261001-stream2-posts-web-feed-card-sync-r1`, seal `39e3f15c…`).
+  - **Next (reproduce first):** the Android Pulse feed keeps a stale save after a save on the post's own screen. `PulseFeedViewModel.load()` is idempotent and nothing syncs detail changes, so the card's toggle could invert the user's intent.
+  - **Decision:** for presentation fixes Stream 1 itself proposed (FAB clearance), its suggestion counts as the approval. It's recorded in each PR.
+- **Earlier (2026-10-01T04:45:22Z):** master is `ea52073b9` (batch 265).
   - **Merged:**
     - #1221 web Saved paging (b262);
     - #1209 native edit keeps the audience (b264; Android seal `830ff876…`, Stream 1 iOS `4898d3ff…`);
