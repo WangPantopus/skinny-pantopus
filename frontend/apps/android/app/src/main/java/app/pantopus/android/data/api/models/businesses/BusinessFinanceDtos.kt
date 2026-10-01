@@ -101,6 +101,26 @@ data class CreateBusinessInvoiceLineItem(
 )
 
 /**
+ * One person a crew can invoice, from `GET api/businesses/{id}/invoice-recipients`
+ * (`backend/routes/businesses.js:4902`), with how the crew knows them.
+ */
+@JsonClass(generateAdapter = true)
+data class InvoiceRecipientDto(
+    val id: String,
+    val name: String,
+    val username: String,
+    @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
+    /** `invoiced` · `booked` · `hired` · `messaged` · `connection`. */
+    val relation: String,
+)
+
+/** `GET api/businesses/{id}/invoice-recipients` → `{ people }`. */
+@JsonClass(generateAdapter = true)
+data class InvoiceRecipientsResponse(
+    val people: List<InvoiceRecipientDto> = emptyList(),
+)
+
+/**
  * Body for `POST api/businesses/{id}/invoices` — route
  * `backend/routes/businesses.js:4766`. 1–50 line items; the server derives
  * every money field, so the client sends only unit price × quantity.

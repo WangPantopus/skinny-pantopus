@@ -146,7 +146,11 @@ public final class BusinessInvoicesViewModel {
     }
 
     // Create-invoice draft (owned here so the sheet stays a dumb view).
-    public var recipientUserId: String = ""
+    /// The recipient, picked from the people this crew already knows.
+    public private(set) var recipient: InvoiceRecipientDTO?
+    public var recipientQuery: String = ""
+    public private(set) var recipientOptions: [InvoiceRecipientDTO] = []
+    public private(set) var isSearchingRecipients = false
     public var dueDate: String = ""
     public var memo: String = ""
     public var lineItems: [InvoiceLineItemDraft] = [InvoiceLineItemDraft()]
@@ -161,6 +165,8 @@ public final class BusinessInvoicesViewModel {
     private var pendingCreate: (draft: CreateBusinessInvoiceRequest, id: String)?
     private var rows: [BusinessInvoiceRow] = []
     private var isLoadingPage = false
+    private var recipientSearchTask: Task<Void, Never>?
+    private var recipientSearchSequence = 0
     private let seededRows: [BusinessInvoiceRow]?
 
     private static let pageSize = 20
@@ -274,8 +280,60 @@ public final class BusinessInvoicesViewModel {
         lineItems.removeAll { $0.id == id }
     }
 
+    // MARK: - Recipient
+
+    /// Suggestions as the sheet opens, then matches as the owner types (250 ms).
+    public func searchRecipients(immediately: Bool = false) {
+        recipientSearchTask?.cancel()
+        guard seededRows == nil, recipient == nil else { return }
+        recipientSearchSequence += 1
+        let sequence = recipientSearchSequence
+        let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        isSearchingRecipients = true
+        recipientSearchTask = Task { [weak self] in
+            if !immediately {
+                do {
+                    try await Task.sleep(nanoseconds: 250_000_000)
+                } catch {
+                    return
+                }
+            }
+            await self?.runRecipientSearch(query, sequence: sequence)
+        }
+    }
+
+    public func selectRecipient(_ person: InvoiceRecipientDTO) {
+        recipientSearchTask?.cancel()
+        recipient = person
+        createError = nil
+    }
+
+    public func clearRecipient() {
+        recipient = nil
+        searchRecipients(immediately: true)
+    }
+
+    private func runRecipientSearch(_ query: String, sequence: Int) async {
+        let people: [InvoiceRecipientDTO]
+        do {
+            people = try await api.request(
+                BusinessFinanceEndpoints.invoiceRecipients(businessId: businessId, query: query),
+                as: InvoiceRecipientsResponse.self
+            ).people
+        } catch {
+            people = []
+        }
+        // A newer search (or a pick) supersedes this one.
+        guard sequence == recipientSearchSequence else { return }
+        recipientOptions = people
+        isSearchingRecipients = false
+    }
+
     public func resetDraft() {
-        recipientUserId = ""
+        recipientSearchTask?.cancel()
+        recipient = nil
+        recipientQuery = ""
+        recipientOptions = []
         dueDate = ""
         memo = ""
         lineItems = [InvoiceLineItemDraft()]
@@ -288,9 +346,8 @@ public final class BusinessInvoicesViewModel {
     public func createInvoice() async -> Bool {
         guard seededRows == nil else { return false }
         createError = nil
-        let recipient = recipientUserId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !recipient.isEmpty else {
-            createError = "Recipient user ID is required"
+        guard let recipientId = recipient?.id else {
+            createError = "Choose who to invoice"
             return false
         }
         var parsed: [CreateBusinessInvoiceLineItem] = []
@@ -320,7 +377,7 @@ public final class BusinessInvoicesViewModel {
         let due = dueDate.trimmingCharacters(in: .whitespacesAndNewlines)
         let note = memo.trimmingCharacters(in: .whitespacesAndNewlines)
         let draft = CreateBusinessInvoiceRequest(
-            recipientUserId: recipient,
+            recipientUserId: recipientId,
             lineItems: parsed,
             dueDate: due.isEmpty ? nil : due,
             memo: note.isEmpty ? nil : note

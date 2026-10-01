@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.businesses.InvoiceRecipientDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.PantopusTextField
@@ -404,7 +406,10 @@ private fun CreateInvoiceSheet(
     viewModel: BusinessInvoicesViewModel,
     onDismiss: () -> Unit,
 ) {
-    val recipient by viewModel.recipientUserId.collectAsStateWithLifecycle()
+    val recipient by viewModel.recipient.collectAsStateWithLifecycle()
+    val recipientQuery by viewModel.recipientQuery.collectAsStateWithLifecycle()
+    val recipientOptions by viewModel.recipientOptions.collectAsStateWithLifecycle()
+    val isSearchingRecipients by viewModel.isSearchingRecipients.collectAsStateWithLifecycle()
     val dueDate by viewModel.dueDate.collectAsStateWithLifecycle()
     val memo by viewModel.memo.collectAsStateWithLifecycle()
     val lineItems by viewModel.lineItems.collectAsStateWithLifecycle()
@@ -429,13 +434,16 @@ private fun CreateInvoiceSheet(
             fontWeight = FontWeight.Bold,
         )
 
-        PantopusTextField(
-            label = "Recipient user ID",
-            value = recipient,
-            onValueChange = viewModel::setRecipientUserId,
-            placeholder = "Paste user ID",
-            isRequired = true,
-            fieldTestTag = "createInvoice.recipient",
+        LaunchedEffect(Unit) { viewModel.searchRecipients(immediately = true) }
+
+        RecipientPicker(
+            recipient = recipient,
+            query = recipientQuery,
+            options = recipientOptions,
+            isSearching = isSearchingRecipients,
+            onQueryChange = viewModel::setRecipientQuery,
+            onSelect = viewModel::selectRecipient,
+            onClear = viewModel::clearRecipient,
         )
 
         Text(
@@ -561,3 +569,160 @@ private fun CreateInvoiceSheet(
         Spacer(Modifier.height(Spacing.s10))
     }
 }
+
+/**
+ * The invoice's recipient, picked from the people this crew already knows
+ * (`GET …/invoice-recipients`); their id is what's sent. Mirrors iOS
+ * `CreateBusinessInvoiceSheet.recipientSection` and the web `InvoicesTab`.
+ */
+@Composable
+private fun RecipientPicker(
+    recipient: InvoiceRecipientDto?,
+    query: String,
+    options: List<InvoiceRecipientDto>,
+    isSearching: Boolean,
+    onQueryChange: (String) -> Unit,
+    onSelect: (InvoiceRecipientDto) -> Unit,
+    onClear: () -> Unit,
+) {
+    if (recipient != null) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = "Recipient", color = PantopusColors.appTextSecondary, fontSize = 12.sp)
+                Text(text = "*", color = PantopusColors.error, fontSize = 12.sp)
+            }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Radii.md))
+                        .background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
+                        .padding(Spacing.s3)
+                        .testTag("createInvoice.recipient.chosen"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RecipientInitials(recipient.name)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = recipient.name,
+                        color = PantopusColors.appText,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    Text(text = "@${recipient.username}", color = PantopusColors.appTextSecondary, fontSize = 11.5.sp, maxLines = 1)
+                }
+                Box(
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(Radii.pill))
+                            .clickable(onClick = onClear)
+                            .padding(Spacing.s2)
+                            .testTag("createInvoice.recipient.change"),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.X,
+                        contentDescription = "Change recipient",
+                        size = 16.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                }
+            }
+        }
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        PantopusTextField(
+            label = "Recipient",
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = "Search people you know",
+            isRequired = true,
+            fieldTestTag = "createInvoice.recipient",
+        )
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Radii.md))
+                    .background(PantopusColors.appSurface)
+                    .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.md)),
+        ) {
+            if (options.isEmpty()) {
+                Text(
+                    text =
+                        if (isSearching) {
+                            "Searching…"
+                        } else {
+                            "No one found. You can invoice people you’ve invoiced, booked or worked for, " +
+                                "people who messaged your business, and your connections."
+                        },
+                    color = PantopusColors.appTextMuted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(Spacing.s3).testTag("createInvoice.recipient.empty"),
+                )
+            } else {
+                options.forEachIndexed { index, person ->
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(person) }
+                                .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                                .testTag("createInvoice.recipient.option"),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RecipientInitials(person.name)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = person.name,
+                                color = PantopusColors.appText,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = "@${person.username} · ${relationLabel(person.relation)}",
+                                color = PantopusColors.appTextSecondary,
+                                fontSize = 11.5.sp,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    if (index < options.lastIndex) {
+                        HorizontalDivider(thickness = 1.dp, color = PantopusColors.appBorderSubtle)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecipientInitials(name: String) {
+    Box(
+        modifier = Modifier.size(32.dp).clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.business),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = name.take(1).uppercase(),
+            color = PantopusColors.appTextInverse,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+/** The row's second line after the username. */
+private fun relationLabel(relation: String): String =
+    when (relation) {
+        "invoiced" -> "Invoiced before"
+        "booked" -> "Booked with you"
+        "hired" -> "Hired you"
+        "messaged" -> "Messaged you"
+        "connection" -> "Your connection"
+        else -> ""
+    }
