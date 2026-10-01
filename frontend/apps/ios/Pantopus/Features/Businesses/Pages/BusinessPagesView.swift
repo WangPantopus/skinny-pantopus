@@ -61,6 +61,7 @@ public struct BusinessPagesView: View {
                 Button { onBack() } label: {
                     Icon(.arrowLeft, size: 20, color: Theme.Color.appText)
                 }
+                .accessibilityLabel("Back")
                 .accessibilityIdentifier("businessPages.back")
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -243,6 +244,7 @@ public struct BusinessPagesView: View {
                         Icon(.trash2, size: 16, color: Theme.Color.error)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Delete page")
                     .accessibilityIdentifier("businessPages.delete.\(row.slug)")
                 }
             }
