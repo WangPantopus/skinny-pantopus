@@ -198,7 +198,7 @@ export type { PriceBenchmark, RebookableGig } from './endpoints/gigs';
 export type { Listing, ListingLayer, ListingType, ListingCategory, ListingCondition, ListingStatus, ListingCreator, MarketplaceBrowseParams, MarketplaceBrowseResponse, MarketplaceDiscoverResponse, MarketplaceAutocompleteResponse, ListingCategoryCluster, ListingOffer, ListingOfferStatus, ReputationScore, PriceSuggestion, TransactionReview } from './endpoints/listings';
 
 // Types from businesses
-export type { BusinessUser, BusinessProfile, BusinessLocation, BusinessDiscoverItem, MapBusinessMarker, BusinessInsights, DiscoverySearchResult, DiscoverySearchResponse, CatalogCategory, CatalogItem, CatalogPreviewItem, DiscoverySort, EndorsementInfo, OnboardingChecklistItem, OnboardingStatus, VerificationEvidence, VerificationStatus, FoundingOfferStatus, FoundingSlotClaim, BusinessDashboardResponse, BusinessInvoice, InvoiceLineItem, BusinessPage, BusinessMembership, BusinessReview, BusinessHours, BusinessSpecialHours } from './endpoints/businesses';
+export type { BusinessUser, BusinessProfile, BusinessLocation, BusinessDiscoverItem, MapBusinessMarker, BusinessInsights, DiscoverySearchResult, DiscoverySearchResponse, CatalogCategory, CatalogItem, CatalogPreviewItem, DiscoverySort, EndorsementInfo, OnboardingChecklistItem, OnboardingStatus, VerificationEvidence, VerificationStatus, FoundingOfferStatus, FoundingSlotClaim, BusinessDashboardResponse, BusinessInvoice, InvoiceLineItem, InvoiceRecipient, BusinessPage, BusinessMembership, BusinessReview, BusinessHours, BusinessSpecialHours } from './endpoints/businesses';
 
 // Types from homeOwnership
 export type {
