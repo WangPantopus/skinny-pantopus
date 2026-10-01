@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import * as api from '@pantopus/api';
 
 // Trains the person is the primary organizer of that are live. When their account
@@ -25,6 +25,9 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [organizedTrains, setOrganizedTrains] = useState(0);
+  const titleId = useId();
+  const descriptionId = useId();
+  const confirmInputId = useId();
 
   // Best effort: a failed read leaves the organizer paragraph out and never blocks
   // or delays the deletion.
@@ -48,6 +51,20 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
     };
   }, [open]);
 
+  const handleClose = useCallback(() => {
+    if (deleting) return;
+    setConfirmText('');
+    onClose();
+  }, [deleting, onClose]);
+
+  // Escape closes the dialog, as Cancel does.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, handleClose]);
+
   if (!open) return null;
 
   const isConfirmed = confirmText === 'DELETE';
@@ -62,12 +79,6 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
     }
   };
 
-  const handleClose = () => {
-    if (deleting) return;
-    setConfirmText('');
-    onClose();
-  };
-
   return (
     <>
       <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-[2px]" onClick={handleClose} />
@@ -75,6 +86,10 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
       <div className="fixed inset-0 z-[81] flex items-center justify-center p-4">
         <div
           className="bg-surface rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-6 pt-8 pb-6 text-center">
@@ -90,9 +105,9 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
               </svg>
             </div>
 
-            <h2 className="text-xl font-bold text-app mb-2">Delete your account?</h2>
+            <h2 id={titleId} className="text-xl font-bold text-app mb-2">Delete your account?</h2>
 
-            <p className="text-sm text-app-secondary mb-4">
+            <p id={descriptionId} className="text-sm text-app-secondary mb-4">
               This will permanently delete your account, including:
             </p>
 
@@ -133,10 +148,11 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
 
             {/* Typed confirmation */}
             <div className="text-left mb-6">
-              <label className="block text-sm font-medium text-app-strong mb-1.5">
+              <label htmlFor={confirmInputId} className="block text-sm font-medium text-app-strong mb-1.5">
                 Type <span className="font-mono font-bold text-red-600">DELETE</span> to confirm
               </label>
               <input
+                id={confirmInputId}
                 type="text"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
