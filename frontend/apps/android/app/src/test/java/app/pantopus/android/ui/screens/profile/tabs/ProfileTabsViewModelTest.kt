@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.profile.GigReviewsResponse
 import app.pantopus.android.data.api.models.profile.PortfolioFileDto
 import app.pantopus.android.data.api.models.profile.PortfolioFileMetadataDto
 import app.pantopus.android.data.api.models.profile.PortfolioListResponse
+import app.pantopus.android.data.api.models.profile.PortfolioUploadResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
@@ -28,6 +29,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -243,6 +245,36 @@ class ProfileTabsViewModelTest {
         }
 
     // endregion
+
+    @Test
+    fun portfolio_upload_retry_keeps_its_request_and_success_or_changed_bytes_start_new_intents() =
+        runTest {
+            coEvery { tabsRepo.portfolio("me", true) } returns NetworkResult.Success(PortfolioListResponse())
+            val keys = mutableListOf<String?>()
+            coEvery { tabsRepo.uploadPortfolioItem(any(), any(), any(), any(), any(), any(), captureNullable(keys)) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(500, "Lost reply")),
+                    NetworkResult.Success(PortfolioUploadResponse()),
+                    NetworkResult.Success(PortfolioUploadResponse()),
+                    NetworkResult.Failure(NetworkError.Server(500, "Lost reply")),
+                    NetworkResult.Failure(NetworkError.Server(500, "Lost reply")),
+                )
+            val vm = ProfilePortfolioViewModel(tabsRepo)
+            vm.load("me", isOwnProfile = true)
+            for (content in listOf("same", "same", "same", "same", "changed")) {
+                vm.upload(
+                    PickedPortfolioFile("project.txt", "text/plain", content.toByteArray()),
+                    "Project", "", PortfolioItemKind.Photo,
+                )
+            }
+            assertEquals(5, keys.size)
+            assertTrue(keys.all { !it.isNullOrBlank() })
+            assertEquals(keys[0], keys[1])
+            assertNotEquals(keys[1], keys[2])
+            assertNotEquals(keys[2], keys[3])
+            assertNotEquals(keys[3], keys[4])
+            assertFalse(vm.isMutating.value)
+        }
 
     // region Gigs
 

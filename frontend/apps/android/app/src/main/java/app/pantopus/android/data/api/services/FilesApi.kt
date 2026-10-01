@@ -69,6 +69,7 @@ interface FilesApi {
         @Part("title") title: RequestBody,
         @Part("description") description: RequestBody? = null,
         @Part("category") category: RequestBody? = null,
+        @Part("client_request_id") clientRequestId: RequestBody? = null,
     ): PortfolioUploadResponse
 
     /**

@@ -498,9 +498,11 @@ public final class MultipartUploader: @unchecked Sendable {
         file: MultipartFile,
         title: String,
         description: String?,
-        category: String?
+        category: String?,
+        clientRequestId: String? = nil
     ) async throws -> PortfolioUploadResponse {
         var fields: [String: String] = ["title": title]
+        if let clientRequestId { fields["client_request_id"] = clientRequestId }
         if let description, !description.isEmpty { fields["description"] = description }
         if let category, !category.isEmpty { fields["category"] = category }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"

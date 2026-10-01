@@ -34,6 +34,7 @@ export async function uploadPortfolio(
     description?: string;
     tags?: string[];
     displayOrder?: number;
+    client_request_id?: string;
   }
 ): Promise<{ 
   message: string;
