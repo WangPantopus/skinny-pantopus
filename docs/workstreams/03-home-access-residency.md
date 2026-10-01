@@ -267,8 +267,7 @@ The session stopped here at the user's request, at a clean boundary.
 5. **Landlord:** native verification wizard U03 remains open (iOS `VerifyLandlord/`, Android `verify_landlord/`). Successor full-app webR1/R2 passed; E5 stale Deny repaired locally and verified, pending push/CI/integration at`cceccd885`. Leads from the native map:
    - Android skips the "already pending/active" 409 mapping when a lease attachment draft exists;
    - both apps show only the generic banner on 403.
-6. **Joining, web:** E3 on the residency-claim submit ("✅ Submit Claim" in `/app/homes/new` for an existing Home's address).
-   First check that the runtime's address validation resolves the fixture address. Also ❓ E6.
+6. **Joining, web:** E3 on the residency-claim submit and later E6 remain unverified at the actual provider boundary: successor Add Home autocomplete500, visible failure, Next disabled and0claim writes (`d1a672a4…`). Empty/unselected-address prevention alone passed. No provider stub or selected-address bypass; resume through real address selection/validation when available.
 7. **U02 native:**
    - **A3/A4 sweep** on the master build: `ios-s3-u02-sweep.py` and `android-s3-u02-sweep.py` (patch them for `S3_STAGE`
      like the review tools), Stream 4's `s4-u02-contrast.py <stage> <ios|android> <mode>` (it flags pairs under 4.5:1;
@@ -988,6 +987,11 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 3 (newest first)
+
+- **2026-10-01T22:18:39Z — joining web provider boundary recorded; native bootstrap underway.**
+  - Actual full-app Add Home at`42a91cbf972bd451408c5034a3a30560641c9e2a`: empty address disables Next. Entering the synthetic address triggers real `GET /api/geo/autocomplete`500, visible Failed to load suggestions, retained text and disabled Next; clearing still blocks. Zero claim POST. E3 claim-submit and later E6 remain **unverified**, before address selection/validation; no provider stub/cache or bypass. Existing error behavior retained, no app change.
+  - [13-file boundary audit](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20261001-stream3-home-joining-provider-boundary-r1/MANIFEST.json), MANIFEST`d1a672a4800e8f29cce7590f0eaba6cd14e30aa9f3c05aa7fdddb80e97a82e8d`. Masked screenshot inspected and secret scan passed; exact one-owner-MailPreferences cleanup restored all353public fingerprints. This boundary is not claim-submission acceptance.
+  - S3 runtime lease acquired22:15:39Z after Stream4 cleanup. Their renewed owner browser session retained as sharedsetup (AuthSession2/AuthSecurityEvent2 at joiningbaseline). S34 replacement iOS`696C4693-BD96-4E96-8E59-D0591C981F2B` slot3 acquired22:14:49Z, boot completed22:16:07Z; founder devices untouched, Android off. Native build still running in lockedcheckout; no app install/acceptance yet. Separate native bootstrap DECISION/fingerprint precedes actual memberAPI sign-in200; its authsession remains private mode0600 and is retainedsetup before case baselines. Generic S34 focus-guarded native UI operator prepared; no native permissions granted.
 
 - **2026-10-01T22:03:50Z — landlord web R1/R2 accepted; silent stale Deny repaired and verified locally.**
   - Before `ecd8a3d90`: real property503 shows error and existing Back to properties; reopening gets200. Empty property list, Requests and Leases show their existing correct empty compositions. First one-shot fault auto-recovered before navigation; driver was corrected to hold the read failure until capture, then clear before recovery. Failed attempts retained; no app read-error change.
