@@ -34,6 +34,20 @@ private const val BANNER_DISMISSED_KEY = "hub.setupBanner.dismissed"
 /** Setup steps the "Verify your address" banner stands for (the claim and verify steps). */
 private val ADDRESS_SETUP_STEPS = setOf("home", "verify")
 
+/**
+ * A greeting by the viewer's own clock. The server can't greet: its clock isn't the viewer's, and a Home has no time
+ * zone. The Hub header and Today's Pulse both use it.
+ */
+internal fun deviceGreeting(): String {
+    val hour = LocalDateTime.now(ZoneId.systemDefault()).hour
+    return when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        in 17..21 -> "Good evening"
+        else -> "Hello"
+    }
+}
+
 /** ViewModel backing the hub screen. */
 @HiltViewModel
 class HubViewModel
@@ -310,7 +324,7 @@ class HubViewModel
                     PopulatedContent(
                         topBar =
                             TopBarContent(
-                                greeting = greeting(),
+                                greeting = deviceGreeting(),
                                 name = hub.user.firstName ?: hub.user.name,
                                 avatarInitials = initials(hub.user.name),
                                 identity = identity,
@@ -448,7 +462,7 @@ class HubViewModel
             val doneCount = steps.count { it.done }
             return HubUiState.FirstRun(
                 FirstRunContent(
-                    greeting = greeting(),
+                    greeting = deviceGreeting(),
                     name = hub.user.firstName ?: hub.user.name,
                     avatarInitials = initials(hub.user.name),
                     identity = identity,
@@ -607,16 +621,6 @@ class HubViewModel
                 .take(2)
                 .mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }
                 .joinToString("")
-
-        private fun greeting(): String {
-            val hour = LocalDateTime.now(ZoneId.systemDefault()).hour
-            return when (hour) {
-                in 5..11 -> "Good morning"
-                in 12..16 -> "Good afternoon"
-                in 17..21 -> "Good evening"
-                else -> "Hello"
-            }
-        }
 
         private fun relative(timestamp: String): String =
             runCatching {

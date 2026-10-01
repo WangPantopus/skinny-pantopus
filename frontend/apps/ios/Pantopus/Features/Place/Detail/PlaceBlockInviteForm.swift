@@ -143,7 +143,8 @@ struct BlockInviteForm: View {
         if outOfBudget {
             return "No invitations left this week. The cap is \(cap) a week — your budget resets in a week."
         }
-        let noun = left == 1 ? "invitation" : "invitations"
+        // The noun agrees with the cap: "1 of 3 invitations left", not "1 of 3 invitation".
+        let noun = cap == 1 ? "invitation" : "invitations"
         return "\(left) of \(cap) \(noun) left this week."
     }
 }
