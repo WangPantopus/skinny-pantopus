@@ -173,9 +173,37 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T10:32:53Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T11:19:07Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T10:32:53Z):** master is `6b528c74f` or later.
+- **Latest (2026-10-01T11:19:07Z):** master is `6d3d05b9d` (batch 289).
+  - **Merged:**
+    - #1299, batch 287, at head `e3aa572d4`. That head fixes SwiftFormat `docComments`: CI's iOS lint job also runs `swiftformat --lint .`. Stream 1's r2 cell `a72658ef` read "helpful, 0" → "helpful, 1".
+    - #1311 and #1312, batch 289. Stream 1's iOS cells passed: `438c341b` (the gone post leaves Pulse, one 404) and `208560df` ("Posted to your connections").
+  - **With Stream 1:** [#1324](https://github.com/WangPantopus/skinny-pantopus/pull/1324): the logged-out landing "/" meets WCAG AA contrast. Stream 1's palette decision: #0284C7 → #0369A1 and #7A736A → #736C63.
+    - axe color-contrast goes 31 → 0 at 1280 px, at 390 px and with the dark scheme; /start stays 0 → 0.
+    - Screenshots keep the same size, and /start differs by 0 pixels.
+    - Head `adf23f0e8`, seal `21d5bd08`.
+  - **Proposed to Stream 1, awaiting approval:** at 390 px, the hero and "The foundation" stay in two columns (inline `gridTemplateColumns` at every width). The text is squeezed to about 150 px, and the hero's "See your place" label spills out of its button.
+    - Fix: `lg:` breakpoint classes like the other sections, plus a nowrap button label.
+  - **Next:**
+    1. posts.js:657, canViewPost's legacy neighborhood/city/radius branch: it selects User.latitude/longitude, which don't exist. It's Stream 5's drift candidate, routed by Stream 1; reproduce first.
+    2. The Connections composer's Category chips, discarded as "general" (Stream 1's observation on #1312).
+    - earnRiskReview.js goes to Stream 5, with my OK.
+    - notifications.js:112 paging was withdrawn: Stream 5's #1322 has it.
+  - **Decisions:**
+    - Every landing use of the two colors moves, decorative ones too, so none is half-migrated.
+    - The shared `--shadow-primary` stays, because /start uses it.
+    - The app-wide `--color-primary` is untouched.
+    - The landing layout fix is its own PR, after approval.
+  - **Lessons:**
+    - Run SwiftFormat as well as SwiftLint before sending iOS heads. CI pins SwiftLint 0.63.3 and SwiftFormat 0.61.1, the same versions installed here.
+    - `git show <sha>:<file> | swiftformat stdin --lint --stdin-path <file>` lints any commit's file.
+    - axe skips the landing's opacity-0 reveal sections, so scroll gradually first.
+    - zsh doesn't word-split variables; pass file lists as arrays.
+  - **Runtime:**
+    - Backend 18160 and Next 18169 (worktree 29bc9a, landing branch) are up.
+    - The emulator is stopped. No live fixtures; no builds queued.
+- **Earlier (2026-10-01T10:32:53Z):** master is `6b528c74f` or later.
   - **Merged:** batch 282, #1296 (a new post shows only in a feed list it belongs to) and #1298 (composer label "Shown on your profile to:").
   - **With Stream 1** (all three iOS cells go on its combined candidate 24, `7ee25bf94`):
     - [#1299](https://github.com/WangPantopus/skinny-pantopus/pull/1299): iOS card VoiceOver actions, head now `64cab2740`.
