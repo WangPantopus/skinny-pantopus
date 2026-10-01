@@ -468,8 +468,8 @@ async function routeTarget(item, userId) {
 function buildDecision(item, action, body, target = null) {
   const nowIso = new Date().toISOString();
   const decision = { status: 'reviewed', action, reviewed_at: nowIso, updated_at: nowIso };
-  if (action === 'routed' && target && target.drawer === 'home') {
-    // No member matched: the chip says where the letter went.
+  if (action === 'routed' && ((target && target.drawer === 'home') || body.drawer === 'home')) {
+    // No member matched, or the household keeps it: the chip says where the letter went.
     decision.routed_tint = 'household_home';
     decision.routed_to = 'Household';
   } else if (action === 'routed') {
@@ -528,12 +528,60 @@ router.post('/items/:itemId/route', verifyToken, (req, res) => applyDecision(req
 router.post('/items/:itemId/junk', verifyToken, (req, res) => applyDecision(req, res, 'junked'));
 router.post('/items/:itemId/return', verifyToken, (req, res) => applyDecision(req, res, 'returned'));
 
-// POST /items/:itemId/undo — back to unreviewed.
+/**
+ * Undo puts a decided piece's letter back where the routing queue had it: a
+ * household letter nobody has claimed yet. Each write is guarded on the state
+ * this piece's own decision left (a Mail Day route, a shredded letter, a queue
+ * row this user resolved), so an undo never overwrites someone's later change.
+ * A failed write fails the undo, so the piece stays decided rather than looking
+ * undone while its letter has not moved.
+ */
+async function revertLinkedMail(item, userId) {
+  if (!item.mail_id || item.status !== 'reviewed') return;
+  if (item.action === 'routed') {
+    const { error } = await supabaseAdmin
+      .from('Mail')
+      .update({
+        recipient_user_id: null,
+        drawer: 'home',
+        privacy: 'shared_household',
+        routing_confidence: null,
+        routing_method: 'mailday_undone',
+      })
+      .eq('id', item.mail_id)
+      .eq('routing_method', 'mailday_resolved')
+      .not('recipient_home_id', 'is', null);
+    if (error) throw error;
+  } else if (item.action === 'junked') {
+    const { data: mail, error: readErr } = await supabaseAdmin
+      .from('Mail')
+      .select('opened_at, viewed_at')
+      .eq('id', item.mail_id)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    const { error } = await supabaseAdmin
+      .from('Mail')
+      .update({ lifecycle: mail && (mail.opened_at || mail.viewed_at) ? 'opened' : 'delivered' })
+      .eq('id', item.mail_id)
+      .eq('lifecycle', 'shredded');
+    if (error) throw error;
+  }
+  const { error: queueErr } = await supabaseAdmin
+    .from('MailRoutingQueue')
+    .update({ resolved: false, resolved_drawer: null, resolved_by: null, resolved_at: null })
+    .eq('mail_id', item.mail_id)
+    .eq('resolved_by', userId);
+  if (queueErr) throw queueErr;
+}
+
+// POST /items/:itemId/undo — back to unreviewed, with the letter back in the queue.
 router.post('/items/:itemId/undo', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const item = await loadOwnedItem(req.params.itemId, userId);
     if (!item) return res.status(404).json({ error: 'Mail item not found' });
+
+    await revertLinkedMail(item, userId);
 
     const { data: updated, error } = await supabaseAdmin
       .from('MailDayItem')

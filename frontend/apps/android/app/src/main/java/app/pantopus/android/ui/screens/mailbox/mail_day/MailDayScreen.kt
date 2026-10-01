@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.mailbox.mail_day
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,15 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -74,9 +81,19 @@ fun MailDayScreen(
     viewModel: MailDayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    // The "Needs a call" piece whose "Other…" choices are showing.
+    var otherChoicesItemId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.configure(onScanRequested = onScan)
         viewModel.load()
+    }
+    LaunchedEffect(actionError) {
+        actionError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeActionError()
+        }
     }
 
     // Tick the undo countdown every second when there's an active timer.
@@ -117,6 +134,9 @@ fun MailDayScreen(
                         total = viewModel.total,
                         onScan = { viewModel.requestScan() },
                         onAccept = { id -> viewModel.acceptSuggestion(id) },
+                        onOtherChoices = { id -> otherChoicesItemId = id },
+                        onUndoPiece = { id -> viewModel.undo(id) },
+                        onUndoAll = { viewModel.undoAll() },
                     )
                 }
             is MailDayUiState.Empty ->
@@ -132,6 +152,35 @@ fun MailDayScreen(
                 MailDayShell(stickyBottom = null, onClose = onClose) {
                     ErrorFrame(message = current.message, onRetry = viewModel::load)
                 }
+        }
+        otherChoicesItemId?.let { itemId ->
+            AlertDialog(
+                onDismissRequest = { otherChoicesItemId = null },
+                title = { Text(text = "Where should this piece go?") },
+                text = {
+                    Column {
+                        TextButton(
+                            onClick = {
+                                otherChoicesItemId = null
+                                viewModel.keepForHousehold(itemId)
+                            },
+                            modifier = Modifier.testTag("mailDayOther_household"),
+                        ) { Text(text = "Keep for the household") }
+                        TextButton(
+                            onClick = {
+                                otherChoicesItemId = null
+                                viewModel.junk(itemId)
+                            },
+                            modifier = Modifier.testTag("mailDayOther_junk"),
+                        ) { Text(text = "Junk it", color = PantopusColors.error) }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { otherChoicesItemId = null }) { Text(text = "Cancel") }
+                },
+                modifier = Modifier.testTag("mailDayOtherChoices"),
+            )
         }
     }
 }
@@ -190,6 +239,9 @@ internal fun MailDayPopulatedFrame(
             total = total,
             onScan = {},
             onAccept = {},
+            onOtherChoices = {},
+            onUndoPiece = {},
+            onUndoAll = {},
         )
     }
 }
@@ -209,6 +261,9 @@ private fun PopulatedBody(
     total: Int,
     onScan: () -> Unit,
     onAccept: (String) -> Unit,
+    onOtherChoices: (String) -> Unit,
+    onUndoPiece: (String) -> Unit,
+    onUndoAll: () -> Unit,
 ) {
     Column(
         modifier =
@@ -233,7 +288,7 @@ private fun PopulatedBody(
                     UnreviewedItem(
                         item = item,
                         onRoute = { onAccept(item.id) },
-                        onSecondary = { /* Other-recipient sheet — out of scope */ },
+                        onSecondary = { onOtherChoices(item.id) },
                     )
                 }
             }
@@ -252,11 +307,11 @@ private fun PopulatedBody(
                         ReviewedRow(
                             item = item,
                             isLast = index == content.reviewed.size - 1,
-                            onUndo = { /* Undo individual — out of scope */ },
+                            onUndo = { onUndoPiece(item.id) },
                         )
                     }
                 }
-                UndoAllButton()
+                UndoAllButton(onClick = onUndoAll)
             }
         }
     }
@@ -314,13 +369,13 @@ private fun SectionOverline(
 }
 
 @Composable
-private fun UndoAllButton() {
+private fun UndoAllButton(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         modifier =
             Modifier
-                .clickable { /* Undo all — out of scope */ }
+                .clickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
                 .testTag("mailDayUndoAll")
                 .semantics { contentDescription = "Undo all from today" },

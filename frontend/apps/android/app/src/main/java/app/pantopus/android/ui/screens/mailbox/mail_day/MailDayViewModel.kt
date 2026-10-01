@@ -45,6 +45,10 @@ class MailDayViewModel
         private val _state = MutableStateFlow<MailDayUiState>(MailDayUiState.Loading)
         val state: StateFlow<MailDayUiState> = _state.asStateFlow()
 
+        /** A triage action that didn't save, shown once as a short message. */
+        private val _actionError = MutableStateFlow<String?>(null)
+        val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
         private var onScanRequested: () -> Unit = {}
 
         fun configure(onScanRequested: () -> Unit) {
@@ -130,6 +134,53 @@ class MailDayViewModel
                 if (repository.route(id) is NetworkResult.Failure) {
                     _state.value = MailDayUiState.Populated(previous)
                 }
+            }
+        }
+
+        /** "Other…" → the household keeps the letter (shared drawer). */
+        fun keepForHousehold(id: String) = decide("Couldn't file that for the household. Try again.") { repository.keepForHousehold(id) }
+
+        /** "Other…" → junk the piece (the mailbox keeps Restore). */
+        fun junk(id: String) = decide("Couldn't junk that piece. Try again.") { repository.junk(id) }
+
+        /** A reviewed row's Undo: the piece goes back to "Needs a call". */
+        fun undo(id: String) = decide("Couldn't undo that. Try again.") { repository.undo(id) }
+
+        /** "Undo all from today": every reviewed piece goes back to "Needs a call". */
+        fun undoAll() {
+            val current = _state.value as? MailDayUiState.Populated ?: return
+            val ids = current.content.reviewed.map { it.id }
+            if (ids.isEmpty()) return
+            viewModelScope.launch {
+                val failed = ids.map { repository.undo(it) }.any { it is NetworkResult.Failure }
+                reread()
+                if (failed) _actionError.value = "Some pieces couldn't be undone. Try again."
+            }
+        }
+
+        fun consumeActionError() {
+            _actionError.value = null
+        }
+
+        /**
+         * Persists one triage decision, then re-reads the day so the rows and chips show what the server did. A
+         * failure says so; the re-read keeps the screen truthful either way.
+         */
+        private fun decide(
+            failure: String,
+            call: suspend () -> NetworkResult<*>,
+        ) {
+            viewModelScope.launch {
+                if (call() is NetworkResult.Failure) _actionError.value = failure
+                reread()
+            }
+        }
+
+        /** Re-reads the day in place (no loading frame). */
+        private suspend fun reread() {
+            when (val result = repository.today()) {
+                is NetworkResult.Success -> _state.value = project(result.data)
+                is NetworkResult.Failure -> Unit
             }
         }
 

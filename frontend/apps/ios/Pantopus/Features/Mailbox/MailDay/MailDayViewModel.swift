@@ -320,6 +320,44 @@ public final class MailDayViewModel {
         }
     }
 
+    /// "Other…" → the household keeps the letter (shared drawer).
+    public func keepForHousehold(_ itemId: String) async {
+        await decide(MailDayEndpoints.keepForHousehold(itemId: itemId), failure: "Couldn't file that for the household. Try again.")
+    }
+
+    /// "Other…" → junk the piece (the mailbox keeps Restore).
+    public func junk(_ itemId: String) async {
+        await decide(MailDayEndpoints.junk(itemId: itemId), failure: "Couldn't junk that piece. Try again.")
+    }
+
+    /// A reviewed row's Undo: the piece goes back to "Needs a call".
+    public func undo(_ itemId: String) async {
+        await decide(MailDayEndpoints.undo(itemId: itemId), failure: "Couldn't undo that. Try again.")
+    }
+
+    /// "Undo all from today": every reviewed piece goes back to "Needs a call".
+    public func undoAll() async {
+        guard case let .populated(content) = state, !content.reviewed.isEmpty else { return }
+        var failed = false
+        for row in content.reviewed {
+            do { _ = try await api.request(MailDayEndpoints.undo(itemId: row.id)) } catch { failed = true }
+        }
+        await fetch()
+        if failed { settingsToast = "Some pieces couldn't be undone. Try again." }
+    }
+
+    /// Persists one triage decision, then re-reads the day so the rows and
+    /// chips show what the server did. A failure says so; the re-read keeps
+    /// the screen truthful either way.
+    private func decide(_ endpoint: Endpoint, failure: String) async {
+        do {
+            _ = try await api.request(endpoint)
+        } catch {
+            settingsToast = failure
+        }
+        await fetch()
+    }
+
     /// Close out the day: `POST /finish` bumps the streak server-side; the
     /// reviewed day stays on screen with the new streak. No-op unless every
     /// piece has a decision.
