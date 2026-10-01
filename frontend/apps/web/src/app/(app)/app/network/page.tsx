@@ -196,7 +196,7 @@ function DiscoverPageContent() {
           <p className="mt-2 text-xs text-app-muted">{headerText}</p>
         </div>
 
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           {[
             ['all', 'All'],
             ['people', 'People'],
