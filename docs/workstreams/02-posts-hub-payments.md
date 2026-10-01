@@ -173,9 +173,26 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T01:51:27Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T02:19:32Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T01:51:27Z):** master is `b6419009f` (batch 243; #1150 merged in batch 242).
+- **Latest (2026-10-01T02:19:32Z):** master is `f24680600` (batch 247).
+  - **Merged:**
+    - #1166 web date labels and #1169 Hub People lane (batch 244);
+    - [#1179](https://github.com/WangPantopus/skinny-pantopus/pull/1179) **web Place composer drops Service/Announce** (batch 247). The Place feed always refused them: a 400 with jargon, nothing shown. Product question recorded in the batch: personal users can no longer reach those two types on web.
+  - **In Stream 1's candidate `80dd2e7cd`** (built clean; iOS steps next):
+    - #1159 Discover Posts;
+    - [#1161](https://github.com/WangPantopus/skinny-pantopus/pull/1161) native Visitor meta, sealed `44cd644a…`. Android after: "29m · Visitor · Vancouver, WA"; with a long place name the place ellipsizes and Visitor stays.
+  - **Sent:**
+    - [#1181](https://github.com/WangPantopus/skinny-pantopus/pull/1181) **Hub Place brief greets by the viewer's clock**, seal `013fc0e9…`. The server-built greeting used UTC: "Good morning" at 7:10 PM under the top bar's "Good evening".
+    - [#1183](https://github.com/WangPantopus/skinny-pantopus/pull/1183) **one "Complete your profile" card**, seal `ea6368ed…`. The setup banner retitled itself and repeated the profile card's photo step.
+  - **Checked:** Stream 4's #1172 summary renders right on the Hub card (violet active; it can't go green because the seasonal signal is always present).
+  - **Routed via Stream 1:** the native Place "Today's Pulse" subtitle shows the same server greeting (Stream 4's screens).
+  - **Decisions (standing direction):**
+    - #1179: hide the intents the Place feed refuses (native parity), rather than silently switching the audience.
+    - #1181: the viewer's clock, as the top bar already does.
+    - #1183: de-duplicate by extending the page's own setup-step filter; the Action Queue item stays.
+  - **Runtime:** emulator stopped and device slot released at 01:58:41Z. All my fixtures are cleaned, with sign-in bookkeeping left for the final teardown. Backend 18160 serves worktree 29bc9a.
+- **Earlier (2026-10-01T01:51:27Z):** master is `b6419009f` (batch 243; #1150 merged in batch 242).
   - **With Stream 1:**
     - [#1159](https://github.com/WangPantopus/skinny-pantopus/pull/1159) Hub Discover "Posts" tab, head `36c906d3e`, seal `eb5bfd27242a62e2e9b62549e034844b57d73bae36b3af5421453d52d2e7470c`.
       - Android before/after verified: master says "Nothing nearby yet" while Pulse lists 3 posts; after, the pointer row and Browse Pulse (a Button) open Pulse.
