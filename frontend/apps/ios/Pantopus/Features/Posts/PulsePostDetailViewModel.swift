@@ -228,6 +228,8 @@ public final class PulsePostDetailViewModel {
             reconciled.helpful = response.likeCount
             reconciled.userReaction = response.liked ? .helpful : nil
             state = .loaded(content.replacing(reactions: reconciled))
+            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Reaction toggle failed: \(error)")
             toastMessage = "Couldn't update your reaction"
@@ -358,6 +360,8 @@ public final class PulsePostDetailViewModel {
                 as: PostSaveResponse.self
             )
             isSaved = response.saved
+            // A stale card's next tap would undo this save: lists showing the post refetch.
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Save toggle failed: \(error)")
             toastMessage = "Couldn't update your bookmark"
