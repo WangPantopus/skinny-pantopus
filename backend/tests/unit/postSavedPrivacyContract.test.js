@@ -48,6 +48,9 @@ function makeSavedPost(overrides = {}) {
       id: 'post-1',
       user_id: AUTHOR_ID,
       content: 'Saved post',
+      // A public Place post: Saved only lists posts the viewer can still open (canViewPost).
+      visibility: 'public',
+      distribution_targets: ['place'],
       media_urls: [],
       media_types: [],
       location_precision: 'exact_place',

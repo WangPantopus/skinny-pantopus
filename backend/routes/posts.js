@@ -2036,7 +2036,14 @@ router.get('/saved', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch saved posts' });
     }
 
-    const validSaves = (saves || []).filter(s => s.post);
+    // Only posts the viewer can still open: the post page's canViewPost (blocks, audience,
+    // connections) and never an archived post (hidden by its author, expired or removed by
+    // moderation). A failed check leaves the post out.
+    const withPost = (saves || []).filter(s => s.post);
+    const viewable = await Promise.all(withPost.map((s) => (
+      s.post.archived_at ? false : canViewPost(s.post, userId).catch(() => false)
+    )));
+    const validSaves = withPost.filter((_, i) => viewable[i] === true);
     const privacySafePosts = applyPostLocationPrivacyBatch(
       validSaves.map(s => ({ ...s.post, savedAt: s.created_at })),
       userId
