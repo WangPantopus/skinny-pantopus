@@ -82,7 +82,11 @@ class SupportTrainDetailViewModel
 
         fun load() {
             viewModelScope.launch {
-                _state.value = SupportTrainDetailUiState.Loading
+                // Keep a loaded train on screen while reloading (a helper action
+                // re-runs `load()`); mirrors Manage and iOS.
+                if (_state.value !is SupportTrainDetailUiState.Loaded) {
+                    _state.value = SupportTrainDetailUiState.Loading
+                }
                 val override = resolve
                 if (override != null) {
                     val content = override(trainId)
@@ -141,9 +145,8 @@ class SupportTrainDetailViewModel
 
         /**
          * Closes the sheet and — when a signup landed — refreshes the
-         * screen. The refresh is deferred to dismissal on purpose:
-         * calling `load()` while the sheet is up flips the state back to
-         * `Loading`, which unmounts the sheet and loses its success step.
+         * screen. The refresh is deferred to dismissal on purpose, so the
+         * train doesn't change under the sheet while its success step shows.
          */
         fun dismissReserve() {
             _action.update { it.copy(reserveSheet = null) }

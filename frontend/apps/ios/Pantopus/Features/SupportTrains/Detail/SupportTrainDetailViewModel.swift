@@ -110,7 +110,9 @@ public final class SupportTrainDetailViewModel {
 
     public func load() async {
         guard !seeded else { return }
-        if case .loading = state {} else { state = .loading }
+        // Keep a loaded train on screen while reloading (a helper action
+        // re-runs `load()`), as Manage does; the skeleton is for the first load.
+        if case .loaded = state {} else { state = .loading }
         if let resolver {
             guard let content = resolver(trainId) else {
                 state = .error(message: "Couldn't load this support train.")
