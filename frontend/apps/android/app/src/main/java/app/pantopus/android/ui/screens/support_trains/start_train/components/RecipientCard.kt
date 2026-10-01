@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
@@ -75,6 +76,7 @@ internal fun StartTrainRecipientCard(
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (mutuals.isNotEmpty()) {
                 MutualsStrip(mutuals)
@@ -189,6 +191,7 @@ private fun MutualsStrip(mutuals: List<StartSupportTrainMutual>) {
             style = PantopusTextStyle.caption.copy(fontSize = 10.sp),
             color = PantopusColors.appTextMuted,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

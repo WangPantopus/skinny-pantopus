@@ -8,10 +8,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,7 +63,10 @@ fun StatCellRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                // At least 60dp and as tall as the tallest tile, so large text keeps each tile's label
+                // ("SLOTS", "HELPERS"…) instead of clipping it; the dividers still span the row.
+                .heightIn(min = 60.dp)
+                .height(IntrinsicSize.Min)
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
                 .border(BorderStroke(1.dp, PantopusColors.appBorder), RoundedCornerShape(Radii.lg))

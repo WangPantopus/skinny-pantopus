@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -122,12 +123,15 @@ private fun RowScope.HeaderText(content: TypeDatesCardContent) {
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
+        // Two lines, so large text keeps the end date and the days left.
         Text(
             text = metaLine(content),
             color = PantopusColors.appTextSecondary,
             fontSize = 12.sp,
-            maxLines = 1,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

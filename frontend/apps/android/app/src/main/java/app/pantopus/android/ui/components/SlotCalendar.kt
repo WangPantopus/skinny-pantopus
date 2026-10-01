@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -267,11 +269,14 @@ private fun cellStyleOf(state: SlotCalendarState): CellStyle =
 
 // MARK: - Legend
 
+// Wraps, so large text moves a key to the next line instead of pushing "Mine" off the card.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Legend() {
-    Row(
+    FlowRow(
         modifier = Modifier.padding(top = Spacing.s1),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         for (state in SlotCalendarState.entries.filter { it != SlotCalendarState.Unscheduled }) {
             LegendChip(state = state)
