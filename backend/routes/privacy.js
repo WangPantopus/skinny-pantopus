@@ -20,6 +20,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
+const { syncLocalProfileLocality } = require('../utils/identityProfiles');
 
 // ============================================================
 // Validation schemas
@@ -124,6 +125,16 @@ router.patch('/settings', verifyToken, validate(updateSettingsSchema), async (re
           userId,
         });
         return res.status(500).json({ error: 'Failed to update profile search visibility' });
+      }
+    }
+
+    // The public profile's city and state copies follow the Neighborhood setting.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'show_neighborhood')) {
+      try {
+        await syncLocalProfileLocality(userId);
+      } catch (localityErr) {
+        logger.error('Error syncing local profile locality', { error: localityErr.message, userId });
+        return res.status(500).json({ error: 'Failed to update profile neighborhood visibility' });
       }
     }
 
