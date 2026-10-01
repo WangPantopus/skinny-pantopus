@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react';
 import { confirmStore } from './confirm-store';
 
 export default function ConfirmDialog() {
@@ -76,6 +76,13 @@ export default function ConfirmDialog() {
 
   if (!state) return null;
 
+  // The second click of the double-click that opened the dialog lands on whatever is now under the pointer: Cancel,
+  // Confirm or the backdrop. Only a fresh click (detail 1) or a keyboard press (detail 0) answers the dialog.
+  const answer = (value: boolean) => (event: MouseEvent) => {
+    if (event.detail > 1) return;
+    confirmStore.close(value);
+  };
+
   const { title, description, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'primary' } = state.options;
 
   const confirmBtnClass =
@@ -92,7 +99,7 @@ export default function ConfirmDialog() {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40"
-        onClick={() => confirmStore.close(false)}
+        onClick={answer(false)}
         aria-hidden="true"
       />
 
@@ -126,7 +133,7 @@ export default function ConfirmDialog() {
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            onClick={() => confirmStore.close(false)}
+            onClick={answer(false)}
             className="px-4 py-2 text-sm font-medium rounded-lg
               text-app-text-strong
               border border-app-border
@@ -139,7 +146,7 @@ export default function ConfirmDialog() {
           <button
             ref={confirmBtnRef}
             type="button"
-            onClick={() => confirmStore.close(true)}
+            onClick={answer(true)}
             className={`px-4 py-2 text-sm font-medium rounded-lg
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
               transition-colors ${confirmBtnClass}`}
