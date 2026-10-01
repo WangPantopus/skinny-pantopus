@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useId, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -38,6 +38,7 @@ export default function ChatListPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const newChatTitleId = useId();
   const [newChatQuery, setNewChatQuery] = useState('');
   const [newChatResults, setNewChatResults] = useState<User[]>([]);
   const [newChatSearching, setNewChatSearching] = useState(false);
@@ -125,6 +126,14 @@ export default function ChatListPage() {
     }, 15000);
     return () => clearInterval(timer);
   }, [connected, load]);
+
+  // Escape closes "Start new chat", as its close button does.
+  useEffect(() => {
+    if (!newChatOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNewChatOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [newChatOpen]);
 
   useEffect(() => {
     if (!newChatOpen) return;
@@ -500,10 +509,15 @@ export default function ChatListPage() {
 
       {newChatOpen && (
         <div className="fixed inset-0 z-[1000] bg-black/40 flex items-start justify-center p-4 sm:p-6">
-          <div className="w-full max-w-lg rounded-2xl border border-app bg-surface shadow-2xl mt-8">
+          <div
+            className="w-full max-w-lg rounded-2xl border border-app bg-surface shadow-2xl mt-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={newChatTitleId}
+          >
             <div className="flex items-center justify-between px-4 py-3 border-b border-app">
               <div>
-                <h2 className="text-base font-semibold text-app">Start new chat</h2>
+                <h2 id={newChatTitleId} className="text-base font-semibold text-app">Start new chat</h2>
                 <p className="text-xs text-app-muted">Search by name or username</p>
               </div>
               <button

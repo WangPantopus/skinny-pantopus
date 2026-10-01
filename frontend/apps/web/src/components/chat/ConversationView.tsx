@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useId, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
@@ -41,6 +41,17 @@ export default function ConversationView({
   const [topics, setTopics] = useState<ConversationTopic[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId || null);
   const [showDrawer, setShowDrawer] = useState(false);
+  const drawerTitleId = useId();
+
+  // Escape closes the Chat details drawer, unless a confirmation (Block) is open over it: Escape dismisses that first.
+  useEffect(() => {
+    if (!showDrawer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !confirmStore.getSnapshot()) setShowDrawer(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showDrawer]);
 
   // ── Attachment modals ───────────────────────────────────
   const [showGigPicker, setShowGigPicker] = useState(false);
@@ -470,10 +481,16 @@ export default function ConversationView({
       {showDrawer && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[60] flex justify-end" onClick={() => setShowDrawer(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <div className="relative w-full max-w-sm bg-surface h-full shadow-xl overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div
+            className="relative w-full max-w-sm bg-surface h-full shadow-xl overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={drawerTitleId}
+            onClick={e => e.stopPropagation()}
+          >
             <div className="p-5">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-app">Chat details</h2>
+                <h2 id={drawerTitleId} className="text-lg font-bold text-app">Chat details</h2>
                 <button onClick={() => setShowDrawer(false)} className="text-app-muted hover:text-app-text-strong" aria-label="Close chat details">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -535,7 +552,11 @@ export default function ConversationView({
               <div>
                 <h3 className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-3">Safety</h3>
                 <button
-                  onClick={() => setReportTarget({ userId: otherUserId, generation: safetyScope.current, current: captureSafetyScope() })}
+                  onClick={() => {
+                    // The report dialog takes the drawer's place: under the drawer's backdrop it got no clicks.
+                    setShowDrawer(false);
+                    setReportTarget({ userId: otherUserId, generation: safetyScope.current, current: captureSafetyScope() });
+                  }}
                   disabled={!currentUserId || currentUserId === otherUserId || blocking}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover-bg-app transition-colors text-left text-sm text-app-text-strong">
                   <span>🚩</span> Report

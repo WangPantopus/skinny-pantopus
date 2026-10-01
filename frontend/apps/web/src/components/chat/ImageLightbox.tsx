@@ -27,6 +27,9 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
   return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full size image"
       onClick={onClose}
     >
       {/* Close button */}
