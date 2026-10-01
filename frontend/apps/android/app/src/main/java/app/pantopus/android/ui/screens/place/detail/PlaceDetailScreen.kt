@@ -26,6 +26,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.place.PlaceDeniedState
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.PlaceSectionReading
@@ -60,7 +61,12 @@ fun PlaceDetailScreen(
         )
         when (val current = state) {
             PlaceDetailUiState.Loading -> PlaceDetailSkeleton()
-            is PlaceDetailUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+            is PlaceDetailUiState.Error ->
+                if (current.denied) {
+                    PlaceDeniedState()
+                } else {
+                    ErrorState(message = current.message, onRetry = viewModel::refresh)
+                }
             is PlaceDetailUiState.Loaded ->
                 Column(
                     modifier =

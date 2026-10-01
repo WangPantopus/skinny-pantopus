@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.place
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
@@ -71,7 +72,10 @@ class PlaceDashboardViewModel
                 when (intelligenceResult) {
                     is NetworkResult.Success -> PlaceDashboardUiState.Loaded(intelligenceResult.data, moveInDate)
                     is NetworkResult.Failure ->
-                        PlaceDashboardUiState.Error(intelligenceResult.error.displayMessage("Couldn't load your dashboard."))
+                        PlaceDashboardUiState.Error(
+                            intelligenceResult.error.displayMessage("Couldn't load your dashboard."),
+                            denied = intelligenceResult.error is NetworkError.Forbidden,
+                        )
                 }
         }
     }
@@ -85,5 +89,6 @@ sealed interface PlaceDashboardUiState {
         val moveInDate: String? = null,
     ) : PlaceDashboardUiState
 
-    data class Error(val message: String) : PlaceDashboardUiState
+    /** [denied]: the server refused this account the place (403), so a retry can't change it. */
+    data class Error(val message: String, val denied: Boolean = false) : PlaceDashboardUiState
 }

@@ -41,8 +41,12 @@ struct PlaceDashboardView: View {
             case let .loaded(intel):
                 loaded(intel)
             case let .error(message):
-                ErrorState(message: message) {
-                    await viewModel.refresh()
+                if viewModel.accessDenied {
+                    PlaceDeniedState()
+                } else {
+                    ErrorState(message: message) {
+                        await viewModel.refresh()
+                    }
                 }
             }
         }
@@ -455,4 +459,17 @@ struct PlaceDashboardSkeleton: View {
 #Preview("Place dashboard — loading") {
     PlaceDashboardSkeleton()
         .background(Theme.Color.appBg)
+}
+
+/// A place this account can't read (403): say so, without a retry, which
+/// could only repeat the refusal. The same visual as `ErrorState` minus its
+/// button; the web says the same (#896).
+struct PlaceDeniedState: View {
+    var body: some View {
+        EmptyState(
+            icon: .alertCircle,
+            headline: "This place isn't available",
+            subcopy: "You don't have permission to view this place."
+        )
+    }
 }

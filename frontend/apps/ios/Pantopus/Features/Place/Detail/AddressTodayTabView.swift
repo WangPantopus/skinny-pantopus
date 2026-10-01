@@ -160,7 +160,11 @@ private struct AddressTodayLoaded: View {
                 }
                 .refreshable { await viewModel.refresh() }
             case let .error(message):
-                ErrorState(message: message) { await viewModel.refresh() }
+                if viewModel.accessDenied {
+                    PlaceDeniedState()
+                } else {
+                    ErrorState(message: message) { await viewModel.refresh() }
+                }
             }
         }
         .task { await viewModel.load() }
