@@ -1,12 +1,12 @@
 package app.pantopus.android.data.auth
 
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import dagger.Lazy
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
