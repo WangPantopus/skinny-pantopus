@@ -235,5 +235,5 @@ private struct InviteTeammateErrorBanner: View {
 }
 
 #Preview {
-    InviteTeammateWizardView(businessId: "preview-business") { _ in }
+    InviteTeammateWizardView(businessId: "preview-business") { _, _ in }
 }
