@@ -9,6 +9,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/query-keys';
 import type { Relationship, ConnectionRequest, RelationshipUser } from '@pantopus/types';
 
@@ -82,6 +83,16 @@ function ConnectionsPageContent() {
   const blockedUsers: BlockedUserEntry[] = blockedQ.data ?? [];
   const loading =
     connectionsQ.isPending || pendingQ.isPending || sentQ.isPending || blockedQ.isPending;
+  // A tab whose list couldn't be read says so, rather than showing its empty state ("No connections yet",
+  // "No blocked users") as if the list were empty.
+  const activeQuery = { connections: connectionsQ, pending: pendingQ, sent: sentQ, blocked: blockedQ }[activeTab];
+  const activeLoadFailed = activeQuery.isError && activeQuery.data === undefined;
+  const loadFailedMessage = {
+    connections: 'We couldn\u2019t load your connections.',
+    pending: 'We couldn\u2019t load your connection requests.',
+    sent: 'We couldn\u2019t load the requests you sent.',
+    blocked: 'We couldn\u2019t load your blocked list.',
+  }[activeTab];
 
   // Invalidate all 4 relationship queries after a mutation so they refetch
   const loadData = async () => {
@@ -189,7 +200,9 @@ function ConnectionsPageContent() {
         ))}
       </div>
 
-      {loading ? (
+      {activeLoadFailed ? (
+        <ErrorState message={loadFailedMessage} onRetry={() => void activeQuery.refetch()} />
+      ) : loading ? (
         <div className="text-center py-16">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto" />
           <p className="mt-4 text-app-text-secondary">Loading...</p>
