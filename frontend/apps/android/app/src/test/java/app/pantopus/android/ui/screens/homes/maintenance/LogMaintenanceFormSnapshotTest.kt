@@ -41,7 +41,12 @@ class LogMaintenanceFormSnapshotTest {
         paparazzi.snapshot {
             Frame {
                 LogMaintenanceFormContent(
-                    form = LogMaintenanceFormState(),
+                    // Pinned like fullState(): the defaults are Instant.now(), so the golden's date changed daily.
+                    form =
+                        LogMaintenanceFormState(
+                            dateCompleted = Instant.parse("2026-09-30T12:00:00Z"),
+                            nextDueDate = Instant.parse("2026-10-30T12:00:00Z"),
+                        ),
                     isDirty = false,
                     screenTitle = "Log maintenance",
                     submitLabel = "Log",
