@@ -361,6 +361,40 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T02:25:58Z — [#1172](https://github.com/WangPantopus/skinny-pantopus/pull/1172), [#1173](https://github.com/WangPantopus/skinny-pantopus/pull/1173) and [#1174](https://github.com/WangPantopus/skinny-pantopus/pull/1174) merged in batch 245 ([#1175](https://github.com/WangPantopus/skinny-pantopus/pull/1175), 01:58Z, master `c171a0056`). Two leads routed by Stream 1 are taken, both decided. Four fix branches are pushed, with device windows next.**
+  - **Block Founders invitations always failed** (Stream 2's value-drift scan; launch scope, because postcards stay).
+    - The service reserves each invitation as a `BlockInvite` row with status `'reserved'`, but `BlockInvite_status_check`
+      allows only `'created'` and `'failed'`. So every send ends at "The invitation could not be sent. Try again shortly."
+      before any postcard is attempted. This has been the case since PR 353 (09-01).
+    - **Decision (standing instruction): a code-only repair.** The reservation uses the allowed `'created'`. Branch
+      `claude/stream4-block-invite-reserve` `3455c9cbf`, base `c171a0056`; no migration, and Stream 1 released `20261001020000`.
+      - Nothing reads the status: the dedup, the weekly cap, the panel's budget and opt-out redemption count every row.
+      - An unconfirmed reservation is the row whose `lob_id` is null; a `'reserved'` status would add nothing.
+      - A code fix ships with the backend, while a migration would wait on a hosted run.
+    - **Before/after window next:** API (dedup, opt-out, double tap, cap), web (form plus the signed-out `/no-mail/<code>`
+      page), iOS and Android. The runtime backend has no `LOB_API_KEY`, so the product's MockMailProvider handles every send
+      and nothing is mailed.
+  - **Today's Pulse greeting (iOS, Android)** (Stream 2's lead).
+    - The subtitle shows the payload's greeting, built with the server process's `getHours()`. A UTC server says "Good
+      morning" on a US evening.
+    - **Decision:** greet by the device clock, as the native Hubs and Stream 2's web #1181 do. Android's private Hub
+      greeting becomes one file-level `internal deviceGreeting()`. Branch `claude/stream4-pulse-device-greeting` `5fd56d0ca`.
+    - Reproduce with the backend under `TZ=UTC`, which matches a hosted server.
+  - **Android invite form keeps the address after a successful send** (found in code; confirm on device).
+    - The draft is `remember`ed while the panel reloads into the same loaded state; web and iOS clear their forms.
+    - Fix: key the draft on the remaining budget. Branch `claude/stream4-block-invite-form-clears` `8e6c0a15d`.
+  - **iOS small-file size:** a 193-byte file read "0 KB". All five Documents size formatters (KB/MB/GB only) now also allow
+    bytes, and 1,000 bytes and up format as before. Branch `claude/stream4-ios-small-file-size` `132c24e9c`.
+    - Before: sealed `20261001-stream4-pulse-honesty-r1`.
+  - **Builds:**
+    - `ios/android-sizefix` (`132c24e9c`; iOS dylib `45fbc6ae…`, APK `b64763b6…`) is ready.
+    - `greetform` (master `e318f26e9` + greeting + form clearing + size fix) is queued in the heavy slot.
+  - **Runtime:** Stream 3 holds the lease and the S34 pair (from 02:05:40Z); Stream 4 takes it next.
+  - **Next:** the Block Founders window (with the iOS size after and the Android form "before"); then greeting and form
+    afters; then the U03 native cells.
+    - Most old U03 drivers target the retired devices, so new S34 drivers come first. The first U03 cell is native
+      Documents delete (success, E1, E2, E3).
+
 - **2026-10-01T01:57:40Z — Item 5 done: [#1172](https://github.com/WangPantopus/skinny-pantopus/pull/1172) (Pulse honesty), [#1173](https://github.com/WangPantopus/skinny-pantopus/pull/1173) (web Documents Download/size) and [#1174](https://github.com/WangPantopus/skinny-pantopus/pull/1174) (Document detail "Uploaded" row), all with the queue owner. One window, one bundle, exact cleanup. [#1163](https://github.com/WangPantopus/skinny-pantopus/pull/1163) (SwiftFormat whitespace) merged in batch 243 (01:31:47Z).**
   - **Bundle `20261001-stream4-pulse-honesty-r1` (`db20a0d8…`):** 123 files, MANIFEST `db20a0d8f467e73b5ab88548d101f7a188ac464257ca82b07e2c53eb2a99fe6b`, sealed
     01:55:06Z after a clean secret scan (0 hits).
