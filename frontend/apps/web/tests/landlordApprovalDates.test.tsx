@@ -391,15 +391,17 @@ test('a denial prompt cannot submit after the account changes while it is open',
 test('a retired lease-end failure cannot alert or refresh the next account', async () => {
   let reject!: (error: unknown) => void, current = true;
   jest.mocked(post).mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+  const confirmation = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
   const alert = jest.spyOn(window, 'alert').mockImplementation(() => {}), refresh = jest.fn();
   try {
     render(<LeasesTab homeId="home-a" leases={[{ id: 'lease-1', state: 'active', start_at: '2026-09-01', end_at: null } as TenantRequest]}
       onRefresh={refresh} isCurrent={() => current} />);
     fireEvent.click(screen.getByRole('button', { name: 'End Lease' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     current = false;
     await act(async () => reject({ message: 'Previous account private error' }));
     expect(alert).not.toHaveBeenCalled(); expect(refresh).not.toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
+  } finally { confirmation.mockRestore(); alert.mockRestore(); }
 });
 
 

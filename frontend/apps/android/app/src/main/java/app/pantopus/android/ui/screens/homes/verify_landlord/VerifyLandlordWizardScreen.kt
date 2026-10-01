@@ -1391,7 +1391,7 @@ private fun StickyAttentionHint(count: Int) {
             tint = PantopusColors.error,
         )
         Text(
-            text = "  $count field${if (count == 1) "" else "s"} need attention",
+            text = "  $count field${if (count == 1) " needs" else "s need"} attention",
             style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.error,
         )
