@@ -98,4 +98,23 @@ async function blockedUserIds(userId) {
   return ids;
 }
 
-module.exports = { isBlocked, blockedUserIds, invalidateBlockCache, blockCheckUnavailable };
+/**
+ * Whether blockerId has a personal block (UserBlock) on viewerId, in that one direction. Profiles and search hide a
+ * blocker from the person they blocked, while the blocker still sees them (routes/users.js personalBlockersOf). Same
+ * unavailable contract as isBlocked: a failed read throws rather than reporting "not blocked".
+ */
+async function hasBlocked(blockerId, viewerId) {
+  if (!blockerId || !viewerId || String(blockerId) === String(viewerId)) return false;
+  const { count, error } = await supabaseAdmin
+    .from('UserBlock')
+    .select('id', { count: 'exact', head: true })
+    .eq('blocker_user_id', blockerId)
+    .eq('blocked_user_id', viewerId);
+  if (error || !Number.isInteger(count)) {
+    logger.warn('blockService.hasBlocked unavailable', { error: error?.message });
+    throw blockCheckUnavailable();
+  }
+  return count > 0;
+}
+
+module.exports = { isBlocked, hasBlocked, blockedUserIds, invalidateBlockCache, blockCheckUnavailable };

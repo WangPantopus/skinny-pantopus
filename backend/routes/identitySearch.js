@@ -21,6 +21,7 @@ const {
   isSearchable,
   isScopedBlocked,
 } = require('../utils/visibilityPolicy');
+const { hasBlocked } = require('../services/blockService');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -246,6 +247,8 @@ async function canDiscoverLocalProfile(profile, viewerId) {
   if (profile.status && profile.status !== 'active') return false;
   if (!(await isSearchable(viewerId, profile.user_id))) return false;
   if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
+  // Someone the owner blocked doesn't find them, as in Discover's search.
+  if (await hasBlocked(profile.user_id, viewerId)) return false;
 
   const searchVisibility = profile.search_visibility || 'everyone';
   if (searchVisibility === 'nobody') return false;
