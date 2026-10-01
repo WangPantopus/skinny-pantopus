@@ -5,10 +5,11 @@
  * Active (green), upcoming renewals (blue), ending soon (yellow), overstays (red).
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
 import { extractApiError } from '@pantopus/ui-utils';
+import { confirmStore } from '@/components/ui/confirm-store';
 
 type Props = {
   homeId: string;
@@ -74,6 +75,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
 export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurrent }: Props) {
   const [filter, setFilter] = useState<FilterOption>('all');
   const [endingId, setEndingId] = useState<string | null>(null);
+  const ending = useRef(false);
 
   const categorized = useMemo(() => {
     return leases.map((l) => ({
@@ -95,15 +97,22 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurren
     return c;
   }, [categorized]);
 
-  const handleEndLease = useCallback(async (leaseId: string) => {
-    if (!isCurrent()) return;
-    setEndingId(leaseId);
+  const handleEndLease = useCallback(async (lease: landlord.HomeLease) => {
+    if (!isCurrent() || ending.current) return;
+    ending.current = true;
     try {
-      await api.landlord.endLease(leaseId);
+      // Ending a lease ends its residents' lease-based access at once, so ask first, as UnitsTab's "Mark vacant" does.
+      const confirmed = await confirmStore.open({ title: 'End this lease?',
+        description: `This ends the lease for ${lease.primary_resident?.name || 'this tenant'} and its lease-based access. Other active leases and independent Home membership remain.`,
+        confirmLabel: 'End lease', variant: 'destructive' });
+      if (!confirmed || !isCurrent()) return;
+      setEndingId(lease.id);
+      await api.landlord.endLease(lease.id);
       if (isCurrent()) onRefresh();
     } catch (err: unknown) {
       if (isCurrent()) alert(extractApiError(err, 'Could not end the lease. Please retry.'));
     } finally {
+      ending.current = false;
       if (isCurrent()) setEndingId(null);
     }
   }, [onRefresh, isCurrent]);
@@ -189,7 +198,7 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurren
                   {lease.state === 'active' && (
                     <button
                       type="button"
-                      onClick={() => handleEndLease(lease.id)}
+                      onClick={() => handleEndLease(lease)}
                       disabled={endingId === lease.id}
                       className="px-2.5 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
                     >
