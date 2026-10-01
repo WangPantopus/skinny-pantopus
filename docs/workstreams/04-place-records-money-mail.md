@@ -562,6 +562,8 @@ Compared current master `cb02fef0827d8a6f895eba9bbaee42cee70a6aed` with the draf
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T22:19:57Z — Merge milestone.** GitHub confirms #1420 and #1422 **merged unchanged** at2026-10-01T22:17:16Z in batch320/#1425. Fresh fetched master `556c4e506a789a3e9188a866d5da271c8462993b`; merge commits `b4253e055d222f75a7d02f64e94a7d53173a3aa1` / `4f287a23f09bf9810840ea6adae558434d1cbe47`. S1 independently rehashed26/30manifestfiles and reviewed source/CI/browser evidence. #1424 remainsqueued. #1406/#1410 combined nativebuilds passed, S1deviceviews pending safe login. S3owns runtime/device for firstbaseline nativewindow; S4holds no slots/fixtures. Preparing separate mailtaskgig-entry guard from currentmaster using newly sealed webbefore; nativebefore/after remainsrequired.
+
 ### 2026-10-01T22:17:45Z — U05 New from mail source repaired; #1424 queued
 
 - [#1424](https://github.com/WangPantopus/skinny-pantopus/pull/1424), exact origin `6e014a3b222bbbfb1b87ad3efa50dfa311b4b67e`, base `42a91cbf972bd451408c5034a3a30560641c9e2a`: real existing New from mail form submitted emptyrequiredmailId→400 and no form error. Existing LinkedMail area now chooses recent received personal/home/business mail (up to50each, other-Home rows filtered), requires source, and uses existing toast on save failure. Preserves form/API/DB contract, no new file/service/schema. Real source200/forced503 visibleerror+draft/retryPOST200/reload200/DBcanonicaltask-source-backlink-audit; readR1Retry/R2empty/phone390×844/Cancel pass. Targeted lint/diffcheck pass.
