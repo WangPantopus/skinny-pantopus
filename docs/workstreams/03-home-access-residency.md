@@ -565,6 +565,42 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T11:29:48Z — Window 10:55:02–11:20:06Z (lease; slot 4 for Android, then slot 1 for iOS): two PRs sent — [#1327](https://github.com/WangPantopus/skinny-pantopus/pull/1327) (access dead-ends) and [#1328](https://github.com/WangPantopus/skinny-pantopus/pull/1328) (invitation links); both verified on iOS and Android and sealed.**
+  - **[#1327](https://github.com/WangPantopus/skinny-pantopus/pull/1327)** (head `5928507c6e5a8e3f605cdd7039fba331ea3e53f9`, 6 files):
+    - **Change role:** no Owner choice, and no actions on a co-owner's row.
+    - **Dashboard:** a refused viewer reads "You don't have access to this Home." (reload kept). A persistent 503 still gives "Couldn't load this home" + Try again, and the owner's dashboard loads.
+    - **Android afters:** case A offers "Admin, Manager, Limited, Guest", and Limited → 1 POST; case B shows only the owner's own "More actions"; the refusal copy; the 503 regression; the owner's dashboard.
+    - **Seals:**
+      - `20261001-stream3-home-change-role-owner-r1`, MANIFEST `2d9e56ea85c077f7b758203e748001ea6c49672b42d25bba5962bbf8adadd9b0`;
+      - `20261001-stream3-home-dashboard-refused-copy-r1`, MANIFEST `2310cb6e4153bc6652a62fdee11ad4a026bcb4c09257901eea61470bda7f5e4d`.
+  - **[#1328](https://github.com/WangPantopus/skinny-pantopus/pull/1328)** (head `80bc6a29cbc4639c513d8b202e167943701e12ab`, 4 files, `RootTabView` one line):
+    - **iOS reruns on `80bc6a29c`:**
+      - a double-tapped opener (161 ms), then one confirm → 1 decision;
+      - an opener (159 ms) + a confirm double tap (160 ms) → 1 decision;
+      - "Keep reviewing" → 0 requests, then a single accept → 1 decision.
+    - **Seal:** `20261001-stream3-home-invite-link-fixes-r1`, MANIFEST `7442fe883fde670cfff5ae22eb8938c6bcb9bcd374ba35e0ce834de41e778589`. It keeps the failed after-run of the first repair.
+  - **Verification only, sealed:**
+    - **Android sender review (the last screen of #1295):** "Invitation expires: Oct 8, 2026, 3:59 AM", nothing withdrawn. `20261001-stream3-home-android-sender-dates-r1`, `e3d568c7c825f2431145b569850331bcb1e4f5401d1a222b0e145203b58e7320`.
+    - **iOS Members row-menu double tap:** **not reproduced.** At 160 ms the menu closes cleanly; at 276 ms it stays and works. `20261001-stream3-home-ios-dialog-double-tap-r1`, `7c7d3a1fbeab437f96089347465031d2baecbac57bf61f6c4a61faed33c57a60`.
+      - So no cross-stream sweep is recommended. The bundle's inventory of 85 `confirmationDialog`s (55 single-confirm writes) is reference for E3 checks.
+  - Both PRs merge cleanly into master `55d5df3c0`. Sent to Stream 1 with heads and seals.
+  - **Routed to me (Stream 1, from Streams 4 and 5), to reproduce first:**
+    - `adminVerification.js:51` `/queue` page ties (order by `id` after `created_at`);
+    - `landlordTenant.js` (4 drift candidates).
+    - `trustState.js` (12) → OK for Stream 5 to take end to end.
+  - **Slips, recorded:**
+    - **Blind taps under an iOS accessibility stall:** my sign-in loop read "app only" as the system prompt and tapped (201,534)/(127,547) blindly. The proxy log shows only GETs since 11:15Z, no write (it had opened B's Mailbox). The simulator was rebooted at 11:17Z. Rule: dismiss the prompt at most twice, and only after confirming the login form.
+    - **zsh `"$SHA:frontend"`** (`:f` modifier) broke one `rev-parse` record in the build. The correct tree is in `source-ios-tree-corrected.txt`; the script is fixed.
+  - **Runtime:**
+    - The backend and shared worktree were on `e333507a9` and are restored to `00bf2d6ff` (PID 70795, 11:20:06Z; HEAD, status and launch.json equal).
+    - B's lazy MailPreferences rows were deleted exactly before release (11:07Z, 11:19Z).
+    - Both devices are shut down with the owner signed in.
+    - No fixtures, fault rules or token file remain.
+  - **Next:**
+    1. Follow #1327/#1328 through CI and merge (Stream 1).
+    2. The routed admin-queue and landlordTenant items (reproduce first).
+    3. The U02 web pass (`stream3-home-u02-web-r1`).
+
 - **2026-10-01T10:51:32Z — Window 09:33:15–10:48:47Z (lease, slots 3 and 4): iOS D07 and the removal double-tap probe pass and are sealed; the access fixes pass on iOS; the invitation-link fixes pass except the iOS double-tapped Accept, which needed a different repair (now building).**
   - **[#1295](https://github.com/WangPantopus/skinny-pantopus/pull/1295) merged** in batch 281 (master `e333507a9`).
   - **iOS D07 role change, verification only** (`20261001-stream3-home-d07-native-r2`, MANIFEST `8fcaea1a2e87f9fb81c5a5147252fda1803c060acf07491bcbe5decbd2440028`):
