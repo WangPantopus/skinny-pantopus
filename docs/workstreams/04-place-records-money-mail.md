@@ -397,6 +397,28 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T15:39:03Z — Merges, #1375 work, and a re-triage of Phase-3 mail drift now that Mail Day, Stamps, themes and Mail Memory stay in launch scope.**
+  - **Merged:** [#1372](https://github.com/WangPantopus/skinny-pantopus/pull/1372) (batch 304) and #1373 + #1374 (batch 305), so
+    master is `215f6d747`.
+  - **[#1375](https://github.com/WangPantopus/skinny-pantopus/pull/1375):**
+    - master is merged in, giving head `fe4d2a880`, as Stream 1 asked;
+    - strict lint passes;
+    - the iOS build is running, then a device recheck (error state plus a reviewed row's Undo) and a re-seal.
+  - **Earn/package/Stamps-header branch** (`claude/stream4-mail-flag-gaps`, `828f61761`):
+    - the feature-flags session has no objection;
+    - its guide (`docs/launch-scope-flags-2026-10-01.md`) gets the matching rows and calls 9 and 12 in the same PR.
+  - **Re-triage of Stream 5's 11:10Z drift hits in `mailboxV2Phase3.js` against master** (my 11:10Z entry had dismissed them as
+    cut #8):
+    - **`Mail.sender_name` / `delivered_at`:** already fixed on master.
+    - **`POST /themes/apply`:** selects `MailDaySettings.id`, a column that doesn't exist, and ignores the error. So once a
+      settings row exists, applying a theme answers "Theme applied" and changes nothing. Candidate, to verify on the API.
+    - **`POST /memory/dismiss`:** upserts `MailMemory.reference_id`, which doesn't exist, without the NOT NULL `headline` and
+      `reference_date`. A dismissed memory never persists, and on-this-day reads `reference_id` too. Candidate, to verify.
+    - **`MailPackage.recipient_user_id`:** package tracking, which is cut #7.
+  - **Mail Day follow-ups from Stream 1's review (next Mail Day PR):**
+    - an explicit `drawer: personal` with no match should fall back to home;
+    - undo should restore the letter's exact prior state, which it would need to record at route time.
+
 - **2026-10-01T15:26:02Z — Four PRs are with the queue owner. Seal `20261001-stream4-flags-mailday-r1` (`eb58ee9a…`), window 14:46:35Z–15:23:06Z, S34 pair and API/SQL, launch features off.**
   - **[#1372](https://github.com/WangPantopus/skinny-pantopus/pull/1372) (privacy, merge first):** Mail Day "Route to <name>"
     made a household letter the triager's private mail.
