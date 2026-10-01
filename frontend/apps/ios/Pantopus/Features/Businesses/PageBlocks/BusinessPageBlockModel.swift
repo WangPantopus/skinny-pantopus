@@ -578,18 +578,4 @@ public enum BusinessPageBlockOptions {
         ("link", "Open Link"),
         ("book", "Book Now")
     ]
-
-    public static let padding: [(key: String, label: String)] = [
-        ("none", "None"),
-        ("small", "Small"),
-        ("default", "Default"),
-        ("large", "Large")
-    ]
-
-    public static let background: [(key: String, label: String)] = [
-        ("default", "White"),
-        ("gray", "Gray"),
-        ("brand", "Brand"),
-        ("transparent", "Transparent")
-    ]
 }

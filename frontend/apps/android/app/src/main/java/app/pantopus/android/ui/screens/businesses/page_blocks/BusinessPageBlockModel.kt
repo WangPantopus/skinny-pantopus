@@ -526,20 +526,4 @@ object BusinessPageBlockOptions {
             "link" to "Open Link",
             "book" to "Book Now",
         )
-
-    val padding =
-        listOf(
-            "none" to "None",
-            "small" to "Small",
-            "default" to "Default",
-            "large" to "Large",
-        )
-
-    val background =
-        listOf(
-            "default" to "White",
-            "gray" to "Gray",
-            "brand" to "Brand",
-            "transparent" to "Transparent",
-        )
 }
