@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -28,6 +28,15 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
     title: '',
   });
   const [saving, setSaving] = useState(false);
+  const titleId = useId();
+
+  // Escape closes the dialog, as its close button does.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -72,11 +81,14 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
       <div className="fixed inset-0 z-[71] flex items-center justify-center p-4">
         <div
           className="bg-surface rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-app">
-            <h3 className="text-lg font-semibold text-app">Create Seat & Invite</h3>
+            <h3 id={titleId} className="text-lg font-semibold text-app">Create Seat & Invite</h3>
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition" aria-label="Close">
               <X className="w-5 h-5 text-app-secondary" />
             </button>

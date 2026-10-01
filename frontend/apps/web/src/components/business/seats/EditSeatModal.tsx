@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -25,6 +25,15 @@ interface EditSeatModalProps {
 export default function EditSeatModal({ open, onClose, businessId, seat, onSuccess }: EditSeatModalProps) {
   const [form, setForm] = useState({ display_name: '', role_base: 'viewer', title: '' });
   const [saving, setSaving] = useState(false);
+  const titleId = useId();
+
+  // Escape closes the dialog, as its close button does.
+  useEffect(() => {
+    if (!open || !seat) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, seat, onClose]);
 
   useEffect(() => {
     if (seat) {
@@ -67,11 +76,14 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
       <div className="fixed inset-0 z-[71] flex items-center justify-center p-4">
         <div
           className="bg-surface rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-app">
-            <h3 className="text-lg font-semibold text-app">Edit Seat</h3>
+            <h3 id={titleId} className="text-lg font-semibold text-app">Edit Seat</h3>
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition" aria-label="Close">
               <X className="w-5 h-5 text-app-secondary" />
             </button>
