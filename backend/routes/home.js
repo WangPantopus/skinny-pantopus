@@ -1798,6 +1798,7 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
       await require('../services/notificationService').notifyHouseholdAccessRequest({
         ownerUserIds: result.notify_user_ids, requesterName: result.actor_name, homeLabel: result.home_label,
         homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
+        requestId: result.request_id,
       });
     } catch (err) { logger.error('Household request notification failed after commit', { errorCode: err.code }); }
     res.json({ ok: true, notified_owners: result.notify_user_ids.length });
