@@ -109,6 +109,9 @@ public struct PulseComposeContentActions {
     public var onSelectRecommendRating: (Int) -> Void
     public var onSelectDealExpires: (Date) -> Void
     public var onUpdateField: (PulseComposeField, String) -> Void
+    /// A field's live value. The text bindings read it rather than the render's snapshot: a snapshot can lag a fast
+    /// typist by a keystroke, and a text view reset to it jumps the cursor and scrambles the input.
+    public var fieldValue: ((PulseComposeField) -> String)?
     public var onPickPhotos: () -> Void
     public var onRemovePhoto: (UUID) -> Void
     /// Body-field blur — runs `POST /api/posts/precheck`.
@@ -132,6 +135,7 @@ public struct PulseComposeContentActions {
         onSelectRecommendRating: @escaping (Int) -> Void = { _ in },
         onSelectDealExpires: @escaping (Date) -> Void = { _ in },
         onUpdateField: @escaping (PulseComposeField, String) -> Void = { _, _ in },
+        fieldValue: ((PulseComposeField) -> String)? = nil,
         onPickPhotos: @escaping () -> Void = {},
         onRemovePhoto: @escaping (UUID) -> Void = { _ in },
         onBodyEditingEnded: @escaping () -> Void = {},
@@ -150,6 +154,7 @@ public struct PulseComposeContentActions {
         self.onSelectRecommendRating = onSelectRecommendRating
         self.onSelectDealExpires = onSelectDealExpires
         self.onUpdateField = onUpdateField
+        self.fieldValue = fieldValue
         self.onPickPhotos = onPickPhotos
         self.onRemovePhoto = onRemovePhoto
         self.onBodyEditingEnded = onBodyEditingEnded
@@ -991,7 +996,7 @@ public struct PulseComposeContent: View {
     ) -> some View {
         let snapshot = state.fields[key] ?? FormFieldState(id: key.rawValue, originalValue: "")
         let binding = Binding<String>(
-            get: { snapshot.value },
+            get: { actions.fieldValue?(key) ?? snapshot.value },
             set: { actions.onUpdateField(key, $0) }
         )
         return PantopusTextField(
@@ -1013,7 +1018,7 @@ public struct PulseComposeContent: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ZStack(alignment: .topLeading) {
                 TextEditor(text: Binding(
-                    get: { snapshot.value },
+                    get: { actions.fieldValue?(.body) ?? snapshot.value },
                     set: { actions.onUpdateField(.body, $0) }
                 ))
                 .focused($isBodyFieldFocused)
