@@ -355,6 +355,31 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T01:09:54Z — [#1140](https://github.com/WangPantopus/skinny-pantopus/pull/1140) merged in batch 232 (00:40:39Z), on its own as a security batch. Schema-drift candidates routed by the coordinator (Stream 2's scan) are triaged; none needs a launch fix.**
+  - **Each candidate was checked against the runtime schema. Recorded, not changed:**
+    - `jobs/earnRiskReview.js` ×5 is real: `EarnSuspension` has no `status` and `EarnRiskSession` has no `risk_flags`, so
+      the 15-minute job's auto-lift and new suspensions both fail.
+      - **Decision (standing instruction):** Earn, the mailbox ad/offer earnings, is outside the launch-kept mail scope
+        (postcards, welcome cards and the digest only), and it has no cash-out path (founder note in the hub). It's
+        treated as cut #8.
+      - If Earn returns, fix it with suspension semantics agreed with the coordinator first.
+    - `routes/mailbox.js` ×2 is the escrow-mail claim (letters to someone not yet on Pantopus; cut #8).
+      - `POST /claim` selects the nonexistent `User.phone`, so the claimer row is null and every claim gets 404. It fails
+        closed, with no leak.
+      - `GET /claim` reads the nonexistent `UserProfile`, so the sender always shows as unverified.
+    - `routes/mailCompose.js:474`: `MailObject.payload` in the compose claim view (stationery; cut #8).
+    - `routes/mailboxV2Phase3.js` ×7: My Mail Day, mail memories and `MailPackage` (cuts #8 and #7).
+    - `routes/mailboxV2.js:115`: the nonexistent `Business` table in `routeMail`'s business-match step.
+      - It fails soft: no mail is routed to a business drawer, and nothing leaks.
+      - Fixing it would start routing mail into business drawers, so it's left alone before launch.
+    - `routes/files.js:689`: a nonexistent `Home.profile_picture_url` update in `POST /api/files/home`. No client calls the
+      route, and the failure is ignored, so it's dead.
+    - `services/addressValidation/canonicalAddressService.js:240`: a nonexistent `HomeAddress.merged_into`.
+      `mergeAliases` has no production caller (tests only), so it's dead.
+  - **Next:** the item-5 window (Pulse honesty, plus the web Documents download fix) once Stream 3 releases the lease.
+    - Builds are ready: iOS and Android `87ccd59cc`, with Place unit tests 116/0.
+    - The web Documents branch is `claude/stream4-web-docs-download` `60961a7e9`.
+
 - **2026-10-01T00:38:41Z — Security (routed by the coordinator, found by Stream 5): the public Home file listing sent whole File rows to any signed-in account. Fixed: [#1140](https://github.com/WangPantopus/skinny-pantopus/pull/1140), with the queue owner for its own batch. Also [#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131) merged in batch 229 (00:23:16Z) and #1116 in batch 231 (00:34:21Z).**
   - **The problem:** `GET /api/files/home/:homeId?visibility=public` (public is the default) returned all 27 File columns to an
     account with no relation to the Home, including:
