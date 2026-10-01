@@ -9,6 +9,31 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1256 (b272), #1261 (b274), #1265 (b276) merged; #1270 (security notices open Devices) on Stream 1's devices; runtime hollowed by the macOS tmp sweep and repaired, 2026-10-01T07:12:50Z
+
+- **Merged:** #1256 (crew Stripe return, b272), #1261 (monthly summary email opt-out, b274, ahead of today's 17:00Z run), #1265 (crew page editor row names, b276; master `dc878ddb5`).
+- **Open: #1270** (iOS + Android + backend). Security notices ("New sign-in on …", device removed, password changed, security sign-out) led nowhere on the phone:
+  - the push sent its destination only under `url`, and both apps route taps from `link`;
+  - neither router mapped `settings/security`;
+  - Android's App Link filter takes every pantopus.com path, so the email's "Review your devices" opened the app and stopped.
+- **#1270's fix:**
+  - the push adds `link: '/app/settings/security'`;
+  - iOS `settings/security` → `SettingsView(initialRoute: .securityDevices)`;
+  - Android `settings/security` → `MENU` then `SETTINGS_DEVICES`.
+- **#1270's proof so far:**
+  - The real notices on the runtime, with the push captured: master pushes have no `link`, and the head's carry it. No DB writes.
+  - Backend: gates OK; Jest 341 suites and 6286 tests pass.
+  - CI is running. Stream 1's candidate `3326f3ecc` holds the device check: the iOS "before" (openurl does nothing) is recorded; the after runs on both apps. The simulated push can't run on Stream 1's sim (no notification permission).
+  - Seal after the device bundle.
+- **Infrastructure (07:00Z): macOS `com.apple.tmp_cleaner`** deletes every `/private/tmp` file untouched for 3 days, nightly at local midnight. It hollowed both Stream 5 runtime trees: `node_modules/.pnpm`, the worktrees' `.git` pointer files, and about 8,000 tracked files each. Stream 1 lost `verify-bundle.py`.
+  - **Repaired:** `git worktree repair`, restoring only the deleted tracked files, then `pnpm install --offline` (nothing downloaded). The API and web were restarted on master `008613b81` (receipts 07:05:27Z and 07:09:42Z), and a signed-in smoke check passed.
+  - The launchers are backed up in the kit's `runtime-launchers-backup/`, and the runtime files' atime was refreshed.
+  - Recovery recipe: memory `pantopus-tmp-cleaner`. Stream 1 relayed the warning to Streams 2–4. Moving the runtimes out of `/private/tmp` is the user's call.
+- **Seen, not changed:**
+  - **Replaced photos stay in storage.** The crew logo/banner route (`upload.js` `/business-media`) and the personal photo route both keep the replaced file in storage, so an old photo stays reachable at its URL. The personal route's "Delete old profile picture" comment has no delete. Deleting could break saved URLs, so this is a design call.
+  - **Floating buttons overlap the editor.** The app's floating chat and "+" buttons overlap the crew page editor's settings panel and partly cover "Delete block".
+- **Runtime:** API 18134 and web 18131 on master `008613b81`. No fixtures remain.
+
 ## LIVE — #1238 (b270) and #1253 (b271) merged; #1256 (crew Stripe return) sealed; #1261 (monthly summary email opt-out) in CI; app-wide page-health scan clean, 2026-10-01T06:36:50Z
 
 - **Merged:** #1238 (Android View as "Not shown", batch 270, master `7c249e7d3`); #1253 (web profile Connect, batch 271, `12013a711`).
