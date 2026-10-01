@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -222,7 +223,8 @@ private fun TopBar(onBack: () -> Unit) {
             modifier =
                 Modifier
                     .size(44.dp)
-                    .clickable(onClick = onBack)
+                    // A button, as on the train page: TalkBack said only "Back".
+                    .clickable(role = Role.Button, onClick = onBack)
                     .testTag(MANAGE_TRAIN_BACK_BUTTON_TAG)
                     .semantics { contentDescription = "Back" },
             contentAlignment = Alignment.Center,

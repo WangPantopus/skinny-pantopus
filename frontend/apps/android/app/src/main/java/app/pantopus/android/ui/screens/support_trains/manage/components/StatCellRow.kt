@@ -8,13 +8,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,12 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.shared.content_detail.withMaxFontScale
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
@@ -61,7 +65,10 @@ fun StatCellRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                // At least 60dp and as tall as the tallest tile, so large text keeps each tile's label
+                // ("SLOTS", "HELPERS"…) instead of clipping it; the dividers still span the row.
+                .heightIn(min = 60.dp)
+                .height(IntrinsicSize.Min)
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
                 .border(BorderStroke(1.dp, PantopusColors.appBorder), RoundedCornerShape(Radii.lg))
@@ -92,7 +99,8 @@ private fun CellView(
         modifier =
             modifier
                 .padding(horizontal = Spacing.s1, vertical = Spacing.s3)
-                .semantics { contentDescription = "${cell.label} ${cell.value}" },
+                // One stop per cell: TalkBack read the value and its label as two ("1/2", then "SLOTS").
+                .clearAndSetSemantics { contentDescription = "${cell.label} ${cell.value}" },
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -106,7 +114,9 @@ private fun CellView(
         )
         Text(
             text = cell.label.uppercase(),
-            fontSize = 10.sp,
+            // Grows with the font size up to 1.5×, then holds, so "HELPERS" stays whole in a narrow tile
+            // (the content-detail stat strip's rule); the value above grows fully.
+            style = LocalTextStyle.current.copy(fontSize = 10.sp).withMaxFontScale(STAT_LABEL_MAX_FONT_SCALE),
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.66.sp,
             color = PantopusColors.appTextSecondary,
@@ -120,3 +130,5 @@ private fun valueColor(tone: StatCellTone): Color =
         StatCellTone.WARN -> PantopusColors.warmAmber
         StatCellTone.NEUTRAL -> PantopusColors.appText
     }
+
+private const val STAT_LABEL_MAX_FONT_SCALE = 1.5f

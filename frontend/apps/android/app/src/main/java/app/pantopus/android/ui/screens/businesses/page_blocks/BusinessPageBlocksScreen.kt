@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -374,6 +376,8 @@ private fun BlockCard(
                 Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onEdit)
+                    // A hidden block says so: the eye-off icon alone is not announced as the row's state.
+                    .semantics { if (!block.isVisible) stateDescription = "Hidden from visitors" }
                     .padding(Spacing.s3)
                     .testTag("businessPageBlocks.block.$index"),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -405,7 +409,7 @@ private fun BlockCard(
             if (!block.isVisible) {
                 PantopusIconImage(
                     icon = PantopusIcon.EyeOff,
-                    contentDescription = "Hidden",
+                    contentDescription = null,
                     tint = PantopusColors.warning,
                 )
             }

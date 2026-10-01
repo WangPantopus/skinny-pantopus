@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
@@ -553,14 +555,15 @@ private fun RowActionButton(
     Row(
         modifier =
             Modifier
-                .height(34.dp)
+                // At least 34dp, so a large font grows the button instead of clipping its label.
+                .heightIn(min = 34.dp)
                 .clip(shape)
                 .background(if (destructive) PantopusColors.errorBg else PantopusColors.appSurface)
                 .border(1.dp, if (destructive) PantopusColors.errorLight else PantopusColors.appBorder, shape)
                 .clickable(enabled = isEnabled, onClick = onClick)
                 .padding(horizontal = Spacing.s3)
                 .testTag(tag)
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },
@@ -736,10 +739,13 @@ private fun HostedByRow(
                 .clip(shape)
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorderSubtle, shape)
-                .clickable(enabled = onMessageHost != null) { onMessageHost?.invoke() }
+                // Clickable only when it messages the host: a disabled click read as "Button, disabled".
+                .then(if (onMessageHost != null) Modifier.clickable { onMessageHost() } else Modifier)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
-                .semantics {
-                    role = Role.Button
+                // One phrase for TalkBack (the initials and the split name were read again after it), and
+                // a button only when it messages the host.
+                .clearAndSetSemantics {
+                    if (onMessageHost != null) role = Role.Button
                     contentDescription =
                         "Hosted by ${content.organizerDisplayName}${content.neighborHint?.let { ", $it" } ?: ""}"
                 },
@@ -842,7 +848,7 @@ private fun PrimarySignUpCTA(
                 .clip(shape)
                 .background(if (enabled) PantopusColors.primary600 else PantopusColors.appBorderStrong)
                 .clickable(enabled = enabled) { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                     if (!enabled) disabled()
@@ -911,7 +917,7 @@ private fun DockSecondary(
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, shape)
                 .clickable { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },
@@ -953,7 +959,7 @@ private fun DockPrimary(
                 .clip(shape)
                 .background(PantopusColors.primary600)
                 .clickable { onTap() }
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
                     contentDescription = label
                 },
