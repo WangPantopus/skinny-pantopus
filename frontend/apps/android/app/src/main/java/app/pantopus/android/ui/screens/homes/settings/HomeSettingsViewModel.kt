@@ -209,7 +209,7 @@ class HomeSettingsViewModel
             }
             if (trimmed.length > HomeRenameState.NAME_MAX_LENGTH) {
                 _rename.update {
-                    it.copy(error = "Keep the name under ${HomeRenameState.NAME_MAX_LENGTH} characters.")
+                    it.copy(error = "Keep the name to ${HomeRenameState.NAME_MAX_LENGTH} characters or fewer.")
                 }
                 return
             }

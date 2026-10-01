@@ -218,7 +218,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
             return
         }
         guard trimmed.count <= Self.nameMaxLength else {
-            renameError = "Keep the name under \(Self.nameMaxLength) characters."
+            renameError = "Keep the name to \(Self.nameMaxLength) characters or fewer."
             return
         }
         isSavingName = true
