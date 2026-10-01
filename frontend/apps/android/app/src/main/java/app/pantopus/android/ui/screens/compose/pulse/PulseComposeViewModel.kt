@@ -408,6 +408,9 @@ class PulseComposeViewModel
                     postingTarget?.displayLabel
                 }
 
+        /** True when composing a new post to the Connections (network) target, stored as "general". */
+        val isNetworkFlowTarget: Boolean get() = !isEditing && postingTarget?.isNetworkTarget == true
+
         /**
          * C2 — route the create submit through the business-post endpoint.
          * Idempotent; called from a `LaunchedEffect` on the compose screen.
@@ -431,6 +434,9 @@ class PulseComposeViewModel
             postingTarget = target
             composePurpose = purpose
             purpose?.legacyIntent?.let { _activeIntent.value = it }
+            // A Connections post is stored as "general" (effectivePostType), so its draft starts on the
+            // general form, not the Ask form, whose category would go nowhere.
+            if (purpose == null && target.isNetworkTarget && !isEditing) _activeIntent.value = PulseComposeIntent.Announce
             _identity.value =
                 PulseComposeIdentity.entries.firstOrNull { it.key == target.postAs }
                     ?: PulseComposeIdentity.Personal
