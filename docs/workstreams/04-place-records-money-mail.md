@@ -397,6 +397,24 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T13:36Z — [#1354](https://github.com/WangPantopus/skinny-pantopus/pull/1354) is with the queue owner: shared Android controls read once in TalkBack, and the wizard title clears its step count at large text.** Head `b170f1ccc` on `a0eba5315`, Android only, three shared files. Seal `20261001-stream4-android-shared-a11y-r1` (`d52978cb…`).
+  - **What changed:** ListOfRows tabs, the extended FAB and the labelled top-bar action; the WizardShell CTA; and the
+    app-wide `PantopusButton`, which covers every EmptyState CTA.
+    - `clearAndSetSemantics` sits last in each chain, so click, role, state, test tag and text are kept.
+    - From font scale 1.3, the wizard title takes its own row.
+  - **Proof on `pantopus_s34`:**
+    - every probed control reads once: "Use my location. Use my location. Button" became "Use my location. Button", and
+      "Continue. Continue. Button" became "Continue. Button", on Start a train steps 1–3 and Add Home;
+    - at font 2.0, "Start a support train1 of 5" now has the title on its own row;
+    - 0 differing pixels in all 9 default-size pairs;
+    - the instrumented suite passed on the device (OK, 50 tests);
+    - the build ran ktlint, detekt, the unit tests and Paparazzi verify: 307 tests, 0 failures.
+  - **Runtime:** two leases with exact cleanups (353 of 353 tables equal both times). I handed the runtime to Stream 3 in
+    between and back afterwards.
+  - **Routed:** Add Home's screen-specific "Use current location" still reads twice. Stream 3 took it.
+  - **Next:** the iOS maintenance reminder under `household_extras`, the Stamps wallet under `mail_extras`, the My Mail
+    Day verification, then U05.
+
 - **2026-10-01T12:52Z — The shared Android TalkBack repair is mid-run, and three decisions are recorded ("Decided by Stream 4" items 8–11).**
   - **Before half done** on `pantopus_s34` (lease 1, 12:02:18Z–12:35:26Z, exact cleanup with 353 of 353 tables equal):
     - TalkBack repeats on the tabs ("My trains, 0. My trains. 0."), the FAB, "Mark all read", the wizard CTA ("Continue.
