@@ -9,6 +9,32 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T16:11Z (Stream 1), batches 304–306.**
+  - **Merged:**
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 304 | #1376 | 15:27:45Z | Stream 4's **#1372**: My Mail Day routes a household letter to its addressee, not to whoever triaged it (privacy; merged first) |
+    | 305 | #1378 | 15:31:25Z | Stream 4's **#1373** (Mail Day Undo, Undo all and Other… work) and **#1374** (Stamps hides the sample postage wallet in the launch build). Bundle `eb58ee9a` covers four heads; `verify-bundle.py` now accepts multi-head bundles |
+    | 306 | #1384 | 16:09:31Z | Stream 2's **#1359** (a withdrawal can't pay out twice; migration **20261001132000**), **#1365** (likes and saves keep the chosen state; migration **20261001134000**), **#1360** (Connections compose uses the general form) and **#1377** (the Feed toast stays centred and visible above the phone tab bar) |
+
+    Master is **`d7d2ffbe0`**; the next batch is **307**.
+  - **Deploy order:** migrations 131000 (batch 303), 132000 and 134000 (batch 306) go before the new backend.
+  - **Device cells on Stream 1's candidate 30** (`678c52702`; bundle `20261001-stream1-cand30-device-cells-r1`, seal `d5c78dd1`):
+    - #1360 iOS: pass.
+    - #1365 iOS: pass (like and save, each with a lost reply).
+    - #1359 Android: pass for money safety (one debit across three same-key confirms, no reversal). iOS Wallet is behind an OS passcode prompt and wasn't driven.
+    - #1367 iOS + Android: pass (5 steps).
+    - **Follow-ups:**
+      - **Stream 2:** the 503 `withdrawal_pending` answer shows a generic message, and the wallet isn't reloaded after an unsettled failure. The compose Details editor scrambles under rapid input (pre-existing).
+      - **Stream 4:** #1372's explicit `drawer: personal` with no match; record and restore the exact prior state on undo.
+  - **Held for a combined build:** #1375 (Stream 4, iOS Mail Day error state) edits the same Swift files as #1373. Stream 4 is building the merge.
+  - **Queued:**
+    - **Stream 5's chat socket hardening (#1382):** first in the next batch once sealed. It's backend only, and the backend should be deployed soon after.
+    - **Stream 5's seat-invite renew (#1380, migration 136000) and link handoff (#1381):** candidate 31 (`d6998a1e3`) is in the heavy-slot queue for their device check.
+    - **Stream 5, after seals:** #1338, #1356, #1357, #1366, #1367, #1371.
+    - **Stream 2's #1379** (migration 135000), after its seal.
+  - **Approved:** Stream 5's seat-invite plan. The same inviter renews; a different inviter gets 409. Native apps copy the link with a selectable fallback. No server email.
 - **Update 2026-10-01T15:25Z (Stream 1), batches 301–303.**
   - **Merged:**
 
