@@ -25,6 +25,22 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
   });
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // The same upload the creation flow's Media step uses (the Overview checklist's "Upload a logo" lands here).
+  const uploadLogo = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      await api.upload.uploadBusinessMedia(businessId, file, 'logo');
+      onUpdate();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to upload the logo';
+      toast.error(msg);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -108,6 +124,27 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
           </>
         ) : (
           <>
+            <div>
+              <div className="text-xs font-medium text-app-muted uppercase tracking-wider">Logo</div>
+              <div className="mt-1 flex items-center gap-3">
+                {business?.profile_picture_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={business.profile_picture_url} alt="Logo" className="w-12 h-12 rounded-lg object-cover border border-app" />
+                ) : (
+                  <span className="text-sm text-app-muted">No logo yet</span>
+                )}
+                <label className="px-3 py-1.5 rounded-lg border border-app-strong text-sm font-medium text-app-strong hover:bg-surface-raised transition cursor-pointer focus-within:ring-2 focus-within:ring-violet-500">
+                  {uploadingLogo ? 'Uploading…' : business?.profile_picture_url ? 'Change logo' : 'Upload logo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    disabled={uploadingLogo}
+                    onChange={(e) => { void uploadLogo(e.target.files?.[0]); e.target.value = ''; }}
+                  />
+                </label>
+              </div>
+            </div>
             <InfoRow label="Name" value={business?.name} />
             <InfoRow label="Tagline" value={business?.tagline} />
             <InfoRow label="Description" value={profile?.description} />

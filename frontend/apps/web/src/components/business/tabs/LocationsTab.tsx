@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import * as api from '@pantopus/api';
 import type { BusinessLocation } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -108,12 +109,21 @@ export default function LocationsTab({ locations, businessId, onUpdate }: Locati
                   </div>
                   {loc.phone && <div className="text-xs text-app-muted mt-1">{loc.phone}</div>}
                 </div>
-                <button
-                  onClick={() => removeLocation(loc.id)}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >
-                  Remove
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* The weekly and special hours editor (the Overview checklist's "Set business hours" lands here). */}
+                  <Link
+                    href={`/app/business/${businessId}/locations/${loc.id}/hours`}
+                    className="text-xs font-medium text-violet-600 hover:underline"
+                  >
+                    Hours
+                  </Link>
+                  <button
+                    onClick={() => removeLocation(loc.id)}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}
