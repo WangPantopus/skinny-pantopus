@@ -253,7 +253,8 @@ public extension PulseComposeViewModel {
             isIntentLocked: isIntentLocked,
             isFlowMode: isFlowMode,
             composePurpose: composePurpose,
-            postingTargetLabel: postingTarget?.displayLabel
+            // Edits open on a Connections target; the header names the post's own (fixed) audience.
+            postingTargetLabel: isEditing ? visibility.label : postingTarget?.displayLabel
         )
     }
 }

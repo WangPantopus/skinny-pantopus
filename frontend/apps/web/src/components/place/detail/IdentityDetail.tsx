@@ -297,6 +297,15 @@ function ResidencyLetterLeaf({ facts, homeId, address, onBack }: { facts: Omit<L
 
   const letters = lettersQuery.data ?? [];
 
+  // One click issues one letter. React Query marks the mutation pending only after a later task, so the second click of
+  // a fast double-click could reach the still-enabled button and issue a second letter with its own code.
+  const issuing = useRef(false);
+  const issue = () => {
+    if (issuing.current) return;
+    issuing.current = true;
+    issueMutation.mutate(undefined, { onSettled: () => { issuing.current = false; } });
+  };
+
   return (
     <>
       <DetailHeader title="Residency letter" address={address} onBack={onBack} />
@@ -320,7 +329,7 @@ function ResidencyLetterLeaf({ facts, homeId, address, onBack }: { facts: Omit<L
 
         <button
           type="button"
-          onClick={() => issueMutation.mutate()}
+          onClick={issue}
           disabled={issueMutation.isPending}
           className="w-full h-12 mt-3.5 rounded-xl bg-primary-600 text-white text-[15px] font-semibold flex items-center justify-center gap-2 shadow-[0_6px_16px_rgba(2,132,199,0.22)] hover:bg-primary-700 transition disabled:opacity-60"
         >
