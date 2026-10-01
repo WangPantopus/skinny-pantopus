@@ -5,6 +5,7 @@
 // always personal (req.user) — the source of truth that home/business compose.
 // ============================================================
 
+const { createHash } = require('node:crypto');
 const express = require('express');
 const Joi = require('joi');
 
@@ -1346,6 +1347,8 @@ const packageSchema = Joi.object({
   currency: Joi.string().length(3).uppercase().default('USD'),
   event_type_id: Joi.string().uuid().allow(null),
   is_active: Joi.boolean().default(true),
+  // A client key for the create (not the patch): a retry answers with the package the first attempt made.
+  client_request_id: Joi.string().uuid().allow(null),
 });
 router.get('/packages', withOwner('view'), asyncHandler(async (req, res) => {
   const { data } = await supabaseAdmin.from('BookingPackage').select('*, credits:PackageCredit(count)')
@@ -1367,10 +1370,27 @@ router.get('/packages', withOwner('view'), asyncHandler(async (req, res) => {
   res.json({ packages });
 }));
 router.post('/packages', withOwner('edit'), validate(packageSchema), asyncHandler(async (req, res) => {
-  const body = { ...req.body }; delete body.owner_type; delete body.owner_id;
-  const { data, error } = await supabaseAdmin.from('BookingPackage').insert({ ...req.scheduling.oc, ...body }).select('*').single();
+  const body = { ...req.body }; delete body.owner_type; delete body.owner_id; delete body.client_request_id;
+  // The same client_request_id maps to one package id (scoped to the owner and the sender), so a retry or a silent
+  // re-send answers with the package the first attempt made; the primary key settles a race.
+  const { ownerType, ownerId } = req.scheduling; const key = req.body.client_request_id;
+  const id = key ? createHash('sha256')
+    .update(`pantopus:booking-package:v1:${ownerType}:${String(ownerId).toLowerCase()}:${req.user.id.toLowerCase()}:${key.toLowerCase()}`)
+    .digest('hex').slice(0, 32) : null;
+  const read = async () => { const { data, error } = await supabaseAdmin.from('BookingPackage').select('*').eq('id', id).maybeSingle(); if (error) throw error; return data; };
+  const answer = (pkg) => (pkg.name === body.name && pkg.sessions_count === body.sessions_count && pkg.price_cents === body.price_cents
+    ? res.status(201).json({ package: pkg })
+    : res.status(409).json({ error: 'This request was already used for a different package.', code: 'PACKAGE_REQUEST_REUSED' }));
+  const existing = id ? await read() : null;
+  if (existing) return answer(existing);
+  const { data, error } = await (id
+    ? supabaseAdmin.from('BookingPackage').upsert({ ...req.scheduling.oc, ...body, id }, { onConflict: 'id', ignoreDuplicates: true })
+    : supabaseAdmin.from('BookingPackage').insert({ ...req.scheduling.oc, ...body })).select('*').maybeSingle();
   if (error) throw error;
-  res.status(201).json({ package: data });
+  if (data) return res.status(201).json({ package: data });
+  const raced = await read(); // a concurrent retry of the same create inserted it first
+  if (!raced) throw new Error('Package create returned no row');
+  return answer(raced);
 }));
 // Defaults-free partial update — see workflowPatchSchema for why fork() is wrong here.
 // With fork, restoring an archived package (`{is_active:true}`) also validated in

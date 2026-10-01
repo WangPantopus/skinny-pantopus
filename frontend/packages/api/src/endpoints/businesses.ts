@@ -514,6 +514,8 @@ export async function createCatalogCategory(businessId: string, data: {
   description?: string;
   slug?: string;
   sort_order?: number;
+  /** One id per intended category, reused on a retry, so a lost reply can't add it twice. */
+  client_request_id?: string;
 }): Promise<{ category: CatalogCategory }> {
   return post(`/api/businesses/${businessId}/catalog/categories`, data);
 }
@@ -556,6 +558,8 @@ export async function createCatalogItem(businessId: string, data: {
   tags?: string[];
   details?: Record<string, any>;
   sort_order?: number;
+  /** One id per intended item, reused on a retry, so a lost reply can't add it twice. */
+  client_request_id?: string;
 }): Promise<{ item: CatalogItem }> {
   return post(`/api/businesses/${businessId}/catalog/items`, data);
 }

@@ -689,10 +689,12 @@ export function listPackages(owner?: SchedulingOwnerRef) {
   );
 }
 
-export function createPackage(data: PackageInput, owner?: SchedulingOwnerRef) {
+/** `clientRequestId`: one id per intended package, reused on a retry, so a lost reply can't create it twice. */
+export function createPackage(data: PackageInput, owner?: SchedulingOwnerRef, clientRequestId?: string) {
   return post<{ package: Package }>(`${ownerBase(owner)}/packages`, {
     ...ownerParams(owner),
     ...data,
+    ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
   });
 }
 

@@ -53,6 +53,7 @@
  *   GET    /public/:username                          — Public business profile (no auth)
  */
 
+const { createHash } = require('node:crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -261,6 +262,11 @@ const updateCatalogItemSchema = createCatalogItemSchema.fork(
   ['name'],
   (schema) => schema.optional()
 ).min(1);
+
+// The creates also take a client key (null from Android's full-form item body), so a retry answers with the row the
+// first attempt made. Updates don't: an unknown key is stripped there.
+const createCategoryRequestSchema = createCategorySchema.keys({ client_request_id: Joi.string().uuid().allow(null) });
+const createCatalogItemRequestSchema = createCatalogItemSchema.keys({ client_request_id: Joi.string().uuid().allow(null) });
 
 const createPageSchema = Joi.object({
   slug: Joi.string().min(1).max(100).required(),
@@ -2316,7 +2322,32 @@ router.delete('/:businessId/locations/:locationId/special-hours/:shId', verifyTo
 
 // --- Categories ---
 
-router.post('/:businessId/catalog/categories', verifyToken, validate(createCategorySchema), async (req, res) => {
+// A catalog create keeps its identity through an uncertain reply: the same client_request_id maps to one row id
+// (scoped to the business and the sender), so a retry or a silent re-send answers with the row the first attempt made,
+// and the table's primary key settles a race. Returns { row, replay } — replay when the row already existed.
+const catalogRequestId = (kind, businessId, userId, requestId) => (requestId ? createHash('sha256')
+  .update(`pantopus:${kind}:v1:${businessId.toLowerCase()}:${userId.toLowerCase()}:${requestId.toLowerCase()}`)
+  .digest('hex').slice(0, 32) : null);
+async function createCatalogRowOnce(table, id, row) {
+  const read = async () => {
+    const { data, error } = await supabaseAdmin.from(table).select().eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  const existing = id ? await read() : null;
+  if (existing) return { row: existing, replay: true };
+  const { data, error } = await (id
+    ? supabaseAdmin.from(table).upsert({ ...row, id }, { onConflict: 'id', ignoreDuplicates: true })
+    : supabaseAdmin.from(table).insert(row))
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (data) return { row: data, replay: false };
+  // A concurrent retry of the same create inserted it first.
+  return { row: await read(), replay: true };
+}
+
+router.post('/:businessId/catalog/categories', verifyToken, validate(createCategoryRequestSchema), async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
@@ -2326,16 +2357,17 @@ router.post('/:businessId/catalog/categories', verifyToken, validate(createCateg
       return res.status(403).json({ error: 'No permission to manage catalog' });
     }
 
-    const { data: category, error } = await supabaseAdmin
-      .from('BusinessCatalogCategory')
-      .insert({
-        business_user_id: businessId,
-        ...req.body,
-      })
-      .select()
-      .single();
-
-    if (error) {
+    const { client_request_id: requestId, ...fields } = req.body;
+    let category;
+    try {
+      const id = catalogRequestId('catalog-category', businessId, userId, requestId);
+      const created = await createCatalogRowOnce('BusinessCatalogCategory', id, { business_user_id: businessId, ...fields });
+      if (!created.row) throw new Error('Category create returned no row');
+      if (created.replay && created.row.name !== fields.name) {
+        return res.status(409).json({ error: 'This request was already used for a different category.', code: 'CATALOG_REQUEST_REUSED' });
+      }
+      category = created.row;
+    } catch (error) {
       logger.error('Error creating catalog category', { error: error.message });
       return res.status(500).json({ error: 'Failed to create category' });
     }
@@ -2440,7 +2472,7 @@ router.delete('/:businessId/catalog/categories/:catId', verifyToken, async (req,
 
 // --- Items ---
 
-router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogItemSchema), async (req, res) => {
+router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogItemRequestSchema), async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
@@ -2458,21 +2490,27 @@ router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogIte
       });
     }
 
-    const { data: item, error } = await supabaseAdmin
-      .from('BusinessCatalogItem')
-      .insert({
-        business_user_id: businessId,
-        ...req.body,
-      })
-      .select()
-      .single();
-
-    if (error) {
+    const { client_request_id: requestId, ...fields } = req.body;
+    let created;
+    try {
+      const id = catalogRequestId('catalog-item', businessId, userId, requestId);
+      created = await createCatalogRowOnce('BusinessCatalogItem', id, { business_user_id: businessId, ...fields });
+      if (!created.row) throw new Error('Catalog item create returned no row');
+    } catch (error) {
       logger.error('Error creating catalog item', { error: error.message });
       return res.status(500).json({ error: 'Failed to create item' });
     }
+    const item = created.row;
+    if (created.replay) {
+      // Fields the request left out took the table's defaults, so only the ones it sent are compared.
+      const same = (key) => fields[key] === undefined || (item[key] ?? null) === (fields[key] ?? null);
+      if (item.name !== fields.name || !['kind', 'price_cents', 'category_id'].every(same)) {
+        return res.status(409).json({ error: 'This request was already used for a different item.', code: 'CATALOG_REQUEST_REUSED' });
+      }
+      return res.status(201).json({ item });
+    }
 
-    await writeAuditLog(businessId, userId, 'create_catalog_item', 'BusinessCatalogItem', item.id, { name: req.body.name });
+    await writeAuditLog(businessId, userId, 'create_catalog_item', 'BusinessCatalogItem', item.id, { name: fields.name });
 
     // Recalculate profile completeness after catalog mutation
     calculateAndStoreCompleteness(businessId).catch((err) => {

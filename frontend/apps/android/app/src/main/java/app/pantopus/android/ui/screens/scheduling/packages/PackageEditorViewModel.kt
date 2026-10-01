@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /** Credit-expiry window (design's `Segmented`). View-only — no `expiry` column. */
@@ -135,6 +136,10 @@ class PackageEditorViewModel
         /** True when the package has sold credits (sessions/eligibility locked). */
         private var hasActiveBuyers = false
 
+        // One client key per intended package, reused while the same package is retried, so a lost reply can't
+        // create it twice. Cleared once the create sticks.
+        private var pendingCreate: Pair<CreatePackageRequest, String>? = null
+
         fun start() {
             if (started) return
             started = true
@@ -236,8 +241,7 @@ class PackageEditorViewModel
                             ),
                         )
                     } else {
-                        repo.createPackage(
-                            owner,
+                        val request =
                             CreatePackageRequest(
                                 name = name,
                                 sessionsCount = form.sessionsCount,
@@ -245,13 +249,16 @@ class PackageEditorViewModel
                                 currency = CURRENCY,
                                 eventTypeId = form.selectedEventTypeId,
                                 isActive = form.isActive,
-                            ),
-                        )
+                            )
+                        val pending = pendingCreate?.takeIf { it.first == request } ?: (request to UUID.randomUUID().toString())
+                        pendingCreate = pending
+                        repo.createPackage(owner, request.copy(clientRequestId = pending.second))
                     }
                 saving = false
                 when (result) {
                     is NetworkResult.Success -> {
                         snapshot = form
+                        pendingCreate = null
                         onDone()
                     }
                     is NetworkResult.Failure -> {

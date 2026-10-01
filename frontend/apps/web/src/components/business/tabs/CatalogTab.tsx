@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -15,6 +15,8 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', kind: 'service', price_cents: '', description: '' });
   const [saving, setSaving] = useState(false);
+  // One id per intended item, reused when the same item is retried, so a lost reply can't add it twice.
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
 
   useEffect(() => { setItems(initialCatalog); }, [initialCatalog]);
 
@@ -22,12 +24,16 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
     if (!addForm.name) return;
     setSaving(true);
     try {
-      await api.businesses.createCatalogItem(businessId, {
+      const payload = {
         name: addForm.name,
         kind: addForm.kind,
         price_cents: addForm.price_cents ? Number(addForm.price_cents) : undefined,
         description: addForm.description || undefined,
-      });
+      };
+      const draft = JSON.stringify(payload);
+      if (pendingCreate.current?.draft !== draft) pendingCreate.current = { draft, id: crypto.randomUUID() };
+      await api.businesses.createCatalogItem(businessId, { ...payload, client_request_id: pendingCreate.current.id });
+      pendingCreate.current = null;
       setShowAdd(false);
       setAddForm({ name: '', kind: 'service', price_cents: '', description: '' });
       onUpdate();

@@ -81,16 +81,21 @@ public struct BusinessCatalogCategoryRequest: Encodable, Sendable, Hashable {
     public let name: String?
     public let description: String?
     public let sortOrder: Int?
+    /// A create's client key (`client_request_id`): one per intended
+    /// category, reused on a retry so a lost reply can't add it twice.
+    public let clientRequestId: String?
 
-    public init(name: String? = nil, description: String? = nil, sortOrder: Int? = nil) {
+    public init(name: String? = nil, description: String? = nil, sortOrder: Int? = nil, clientRequestId: String? = nil) {
         self.name = name
         self.description = description
         self.sortOrder = sortOrder
+        self.clientRequestId = clientRequestId
     }
 
     private enum CodingKeys: String, CodingKey {
         case name, description
         case sortOrder = "sort_order"
+        case clientRequestId = "client_request_id"
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -98,6 +103,7 @@ public struct BusinessCatalogCategoryRequest: Encodable, Sendable, Hashable {
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(sortOrder, forKey: .sortOrder)
+        try container.encodeIfPresent(clientRequestId, forKey: .clientRequestId)
     }
 }
 
@@ -184,6 +190,9 @@ public struct BusinessCatalogItemRequest: Encodable, Sendable, Hashable {
     public let durationMinutes: Int?
     public let isFeatured: Bool
     public let categoryId: String?
+    /// A create's client key (`client_request_id`): one per intended item,
+    /// reused on a retry so a lost reply can't add it twice. Updates leave it nil.
+    public let clientRequestId: String?
 
     public init(
         name: String,
@@ -195,7 +204,8 @@ public struct BusinessCatalogItemRequest: Encodable, Sendable, Hashable {
         priceUnit: String?,
         durationMinutes: Int?,
         isFeatured: Bool,
-        categoryId: String?
+        categoryId: String?,
+        clientRequestId: String? = nil
     ) {
         self.name = name
         self.description = description
@@ -207,6 +217,24 @@ public struct BusinessCatalogItemRequest: Encodable, Sendable, Hashable {
         self.durationMinutes = durationMinutes
         self.isFeatured = isFeatured
         self.categoryId = categoryId
+        self.clientRequestId = clientRequestId
+    }
+
+    /// The same body carrying a create's client key.
+    public func withClientRequestId(_ id: String?) -> BusinessCatalogItemRequest {
+        BusinessCatalogItemRequest(
+            name: name,
+            description: description,
+            kind: kind,
+            status: status,
+            priceCents: priceCents,
+            priceMaxCents: priceMaxCents,
+            priceUnit: priceUnit,
+            durationMinutes: durationMinutes,
+            isFeatured: isFeatured,
+            categoryId: categoryId,
+            clientRequestId: id
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -217,6 +245,7 @@ public struct BusinessCatalogItemRequest: Encodable, Sendable, Hashable {
         case durationMinutes = "duration_minutes"
         case isFeatured = "is_featured"
         case categoryId = "category_id"
+        case clientRequestId = "client_request_id"
     }
 
     /// Explicit — the synthesized encoder would `encodeIfPresent` the
@@ -233,6 +262,7 @@ public struct BusinessCatalogItemRequest: Encodable, Sendable, Hashable {
         try container.encode(durationMinutes, forKey: .durationMinutes)
         try container.encode(isFeatured, forKey: .isFeatured)
         try container.encode(categoryId, forKey: .categoryId)
+        try container.encodeIfPresent(clientRequestId, forKey: .clientRequestId)
     }
 }
 

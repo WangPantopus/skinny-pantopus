@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -17,6 +17,8 @@ export default function BusinessCatalogNewPage() {
     price_cents: '',
     description: '',
   });
+  // One id per intended item, reused when the same item is retried, so a lost reply can't add it twice.
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
 
   const save = async () => {
     if (!form.name.trim()) {
@@ -26,12 +28,16 @@ export default function BusinessCatalogNewPage() {
     setSaving(true);
     setError('');
     try {
-      await api.businesses.createCatalogItem(businessId, {
+      const payload = {
         name: form.name.trim(),
         kind: form.kind as 'service' | 'product',
         price_cents: form.price_cents ? Number(form.price_cents) : undefined,
         description: form.description.trim() || undefined,
-      });
+      };
+      const draft = JSON.stringify(payload);
+      if (pendingCreate.current?.draft !== draft) pendingCreate.current = { draft, id: crypto.randomUUID() };
+      await api.businesses.createCatalogItem(businessId, { ...payload, client_request_id: pendingCreate.current.id });
+      pendingCreate.current = null;
       router.push(`/app/business/${businessId}/catalog`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create item');

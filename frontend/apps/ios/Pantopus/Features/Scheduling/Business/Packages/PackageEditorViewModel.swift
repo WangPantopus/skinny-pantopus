@@ -83,6 +83,9 @@ final class PackageEditorViewModel {
     /// user's in-progress edits. `phase = .error` is reserved for load failures.
     private(set) var saveError: String?
     private var snapshot = Snapshot()
+    /// One client key per intended package, reused while the same package
+    /// is retried, so a lost reply can't create it twice.
+    private var pendingCreate: (request: SchedulingCreatePackageRequest, id: String)?
 
     var isEditing: Bool {
         packageId != nil
@@ -215,19 +218,20 @@ final class PackageEditorViewModel {
                     )
                 )
             } else {
-                let _: PackageResponse = try await client.request(
-                    SchedulingEndpoints.createPackage(
-                        owner: owner,
-                        SchedulingCreatePackageRequest(
-                            name: trimmedName,
-                            sessionsCount: sessionsCount,
-                            priceCents: priceCents,
-                            currency: "USD",
-                            eventTypeId: selectedEventTypeId,
-                            isActive: isActive
-                        )
-                    )
+                var request = SchedulingCreatePackageRequest(
+                    name: trimmedName,
+                    sessionsCount: sessionsCount,
+                    priceCents: priceCents,
+                    currency: "USD",
+                    eventTypeId: selectedEventTypeId,
+                    isActive: isActive
                 )
+                if pendingCreate?.request != request { pendingCreate = (request, UUID().uuidString) }
+                request.clientRequestId = pendingCreate?.id
+                let _: PackageResponse = try await client.request(
+                    SchedulingEndpoints.createPackage(owner: owner, request)
+                )
+                pendingCreate = nil
             }
             snapshot = Snapshot(self)
             onDone()

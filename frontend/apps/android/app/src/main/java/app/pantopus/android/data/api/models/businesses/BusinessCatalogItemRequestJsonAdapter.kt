@@ -42,6 +42,7 @@ class BusinessCatalogItemRequestJsonAdapter {
             writer.name("duration_minutes").value(value.durationMinutes)
             writer.name("is_featured").value(value.isFeatured)
             writer.name("category_id").value(value.categoryId)
+            value.clientRequestId?.let { writer.name("client_request_id").value(it) }
             writer.endObject()
         } finally {
             writer.serializeNulls = previous
