@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.homes.actorDisplayName
 import app.pantopus.android.data.api.models.homes.requestedIdentityLabel
 import app.pantopus.android.data.api.models.homes.requesterDisplayName
 import app.pantopus.android.data.api.models.homes.targetLabel
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -174,6 +175,9 @@ class MembersListViewModel
         private var readGeneration = 0L
         private var loadInFlight = false
         private var readError: String? = null
+
+        /** The latest member-list answer was a 403: no invite or add-guest FAB (removal recovery stays in the header). */
+        private var memberListRefused = false
         private var busyRequestId: String? = null
 
         private val _tabs = MutableStateFlow(makeTabs())
@@ -200,29 +204,20 @@ class MembersListViewModel
 
         /** 52dp home-green secondary-create FAB. Contextual on Guests:
          *  issue a guest pass; otherwise invite a household member. The
-         *  Requests tab is a review queue — no create affordance. */
+         *  Requests tab is a review queue — no create affordance, and a
+         *  viewer refused the member list can't invite or add a guest. */
         val fab: FabAction?
-            get() =
-                when (_selectedTab.value) {
-                    // Review / read-only queues carry no create affordance.
-                    MembersTab.REQUESTS, MembersTab.AUDIT -> null
-                    MembersTab.GUESTS ->
-                        FabAction(
-                            icon = PantopusIcon.UserPlus,
-                            contentDescription = "Add guest",
-                            variant = FabVariant.SecondaryCreate,
-                            tint = FabTint.Home,
-                            onClick = ::requestAddGuest,
-                        )
-                    else ->
-                        FabAction(
-                            icon = PantopusIcon.UserPlus,
-                            contentDescription = "Invite member",
-                            variant = FabVariant.SecondaryCreate,
-                            tint = FabTint.Home,
-                            onClick = ::requestInvite,
-                        )
-                }
+            get() {
+                val tab = _selectedTab.value
+                if (memberListRefused || tab == MembersTab.REQUESTS || tab == MembersTab.AUDIT) return null
+                return FabAction(
+                    icon = PantopusIcon.UserPlus,
+                    contentDescription = if (tab == MembersTab.GUESTS) "Add guest" else "Invite member",
+                    variant = FabVariant.SecondaryCreate,
+                    tint = FabTint.Home,
+                    onClick = if (tab == MembersTab.GUESTS) ::requestAddGuest else ::requestInvite,
+                )
+            }
 
         /** Idempotent — re-running won't refetch once content is loaded. */
         fun load() {
@@ -406,7 +401,10 @@ class MembersListViewModel
                     val roster = repo.listOccupants(homeId)
                     if (roster is NetworkResult.Failure) {
                         session.requireCurrent()
-                        if (generation == readGeneration) publishReadFailure(roster.error.displayMessage("Couldn't load the list."))
+                        if (generation == readGeneration) {
+                            val refused = roster.error is NetworkError.Forbidden
+                            publishReadFailure(roster.error.displayMessage("Couldn't load the list."), refused)
+                        }
                         return@coroutineScope
                     }
                     val nextOccupants = (roster as NetworkResult.Success).data.occupants.filter { it.isActive }
@@ -424,6 +422,7 @@ class MembersListViewModel
                     accessRequests = nextRequests
                     auditEntries = nextAudit
                     readError = null
+                    memberListRefused = false
                     rosterConfirmed = true
                     loadedOnce = true
                     if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) && !confirmedManage) {
@@ -440,7 +439,11 @@ class MembersListViewModel
                 }
             }
 
-        private fun publishReadFailure(message: String) {
+        private fun publishReadFailure(
+            message: String,
+            refused: Boolean = false,
+        ) {
+            memberListRefused = refused
             rosterConfirmed = false
             access = null
             occupants = emptyList()
