@@ -10,6 +10,10 @@
 -- details. Only token_hash is stored, so the first reply's raw token can't be returned again; rotating keeps
 -- exactly one live link, the caller's. A revoked or expired pass answers its own error. A create without
 -- request_id behaves as before, so older clients keep working.
+--
+-- Backwards compatible: yes. The function's signature is unchanged, request_id is a new nullable column, and the
+-- unique index is partial (request_id IS NOT NULL), so the deployed backend's creates without request_id behave as
+-- before.
 
 ALTER TABLE public."HomeGuestPass" ADD COLUMN request_id uuid;
 
@@ -186,3 +190,7 @@ BEGIN
       CASE p_kind WHEN 'guest' THEN 'HomeGuestPass' ELSE 'HomeScopedGrant' END,v_share);
   RETURN jsonb_build_object('ok',true,'record',v_row);
 END $$;
+
+-- CREATE OR REPLACE keeps the function's existing grants (service role only, 20260910040000). Restated here, as
+-- the policy requires for every created or replaced SECURITY DEFINER function.
+REVOKE EXECUTE ON FUNCTION public.mutate_home_external_share(uuid,uuid,text,text,uuid,jsonb) FROM PUBLIC, anon, authenticated;
