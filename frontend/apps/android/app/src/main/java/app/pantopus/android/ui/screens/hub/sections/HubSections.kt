@@ -643,6 +643,8 @@ fun HubDiscoveryRail(
     onFindBusinesses: (() -> Unit)? = null,
     loadFailed: Boolean = false,
     onRetry: (() -> Unit)? = null,
+    /** Posts tab: posts live in Pulse, which applies the viewer's area and each post's visibility. */
+    onBrowsePulse: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -698,6 +700,7 @@ fun HubDiscoveryRail(
             DiscoveryFilterTabs(active = activeFilter, onSelect = onFilterChange)
         }
         when {
+            activeFilter == HubDiscoveryFilter.Posts && onBrowsePulse != null -> DiscoveryPostsInPulseRow(onBrowsePulse)
             isLoading -> DiscoverySkeletonRail()
             loadFailed -> DiscoveryFailedRow(onRetry)
             items.isEmpty() -> DiscoveryEmptyRow()
@@ -846,6 +849,37 @@ private fun DiscoveryFailedRow(onRetry: (() -> Unit)?) {
                 modifier = Modifier.clickable { onRetry() }.testTag("hubDiscoveryRetry"),
             )
         }
+    }
+}
+
+/** The Posts tab points to Pulse instead of reporting a false "Nothing nearby yet" (web does the same). */
+@Composable
+private fun DiscoveryPostsInPulseRow(onBrowsePulse: () -> Unit) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s4)
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
+                .padding(vertical = Spacing.s6, horizontal = Spacing.s4)
+                .testTag("hubDiscoveryPostsInPulse"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(
+            "Local posts are in Pulse, where you choose the area.",
+            style = PantopusTextStyle.caption.copy(fontSize = 13.sp),
+            color = PantopusColors.appTextSecondary,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Browse Pulse",
+            style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.primary600,
+            modifier = Modifier.clickable(role = Role.Button) { onBrowsePulse() }.testTag("hubDiscoveryBrowsePulse"),
+        )
     }
 }
 

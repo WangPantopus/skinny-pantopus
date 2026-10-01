@@ -99,7 +99,8 @@ struct HubView: View {
                     onRetry: { Task { await viewModel.refreshDiscovery() } },
                     onSeeAll: { onNavigate(.openDiscoverHub) },
                     onExploreMap: { onNavigate(.openExploreMap) },
-                    onFindBusinesses: { onNavigate(.openFindBusinesses) }
+                    onFindBusinesses: { onNavigate(.openFindBusinesses) },
+                    onBrowsePulse: { onNavigate(.pillar(.pulse)) }
                 )
                 if !content.jumpBackIn.isEmpty {
                     HubJumpBackIn(items: content.jumpBackIn) { onNavigate(.jumpBackIn($0)) }
@@ -145,7 +146,8 @@ struct HubView: View {
                         onRetry: { Task { await viewModel.refreshDiscovery() } },
                         onSeeAll: { onNavigate(.openDiscoverHub) },
                         onExploreMap: { onNavigate(.openExploreMap) },
-                        onFindBusinesses: { onNavigate(.openFindBusinesses) }
+                        onFindBusinesses: { onNavigate(.openFindBusinesses) },
+                        onBrowsePulse: { onNavigate(.pillar(.pulse)) }
                     )
                     // Bottom padding leaves room for the floating progress
                     // card pinned below by the ZStack alignment.
