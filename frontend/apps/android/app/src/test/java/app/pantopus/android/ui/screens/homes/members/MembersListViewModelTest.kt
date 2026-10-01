@@ -525,7 +525,7 @@ class MembersListViewModelTest {
     // ─── Role change ──────────────────────────────────────────────
 
     @Test
-    fun owner_can_assign_every_role_below_and_including_owner() =
+    fun owner_can_assign_every_role_below_owner() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             val vm = makeVm()
@@ -535,9 +535,9 @@ class MembersListViewModelTest {
                     occ = occupant(id = "occ_admin", userId = "u_admin", role = "admin", name = "Jamie"),
                     name = "Jamie",
                 )
+            // Never Owner: the server refuses promotion to owner (ownership moves via Owners/Transfer).
             assertEquals(
                 setOf(
-                    HomeAssignableRole.Owner,
                     HomeAssignableRole.Manager,
                     HomeAssignableRole.Member,
                     HomeAssignableRole.RestrictedMember,
@@ -626,7 +626,8 @@ class MembersListViewModelTest {
             assertEquals(2, row.titleMaxLines)
             val leading = row.leading as RowLeading.AvatarWithBadge
             assertTrue(leading.verified)
-            assertEquals(RowTrailing.Kebab, row.trailing)
+            // Another owner's row offers nothing the server allows: no role change, no removal.
+            assertEquals(RowTrailing.None, row.trailing)
         }
 
     @Test
