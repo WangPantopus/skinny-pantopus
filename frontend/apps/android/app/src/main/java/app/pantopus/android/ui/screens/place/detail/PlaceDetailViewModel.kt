@@ -132,7 +132,11 @@ class PlaceDetailViewModel
                 _state.value =
                     when (val result = repo.intelligence(homeId)) {
                         is NetworkResult.Success -> PlaceDetailUiState.Loaded(result.data)
-                        is NetworkResult.Failure -> PlaceDetailUiState.Error(result.error.displayMessage("Couldn't load this place."))
+                        is NetworkResult.Failure ->
+                            PlaceDetailUiState.Error(
+                                result.error.displayMessage("Couldn't load this place."),
+                                denied = result.error is NetworkError.Forbidden,
+                            )
                     }
             }
         }
@@ -911,7 +915,8 @@ sealed interface PlaceDetailUiState {
 
     data class Loaded(val intelligence: PlaceIntelligence) : PlaceDetailUiState
 
-    data class Error(val message: String) : PlaceDetailUiState
+    /** [denied]: the server refused this account the place (403), so a retry can't change it. */
+    data class Error(val message: String, val denied: Boolean = false) : PlaceDetailUiState
 }
 
 /** Sections that belong to this detail page, in contract order. */

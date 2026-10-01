@@ -20,6 +20,9 @@ final class PlaceDetailViewModel {
     }
 
     private(set) var state: State = .loading
+    /// The error is the server refusing this account the place (403): a
+    /// retry can't change it, so the views drop their Try again.
+    private(set) var accessDenied = false
     let homeId: String
     let group: PlaceDetailGroup
     /// The host's real verification flows (the dashboard's verify sheet doors).
@@ -61,10 +64,13 @@ final class PlaceDetailViewModel {
             let intelligence: PlaceIntelligence = try await api.request(
                 PlaceEndpoints.intelligence(homeId: homeId)
             )
+            accessDenied = false
             state = .loaded(intelligence)
         } catch let error as APIError {
+            if case .forbidden = error { accessDenied = true } else { accessDenied = false }
             state = .error(message: error.errorDescription ?? "Couldn't load this section.")
         } catch {
+            accessDenied = false
             state = .error(message: "Couldn't load this section.")
         }
     }

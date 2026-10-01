@@ -21,6 +21,9 @@ final class PlaceDashboardViewModel {
     }
 
     private(set) var state: State = .loading
+    /// The error is the server refusing this account the place (403): a
+    /// retry can't change it, so the view drops its Try again.
+    private(set) var accessDenied = false
     /// Set when a refresh fails while the dashboard is on screen: it stays
     /// and this shows as a toast. The view clears it after display.
     var refreshFailureMessage: String?
@@ -111,6 +114,7 @@ final class PlaceDashboardViewModel {
             // Only a successful detail read may change the date; a failed one
             // keeps the last known value so the card does not blink out.
             if let detail = await detail { moveInDate = detail.home.base.moveInDate }
+            accessDenied = false
             state = .loaded(intelligence)
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load your place."
@@ -118,6 +122,7 @@ final class PlaceDashboardViewModel {
                 // Keep the dashboard on screen; a failed refresh only toasts.
                 refreshFailureMessage = message
             } else {
+                if case .forbidden = error as? APIError { accessDenied = true } else { accessDenied = false }
                 state = .error(message: message)
             }
         }
