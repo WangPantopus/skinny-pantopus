@@ -69,6 +69,30 @@ const challengeClaimSchema = Joi.object({
   note: Joi.string().max(1000).allow('', null),
 });
 
+// The open claim states the claim policies use (homeSecurityPolicy canSubmitOwnerClaim). Migration 20261001137000
+// backs "one open claim per Home, claimant, claim type and method" with a unique index over these states (not merged,
+// no terminal reason), so a simultaneous repeat fails with 23505 and the route answers with the claim that got in.
+const OPEN_CLAIM_STATES = ['draft', 'submitted', 'needs_more_info', 'pending_review', 'pending_challenge_window'];
+
+/** The claimant's open claim of this type and method on the Home (the row the unique index guards), or null. */
+async function findOpenClaim({ homeId, claimantId, claimType, method }) {
+  const { data, error } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('claimant_user_id', claimantId)
+    .eq('claim_type', claimType)
+    .eq('method', method)
+    .in('state', OPEN_CLAIM_STATES)
+    .is('merged_into_claim_id', null)
+    .eq('terminal_reason', 'none')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 const inviteOwnerSchema = Joi.object({
   email: Joi.string().email().allow(null),
   phone: Joi.string().max(20).allow(null),
@@ -314,11 +338,15 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       .single();
 
     if (error) {
-      // 23505 = unique_violation from idx_home_claim_active_unique (concurrent claim race)
+      // 23505: a simultaneous repeat of this claim got in first (the open-claim index, migration 20261001137000).
+      // Answer as for a sequential repeat: the opaque message with the claim that exists.
       if (error.code === '23505') {
-        return res.status(409).json({
-          error: 'An ownership claim is already active for this home. Please wait for it to be resolved.',
-          code: 'DUPLICATE_CLAIM',
+        const winner = await findOpenClaim({ homeId, claimantId: userId, claimType: claim_type, method });
+        return res.status(200).json({
+          message: isResidencyClaim
+            ? "We're verifying your residency at this address. You'll be notified when complete."
+            : "We're verifying ownership for this address. You'll be notified when complete.",
+          claim: { id: winner?.id || null, status: 'under_review' },
         });
       }
       throw error;
@@ -838,18 +866,7 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
 
     // A repeat of this invitation (a re-sent request or a second tap) gets the claim it already opened, not a second
     // active claim for the same person.
-    const { data: openInvite, error: openInviteError } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('claimant_user_id', targetUserId)
-      .eq('claim_type', 'owner')
-      .eq('method', method)
-      .in('state', ['draft', 'submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (openInviteError) throw openInviteError;
+    const openInvite = await findOpenClaim({ homeId, claimantId: targetUserId, claimType: 'owner', method });
     if (openInvite) {
       return res.status(200).json({
         message: 'Co-owner invitation sent. They will need to verify ownership.',
@@ -878,8 +895,16 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
       .single();
 
     if (error) {
-      // 23505 = unique_violation from idx_home_claim_active_unique (concurrent claim race)
+      // 23505: a simultaneous repeat of this invitation got in first (the open-claim index, migration
+      // 20261001137000). Answer with its claim, as for a sequential repeat.
       if (error.code === '23505') {
+        const winner = await findOpenClaim({ homeId, claimantId: targetUserId, claimType: 'owner', method });
+        if (winner) {
+          return res.status(200).json({
+            message: 'Co-owner invitation sent. They will need to verify ownership.',
+            claim_id: winner.id,
+          });
+        }
         return res.status(409).json({
           error: 'An ownership claim is already active for this home. Please wait for it to be resolved before inviting a co-owner.',
           code: 'DUPLICATE_CLAIM',
@@ -946,26 +971,41 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
 
     if (quorum.needed) {
       // A repeat of this proposal (a re-sent request or a second tap) gets the open proposal it already made, so the
-      // other owners aren't asked to resolve the same transfer twice.
-      const { data: openProposal, error: openProposalError } = await supabaseAdmin
-        .from('HomeQuorumAction')
-        .select('id, required_approvals')
-        .eq('home_id', homeId)
-        .eq('proposed_by', userId)
-        .eq('action_type', 'TRANSFER_OWNERSHIP')
-        .eq('state', 'proposed')
-        .eq('metadata->>buyer_user_id', buyerUserId)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (openProposalError) throw openProposalError;
+      // other owners aren't asked to resolve the same transfer twice. Migration 20261001137000 allows one open
+      // ('proposed') proposal per Home, proposer and buyer, so a simultaneous repeat fails with 23505 below.
+      const findOpenProposal = async () => {
+        const { data, error: findError } = await supabaseAdmin
+          .from('HomeQuorumAction')
+          .select('id, required_approvals, expires_at')
+          .eq('home_id', homeId)
+          .eq('proposed_by', userId)
+          .eq('action_type', 'TRANSFER_OWNERSHIP')
+          .eq('state', 'proposed')
+          .eq('metadata->>buyer_user_id', buyerUserId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (findError) throw findError;
+        return data;
+      };
+      const proposalReply = (proposal) => res.status(200).json({
+        message: 'Transfer requires approval from other owners',
+        quorum_action_id: proposal.id,
+        required_approvals: proposal.required_approvals,
+      });
+      const openProposal = await findOpenProposal();
+      if (openProposal && (!openProposal.expires_at || new Date(openProposal.expires_at).getTime() > Date.now())) {
+        return proposalReply(openProposal);
+      }
       if (openProposal) {
-        return res.status(200).json({
-          message: 'Transfer requires approval from other owners',
-          quorum_action_id: openProposal.id,
-          required_approvals: openProposal.required_approvals,
-        });
+        // Past its expiry but still 'proposed' (nothing closes proposals on a timer): close it, so the new
+        // proposal can take the one open slot. Compare-and-set, so a concurrent close is harmless.
+        const { error: expireError } = await supabaseAdmin
+          .from('HomeQuorumAction')
+          .update({ state: 'expired', updated_at: new Date().toISOString() })
+          .eq('id', openProposal.id)
+          .eq('state', 'proposed');
+        if (expireError) throw expireError;
       }
 
       const { data: action, error } = await supabaseAdmin
@@ -986,7 +1026,14 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // 23505: a simultaneous repeat of this proposal got in first. Answer with it.
+        if (error.code === '23505') {
+          const winner = await findOpenProposal();
+          if (winner) return proposalReply(winner);
+        }
+        throw error;
+      }
 
       // Auto-approve with proposer's vote
       const { error: voteError } = await supabaseAdmin
@@ -1702,7 +1749,7 @@ async function undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwne
     steps.push(['seller_owner', supabaseAdmin.from('HomeOwner').update({ owner_status: 'verified' })
       .eq('id', sellerOwnerId).eq('owner_status', 'revoked')]);
   }
-  steps.push(['buyer_claim', supabaseAdmin.from('HomeOwnershipClaim').delete().eq('id', claimId).eq('home_id', homeId)]);
+  if (claimId) steps.push(['buyer_claim', supabaseAdmin.from('HomeOwnershipClaim').delete().eq('id', claimId).eq('home_id', homeId)]);
   for (const [step, query] of steps) {
     try {
       const { error } = await query;
@@ -1754,30 +1801,52 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
   const sellerOwnerId = ownerRead.data.id;
   const sellerHeldOwnerId = homeRead.data.owner_id === sellerUserId;
 
-  // 1. The buyer's claim first: until it exists, nothing else changes.
-  const { data: claim, error: claimError } = await supabaseAdmin
-    .from('HomeOwnershipClaim')
-    .insert({
-      home_id: homeId,
-      claimant_user_id: buyerUserId,
-      claim_type: 'owner',
-      state: 'submitted',
-      method: 'invite',
-      risk_score: 0, // Invited by prior owner — lowest risk
-      // HomeOwnershipClaim has no metadata column; the seller and effective
-      // date are recorded in the TRANSFER_EXECUTED audit entry.
-      ...(await homeClaimCompatService.buildInitialClaimCompatibilityFields({
-        homeId,
-        userId: buyerUserId,
-        claimType: 'owner',
+  // 1. The buyer's claim first: until it exists, nothing else changes. A buyer who already holds an open owner
+  //    invitation claim on this Home (a co-owner invite) keeps it as the transfer's claim: the open-claim index
+  //    (migration 20261001137000) allows one per Home, claimant, type and method, and the undo leaves it alone.
+  let claimId = null;
+  let claimCreated = false;
+  try {
+    const existing = await findOpenClaim({ homeId, claimantId: buyerUserId, claimType: 'owner', method: 'invite' });
+    if (existing) claimId = existing.id;
+  } catch {
+    throw unavailable();
+  }
+  if (!claimId) {
+    const { data: claim, error: claimError } = await supabaseAdmin
+      .from('HomeOwnershipClaim')
+      .insert({
+        home_id: homeId,
+        claimant_user_id: buyerUserId,
+        claim_type: 'owner',
+        state: 'submitted',
         method: 'invite',
-        legacyState: 'submitted',
-      })),
-    })
-    .select('id')
-    .single();
-  if (claimError || !claim) throw unavailable();
-  const claimId = claim.id;
+        risk_score: 0, // Invited by prior owner — lowest risk
+        // HomeOwnershipClaim has no metadata column; the seller and effective
+        // date are recorded in the TRANSFER_EXECUTED audit entry.
+        ...(await homeClaimCompatService.buildInitialClaimCompatibilityFields({
+          homeId,
+          userId: buyerUserId,
+          claimType: 'owner',
+          method: 'invite',
+          legacyState: 'submitted',
+        })),
+      })
+      .select('id')
+      .single();
+    if (claimError?.code === '23505') {
+      // A simultaneous invite or transfer opened the buyer's claim first: use it.
+      const winner = await findOpenClaim({ homeId, claimantId: buyerUserId, claimType: 'owner', method: 'invite' }).catch(() => null);
+      if (!winner) throw unavailable();
+      claimId = winner.id;
+    } else {
+      if (claimError || !claim) throw unavailable();
+      claimId = claim.id;
+      claimCreated = true;
+    }
+  }
+  // The undo removes the buyer's claim only when this transfer created it.
+  const undoClaimId = claimCreated ? claimId : null;
 
   // 2. Revoke the seller's ownership.
   const { data: revoked, error: revokeError } = await supabaseAdmin
@@ -1787,7 +1856,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
     .eq('owner_status', 'verified')
     .select('id');
   if (revokeError || !revoked?.length) {
-    await undoOwnershipTransfer(homeId, sellerUserId, { claimId });
+    await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId });
     throw unavailable();
   }
 
@@ -1800,7 +1869,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
       .eq('id', homeId)
       .eq('owner_id', sellerUserId);
     if (ownerIdError) {
-      await undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId });
+      await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId, sellerOwnerId });
       throw unavailable();
     }
   }
@@ -1809,7 +1878,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
   try {
     await applyOccupancyTemplate(homeId, sellerUserId, 'member', 'verified');
   } catch (err) {
-    await undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId, restoreOwnerId: sellerHeldOwnerId });
+    await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId, sellerOwnerId, restoreOwnerId: sellerHeldOwnerId });
     throw unavailable();
   }
 
