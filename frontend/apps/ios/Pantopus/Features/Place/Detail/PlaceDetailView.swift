@@ -75,7 +75,11 @@ struct PlaceDetailView: View {
                 .padding(.bottom, Spacing.s10)
             }
         case let .error(message):
-            ErrorState(message: message) { await viewModel.refresh() }
+            if viewModel.accessDenied {
+                PlaceDeniedState()
+            } else {
+                ErrorState(message: message) { await viewModel.refresh() }
+            }
         }
     }
 

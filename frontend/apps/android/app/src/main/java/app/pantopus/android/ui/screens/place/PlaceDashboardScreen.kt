@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
+import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
@@ -108,7 +109,12 @@ fun PlaceDashboardScreen(
     ) {
         when (val current = state) {
             PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton()
-            is PlaceDashboardUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+            is PlaceDashboardUiState.Error ->
+                if (current.denied) {
+                    PlaceDeniedState()
+                } else {
+                    ErrorState(message = current.message, onRetry = viewModel::refresh)
+                }
             is PlaceDashboardUiState.Loaded ->
                 PlaceDashboardContent(
                     intel = current.intelligence,
@@ -637,4 +643,18 @@ private fun PlaceDashboardSkeleton() {
             }
         }
     }
+}
+
+/**
+ * A place this account can't read (403): say so, without a retry, which could only repeat the
+ * refusal. The same visual as [ErrorState] minus its button; the web says the same (#896).
+ */
+@Composable
+internal fun PlaceDeniedState(modifier: Modifier = Modifier) {
+    EmptyState(
+        icon = PantopusIcon.AlertCircle,
+        headline = "This place isn't available",
+        subcopy = "You don't have permission to view this place.",
+        modifier = modifier,
+    )
 }

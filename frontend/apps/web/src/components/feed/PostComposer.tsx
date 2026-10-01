@@ -925,7 +925,8 @@ export default function PostComposer({
 
           {f.selectedIntent && !isEdit && (
             <div className="flex items-center gap-2 px-4 pb-2 text-sm">
-              <span className="text-xs font-medium text-app-muted">Post visibility:</span>
+              {/* This sets who sees the post on the author's profile; who gets it in the feed is the audience picker below. */}
+              <span className="text-xs font-medium text-app-muted">Shown on your profile to:</span>
               {(['local_context', 'connections'] as const).map((scope) => (
                 <button
                   key={scope}

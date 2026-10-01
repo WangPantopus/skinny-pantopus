@@ -19,6 +19,20 @@ import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 
 export type FilterType = PostType | 'all';
 
+/** Where each feed surface's posts are distributed. */
+const SURFACE_TARGETS: Record<FeedSurface, string[]> = {
+  place: ['place', 'public'],
+  connections: ['connections'],
+  personas: ['persona_followers'],
+};
+
+/** Whether a just-created post belongs in the feed list for this surface and filter (Place filters are post types). */
+function postBelongsToList(post: Post, surface: FeedSurface, filter: FilterType): boolean {
+  const targets = post.distribution_targets ?? [post.visibility === 'connections' ? 'connections' : 'place'];
+  if (!targets.some((target) => SURFACE_TARGETS[surface].includes(target))) return false;
+  return surface !== 'place' || filter === 'all' || post.post_type === filter;
+}
+
 interface UseFeedDataOptions {
   initialSurface?: FeedSurface;
   viewingLat: number | null;
@@ -388,7 +402,10 @@ export function useFeedData({
         }
       }
 
-      prependPostToCache(newPost);
+      // On top of the list on screen only if it belongs there: a Connections post made from the Place feed
+      // isn't in the Place feed. Every cached list re-reads on its next view.
+      if (postBelongsToList(newPost, surface, filter)) prependPostToCache(newPost);
+      void queryClient.invalidateQueries({ queryKey: ['feed'], refetchType: 'none' });
       showToast('Posted!');
       return true;
     } catch (err: unknown) {
@@ -398,7 +415,7 @@ export function useFeedData({
       creatingPost.current = false;
       setIsPosting(false);
     }
-  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, showToast, prependPostToCache]);
+  }, [surface, filter, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, showToast, prependPostToCache, queryClient]);
 
   // ── Like mutation (optimistic with automatic rollback) ──
   const likeMutation = useMutation({
