@@ -9,6 +9,36 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — idempotency audit delivered; fixes #1341 #1342 #1343 merged (b297), #1344 sealed, #1338 #1346 in CI; earnRiskReview recorded (cut #8), 2026-10-01T13:01:59Z
+
+- **Merged in batch 292:** #1326 (icon-only web buttons get names).
+- **The native POST idempotency audit is delivered** (Stream 1's first priority; record `20261001-stream5-native-post-idempotency-r1`).
+  - **Inventory:** 637 native POST calls reach 346 routes, 214 of them in launch scope. Five reviewers classified them against the live unique indexes, and the unprotected ones were reproduced through the real API with exact cleanup.
+  - **Routing:** each stream's section went out via Stream 1.
+  - **Root cause:** Android's OkHttp silently re-sends POSTs below RetryInterceptor, and the reused DPoP proof gets 401 DPOP_REPLAY, which signs the user out. Stream 1 assigned the fix to Stream 5: a per-attempt proof in a network interceptor.
+- **Stream 5 fixes:**
+  - **#1341** (merged, b297): a doubled report no longer makes later reports 500; a repeated neighbor-note report alerts once.
+  - **#1342** (merged, b297): a re-sent connection request or accept answers like the first; simultaneous accepts notify once.
+  - **#1343** (merged, b297): a re-sent neighbor note is delivered once and uses one weekly send (10-minute window).
+  - **#1344** (sealed `30eb346c…`): posting as a crew works again. Every business post had answered 500 on `Post_purpose_check`; Stream 2 OK'd one export line in posts.js.
+  - **#1338** (CI; device check in Stream 1's candidate 26): changing your password keeps you signed in, and a mistyped current password no longer signs you out on iOS or Android.
+    - Root cause: GoTrue's admin password update ends every session.
+    - Fix: the change goes through the caller's own session. The wrong-password 401 carries `UNAUTHORIZED`/`password_change`, iOS marks the endpoint `verifiesCredential`, and Android's authenticator exempts it like step-up.
+  - **#1346** (CI): forgot password or resend verification sent twice sends one email, whose link keeps working (60 s cooldown on GoTrue's `recovery_sent_at`).
+- **Decisions taken under the standing direction:**
+  - the neighbor-note repeat window is 10 minutes;
+  - the email cooldown is 60 s;
+  - Stream 1 decided the money items (invoice /confirm checks Stripe; crew invoice and package-buy intent keys).
+- **earnRiskReview.js: a record, no fix** (`20261001-stream5-earn-risk-review-r1`).
+  - Reproduced: both reads fail (no `status`/`risk_flags` columns) and the job writes nothing.
+  - Stream 4 had already classed Earn as cut #8. The half-fix hazard is recorded for whoever revives Earn.
+- **Next:**
+  1. the DPoP per-attempt network interceptor (Android; Stream 1 runs the device check);
+  2. the direct-chat race (migration 20261001130000, reserved by Stream 1);
+  3. invoice /confirm (Stripe check; the refusal path verified, capture unverified) and the crew intent keys (invoice create, package buy);
+  4. then trustState.js (Stream 3 OK'd).
+- **Runtime:** API 18134 on the #1346 head; web on master. No fixtures; every bundle's rows-since scan is empty.
+
 ## LIVE — #1320 #1322 merged (b290); #1326 (icon buttons get names) sealed; native POST idempotency audit under way (Stream 1's first priority), 2026-10-01T11:34:29Z
 
 - **Merged in batch 290** (#1323, master `e5b43df97`): #1320 (profile reviews) and #1322 (notifications and connections) break `created_at` ties by id.
