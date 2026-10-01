@@ -397,7 +397,7 @@ final class DocumentsViewModel: ListOfRowsDataSource {
     private static func formatSize(bytes: Int64?) -> String? {
         guard let bytes, bytes > 0 else { return nil }
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
@@ -491,7 +491,7 @@ final class DocumentsViewModel: ListOfRowsDataSource {
             }
         }
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
         formatter.countStyle = .file
         let used = totalBytes > 0 ? formatter.string(fromByteCount: totalBytes) : nil
         return DocumentsBannerSummary(

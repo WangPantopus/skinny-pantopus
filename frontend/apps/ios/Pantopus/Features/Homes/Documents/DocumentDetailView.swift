@@ -516,7 +516,7 @@ private struct DocumentHeaderCard: View {
     private var sizeLabel: String? {
         guard let bytes = dto.sizeBytes, bytes > 0 else { return nil }
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
@@ -739,7 +739,7 @@ private struct MetadataGrid: View {
     private var sizeLabel: String? {
         guard let bytes = dto.sizeBytes, bytes > 0 else { return nil }
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
