@@ -50,6 +50,7 @@ export function ClarifyingQuestionsPanel({
           <button
             type="button"
             onClick={onDismiss}
+            aria-label="Dismiss questions"
             className="p-0.5 rounded hover:bg-app-surface/60 transition-colors"
           >
             <X className="w-3.5 h-3.5 text-app-text-muted" />

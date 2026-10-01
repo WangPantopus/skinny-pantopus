@@ -235,6 +235,7 @@ export function InlineDraftHelper({
         <button
           type="button"
           onClick={() => { setExpanded(false); setError(null); }}
+          aria-label="Close AI draft"
           className="p-0.5 rounded hover:bg-app-surface/60 transition-colors"
         >
           <X className="w-3.5 h-3.5 text-app-text-muted" />
