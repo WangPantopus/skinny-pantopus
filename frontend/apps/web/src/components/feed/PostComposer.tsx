@@ -1093,13 +1093,25 @@ export default function PostComposer({
 
             {showGlobalLocation && f.location && (
               <div className="flex items-center">
-                <PostLocationPicker value={f.location} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
+                <PostLocationPicker
+                  value={f.location}
+                  onChange={(loc) => setField('location', loc)}
+                  accentColor={activeIntent.color}
+                  textColor={activeIntent.textColor}
+                  darkTextColor={activeIntent.darkTextColor}
+                />
               </div>
             )}
 
             {!canUseGlobalAudience && !isNetworkSurface && !isEdit && f.location && (
               <div className="flex items-center">
-                <PostLocationPicker value={f.location} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
+                <PostLocationPicker
+                  value={f.location}
+                  onChange={(loc) => setField('location', loc)}
+                  accentColor={activeIntent.color}
+                  textColor={activeIntent.textColor}
+                  darkTextColor={activeIntent.darkTextColor}
+                />
               </div>
             )}
 
