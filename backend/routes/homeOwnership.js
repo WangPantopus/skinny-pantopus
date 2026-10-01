@@ -27,6 +27,7 @@ const householdClaimConfig = require('../config/householdClaims');
 const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
+const { displayNameFromUser } = require('../serializers/identitySerializers');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -2065,11 +2066,12 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
 
         const { data: newUser } = await supabaseAdmin
           .from('User')
-          .select('display_name, email')
+          .select('name, first_name, middle_name, last_name, username')
           .eq('id', userId)
           .single();
 
-        const userName = newUser?.display_name || newUser?.email || 'Someone';
+        // Household members see the person's display name, never their e-mail address.
+        const userName = displayNameFromUser(newUser);
 
         for (const auth of (authorities || [])) {
           await notificationService.createNotification({
