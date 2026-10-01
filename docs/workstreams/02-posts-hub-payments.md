@@ -9,6 +9,9 @@
 
 ## CURRENT RESUME — SUCCESSOR 2026-10-01T21:22:09Z
 
+- **UPDATE 2026-10-01T23:49:42Z — web integration complete; native disposition established:** #1431 merged unchanged in batch323/#1432 at23:42:38Z, exact source `242eac0ce243fd030953365b70179555075b79db`; fetched master `6c7e0ed582fb3dca9f3479a286601a9ae39b6bff`. All PR checks passed. Batch run36942203350 was canceled; its red CI OK log was read and is the aggregate rejection of canceled web/web-e2e/iOS/Android/database jobs, with no new product failure. Stream1 verified the16-file seal, source, keyboard/axe evidence and351 non-auth cleanup. Thus this successor's task-width, Pulse naming, post wrapping, reply indentation and comment-control web repairs are integrated, along with inherited dialog #1412.
+- **Native limit:** Stream1 visually confirmed the installed iOS simulator Wallet gate says “Enter iPhone Passcode for Pantopus” / “Verify to access your Wallet”, with empty input. The accessibility hierarchy had misleadingly looked like the app switcher; screenshot established the actual gate. No passcode input or OS grant was made, and the app was relaunched to leave it. iOS withdrawal remains unverified behind the standing authentication boundary. Android's controlled pending503 → same-key200 success is reported above; await Stream1's final native seal, owned-fixture cleanup and sole-merger integration of #1413/#1428. Canonical checklist integrity passes with Stream2 U02 81 done/2 boundaries, U03 55 done/2 not offered, U04 16 done; no count changes.
+
 - **UPDATE 2026-10-01T23:41:57Z — installed Android outcome reported by Stream 1:** candidate32 with backend companion `d12c18f0e8140e454547ae486fe369857f07f7fc` completed a fresh controlled withdrawal: pending503 → same-key200, balance1500 →50 cents, one1450-cent completed debit, and the actual success toast. The amount text remains intentionally; the pending key clears. The original fixture was already settled, so Stream1 preserved the before evidence, proved rollback/guarded cleanup, then seeded its same owned user for this after cell. Final coordinator seal and cleanup proof are pending. iOS wallet navigation currently meets the existing sensitive-screen security gate; no iOS withdrawal acceptance or OS bypass. #1413/#1428/#1431 remain open with all applicable CI green; sole-merger review/integration remains with Stream1.
 - **Operational decision:** two consecutive Stream1 turns failed with the model-capacity error. Resumed the same authorized coordinator chat on supported `gpt-6.1-sol`/high, preserving history, device ownership and sole-merger authority. The resumed turn produced the Android outcome above. No new chat, native delta, fixture mutation in Stream2, or acceptance-row change. Own backend/proxy health200/200, Next18169 listening; all application fixtures remain clean and11AuthSession/11AuthSecurityEvent retained until final teardown. Next: inspect coordinator's sealed native result and integration; keep the runtime available.
 
@@ -364,9 +367,9 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T23:41:57Z (Stream 2 successor)
+## CURRENT STATE — 2026-10-01T23:49:42Z (Stream 2 successor)
 
-- **Latest:** #1414/#1412/#1418/#1423/#1426 merged; #1413/#1428 and #1431 remain in Stream1’s queue with green CI. Stream1 reports the installed Android withdrawal retry passes; final native seal/cleanup and iOS security-gate disposition remain pending. Current source, evidence, decisions and limits are in CURRENT RESUME above.
+- **Latest:** #1414/#1412/#1418/#1423/#1426/#1431 merged. #1413/#1428 await Stream1’s final native seal/cleanup and integration. Installed Android retry passes; installed iOS Wallet visibly reaches the passcode gate and withdrawal remains unverified. Current source, evidence, decisions and limits are in CURRENT RESUME above.
 
 - **Latest (2026-10-01T18:09:59Z): HANDED OFF** at the user's request. See "CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z" above and [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md).
   - Since 17:32Z:
