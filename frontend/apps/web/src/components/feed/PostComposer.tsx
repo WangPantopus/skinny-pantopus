@@ -723,7 +723,13 @@ export default function PostComposer({
       )}
 
       {!f.expanded && !isEdit && (
-        <IntentSelector onSelect={selectIntent} user={user} activeSurface={activeSurface} />
+        <IntentSelector
+          onSelect={selectIntent}
+          user={user}
+          activeSurface={activeSurface}
+          // Service and Announce aren't Place post types; the Place feed would refuse them.
+          allowedTypes={activeSurface === 'place' ? allowedPostTypes : undefined}
+        />
       )}
 
       {f.expanded && activeIntent && (
