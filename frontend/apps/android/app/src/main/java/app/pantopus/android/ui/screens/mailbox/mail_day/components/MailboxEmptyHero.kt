@@ -51,22 +51,25 @@ import app.pantopus.android.ui.theme.Spacing
  * A13.16 — Empty-state hero for the My Mail Day editor. Bespoke
  * 120×96 mailbox illustration on top, "Nothing new today" h2,
  * description body, a streak chip + last-scan chip row, then the
- * Scan today's stack primary CTA. Yesterday recap + setup nudges
- * render in their own cards below (rendered by the host).
+ * Scan today's stack primary CTA. Without a scanner ([onScan] null) the
+ * hero drops the CTA, the last-scan chip and the scanner copy. Yesterday
+ * recap + setup nudges render in their own cards below (rendered by the host).
  */
 @Composable
 fun MailboxEmptyHero(
     streakDays: Int,
     lastScanLabel: String,
-    onScan: () -> Unit,
+    onScan: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.testTag("mailDayEmptyHero"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        HeroCard(streakDays = streakDays, lastScanLabel = lastScanLabel)
-        ScanCTA(onClick = onScan)
+        HeroCard(streakDays = streakDays, lastScanLabel = lastScanLabel, canScan = onScan != null)
+        if (onScan != null) {
+            ScanCTA(onClick = onScan)
+        }
     }
 }
 
@@ -74,6 +77,7 @@ fun MailboxEmptyHero(
 private fun HeroCard(
     streakDays: Int,
     lastScanLabel: String,
+    canScan: Boolean,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -98,8 +102,12 @@ private fun HeroCard(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text =
-                "No mail has been scanned since this morning. " +
-                    "Drop today's stack on the scanner when you're ready.",
+                if (canScan) {
+                    "No mail has been scanned since this morning. " +
+                        "Drop today's stack on the scanner when you're ready."
+                } else {
+                    "No mail needs a call right now."
+                },
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -108,7 +116,9 @@ private fun HeroCard(
         Spacer(modifier = Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             StreakChip(days = streakDays)
-            LastScanChip(label = lastScanLabel)
+            if (canScan) {
+                LastScanChip(label = lastScanLabel)
+            }
         }
         Spacer(modifier = Modifier.height(Spacing.s5))
     }
@@ -290,10 +300,11 @@ fun MailboxIllustration() {
 
 // ─── Yesterday recap card ──────────────────────────────────────
 
+/** [onSeeHistory] is null while there is no history screen: the "See full history" row is then hidden. */
 @Composable
 fun YesterdayRecapCard(
     recap: YesterdayRecap,
-    onSeeHistory: () -> Unit,
+    onSeeHistory: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -326,31 +337,33 @@ fun YesterdayRecapCard(
             StackedBar(segments = recap.segments)
             SegmentLegend(segments = recap.segments)
         }
-        HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSeeHistory)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .testTag("mailDayEmptyRecapSeeHistory")
-                    .semantics { contentDescription = "See full history" },
-        ) {
-            Text(
-                text = "See full history",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextStrong,
-                modifier = Modifier.weight(1f),
-            )
-            PantopusIconImage(
-                icon = PantopusIcon.ChevronRight,
-                contentDescription = null,
-                size = 15.dp,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.appTextMuted,
-            )
+        if (onSeeHistory != null) {
+            HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onSeeHistory)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .testTag("mailDayEmptyRecapSeeHistory")
+                        .semantics { contentDescription = "See full history" },
+            ) {
+                Text(
+                    text = "See full history",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextStrong,
+                    modifier = Modifier.weight(1f),
+                )
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronRight,
+                    contentDescription = null,
+                    size = 15.dp,
+                    strokeWidth = 2.2f,
+                    tint = PantopusColors.appTextMuted,
+                )
+            }
         }
     }
 }

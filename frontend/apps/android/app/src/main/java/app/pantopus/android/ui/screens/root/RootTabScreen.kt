@@ -6275,12 +6275,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.MAIL_DAY,
                     arguments = listOf(navArgument(MAIL_DAY_VARIANT_KEY) { type = NavType.StringType }),
                 ) {
-                    MailDayScreen(
-                        onClose = { navController.popBackStack() },
-                        onScan = { /* Out of scope per A13.16 — scanner integration */ },
-                        onSeeHistory = { /* Out of scope */ },
-                        onOpenNudge = { /* Out of scope */ },
-                    )
+                    // No scanner, Mail Day history or setup flow exists yet, so
+                    // Mail Day hides those controls instead of offering dead taps.
+                    MailDayScreen(onClose = { navController.popBackStack() })
                 }
                 // ---- Batch 2 (B1.6) routing seam. Swap each body for the real
                 // screen when the matching A.x screen ships. ----

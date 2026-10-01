@@ -37,7 +37,7 @@ public final class MailDayViewModel {
 
     public var variant: MailDayVariant
     private let seededContent: MailDayContent?
-    private let onScanRequested: @MainActor () -> Void
+    private let onScanRequested: (@MainActor () -> Void)?
     private let api: APIClient
 
     /// - Parameters:
@@ -46,12 +46,12 @@ public final class MailDayViewModel {
     ///   - content: Optional seed (tests / previews) overriding the
     ///     sample fixture for this variant.
     ///   - onScanRequested: Invoked when the user taps any Scan CTA
-    ///     (top scan-more card or empty-hero primary). Out of scope to
-    ///     wire to the real scanner here — the host hands a closure.
+    ///     (top scan-more card or empty-hero primary). Nil until a scanner
+    ///     exists: the Scan CTAs are then hidden instead of doing nothing.
     public convenience init(
         variant: MailDayVariant = .populated,
         content: MailDayContent? = nil,
-        onScanRequested: @escaping @MainActor () -> Void = {}
+        onScanRequested: (@MainActor () -> Void)? = nil
     ) {
         self.init(
             variant: variant,
@@ -66,7 +66,7 @@ public final class MailDayViewModel {
         variant: MailDayVariant = .populated,
         api: APIClient,
         content: MailDayContent? = nil,
-        onScanRequested: @escaping @MainActor () -> Void = {}
+        onScanRequested: (@MainActor () -> Void)? = nil
     ) {
         self.variant = variant
         self.api = api
@@ -238,9 +238,14 @@ public final class MailDayViewModel {
 
     // MARK: - Actions
 
-    /// Out-of-scope per the task — open the scanner flow.
+    /// Whether a scanner is wired; the Scan CTAs only show when it is.
+    public var canScan: Bool {
+        onScanRequested != nil
+    }
+
+    /// Open the scanner flow.
     public func requestScan() {
-        onScanRequested()
+        onScanRequested?()
     }
 
     /// Decrement the undo countdown on the latest reviewed row. When it
