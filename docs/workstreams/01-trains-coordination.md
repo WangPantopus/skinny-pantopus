@@ -9,6 +9,15 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T12:05Z (Stream 1).**
+  - **The six "A3 brand-blue token" decide cells are closed** (seal `749e0d21`). On master `a0eba5315`, axe finds 0 violations in light and 0 contrast violations in dark across 12 Trains web screens, so the 2026-09-30 AA accent utilities resolved them.
+  - My first run measured the login page (a stale web session); it's kept as a NOTE and discarded. Lesson: assert page content before trusting axe.
+  - Stream 1's U02 now has **0 decide** cells and 3 todos: 2 shared Android a11y items with Stream 4 (fix `5ed03843c` in progress), and Android Review signups A1–A4, mine.
+  - **Runtime:** the peer-takeover worktree is on master `a0eba5315`, with the backend restarted at 11:43Z.
+  - **Stream 2:**
+    - posts.js:654 legacy branch: no change. It fails closed, and widening access to legacy rows is a privacy risk.
+    - Two later items are recorded: Marketplace share-to-feed should set `distribution_targets ['place']` when Marketplace returns, and a production count of empty-target local-visibility posts would decide whether to retire the branch.
+    - #1331 (landing mobile layout): the placeholder clamp and the stacked-art centering are approved.
 - **Update 2026-10-01T11:40Z (Stream 1).**
   - **Merged:**
 
@@ -783,7 +792,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T11:39Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T12:02Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -819,13 +828,13 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Support Trains** | | | |
-| My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>⬜ A4 shared ListOfRows repeats its tab, FAB and Nearby button labels (app-wide) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
+| My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>⬜ A4 shared ListOfRows repeats its tab, FAB and Nearby button labels (app-wide) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 | Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ✅ A1 A2 A3 A4: field named, results read once (#1211, ac43ecdb) | – No Train search on web |
-| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>✅ Sign-up sheet keeps its draft through rotation, dark mode and font changes: held outside the sheet, one per opening (#1262, 96676bc0) | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
-| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>🔷 A3 brand-blue token |
-| Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ✅ A1 stat labels whole (default-size clipping fixed), pills grow; A2; A3; A4 Back, tiles, field, switch and chips named with state (#1211, ac43ecdb) | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
-| Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
-| Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>🔷 A3 brand-blue token |
+| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>✅ Sign-up sheet keeps its draft through rotation, dark mode and font changes: held outside the sheet, one per opening (#1262, 96676bc0) | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ✅ A1 stat labels whole (default-size clipping fixed), pills grow; A2; A3; A4 Back, tiles, field, switch and chips named with state (#1211, ac43ecdb) | ✅ A1 A2 A4 A5; share-link label added (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>✅ Signups tab A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 
 **Outside this plan:** Remind helpers: Blocked until an AI provider is available: Send only appears after an AI draft. U01 and U05: U01 has no cells in either stream (it belongs to the former Stream 2). U05 starts once your launch flags are on master: each stream inventories its own screens, and Stream 1 assembles the final release manifest.
 
@@ -833,7 +842,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 - U03 items: done 72, confirm from existing evidence 0, to do 0, your call 0, boundary 6, not offered 9
 - U04 items: done 11, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 0
-- U02 items: done 22, confirm from existing evidence 0, to do 3, your call 6, boundary 0, not offered 4
+- U02 items: done 28, confirm from existing evidence 0, to do 3, your call 0, boundary 0, not offered 4
 
 ## History
 
