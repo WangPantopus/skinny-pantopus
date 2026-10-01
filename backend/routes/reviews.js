@@ -178,6 +178,8 @@ router.get('/user/:userId', async (req, res) => {
       `, { count: 'exact' })
       .eq('reviewee_id', userId)
       .order('created_at', { ascending: false })
+      // Reviews written together share created_at; without a tiebreak a page can repeat one and skip others.
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
@@ -189,6 +191,7 @@ router.get('/user/:userId', async (req, res) => {
         .select('*')
         .eq('reviewee_id', userId)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (fallbackErr) {
