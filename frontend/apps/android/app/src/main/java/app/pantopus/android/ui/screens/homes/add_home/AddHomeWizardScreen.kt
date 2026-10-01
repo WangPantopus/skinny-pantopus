@@ -428,12 +428,14 @@ private fun ManualAddressField(
     value: String,
     onChange: (String) -> Unit,
 ) {
+    // The field's label already names it for TalkBack. A content description with the same text made it read twice
+    // ("Edit box. Street address. Street address").
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
