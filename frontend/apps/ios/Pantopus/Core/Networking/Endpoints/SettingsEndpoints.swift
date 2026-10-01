@@ -54,10 +54,12 @@ public enum AuthMethodsEndpoints {
     public static let methods = Endpoint(method: .get, path: "/api/users/auth-methods")
 
     /// `POST /api/users/password` — change the password (rate-limited
-    /// by `reauthLimiter`). Route `backend/routes/users.js:1919`. The
+    /// by `reauthLimiter`). Route `backend/routes/users.js:2111`. The
     /// Joi schema accepts camelCase keys, so the body uses them too.
+    /// A 401 here is a wrong current password, not a dead session
+    /// (`verifiesCredential`): the form shows it instead of signing out.
     public static func updatePassword(_ body: PasswordUpdateBody) -> Endpoint {
-        Endpoint(method: .post, path: "/api/users/password", body: body)
+        Endpoint(method: .post, path: "/api/users/password", body: body, verifiesCredential: true)
     }
 
     /// `POST /api/users/resend-verification` — re-send the email

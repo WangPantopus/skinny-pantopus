@@ -2085,6 +2085,29 @@ router.get('/auth-methods', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * Change the password with the caller's own access token (GoTrue PUT /user). Returns false,
+ * so the caller falls back to the admin update, when there's no token or GoTrue refuses.
+ */
+async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
+  const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!accessToken || !baseUrl || !anonKey) return false;
+  try {
+    const response = await fetch(`${baseUrl}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPassword }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) return true;
+    logger.warn('Password update with own session refused, using admin update', { userId, status: response.status });
+  } catch (err) {
+    logger.warn('Password update with own session failed, using admin update', { userId, error: err.message });
+  }
+  return false;
+}
+
 router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, validate(updatePasswordSchema), async (req, res) => {
   const userId = req.user?.id;
   const email = req.user?.email;
@@ -2138,8 +2161,12 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
           email,
           error: authError?.message,
         });
+        // A wrong current password is a refused credential, not a dead session. The code and
+        // purpose (step-up's shape) tell the apps not to refresh, replay and sign out.
         return res.status(401).json({
           error: 'Current password is incorrect',
+          code: 'UNAUTHORIZED',
+          purpose: 'password_change',
         });
       }
 
@@ -2181,18 +2208,23 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
       }
     }
 
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      password: newPassword,
-    });
+    // Through the caller's own session, GoTrue keeps that session and ends the others, as the
+    // design below says. admin.updateUserById ends every session, the caller's too, so the
+    // next request 401s and the apps sign the person out; it stays as the fallback.
+    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId))) {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
 
-    if (updateError) {
-      logger.warn('Password update failed - admin update error', {
-        userId,
-        error: updateError.message,
-      });
-      return res.status(400).json({
-        error: 'Unable to update password',
-      });
+      if (updateError) {
+        logger.warn('Password update failed - admin update error', {
+          userId,
+          error: updateError.message,
+        });
+        return res.status(400).json({
+          error: 'Unable to update password',
+        });
+      }
     }
 
     logger.info('Password updated successfully', {

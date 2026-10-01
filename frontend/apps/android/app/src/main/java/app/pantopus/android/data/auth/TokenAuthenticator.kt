@@ -62,8 +62,9 @@ class TokenAuthenticator
             // A step-up credential rejection follows successful bearer validation.
             // Let the password sheet retry it without replaying the wrong password
             // or retiring a valid session. Middleware 401s have no purpose and
-            // continue through the normal refresh path below.
-            if (response.request.method == "POST" && response.request.url.encodedPath == "/api/auth/step-up") {
+            // continue through the normal refresh path below. Change password's
+            // wrong current password answers the same way.
+            if (response.request.method == "POST" && response.request.url.encodedPath in CREDENTIAL_CHECK_PATHS) {
                 val rejection =
                     runCatching {
                         AuthErrorBodyParser.parseStepUp(response.peekBody(MAX_PEEK_BYTES).string())
@@ -135,6 +136,9 @@ class TokenAuthenticator
 
             /** Error envelopes are tiny; never buffer more than this. */
             const val MAX_PEEK_BYTES = 4_096L
+
+            /** POSTs whose `UNAUTHORIZED` + `purpose` 401 is a refused password, not a dead session. */
+            val CREDENTIAL_CHECK_PATHS = setOf("/api/auth/step-up", "/api/users/password")
             val lock = Any()
         }
     }

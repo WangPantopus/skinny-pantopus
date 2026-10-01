@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -31,12 +32,14 @@ class TokenAuthenticatorTest {
         bearer: String?,
         prior: Response? = null,
         body: String? = null,
+        post: Boolean = false,
     ): Response {
         val request =
             Request
                 .Builder()
                 .url(url)
                 .apply { if (bearer != null) header("Authorization", "Bearer $bearer") }
+                .apply { if (post) post("{}".toRequestBody("application/json".toMediaTypeOrNull())) }
                 .build()
         // No body: `authenticate` never reads it, and OkHttp forbids a
         // priorResponse that carries a body.
@@ -159,5 +162,36 @@ class TokenAuthenticatorTest {
         coVerify { repo.signOut(match { it.code == "SESSION_REVOKED" && it.isSecurity }) }
         // peekBody must leave the body readable for the caller.
         assertEquals(true, second.body?.string()?.contains("SESSION_REVOKED"))
+    }
+
+    @Test
+    fun `a wrong current password on change password is shown, not refreshed or signed out`() {
+        coEvery { storage.accessToken() } returns "old-at"
+        val rejected =
+            response401(
+                "https://x/api/users/password",
+                "old-at",
+                body = "{\"error\":\"Current password is incorrect\",\"code\":\"UNAUTHORIZED\",\"purpose\":\"password_change\"}",
+                post = true,
+            )
+
+        val retry = authenticator().authenticate(null, rejected)
+
+        assertNull(retry)
+        coVerify(exactly = 0) { repo.refreshTokens() }
+        coVerify(exactly = 0) { repo.signOut(any()) }
+    }
+
+    @Test
+    fun `a change password 401 without a purpose is a dead session and refreshes as usual`() {
+        coEvery { storage.accessToken() } returns "old-at"
+        coEvery { repo.refreshTokens() } returns AuthRepository.RefreshOutcome.Rotated("new-at")
+        val expired =
+            response401("https://x/api/users/password", "old-at", body = "{\"error\":\"Invalid or expired token\"}", post = true)
+
+        val retry = authenticator().authenticate(null, expired)
+
+        assertEquals("Bearer new-at", retry?.header("Authorization"))
+        coVerify(exactly = 1) { repo.refreshTokens() }
     }
 }
