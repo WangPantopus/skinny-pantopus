@@ -9,6 +9,42 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T15:25Z (Stream 1), batches 301–303.**
+  - **Merged:**
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 301 | #1364 | 15:04:03Z | Stream 5's **#1349** (Android re-sent requests carry a fresh DPoP proof; seal `8a4f5520`, plus my device bundle `856be5e7`) and the flags session's **#1358** (the web Explore Map keeps its Posts layer in the launch build; seal `42308a96`) |
+    | 302 | #1368 | 15:17:51Z | Stream 2's **#1363**: a re-sent or simultaneous task action settles once (seal `a01b71f7`) |
+    | 303 | #1370 | 15:22:43Z | **My #1369** (two raw-hex comments broke every PR's iOS lint job), Stream 3's **#1361** (one live guest-pass link per create intent; migration **20261001131000**; seal `875eebf2`) and Stream 5's **#1362** (pending claimants learn how to unlock posting; trust reads match the schema; seal `1f85e658`) |
+
+    Master is **`ec4242aa4`**; the next batch is **304**.
+  - **Device checks for Stream 5, all passing** (secret scan 0, then sealed):
+    - #1349 Android (`856be5e7`);
+    - #1356 iOS + Android: New password stays masked (`63eb65e3`);
+    - #1357 iOS + Android: a crew invoice re-sent after a lost reply makes one invoice and one notification (`5f400cd5`, bound to the ktlint-fixed head `cc1d95716`; the diff from the tested `be26e6144` is one joined line).
+  - **Money decision, #1359** (Stream 2, wallet withdraw): **held at `684a7cc28` and fixed at `93f75ff1a`.**
+    - **The race:** with the new same-key retry, a client retry could complete a transfer while attempt 1, timing out against Stripe (80 s, vs iOS's 20 s), reversed the debit. That pays out and credits back.
+    - **The rule now:** reverse only on a definite Stripe refusal (`StripeInvalidRequestError`, `StripeCardError`, `StripePermissionError`, `StripeAuthenticationError`), after re-reading the row. Anything else keeps the debit and answers 503, and the same-key retry settles it.
+    - **Proven** with Stream 2's stubbed-Stripe harness, which reproduces the race on the old head.
+    - **Follow-up, provider-bound:** a sweep for unknown-outcome withdrawals.
+  - **Migration numbers:**
+    - **20261001135000** is reserved for Stream 2's `wallet_credit` inner-function replay fix (the same `IF FOUND` bug as `wallet_debit`), separate from 132000.
+    - 133000 stays unused.
+    - Pending: 132000 (#1359) and 134000 (#1365).
+  - **Master's iOS lint was red for every PR.** Two comments quoted `#RRGGBB` values, and CI's "No raw hex in feature code" grep rejects these; Stream 5 found it. #1369 fixed them.
+    - **Lesson:** my batch lint ran SwiftLint and SwiftFormat on changed files only.
+    - **Now** `tools/ios-guards.sh <tip>` (runtime) runs the whole iOS lint job at the tip: SwiftLint strict, SwiftFormat, raw hex, icons, overline. It took about 23 s, failed on `3bacaa92a` and passed on `ec4242aa4`.
+  - **CI capacity:** cancelled 49 queued runs and 2 running iOS jobs, all for branches whose PRs had already merged or closed. Runs for master and for every open PR's current head were kept. The queue had backed iOS jobs up for 2.5 h. Log: Stream 1 session scratchpad `ci-cancel-sweep-20261001.txt`.
+  - **Infra failures read, not code:**
+    - #1358's DB replay: port 54322 in use on the runner; re-run requested.
+    - #1360's Android instrumented job: the emulator package download failed.
+  - **Waiting:**
+    - **candidate 30** (`28082e176` = `3bacaa92a` + Stream 2's #1360, #1365 and #1359 + Stream 5's #1357, #1366 and #1367; iOS + Android) is next for the heavy slot. It's for Stream 2's Cell A, toggles and Cell B, and Stream 5's #1367 recipient picker. Stream 2's own .app can't sign in on a simulator: it was built without signing, so it has no entitlements and Keychain gives -34018.
+    - **Stream 5 seals:** #1338, #1356 and #1357, after their iOS jobs re-run on the fixed master.
+  - **Runtime:**
+    - **DB:** migrations 131000 (merged) and 134000 (#1365) are applied. The helper now applies every version the ledger lacks, not only versions newer than its max.
+    - **Proxy:** the keep-alive is back at the default since 15:14:33Z.
 - **Update 2026-10-01T13:46Z (Stream 1), batches 299–300.**
   - **Merged:**
 
