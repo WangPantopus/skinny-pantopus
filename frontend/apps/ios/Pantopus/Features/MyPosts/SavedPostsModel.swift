@@ -93,15 +93,16 @@ public final class SavedPostsModel {
         await rebuild()
     }
 
-    /// Remove from saved: the server toggles the save, and the row leaves once it confirms.
+    /// Remove from saved: the request asks for "not saved" (a re-send can't re-save it), and the
+    /// row leaves once the server confirms.
     func remove(postId: String) async {
         guard !removing.contains(postId) else { return }
         removing.insert(postId)
         defer { removing.remove(postId) }
         do {
-            let response: PostSaveResponse = try await api.request(PostsEndpoints.toggleSave(id: postId))
+            let response: PostSaveResponse = try await api.request(PostsEndpoints.toggleSave(id: postId, saved: false))
             if response.saved {
-                // The toggle saved it again (it had been unsaved elsewhere): re-read the list.
+                // A server that still toggles saved it again (it had been unsaved elsewhere): re-read the list.
                 await load()
                 return
             }

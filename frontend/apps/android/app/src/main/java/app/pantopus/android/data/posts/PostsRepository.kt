@@ -15,8 +15,10 @@ import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
+import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
 import app.pantopus.android.data.api.models.posts.PostReportRequest
 import app.pantopus.android.data.api.models.posts.PostSaveResponse
+import app.pantopus.android.data.api.models.posts.PostSaveStateRequest
 import app.pantopus.android.data.api.models.posts.PostShareRequest
 import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
@@ -77,8 +79,11 @@ class PostsRepository
         /** `GET /api/posts/:id`. */
         suspend fun detail(id: String): NetworkResult<PostDetailResponse> = safeApiCall { api.detail(id) }
 
-        /** `POST /api/posts/:id/like`. */
-        suspend fun toggleLike(id: String): NetworkResult<PostLikeResponse> = safeApiCall { api.toggleLike(id) }
+        /** `POST /api/posts/:id/like`: sets the like to [liked], the state the person chose (a re-send can't flip it back). */
+        suspend fun toggleLike(
+            id: String,
+            liked: Boolean,
+        ): NetworkResult<PostLikeResponse> = safeApiCall { api.toggleLike(id, PostLikeStateRequest(liked)) }
 
         /** `GET /api/posts/:id/comments`. */
         suspend fun comments(
@@ -127,7 +132,8 @@ class PostsRepository
         suspend fun toggleCommentLike(
             postId: String,
             commentId: String,
-        ): NetworkResult<CommentLikeResponse> = safeApiCall { api.toggleCommentLike(postId, commentId) }
+            liked: Boolean,
+        ): NetworkResult<CommentLikeResponse> = safeApiCall { api.toggleCommentLike(postId, commentId, PostLikeStateRequest(liked)) }
 
         /** `DELETE /api/posts/:postId/comments/:commentId`. */
         suspend fun deleteComment(
@@ -139,7 +145,8 @@ class PostsRepository
         suspend fun share(
             id: String,
             shareType: String = "external",
-        ): NetworkResult<PostShareResponse> = safeApiCall { api.share(id, PostShareRequest(shareType = shareType)) }
+            reposted: Boolean? = null,
+        ): NetworkResult<PostShareResponse> = safeApiCall { api.share(id, PostShareRequest(shareType = shareType, reposted = reposted)) }
 
         /** `POST /api/posts/:id/report`. */
         suspend fun report(
@@ -149,7 +156,10 @@ class PostsRepository
         ): NetworkResult<PostActionAckResponse> = safeApiCall { api.report(id, PostReportRequest(reason = reason, details = details)) }
 
         /** `POST /api/posts/:id/save`. */
-        suspend fun toggleSave(id: String): NetworkResult<PostSaveResponse> = safeApiCall { api.toggleSave(id) }
+        suspend fun toggleSave(
+            id: String,
+            saved: Boolean,
+        ): NetworkResult<PostSaveResponse> = safeApiCall { api.toggleSave(id, PostSaveStateRequest(saved)) }
 
         /** `GET /api/posts/place-eligibility`. */
         suspend fun placeEligibility(

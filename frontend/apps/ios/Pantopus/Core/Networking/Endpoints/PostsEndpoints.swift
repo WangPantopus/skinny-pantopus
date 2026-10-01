@@ -84,10 +84,11 @@ public enum PostsEndpoints {
         return Endpoint(method: .get, path: "/api/posts/place-eligibility", query: query)
     }
 
-    /// `POST /api/posts/:id/like` — toggles the like; returns the new
+    /// `POST /api/posts/:id/like` — sets the like to `liked` (the state the person chose; a
+    /// re-sent request can't flip it back), or toggles when it's nil; returns the new
     /// `{liked, likeCount}` state. Route `backend/routes/posts.js:2595`.
-    public static func toggleLike(id: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/posts/\(id)/like")
+    public static func toggleLike(id: String, liked: Bool? = nil) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(id)/like", body: liked.map { PostLikeStateRequest(liked: $0) })
     }
 
     /// `GET /api/posts/:id/comments` — paged. Route
@@ -139,8 +140,12 @@ public enum PostsEndpoints {
     /// `POST /api/posts/:postId/comments/:commentId/like` — toggles a
     /// heart on a comment; returns `{liked, likeCount}`. Route
     /// `backend/routes/posts.js:2983`.
-    public static func toggleCommentLike(postId: String, commentId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/posts/\(postId)/comments/\(commentId)/like")
+    public static func toggleCommentLike(postId: String, commentId: String, liked: Bool? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/posts/\(postId)/comments/\(commentId)/like",
+            body: liked.map { PostLikeStateRequest(liked: $0) }
+        )
     }
 
     /// `DELETE /api/posts/:postId/comments/:commentId` — author-only
@@ -154,8 +159,8 @@ public enum PostsEndpoints {
     /// (`shareType: "external"`) or toggles a repost (`"repost"`);
     /// returns `{shared|reposted, shareCount}`. Route
     /// `backend/routes/posts.js:2829`.
-    public static func share(id: String, shareType: String = "external") -> Endpoint {
-        Endpoint(method: .post, path: "/api/posts/\(id)/share", body: PostShareRequest(shareType: shareType))
+    public static func share(id: String, shareType: String = "external", reposted: Bool? = nil) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(id)/share", body: PostShareRequest(shareType: shareType, reposted: reposted))
     }
 
     /// `POST /api/posts/:id/report` — files a report with one of the
@@ -166,8 +171,8 @@ public enum PostsEndpoints {
 
     /// `POST /api/posts/:id/save` — toggles the viewer's bookmark;
     /// returns `{saved}`. Route `backend/routes/posts.js:3276`.
-    public static func toggleSave(id: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/posts/\(id)/save")
+    public static func toggleSave(id: String, saved: Bool? = nil) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(id)/save", body: saved.map { PostSaveStateRequest(saved: $0) })
     }
 
     /// `POST /api/posts/:id/archive` — author-only archive.
