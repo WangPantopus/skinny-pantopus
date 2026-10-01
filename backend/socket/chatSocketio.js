@@ -572,17 +572,19 @@ module.exports = (io) => {
     // and mobile clients use the REST endpoint exclusively.
 
     /**
-     * Toggle reaction on a message (add if absent, remove if present).
+     * Add (`reacted: true`) or remove (`reacted: false`) a reaction on a message; without `reacted`, toggle it.
      * Emits 'message:reaction_updated' with full reaction summary — same
      * format as the REST POST /messages/:messageId/react endpoint.
      */
-    on('message:react', async ({ messageId, reaction }, callback) => {
+    on('message:react', async ({ messageId, reaction, reacted }, callback) => {
       try {
         if (socketRateLimited(socket.id, 'message:react')) {
           return callback({ error: 'Rate limit exceeded' });
         }
-        // The REST route's rule (reactToMessageSchema): a reaction is a string of 1 to 8 characters.
-        if (typeof reaction !== 'string' || reaction.length === 0 || reaction.length > 8) {
+        // The REST route's rules (reactToMessageSchema): a reaction is a string of 1 to 8 characters, and `reacted`
+        // is a boolean when present.
+        if (typeof reaction !== 'string' || reaction.length === 0 || reaction.length > 8
+          || (reacted !== undefined && typeof reacted !== 'boolean')) {
           return callback({ error: 'Invalid reaction' });
         }
 
@@ -617,7 +619,6 @@ module.exports = (io) => {
           return callback({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
         }
 
-        // Toggle: check if reaction already exists
         const { data: existing } = await supabaseAdmin
           .from('MessageReaction')
           .select('id')
@@ -626,16 +627,19 @@ module.exports = (io) => {
           .eq('reaction', reaction)
           .maybeSingle();
 
-        if (existing) {
+        // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
+        const wanted = typeof reacted === 'boolean' ? reacted : !existing;
+        if (existing && !wanted) {
           await supabaseAdmin
             .from('MessageReaction')
             .delete()
             .eq('id', existing.id);
-        } else {
+        } else if (!existing && wanted) {
           const { error: insertErr } = await supabaseAdmin
             .from('MessageReaction')
             .insert({ message_id: messageId, user_id: userId, reaction });
-          if (insertErr) {
+          // 23505: the same reaction landed at the same moment (a concurrent repeat), which is the state asked for.
+          if (insertErr && insertErr.code !== '23505') {
             logger.error('Insert reaction error', { sessionId, userId, messageId, error: insertErr.message });
             return callback({ error: 'Failed to add reaction' });
           }

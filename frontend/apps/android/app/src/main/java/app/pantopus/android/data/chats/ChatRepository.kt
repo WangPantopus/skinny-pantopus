@@ -105,7 +105,9 @@ class ChatRepository
         suspend fun reactToMessage(
             messageId: String,
             reaction: String,
-        ): NetworkResult<ReactToChatMessageResponse> = safeApiCall { api.reactToMessage(messageId, ReactToChatMessageBody(reaction)) }
+            reacted: Boolean? = null,
+        ): NetworkResult<ReactToChatMessageResponse> =
+            safeApiCall { api.reactToMessage(messageId, ReactToChatMessageBody(reaction, reacted)) }
 
         suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }
 

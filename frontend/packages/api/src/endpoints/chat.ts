@@ -418,15 +418,17 @@ export async function getConversationTopics(
 // ─── Message Reactions ───
 
 /**
- * Toggle a reaction on a message (add if absent, remove if present).
+ * Add (`reacted: true`) or remove (`reacted: false`) a reaction on a message, so a retry keeps the state asked for.
+ * Without `reacted` the server toggles it (add if absent, remove if present).
  */
 export async function reactToMessage(
   messageId: string,
-  reaction: string
+  reaction: string,
+  reacted?: boolean
 ): Promise<{ reactions: ReactionSummary[] }> {
   return post<{ reactions: ReactionSummary[] }>(
     `/api/chat/messages/${messageId}/react`,
-    { reaction }
+    reacted === undefined ? { reaction } : { reaction, reacted }
   );
 }
 

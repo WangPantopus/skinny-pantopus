@@ -224,10 +224,14 @@ data class SendChatMessageResponse(
     val message: ChatMessageDto,
 )
 
-/** `POST /messages/:id/react` body. */
+/**
+ * `POST /messages/:id/react` body. [reacted] is the state the tap asks for, so a retry keeps it; null (left out of the
+ * JSON) lets the server toggle.
+ */
 @JsonClass(generateAdapter = true)
 data class ReactToChatMessageBody(
     val reaction: String,
+    val reacted: Boolean? = null,
 )
 
 /** `POST /messages/:id/react` envelope. */
