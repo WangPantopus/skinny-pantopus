@@ -507,7 +507,7 @@ export default function PostDetailPanel({
               )}
 
               <div className="px-5 pb-4">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-app">
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-app">
                   {post.content}
                 </p>
               </div>
