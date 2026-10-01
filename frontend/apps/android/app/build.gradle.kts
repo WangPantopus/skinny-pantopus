@@ -80,6 +80,16 @@ android {
         buildConfigField("String", "POSTHOG_API_KEY", "\"${envOr("POSTHOG_API_KEY", "")}\"")
         buildConfigField("String", "POSTHOG_HOST", "\"${envOr("POSTHOG_HOST", "https://eu.i.posthog.com")}\"")
 
+        // First-launch scope (2026-09-27): LaunchFeature keys switched back on,
+        // comma-separated (e.g. `marketplace,open_gigs`, or `all`). Empty keeps
+        // every cut feature hidden. Read via core/LaunchFeatures.kt.
+        buildConfigField("String", "PANTOPUS_LAUNCH_FEATURES", "\"${envOr("PANTOPUS_LAUNCH_FEATURES", "")}\"")
+        // Launch cut #4 (Open Gigs): the "Tasks near me" widget browses open
+        // gigs, so the manifest enables its receiver only when `open_gigs`
+        // (or `all`) is listed; widget pickers then never offer it.
+        val launchFeatureKeys = envOr("PANTOPUS_LAUNCH_FEATURES", "").split(',').map { it.trim().lowercase() }
+        resValue("bool", "launch_open_gigs", ("all" in launchFeatureKeys || "open_gigs" in launchFeatureKeys).toString())
+
         // Google Maps API key — read from gradle.properties, ~/.gradle/gradle.properties,
         // or the env. Never hard-code a real key here.
         manifestPlaceholders["MAPS_API_KEY"] = envOr("MAPS_API_KEY", "")

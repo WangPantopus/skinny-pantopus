@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
@@ -308,8 +309,21 @@ class HomeDashboardViewModel
                     "view_docs" to "docs.view", "view_emergency" to "sensitive.view", "view_packages" to "packages.view",
                     "view_tasks" to "tasks.view", "view_claims" to "ownership.view",
                 )[action]
-            return permission?.let(::can) == true
+            // Launch cut: no action into a feature hidden for the first launch.
+            return isLaunchAvailableAction(action) && permission?.let(::can) == true
         }
+
+        /** Launch cut (2026-09-27): "+" rows and tiles into features hidden for the first launch. */
+        private fun isLaunchAvailableAction(action: String): Boolean =
+            when (action) {
+                // Launch cut #7 (Household extras): bills, packages, pets, polls and the Home calendar.
+                "track_bill", "track_package", "log_package", "add_pet", "create_poll",
+                "view_bills", "view_packages", "view_polls", "pets", "calendar",
+                -> LaunchFeatures.householdExtras
+                // Launch cut #8 (Mail extras): "Send Mail" opens the letter composer.
+                "send_mail" -> LaunchFeatures.mailExtras
+                else -> true
+            }
 
         fun suspendContent() {
             generation += 1

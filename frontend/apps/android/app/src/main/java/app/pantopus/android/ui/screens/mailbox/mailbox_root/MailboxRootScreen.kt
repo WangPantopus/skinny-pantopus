@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -104,12 +105,13 @@ fun MailboxRootScreen(
         // `mode !== 'empty'` guard applied to the old scan-line FAB, which
         // now lives in the overflow menu ("Find a mailbox") so the map
         // surface stays reachable.
+        // Launch cut #8 (Mail extras): letters are hidden, so no compose FAB.
         fab =
             FabAction(
                 icon = PantopusIcon.Pencil,
                 contentDescription = "Write a letter",
                 onClick = onOpenCompose,
-            ),
+            ).takeIf { LaunchFeatures.mailExtras },
         onBack = onBack,
         customHeader = {
             Column {
@@ -209,22 +211,25 @@ private fun MailboxRootSettingsMenu(
             },
             modifier = Modifier.testTag("mailboxRootSettings.mailTasks"),
         )
-        DropdownMenuItem(
-            text = { Text("Mail party", color = PantopusColors.appText) },
-            onClick = {
-                expanded = false
-                onOpenMailParty()
-            },
-            modifier = Modifier.testTag("mailboxRootSettings.mailParty"),
-        )
-        DropdownMenuItem(
-            text = { Text("Community mail", color = PantopusColors.appText) },
-            onClick = {
-                expanded = false
-                onOpenCommunity()
-            },
-            modifier = Modifier.testTag("mailboxRootSettings.community"),
-        )
+        // Launch cut #8 (Mail extras): the Family Mail Party and the community mail stream are hidden.
+        if (LaunchFeatures.mailExtras) {
+            DropdownMenuItem(
+                text = { Text("Mail party", color = PantopusColors.appText) },
+                onClick = {
+                    expanded = false
+                    onOpenMailParty()
+                },
+                modifier = Modifier.testTag("mailboxRootSettings.mailParty"),
+            )
+            DropdownMenuItem(
+                text = { Text("Community mail", color = PantopusColors.appText) },
+                onClick = {
+                    expanded = false
+                    onOpenCommunity()
+                },
+                modifier = Modifier.testTag("mailboxRootSettings.community"),
+            )
+        }
         DropdownMenuItem(
             text = { Text("Home records", color = PantopusColors.appText) },
             onClick = {

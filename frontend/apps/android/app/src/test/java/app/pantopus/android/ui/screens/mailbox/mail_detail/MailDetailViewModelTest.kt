@@ -3,6 +3,8 @@
 package app.pantopus.android.ui.screens.mailbox.mail_detail
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.AckResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
@@ -49,6 +51,8 @@ class MailDetailViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut keeps letters out of the ceremonial opening; these tests pin the redirect.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Loading an unread letter marks it read (PATCH /api/mailbox/:id/view).
         coEvery { repo.markViewed(any()) } returns
             NetworkResult.Success(MarkMailViewedResponse(message = "Mail marked as viewed", alreadyViewed = false))
@@ -57,6 +61,7 @@ class MailDetailViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeDetail(

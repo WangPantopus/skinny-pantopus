@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.mailbox.mail_detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDetailDto
@@ -308,7 +309,8 @@ class MailDetailViewModel
                         // hand it straight to the open experience and hold the
                         // loading frame so the plain layout never flashes (RN
                         // short-circuits before `setLoading(false)`).
-                        if (result.data.mail.stationeryTheme != null) {
+                        // Launch cut #8 (Mail extras): with letters hidden, it opens here instead.
+                        if (result.data.mail.stationeryTheme != null && LaunchFeatures.mailExtras) {
                             _ceremonialRedirectMailId.value = mailId
                         } else {
                             _state.value = MailDetailUiState.Loaded(project(result.data.mail))

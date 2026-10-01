@@ -33,6 +33,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,7 +74,8 @@ fun HouseholdTaskDetailScreen(
                 HouseholdTaskReadOnlyContent(task)
                 TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
                 TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
-                if (task.capabilities?.canEdit == true) {
+                // Launch cut #4 (Open Gigs): publishing a household task as an open Gig is hidden.
+                if (task.capabilities?.canEdit == true && LaunchFeatures.openGigs) {
                     TextButton(onClick = gigViewModel.controller::show, enabled = !state.busy) { Text("Review Gig publication") }
                 }
                 TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }

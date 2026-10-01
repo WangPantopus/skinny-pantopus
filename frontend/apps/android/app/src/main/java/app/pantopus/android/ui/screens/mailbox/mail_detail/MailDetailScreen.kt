@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
@@ -324,14 +325,17 @@ private fun LoadedLayout(
     // carries decoded payloads. Every variant composes the shared
     // `MailItemDetailShell`; A17.1 is the bespoke fall-through for
     // categories without a decoded ceremonial payload.
+    // Launch cut #8 (Mail extras): certified mail (e-signing), community mail, ceremonial
+    // keepsakes and party invitations read as plain mail. Launch cut #4 (Open Gigs): a bid
+    // by mail has no Accept.
     val booklet = content.bookletDetail
-    val certified = content.certifiedDetail
-    val community = content.communityDetail
+    val certified = content.certifiedDetail?.takeIf { LaunchFeatures.mailExtras }
+    val community = content.communityDetail?.takeIf { LaunchFeatures.mailExtras }
     val coupon = content.couponDetail
-    val gig = content.gigDetail
-    val memory = content.memoryDetail
+    val gig = content.gigDetail?.takeIf { LaunchFeatures.openGigs }
+    val memory = content.memoryDetail?.takeIf { LaunchFeatures.mailExtras }
     val pkg = content.packageDetail
-    val party = content.partyDetail
+    val party = content.partyDetail?.takeIf { LaunchFeatures.mailExtras }
     val records = content.recordsDetail
     when {
         content.category == MailItemCategory.Booklet && booklet != null ->

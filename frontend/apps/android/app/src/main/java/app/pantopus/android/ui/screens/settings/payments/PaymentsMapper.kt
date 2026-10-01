@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.settings.payments
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.connect.ConnectAccountDto
 import app.pantopus.android.data.api.models.payments.EarningsSummaryDto
 import app.pantopus.android.data.api.models.payments.PaymentHistoryEntryDto
@@ -328,7 +329,13 @@ object PaymentsMapper {
                     subtext = "W-9 collected during setup",
                     trailing = PaymentsRowTrailing.GatedDash,
                 ),
-            helper = "Required before you can post paid tasks or sell on Marketplace.",
+            // Launch cuts #4 / #3: posting open tasks and selling are hidden.
+            helper =
+                if (LaunchFeatures.openGigs && LaunchFeatures.marketplace) {
+                    "Required before you can post paid tasks or sell on Marketplace."
+                } else {
+                    "Required before you can get paid on Pantopus."
+                },
         )
 }
 

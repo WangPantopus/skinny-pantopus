@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
@@ -341,7 +342,7 @@ class NotificationSettingsViewModel
                 id = GroupId.ALERTS,
                 overline = "Alert preferences",
                 rows =
-                    listOf(
+                    listOfNotNull(
                         GroupedListRow(
                             id = RowId.WEATHER_ALERTS,
                             label = "Weather Alerts",
@@ -357,7 +358,13 @@ class NotificationSettingsViewModel
                         GroupedListRow(
                             id = RowId.HOME_REMINDERS,
                             label = "Home Reminders",
-                            subtext = "Bills, tasks, and calendar events",
+                            // Launch cut #7 (Household extras): bills and the calendar are hidden.
+                            subtext =
+                                if (LaunchFeatures.householdExtras) {
+                                    "Bills, tasks, and calendar events"
+                                } else {
+                                    "Household tasks and reminders"
+                                },
                             control = RowControl.Toggle(prefs.homeRemindersEnabled),
                         ),
                         GroupedListRow(
@@ -366,12 +373,13 @@ class NotificationSettingsViewModel
                             subtext = "Active gig status changes",
                             control = RowControl.Toggle(prefs.gigUpdatesEnabled),
                         ),
+                        // Launch cut #1 (Beacon): no Beacon updates to alert about.
                         GroupedListRow(
                             id = RowId.BEACON_PUSH,
                             label = "Beacon Push Notifications",
                             subtext = "Device alerts for Beacon updates. Updates stay in the app when off.",
                             control = RowControl.Toggle(prefs.beaconPushEnabled),
-                        ),
+                        ).takeIf { LaunchFeatures.beacon },
                         GroupedListRow(
                             id = RowId.MAIL_SUMMARY,
                             label = "Mail Summary",

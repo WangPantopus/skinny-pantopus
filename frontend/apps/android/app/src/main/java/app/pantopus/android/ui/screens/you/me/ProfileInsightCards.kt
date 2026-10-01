@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.users.InviteNextUnlockDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
@@ -273,14 +274,17 @@ private fun ReceiptDetails(receipt: MonthlyReceiptDto) {
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
-        DetailSection(
-            "Marketplace",
-            listOf(
-                "Listings sold" to "${receipt.marketplace.listingsSold}",
-                "Listings bought" to "${receipt.marketplace.listingsBought}",
-                "Free items claimed" to "${receipt.marketplace.freeItemsClaimed}",
-            ),
-        )
+        // Launch cut #3 (Marketplace): no marketplace totals.
+        if (LaunchFeatures.marketplace) {
+            DetailSection(
+                "Marketplace",
+                listOf(
+                    "Listings sold" to "${receipt.marketplace.listingsSold}",
+                    "Listings bought" to "${receipt.marketplace.listingsBought}",
+                    "Free items claimed" to "${receipt.marketplace.freeItemsClaimed}",
+                ),
+            )
+        }
         DetailSection(
             "Earnings breakdown",
             listOf(

@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.explore
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.gigs.GigsInBoundsResponse
 import app.pantopus.android.data.api.models.listings.ListingDto
@@ -40,10 +42,13 @@ import org.junit.Test
 class ExploreMapViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides tasks, items and spots; these tests pin every kind.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeVm(): ExploreMapViewModel = ExploreMapViewModel(mockk(), mockk(), mockk(), mockk(), mockk())
