@@ -258,9 +258,10 @@ export default function PostDetailPanel({
     }
   };
 
+  // Each request carries the state the person chose, so a re-send can't flip it back.
   const likeMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleLike(postId),
-    onSuccess: (res, postId) => {
+    mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
+    onSuccess: (res, { postId }) => {
       setPost((prev) => prev ? { ...prev, userHasLiked: res.liked, like_count: res.likeCount } : prev);
       onPostChange?.(postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
@@ -272,13 +273,14 @@ export default function PostDetailPanel({
 
   const handleLike = () => {
     if (!post) return;
-    likeMutation.mutate(post.id);
+    likeMutation.mutate({ postId: post.id, liked: !post.userHasLiked });
   };
 
   const handleCommentLike = async (commentId: string) => {
     if (!postId) return;
     try {
-      const res = await api.posts.toggleCommentLike(postId, commentId);
+      const comment = comments.find((c) => c.id === commentId);
+      const res = await api.posts.toggleCommentLike(postId, commentId, !(comment?.userHasLiked ?? false));
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId ? { ...c, userHasLiked: res.liked, like_count: res.likeCount } : c
@@ -290,18 +292,18 @@ export default function PostDetailPanel({
   };
 
   const saveMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleSave(postId),
+    mutationFn: ({ postId, saved }: { postId: string; saved: boolean }) => api.posts.toggleSave(postId, saved),
     onMutate: () => {
       const prevSaved = post?.userHasSaved ?? false;
       setPost((prev) => prev ? { ...prev, userHasSaved: !prevSaved } : prev);
       return { prevSaved };
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       setPost((prev) => prev ? { ...prev, userHasSaved: res.saved } : prev);
       onPostChange?.(postId, { userHasSaved: res.saved });
       showToast(res.saved ? 'Post saved' : 'Removed from saved');
     },
-    onError: (err, _postId, context) => {
+    onError: (err, _vars, context) => {
       if (context) setPost((prev) => prev ? { ...prev, userHasSaved: context.prevSaved } : prev);
       console.warn('Failed to toggle save', err);
       showToast('Failed to update save');
@@ -313,7 +315,7 @@ export default function PostDetailPanel({
   const handleSave = () => {
     if (!post || saveInFlight.current) return;
     saveInFlight.current = true;
-    saveMutation.mutate(post.id, {
+    saveMutation.mutate({ postId: post.id, saved: !post.userHasSaved }, {
       onSettled: () => {
         saveInFlight.current = false;
       },
@@ -323,7 +325,7 @@ export default function PostDetailPanel({
   const handleRepost = async () => {
     if (!post) return;
     try {
-      const res = await api.posts.repostPost(post.id);
+      const res = await api.posts.repostPost(post.id, !post.userHasReposted);
       const patch = {
         userHasReposted: res.reposted,
         share_count: res.shareCount,

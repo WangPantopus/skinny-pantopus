@@ -243,7 +243,7 @@ class PulseFeedViewModelTest {
             coEvery {
                 repo.feed("place", null, null, null, 20)
             } returns NetworkResult.Success(FeedResponse(listOf(askPost()), null))
-            coEvery { repo.toggleLike("p1") } returns
+            coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Success(PostLikeResponse(message = "ok", liked = true, likeCount = 13))
             val vm = makeVm()
             vm.load()
@@ -258,7 +258,7 @@ class PulseFeedViewModelTest {
             coEvery {
                 repo.feed("place", null, null, null, 20)
             } returns NetworkResult.Success(FeedResponse(listOf(askPost()), null))
-            coEvery { repo.toggleLike("p1") } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.toggleLike("p1", any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
             vm.tapReaction("p1")

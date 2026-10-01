@@ -354,7 +354,7 @@ public final class PulseFeedViewModel {
 
         do {
             let response = try await api.request(
-                PostsEndpoints.toggleLike(id: postId),
+                PostsEndpoints.toggleLike(id: postId, liked: toggled),
                 as: PostLikeResponse.self
             )
             overrides[postId, default: PulsePostOverride()].hasReacted = response.liked
@@ -382,7 +382,7 @@ public final class PulseFeedViewModel {
         rebuildLoadedState()
         do {
             let response = try await api.request(
-                PostsEndpoints.toggleSave(id: postId),
+                PostsEndpoints.toggleSave(id: postId, saved: !original),
                 as: PostSaveResponse.self
             )
             overrides[postId, default: PulsePostOverride()].isSaved = response.saved
@@ -405,7 +405,7 @@ public final class PulseFeedViewModel {
         rebuildLoadedState()
         do {
             let response = try await api.request(
-                PostsEndpoints.share(id: postId, shareType: "repost"),
+                PostsEndpoints.share(id: postId, shareType: "repost", reposted: !original),
                 as: PostShareResponse.self
             )
             let reposted = response.reposted ?? !original

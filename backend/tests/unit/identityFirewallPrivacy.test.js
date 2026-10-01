@@ -560,6 +560,11 @@ describe('Identity Firewall two-user privacy contract', () => {
       if (fnName === 'toggle_post_save') {
         return { data: true, error: null };
       }
+      if (fnName === 'record_post_share') {
+        // External shares go through record_post_share (one per person, post and 10 minutes).
+        getTable('PostShare').push({ post_id: params.p_post_id, user_id: params.p_user_id, share_type: 'external' });
+        return { data: { recorded: true, shareCount: 1 }, error: null };
+      }
       return { data: null, error: { message: `Unexpected RPC ${fnName}` } };
     });
     setRpcMock(rpcMock);
