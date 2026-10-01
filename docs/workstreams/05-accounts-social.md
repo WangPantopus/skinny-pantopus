@@ -9,6 +9,23 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1270 #1274 #1277 #1278 (b278) and #1281 (b279) merged; #1285 #1288 sealed; cross-stream #1289 (Trains, for Stream 1) sealed and #1290 (Payments, for Stream 2) in CI, 2026-10-01T08:51:14Z
+
+- **Merged:** batch 278 (#1270, #1274, #1277, #1278) and batch 279 (#1281). Master is `5e5bf32d3`.
+- **New scans (records, no PR):**
+  - **API failure** (`20261001-stream5-api-failure-scan-r1`): 14 Stream 5 pages with every page-load read at 500. No uncaught exceptions; every page shows an error state except Connections (fixed in #1285) and Network (no read until a search).
+  - **App-wide phone width** (`20261001-stream5-mobile-overflow-scan-r1`): 45 pages at 375 and 320. Beyond #1281's three pages, only Settings → Payments overflows (#1290).
+- **Sealed and with Stream 1:**
+  - **#1285** (seal `5283377f…`): Connections shows ErrorState with Try Again when a list fails to load, instead of "No connections yet" or "No blocked users".
+  - **#1288** (seal `58287dbe…`): Discover says "No results found." only after a search. A failed search shows "Couldn't search right now." with Try again; master threw an uncaught error.
+  - **#1289**, for **Stream 1** (seal `537d558c…`): the Trains "Sign up for this slot" dialog portals to the body. On the head the overlay covers the header, sidebar and "+"; one real sign-up returned 201 and made exactly 1 reservation; the fixture was removed by exact id.
+- **In CI: #1290**, for **Stream 2**: the Settings → Payments tab row scrolls on its own at 320 px (was 363/320). Stream 2 approved and asked for a keyboard check: order and active tab are unchanged.
+- **Cross-stream notes:**
+  - The BottomSheet close-button name is left to Stream 4: the web verify sheet needs a T3 primary home, and Stream 5's fixtures are T4.
+  - The 71-file unportalled-overlay list is with Stream 1 for owners.
+- **Lesson:** `UserChatRooms` is a view over ChatParticipant. A cleanup that deletes from it rolls back the whole transaction.
+- **Runtime:** API on master `5e5bf32d3` (08:43:26Z); web on `39c7b636f` (#1290's head). No fixtures remain.
+
 ## LIVE — #1270 (devices pass), #1277 and #1278 sealed; #1281 (phone width) in CI; decisions on the remaining backlog, 2026-10-01T08:01:26Z
 
 - **Sealed and with Stream 1:**
