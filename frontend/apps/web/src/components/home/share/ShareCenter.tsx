@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { GuestPass } from '@pantopus/api';
-import CreateGuestPass from './CreateGuestPass';
+import CreateGuestPass, { type GuestPassDraft } from './CreateGuestPass';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage, shareFailure } from './shareFailure';
@@ -103,6 +103,8 @@ export default function ShareCenter({
   emergencies: _emergencies,
   can,
   onSecretsChange: _onSecretsChange,
+  draft,
+  onDraftUnmount,
 }: {
   homeId: string;
   home: Record<string, any>;
@@ -110,11 +112,21 @@ export default function ShareCenter({
   emergencies: Record<string, any>[];
   can: (perm: string) => boolean;
   onSecretsChange: (s: Record<string, any>[]) => void;
+  /** A pass that was being set up before the dashboard's access re-check; it reopens where it was. */
+  draft?: GuestPassDraft | null;
+  onDraftUnmount?: (draft: GuestPassDraft) => void;
 }) {
   const [passes, setPasses] = useState<GuestPass[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [preselectedKind, setPreselectedKind] = useState<GuestPass['kind'] | null>(null);
+  const [restoredDraft, setRestoredDraft] = useState<GuestPassDraft | null>(null);
+  useEffect(() => {
+    if (!draft) return;
+    setPreselectedKind(null);
+    setRestoredDraft(draft);
+    setShowCreate(true);
+  }, [draft]);
   const [showPastPasses, setShowPastPasses] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [listError, setListError] = useState('');
@@ -211,11 +223,13 @@ export default function ShareCenter({
       {/* Create Guest Pass SlidePanel */}
       <CreateGuestPass
         open={showCreate}
-        onClose={() => { setShowCreate(false); setPreselectedKind(null); }}
+        onClose={() => { setShowCreate(false); setPreselectedKind(null); setRestoredDraft(null); }}
         homeId={homeId}
         preselectedKind={preselectedKind}
         onIssued={() => { void loadPasses(); }}
-        onCreated={() => { setShowCreate(false); setPreselectedKind(null); loadPasses(); }}
+        onCreated={() => { setShowCreate(false); setPreselectedKind(null); setRestoredDraft(null); loadPasses(); }}
+        draft={restoredDraft}
+        onDraftUnmount={onDraftUnmount}
       />
 
       {/* Header */}
