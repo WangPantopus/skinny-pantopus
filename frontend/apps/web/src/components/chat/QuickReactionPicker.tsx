@@ -24,6 +24,7 @@ export default function QuickReactionPicker({ onSelect, onOpenFullPicker }: Quic
         type="button"
         onClick={onOpenFullPicker}
         className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors text-sm text-app-text-secondary"
+        aria-label="More reactions"
       >
         +
       </button>

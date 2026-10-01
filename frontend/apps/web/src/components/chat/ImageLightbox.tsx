@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ImageLightboxProps {
   imageUrl: string | null;
@@ -9,6 +10,9 @@ interface ImageLightboxProps {
 }
 
 export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightboxProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     if (!imageUrl) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -16,17 +20,20 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
     return () => window.removeEventListener('keydown', handler);
   }, [imageUrl, onClose]);
 
-  if (!imageUrl) return null;
+  if (!mounted || !imageUrl) return null;
 
-  return (
+  // Rendered into document.body, as the feed's post panel and the home slide panel are: inside the app's <main> (its
+  // own stacking context) the viewer stayed under the header and sidebar, and the header covered its close button.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80"
       onClick={onClose}
     >
       {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors z-10"
+        aria-label="Close image"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -54,6 +61,7 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
         }}
         onClick={e => e.stopPropagation()}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
