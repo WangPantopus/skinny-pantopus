@@ -220,9 +220,33 @@ public struct PulsePostCard: View {
         } else {
             Button(action: onTap) { card }
                 .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
+                // One element with one label; its controls are named actions, so VoiceOver reaches each one
+                // (combining would leave that to how SwiftUI merges nested buttons).
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(a11yLabel)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onTap() }
+                .accessibilityActions { cardActions }
                 .accessibilityIdentifier("pulsePostCard_\(content.id)")
+        }
+    }
+
+    /// The card's controls as VoiceOver actions, named as their buttons are.
+    @ViewBuilder private var cardActions: some View {
+        if let reaction = content.reactions.first(where: \.isInteractive) {
+            Button(reaction.label.isEmpty ? "Heart reaction" : reaction.label, action: onPrimaryReaction)
+        }
+        if let onToggleSave {
+            Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)
+        }
+        if let onToggleRepost {
+            Button(content.actions.isReposted ? "Undo repost" : "Repost", action: onToggleRepost)
+        }
+        if let onRSVP, let attendees = content.attendees {
+            Button(attendees.userIsGoing ? "Going" : "RSVP", action: onRSVP)
+        }
+        if let onOverflow {
+            Button("Post options", action: onOverflow)
         }
     }
 
