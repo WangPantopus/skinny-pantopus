@@ -6,6 +6,7 @@ import {
   useMutation,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getPostTypeConfig } from '@pantopus/ui-utils';
@@ -51,6 +52,23 @@ function buildFeedKey(
     topic === 'sports' ? (sportsMode ?? 'for_you') : 'na',
     topic === 'sports' ? (eventKey ?? 'none') : 'na',
   ] as const;
+}
+
+/**
+ * Patch one post in every cached feed list. A save or like made on the post's own page
+ * then shows on its feed card when you come back; a stale card's next click would undo it.
+ */
+export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, patch: Partial<Post>) {
+  queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        posts: (page.posts || []).map((post) => (post.id === postId ? { ...post, ...patch } : post)),
+      })),
+    };
+  });
 }
 
 export function useFeedData({
