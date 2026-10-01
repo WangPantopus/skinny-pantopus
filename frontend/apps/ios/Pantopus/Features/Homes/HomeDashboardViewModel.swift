@@ -212,6 +212,9 @@ final class HomeDashboardViewModel {
     /// Checklist item ids with an in-flight PATCH — the row disables while
     /// its mutation is awaiting the server's returned item state.
     private(set) var pendingChecklistItemIds: Set<String> = []
+    /// The checklist's error came from a change, not the read: the card
+    /// had loaded, so its headline names the change instead.
+    private(set) var checklistChangeFailed = false
 
     private let homeId: String
     private let api: APIClient
@@ -286,6 +289,7 @@ final class HomeDashboardViewModel {
         billReadID = UUID()
         billTrends = .loading
         pendingChecklistItemIds = []
+        checklistChangeFailed = false
         state = .loading
     }
 
@@ -488,6 +492,7 @@ final class HomeDashboardViewModel {
             guard HomeIntelligenceValidation.checklist(value, homeId: self.homeId) else { throw APIError.invalidResponse }
             return value
         }) else { return }
+        checklistChangeFailed = false
         checklist = result
     }
 
@@ -614,6 +619,7 @@ final class HomeDashboardViewModel {
                 if case .clientError = failure { return failure.errorDescription }
                 return nil
             }
+            checklistChangeFailed = true
             checklist = .failed(message: detail ?? "Couldn't confirm the checklist change. Reload to check its current state.")
         }
     }

@@ -174,6 +174,8 @@ sealed interface HomeIntelligenceCardState<out T> {
 
     data class Failed(
         val message: String,
+        /** A change failed, not the read: the card's content had loaded. */
+        val afterChange: Boolean = false,
     ) : HomeIntelligenceCardState<Nothing>
 }
 
@@ -658,7 +660,11 @@ class HomeDashboardViewModel
                 retireAccess(revision)
             } catch (_: Throwable) {
                 if (current(revision)) {
-                    _checklist.value = HomeIntelligenceCardState.Failed("Couldn't confirm that task update. Reload to try again.")
+                    _checklist.value =
+                        HomeIntelligenceCardState.Failed(
+                            "Couldn't confirm that task update. Reload to try again.",
+                            afterChange = true,
+                        )
                 }
             } finally {
                 if (revision == generation) _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
