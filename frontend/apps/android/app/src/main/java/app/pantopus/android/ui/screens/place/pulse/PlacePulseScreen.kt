@@ -36,6 +36,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.hub.deviceGreeting
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailCard
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailHeader
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailSectionLabel
@@ -99,7 +100,8 @@ fun PlacePulseScreen(
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         PlaceDetailHeader(
             title = "Today's Pulse",
-            address = (state as? PlacePulseUiState.Loaded)?.pulse?.greeting.orEmpty(),
+            // The pulse's greeting follows the server's clock, not the viewer's; greet by the device clock, as the Hub does.
+            address = if (state is PlacePulseUiState.Loaded) deviceGreeting() else "",
             onBack = onBack,
         )
         when (val current = state) {
