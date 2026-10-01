@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
 import java.util.Locale
 import javax.inject.Inject
 
@@ -183,6 +184,7 @@ class BusinessLegalViewModel
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val businessId: String = savedStateHandle.get<String>(BUSINESS_LEGAL_ID_KEY).orEmpty()
+        private var pendingEvidence: Pair<List<String>, String>? = null
 
         private val _state = MutableStateFlow<BusinessLegalUiState>(BusinessLegalUiState.Loading)
         val state: StateFlow<BusinessLegalUiState> = _state.asStateFlow()
@@ -347,26 +349,37 @@ class BusinessLegalViewModel
             type: BusinessEvidenceType,
             file: PickedEvidenceFile,
         ) {
+            if (_action.value == BusinessLegalAction.Uploading) return
+            _action.value = BusinessLegalAction.Uploading
             viewModelScope.launch {
-                _action.value = BusinessLegalAction.Uploading
-                val upload =
-                    filesRepository.uploadFile(
-                        filename = file.filename,
-                        mimeType = file.mimeType,
-                        bytes = file.bytes,
-                        fileType = "business_verification",
-                        visibility = "private",
+                val draft =
+                    listOf(
+                        type.raw, file.filename, file.mimeType,
+                        MessageDigest.getInstance("SHA-256").digest(file.bytes).joinToString("") { "%02x".format(it) },
                     )
-                val fileId =
-                    when (upload) {
-                        is NetworkResult.Success -> upload.data.file.id
+                if (pendingEvidence?.first != draft) pendingEvidence = null
+                if (pendingEvidence == null) {
+                    when (
+                        val upload =
+                            filesRepository.uploadFile(
+                                filename = file.filename,
+                                mimeType = file.mimeType,
+                                bytes = file.bytes,
+                                fileType = "business_verification",
+                                visibility = "private",
+                            )
+                    ) {
+                        is NetworkResult.Success -> pendingEvidence = draft to upload.data.file.id
                         is NetworkResult.Failure -> {
                             _action.value = BusinessLegalAction.Failed(upload.error.message)
                             return@launch
                         }
                     }
+                }
+                val fileId = pendingEvidence?.second ?: return@launch
                 when (val result = repository.uploadVerificationEvidence(businessId, type.raw, fileId)) {
                     is NetworkResult.Success -> {
+                        pendingEvidence = null
                         _action.value = BusinessLegalAction.Succeeded("Document submitted for review.")
                         fetch()
                     }
@@ -385,6 +398,7 @@ class BusinessLegalViewModel
          * outlive the surface that needed them.
          */
         fun clearSensitive() {
+            pendingEvidence = null
             _legalName.value = ""
             _taxIdLast4.value = ""
             _supportEmail.value = ""
