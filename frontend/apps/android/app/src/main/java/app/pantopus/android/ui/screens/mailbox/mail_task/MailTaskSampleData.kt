@@ -124,7 +124,7 @@ object MailTaskSampleData {
                     due = "Due in 3 days",
                     from = "From your Counter",
                 ),
-            hasDockShortcuts = true,
+            hasUnbuiltActions = true,
             isDone = done,
         )
 

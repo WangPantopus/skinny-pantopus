@@ -36,7 +36,7 @@ public enum MailTaskSampleData {
             elfDone: elfDone,
             completion: completion,
             nextUp: nextUp,
-            hasDockShortcuts: true,
+            hasUnbuiltActions: true,
             isDone: done
         )
     }
