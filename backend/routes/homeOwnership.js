@@ -836,6 +836,27 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
 
     const method = fast_track ? 'vouch' : 'invite';
 
+    // A repeat of this invitation (a re-sent request or a second tap) gets the claim it already opened, not a second
+    // active claim for the same person.
+    const { data: openInvite, error: openInviteError } = await supabaseAdmin
+      .from('HomeOwnershipClaim')
+      .select('id')
+      .eq('home_id', homeId)
+      .eq('claimant_user_id', targetUserId)
+      .eq('claim_type', 'owner')
+      .eq('method', method)
+      .in('state', ['draft', 'submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (openInviteError) throw openInviteError;
+    if (openInvite) {
+      return res.status(200).json({
+        message: 'Co-owner invitation sent. They will need to verify ownership.',
+        claim_id: openInvite.id,
+      });
+    }
+
     const { data: claim, error } = await supabaseAdmin
       .from('HomeOwnershipClaim')
       .insert({
