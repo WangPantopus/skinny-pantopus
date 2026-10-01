@@ -978,21 +978,10 @@ router.get('/discovery', verifyToken, async (req, res) => {
       }
 
       case 'posts': {
-        const { data: posts } = await supabaseAdmin
-          .from('Post')
-          .select('id, post_type, content, author_id, created_at, title')
-          .order('created_at', { ascending: false })
-          .limit(parsedLimit);
-
-        items = (posts || []).map((p) => ({
-          id: p.id,
-          type: 'post',
-          title: p.title || (p.content || '').slice(0, 60) + ((p.content || '').length > 60 ? '...' : ''),
-          meta: p.post_type ? p.post_type.replace(/_/g, ' ') : 'Post',
-          category: p.post_type ? p.post_type.replace(/_/g, ' ') : 'Post',
-          createdAt: p.created_at,
-          route: `/posts/${p.id}`,
-        }));
+        // Posts live in Pulse, which applies the viewer's area and each post's visibility;
+        // every client's Posts tab points there. This lane has no such rules, so it lists
+        // nothing rather than the newest posts of everyone.
+        items = [];
         break;
       }
 

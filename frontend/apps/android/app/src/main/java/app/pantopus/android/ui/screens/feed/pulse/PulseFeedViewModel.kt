@@ -996,6 +996,7 @@ class PulseFeedViewModel
                 meta = metaString(post),
                 intent = intent,
                 chipLabel = intent.chipLabelFor(post.lostFoundType),
+                isVisitor = post.isVisitorPost,
                 title = if (intent == PulseIntent.Event) post.title else null,
                 body = post.content.orEmpty(),
                 reactions =
@@ -1051,11 +1052,13 @@ class PulseFeedViewModel
             return post.userId == viewer || post.creator?.id == viewer
         }
 
-        private fun metaString(post: FeedPost): String {
-            val relative = relativeTimestamp(post.createdAt)
-            val locality = post.locationName?.takeIf { it.isNotEmpty() }
-            return if (locality != null) "$relative · $locality" else relative
-        }
+        private fun metaString(post: FeedPost): String =
+            listOfNotNull(
+                relativeTimestamp(post.createdAt),
+                // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
+                "Visitor".takeIf { post.isVisitorPost },
+                post.locationName?.takeIf { it.isNotEmpty() },
+            ).joinToString(" · ")
 
         private fun relativeTimestamp(iso: String): String =
             runCatching {
