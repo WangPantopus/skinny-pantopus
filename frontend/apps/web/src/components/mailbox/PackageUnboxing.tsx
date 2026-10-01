@@ -5,6 +5,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Camera, Save, FolderOpen, Handshake } from 'lucide-react';
 import { formatTimestamp } from '@pantopus/ui-utils';
 import type { VaultFolder } from '@/types/mailbox';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type PackageUnboxingProps = {
   itemId: string;
@@ -217,7 +218,8 @@ export default function PackageUnboxing({
       )}
 
       {/* ── Need help section ───────────────────────────────── */}
-      <div className="px-4 py-3">
+      {/* Launch cut #4 (Open Gigs): "Ask a neighbor" posts an open task. */}
+      {launchFeatures.openGigs && <div className="px-4 py-3">
         <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-2.5">
           Need Help?
         </p>
@@ -234,7 +236,7 @@ export default function PackageUnboxing({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

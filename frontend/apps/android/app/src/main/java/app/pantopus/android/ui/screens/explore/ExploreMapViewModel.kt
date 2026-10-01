@@ -279,7 +279,8 @@ class ExploreMapViewModel
         private fun filtered(): List<ExploreEntity> =
             allEntities.filter { entity ->
                 val kind = _activeKind.value
-                (kind == null || entity.kind == kind) && _filters.value.matches(entity)
+                // Launch cut: kinds hidden for the first launch never reach the map or the rail.
+                entity.kind.isLaunchAvailable && (kind == null || entity.kind == kind) && _filters.value.matches(entity)
             }
 
         private fun sortFor(source: List<ExploreEntity>): List<ExploreEntity> =

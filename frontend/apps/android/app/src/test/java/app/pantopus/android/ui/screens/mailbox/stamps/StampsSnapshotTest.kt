@@ -9,8 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,6 +34,17 @@ class StampsSnapshotTest {
                     softButtons = false,
                 ),
         )
+
+    // The dock's "Send mail" is a launch-cut (#8, mail extras) chip; the goldens show every feature on.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
 
     @Test
     fun stamps_populated() {

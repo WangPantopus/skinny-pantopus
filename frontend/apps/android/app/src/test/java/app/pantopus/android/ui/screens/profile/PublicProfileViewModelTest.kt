@@ -3,6 +3,8 @@
 package app.pantopus.android.ui.screens.profile
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
@@ -65,6 +67,8 @@ class PublicProfileViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides the persona chip and the Gigs count; these tests pin them.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Local-kind profiles pull `GET /api/posts/user/:id`; default the
         // stub to an empty feed and let individual tests override it.
         coEvery { posts.userPosts(any(), any()) } returns
@@ -73,6 +77,7 @@ class PublicProfileViewModelTest {
 
     @After fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeVm(): PublicProfileViewModel =

@@ -12,6 +12,17 @@ import XCTest
 
 @MainActor
 final class ExploreMapViewModelTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // Task, item and spot pins: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     private func loaded(_ vm: ExploreMapViewModel) -> ExploreMapLoaded? {
         if case let .loaded(loaded) = vm.state { return loaded }
         return nil

@@ -27,6 +27,7 @@ import HomeHeader from '@/components/home/HomeHeader';
 import TodayCard from '@/components/home/TodayCard';
 import UnifiedFAB from '@/components/UnifiedFAB';
 import { QuickCreateIcons } from '@/lib/icons';
+import { launchFeatures } from '@/lib/featureFlags';
 import VerificationCenter from '@/components/home/VerificationCenter';
 import VendorsTab from '@/components/home/VendorsTab';
 import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
@@ -598,10 +599,12 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
           contextActions={[
             ...(can('tasks.edit') || can('tasks.manage') ? [{ key: 'add-task', icon: QuickCreateIcons.task, label: 'Add Task', iconColor: 'text-emerald-600', onAction: () => openTaskPanel() }] : []),
             ...(can('maintenance.edit') || can('maintenance.manage') ? [{ key: 'report-issue', icon: QuickCreateIcons.issue, label: 'Report Issue', iconColor: 'text-amber-600', onAction: () => openIssuePanel() }] : []),
-            ...(can('finance.manage') ? [{ key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() }] : []),
-            ...(can('packages.edit') || can('packages.manage') ? [{ key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() }] : []),
+            // Launch cut #7 (Household extras): Track Bill / Track Package are hidden.
+            ...(launchFeatures.householdExtras && can('finance.manage') ? [{ key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() }] : []),
+            ...(launchFeatures.householdExtras && (can('packages.edit') || can('packages.manage')) ? [{ key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() }] : []),
             ...(can('members.manage') ? [{ key: 'invite-member', icon: QuickCreateIcons.member, label: 'Invite Member', iconColor: 'text-orange-600', onAction: openInviteModal }] : []),
-            { key: 'post-home-task', icon: QuickCreateIcons.gig, label: 'Post Home Task', iconColor: 'text-primary-600', onAction: () => router.push(`/app/gigs/new?home_id=${homeId}`) },
+            // Launch cut #4 (Open Gigs): "Post Home Task" (open posting) is hidden.
+            ...(launchFeatures.openGigs ? [{ key: 'post-home-task', icon: QuickCreateIcons.gig, label: 'Post Home Task', iconColor: 'text-primary-600', onAction: () => router.push(`/app/gigs/new?home_id=${homeId}`) }] : []),
           ]}
         />
       )}
@@ -630,7 +633,7 @@ function DashboardTab({
   secrets,
   emergencies,
   can,
-  expandedCard,
+  expandedCard: requestedCard,
   onExpandCard,
   onAddTask,
   onTaskClick,
@@ -704,6 +707,12 @@ function DashboardTab({
 }) {
   const router = useRouter();
   const onBack = () => onExpandCard(null);
+  // Launch cut #7 (Household extras): bills, calendar, packages, pets and
+  // polls are hidden, so their cards (and ?tab=bills|packages) show the overview.
+  // Launch cut #4 (Open Gigs): the same for Home Help (posting the Home's tasks for bids).
+  const expandedCard = (!launchFeatures.householdExtras && ['bills', 'calendar', 'deliveries', 'pets', 'polls'].includes(requestedCard ?? ''))
+    || (!launchFeatures.openGigs && requestedCard === 'homehelp')
+    ? null : requestedCard;
 
   const cardPermissions: Record<string, string> = {
     tasks: 'tasks.view', bills: 'finance.view', calendar: 'calendar.view', deliveries: 'packages.view',
@@ -854,12 +863,16 @@ function DashboardTab({
         {intelligence.canReadHealth && <HomeSummaryBoundary title="Home health" error={intelligence.errors.health} loading={intelligence.healthLoading} onRetry={() => void intelligence.reloadSummary('health')}>
           <div className="flex flex-col items-center">
             <HealthScoreRing score={intelligence.healthScore?.score ?? 0} topIssue={intelligence.healthScore?.topIssue ?? null}
-              topAction={intelligence.healthScore?.topAction ?? null} loading={intelligence.healthLoading}
+              // Launch cut #7 (Household extras): a top action that opens Bills is hidden.
+              topAction={launchFeatures.householdExtras || !/\/bills(?:$|[/?#])/.test(intelligence.healthScore?.topAction?.route ?? '') ? (intelligence.healthScore?.topAction ?? null) : null}
+              loading={intelligence.healthLoading}
               isNewHome={false} homeId={homeId}
               onActionPress={(route) => {
                 const prefix = `/homes/${homeId}/`;
                 const target = route.startsWith(prefix) ? route.slice(prefix.length) : '';
                 const tab = ({ maintenance: 'issues', bills: 'bills', emergency: 'emergency', members: 'members', documents: 'documents', dashboard: 'dashboard' } as Record<string, string>)[target];
+                // Launch cut #7 (Household extras): the Bills tab is hidden.
+                if (tab === 'bills' && !launchFeatures.householdExtras) return;
                 if (tab) router.push(`/app/homes/${homeId}/dashboard?tab=${tab}`);
               }} />
           </div>
@@ -882,7 +895,8 @@ function DashboardTab({
         </HomeSummaryBoundary>
         {intelligence.canReadBills && <HomeSummaryBoundary title="Bill trends" error={intelligence.errors.bills} loading={intelligence.billTrendsLoading} onRetry={() => void intelligence.reloadSummary('bills')}>
           <BillTrendChart data={intelligence.billTrends} selectedType={selectedBillType} onTypeChange={onBillTypeChange}
-            loading={intelligence.billTrendsLoading} onAddBill={can('finance.manage') ? onAddBill : undefined}
+            // Launch cut #7 (Household extras): no "Add a bill"; the benchmark opt-in stays.
+            loading={intelligence.billTrendsLoading} onAddBill={launchFeatures.householdExtras && can('finance.manage') ? onAddBill : undefined}
             savingPreference={intelligence.benchmarkBusy} onCurrencyChange={intelligence.setBillCurrency} onOptInChange={can('home.edit') ? (optedIn) => void intelligence.setBillBenchmarkOptIn(optedIn) : undefined} />
         </HomeSummaryBoundary>}
       </div>
@@ -904,18 +918,20 @@ function DashboardTab({
           )}
 
           {/* Shown whenever the member can view the Home, so "No tasks posted" and the card's
-              "Post Home Help Task" stay reachable when nothing is posted yet. */}
-          {can('home.view') && (
+              "Post Home Help Task" stay reachable when nothing is posted yet.
+              Launch cut #4 (Open Gigs): hidden, since posting the Home's tasks for bids is. */}
+          {launchFeatures.openGigs && can('home.view') && (
             <HomeSummaryBoundary title="Home help" error={entityErrors.homeGigs || entityErrors.nearbyGigs || null} loading={false} onRetry={onReloadData}><HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} /></HomeSummaryBoundary>
           )}
 
-          {can('finance.view') && (
+          {/* Launch cut #7 (Household extras): Bills, Calendar, Packages, Pets and Polls are hidden. */}
+          {launchFeatures.householdExtras && can('finance.view') && (
             <BillsBudgetCardPreview bills={bills} billsDueCount={billsDueCount} onExpand={() => onExpandCard('bills')} />
           )}
 
-          {can('calendar.view') && <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />}
+          {launchFeatures.householdExtras && can('calendar.view') && <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />}
 
-          {can('packages.view') && (
+          {launchFeatures.householdExtras && can('packages.view') && (
             <DeliveriesCardPreview packages={packages} pendingPkgs={pendingPkgs} onExpand={() => onExpandCard('deliveries')} />
           )}
 
@@ -933,9 +949,9 @@ function DashboardTab({
 
           {can('sensitive.view') && <HomeSummaryBoundary title="Emergency information" error={entityErrors.emergencies || null} loading={false} onRetry={onReloadData}><EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} /></HomeSummaryBoundary>}
 
-          <HomeSummaryBoundary title="Pets" error={entityErrors.pets || null} loading={false} onRetry={onReloadData}><PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} /></HomeSummaryBoundary>
+          {launchFeatures.householdExtras && <HomeSummaryBoundary title="Pets" error={entityErrors.pets || null} loading={false} onRetry={onReloadData}><PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} /></HomeSummaryBoundary>}
 
-          <HomeSummaryBoundary title="Polls" error={entityErrors.polls || null} loading={false} onRetry={onReloadData}><PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} /></HomeSummaryBoundary>
+          {launchFeatures.householdExtras && <HomeSummaryBoundary title="Polls" error={entityErrors.polls || null} loading={false} onRetry={onReloadData}><PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} /></HomeSummaryBoundary>}
         </div>
       ) : (
         <div className="bg-surface rounded-xl border border-app p-8 text-center">
@@ -948,10 +964,11 @@ function DashboardTab({
             <ActionPill icon={<Building2 className="w-4 h-4" />} label="Property Details" onClick={() => router.push(`/app/homes/${homeId}/property-details`)} />
             {(can('tasks.edit') || can('tasks.manage')) && <ActionPill icon={<ClipboardList className="w-4 h-4" />} label="Add Task" onClick={onAddTask} />}
             {(can('maintenance.edit') || can('maintenance.manage')) && <ActionPill icon={<AlertTriangle className="w-4 h-4" />} label="Report Issue" onClick={onAddIssue} />}
-            {(can('finance.manage')) && <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />}
-            {(can('packages.edit') || can('packages.manage')) && <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />}
+            {/* Launch cuts #7 (Track Bill / Track Package) and #4 (Post Home Gig) are hidden. */}
+            {launchFeatures.householdExtras && (can('finance.manage')) && <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />}
+            {launchFeatures.householdExtras && (can('packages.edit') || can('packages.manage')) && <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />}
             {(can('members.manage')) && <ActionPill icon={<Users className="w-4 h-4" />} label="Invite Member" onClick={onInviteMember} />}
-            <ActionPill icon={<Hammer className="w-4 h-4" />} label="Post Home Gig" onClick={() => router.push(`/app/gigs/new?home_id=${homeId}`)} />
+            {launchFeatures.openGigs && <ActionPill icon={<Hammer className="w-4 h-4" />} label="Post Home Gig" onClick={() => router.push(`/app/gigs/new?home_id=${homeId}`)} />}
           </div>
         </div>
       )}

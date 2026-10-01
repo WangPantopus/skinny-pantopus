@@ -2,6 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { ClipboardList, Wrench, Wallet, Package, Users, CheckCircle, Calendar } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface TodayCardProps {
   activeTasks: number;
@@ -29,7 +30,9 @@ export default function TodayCard({
     day: 'numeric',
   });
 
-  const upcomingEvents = events
+  // Launch cut #7 (Household extras): the family calendar, bills and
+  // package tracking are hidden, so their summary rows are too.
+  const upcomingEvents = (launchFeatures.householdExtras ? events : [])
     .filter((e) => new Date(e.start_at) >= today)
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
     .slice(0, 3);
@@ -43,10 +46,10 @@ export default function TodayCard({
   if (openIssues > 0) {
     summaryItems.push({ icon: <Wrench className="w-5 h-5" />, label: 'Open issues', value: openIssues, accent: 'text-red-600', tab: 'maintenance' });
   }
-  if (billsDueCount > 0) {
+  if (launchFeatures.householdExtras && billsDueCount > 0) {
     summaryItems.push({ icon: <Wallet className="w-5 h-5" />, label: 'Bills due', value: billsDueCount, accent: 'text-amber-600', tab: 'bills' });
   }
-  if (pendingPkgs > 0) {
+  if (launchFeatures.householdExtras && pendingPkgs > 0) {
     summaryItems.push({ icon: <Package className="w-5 h-5" />, label: 'Pending packages', value: pendingPkgs, accent: 'text-purple-600', tab: 'deliveries' });
   }
 

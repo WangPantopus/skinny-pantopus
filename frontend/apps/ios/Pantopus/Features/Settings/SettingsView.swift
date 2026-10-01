@@ -217,7 +217,10 @@ public struct SettingsView: View {
     private static func stackRoute(for route: SettingsRoute) -> SettingsStackRoute? {
         switch route {
         case .notifications: .notifications
-        case .privacy: .identityCenter // Profiles & Privacy is the unified destination.
+        // Profiles & Privacy is the unified destination. Launch cut #2
+        // (Personas): the Identity Center is hidden, so the row opens the
+        // privacy settings themselves (Blocked users keeps its own row).
+        case .privacy: LaunchFeatures.personas ? SettingsStackRoute.identityCenter : SettingsStackRoute.privacy
         case .blocks: .blockedUsers
         case .password: .password
         case .securityDevices: .securityDevices

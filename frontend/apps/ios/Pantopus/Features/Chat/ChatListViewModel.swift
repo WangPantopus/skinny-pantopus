@@ -364,7 +364,9 @@ public final class ChatListViewModel {
             unread: unread,
             pinned: false,
             topicKinds: Set(dto.topicKinds),
-            topics: dto.topics.map {
+            // Launch cut #3 (Marketplace): no listing topic pills; the
+            // direct-message thread itself stays.
+            topics: dto.topics.filter { LaunchFeatures.marketplace || !["listing", "marketplace"].contains($0.topicType) }.map {
                 ConversationRowTopic(id: $0.id, title: $0.title, topicType: $0.topicType)
             },
             gigId: dto.gigId,

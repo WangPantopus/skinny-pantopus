@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.mailbox.mailbox_map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.v2.MapPinDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -112,7 +113,7 @@ class MailboxMapViewModel
             viewModelScope.launch {
                 when (val result = repo.mapPins()) {
                     is NetworkResult.Success -> {
-                        val spots = result.data.pins.map { it.toSpot() }
+                        val spots = result.data.pins.filter { isLaunchVisiblePin(it.pinType) }.map { it.toSpot() }
                         workingSpots = spots
                         _state.value = MailboxMapUiState.Populated(filtered(spots))
                     }
@@ -175,6 +176,17 @@ class MailboxMapViewModel
 private const val PIN_FRACTION_MIN = 0.15f
 private const val PIN_FRACTION_SPAN = 70
 private const val PIN_FRACTION_DENOM = 100f
+
+/**
+ * Launch cuts: community pins come from the community mail stream (#8 Mail extras) and
+ * delivery pins from package tracking (#7 Household extras); both are hidden for the first launch.
+ */
+private fun isLaunchVisiblePin(pinType: String?): Boolean =
+    when (pinType) {
+        "community" -> LaunchFeatures.mailExtras
+        "delivery" -> LaunchFeatures.householdExtras
+        else -> true
+    }
 
 /** Best-effort `pin_type` → venue kind. Only `civic` overlaps cleanly. */
 private fun spotKindFor(pinType: String?): MailboxSpotKind =

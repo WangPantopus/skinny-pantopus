@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { IdentityIcons } from '@/lib/icons';
 import { Check, ChevronDown, Shield } from 'lucide-react';
 import type { MySeat } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type HomeOption = {
   id: string;
@@ -274,7 +275,8 @@ export default function ProfileToggle({
             </button>
 
             {/* Professional */}
-            <button
+            {/* Launch cuts #2 + #4: switching to the Professional profile is hidden. */}
+            {launchFeatures.personas && launchFeatures.openGigs && <button
               onClick={() => {
                 onSwitch?.(null);
                 setOpen(false);
@@ -298,7 +300,7 @@ export default function ProfileToggle({
               {isProfessionalMode && (
                 <Check className="w-4 h-4 text-amber-600" />
               )}
-            </button>
+            </button>}
 
             {/* Divider + Homes header */}
             {homes.length > 0 && (

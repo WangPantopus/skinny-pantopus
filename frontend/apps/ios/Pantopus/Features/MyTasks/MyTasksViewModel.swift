@@ -88,6 +88,8 @@ public enum MyTasksStatus: Sendable, Hashable {
 
     public var label: String {
         switch self {
+        // Launch cut #4 (Open gigs): bids are hidden, so an open task just reads "Open".
+        case .reviewing where !LaunchFeatures.openGigs, .noBids where !LaunchFeatures.openGigs: "Open"
         case .reviewing: "Reviewing bids"
         case let .urgent(hours): "Closes in \(hours)h"
         case .noBids: "No bids yet"
@@ -316,7 +318,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     }
 
     public var fab: FABAction? {
-        guard canDisplay else { return nil }
+        // Launch cut #4 (Open gigs): posting an open task is hidden.
+        guard canDisplay, LaunchFeatures.openGigs else { return nil }
         let generation = screenGeneration
         // T6.0b — Magic Task FAB. 60pt gradient (primary600 → primary700)
         // with a sparkles disc clipped over the top-right corner.
@@ -396,7 +399,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     }
 
     public var banner: BannerConfig? {
-        guard canDisplay else { return nil }
+        // Launch cut #4 (Open gigs): the open-tab banner summarises bids.
+        guard canDisplay, LaunchFeatures.openGigs else { return nil }
         guard selectedTab == MyTasksTab.open else { return nil }
         guard counts.openTotal > 0 else { return nil }
         let title: String
@@ -673,6 +677,15 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     private func emptyContent(for tab: String) -> ListOfRowsState.EmptyContent {
         let generation = screenGeneration
         return switch tab {
+        // Launch cut #4 (Open gigs): no Magic Task (open task posting) CTA.
+        case MyTasksTab.open where !LaunchFeatures.openGigs:
+            ListOfRowsState.EmptyContent(
+                icon: .clipboardList,
+                headline: "No open tasks",
+                subcopy: "Tasks you've posted that are waiting for a helper will show up here.",
+                ctaTitle: nil,
+                onCTA: nil
+            )
         case MyTasksTab.open:
             // T6.0b — Magic Task primary CTA. The shell's EmptyState
             // renders the headline + body + single primary button; the
@@ -864,6 +877,17 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     /// Footer archetype for a row.
     public static func footerFor(status: MyTasksStatus, bidCount: Int) -> MyTasksFooter {
+        let footer = designFooter(status: status, bidCount: bidCount)
+        guard !LaunchFeatures.openGigs else { return footer }
+        // Launch cut #4 (Open gigs): reviewing bids, editing / extending /
+        // boosting an open task and reposting it are hidden; lifecycle stays.
+        switch footer {
+        case .open, .urgent, .boost, .repost: return .none
+        default: return footer
+        }
+    }
+
+    private static func designFooter(status: MyTasksStatus, bidCount: Int) -> MyTasksFooter {
         switch status {
         case .reviewing: .open(bidCount: bidCount)
         case .urgent: .urgent(bidCount: bidCount)
@@ -981,6 +1005,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     }
 
     public static func bidderStack(for dto: MyGigDTO) -> BidderStackData? {
+        // Launch cut #4 (Open gigs): no bidder avatars.
+        guard LaunchFeatures.openGigs else { return nil }
         let topBidders = dto.topBidders ?? []
         let bidCount = dto.bidCount ?? 0
         if topBidders.isEmpty { return nil }
@@ -1021,7 +1047,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         if let posted = formatRelativeTime(dto.createdAt, now: now) {
             parts.append("Posted \(posted)")
         }
-        let bidCount = dto.bidCount ?? 0
+        // Launch cut #4 (Open gigs): no bid count or bid range.
+        let bidCount = LaunchFeatures.openGigs ? (dto.bidCount ?? 0) : 0
         if bidCount > 0 {
             parts.append("\(bidCount) \(bidCount == 1 ? "bid" : "bids")")
             if let range = formatBidRange(top: dto.topBidAmount, ask: dto.price) {

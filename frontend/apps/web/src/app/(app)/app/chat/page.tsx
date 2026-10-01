@@ -15,6 +15,7 @@ import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
 import { useBadges } from '@/contexts/BadgeContext';
 import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, User } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type IncomingChatMessage = {
   room_id?: string;
@@ -361,7 +362,9 @@ export default function ChatListPage() {
             <div className="mb-3 flex justify-center"><MessageCircle className="w-10 h-10 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No messages yet</div>
             <div className="text-sm text-app-text-secondary mt-1">
-              Messages will appear here when you chat about tasks, listings, or anything else.
+              {launchFeatures.marketplace
+                ? 'Messages will appear here when you chat about tasks, listings, or anything else.'
+                : 'Messages will appear here when you chat about tasks or anything else.'}
             </div>
           </div>
         ) : filteredConversations.length === 0 ? (
@@ -386,7 +389,8 @@ export default function ChatListPage() {
                     <span className="font-semibold text-sm text-app">Pantopus Assistant</span>
                     <span className="px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">AI</span>
                   </div>
-                  <p className="text-xs text-app-text-secondary truncate mt-0.5">Draft gigs, listings, posts &amp; more with AI</p>
+                  {/* Launch cuts #3/#4: the copy names only drafts still offered. */}
+                  <p className="text-xs text-app-text-secondary truncate mt-0.5">{launchFeatures.openGigs && launchFeatures.marketplace ? 'Draft gigs, listings, posts & more with AI' : `Draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')} & more with AI`}</p>
                 </div>
               </div>
             </button>
@@ -418,7 +422,8 @@ export default function ChatListPage() {
                   const timeStr = conv.last_message_at ? formatTimeAgo(conv.last_message_at, 'full') : '';
                   const unread = conv.total_unread || 0;
                   // messageCount removed — per-room count queries were an N+1 bottleneck
-                  const topics: ConversationTopic[] = conv.topics || [];
+                  // Launch cut #3 (Marketplace): listing topic chips are not shown.
+                  const topics: ConversationTopic[] = (conv.topics || []).filter((t: ConversationTopic) => launchFeatures.marketplace || t.topic_type !== 'listing');
                   const initials = getInitials(title);
 
                   return (

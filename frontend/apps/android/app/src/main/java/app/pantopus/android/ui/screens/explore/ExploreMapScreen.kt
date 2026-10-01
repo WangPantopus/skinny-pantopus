@@ -722,7 +722,8 @@ private fun ExploreTypeToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ExploreTypeSegment(kind = null, label = "All", active = active == null, onSelect = onSelect)
-        ExploreKind.entries.forEach { kind ->
+        // Launch cut: no segment for a kind hidden for the first launch.
+        ExploreKind.entries.filter { it.isLaunchAvailable }.forEach { kind ->
             ExploreTypeSegment(kind = kind, label = kind.pluralLabel, active = active == kind, onSelect = onSelect)
         }
     }

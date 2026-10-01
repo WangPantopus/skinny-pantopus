@@ -98,6 +98,12 @@ class NotificationDispatcher
          */
         fun dispatch(message: RemoteMessage) {
             val routing = route(message.data, message.notification?.title, message.notification?.body)
+            // Launch cut (2026-09-27): no system notification for a feature
+            // hidden for the first launch (bids, listings, Beacon, bookings…).
+            if (!DeepLinkRouter.isLaunchAvailable(message.data["type"], routing.deepLink)) {
+                Timber.d("Push suppressed — its feature is hidden for the first launch")
+                return
+            }
             // The backend's chat push (`backend/routes/chats.js:1834`) is
             // data-only with `{ type: "chat_message", room_id, link }`, so
             // this fires in the foreground too — skip the system post when

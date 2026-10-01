@@ -22,6 +22,29 @@ const prompts = require('./prompts');
 const schemas = require('./schemas');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
+
+// Launch cuts #3 (Marketplace) and #4 (Open Gigs): while they are hidden, the
+// chat assistant neither offers nor drafts listings or open tasks (their
+// drafts would lead to hidden composers). The drafting code itself stays.
+function launchScopedChatTools() {
+  return toolDefinitions.filter((tool) => {
+    if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
+    if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
+    return true;
+  });
+}
+
+function launchScopedChatInstructions() {
+  const hidden = [];
+  if (!isLaunchFeatureEnabled('open_gigs')) hidden.push('posting tasks (gigs) for neighbors to bid on');
+  if (!isLaunchFeatureEnabled('marketplace')) hidden.push('marketplace listings (selling, giving away, renting or wanted items)');
+  if (!hidden.length) return prompts.CHAT_AGENT_SYSTEM;
+  return `${prompts.CHAT_AGENT_SYSTEM}
+
+## Not available right now
+These parts of Pantopus are not available yet: ${hidden.join('; ')}. Don't offer, suggest or draft them. If the user asks for one, say briefly that it isn't available in the app yet and help another way, for example with a community post.`;
+}
 
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
 const DRAFT_MODEL = process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini';
@@ -164,9 +187,9 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
 
     const baseParams = {
       model: CHAT_MODEL,
-      instructions: prompts.CHAT_AGENT_SYSTEM,
+      instructions: launchScopedChatInstructions(),
       input,
-      tools: toolDefinitions,
+      tools: launchScopedChatTools(),
       stream: true,
       ...(conversation.response_id ? { previous_response_id: conversation.response_id } : {}),
     };
@@ -216,9 +239,9 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
 
       const params = round === 1 ? baseParams : {
         model: CHAT_MODEL,
-        instructions: prompts.CHAT_AGENT_SYSTEM,
+        instructions: baseParams.instructions,
         input: baseParams.input,
-        tools: toolDefinitions,
+        tools: baseParams.tools,
         stream: true,
         ...(currentResponseId ? { previous_response_id: currentResponseId } : {}),
       };

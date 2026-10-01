@@ -68,6 +68,12 @@ public enum LocalProfileTab: String, Sendable, Equatable, Hashable, CaseIterable
         case .reviews: "Reviews"
         }
     }
+
+    /// First-launch scope: the tabs shown. The Gigs tab is launch cut #4
+    /// (Open gigs).
+    public static var launchCases: [LocalProfileTab] {
+        allCases.filter { $0 != .gigs || LaunchFeatures.openGigs }
+    }
 }
 
 /// One post rendered beneath the stats/tabs body. Persona profiles
@@ -815,7 +821,8 @@ public final class PublicProfileViewModel {
             isVerified: false,
             identityBadges: buildBadges(profile),
             // No server field verifies a persona, so the chip names the kind only.
-            tierLabel: kind == .persona ? "Persona" : nil,
+            // Launch cuts #1 + #2: no "Persona" chip while personas are hidden.
+            tierLabel: kind == .persona && LaunchFeatures.beacon && LaunchFeatures.personas ? "Persona" : nil,
             isVerifiedNeighbor: kind == .local
         )
 

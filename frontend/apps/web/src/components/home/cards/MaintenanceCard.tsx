@@ -9,6 +9,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 import { failureMessage } from '../share/shareFailure';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type SubTab = 'active' | 'suggested' | 'scheduled' | 'history' | 'providers';
 
@@ -190,12 +191,13 @@ export default function MaintenanceCard({
                   {s.season}
                 </span>
               </div>
-              <button
+              {/* Launch cut #4 (Open Gigs): "Hire Help" / "Hire" open the open-post composer. */}
+              {launchFeatures.openGigs && <button
                 onClick={() => router.push(`/app/gigs/new?home_id=${homeId}&title=${encodeURIComponent(s.title)}`)}
                 className="text-[10px] font-medium px-2 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition flex-shrink-0"
               >
                 Hire Help
-              </button>
+              </button>}
             </div>
           ))}
         </div>
@@ -283,12 +285,12 @@ export default function MaintenanceCard({
                     {v.rating && <span className="text-[10px] text-yellow-500">{'★'.repeat(v.rating)}</span>}
                   </div>
                 </div>
-                <button
+                {launchFeatures.openGigs && <button
                   onClick={() => router.push(`/app/gigs/new?home_id=${homeId}&vendor=${encodeURIComponent(v.name)}`)}
                   className="text-[10px] font-medium px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition flex-shrink-0"
                 >
                   Hire
-                </button>
+                </button>}
               </div>
             ))
           )}

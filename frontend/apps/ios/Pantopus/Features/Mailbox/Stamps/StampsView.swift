@@ -410,7 +410,10 @@ private struct StampsDock: View {
             HStack(spacing: Spacing.s2) {
                 StampActionChip(icon: .arrowsRepeat, label: "Auto-refill")
                 StampActionChip(icon: .gift, label: "Gift")
-                StampActionChip(icon: .send, label: "Send mail")
+                // Launch cut #8 (Mail extras): sending letters is hidden.
+                if LaunchFeatures.mailExtras {
+                    StampActionChip(icon: .send, label: "Send mail")
+                }
                 StampActionChip(icon: .archive, label: "Archive")
             }
         }

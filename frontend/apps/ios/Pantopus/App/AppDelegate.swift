@@ -127,6 +127,15 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             if isViewingThread { return [] }
         }
+        // First-launch scope: a push for a feature hidden for the first
+        // launch shows no banner while the app is open (its tap would land nowhere).
+        let link = HomeTaskNotificationRoute.pushPath(userInfo)
+            ?? (userInfo["link"] as? String)
+            ?? (userInfo["deepLink"] as? String)
+        let launchAvailable = await MainActor.run {
+            DeepLinkRouter.shared.isLaunchAvailable(notificationType: type, link: link)
+        }
+        if !launchAvailable { return [] }
         return [.banner, .list, .sound, .badge]
     }
 

@@ -246,8 +246,19 @@ final class HomeDashboardViewModel {
         visible && isCurrent && accessUnexpired && access?.can(permission) == true
     }
 
+    /// Launch cut #7 (Household extras): the dashboard actions that open bills,
+    /// packages, pets, polls or the home calendar.
+    private static let householdExtrasActions: Set<String> = [
+        "track_bill", "track_package", "log_package", "add_pet", "create_poll", "view_bills", "view_polls", "pets",
+        "calendar", "view_packages"
+    ]
+
     func canPerform(_ action: String) -> Bool {
         guard visible, isCurrent, accessUnexpired else { return false }
+        // Launch cuts #7 (Household extras) / #8 (Mail extras): bills,
+        // packages, pets, polls and the calendar; "Send Mail" writes a letter.
+        if Self.householdExtrasActions.contains(action), !LaunchFeatures.householdExtras { return false }
+        if action == "send_mail", !LaunchFeatures.mailExtras { return false }
         if action == "add_task" { return canCreateTask }
         let permissions = [
             "track_bill": "finance.manage", "track_package": "packages.edit", "log_package": "packages.edit",
@@ -679,6 +690,8 @@ final class HomeDashboardViewModel {
             verified: verified,
             isVerifiedOwner: isVerifiedOwner,
             stats: HomeDashboardProjection.stats(counts: counts).filter {
+                // Launch cut #7 (Household extras): the Packages and Bills stats are hidden.
+                if $0.id != "tasks", !LaunchFeatures.householdExtras { return false }
                 let permission = ["packages": "packages.view", "bills": "finance.view", "tasks": "tasks.view"][$0.id]
                 return permission.map(can) ?? false
             },

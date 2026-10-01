@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.contentdetail
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -11,10 +12,21 @@ internal fun currentGigDetail(
     canDeliver: Boolean,
     canTip: Boolean,
 ): ContentDetailContent =
-    content.copy(
-        statusPill = currentGigStatus(gig, content.statusPill),
-        dock = currentGigDock(content.dock, gig, viewer, canDeliver, canTip),
+    launchScopedGigDetail(
+        content.copy(
+            statusPill = currentGigStatus(gig, content.statusPill),
+            dock = currentGigDock(content.dock, gig, viewer, canDeliver, canTip),
+        ),
     )
+
+/** Launch cut #4 (Open Gigs): a task's detail shows no bids, bid counts or "Be the first to bid". */
+private fun launchScopedGigDetail(content: ContentDetailContent): ContentDetailContent {
+    if (LaunchFeatures.openGigs) return content
+    return content.copy(
+        statusPill = content.statusPill?.let { pill -> if (pill.label.startsWith("Open · ")) pill.copy(label = "Open") else pill },
+        modules = content.modules.filterNot { it is ContentDetailModule.Bids || it.id == "be-first" },
+    )
+}
 
 private fun currentGigStatus(
     gig: GigDto,

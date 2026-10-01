@@ -46,6 +46,12 @@ public enum UniversalSearchTab: String, CaseIterable, Sendable, Hashable {
         case .homes: .home
         }
     }
+
+    /// First-launch scope: the tab chips shown (All plus every source still
+    /// searchable — see `UniversalSearchKind.isAvailableAtLaunch`).
+    public static var launchCases: [UniversalSearchTab] {
+        allCases.filter { $0.kind?.isAvailableAtLaunch ?? true }
+    }
 }
 
 /// One searchable entity kind. Ordering matches the section order RN
@@ -99,6 +105,18 @@ public enum UniversalSearchKind: String, CaseIterable, Sendable, Hashable {
         case .beacon: Theme.Color.magicBg
         case .business: Theme.Color.businessBg
         case .home: Theme.Color.homeBg
+        }
+    }
+
+    /// First-launch scope: Tasks (launch cut #4, Open gigs), Beacons (#1
+    /// Beacon + #2 Personas: results open persona pages) and Businesses (#6,
+    /// Business directory) are not searched; people and homes stay.
+    public var isAvailableAtLaunch: Bool {
+        switch self {
+        case .task: LaunchFeatures.openGigs
+        case .beacon: LaunchFeatures.beacon && LaunchFeatures.personas
+        case .business: LaunchFeatures.businessDirectory
+        case .person, .home: true
         }
     }
 

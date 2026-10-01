@@ -26,6 +26,16 @@ public final class NeighborhoodDoorStore {
         public var id: String {
             rawValue
         }
+
+        /// First-launch scope: Tasks (launch cut #4, Open gigs) and
+        /// Marketplace (launch cut #3) are hidden; Pulse stays.
+        public var isAvailableAtLaunch: Bool {
+            switch self {
+            case .pulse: true
+            case .tasks: LaunchFeatures.openGigs
+            case .marketplace: LaunchFeatures.marketplace
+            }
+        }
     }
 
     /// Set by the cross-tab dispatcher; consumed (nil-ed) by

@@ -3,14 +3,16 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, Users, Building2 } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type NearbyTab = 'gigs' | 'people' | 'businesses';
 
-const tabs: { key: NearbyTab; label: string; icon: ReactNode }[] = [
+const tabs: { key: NearbyTab; label: string; icon: ReactNode }[] = ([
   { key: 'gigs', label: 'Tasks', icon: <ClipboardList className="w-4 h-4" /> },
   { key: 'people', label: 'People', icon: <Users className="w-4 h-4" /> },
   { key: 'businesses', label: 'Businesses', icon: <Building2 className="w-4 h-4" /> },
-];
+// Launch cuts #4 (Tasks) and #6 (Businesses): their tabs are hidden; People stays.
+] satisfies { key: NearbyTab; label: string; icon: ReactNode }[]).filter(({ key }) => (key !== 'gigs' || launchFeatures.openGigs) && (key !== 'businesses' || launchFeatures.businessDirectory));
 
 const tabRoutes: Record<NearbyTab, string> = {
   gigs: '/app/gigs',
@@ -26,7 +28,7 @@ const tabDescriptions: Record<NearbyTab, string> = {
 
 export default function NearbyModule() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<NearbyTab>('gigs');
+  const [activeTab, setActiveTab] = useState<NearbyTab>(tabs[0]?.key ?? 'people');
 
   return (
     <div>

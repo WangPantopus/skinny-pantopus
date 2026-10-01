@@ -280,8 +280,11 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
                     id: "blocked",
                     header: "Blocked · \(visible.count)",
                     footer: (complete ? "" : "We couldn't load the complete list. Pull to refresh. ")
-                        + "Blocked people can't message you, see your profile, or bid on "
-                        + "your tasks. Unblocking doesn't notify them.",
+                        // Launch cut #4 (Open gigs): no bidding to block.
+                        + (LaunchFeatures.openGigs
+                            ? "Blocked people can't message you, see your profile, or bid on your tasks. "
+                            : "Blocked people can't message you or see your profile. ")
+                        + "Unblocking doesn't notify them.",
                     rows: rows,
                     style: .card
                 )

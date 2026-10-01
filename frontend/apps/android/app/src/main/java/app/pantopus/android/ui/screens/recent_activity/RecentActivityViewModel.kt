@@ -72,7 +72,9 @@ class RecentActivityViewModel
             }
         }
 
-        private fun apply(items: List<HubActivityItem>) {
+        private fun apply(activity: List<HubActivityItem>) {
+            // Launch cut (2026-09-27): activity from features hidden for the first launch is left out.
+            val items = activity.filter { DeepLinkRouter.isLaunchAvailable(it.notificationType, it.route) }
             if (items.isEmpty()) {
                 _state.value =
                     ListOfRowsUiState.Empty(

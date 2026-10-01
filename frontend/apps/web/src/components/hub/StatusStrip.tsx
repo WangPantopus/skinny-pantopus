@@ -7,6 +7,7 @@ import {
   Truck, FileText, Bell, MapPin, Check, Search, Zap, Handshake,
 } from 'lucide-react';
 import type { ActionItem } from './types';
+import { isLaunchCutPath, launchFeatures } from '@/lib/featureFlags';
 
 interface StatusStripProps {
   items: ActionItem[];
@@ -42,7 +43,9 @@ export default function StatusStrip({
 }: StatusStripProps) {
   const router = useRouter();
 
-  const pills: Pill[] = items.map((item) => ({
+  // Launch cuts: bill and package items (#7) and items opening a hidden page are left out.
+  const pills: Pill[] = items.filter((item) => !(item.route && isLaunchCutPath(item.route))
+    && (launchFeatures.householdExtras || (item.type !== 'bill_due' && item.type !== 'package_update'))).map((item) => ({
     id: item.id,
     icon: typeIcons[item.type] || <MapPin className="w-4 h-4" />,
     label: item.title + (item.subtitle ? ` · ${item.subtitle}` : ''),
@@ -55,7 +58,10 @@ export default function StatusStrip({
   if (pills.length === 0) {
     neutralPills.push({ id: 'n-caughtup', icon: <Check className="w-4 h-4" />, label: 'All caught up', route: '', severity: 'neutral' });
   }
-  neutralPills.push({ id: 'n-discover', icon: <Search className="w-4 h-4" />, label: 'Discover tasks near you', route: '/app/gigs', severity: 'neutral' });
+  // Launch cut #4 (Open Gigs): no task browsing.
+  if (launchFeatures.openGigs) {
+    neutralPills.push({ id: 'n-discover', icon: <Search className="w-4 h-4" />, label: 'Discover tasks near you', route: '/app/gigs', severity: 'neutral' });
+  }
   if (!setupDone) {
     neutralPills.push({ id: 'n-setup', icon: <Zap className="w-4 h-4" />, label: `Finish setup (${setupCompleted}/${setupTotal})`, route: '/app/profile/edit', severity: 'neutral' });
   }

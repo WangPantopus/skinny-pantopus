@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.ActionChip
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
@@ -266,8 +267,9 @@ fun HubSetupBanner(
                 style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )
+            // Launch cut #4 (Open Gigs): verification doesn't advertise gigs.
             Text(
-                "Unlock gigs + mail receiving.",
+                if (LaunchFeatures.openGigs) "Unlock gigs + mail receiving." else "Unlock mail receiving.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -393,8 +395,13 @@ fun HubFirstRunHero(
                 color = Color.White,
                 modifier = Modifier.width(220.dp).semantics { heading() },
             )
+            // Launch cut #4 (Open Gigs): no gigs to advertise.
             Text(
-                "Takes 4 minutes. Gets you mail, gigs, and neighbor features.",
+                if (LaunchFeatures.openGigs) {
+                    "Takes 4 minutes. Gets you mail, gigs, and neighbor features."
+                } else {
+                    "Takes 4 minutes. Gets you mail and neighbor features."
+                },
                 style = PantopusTextStyle.caption.copy(fontSize = 13.sp),
                 color = Color.White.copy(alpha = 0.82f),
                 modifier = Modifier.width(240.dp),
@@ -696,7 +703,8 @@ fun HubDiscoveryRail(
                 }
             }
         }
-        if (onFilterChange != null) {
+        // Launch cut: with Tasks (#4) and Businesses (#6) hidden, a lone tab is no choice.
+        if (onFilterChange != null && HubDiscoveryFilter.visibleTabs.size > 1) {
             DiscoveryFilterTabs(active = activeFilter, onSelect = onFilterChange)
         }
         when {

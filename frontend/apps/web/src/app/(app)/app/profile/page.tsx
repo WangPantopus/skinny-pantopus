@@ -11,6 +11,12 @@ import type { User, UserProfile, Listing, GigListItem } from '@pantopus/types';
 import { buildUserProfilePath } from '@pantopus/utils';
 import ResidencyHomeBlock from '@/components/profile/public/ResidencyHomeBlock';
 import ErrorState from '@/components/ui/ErrorState';
+import { launchFeatures } from '@/lib/featureFlags';
+
+// Launch cuts #4/#3: the stats row has one column per card still shown.
+const STATS_LG_COLS = ({ 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 5: 'lg:grid-cols-5' } as Record<number, string>)[
+  3 + Number(launchFeatures.openGigs) + Number(launchFeatures.marketplace)
+];
 
 export default function MyProfilePage() {
   const router = useRouter();
@@ -54,7 +60,8 @@ export default function MyProfilePage() {
         // Try to load my bids
         let activeBidsCount: number | null = 0;
         try {
-          const myBids = await api.gigs.getMyBids({ limit: 100 });
+          // Launch cut #4 (Open Gigs): bids are hidden, so they are not loaded.
+          const myBids = launchFeatures.openGigs ? await api.gigs.getMyBids({ limit: 100 }) : { bids: [] };
           console.log('✅ My bids loaded:', myBids);
           const bidsArray = myBids.bids || [];
           activeBidsCount = bidsArray.filter((b: { status?: string }) => b.status === 'pending').length;
@@ -82,7 +89,8 @@ export default function MyProfilePage() {
         // Load my listings
         let activeListingsCount: number | null = 0;
         try {
-          const listingsRes = await api.listings.getMyListings({ limit: 5 }) as Record<string, unknown>;
+          // Launch cut #3 (Marketplace): listings are hidden, so they are not loaded.
+          const listingsRes = (launchFeatures.marketplace ? await api.listings.getMyListings({ limit: 5 }) : {}) as Record<string, unknown>;
           const listingsArr = (listingsRes?.listings || []) as Listing[];
           const pagination = listingsRes?.pagination as Record<string, unknown> | undefined;
           activeListingsCount = (pagination?.total as number) ?? listingsArr.length;
@@ -287,7 +295,8 @@ export default function MyProfilePage() {
           {/* Right Column - Dashboard */}
           <div className="lg:col-span-2 space-y-6">
             {/* Stats Cards */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Launch cuts #4/#3: Active Bids and Listings are hidden; the row keeps one line. */}
+            <div className={`grid sm:grid-cols-2 ${STATS_LG_COLS} gap-4`}>
               <StatsCard
                 icon="📝"
                 label="Gigs Posted"
@@ -295,13 +304,13 @@ export default function MyProfilePage() {
                 color="blue"
                 onClick={() => router.push('/app/my-gigs')}
               />
-              <StatsCard
+              {launchFeatures.openGigs && <StatsCard
                 icon="💼"
                 label="Active Bids"
                 value={stats?.activeBids ?? '—'}
                 color="purple"
                 onClick={() => router.push('/app/my-bids')}
-              />
+              />}
               <StatsCard
                 icon="✅"
                 label="Completed"
@@ -309,13 +318,13 @@ export default function MyProfilePage() {
                 color="green"
                 onClick={() => router.push('/app/my-gigs')}
               />
-              <StatsCard
+              {launchFeatures.marketplace && <StatsCard
                 icon="🏷️"
                 label="Listings"
                 value={stats?.listings ?? '—'}
                 color="blue"
                 onClick={() => router.push('/app/my-listings')}
-              />
+              />}
               <StatsCard
                 icon="💰"
                 label="Earnings"
@@ -324,7 +333,7 @@ export default function MyProfilePage() {
                 onClick={() => router.push('/app/wallet')}
               />
             </div>
-            {stats && (stats.activeBids == null || stats.earnings == null || stats.listings == null) && (
+            {stats && ((launchFeatures.openGigs && stats.activeBids == null) || stats.earnings == null || (launchFeatures.marketplace && stats.listings == null)) && (
               <p role="alert" className="text-sm text-app-muted">
                 Some of these numbers couldn&apos;t load.{' '}
                 <button type="button" onClick={loadUserData} className="font-medium text-primary-600 hover:underline">
@@ -337,30 +346,31 @@ export default function MyProfilePage() {
             <div className="bg-surface rounded-xl border border-app p-6">
               <h3 className="text-lg font-semibold text-app mb-4">Quick Actions</h3>
               <div className="grid sm:grid-cols-2 gap-4">
-                <QuickActionCard
+                {/* Launch cuts #4 (Post a Task, My Bids) and #3 (My Listings) are hidden. */}
+                {launchFeatures.openGigs && <QuickActionCard
                   icon="➕"
                   title="Post a Task"
                   description="Create a new gig"
                   onClick={() => router.push('/app/gigs-v2/new')}
-                />
+                />}
                 <QuickActionCard
                   icon="💼"
                   title="My Tasks"
                   description="Manage your tasks"
                   onClick={() => router.push('/app/my-gigs')}
                 />
-                <QuickActionCard
+                {launchFeatures.marketplace && <QuickActionCard
                   icon="🏷️"
                   title="My Listings"
                   description="Manage your items"
                   onClick={() => router.push('/app/my-listings')}
-                />
-                <QuickActionCard
+                />}
+                {launchFeatures.openGigs && <QuickActionCard
                   icon="📊"
                   title="My Bids"
                   description="Track your offers"
                   onClick={() => router.push('/app/my-bids')}
-                />
+                />}
                 <QuickActionCard
                   icon="💬"
                   title="Messages"
@@ -371,7 +381,8 @@ export default function MyProfilePage() {
             </div>
 
             {/* My Listings */}
-            <div className="bg-surface rounded-xl border border-app p-6">
+            {/* Launch cut #3 (Marketplace): the My Listings section is hidden. */}
+            {launchFeatures.marketplace && <div className="bg-surface rounded-xl border border-app p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-app">My Listings</h3>
                 <button
@@ -424,7 +435,7 @@ export default function MyProfilePage() {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Recent Activity */}
             <div className="bg-surface rounded-xl border border-app p-6">
@@ -440,7 +451,10 @@ export default function MyProfilePage() {
                     />
                   ))
                 ) : (
-                  <p className="text-sm text-app-muted">No recent activity yet. Post a task or place a bid to get started!</p>
+                  <p className="text-sm text-app-muted">
+                    {/* Launch cut #4 (Open Gigs): no posting or bidding to suggest. */}
+                    {launchFeatures.openGigs ? 'No recent activity yet. Post a task or place a bid to get started!' : 'No recent activity yet.'}
+                  </p>
                 )}
               </div>
             </div>

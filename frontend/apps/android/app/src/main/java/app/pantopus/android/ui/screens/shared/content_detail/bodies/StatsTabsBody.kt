@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.IdentityPillar
@@ -290,6 +291,9 @@ private fun visibleTabs(profileUserId: String?): List<ProfileTab> =
         listOf(ProfileTab.About, ProfileTab.Reviews, ProfileTab.Gigs)
     } else {
         ProfileTab.entries
+    }.filter { tab ->
+        // Launch cut #4 (Open Gigs): no Gigs tab.
+        tab != ProfileTab.Gigs || LaunchFeatures.openGigs
     }
 
 @Composable

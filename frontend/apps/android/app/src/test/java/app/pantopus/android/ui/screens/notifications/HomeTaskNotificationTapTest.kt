@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.notifications
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.notifications.NotificationActionEcho
 import app.pantopus.android.data.api.models.notifications.NotificationDto
@@ -48,6 +50,8 @@ class HomeTaskNotificationTapTest {
         )
 
     @Before fun setup() {
+        // Audience rows are a launch-cut (Beacon + personas) surface; these tests cover every feature on.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         Dispatchers.setMain(UnconfinedTestDispatcher())
         DeepLinkRouter.bindSignedInUserIdProvider { identity.accounts.value }
         DeepLinkRouter.clearPending()
@@ -58,6 +62,7 @@ class HomeTaskNotificationTapTest {
         DeepLinkRouter.clearPending()
         DeepLinkRouter.bindSignedInUserIdProvider { null }
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun model(

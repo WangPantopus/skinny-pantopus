@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
@@ -84,11 +85,15 @@ fun MyTasksScreen(
             // server has no rebookable tasks, so it costs a new poster no
             // vertical space. Mirrors iOS MyTasksView's customHeader.
             customHeader = {
-                RebookRail(
-                    onRebook = { gig ->
-                        onRebook(GigsCategory.fromBackendKey(gig.category).key)
-                    },
-                )
+                // Launch cut #4 (Open Gigs): "Rebook" opens the open-task composer, the
+                // rail's only action, so the rail is hidden (and not fetched) at launch.
+                if (LaunchFeatures.openGigs) {
+                    RebookRail(
+                        onRebook = { gig ->
+                            onRebook(GigsCategory.fromBackendKey(gig.category).key)
+                        },
+                    )
+                }
             },
         )
     }

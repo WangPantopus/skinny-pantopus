@@ -115,6 +115,26 @@ enum NavigationDrawerDestination: Equatable {
     case businessReviews
     case businessPayments
     case businessSettings
+
+    /// First-launch scope: false when the row opens a feature hidden for the
+    /// first launch. A row serving two cut features needs both switched on.
+    var isAvailableAtLaunch: Bool {
+        switch self {
+        // Launch cut #1 (Beacon) — #2 (Personas) too for the owner's Beacon.
+        case .beaconUpdates: LaunchFeatures.beacon
+        case .myBeacon: LaunchFeatures.beacon && LaunchFeatures.personas
+        // Launch cut #3 (Marketplace).
+        case .myListings: LaunchFeatures.marketplace
+        // Launch cut #4 (Open gigs): bids, gig offers and open task posting.
+        case .myBids, .offersAndBids, .postTask, .businessPostTask: LaunchFeatures.openGigs
+        // Launch cuts #6 + #4 + #3: "Discover Neighbors" opens the Discover
+        // hub (business, open-task and listing rails), not people search.
+        case .discoverNeighbors: LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
+        // Launch cut #7 (Household extras): bills and package tracking.
+        case .homeBills, .homePackages: LaunchFeatures.householdExtras
+        default: true
+        }
+    }
 }
 
 // MARK: - Item / Section models
@@ -201,10 +221,17 @@ final class NavigationDrawerViewModel {
     }
 
     var sections: [NavigationDrawerSection] {
-        switch context {
+        let sections = switch context {
         case .personal: Self.personalSections
         case .home: Self.homeSections
         case .business: Self.businessSections
+        }
+        // Launch cuts: rows into features hidden for the first launch are
+        // dropped, and a section left without rows goes with them.
+        return sections.compactMap { section in
+            let items = section.items.filter(\.destination.isAvailableAtLaunch)
+            guard !items.isEmpty else { return nil }
+            return NavigationDrawerSection(id: section.id, overline: section.overline, items: items)
         }
     }
 

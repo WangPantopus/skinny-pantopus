@@ -25,20 +25,28 @@ import {
 import * as api from '@pantopus/api';
 import type { NeighborhoodMeter } from '@pantopus/api';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // Leaflet touches `window` at import time; the window is client-only.
 const NearbyCellsMap = dynamic(() => import('./NearbyCellsMap'), { ssr: false });
 
+// Launch cuts #3 (Marketplace), #4 (Open Gigs) and #1 (Beacon): their doors are hidden.
 const SURFACES = [
-  { icon: ShoppingBag, title: 'Marketplace', subtitle: 'Buy, sell, and give — with people who are verifiably local', route: '/app/marketplace' },
-  { icon: Briefcase, title: 'Tasks', subtitle: 'Post and pick up local work, backed by verified addresses', route: '/app/gigs' },
+  ...(launchFeatures.marketplace ? [{ icon: ShoppingBag, title: 'Marketplace', subtitle: 'Buy, sell, and give — with people who are verifiably local', route: '/app/marketplace' }] : []),
+  ...(launchFeatures.openGigs ? [{ icon: Briefcase, title: 'Tasks', subtitle: 'Post and pick up local work, backed by verified addresses', route: '/app/gigs' }] : []),
 ] as const;
 
 const SOCIAL = [
   { icon: Newspaper, title: 'Pulse', subtitle: 'Browse a chosen area or catch up with your connections', route: '/app/feed' },
-  { icon: Radio, title: 'Beacons', subtitle: 'Find public profiles and return to the people you follow — no home address needed', route: '/app/beacons' },
+  ...(launchFeatures.beacon ? [{ icon: Radio, title: 'Beacons', subtitle: 'Find public profiles and return to the people you follow — no home address needed', route: '/app/beacons' }] : []),
   { icon: Users, title: 'Connections', subtitle: 'Keep up with people you know', route: '/app/connections' },
 ] as const;
+
+// With both hidden, nothing opens at the meter's threshold, so the meter,
+// the locked list and the "open" banner go too (decision 1, as on iOS).
+const HAS_LOCAL_SURFACES = SURFACES.length > 0;
+// Launch cut #1 (Beacon): no Beacons to mention.
+const AVAILABLE_NOW = launchFeatures.beacon ? 'Pulse and Beacons are available now.' : 'Pulse is available now.';
 
 function SocialDestinations() {
   const router = useRouter();
@@ -55,7 +63,8 @@ function SocialDestinations() {
 
 const SECONDARY = [
   { icon: Compass, label: 'Discover', route: '/app/discover' },
-  { icon: MapIcon, label: 'Map', route: '/app/map' },
+  // Launch cut #6 (Business directory): the business map is hidden.
+  ...(launchFeatures.businessDirectory ? [{ icon: MapIcon, label: 'Map', route: '/app/map' }] : []),
 ] as const;
 
 function areaLabel(meter: NeighborhoodMeter | undefined): string {
@@ -123,8 +132,8 @@ function MeterCard({ meter }: { meter: NeighborhoodMeter }) {
       </div>
       <p className="mt-3 text-[13.5px] leading-[19px] text-app-text-secondary">
         {state === 'forming'
-          ? `Your area is just forming — be one of the first ${k_anon_min} verified households here. Local marketplace and tasks open at ${threshold}. Pulse and Beacons are available now.`
-          : `${verified_count} households have verified their address nearby. Local marketplace and tasks open at ${threshold}. Pulse and Beacons are available now.`}
+          ? `Your area is just forming — be one of the first ${k_anon_min} verified households here. Local marketplace and tasks open at ${threshold}. ${AVAILABLE_NOW}`
+          : `${verified_count} households have verified their address nearby. Local marketplace and tasks open at ${threshold}. ${AVAILABLE_NOW}`}
       </p>
     </div>
   );
@@ -157,7 +166,8 @@ function UnlockedSurfaces() {
   const router = useRouter();
   return (
     <>
-      <div className="space-y-3 mb-6">
+      {/* Launch cuts #3/#4: no empty list when both doors are hidden. */}
+      {HAS_LOCAL_SURFACES && <div className="space-y-3 mb-6">
         {SURFACES.map((s) => {
           const Icon = s.icon;
           return (
@@ -177,8 +187,9 @@ function UnlockedSurfaces() {
             </button>
           );
         })}
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
+      </div>}
+      {/* Launch cut #6: with Map hidden, Discover spans the row. */}
+      <div className={`grid ${SECONDARY.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5`}>
         {SECONDARY.map((a) => {
           const Icon = a.icon;
           return (
@@ -221,7 +232,10 @@ export default function NearbyPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-app-text leading-tight">Nearby</h1>
         <p className="text-sm text-app-text-secondary mt-2 leading-relaxed">
-          Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts; following Beacons needs no home address.
+          {/* Launch cut #1 (Beacon): the copy leaves Beacons out. */}
+          {launchFeatures.beacon
+            ? 'Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts; following Beacons needs no home address.'
+            : 'Join conversations and stay connected. Choose an area inside Pulse to browse local posts.'}
         </p>
       </div>
 
@@ -251,7 +265,9 @@ export default function NearbyPage() {
           </span>
           <h2 className="text-lg font-bold text-app-text">Add a home for neighborhood context</h2>
           <p className="mt-2 text-sm text-app-text-secondary leading-relaxed max-w-sm mx-auto">
-            Adding a home gives you neighborhood context and household tools. You can browse Pulse and follow Beacons before setting it up.
+            {launchFeatures.beacon
+              ? 'Adding a home gives you neighborhood context and household tools. You can browse Pulse and follow Beacons before setting it up.'
+              : 'Adding a home gives you neighborhood context and household tools. You can browse Pulse before setting it up.'}
           </p>
           <button
             type="button"
@@ -263,24 +279,26 @@ export default function NearbyPage() {
         </div>
       ) : meter?.unlocked ? (
         <>
-          <div className="flex items-center gap-2 mb-5 text-primary-600">
+          {/* Launch cuts #3/#4: no "open" banner when both doors are hidden. */}
+          {HAS_LOCAL_SURFACES && <div className="flex items-center gap-2 mb-5 text-primary-600">
             <Sparkles className="w-4 h-4" />
             <span className="text-[13px] font-semibold">
               Local marketplace and tasks are open — {meter.verified_count} verified households {areaLabel(meter)}.
             </span>
-          </div>
+          </div>}
           {cellsMap ? <div className="mb-5">{cellsMap}</div> : null}
           <UnlockedSurfaces />
         </>
       ) : meter ? (
         <div className="space-y-5">
           {cellsMap}
-          <MeterCard meter={meter} />
+          {/* Launch cuts #3/#4: the meter counts toward the hidden doors. */}
+          {HAS_LOCAL_SURFACES && <MeterCard meter={meter} />}
           <InviteButton />
-          <div>
+          {HAS_LOCAL_SURFACES && <div>
             <h2 className="text-base font-bold text-app-text mb-3">Local marketplace and tasks</h2>
             <LockedSurfaces />
-          </div>
+          </div>}
         </div>
       ) : null}
     </div>

@@ -19,6 +19,7 @@ import ListingShareAddressButton from './ListingShareAddressButton';
 import ReportModal from '../ui/ReportModal';
 import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -168,7 +169,8 @@ export default function ConversationView({
     if (!otherUserId) return;
     try {
       const result = await api.chat.getConversationTopics(otherUserId) as { topics?: ConversationTopic[] };
-      setTopics(result?.topics || []);
+      // Launch cut #3 (Marketplace): listing topics are not shown.
+      setTopics((result?.topics || []).filter((t) => launchFeatures.marketplace || t.topic_type !== 'listing'));
     } catch {}
   }, [otherUserId]);
 

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.profile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -775,7 +776,9 @@ class PublicProfileViewModel
                     isVerified = false,
                     identityBadges = buildBadges(profile),
                     // No server field verifies a persona, so the chip names the kind only.
-                    tierLabel = if (kind == PublicProfileKind.Persona) "Persona" else null,
+                    // Launch cuts #1/#2 (Beacon + Personas): no "Persona" chip while personas are hidden.
+                    tierLabel =
+                        if (kind == PublicProfileKind.Persona && LaunchFeatures.beacon && LaunchFeatures.personas) "Persona" else null,
                     isVerifiedNeighbor = kind == PublicProfileKind.Local,
                 )
             val stats = buildStatCells(profile)
@@ -841,6 +844,8 @@ class PublicProfileViewModel
             val gigsCompleted = profile.gigsCompleted ?: 0
             val gigsPosted = profile.gigsPosted ?: 0
             when {
+                // Launch cut #4 (Open Gigs): no gig count, like the hidden Gigs tab.
+                !LaunchFeatures.openGigs -> Unit
                 gigsCompleted > 0 ->
                     stats += ProfileStatCell(id = "gigs", value = "$gigsCompleted", label = "Gigs")
                 gigsPosted > 0 ->

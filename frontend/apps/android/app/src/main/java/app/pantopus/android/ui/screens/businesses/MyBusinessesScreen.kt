@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.Shimmer
@@ -177,8 +178,14 @@ private fun BusinessesIntroCard(count: Int) {
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
+            // Launch cut #4 (Open Gigs): business task posting is hidden.
             Text(
-                text = "Tap any business to manage its inbox, gigs, and reviews",
+                text =
+                    if (LaunchFeatures.openGigs) {
+                        "Tap any business to manage its inbox, gigs, and reviews"
+                    } else {
+                        "Tap any business to manage its inbox and reviews"
+                    },
                 fontSize = 11.sp,
                 color = PantopusColors.appTextSecondary,
             )
@@ -343,8 +350,11 @@ private fun StatsBand(card: BusinessCard) {
     ) {
         StatCell(PantopusIcon.MessageSquare, card.openChats.toString(), null, "Open chats", Modifier.weight(1f))
         StatDivider()
-        StatCell(PantopusIcon.CalendarCheck, card.bookingsThisWeek.toString(), null, "This week", Modifier.weight(1f))
-        StatDivider()
+        // Launch cut #5 (Public scheduling): no bookings count.
+        if (LaunchFeatures.publicScheduling) {
+            StatCell(PantopusIcon.CalendarCheck, card.bookingsThisWeek.toString(), null, "This week", Modifier.weight(1f))
+            StatDivider()
+        }
         StatCell(
             PantopusIcon.Star,
             card.ratingText,
@@ -504,13 +514,16 @@ private fun MyBusinessesEmpty(
             PantopusIconImage(PantopusIcon.Building2, null, size = Radii.xl, tint = PantopusColors.appTextInverse)
             Text("Create a business", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextInverse)
         }
-        Row(
-            modifier = Modifier.clickable(onClick = onClaim).testTag("myBusinessesClaim").padding(Spacing.s1),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            Text("Already listed? Claim an existing page", fontSize = 12.5.sp, color = PantopusColors.appTextSecondary)
-            PantopusIconImage(PantopusIcon.ArrowUpRight, null, size = Radii.lg, tint = PantopusColors.appTextSecondary)
+        // Launch cut #6 (Business directory): claiming starts from the directory, which is hidden.
+        if (LaunchFeatures.businessDirectory) {
+            Row(
+                modifier = Modifier.clickable(onClick = onClaim).testTag("myBusinessesClaim").padding(Spacing.s1),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+            ) {
+                Text("Already listed? Claim an existing page", fontSize = 12.5.sp, color = PantopusColors.appTextSecondary)
+                PantopusIconImage(PantopusIcon.ArrowUpRight, null, size = Radii.lg, tint = PantopusColors.appTextSecondary)
+            }
         }
     }
 }

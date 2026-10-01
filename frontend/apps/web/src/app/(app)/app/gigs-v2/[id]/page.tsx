@@ -34,6 +34,7 @@ import OffersPanelV2Comp from '@/components/gig-detail-v2/OffersPanelV2';
 import InstantAcceptButtonComp from '@/components/gig-detail-v2/InstantAcceptButton';
 import ETATrackerComp from '@/components/gig-detail-v2/ETATracker';
 import ActiveTaskPanel from '@/components/gig-detail-v2/ActiveTaskPanel';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ─── Lazy Leaflet ────────────────────────────────────────────────────
 
@@ -692,11 +693,11 @@ function GigDetailV2Content() {
             })()}
           </div>
 
-          {/* Engagement mode badge */}
+          {/* Engagement mode badge. Launch cut #4 (Open Gigs): the bidding format isn't shown. */}
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-primary-50 text-primary-700 border border-primary-200">
+            {launchFeatures.openGigs && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-primary-50 text-primary-700 border border-primary-200">
               {engInfo.icon} {engInfo.label}
-            </span>
+            </span>}
             {gigStatus && (
               <span className="inline-flex px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 capitalize">
                 {gigStatus.replace(/_/g, ' ')}
@@ -712,7 +713,8 @@ function GigDetailV2Content() {
           />
 
           {/* Instant accept for non-owner helpers */}
-          {engagementMode === 'instant_accept' && gigStatus === 'open' && !isMyGig && (
+          {/* Launch cut #4 (Open Gigs): stranger instant-accept, Q&A, offers and bids are hidden. */}
+          {launchFeatures.openGigs && engagementMode === 'instant_accept' && gigStatus === 'open' && !isMyGig && (
             <InstantAcceptButtonComp gigId={gigId!} onAccepted={handleStatusChange} />
           )}
 
@@ -748,11 +750,11 @@ function GigDetailV2Content() {
             onOpenChat={handleOpenChat}
           />
 
-          <QASection
+          {launchFeatures.openGigs && <QASection
             gigId={gigId!}
             isMyGig={isMyGig}
             currentUserId={currentUserId}
-          />
+          />}
 
           {/* Only the poster and the worker can read change requests (the API
               answers 403 to anyone else). Mounting it once someone becomes the
@@ -772,7 +774,7 @@ function GigDetailV2Content() {
         {/* ── Right column (1/3) ── */}
         <div className="space-y-6">
           {/* Offers / Bids panel */}
-          {(engagementMode === 'curated_offers' || engagementMode === 'quotes') && isMyGig && (
+          {launchFeatures.openGigs && (engagementMode === 'curated_offers' || engagementMode === 'quotes') && isMyGig && (
             <div className="bg-white border border-gray-200 rounded-2xl p-5">
               <OffersPanelV2Comp
                 offers={offersV2}
@@ -784,7 +786,7 @@ function GigDetailV2Content() {
             </div>
           )}
 
-          {(engagementMode === 'curated_offers' || engagementMode === 'quotes') && !isMyGig && (
+          {launchFeatures.openGigs && (engagementMode === 'curated_offers' || engagementMode === 'quotes') && !isMyGig && (
             <BidPanel
               gigId={gigId!}
               gigStatus={gigStatus}

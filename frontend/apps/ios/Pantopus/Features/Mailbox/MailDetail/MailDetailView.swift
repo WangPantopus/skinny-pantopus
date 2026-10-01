@@ -173,6 +173,13 @@ public struct MailDetailView: View {
     @ViewBuilder
     private func loaded(_ content: MailDetailContent) -> some View {
         switch content.category {
+        // Launch cut #8 (Mail extras): certified mail (e-signing), community
+        // mail, ceremonial keepsakes and party invitations read as plain
+        // mail. Launch cut #4 (Open gigs): a bid by mail has no Accept.
+        case .certified where !LaunchFeatures.mailExtras, .community where !LaunchFeatures.mailExtras,
+             .memory where !LaunchFeatures.mailExtras, .party where !LaunchFeatures.mailExtras,
+             .gig where !LaunchFeatures.openGigs:
+            generic(content)
         case .booklet:
             booklet(content)
         case .certified:

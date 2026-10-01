@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Hammer, Home, Mail, Map as MapIcon, MapPin, MessageCircle, Store } from 'lucide-react';
 import type { JumpBackInItem } from './types';
+import { isLaunchCutPath } from '@/lib/featureFlags';
 
 // The hub payload names its icons with the mobile icon keys ("hammer",
 // "chatbubbles", …). Rendering the string printed the key as text, so map
@@ -29,7 +30,8 @@ interface JumpBackInProps {
 
 export default function JumpBackIn({ items, hasBusiness }: JumpBackInProps) {
   const router = useRouter();
-  const allItems = [...items];
+  // Launch cuts: shortcuts to hidden pages (e.g. the business map) are left out.
+  const allItems = items.filter((item) => !isLaunchCutPath(item.route));
 
   if (!hasBusiness && !allItems.some((i) => i.route.includes('businesses/new'))) {
     allItems.push({ title: 'Create Business', route: '/app/businesses/new', icon: <Building2 className="w-5 h-5" /> });
