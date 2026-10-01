@@ -105,6 +105,9 @@ targets:
         SentryDSN: $(SENTRY_DSN)
         PostHogAPIKey: $(POSTHOG_API_KEY)
         PostHogHost: $(POSTHOG_HOST)
+        # First-launch scope: comma-separated LaunchFeature keys switched back
+        # on for this build (empty = every cut feature stays hidden).
+        PantopusLaunchFeatures: $(PANTOPUS_LAUNCH_FEATURES)
         LSRequiresIPhoneOS: true
         # Phase 6b — active-task Live Activity (PantopusWidgets extension).
         NSSupportsLiveActivities: true
@@ -233,6 +236,9 @@ targets:
       # cannot import the app module.
       - path: Pantopus/Core/LiveActivity/GigActivityAttributes.swift
       - path: Pantopus/Core/Widgets/GigWidgetSnapshot.swift
+      # First-launch scope: the "Tasks near me" widget reads the same
+      # launch-feature switches as the app (open_gigs).
+      - path: Pantopus/Core/Environment/LaunchFeatures.swift
     entitlements:
       path: PantopusWidgets/PantopusWidgets.entitlements
       properties:
@@ -245,6 +251,9 @@ targets:
         CFBundleDisplayName: Pantopus Widgets
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # First-launch scope: the app's launch-feature keys, read by the
+        # widget extension through the shared LaunchFeatures registry.
+        PantopusLaunchFeatures: $(PANTOPUS_LAUNCH_FEATURES)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

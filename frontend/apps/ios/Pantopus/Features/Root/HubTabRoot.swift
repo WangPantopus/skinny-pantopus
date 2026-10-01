@@ -666,8 +666,8 @@ public struct HubTabRoot: View {
         NavigationStack(path: navigationPathBinding) {
             stackRoot
                 .navigationDestination(for: HubRoute.self) { route in
-                    destination(for: route) { path.append($0) }
-                        .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
+                    launchScopedDestination(for: route) { path.append($0) }
+                        .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
                 }
             #if DEBUG
                 .sheet(item: $debugSheet) { route in
@@ -704,7 +704,7 @@ public struct HubTabRoot: View {
             await resolvePlaceLanding()
         }
         .fullScreenCover(item: $modalRoute) { item in
-            destination(for: item.route) { path.append($0) }
+            launchScopedDestination(for: item.route) { path.append($0) }
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
         .findPeopleSheet(isPresented: $showFindPeople)
@@ -882,7 +882,8 @@ public struct HubTabRoot: View {
                     path.append(route)
                 }
             },
-            onOpenIdentityCenter: { navDrawerIdentityCenter = true },
+            // Launch cut #2 (Personas): the drawer hides its identity Switch.
+            onOpenIdentityCenter: { navDrawerIdentityCenter = LaunchFeatures.personas },
             onBackToHub: { Task { @MainActor in path.removeAll { _ in true } } },
             onOpenProfile: { onOpenProfile() }
         )
@@ -992,6 +993,11 @@ public struct HubTabRoot: View {
         guard let pending, pending == router.pending,
               Self.ownsDeepLink(pending, tab: owningTab) else { return }
         switch pending {
+        case let .gig(id) where !LaunchFeatures.openGigs:
+            // Launch cut #4 (Open gigs): with the Tasks door hidden, a task's
+            // detail (the lifecycle of a task you are part of) opens here.
+            path.append(.gigDetail(gigId: id))
+            _ = router.consume()
         case .feed, .post, .gig, .listing:
             // Nearby owns these links. The Place stack can observe a link
             // before RootTabView switches tabs, and must leave it pending.
@@ -1212,16 +1218,21 @@ public struct HubTabRoot: View {
     /// the destination's owning stack may consume it, even while another tab
     /// is still selected during the hand-off.
     static func ownsDeepLink(_ destination: DeepLinkRouter.Destination, tab: RootTab) -> Bool {
+        // First-launch scope: RootTabView drops links into hidden features.
+        guard destination.isAvailableAtLaunch else { return false }
         switch destination {
+        // Launch cut #4 (Open gigs): a task's detail opens in the Place stack.
+        case .gig where !LaunchFeatures.openGigs:
+            return tab == .place
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
              .creatorInbox, .fanInbox, .creatorAudienceMembers, .nearby:
-            false
+            return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
-            tab == .mail
+            return tab == .mail
         default:
-            tab == .place
+            return tab == .place
         }
     }
 
@@ -1434,6 +1445,21 @@ public struct HubTabRoot: View {
         }
     }
     #endif
+
+    /// First-launch scope: a screen of a feature hidden for the first launch
+    /// (reached by a stray link — server content, a jump-back-in route)
+    /// renders the "not in the app yet" placeholder instead.
+    @ViewBuilder
+    private func launchScopedDestination(
+        for route: HubRoute,
+        push: @escaping @MainActor @Sendable (HubRoute) -> Void
+    ) -> some View {
+        if route.isAvailableAtLaunch {
+            destination(for: route, push: push)
+        } else {
+            NotYetAvailableView(tabName: "This feature", icon: .info)
+        }
+    }
 
     @ViewBuilder
     private func destination(
@@ -3610,6 +3636,80 @@ extension HubRoute {
         switch self {
         case .addHome, .joinHome: true
         default: false
+        }
+    }
+}
+
+/// First-launch scope (`LaunchFeatures`): the screens of features hidden for
+/// the first launch. A screen serving two cut features needs both switched on.
+extension HubRoute {
+    var isAvailableAtLaunch: Bool {
+        switch self {
+        // Launch cut #1 (Beacon): Beacon feeds, following, audience, broadcasts.
+        case .beaconsFeed, .following, .beaconSearch, .beaconInsights, .composeBroadcast:
+            LaunchFeatures.beacon
+        // Launch cuts #1 + #2: the Audience notification stream (the backend
+        // serves it only with both on).
+        case let .notificationsZone(context):
+            context != NotificationsZone.audience.rawValue || (LaunchFeatures.beacon && LaunchFeatures.personas)
+        // Launch cuts #1 + #2 (Personas): Beacon profiles and the persona editor.
+        case .myBeacon, .beaconProfile, .editPersona:
+            LaunchFeatures.beacon && LaunchFeatures.personas
+        // Launch cut #2 (Personas): "View as".
+        case .viewAs:
+            LaunchFeatures.personas
+        // Launch cuts #2 + #4: the professional (service-provider) profile.
+        case .professionalProfile:
+            LaunchFeatures.personas && LaunchFeatures.openGigs
+        // Launch cut #3 (Marketplace).
+        case .myListings, .marketplace, .listingDetail, .composeListing, .editListing, .listingOffers:
+            LaunchFeatures.marketplace
+        // Launch cut #4 (Open gigs): browse, post, bids and gig offers. A
+        // task's own detail (`.gigDetail`) and My tasks stay.
+        case .gigsFeed, .gigSearch, .nearbyMapForGigs, .tasksMap, .composeGig, .quickPostGig, .editGig,
+             .myBids, .offers, .packageGig:
+            LaunchFeatures.openGigs
+        // Launch cut #5 (Public scheduling); invoices, packages and payouts stay.
+        case let .scheduling(route):
+            route.isAvailableAtLaunch
+        // Launch cuts #6 + #4 + #3: the Discover hub rails businesses, open
+        // tasks and listings.
+        case .discoverHub:
+            LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
+        // Launch cut #6 (Business directory).
+        case .discoverBusinesses:
+            LaunchFeatures.businessDirectory
+        // Launch cut #7 (Household extras): pets, packages, bills, calendar, polls.
+        case .homePets, .homePackages, .packageDetail, .logPackage, .homeBills, .billDetail, .addBill,
+             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll:
+            LaunchFeatures.householdExtras
+        // Launch cut #8 (Mail extras): letters, Mail Party, community mail, translations.
+        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation:
+            LaunchFeatures.mailExtras
+        default:
+            true
+        }
+    }
+}
+
+/// First-launch scope for the scheduling screens (`HubRoute.scheduling` /
+/// `YouRoute.scheduling`). Launch cut #5 hides public scheduling; the
+/// invoice, package (session bundle), payment-setup and payout screens are
+/// financial and stay.
+extension SchedulingRoute {
+    var isAvailableAtLaunch: Bool {
+        switch self {
+        case .paymentsSetup, .payoutsEarnings, .packagesList, .packageEditor, .buyPackage, .myPackages,
+             .invoicesList, .invoiceDetail:
+            true
+        // Launch cuts #5 + #7: the home calendar and its scheduling tools
+        // (family calendar, availability, Find a time, Who's free, resources, visits).
+        case .homeCalendar, .homeEventDetail, .homeEventEditor, .householdAvailability, .permissionGatedScheduler,
+             .findATimeSetup, .findATimeSuggested, .findATimePollResponse, .whosFree, .resourceList,
+             .resourceEditor, .resourceDetail, .bookResource, .scheduleVisit, .visitDetail:
+            LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras
+        default:
+            LaunchFeatures.publicScheduling
         }
     }
 }

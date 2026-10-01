@@ -20,6 +20,13 @@ final class PublicProfileViewModelTests: XCTestCase {
         super.setUp()
         SequencedURLProtocol.reset()
         authProviders = []
+        // The persona chip and Gigs tab: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private func makeAPI() -> APIClient {

@@ -15,6 +15,13 @@ final class HubViewModelTests: XCTestCase {
         super.setUp()
         SequencedURLProtocol.reset()
         UserDefaults.standard.removeObject(forKey: "hub.setupBanner.dismissed")
+        // All four pillars and chips: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private func makeVM() -> HubViewModel {

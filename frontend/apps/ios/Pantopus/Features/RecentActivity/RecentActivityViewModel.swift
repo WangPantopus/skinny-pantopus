@@ -96,7 +96,12 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
         }
     }
 
-    private func apply(_ items: [HubResponse.HubActivityItem]) {
+    private func apply(_ allItems: [HubResponse.HubActivityItem]) {
+        // First-launch scope: rows whose type or route opens a feature hidden
+        // for the first launch are skipped (Android does the same).
+        let items = allItems.filter {
+            DeepLinkRouter.shared.isLaunchAvailable(notificationType: $0.notificationType, link: $0.route)
+        }
         if items.isEmpty {
             state = .empty(
                 ListOfRowsState.EmptyContent(

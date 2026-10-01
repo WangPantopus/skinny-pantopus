@@ -77,16 +77,20 @@ struct MyBusinessesEmptyView: View {
                 .padding(.bottom, Spacing.s2)
                 .accessibilityIdentifier("myBusinessesCreate")
 
-                Button { onClaim() } label: {
-                    HStack(spacing: Spacing.s1) {
-                        Text("Already listed? Claim an existing page")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                        Icon(.arrowUpRight, size: 12, color: Theme.Color.appTextSecondary)
+                // Launch cut #6 (Business directory): claiming goes through the
+                // business directory, which is hidden; Create stays.
+                if LaunchFeatures.businessDirectory {
+                    Button { onClaim() } label: {
+                        HStack(spacing: Spacing.s1) {
+                            Text("Already listed? Claim an existing page")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                            Icon(.arrowUpRight, size: 12, color: Theme.Color.appTextSecondary)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("myBusinessesClaim")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("myBusinessesClaim")
             }
             .padding(.horizontal, Spacing.s6)
             .padding(.vertical, Spacing.s10)

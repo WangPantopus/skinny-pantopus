@@ -82,14 +82,21 @@ struct ChatConversationDetailsSheet: View {
     // MARK: - Topics
 
     private var topicsSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
+        // Launch cut #3 (Marketplace): listing topics are hidden.
+        let topics = viewModel.topics.filter { LaunchFeatures.marketplace || !["listing", "marketplace"].contains($0.topicType) }
+        return VStack(alignment: .leading, spacing: Spacing.s2) {
             sectionLabel("Topics")
-            if viewModel.topics.isEmpty {
-                Text("No topics yet — share a task or listing to start one.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+            if topics.isEmpty {
+                // Launch cuts #4 / #3: task and listing shares are hidden.
+                Text(
+                    LaunchFeatures.openGigs && LaunchFeatures.marketplace
+                        ? "No topics yet — share a task or listing to start one."
+                        : "No topics yet."
+                )
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
-                ForEach(viewModel.topics) { topic in
+                ForEach(topics) { topic in
                     topicRow(topic)
                 }
             }

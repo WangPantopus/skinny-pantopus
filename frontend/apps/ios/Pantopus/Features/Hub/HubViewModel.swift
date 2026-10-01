@@ -25,7 +25,7 @@ final class HubViewModel {
 
     /// Active Discover filter tab. Drives the `filter` query param on
     /// `GET /api/hub/discovery` — RN `(tabs)/index.tsx:138`.
-    private(set) var discoveryFilter: HubDiscoveryFilter = .gigs
+    private(set) var discoveryFilter: HubDiscoveryFilter = HubDiscoveryFilter.launchVisibleTabs.first ?? .posts // Launch cuts #4 / #6
 
     /// True while a filter-tab refetch is in flight (rail shows its
     /// skeleton instead of stale rows).
@@ -306,7 +306,7 @@ final class HubViewModel {
                 ),
                 actionChips: Self.defaultActionChips(),
                 statusItems: hub.statusItems
-                    .filter { !dismissedStatusIds.contains($0.id) }
+                    .filter { !dismissedStatusIds.contains($0.id) && Self.isStatusItemAvailableAtLaunch($0) }
                     .map(Self.projectStatusItem(_:)),
                 neighborDensity: density,
                 setupBanner: banner,
@@ -314,7 +314,7 @@ final class HubViewModel {
                 pillars: Self.pillars(from: hub, setupMode: false),
                 discovery: discoveryCards,
                 jumpBackIn: Self.jumpBackItems(hub: hub, rebookable: rebookable),
-                activity: hub.activity.prefix(3).map {
+                activity: hub.activity.filter(Self.isActivityAvailableAtLaunch).prefix(3).map {
                     ActivityEntry(
                         id: $0.id,
                         title: $0.title,
@@ -453,7 +453,7 @@ final class HubViewModel {
                     setupCaption: "Scan & forward"
                 )
             )
-        ]
+        ].filter(\.isAvailableAtLaunch) // Launch cuts #3 / #4: no Marketplace / Gigs tiles.
     }
 
     /// Maps a `/app/…` jump route to the pillar tint that owns it. Falls
@@ -481,7 +481,7 @@ final class HubViewModel {
             ActionChipContent(kind: .snapAndSell, label: "Snap & sell", icon: .camera, active: false),
             ActionChipContent(kind: .scanMail, label: "Scan mail", icon: .scanLine, active: false),
             ActionChipContent(kind: .addHome, label: "Add home", icon: .home, active: false)
-        ]
+        ].filter(\.isAvailableAtLaunch) // Launch cuts #4 / #3: no "Post task" / "Snap & sell".
     }
 
     private static func pillarTint(for value: String) -> IdentityPillar {

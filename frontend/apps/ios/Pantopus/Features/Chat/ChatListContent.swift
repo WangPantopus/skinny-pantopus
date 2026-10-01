@@ -20,6 +20,18 @@ public enum ChatFilter: String, CaseIterable, Sendable, Hashable {
         case .market: "Market"
         }
     }
+
+    /// First-launch scope: the filter tabs shown. "Gigs" is launch cut #4
+    /// (Open gigs) and "Market" launch cut #3 (Marketplace).
+    public static var launchCases: [ChatFilter] {
+        allCases.filter { filter in
+            switch filter {
+            case .all, .unread: true
+            case .gigs: LaunchFeatures.openGigs
+            case .market: LaunchFeatures.marketplace
+            }
+        }
+    }
 }
 
 /// Variant for the per-row avatar treatment.

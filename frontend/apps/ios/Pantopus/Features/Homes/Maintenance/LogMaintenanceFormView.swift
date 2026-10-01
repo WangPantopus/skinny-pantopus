@@ -308,6 +308,14 @@ private struct PerformedByGroup: View {
 private struct CostAndNextDueGroup: View {
     @Bindable var viewModel: LogMaintenanceFormViewModel
 
+    /// Launch cut #7 (Household extras): the home calendar is hidden for the
+    /// first launch, so the caption doesn't point there; the reminder stays.
+    private static var nextDueCaption: String {
+        LaunchFeatures.householdExtras
+            ? "We'll add this to the home calendar as a reminder."
+            : "We'll save the next due date as a reminder."
+    }
+
     var body: some View {
         FormFieldGroup("Cost & schedule") {
             PantopusTextField(
@@ -369,7 +377,7 @@ private struct CostAndNextDueGroup: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("logMaintenance_recurrence")
 
-                    Text("We'll add this to the home calendar as a reminder.")
+                    Text(Self.nextDueCaption)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
