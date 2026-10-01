@@ -6,6 +6,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { Handshake, Mailbox, Send, Ban } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 import { queryKeys } from '@/lib/query-keys';
@@ -208,7 +209,7 @@ function ConnectionsPageContent() {
                     key={rel.id}
                     user={rel.other_user}
                     subtitle={`Connected since ${new Date(rel.accepted_at || rel.created_at).toLocaleDateString()}`}
-                    onNavigate={() => router.push(`/${rel.other_user?.username}`)}
+                    href={profileHref(rel.other_user)}
                     actions={
                       <div className="flex gap-2">
                         <button
@@ -247,7 +248,7 @@ function ConnectionsPageContent() {
                     key={req.id}
                     user={req.requester}
                     subtitle={`Sent ${new Date(req.created_at).toLocaleDateString()}`}
-                    onNavigate={() => router.push(`/${req.requester?.username}`)}
+                    href={profileHref(req.requester)}
                     actions={
                       <div className="flex gap-2">
                         <button
@@ -287,7 +288,7 @@ function ConnectionsPageContent() {
                     key={req.id}
                     user={req.addressee}
                     subtitle={`Sent ${new Date(req.created_at).toLocaleDateString()}`}
-                    onNavigate={() => router.push(`/${req.addressee?.username}`)}
+                    href={profileHref(req.addressee)}
                     actions={
                       <span className="text-sm text-yellow-600 bg-yellow-50 px-3 py-1.5 rounded-lg">
                         Pending
@@ -314,7 +315,6 @@ function ConnectionsPageContent() {
                     key={rel.id}
                     user={rel.blocked_user}
                     subtitle={`Blocked ${new Date(rel.responded_at || rel.created_at).toLocaleDateString()}`}
-                    onNavigate={() => {}}
                     actions={
                       <button
                         onClick={() => handleUnblock(rel.id)}
@@ -337,24 +337,30 @@ function ConnectionsPageContent() {
 
 // ============ Sub-Components ============
 
+/** The card's link to a person's profile; none when the person has no username. */
+function profileHref(user: RelationshipUser | null | undefined): string | undefined {
+  return user?.username ? `/${user.username}` : undefined;
+}
+
 function UserCard({
   user,
   subtitle,
-  onNavigate,
+  href,
   actions,
 }: {
   user: RelationshipUser | null | undefined;
   subtitle: string;
-  onNavigate: () => void;
+  /** The person's profile. A blocked person's card has none, so it opens nothing. */
+  href?: string;
   actions: React.ReactNode;
 }) {
   if (!user) return null;
   const displayName = user.name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : null) || user.username;
 
-  return (
-    <div className="bg-app-surface rounded-xl border border-app-border p-4 flex items-center gap-4">
-      {/* Avatar */}
-      <div className="flex-shrink-0 cursor-pointer" onClick={onNavigate}>
+  const identity = (
+    <>
+      {/* Avatar (the name follows, so screen readers skip it) */}
+      <div className="flex-shrink-0" aria-hidden="true">
         {user.profile_picture_url ? (
           <Image src={user.profile_picture_url!} alt={displayName} width={48} height={48} sizes="48px" quality={75} className="w-12 h-12 rounded-full object-cover" />
         ) : (
@@ -365,7 +371,7 @@ function UserCard({
       </div>
 
       {/* Info */}
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={onNavigate}>
+      <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-app-text truncate">{displayName}</h3>
         <p className="text-sm text-app-text-secondary truncate">@{user.username}</p>
         {(user.city || user.state) && (
@@ -373,6 +379,19 @@ function UserCard({
         )}
         <p className="text-xs text-app-text-muted">{subtitle}</p>
       </div>
+    </>
+  );
+
+  return (
+    <div className="bg-app-surface rounded-xl border border-app-border p-4 flex items-center gap-4">
+      {/* Avatar and name: one link to the profile, so a keyboard reaches it too */}
+      {href ? (
+        <Link href={href} className="flex-1 min-w-0 flex items-center gap-4 rounded-lg">
+          {identity}
+        </Link>
+      ) : (
+        <div className="flex-1 min-w-0 flex items-center gap-4">{identity}</div>
+      )}
 
       {/* Actions */}
       <div className="flex-shrink-0">{actions}</div>
