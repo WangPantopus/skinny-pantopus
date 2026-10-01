@@ -354,7 +354,9 @@ class BusinessLegalViewModel
             viewModelScope.launch {
                 val draft =
                     listOf(
-                        type.raw, file.filename, file.mimeType,
+                        type.raw,
+                        file.filename,
+                        file.mimeType,
                         MessageDigest.getInstance("SHA-256").digest(file.bytes).joinToString("") { "%02x".format(it) },
                     )
                 if (pendingEvidence?.first != draft) pendingEvidence = null
