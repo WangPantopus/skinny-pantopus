@@ -31,8 +31,8 @@ public enum MailboxStampsEndpoints {
 
     /// `POST /api/mailbox/v2/p3/themes/apply` — route
     /// `backend/routes/mailboxV2Phase3.js:1285`. Upserts
-    /// `MailDaySettings.current_theme`. The validator
-    /// (`mailboxV2Phase3.js:107`) requires a UUID `themeId`.
+    /// `MailDaySettings.current_theme`. `themeId` is the theme's text id
+    /// (`autumn_2026`); the theme must exist and be unlocked.
     public static func applyTheme(themeId: String) -> Endpoint {
         Endpoint(
             method: .post,
