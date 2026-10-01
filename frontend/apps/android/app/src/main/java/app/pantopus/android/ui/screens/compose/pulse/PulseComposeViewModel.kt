@@ -923,7 +923,9 @@ class PulseComposeViewModel
                         return
                     }
                     _state.value = PulseComposeUiState.Success(postId = postId)
-                    _toast.value = PulseComposeToast(toastText, isError = toastError)
+                    // A Connections post isn't in the Nearby feed (nor, being yours, in Connections): say where it went.
+                    val successText = if (request.visibility == "connections") "Posted to your connections" else toastText
+                    _toast.value = PulseComposeToast(successText, isError = toastError)
                     _shouldDismiss.value = true
                     postsRefresh.notifyPostsDidChange()
                     Analytics.track(

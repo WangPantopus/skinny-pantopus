@@ -26,10 +26,13 @@ const SURFACE_TARGETS: Record<FeedSurface, string[]> = {
   personas: ['persona_followers'],
 };
 
+function postTargets(post: Post): string[] {
+  return post.distribution_targets ?? [post.visibility === 'connections' ? 'connections' : 'place'];
+}
+
 /** Whether a just-created post belongs in the feed list for this surface and filter (Place filters are post types). */
 function postBelongsToList(post: Post, surface: FeedSurface, filter: FilterType): boolean {
-  const targets = post.distribution_targets ?? [post.visibility === 'connections' ? 'connections' : 'place'];
-  if (!targets.some((target) => SURFACE_TARGETS[surface].includes(target))) return false;
+  if (!postTargets(post).some((target) => SURFACE_TARGETS[surface].includes(target))) return false;
   return surface !== 'place' || filter === 'all' || post.post_type === filter;
 }
 
@@ -406,7 +409,10 @@ export function useFeedData({
       // isn't in the Place feed. Every cached list re-reads on its next view.
       if (postBelongsToList(newPost, surface, filter)) prependPostToCache(newPost);
       void queryClient.invalidateQueries({ queryKey: ['feed'], refetchType: 'none' });
-      showToast('Posted!');
+      // A connections-only post isn't in Place (nor, being yours, in the Connections feed): say where it went.
+      const targets = postTargets(newPost);
+      const connectionsOnly = targets.length > 0 && targets.every((target) => target === 'connections');
+      showToast(connectionsOnly ? 'Posted to your connections' : 'Posted!');
       return true;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to post');

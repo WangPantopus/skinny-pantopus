@@ -738,6 +738,8 @@ public final class PulseComposeViewModel {
         }
         do {
             let postId: String?
+            // A Connections post isn't in the Nearby feed (nor, being yours, in Connections): the toast says where it went.
+            var postedToConnections = false
             if let editingPostId {
                 let request = buildUpdateRequest()
                 let response: PostUpdateResponse = try await api.request(
@@ -751,6 +753,7 @@ public final class PulseComposeViewModel {
                     BusinessPostsEndpoints.createPost(businessId: businessAuthorId, body: request)
                 )
                 postId = response.postId
+                postedToConnections = request.visibility == "connections"
             } else {
                 var request = buildRequest()
                 request.clientRequestId = createCommandId
@@ -758,6 +761,7 @@ public final class PulseComposeViewModel {
                     PostsEndpoints.createPost(body: request)
                 )
                 postId = response.postId
+                postedToConnections = request.visibility == "connections"
             }
             guard let postId, !postId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 let message = "Post could not be confirmed. Try again."
@@ -785,7 +789,10 @@ public final class PulseComposeViewModel {
                 }
             }
             state = .success(postId: postId)
-            toast = ToastMessage(text: isEditing ? "Saved" : "Posted", kind: .success)
+            toast = ToastMessage(
+                text: isEditing ? "Saved" : (postedToConnections ? "Posted to your connections" : "Posted"),
+                kind: .success
+            )
             shouldDismiss = true
             PulsePostsRefresh.notifyPostsDidChange()
             Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .success))
