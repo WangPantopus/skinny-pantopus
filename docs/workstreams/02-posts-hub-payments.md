@@ -173,9 +173,22 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T05:41:51Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T06:24:42Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T05:41:51Z):** master is `7a42f1d7a` (batch 268).
+- **Latest (2026-10-01T06:24:42Z):** master is `12013a711` (batch 271).
+  - **Merged:**
+    - batch 270: [#1254](https://github.com/WangPantopus/skinny-pantopus/pull/1254), the golden re-record, so master's Android unit tests are green again (Stream 1 checked the PNGs); #1237 iOS single pop; #1241 list paging; #1242 list top rows (Stream 1's My trains check passed).
+    - batch 271: [#1257](https://github.com/WangPantopus/skinny-pantopus/pull/1257), a save or like on the web post page now updates the feed card. Before, after Back, a stale card's click undid the save ("Removed from saved").
+  - **Sent:** [#1259](https://github.com/WangPantopus/skinny-pantopus/pull/1259), the native counterpart (seal `507b9710…`). After a save or like on a post's own screen, both apps now send the existing refresh signal, as repost already does.
+    - Android before: save → Back → the card said "Save post", and its tap showed "Removed from bookmarks." and unsaved the post. After: the card says "Remove bookmark", and a like shows "helpful, 1".
+    - The iOS cell is Stream 1's.
+  - **Waiting on Stream 1's iOS cells** (candidate `9b4ff70c6`): #1248 Ask category, #1249 FAB clearance, #1250 iOS row label.
+  - **Decisions:**
+    - Reuse the existing refresh signal (a coarse refetch, as repost does) rather than add a per-post channel.
+    - On web, patch the cached feed lists through a `useFeedData` helper.
+    - Notify or patch only after the server confirms.
+  - **Lesson:** I now read every red CI job before sending. #1209's golden slipped through because CI was treated as informational.
+- **Earlier (2026-10-01T05:41:51Z):** master is `7a42f1d7a` (batch 268).
   - **First (master is red):** #1209 changed the edit form, so the `PulseComposeSnapshotTest.pulse_compose_edit_prefilled` golden no longer matches. Android unit tests have been red since batch 264.
     - The re-record job (`claude/stream2-posts-android-edit-golden`) is queued in the heavy slot. Its first run was skipped at 16 GiB free; for this Android-only job the guard is now 12 GiB.
     - #1241 and #1242's Android CI fails only on this golden: 5026 tests, 3 failed, all `pulse_compose_edit_prefilled`.
