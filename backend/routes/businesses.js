@@ -417,6 +417,53 @@ async function bootstrapOwnerSeat(businessUserId, actorId) {
   }
 }
 
+// A repeat of this person's own create (a phone's silent re-send, or a retry after a lost reply) finds the business it
+// made: the username is a business with these same name and email details, made in the last half hour, owned by this
+// person and not yet published. The create then answers as the first one did, so the app goes on to its logo and
+// publish steps instead of being told its own username is taken.
+const REPEAT_CREATE_WINDOW_MS = 30 * 60 * 1000;
+async function findOwnRepeatCreate(actorId, { username, name, email }) {
+  const { data: account } = await supabaseAdmin
+    .from('User')
+    .select('id, created_at')
+    .eq('username', username)
+    .eq('account_type', 'business')
+    .eq('name', name)
+    .eq('email', email)
+    .maybeSingle();
+  if (!account || Date.now() - new Date(account.created_at).getTime() > REPEAT_CREATE_WINDOW_MS) return null;
+  const { data: owner } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('id')
+    .eq('business_user_id', account.id)
+    .eq('user_id', actorId)
+    .eq('role_base', 'owner')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (!owner) return null;
+  const { data: profile } = await supabaseAdmin
+    .from('BusinessProfile')
+    .select('is_published, primary_location_id')
+    .eq('business_user_id', account.id)
+    .maybeSingle();
+  if (!profile || profile.is_published) return null;
+  return { id: account.id, locationId: profile.primary_location_id || null };
+}
+
+// An identical create that started at the same moment can win the username (23505 from the RPC); its rows are
+// committed within moments.
+const REPEAT_CREATE_SETTLE_MS = 500;
+
+function answerRepeatCreate(res, repeat, { username, name, email }, withLocation) {
+  logger.info('Business create repeated - answering as the first', { businessUserId: repeat.id });
+  return res.status(201).json({
+    message: 'Business created',
+    business: { id: repeat.id, username, name, email, account_type: 'business' },
+    ...(withLocation ? { location_id: repeat.locationId } : {}),
+  });
+}
+
 /**
  * POST / — Create a new business
  *
@@ -432,6 +479,10 @@ router.post('/', verifyToken, validate(createBusinessSchema), async (req, res) =
     if (RESERVED_USERNAMES.has(username.toLowerCase())) {
       return res.status(409).json({ error: 'This username is reserved', code: 'USERNAME_RESERVED' });
     }
+
+    // A repeat of this person's own create answers as the first one did (and creates nothing, so no rate limit).
+    const repeat = await findOwnRepeatCreate(actorId, { username, name, email });
+    if (repeat) return answerRepeatCreate(res, repeat, { username, name, email }, false);
 
     // 2) Rate limiting — max 3 businesses created per user per 24 hours
     //    Check both seat-based and legacy BusinessTeam
@@ -506,6 +557,11 @@ router.post('/', verifyToken, validate(createBusinessSchema), async (req, res) =
     });
 
     if (rpcErr) {
+      if (rpcErr.code === '23505') {
+        await new Promise((resolve) => { setTimeout(resolve, REPEAT_CREATE_SETTLE_MS); });
+        const winner = await findOwnRepeatCreate(actorId, { username, name, email });
+        if (winner) return answerRepeatCreate(res, winner, { username, name, email }, false);
+      }
       logger.error('create_business_transaction RPC failed', { error: rpcErr.message });
       return res.status(500).json({ error: 'Failed to create business', code: 'CREATION_FAILED' });
     }
@@ -587,6 +643,10 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
       return res.status(409).json({ error: 'This username is reserved', code: 'USERNAME_RESERVED' });
     }
 
+    // A repeat of this person's own create answers as the first one did (and creates nothing, so no rate limit).
+    const repeat = await findOwnRepeatCreate(actorId, { username, name, email });
+    if (repeat) return answerRepeatCreate(res, repeat, { username, name, email }, true);
+
     // 2) Rate limiting — max 3 businesses per user per 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: ownedSeats } = await supabaseAdmin
@@ -655,6 +715,11 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
     });
 
     if (rpcErr) {
+      if (rpcErr.code === '23505') {
+        await new Promise((resolve) => { setTimeout(resolve, REPEAT_CREATE_SETTLE_MS); });
+        const winner = await findOwnRepeatCreate(actorId, { username, name, email });
+        if (winner) return answerRepeatCreate(res, winner, { username, name, email }, true);
+      }
       logger.error('create_business_full RPC failed', { error: rpcErr.message });
       return res.status(500).json({ error: 'Failed to create business', code: 'CREATION_FAILED' });
     }
