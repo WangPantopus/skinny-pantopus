@@ -723,7 +723,8 @@ private struct MetadataGrid: View {
     }
 
     private var uploadedLabel: String {
-        projection.uploadedLabel ?? "—"
+        // The day alone: the "Uploaded by" row above already names the uploader.
+        DocumentsViewModel.uploadedDayLabel(dto: dto) ?? "—"
     }
 
     private var visibilityLabel: String {
