@@ -69,6 +69,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -877,6 +878,9 @@ private fun LoadedList(
     onEndReached: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    // The remembered check reads the current list: a list first shown with no more pages that later
+    // gains some (a refresh or a tab change while this screen stays open) must still page.
+    val currentState by rememberUpdatedState(state)
     val shouldLoadMore by remember {
         derivedStateOf {
             val total = listState.layoutInfo.totalItemsCount
@@ -884,7 +888,7 @@ private fun LoadedList(
                 listState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: return@derivedStateOf false
-            state.hasMore && total > 0 && last >= total - 3
+            currentState.hasMore && total > 0 && last >= total - 3
         }
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onEndReached() }
