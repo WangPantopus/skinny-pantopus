@@ -72,7 +72,8 @@ export function useDiscoverData() {
   const isListView = viewMode === 'list';
 
   // ── Map state ─────────────────────────────────────────────
-  const [mapLayers, setMapLayers] = useState<Set<MapLayerKey>>(() => new Set(['businesses']));
+  // Launch cut #6 (Business directory): the map opens on Posts.
+  const [mapLayers, setMapLayers] = useState<Set<MapLayerKey>>(() => new Set([launchFeatures.businessDirectory ? 'businesses' : 'posts']));
   const [measureFrom, setMeasureFrom] = useState<MeasureFrom>('home');
 
   const sentinelRef = useRef<HTMLDivElement>(null);
