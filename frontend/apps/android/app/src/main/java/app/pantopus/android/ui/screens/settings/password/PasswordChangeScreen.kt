@@ -154,6 +154,10 @@ internal data class PasswordChangeLoadedState(
     val isSaving: Boolean,
 )
 
+/**
+ * [newPasswordRevealed] starts the new password shown, as after a tap on Show
+ * password (the design frames' snapshots). The screen starts it masked.
+ */
 @Composable
 internal fun PasswordChangeContent(
     state: PasswordChangeLoadedState,
@@ -161,6 +165,7 @@ internal fun PasswordChangeContent(
     onUpdate: (FieldKey, String) -> Unit,
     onSubmit: () -> Unit,
     onReset: () -> Unit,
+    newPasswordRevealed: Boolean = false,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         PasswordChangeTopBar(onBack = onBack)
@@ -180,7 +185,7 @@ internal fun PasswordChangeContent(
             if (state.requiresCurrent) {
                 VerifySection(state = state, onUpdate = onUpdate, onReset = onReset)
             }
-            ChooseNewSection(state = state, onUpdate = onUpdate)
+            ChooseNewSection(state = state, onUpdate = onUpdate, newPasswordRevealed = newPasswordRevealed)
             Actions(state = state, onSubmit = onSubmit, onBack = onBack)
             if (state.formError == null) {
                 InfoChip()
@@ -273,17 +278,20 @@ private fun VerifySection(
 private fun ChooseNewSection(
     state: PasswordChangeLoadedState,
     onUpdate: (FieldKey, String) -> Unit,
+    newPasswordRevealed: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Overline("Choose a new one")
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            // Masked until the person taps Show password; it used to reveal
+            // itself once the password became valid, mid-typing.
             PasswordEntryField(
                 label = "New password",
                 value = state.fields[FieldKey.New]?.value.orEmpty(),
                 onValueChange = { onUpdate(FieldKey.New, it) },
                 state = fieldState(state.fields[FieldKey.New], state.isNewValid),
                 isRequired = true,
-                revealedByDefault = state.isNewValid,
+                revealedByDefault = newPasswordRevealed,
                 fieldTestTag = "field_new",
             )
             StrengthMeter(strength = state.strength)

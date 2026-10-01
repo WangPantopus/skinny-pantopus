@@ -53,6 +53,7 @@
  *   GET    /public/:username                          — Public business profile (no auth)
  */
 
+const { createHash } = require('node:crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -4700,6 +4701,7 @@ const createInvoiceSchema = Joi.object({
   })).min(1).max(50).required(),
   due_date: Joi.date().iso().allow(null).optional(),
   memo: Joi.string().max(1000).allow('', null).optional(),
+  client_request_id: Joi.string().uuid().optional(),
 });
 
 /**
@@ -4950,6 +4952,107 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
 
 // ─── Parameterized /:businessId/invoices routes (must come AFTER literal /invoices/* routes) ───
 
+const INVOICE_RECIPIENT_SOURCE_LIMIT = 200;
+const INVOICE_RECIPIENT_RESULT_LIMIT = 20;
+
+/**
+ * GET /:businessId/invoice-recipients?q= — the people this crew can pick when sending an
+ * invoice: those it already knows (invoiced before, booked with it, hired it for a task,
+ * messaged it) and the sender's own connections, matched by name or username. Never an open
+ * member search. Without q, the most recent ones. Editors and up, like sending an invoice.
+ */
+router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const userId = req.user.id;
+
+    const access = await checkBusinessPermission(businessId, userId, 'profile.edit');
+    if (!access.hasAccess) {
+      return res.status(403).json({ error: 'Editor role or above required to create invoices' });
+    }
+
+    const query = String(req.query.q || '').trim().slice(0, 80).toLowerCase();
+
+    const { data: crewRooms } = await supabaseAdmin
+      .from('ChatParticipant')
+      .select('room_id')
+      .eq('user_id', businessId)
+      .limit(INVOICE_RECIPIENT_SOURCE_LIMIT);
+    const crewRoomIds = (crewRooms || []).map((r) => r.room_id);
+
+    const [invoiced, booked, hired, messaged, connections] = await Promise.all([
+      supabaseAdmin.from('BusinessInvoice').select('recipient_user_id, created_at')
+        .eq('business_user_id', businessId)
+        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Booking').select('invitee_user_id, created_at')
+        .eq('owner_type', 'business').eq('owner_id', businessId).not('invitee_user_id', 'is', null)
+        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Gig').select('user_id, accepted_at')
+        .eq('accepted_by', businessId)
+        .order('accepted_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      crewRoomIds.length === 0 ? { data: [] } : supabaseAdmin.from('ChatParticipant')
+        .select('user_id, joined_at, room:room_id!inner(type)')
+        .in('room_id', crewRoomIds).eq('room.type', 'direct').neq('user_id', businessId)
+        .order('joined_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, accepted_at')
+        .eq('status', 'accepted').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
+        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+    ]);
+
+    // The first source to name someone gives their label; within a source, most recent first.
+    const relationById = new Map();
+    const add = (id, relation) => {
+      if (id && !relationById.has(id)) relationById.set(id, relation);
+    };
+    (invoiced.data || []).forEach((r) => add(r.recipient_user_id, 'invoiced'));
+    (booked.data || []).forEach((r) => add(r.invitee_user_id, 'booked'));
+    (hired.data || []).forEach((r) => add(r.user_id, 'hired'));
+    (messaged.data || []).forEach((r) => add(r.user_id, 'messaged'));
+    (connections.data || []).forEach((r) => add(r.requester_id === userId ? r.addressee_id : r.requester_id, 'connection'));
+
+    const { blockedUserIds } = require('../services/blockService');
+    const [crewBlocks, senderBlocks] = await Promise.all([blockedUserIds(businessId), blockedUserIds(userId)]);
+    for (const id of [businessId, userId, ...crewBlocks, ...senderBlocks]) relationById.delete(id);
+
+    const order = [...relationById.keys()];
+    if (order.length === 0) return res.json({ people: [] });
+
+    // Looked up in chunks so a crew that knows many people doesn't send one huge id list.
+    const chunks = [];
+    for (let i = 0; i < order.length; i += 100) chunks.push(order.slice(i, i + 100));
+    const lookups = await Promise.all(chunks.map((ids) => supabaseAdmin
+      .from('User')
+      .select('id, name, username, profile_picture_url, account_type')
+      .in('id', ids)));
+    const failed = lookups.find((r) => r.error);
+    if (failed) throw failed.error;
+
+    const byId = new Map(lookups.flatMap((r) => r.data || []).map((u) => [u.id, u]));
+    const people = order
+      .map((id) => byId.get(id))
+      .filter((u) => u && u.account_type !== 'business')
+      .filter((u) => !query
+        || (u.name || '').toLowerCase().includes(query)
+        || (u.username || '').toLowerCase().includes(query))
+      .slice(0, INVOICE_RECIPIENT_RESULT_LIMIT)
+      .map((u) => ({
+        id: u.id,
+        name: u.name || u.username,
+        username: u.username,
+        profile_picture_url: u.profile_picture_url || null,
+        relation: relationById.get(u.id),
+      }));
+
+    res.json({ people });
+  } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: "Couldn't load people right now. Please try again.", code: err.code });
+    }
+    logger.error('Invoice recipients error', { error: err.message });
+    res.status(500).json({ error: 'Failed to load people', code: 'INTERNAL_ERROR' });
+  }
+});
+
 /**
  * POST /:businessId/invoices — Create and send an invoice
  */
@@ -4963,7 +5066,7 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(403).json({ error: 'Editor role or above required to create invoices' });
     }
 
-    const { recipient_user_id, gig_id, line_items, due_date, memo } = req.body;
+    const { recipient_user_id, gig_id, line_items, due_date, memo, client_request_id } = req.body;
 
     // Validate recipient exists
     const { data: recipient } = await supabaseAdmin
@@ -4983,6 +5086,38 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
     }
 
+    // A send keeps its identity through an uncertain reply: a retry with the same
+    // client_request_id answers with the invoice the first attempt made, and the
+    // recipient is notified once. Scoped to the business and the sender, using the
+    // existing primary key for races.
+    const requestInvoiceId = client_request_id ? createHash('sha256')
+      .update(`pantopus:business-invoice:v1:${businessId.toLowerCase()}:${userId.toLowerCase()}:${client_request_id.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const readRequestInvoice = async () => {
+      const { data, error } = await supabaseAdmin.from('BusinessInvoice')
+        .select('*').eq('id', requestInvoiceId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+    const itemsKey = (items) => JSON.stringify((items || []).map((item) => [item.description, item.amount_cents, item.quantity || 1]));
+    const acknowledgeRetry = (existing) => {
+      const sameInvoice = sameId(existing.business_user_id, businessId)
+        && sameId(existing.recipient_user_id, recipient_user_id)
+        && sameId(existing.gig_id, gig_id)
+        && itemsKey(existing.line_items) === itemsKey(line_items)
+        && (existing.due_date ? Date.parse(existing.due_date) : null) === (due_date ? new Date(due_date).getTime() : null)
+        && (existing.memo || null) === (memo || null);
+      if (!sameInvoice) {
+        return res.status(409).json({ error: 'This invoice request was already used for a different invoice.', code: 'INVOICE_REQUEST_REUSED' });
+      }
+      return res.status(201).json({ invoice: existing });
+    };
+    if (requestInvoiceId) {
+      const existing = await readRequestInvoice();
+      if (existing) return acknowledgeRetry(existing);
+    }
+
     // Calculate totals — fee is deducted from business payout, not added to customer total
     const subtotal_cents = line_items.reduce(
       (sum, item) => sum + item.amount_cents * (item.quantity || 1), 0
@@ -4993,26 +5128,35 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
     const fee_cents = fees.platformFee;
     const total_cents = subtotal_cents; // Customer pays subtotal; fee deducted from business share
 
-    const { data: invoice, error: insertErr } = await supabaseAdmin
-      .from('BusinessInvoice')
-      .insert({
-        business_user_id: businessId,
-        recipient_user_id,
-        gig_id: gig_id || null,
-        line_items,
-        subtotal_cents,
-        fee_cents,
-        total_cents,
-        currency: 'usd',
-        status: 'sent',
-        due_date: due_date || null,
-        memo: memo || null,
-      })
+    const invoiceRow = {
+      business_user_id: businessId,
+      recipient_user_id,
+      gig_id: gig_id || null,
+      line_items,
+      subtotal_cents,
+      fee_cents,
+      total_cents,
+      currency: 'usd',
+      status: 'sent',
+      due_date: due_date || null,
+      memo: memo || null,
+    };
+    const { data: invoice, error: insertErr } = await (requestInvoiceId
+      ? supabaseAdmin.from('BusinessInvoice')
+        .upsert({ ...invoiceRow, id: requestInvoiceId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('BusinessInvoice').insert(invoiceRow))
       .select()
-      .single();
+      .maybeSingle();
 
     if (insertErr) {
       logger.error('Invoice creation failed', { error: insertErr.message });
+      return res.status(500).json({ error: 'Failed to create invoice', code: 'INSERT_FAILED' });
+    }
+    if (!invoice) {
+      // A concurrent retry of the same send inserted it first.
+      const existing = requestInvoiceId ? await readRequestInvoice() : null;
+      if (existing) return acknowledgeRetry(existing);
+      logger.error('Invoice creation returned no row', { businessId });
       return res.status(500).json({ error: 'Failed to create invoice', code: 'INSERT_FAILED' });
     }
 

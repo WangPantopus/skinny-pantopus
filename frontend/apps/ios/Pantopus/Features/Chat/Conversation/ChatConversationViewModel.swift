@@ -937,11 +937,16 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// Toggle a reaction on a message.
+    /// Toggle a reaction on a message. The request carries the state the
+    /// tap asks for, so a retry after a lost reply keeps the reaction
+    /// instead of undoing it.
     public func react(messageId: String, reaction: String) async {
+        let reacted = messages.first { $0.id == messageId }.map { message in
+            !message.reactions.contains { $0.reaction == reaction && $0.reactedByMe }
+        }
         do {
             let response: ReactToChatMessageResponse = try await api.request(
-                ChatEndpoints.reactToMessage(id: messageId, reaction: reaction),
+                ChatEndpoints.reactToMessage(id: messageId, reaction: reaction, reacted: reacted),
                 as: ReactToChatMessageResponse.self
             )
             if let reactions = response.reactions {

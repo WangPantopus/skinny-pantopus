@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /** Payment progress for the G10 Pay CTA. */
@@ -113,6 +114,12 @@ class BuyPackageViewModel
         private var payState: PayState = PayState.Idle
         private var started = false
 
+        /**
+         * One purchase per visit: a retry (a lost reply, a second tap) reuses this
+         * id, so the server answers with the pack it already granted.
+         */
+        private val purchaseRequestId = UUID.randomUUID().toString()
+
         fun start() {
             if (started) return
             started = true
@@ -152,7 +159,7 @@ class BuyPackageViewModel
             payState = PayState.Paying
             pushReady()
             viewModelScope.launch {
-                when (val result = repo.buyPackage(owner, packageId)) {
+                when (val result = repo.buyPackage(owner, packageId, purchaseRequestId)) {
                     is NetworkResult.Success -> {
                         val secret = result.data.clientSecret
                         if (secret.isNullOrEmpty()) {

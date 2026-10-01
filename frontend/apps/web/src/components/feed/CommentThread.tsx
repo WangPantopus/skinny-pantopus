@@ -182,7 +182,7 @@ export default function CommentThread({
 
     // Visual indentation capped at MAX_INDENT_DEPTH
     const indentLevel = Math.min(depth, MAX_INDENT_DEPTH);
-    const marginClass = indentLevel > 0 ? `ml-8` : '';
+    const marginClass = depth > 0 && depth <= MAX_INDENT_DEPTH ? 'ml-8' : '';
 
     // Collapse/expand for threads with many replies
     const isExpanded = expandedThreads.has(comment.id);

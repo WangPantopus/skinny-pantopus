@@ -1269,12 +1269,30 @@ export interface BusinessInvoice {
   business?: { id: string; name: string; username: string; profile_picture_url?: string };
 }
 
+/** Someone a crew can pick when sending an invoice, and how the crew knows them. */
+export interface InvoiceRecipient {
+  id: string;
+  name: string;
+  username: string;
+  profile_picture_url: string | null;
+  relation: 'invoiced' | 'booked' | 'hired' | 'messaged' | 'connection';
+}
+
+/**
+ * People this crew can invoice: those it already knows (invoiced, booked, hired it, messaged it)
+ * and the sender's connections, matched by name or username. Never an open member search.
+ */
+export const getInvoiceRecipients = (businessId: string, q?: string) =>
+  get<{ people: InvoiceRecipient[] }>(`/api/businesses/${businessId}/invoice-recipients`, q ? { q } : undefined);
+
 export const createBusinessInvoice = (businessId: string, data: {
   recipient_user_id: string;
   line_items: InvoiceLineItem[];
   gig_id?: string | null;
   due_date?: string | null;
   memo?: string | null;
+  /** Kept across retries of one draft: a retry answers with the invoice already sent. */
+  client_request_id?: string;
 }) =>
   post<{ invoice: BusinessInvoice }>(`/api/businesses/${businessId}/invoices`, data);
 

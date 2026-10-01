@@ -1396,11 +1396,15 @@ router.delete('/packages/:id', asyncHandler(async (req, res) => {
   await supabaseAdmin.from('BookingPackage').update({ is_active: false }).eq('id', row.id);
   res.json({ ok: true });
 }));
-// Customer buys a package (authed; not owner-gated).
-router.post('/packages/:id/buy', asyncHandler(async (req, res) => {
+// Customer buys a package (authed; not owner-gated). A retry with the same
+// client_request_id answers with the first attempt's credit instead of granting another.
+const buyPackageSchema = Joi.object({
+  client_request_id: Joi.string().uuid(),
+});
+router.post('/packages/:id/buy', validate(buyPackageSchema), asyncHandler(async (req, res) => {
   const { data: pkg } = await supabaseAdmin.from('BookingPackage').select('*').eq('id', req.params.id).eq('is_active', true).maybeSingle();
   if (!pkg) return res.status(404).json({ error: 'PACKAGE_NOT_FOUND' });
-  const result = await packages.purchasePackage({ pkg, buyerUserId: req.user.id });
+  const result = await packages.purchasePackage({ pkg, buyerUserId: req.user.id, clientRequestId: req.body?.client_request_id });
   if (!result.success) return res.status(400).json({ error: result.error, message: result.message });
   res.status(201).json({ credit: result.credit, clientSecret: result.clientSecret || null });
 }));
