@@ -4357,7 +4357,9 @@ router.post('/:businessId/posts', verifyToken, async (req, res) => {
       deal_expires_at: dealExpiresAt || null,
       deal_business_name: dealBusinessName || bizUser?.name || null,
       service_category: serviceCategory || null,
-      purpose: postType === 'deal' ? 'promote' : (postType === 'event' ? 'invite' : 'inform'),
+      // The same purpose a regular post of this type gets; 'promote', 'invite' and 'inform'
+      // aren't purposes the Post table allows, so every business post failed.
+      purpose: require('./posts').derivePurposeFromPostType(postType || 'local_update'),
       profile_visibility_scope: 'public',
       show_on_profile: true,
       is_visitor_post: false,
