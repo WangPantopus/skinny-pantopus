@@ -9,6 +9,29 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1310 #1313 (b286), #1314 (b288), #1318 (b289) merged; #1320 (review pages) sealed; #1322 (notification and connection pages) in CI; real-name search question for the user, 2026-10-01T11:11:00Z
+
+- **Merged:**
+  - #1310: the P0.2 email retired.
+  - #1313: a personal block hides you in app search and on your local profile.
+  - #1314 and #1318: the web Privacy page no longer shows controls that did nothing ("Default profile visibility", "Findable by email/phone"; same call as native S3-29).
+- **Sealed and with Stream 1: #1320** (seal `bf8bb1b7…`): the profile Reviews tab breaks `created_at` ties by id. Routed by Stream 1 from Stream 4's Home-activity finding.
+  - Before: with 44 tied reviews, pages of 7 and of 3 repeated one review and never showed 2 and 6 others, every run.
+  - After: every review exactly once.
+- **In CI: #1322**: the same fix in `GET /api/notifications` (the apps' notification list and "load more") and `GET /api/relationships`.
+  - Before: pages of 7 lost 2 of 44 tied notifications, and pages of 3 lost 6. Connections at pages of 2 lost 1 of 11.
+- **Record (no PR): `20261001-stream5-findable-by-name-moot-r1`.**
+  - iOS/Android "Find me by real name" (off by default) no longer protects anyone: after migration 146, display names are real names, and both searches match `display_name` with no `findable_by_name` check. Proof: hs12, renamed "Quill Marchetti", was found by "Marchetti" with the flag off.
+  - **User's product call:** honor it, retire it, or default it on and honor it. Stream 5 recommends the last.
+- **Open user questions:**
+  1. Audit or notify for the old view-as exposure (#1304)?
+  2. Was the P0.2 email ever sent (correction)?
+  3. "Home affiliation": wire it or remove it?
+  4. "Find me by real name" (above).
+- **Scope check pending with Stream 1:** 7 more paged lists in `businesses.js` (crews and business pages) have the same tie issue. Some may be in launch cut #6.
+- **Lesson:** the full backend Jest occasionally fails 1–3 unrelated suites under load. Rerun them alone, then rerun the full suite before sealing.
+- **Runtime:** API on `c09d1b1d4` (#1322) since 11:06:33Z; web on master. No fixtures remain.
+
 ## LIVE — #1308 merged (b285, with migration 20261001100000); #1310 (P0.2 email retired) and #1313 (personal block hides you in app search and local profiles) sealed; #1314 (dead "Default profile visibility") in CI, 2026-10-01T10:46:10Z
 
 - **Merged: #1308** (batch 285): Neighborhood "Only me" and city changes now reach the public locality, plus the hide-only migration `20261001100000`. It reaches production only through the founder's migration process (Stream 1's batch note).
