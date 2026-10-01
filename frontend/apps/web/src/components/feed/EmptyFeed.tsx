@@ -85,8 +85,9 @@ export default function EmptyFeed({
     ask_local: { icon: <MessageCircle className="w-5 h-5" />, title: 'No questions yet', sub: 'Got something on your mind? Ask your neighbors!' },
     recommendation: { icon: <Star className="w-5 h-5" />, title: 'No recommendations yet', sub: 'Know a great local spot? Share it!' },
     event: { icon: <Calendar className="w-5 h-5" />, title: 'No events posted', sub: 'Know about something happening nearby? Let neighbors know!' },
-    lost_found: { icon: <Search className="w-5 h-5" />, title: 'Nothing lost or found', sub: "That's good news! Help keep it that way." },
-    alert: { icon: <AlertTriangle className="w-5 h-5" />, title: 'No alerts', sub: 'Everything looks safe in the neighborhood!' },
+    // An empty filter only means nobody posted one: never an all-clear.
+    lost_found: { icon: <Search className="w-5 h-5" />, title: 'No lost & found posts yet', sub: 'Lost or found something nearby? Post it so neighbors can help.' },
+    alert: { icon: <AlertTriangle className="w-5 h-5" />, title: 'No alerts posted', sub: "Neighbors haven't posted a safety alert here." },
     deal: { icon: <Tag className="w-5 h-5" />, title: 'No deals yet', sub: 'Know about a local deal? Share it with neighbors!' },
     local_update: { icon: <Newspaper className="w-5 h-5" />, title: 'No updates', sub: 'Have news about the neighborhood? Post an update.' },
     neighborhood_win: { icon: <Trophy className="w-5 h-5" />, title: 'No wins yet', sub: 'Celebrate something great happening nearby!' },
