@@ -9,6 +9,32 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — three privacy fixes: #1302 (b282), #1304 (b283) and #1306 (b284) merged; #1308 (Neighborhood copy + hide-only migration 20261001100000) in CI, 2026-10-01T10:23:21Z
+
+- **Merged:**
+  - **#1302** (batch 282): Edit profile's name, bio and photo now reach the public LocalProfile copy. Before, posts, comments, search and the privacy preview kept the old ones.
+  - **#1304** (batch 283, its own batch): the privacy preview (`GET /api/identity-center/view-as`) only previews your own profile.
+    - **Before it, any signed-in user could read anyone's connections-only posts** by asking for `viewer=connection` with their handle (`sample.posts` carried text and media).
+    - The persona branch got the same 403. That was Stream 1's call: an authorization fix to an endpoint that isn't cut, proved by one API probe.
+    - **Flagged to the user:** whether to check production logs for past `view-as` calls with someone else's handle, or notify anyone, is their call.
+  - **#1306** (batch 284): Profile Visibility "Private – Only you" and "Registered users only" now govern the local profile route and both searches.
+    - Before, a private account's local profile still loaded for anyone, signed out included, and search listed them.
+    - The fix takes the stricter of the LocalProfile copy and the live account setting at read time. No migration.
+- **In CI: #1308** (head `9da6a7604`, rebased onto `d214b9c9f`; same patch-id as the runtime-tested `0643df7a9`). Bundle `20261001-stream5-neighborhood-copy-r1`.
+  - "Only me" for Neighborhood and a city change now reach the copied locality: before, Discover, the signed-out local profile and even the owner's own preview kept showing the old city.
+  - `syncLocalProfileLocality` re-derives the copy like `ensureLocalProfile` does.
+  - Migration `20261001100000` (number and hide-only approval from Stream 1) hides copies already out of step. Runtime proof: UPDATE 1, then 0 on re-run; "Everyone" untouched; no settings row = hidden, which matches the UI's "Followers only" default.
+- **Rules recorded:**
+  - #1302's sync overwrites the LocalProfile's name, bio and photo from the account on every Edit profile save, because no app edits the LocalProfile directly. **If an Identity Center editor for the local name (or photo or bio) ever ships, this sync must skip the fields set there** (Stream 1's review note).
+  - Before Personas are re-enabled, keep #1304's ownership check on the persona preview.
+- **Still open (Stream 5):** retire the one-off P0.2 display-name email and its runbook step (migration 146 made its message untrue).
+- **Lessons:**
+  - `check-legacy-identity-aliases.js` allowlists `users.js:306` by line. Change lines above it in place, or require inside the handler.
+  - `UserPrivacySettings` is keyed by `user_id` (no `id`).
+  - A privacy save writes a `privacy.settings_updated` IdentityAuditLog row, so remove fixture audit rows by exact id.
+  - Full backend Jest occasionally flakes once under load (`paymentSheetReconciliation`, `listingAddressGrants`). Those suites pass alone; rerun before sealing.
+- **Runtime:** API on `9da6a7604` (#1308) for checks; web on master `45acbf8b1`. No fixtures remain. The `pantopus-uploads` bucket exists only during an upload check.
+
 ## LIVE — #1285 #1288 #1289 (b280) and #1290 (b281) merged; #1302 (profile edits reach posts, search and the privacy preview) sealed; static a11y list shared; privacy findings next, 2026-10-01T09:49:57Z
 
 - **Merged:** batch 280 (#1285, #1288, #1289 for Stream 1) and batch 281 (#1290 for Stream 2). Master is `e333507a9`.
