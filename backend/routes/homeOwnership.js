@@ -836,6 +836,27 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
 
     const method = fast_track ? 'vouch' : 'invite';
 
+    // A repeat of this invitation (a re-sent request or a second tap) gets the claim it already opened, not a second
+    // active claim for the same person.
+    const { data: openInvite, error: openInviteError } = await supabaseAdmin
+      .from('HomeOwnershipClaim')
+      .select('id')
+      .eq('home_id', homeId)
+      .eq('claimant_user_id', targetUserId)
+      .eq('claim_type', 'owner')
+      .eq('method', method)
+      .in('state', ['draft', 'submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (openInviteError) throw openInviteError;
+    if (openInvite) {
+      return res.status(200).json({
+        message: 'Co-owner invitation sent. They will need to verify ownership.',
+        claim_id: openInvite.id,
+      });
+    }
+
     const { data: claim, error } = await supabaseAdmin
       .from('HomeOwnershipClaim')
       .insert({
@@ -924,6 +945,29 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
     const quorum = await policy.calculateQuorumRequirement('TRANSFER_OWNERSHIP', homeId);
 
     if (quorum.needed) {
+      // A repeat of this proposal (a re-sent request or a second tap) gets the open proposal it already made, so the
+      // other owners aren't asked to resolve the same transfer twice.
+      const { data: openProposal, error: openProposalError } = await supabaseAdmin
+        .from('HomeQuorumAction')
+        .select('id, required_approvals')
+        .eq('home_id', homeId)
+        .eq('proposed_by', userId)
+        .eq('action_type', 'TRANSFER_OWNERSHIP')
+        .eq('state', 'proposed')
+        .eq('metadata->>buyer_user_id', buyerUserId)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openProposalError) throw openProposalError;
+      if (openProposal) {
+        return res.status(200).json({
+          message: 'Transfer requires approval from other owners',
+          quorum_action_id: openProposal.id,
+          required_approvals: openProposal.required_approvals,
+        });
+      }
+
       const { data: action, error } = await supabaseAdmin
         .from('HomeQuorumAction')
         .insert({
