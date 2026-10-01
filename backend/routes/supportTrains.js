@@ -1201,6 +1201,25 @@ router.post(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to add organizer.' });
     }
 
+    // A co-organizer added after publishing joins the campaign chat, as publish does for earlier ones.
+    try {
+      const chatThreadId = req.activity?.chat_thread_id;
+      if (chatThreadId) {
+        await supabaseAdmin
+          .from('ChatParticipant')
+          .upsert(
+            { room_id: chatThreadId, user_id, role: 'member', is_active: true },
+            { onConflict: 'room_id,user_id' }
+          );
+      }
+    } catch (chatErr) {
+      logger.error('Add organizer to chat failed (non-fatal)', {
+        supportTrainId: st.id,
+        userId: user_id,
+        error: chatErr.message,
+      });
+    }
+
     res.status(201).json(data);
   })
 );
@@ -1236,6 +1255,34 @@ router.delete(
         error: error.message,
       });
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to remove organizer.' });
+    }
+
+    // A removed co-organizer leaves the campaign chat unless they are still the recipient or a helper
+    // with an active signup (the same rule as a helper's cancel).
+    try {
+      const chatThreadId = req.activity?.chat_thread_id;
+      if (chatThreadId && targetUserId !== st.recipient_user_id) {
+        const { count: activeRes } = await supabaseAdmin
+          .from('SupportTrainReservation')
+          .select('id', { count: 'exact', head: true })
+          .eq('support_train_id', st.id)
+          .eq('user_id', targetUserId)
+          .neq('status', 'canceled');
+
+        if ((activeRes || 0) === 0) {
+          await supabaseAdmin
+            .from('ChatParticipant')
+            .delete()
+            .eq('room_id', chatThreadId)
+            .eq('user_id', targetUserId);
+        }
+      }
+    } catch (chatErr) {
+      logger.error('Remove organizer from chat failed (non-fatal)', {
+        supportTrainId: st.id,
+        targetUserId,
+        error: chatErr.message,
+      });
     }
 
     res.status(204).end();
