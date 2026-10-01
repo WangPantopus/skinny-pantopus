@@ -173,9 +173,28 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T02:38:35Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T03:21:22Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T02:38:35Z):** master is `cd57ec897` (batch 249).
+- **Latest (2026-10-01T03:21:22Z):** master is `89c1291b1` (batch 257).
+  - **Merged since the last entry:**
+    - #1188 empty Alerts copy (b250);
+    - **#1193** Saved lists only posts the saver can still open (b252);
+    - **#1198** web My pulse **Saved tab** (b254);
+    - **#1201** a moderation-removed post opens only for its author (b255).
+  - **Saved-posts plan (approved by Stream 1):** Save worked everywhere but nothing listed saved posts.
+    - Steps 1–2 merged (#1193, #1198).
+    - Step 3 is [#1210](https://github.com/WangPantopus/skinny-pantopus/pull/1210): native My posts Saved tab (Android `SavedPostsViewModel`, iOS `SavedPostsModel`), head `1e1b50147`.
+  - **Native edit defect (approved fix):** [#1209](https://github.com/WangPantopus/skinny-pantopus/pull/1209), head `ba0394389`.
+    - The bug: iOS sent `visibility` on every edit, so editing any Connections post returned 400 and saved nothing (Stream 1 reproduced it: `20261001-stream1-ios-edit-audience-r1`). On Android, switching the audience chip to Connections failed the same way; to Public, it changed only a cosmetic column.
+    - Text-only edits gave an Ask without a category the default "Handyman" (reproduced on Android). The iOS edit header said "Posting to Connections" for Neighbors posts.
+    - Fix: the audience is fixed after posting (no visibility on edit; the selector is hidden in edit, like web); `serviceCategory` is sent only when changed; the iOS header shows the post's audience.
+  - **Build:** both PRs are in local candidate `906eaeb4b` (master + both heads), queued in the heavy slot. Next: Android after-runs, seals, and Stream 1's iOS after-runs.
+  - **Decisions (standing direction, with Stream 1):**
+    - The audience is fixed after posting; delete and repost to change it. No new copy.
+    - Saved rows name the author and offer Remove.
+    - Moderation-archived posts are hidden from non-authors; author-archived and expired posts on the post page are left as a product question.
+  - **Notes, no change:** the iOS compose toast shows raw backend validation text for 2 s (Stream 1: not worth widening #1209); the Action Queue is gig-centric (launch-cut entry point).
+- **Earlier (2026-10-01T02:38:35Z):** master is `cd57ec897` (batch 249).
   - **Merged:**
     - #1181 Place-brief greeting and #1183 single profile card (batch 248);
     - **#1159** Discover Posts → Pulse, **#1161** native Visitor meta, **#1185** Today sources and **#1186** post distance units (batch 249). Stream 1's iOS device bundle `20261001-stream1-native-1158-1159-1161-devices-r1` (dd21f9b4…) passed #1159 and #1161. On iOS, Back from Pulse lands on the Nearby root, the same as the existing Pulse pillar.
