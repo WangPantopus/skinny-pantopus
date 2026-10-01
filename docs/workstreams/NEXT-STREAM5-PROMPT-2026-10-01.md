@@ -44,7 +44,7 @@ You are **Stream 5**, one of the user's parallel workstreams. History before 202
   - The people search reads `LocalProfile` only: give a fixture user a Local Profile (handle = username).
   - Toasts: `div.fixed.top-4.right-4[aria-live="polite"]` with a 2 s timeout.
   - The conversation composer's placeholder is "Message"; the room page's is "Type a message…".
-- **Scans** (scratchpad, reusable; TypeScript at the web tree's `node_modules/.pnpm/typescript@5.9.3`): `page-health.mjs` (bundle `20261001-stream5-page-health-scan-r1`), `link-target-scan.cjs`, `try-finally-scan.cjs`, `destructive-scan.cjs`, `console-only-catch-scan.cjs`, `unnamed-buttons.cjs`, `unnamed-links.cjs`, `unlabeled-fields.cjs`.
+- **Scans** (in the kit's `tools/stream5-e2e/`, with README notes; TypeScript at the web tree's `node_modules/.pnpm/typescript@5.9.3`): `page-health.mjs`, `link-target-scan.cjs`, `try-finally-scan.cjs`, `destructive-scan.cjs`, `console-only-catch-scan.cjs`, `unnamed-buttons.cjs`, `unnamed-links.cjs`, `unlabeled-fields.cjs`.
   - Run them over `git archive <master> frontend/apps/web/src`.
   - Today's results: Stream 5's web code has no remaining silent write failures, no unconfirmed destructive actions and no dead link targets. The app-wide scan's one dead target, `/app/homes/find` → `claim-owner`, went to Stream 3, which took it.
 
