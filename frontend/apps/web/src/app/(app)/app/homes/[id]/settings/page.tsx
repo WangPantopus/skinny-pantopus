@@ -9,6 +9,7 @@ import {
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { notifyHomesChanged } from '@/components/ProfileToggle';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 function SettingsContent() {
@@ -65,6 +66,7 @@ function SettingsContent() {
     setSaving(true);
     try {
       await api.homes.updateHome(homeId!, { name: nickname.trim() });
+      notifyHomesChanged();
       setEditing(false);
       toast.success('Name updated');
       await fetchData();
