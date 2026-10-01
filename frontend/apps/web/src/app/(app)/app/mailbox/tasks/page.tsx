@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { MailTask } from '@/types/mailbox';
 import {
   useTasks,
+  useDrawerItems,
   useCreateTaskFromMail,
   useUpdateTask,
 } from '@/lib/mailbox-queries';
@@ -12,6 +13,7 @@ import { TaskCard } from '@/components/mailbox';
 // The user's Home; each page used a hard-coded 'home_1' stub.
 import useHomeProfile from '../_components/useMailboxHome';
 import { launchFeatures } from '@/lib/featureFlags';
+import { toast } from '@/components/ui/toast-store';
 
 // ── Priority sort weight (high > medium > low) ──────────────
 const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -62,23 +64,41 @@ function TaskCreationPanel({
   const [dueAt, setDueAt] = useState(mailDueDate || '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [description, setDescription] = useState('');
+  const [sourceMailId, setSourceMailId] = useState(mailId || '');
+  // Reuse the received-mail lists; the create API requires a real source.
+  const personalMail = useDrawerItems('personal', { limit: 50 }, { enabled: !mailId });
+  const homeMail = useDrawerItems('home', { limit: 50 }, { enabled: !mailId });
+  const businessMail = useDrawerItems('business', { limit: 50 }, { enabled: !mailId });
+  const sourceMail = useMemo(() => [...new Map([
+    ...(personalMail.data?.items || []),
+    ...(homeMail.data?.items || []),
+    ...(businessMail.data?.items || []),
+  ].filter(item => !item.recipient_home_id || item.recipient_home_id === homeId)
+    .map(item => [item.id, item])).values()],
+  [personalMail.data, homeMail.data, businessMail.data, homeId]);
+  const sourceLoading = !mailId && (personalMail.isLoading || homeMail.isLoading || businessMail.isLoading);
+  const sourceError = !mailId && (personalMail.error || homeMail.error || businessMail.error);
+  const hasSource = !!sourceMailId && (!!mailId || sourceMail.some(item => item.id === sourceMailId));
 
   const createTask = useCreateTaskFromMail();
 
   const handleSubmit = useCallback(() => {
-    if (!title.trim()) return;
+    if (!title.trim() || !homeId || !hasSource) return;
     createTask.mutate(
       {
-        mailId: mailId || '',
+        mailId: sourceMailId,
         homeId,
         title: title.trim(),
         dueAt: dueAt || undefined,
         priority,
         description: description.trim() || undefined,
       },
-      { onSuccess: onCreated },
+      {
+        onSuccess: onCreated,
+        onError: (err) => toast.error(err.message || "Couldn't create task. Try again."),
+      },
     );
-  }, [title, dueAt, priority, description, mailId, homeId, createTask, onCreated]);
+  }, [title, dueAt, priority, description, sourceMailId, homeId, hasSource, createTask, onCreated]);
 
   return (
     <div className="h-full overflow-y-auto bg-app-surface p-6">
@@ -148,25 +168,51 @@ function TaskCreationPanel({
         </div>
 
         {/* Linked mail */}
-        {mailId && (
-          <div className="px-3 py-2 bg-app-surface-raised rounded-lg">
-            <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-1">
-              Linked Mail
-            </p>
-            <p className="text-sm text-app-text-secondary dark:text-app-text-muted">
-              {mailTitle || mailId}
-            </p>
-          </div>
-        )}
+        <div className="px-3 py-2 bg-app-surface-raised rounded-lg">
+          {mailId ? (
+            <>
+              <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-1">
+                Linked Mail
+              </p>
+              <p className="text-sm text-app-text-secondary dark:text-app-text-muted">{mailTitle || 'Selected mail'}</p>
+            </>
+          ) : (
+            <>
+              <label htmlFor="mail-task-source" className="text-xs text-app-text-secondary mb-1 block">Source mail</label>
+              <select
+                id="mail-task-source"
+                value={sourceMailId}
+                onChange={(event) => setSourceMailId(event.target.value)}
+                disabled={sourceLoading || !!sourceError}
+                className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="">{sourceLoading ? 'Loading mail...' : 'Choose recent received mail'}</option>
+                {sourceMail.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.display_title || item.subject || item.sender_display || 'Mail item'}
+                  </option>
+                ))}
+              </select>
+              {sourceError ? (
+                <button type="button" className="mt-1 text-xs text-app-link" onClick={() => {
+                  void personalMail.refetch(); void homeMail.refetch(); void businessMail.refetch();
+                }}>Couldn&apos;t load mail. Retry</button>
+              ) : !sourceLoading && sourceMail.length === 0 ? (
+                <p className="mt-1 text-xs text-app-text-secondary">No received mail is available for this home.</p>
+              ) : null}
+            </>
+          )}
+          {!homeId && <p className="mt-1 text-xs text-app-text-secondary">A home is required to create a task.</p>}
+        </div>
 
         {/* Actions */}
         <div className="flex items-center gap-3 pt-2">
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={createTask.isPending || !title.trim()}
+            disabled={createTask.isPending || !title.trim() || !homeId || !hasSource}
             className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${
-              createTask.isPending || !title.trim()
+              createTask.isPending || !title.trim() || !homeId || !hasSource
                 ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}

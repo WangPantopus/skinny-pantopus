@@ -34,7 +34,7 @@ public enum InviteTeammateStep: Int, CaseIterable, Sendable, Equatable {
     public var subcopy: String {
         switch self {
         case .role: "Roles set what a teammate can see and do. You can change it later."
-        case .identify: "We'll create a seat and send a link they can use to join your business."
+        case .identify: "We'll create a seat and give you a link to share with them."
         case .review: "Confirm the details below. You can cancel the invite later from the Pending section."
         }
     }
@@ -79,6 +79,9 @@ public final class InviteTeammateWizardViewModel: WizardModel {
     var form: InviteTeammateForm
     private(set) var errorMessage: String?
     var pendingEvent: InviteTeammateEvent?
+    /// The new seat's invite link (`/invite/seat?token=…` on this build's web origin), set with
+    /// `.submitted`. It is the only way the invitee can join, and the server returns it only here.
+    private(set) var inviteLink: String?
 
     private let businessId: String
     private let api: APIClient
@@ -199,6 +202,7 @@ public final class InviteTeammateWizardViewModel: WizardModel {
             let response: BusinessTeamSeatInviteResponse = try await api.request(
                 BusinessTeamEndpoints.inviteSeat(businessId: businessId, request: request)
             )
+            inviteLink = response.inviteToken.map { InviteLinks.publicPageURLString(path: "/invite/seat?token=\($0)") }
             pendingEvent = .submitted(response.seat)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription

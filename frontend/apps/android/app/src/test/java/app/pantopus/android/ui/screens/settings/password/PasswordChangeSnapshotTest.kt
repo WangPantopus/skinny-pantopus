@@ -20,10 +20,10 @@ import org.junit.Test
 
 /**
  * A13.14 — Paparazzi baselines for the reshaped Change Password screen. Locks
- * the two design frames: READY (current verified, strong revealed new
- * password, confirm matches, CTA enabled, info chip) and ERROR (form banner,
- * wrong current password + reset shortcut, breached new password, mismatched
- * confirm, CTA locked).
+ * the two design frames: READY (current verified, strong new password shown
+ * as after a tap on Show password, confirm matches, CTA enabled, info chip)
+ * and ERROR (form banner, wrong current password + reset shortcut, breached
+ * new password, mismatched confirm, CTA locked).
  *
  * Note: the iOS counterpart relies on in-process render tripwires in
  * `PantopusTests/.../PasswordChangeSnapshotTests.swift`.
@@ -49,6 +49,7 @@ class PasswordChangeSnapshotTest {
                     onUpdate = { _, _ -> },
                     onSubmit = {},
                     onReset = {},
+                    newPasswordRevealed = true,
                 )
             }
         }

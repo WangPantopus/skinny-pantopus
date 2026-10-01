@@ -225,8 +225,8 @@ export default function ChatRoomView({
   }, []);
 
   // ── Reaction handler ────────────────────────────────
-  const handleReact = useCallback(async (messageId: string, emoji: string) => {
-    await chat.reactToMessage(messageId, emoji);
+  const handleReact = useCallback(async (messageId: string, emoji: string, reacted?: boolean) => {
+    await chat.reactToMessage(messageId, emoji, reacted);
   }, [chat.reactToMessage]);
 
   useSocketEvent('message:reaction_updated', useCallback((data: { messageId?: string; reactions?: Array<{ reaction: string; count: number; users: Array<{ id: string; name: string }>; reacted_by_me?: boolean }> }) => {
@@ -325,7 +325,8 @@ export default function ChatRoomView({
                     {Array.isArray((m as ChatMessage & { reactions?: unknown[] }).reactions) && ((m as ChatMessage & { reactions?: unknown[] }).reactions?.length || 0) > 0 && (
                       <MessageReactionBar
                         reactions={((m as ChatMessage & { reactions?: any[] }).reactions || []) as any}
-                        onReact={(emoji) => { void handleReact(String(m.id), emoji); }}
+                        // An earlier conversation's message isn't in this room's list, so say which state the tap asks for.
+                        onReact={(emoji) => { void handleReact(String(m.id), emoji, !(m.reactions || []).some((r) => r.reaction === emoji && r.reacted_by_me)); }}
                       />
                     )}
                   </div>

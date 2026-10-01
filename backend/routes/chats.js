@@ -179,6 +179,8 @@ const updateRoomSchema = Joi.object({
 
 const reactToMessageSchema = Joi.object({
   reaction: Joi.string().max(8).required(),
+  // The state the person asked for, so a retry keeps it. Without it (older apps) the route toggles.
+  reacted: Joi.boolean(),
 });
 
 async function isBusinessAccount(userId) {
@@ -2684,13 +2686,14 @@ async function buildReactionSummary(messageIds, requestingUserId) {
 
 /**
  * POST /api/chat/messages/:messageId/react
- * Toggle a reaction on a message (add if absent, remove if present).
+ * Add (`reacted: true`) or remove (`reacted: false`) a reaction on a message. Without `reacted`, toggle it (add if
+ * absent, remove if present).
  */
 router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate(reactToMessageSchema), async (req, res) => {
   try {
     const userId = req.user.id;
     const { messageId } = req.params;
-    const { reaction } = req.body;
+    const { reaction, reacted } = req.body;
 
     // Verify message exists and is not deleted
     const { data: message, error: msgErr } = await supabaseAdmin
@@ -2723,7 +2726,6 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
       return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
     }
 
-    // Toggle: check if reaction already exists
     const { data: existing } = await supabaseAdmin
       .from('MessageReaction')
       .select('id')
@@ -2732,12 +2734,14 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
       .eq('reaction', reaction)
       .maybeSingle();
 
-    if (existing) {
+    // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
+    const wanted = typeof reacted === 'boolean' ? reacted : !existing;
+    if (existing && !wanted) {
       await supabaseAdmin
         .from('MessageReaction')
         .delete()
         .eq('id', existing.id);
-    } else {
+    } else if (!existing && wanted) {
       await supabaseAdmin
         .from('MessageReaction')
         .insert({ message_id: messageId, user_id: userId, reaction });

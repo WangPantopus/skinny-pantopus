@@ -1275,6 +1275,8 @@ export const createBusinessInvoice = (businessId: string, data: {
   gig_id?: string | null;
   due_date?: string | null;
   memo?: string | null;
+  /** Kept across retries of one draft: a retry answers with the invoice already sent. */
+  client_request_id?: string;
 }) =>
   post<{ invoice: BusinessInvoice }>(`/api/businesses/${businessId}/invoices`, data);
 

@@ -1066,8 +1066,14 @@ class ChatConversationViewModel
             messageId: String,
             reaction: String,
         ) {
+            // The request carries the state this tap asks for, so a retry after a lost reply keeps the reaction instead
+            // of undoing it.
+            val reacted =
+                messages.firstOrNull { it.id == messageId }?.let { message ->
+                    message.reactions.none { it.reaction == reaction && it.reactedByMe }
+                }
             viewModelScope.launch {
-                when (val result = repo.reactToMessage(messageId, reaction)) {
+                when (val result = repo.reactToMessage(messageId, reaction, reacted)) {
                     is NetworkResult.Failure -> {
                         _actionFailure.value = "Couldn't add your reaction. Try again."
                         Timber.w("chat react failed: ${result.error.message}")
