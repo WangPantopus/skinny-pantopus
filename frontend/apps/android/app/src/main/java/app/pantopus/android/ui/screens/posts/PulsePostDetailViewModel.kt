@@ -255,6 +255,8 @@ class PulsePostDetailViewModel
                                 PulsePostDetailUiState.Loaded(it.content.copy(reactions = reconciled))
                             } ?: current
                         }
+                        // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
+                        postsRefresh.notifyPostsDidChange()
                     }
                     is NetworkResult.Failure -> {
                         _toastMessage.value = "Couldn't update your reaction"
@@ -357,7 +359,11 @@ class PulsePostDetailViewModel
             _isSaved.value = !before
             viewModelScope.launch {
                 when (val result = repo.toggleSave(postId)) {
-                    is NetworkResult.Success -> _isSaved.value = result.data.saved
+                    is NetworkResult.Success -> {
+                        _isSaved.value = result.data.saved
+                        // A stale card's next tap would undo this save: lists showing the post refetch.
+                        postsRefresh.notifyPostsDidChange()
+                    }
                     is NetworkResult.Failure -> {
                         _isSaved.value = before
                         _toastMessage.value = "Couldn't update the bookmark"
