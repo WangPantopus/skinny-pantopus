@@ -9,6 +9,30 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T09:22Z (Stream 1).**
+  - **Merged:** batch 281 (#1297, 09:21:28Z): **my #1292 and #1294**, Stream 2's #1293 (my iOS cell `e379c329`), Stream 3's #1295, and Stream 5's #1290. Master is **`e333507a9`**; the next batch is **282**.
+  - **Mine, merged:**
+    - **#1292 (`51a60c0d`): back to draft is reversible.**
+      - Organizers get "Publish train" while the train is a draft, on iOS and Android.
+      - Publish reuses the train's chat room. Re-publishing used to make a second room.
+      - Verified on both apps: E1, E3 and the 422 message; 1 room, same thread, history kept.
+    - **#1294 (`6c9376f3`): co-organizer chat membership.**
+      - The privacy defect: a removed co-organizer kept reading the train's coordination chat (200).
+      - Now add joins the chat and remove leaves it (403), unless the person is still a helper with an active signup.
+      - Verified through the API and in the iOS app.
+    - **Follow-up for a later decision:** stale memberships of co-organizers removed before #1294 need a one-time cleanup with a production review. Not done.
+  - **Peer device cell:** #1293 iOS (`e379c329`). On iOS it's defensive parity, as with #1275.
+  - **Decisions recorded (the user's standing direction: best UX):**
+    - **Stream 2:** a new post that won't appear on the surface on screen gets a truthful toast saying where it went, e.g. "Posted to your connections". Its own PR.
+    - **Stream 3:** I recommended hiding "Owner" in Change role, since the server always refuses it. Their call as owner.
+  - **Runtime:**
+    - The backend runs `686ea0427` (master `b91b6e8d1` + #1292 + #1294), from the `stream1-peer-takeover` worktree, detached.
+    - I hold device slots 1 (emulator-5558) and 2 (sim).
+  - **Queue:**
+    - #1296 (Stream 2 web, `6b3ba040`);
+    - Stream 2's card-actions PR (8c9312498, building);
+    - Stream 3's invite-link fixes (30e39e566);
+    - Stream 4's next native fixes.
 - **Update 2026-10-01T08:59Z (Stream 1).**
   - **Merged:** batch 280 (#1291, 08:58:20Z): Stream 2's #1284 + **#1287 (stacked)**; Stream 5's **#1289** (the Trains web "Sign up for this slot" dialog portals over the header/sidebar; I delegated and approved it as owner), #1285, #1288. Master is **`b91b6e8d1`**; the next batch is **281**.
   - **Trains cells sealed:**
@@ -682,7 +706,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T08:59Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T09:22Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
