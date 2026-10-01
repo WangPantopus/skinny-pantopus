@@ -88,17 +88,21 @@ class DPoPProofBuilder
             jti: String = UUID.randomUUID().toString(),
         ): String? {
             val segments = proof.split('.')
-            if (segments.size != JWS_SEGMENTS) return null
-            val header = decodeSegment(segments[0]) ?: return null
-            if (header["jwk"] != key.jwk) return null
-            val claims = decodeSegment(segments[1]) ?: return null
-            val htm = claims["htm"] as? String ?: return null
-            val htu = claims["htu"] as? String ?: return null
+            val header =
+                segments
+                    .takeIf { it.size == JWS_SEGMENTS }
+                    ?.let { decodeSegment(it[0]) }
+                    ?.takeIf { it["jwk"] == key.jwk }
+            val claims =
+                header
+                    ?.let { decodeSegment(segments[1]) }
+                    ?.takeIf { it["htm"] is String && it["htu"] is String }
+            if (header == null || claims == null) return null
             val payload =
                 linkedMapOf<String, Any>(
                     "jti" to jti,
-                    "htm" to htm,
-                    "htu" to htu,
+                    "htm" to claims.getValue("htm"),
+                    "htu" to claims.getValue("htu"),
                     "iat" to nowSeconds,
                 )
             (claims["rth"] as? String)?.let { payload["rth"] = it }
