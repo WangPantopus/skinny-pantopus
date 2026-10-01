@@ -424,7 +424,7 @@ export default function EditProfilePage() {
                     addSkill();
                   }
                 }}
-                className="flex-1 px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                className="flex-1 min-w-0 px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
                 aria-label="Add a skill"
                 placeholder="Add a skill..."
               />
