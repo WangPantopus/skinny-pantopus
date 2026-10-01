@@ -153,7 +153,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
     // Check for existing relationship (the unique pair index enforces one row)
     const { data: existing } = await supabaseAdmin
       .from('Relationship')
-      .select('id, status, requester_id, blocked_by')
+      .select('*')
       .or(
         `and(requester_id.eq.${requesterId},addressee_id.eq.${addressee_id}),and(requester_id.eq.${addressee_id},addressee_id.eq.${requesterId})`
       )
@@ -169,7 +169,8 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       if (existing.status === 'pending') {
         // If the other person already sent us a request, auto-accept
         if (existing.requester_id === addressee_id) {
-          const { data: updated, error } = await supabaseAdmin
+          // Only a still-pending request moves, so two requests at once can't both notify.
+          const { data: acceptedRows, error } = await supabaseAdmin
             .from('Relationship')
             .update({
               status: 'accepted',
@@ -177,12 +178,20 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
               accepted_at: new Date().toISOString(),
             })
             .eq('id', existing.id)
-            .select()
-            .single();
+            .eq('status', 'pending')
+            .select();
 
           if (error) {
             logger.error('Error auto-accepting relationship', { error: error.message });
             return res.status(500).json({ error: 'Failed to accept connection' });
+          }
+          const updated = acceptedRows?.[0];
+          if (!updated) {
+            const { data: current } = await supabaseAdmin.from('Relationship').select('*').eq('id', existing.id).maybeSingle();
+            if (current?.status === 'accepted') {
+              return res.status(200).json({ message: 'Connection established (mutual request)', relationship: current });
+            }
+            return res.status(409).json({ error: 'This request just changed. Refresh and try again.' });
           }
 
           // Main profile behavior: accepting a mutual connection also creates
@@ -219,8 +228,9 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
           });
         }
 
-        // Requester already sent a request
-        return res.status(400).json({ error: 'Connection request already pending' });
+        // Requester already sent this request: a repeat (a re-sent request or a second tap)
+        // answers like the first, without a second notification.
+        return res.status(200).json({ message: 'Connection request sent', relationship: existing });
       }
     }
 
@@ -295,11 +305,17 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Connection request not found' });
     }
 
+    // A repeat of an accept that already went through (a re-sent request or a second tap)
+    // answers like the first one did.
+    if (rel.status === 'accepted') {
+      return res.json({ message: 'Connection accepted', relationship: rel });
+    }
     if (rel.status !== 'pending') {
       return res.status(400).json({ error: `Cannot accept a ${rel.status} request` });
     }
 
-    const { data: updated, error } = await supabaseAdmin
+    // Only a still-pending request moves, so two accepts at once can't both notify.
+    const { data: acceptedRows, error } = await supabaseAdmin
       .from('Relationship')
       .update({
         status: 'accepted',
@@ -307,12 +323,18 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
         accepted_at: new Date().toISOString(),
       })
       .eq('id', relationshipId)
-      .select()
-      .single();
+      .eq('status', 'pending')
+      .select();
 
     if (error) {
       logger.error('Error accepting relationship', { error: error.message });
       return res.status(500).json({ error: 'Failed to accept connection' });
+    }
+    const updated = acceptedRows?.[0];
+    if (!updated) {
+      const { data: current } = await supabaseAdmin.from('Relationship').select('*').eq('id', relationshipId).maybeSingle();
+      if (current?.status === 'accepted') return res.json({ message: 'Connection accepted', relationship: current });
+      return res.status(409).json({ error: 'This request just changed. Refresh and try again.' });
     }
 
     // Main profile behavior: connecting auto-creates mutual follows.
