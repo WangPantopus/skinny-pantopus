@@ -173,9 +173,22 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T05:10:12Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T05:41:51Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T05:10:12Z):** master is `2abd0edd4` (batch 266).
+- **Latest (2026-10-01T05:41:51Z):** master is `7a42f1d7a` (batch 268).
+  - **First (master is red):** #1209 changed the edit form, so the `PulseComposeSnapshotTest.pulse_compose_edit_prefilled` golden no longer matches. Android unit tests have been red since batch 264.
+    - The re-record job (`claude/stream2-posts-android-edit-golden`) is queued in the heavy slot. Its first run was skipped at 16 GiB free; for this Android-only job the guard is now 12 GiB.
+    - #1241 and #1242's Android CI fails only on this golden: 5026 tests, 3 failed, all `pulse_compose_edit_prefilled`.
+  - **Sent with seals** (iOS cells by Stream 1):
+    - [#1248](https://github.com/WangPantopus/skinny-pantopus/pull/1248) Ask category in edit (Android: Handyman no longer preselected; picking it saves);
+    - [#1249](https://github.com/WangPantopus/skinny-pantopus/pull/1249) FAB clearance (Android: tapping the last row's Remove used to open the composer; now it removes);
+    - [#1250](https://github.com/WangPantopus/skinny-pantopus/pull/1250) iOS row labels without an empty segment.
+    - #1237 carries Stream 1's iOS bundle `e516402f…`.
+  - **Building:** candidate `1b4b001b8` (`claude/stream2-pulse-post-screen-sync`). After a save or like on a post's own screen, both apps now send the existing refresh signal, so the Pulse feed card isn't left stale.
+    - Reproduced on Android: save on F1's screen, the feed card stayed "Save post", and tapping it showed "Removed from bookmarks." and unsaved the post. A like left the count at 0.
+    - The pinned test `reaction_optimistic_then_reconcile` was updated.
+  - **Decision:** my Android-only build jobs use a 12 GiB disk guard (the shared slot rule is 10); jobs that include iOS use 14 GiB.
+- **Earlier (2026-10-01T05:10:12Z):** master is `2abd0edd4` (batch 266).
   - **Sent, with Stream 1:**
     - [#1237](https://github.com/WangPantopus/skinny-pantopus/pull/1237) iOS goes back one screen after a save (Stream 1 runs the iOS cells and seals);
     - [#1241](https://github.com/WangPantopus/skinny-pantopus/pull/1241) Android list paging after the list grows (seal `cde4423e…`);
