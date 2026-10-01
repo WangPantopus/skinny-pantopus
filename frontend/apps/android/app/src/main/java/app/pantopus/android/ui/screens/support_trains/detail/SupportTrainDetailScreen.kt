@@ -54,6 +54,7 @@ import app.pantopus.android.ui.screens.support_trains.detail.components.Recipien
 import app.pantopus.android.ui.screens.support_trains.detail.components.SlotRow
 import app.pantopus.android.ui.screens.support_trains.detail.components.TypeDatesCard
 import app.pantopus.android.ui.screens.support_trains.reserve.ReserveSlotSheet
+import app.pantopus.android.ui.screens.support_trains.reserve.rememberReserveSheetDraft
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -133,6 +134,10 @@ fun SupportTrainDetailScreen(
 
     val loaded = state as? SupportTrainDetailUiState.Loaded
     val reserveSheet = action.reserveSheet
+    // The sheet's draft is held here, outside the sheet's own window and outside the loaded check: after a rotation or
+    // theme change the screen reloads, so the sheet leaves and comes back, and the draft has to outlive that. Each
+    // opening of the sheet starts a new draft.
+    val reserveDraft = rememberReserveSheetDraft(reserveSheet?.slotId, sheetKey = reserveSheet)
     if (reserveSheet != null && loaded != null) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.dismissReserve() },
@@ -146,6 +151,7 @@ fun SupportTrainDetailScreen(
                 isSubmitting = action.isSubmitting,
                 onSubmit = { slotId, body, done -> viewModel.reserve(slotId, body, done) },
                 onClose = { viewModel.dismissReserve() },
+                draft = reserveDraft,
             )
         }
     }
