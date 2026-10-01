@@ -565,6 +565,37 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T14:52:08Z — Guest-pass fix verified end to end and sealed; [#1361](https://github.com/WangPantopus/skinny-pantopus/pull/1361) sent; residency-letter fix written on the residency-claim pattern (no migration); window 13:31:35–14:46:21Z (lease; device slot 1).**
+  - **Guest passes, [#1361](https://github.com/WangPantopus/skinny-pantopus/pull/1361)** (head `0f70fca2386d57b417ec8aaf9f280fbef8ae3a11`; merge-tree clean against master `ff08ed75b`):
+    - **Seal:** `20261001-stream3-home-guest-pass-idempotency-r1`, MANIFEST `94382d9582b1eb209580ded7309fc32e522b66534c5b5c14e3c6429cfc7d1be6` (secret scan: 225 files, 0 hits).
+    - **Before (master) → after:**
+      - API: the same create twice made 2 live passes → the same `request_id` makes 1 pass, and only the latest token opens. Two simultaneous sends also make 1. A revoked key gets 409.
+      - Lost reply (the proxy holds the reply 35 s; the app errors; the person retries): web (panel and `/share`), Android and iOS each went from **2 passes** to **1**, and the link the app shows or copies opens (200).
+      - A double tap/click sends 1 POST and makes 1 pass on all three.
+    - **Migration 20261001131000** was applied to the runtime DB at 14:21:02Z with `supabase migration up --local` (ledger 105). It is kept, with Stream 4's OK, and noted in the kit README.
+    - **Deploy order** (in the PR): apply the migration before the web ships. An un-migrated DB refuses `request_id` with 400.
+    - Sent to Stream 1.
+  - **Residency letters** (Stream 5's audit row `POST /residency-letters`, class none):
+    - **Branch `claude/stream3-residency-letter-request-key`** (head `175c3f3beae33af9bdd36d5bd346200533f56049`, 2 commits on master `cc14f2295`).
+    - **It reuses the residency-claim fix** `0b41fc3cb` in the same 9 files: `clientRequestId` with a primary key derived from sha256(Home, user, key), and a repeat returns the stored letter. A different purpose gets 409 REQUEST_CONFLICT, and a revoked or expired letter gets 409 LETTER_INACTIVE. iOS and Android add the claims' in-flight guard.
+    - **No migration.** Stream 1 released the number 20261001133000 and accepted the design, including the cross-member proof (another member's key gets their own letter).
+    - DECISION 13:09:21Z (`stream3-home-residency-letter-idempotency-r1`).
+    - **Checks:** the existing letter security tests 12/12; backend Jest 341 suites; web Jest 2343/2343 and `tsc` 0 on candidate `0fc0c997e` (both branches).
+    - **E2E** comes in my next window, after Stream 4's.
+  - **Candidate build `0fc0c997e`** (both branches, disjoint files):
+    - Android ktlint, detekt and the guests + place unit tests (9 suites, 0 failures) pass; assembleDebug succeeds.
+    - iOS builds.
+    - Both endpoint bindings are isolated.
+    - Heavy slot held 13:11:31–13:31:42Z.
+  - **Next, in order:**
+    1. The residency-letter E2E + seal + PR, and the D05 Android afters, in the next window.
+    2. Stream 4's Add Home finding: TalkBack reads "Use current location" twice (`AddHomeWizardScreen.kt:1163`).
+    3. The audit's other Stream 3 rows: the household invite's open-link path, owners/invite, owners/transfer, the request-household notification dedupe, and the ownership-claims race.
+  - **Lessons:**
+    - `supabase migration list --local` hung for 30 minutes on the kit stack (use `migration up` directly).
+    - The web drivers must save the rotated session back, or the next run reuses a spent refresh token and is signed out.
+    - The iOS share sheet isn't in the accessibility tree, and Vision OCR misses its "Copy" label. Copy sits in the first column on the "Add to" row; read the link with `simctl pbpaste`, then clear the pasteboard.
+
 - **2026-10-01T12:56:00Z — Guest-pass duplicate (security, routed by Stream 1 from Stream 5's audit) fixed on a branch; D05 native verified on iOS with its repair; window 12:35:37–12:55:29Z (lease; iOS slot 4).**
   - **Guest passes** (stage `stream3-home-guest-pass-idempotency-r1`, DECISION 12:28:01Z): the same create sent twice made **two live passes**.
     - **Branch `claude/stream3-guest-pass-request-key`** (head `0f70fca2386d57b417ec8aaf9f280fbef8ae3a11`, based on master `8ce4089a9`):
