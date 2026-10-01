@@ -9,6 +9,28 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — eight carried seals delivered; verification repairs ready for native candidate, 2026-10-01T22:29:48Z
+
+- **Carried queue:**8 fresh source-specific bundles sealed and independently pass Stream1's verifier. Root `/Users/yingpengwang/pantopus-stream5-recovery/audits/20261001-stream5-pr<N>-rebuilt-r1`; exact index `runtime/carried-seal-index.json`. Each explicitly separates accepted historical native reports (original bytes unavailable), fresh API/browser/cleanup and candidate32 iOS+Android compile/product hashes.1408 stays separate for its new device cell. No original seal was reconstructed or whole acceptance row closed.
+- **CI policy reconciliation:** verified the human's newer Stream1 18:00 resume, line59: CI informational/off. This supersedes older green-CI waiting text; no failed jobs in the recorded snapshot, pending jobs remain labeled pending. Stream1 accepted the bounded native-history/source/compile basis.1380+1381 remain atomic;1366 retarget follows1357,1367 follows1366 with new source/merge-tree addenda.
+
+|PR|Exact sealed head|Fresh manifest SHA256|
+|---|---|---|
+|#1338|`7f08153b7bd3f6e9c7bec6fbbf47f798b3933eb2`|`5d7b05b80e9b4070f926541f3327f31ce46438544912692824665133a86bbf53`|
+|#1356|`09e1ab26a07333c3122f6f1bc945e0a1d41d8b9d`|`53e7e69d15100aff392a75c9d4270eb3a8fdaf2ce1d5f251614dc58817abe078`|
+|#1357|`88d7fedd9174e90af008db395ef2934fcd8675fd`|`91a84a3cabe149b1f230ce2d45cd3b71635b7940b623f8300fb4045b42f8e55d`|
+|#1366|`ab5c3470ce87dd1343268697e7b3822463b3d25f`|`2aa4e13e114bc6918e9a0867f517fc559607079be6d1a6eecf7e280feaa48968`|
+|#1367|`0c655233fbf7d47bba825e3c9883fde6c108836b`|`ab88c70372e7b65d1c3751e7364a0488ae00f8a1a77ea12798739e26f42ab875`|
+|#1380|`80f2d582282d9da67f75c02c56548546c2abbcdc`|`9fc9a45ab4418e3def85ea64eb1e4c66790eb7bb09ba351128bf909c6d44f6fa`|
+|#1381|`736d38feaa7e71831b0bd0fe5021ab5688b07c71`|`f9998b8410396f40c4548da80aca3171f7bf5c2e642ab16650af24d9f832020a`|
+|#1387|`f8fbea6654002d6bee772bb1f63da0bb281f1376`|`faf6ff5979850edf2f1c54fcd72eb37098a17d551acb3432fca6163308ec4bb1`|
+
+- **Portfolio:** final local `72de962e3ecf3d6ad0aa1dca52610e060a5f8073` retains application blobs from accepted3c7f837435b29d290df385b39b07dbd529ffa3ff. New test file removed;10 regressions now extend existing uploadExifStrip suite,15 checks pass. Test-only addendum `20261001-stream5-portfolio-tests-addendum-r1` manifest01133cba5267cf13dbbeb2a4d1fc553f7808e32873a55e06127c0395fffb3afc, unsealed. Native candidate requested.
+- **Verification retry:** local `ecfe6a5956b72ddcf45254d96509dae85781c080`,9 existing files changed. Preserve uploaded File ID through registration failure; recover identical evidence through existing PK, current permissions and file ownership checked. API201→409 before,201→201 after;6 overlapping registrations→1 row; outsider403. Both real owner web forms lose committed registration reply then retry with1 upload/File/evidence. Existing backend/web/native suites extended; no new test files. Backend6293 pass after one unrelated timeout and focused/full reruns, privacy/web type/19 web tests/Swift checks pass; ESLint0 errors/7 existing warnings. Native build/device pending. Bundle `20261001-stream5-verification-retry-r1` unsealed manifesteb2666a73c1b38fe24f4dbcb2044b29a0ea1844d4fbf430a6bedc765bf080eff.
+- **Separate reproduced schema gap:** existing nonprofit owner/API types rejected by baseline check. Reserved140000, local `cce9a4d55fbbdad886771d88d956299b5a6e5ab7` adds only these2 values; both now persist pending, unknown rejected, existing rows preserved and business remains unverified. No approval/fee policy change. Forward migration needed because baseline/archive are applied history. Bundle `20261001-stream5-verification-types-r1` unsealed manifest46ced9e7629aad49f73c992ad8cae52c728e3ee13cb7d2afbb21d314f06fe15f. Local candidate retired after cleanup; no unmerged ledger row. Fresh DB CI replay/native applicability still pending.
+- **Cleanup:** all current synthetic verification/chat fixtures, captured UUID references/auth users and8 owned S3 objects cleaned to zero. Source-linked migration retirement receipt retained. Hosted private-storage/provider behavior unverified.
+- **Remaining:** PR1416 and both new native repairs go in Stream1's next incremental candidate. UserReport unique index waits for required production aggregate duplicate counts; no migration created. Chat orphan repro confirms2 uploads/1 attached message charge quota twice; all fixtures cleaned, bundle `20261001-stream5-chat-orphans-r1`, unsealed manifest2baf5a3949965eb91f5dbd2263ef167cb32d432cdf69d4b0f0372be6f95eab00. Existing purge is deleted-only and Home workers cannot be applied to chat unchanged; scoped retry prevention/abandoned-upload cleanup remains open. Prioritize carried retarget/queue proof before more native deltas.
+
 ## LIVE — portfolio repair verified locally; next evidence-registration retry, 2026-10-01T22:00:55Z
 
 - **Portfolio:** clean local commit `3c7f837435b29d290df385b39b07dbd529ffa3ff` on `codex/stream5-portfolio-retry`. Same native draft retains a request ID; existing File primary key and stable S3 names produce one item on retry. Concurrent changed contents return409 and clean only losing objects; tombstones stay deleted. No new application file/table/migration or visual change. Publication follows PR1416's queue milestone; native compile/device remains Stream1's.
