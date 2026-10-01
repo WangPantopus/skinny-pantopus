@@ -156,8 +156,8 @@ struct PlaceDashboardView: View {
                     onNudgeTap: { viewModel.onOpenPulse() },
                     onTap: { viewModel.onOpenPulse() }
                 )
-                    .padding(.horizontal, 16)
-                    .padding(.top, isClaimed ? 12 : 14)
+                .padding(.horizontal, 16)
+                .padding(.top, isClaimed ? 12 : 14)
 
                 VStack(spacing: 24) {
                     // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
