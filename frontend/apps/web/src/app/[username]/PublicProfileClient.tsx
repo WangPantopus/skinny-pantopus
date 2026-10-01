@@ -16,7 +16,6 @@ import { ProfileHeader, TabButton } from '@/components/profile/public';
 import { ReliabilityPanel, AboutCard, SkillsCard } from '@/components/profile/public/cards';
 import {
   OverviewTab,
-  ServicesTab,
   MissionsTab,
   PortfolioTab,
   ActivityTab,
@@ -24,10 +23,11 @@ import {
   OwnerInsightsTab,
   OwnerSettingsTab,
 } from '@/components/profile/public/tabs';
+import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
-type ProfileTab = 'overview' | 'services' | 'portfolio' | 'missions' | 'reviews' | 'activity' | 'insights' | 'settings';
+type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'activity' | 'insights' | 'settings';
 
 /** Extended profile shape returned by the public profile API. */
 type PublicProfileData = UserProfile & {
@@ -39,8 +39,6 @@ type PublicProfileData = UserProfile & {
   };
   account_type?: string;
   accountType?: string;
-  services?: { id?: string; name?: string; title?: string; promise?: string; description?: string; from_price?: number; rate?: number; price?: number; availability?: string }[];
-  availability?: string;
   verified?: boolean;
   typical_response_time?: string;
   response_time_label?: string;
@@ -49,7 +47,20 @@ type PublicProfileData = UserProfile & {
   followers_count?: number;
 };
 
-type ServiceEntry = NonNullable<PublicProfileData['services']>[number] | string;
+/**
+ * The public portfolio (GET /api/files/portfolio/:userId, the list the iOS and Android profiles show) as the tabs
+ * show it: a photo (its medium thumbnail when there is one), a title and a description.
+ */
+function toPortfolioEntries(files: Array<Record<string, any>> | undefined): PortfolioEntry[] {
+  return (files || []).map((file) => ({
+    id: String(file.id),
+    image_url: String(file.mime_type || '').startsWith('image/')
+      ? file.metadata?.thumbnails?.medium || file.file_url || undefined
+      : undefined,
+    title: file.metadata?.title || undefined,
+    description: file.metadata?.description || undefined,
+  }));
+}
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -84,6 +95,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
+  // null until the portfolio has loaded.
+  const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(null);
+  const [portfolioFailed, setPortfolioFailed] = useState(false);
+  const portfolioRequested = useRef<string | null>(null);
   const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
@@ -240,6 +255,20 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     }
   }, [profile?.id]);
 
+  const loadPortfolio = useCallback(async () => {
+    if (!profile?.id || portfolioRequested.current === profile.id) return;
+    portfolioRequested.current = profile.id;
+    setPortfolioFailed(false);
+    try {
+      const res = await api.files.getPortfolio(profile.id);
+      setPortfolio(toPortfolioEntries(res.files as unknown as Array<Record<string, any>>));
+    } catch (err) {
+      console.error('Failed to load portfolio:', err);
+      setPortfolioFailed(true);
+      portfolioRequested.current = null; // the next visit to the tab tries again
+    }
+  }, [profile?.id]);
+
   const loadUserPosts = useCallback(async () => {
     if (!profile?.id) return;
     if (!getAuthToken()) {
@@ -299,8 +328,11 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }, [profileIdentifier, loadProfile, loadCurrentUser, initialProfile]);
 
   useEffect(() => {
-    if (profile && ['overview', 'services', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
+    if (profile && ['overview', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
       loadUserGigs();
+    }
+    if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolio === null) {
+      loadPortfolio();
     }
     if (profile && ['overview', 'activity'].includes(activeTab) && userPosts.length === 0) {
       loadUserPosts();
@@ -308,7 +340,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (profile && (activeTab === 'overview' || activeTab === 'reviews')) {
       loadReviews();
     }
-  }, [activeTab, profile, userGigs.length, userPosts.length, loadUserGigs, loadUserPosts, loadReviews]);
+  }, [activeTab, profile, userGigs.length, userPosts.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
 
   useEffect(() => {
     if (currentUser && profile && currentUser.id !== profile.id) {
@@ -532,28 +564,6 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     profile.stripe_account_id ? { icon: '💳', text: 'Payment Verified', color: 'purple' } : null,
   ].filter(Boolean) as Array<{ icon: string; text: string; color: string }>;
 
-  const normalizedServices = (() => {
-    if (!Array.isArray(profile.services)) return [];
-    return profile.services.slice(0, 3).map((service: ServiceEntry, idx: number) => {
-      if (typeof service === 'string') {
-        return {
-          id: `service-${idx}`,
-          name: service,
-          promise: `Practical help with ${service.toLowerCase()}`,
-          price: null,
-          availability: profile.availability || 'Availability on request',
-        };
-      }
-      return {
-        id: service.id || `service-${idx}`,
-        name: service.name || service.title || `Service ${idx + 1}`,
-        promise: service.promise || service.description || 'Reliable neighborhood help',
-        price: service.from_price || service.rate || service.price || null,
-        availability: service.availability || profile.availability || 'Availability on request',
-      };
-    });
-  })();
-
   const featuredSkills = Array.isArray(profile.skills) ? profile.skills : [];
   // Only what the profile actually carries: no response time is recorded yet, so none is claimed.
   const responseTimeLabel =
@@ -576,8 +586,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     : 'No tasks as worker yet';
 
   const tabOptions: Array<{ key: ProfileTab; label: string; ownerOnly?: boolean }> = [
+    // No Services tab: no account has services to list (the API sends none), as on iOS and Android.
     { key: 'overview', label: 'Overview' },
-    { key: 'services', label: 'Services' },
     { key: 'portfolio', label: 'Portfolio' },
     { key: 'missions', label: 'Missions' },
     { key: 'reviews', label: `Reviews${displayReviewCount > 0 ? ` (${displayReviewCount})` : ''}` },
@@ -645,26 +655,19 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         {activeTab === 'overview' && (
           <OverviewTab
             profile={profile}
-            services={normalizedServices}
+            portfolio={portfolio}
+            portfolioFailed={portfolioFailed}
             skills={featuredSkills}
             reviews={reviews}
             userGigs={userGigs}
             gigsLoading={gigsLoading}
-            onRequest={handleRequestHire}
             onSkillRequest={handleRequestHire}
             onViewPortfolio={() => setActiveTab('portfolio')}
           />
         )}
-        {activeTab === 'services' && (
-          <ServicesTab
-            services={normalizedServices}
-            skills={featuredSkills}
-            onRequest={handleRequestHire}
-            isOwner={showOwnerOnly}
-            onEdit={() => router.push('/app/profile/edit')}
-          />
+        {activeTab === 'portfolio' && (
+          <PortfolioTab items={portfolio} failed={portfolioFailed} isOwner={showOwnerOnly} />
         )}
-        {activeTab === 'portfolio' && <PortfolioTab profile={profile} />}
         {activeTab === 'missions' && (
           <MissionsTab
             gigs={userGigs}
@@ -698,6 +701,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         {activeTab === 'insights' && showOwnerOnly && (
           <OwnerInsightsTab
             profile={profile}
+            portfolio={portfolio}
             displayReviewCount={displayReviewCount}
             displayRating={displayRating}
           />

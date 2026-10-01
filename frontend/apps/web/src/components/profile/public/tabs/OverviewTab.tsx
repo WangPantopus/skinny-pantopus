@@ -1,24 +1,9 @@
 import Image from 'next/image';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-
-interface NormalizedService {
-  id: string;
-  name: string;
-  promise: string;
-  price: number | string | null;
-  availability: string;
-}
-
-interface PortfolioItem {
-  image_url?: string;
-  title?: string;
-  description?: string;
-}
+import type { PortfolioEntry } from './PortfolioTab';
 
 interface ProfileData {
-  portfolio?: PortfolioItem[];
   skills?: string[];
-  services?: NormalizedService[];
   bio?: string;
   profile_picture_url?: string;
   followers_count?: number;
@@ -27,15 +12,18 @@ interface ProfileData {
   [key: string]: unknown;
 }
 
-function PortfolioPreview({ profile }: { profile: ProfileData }) {
-  if (!Array.isArray(profile.portfolio) || profile.portfolio.length === 0) {
+function PortfolioPreview({ items, failed }: { items: PortfolioEntry[] | null; failed: boolean }) {
+  if (!items) {
+    return <p className="text-sm text-app-secondary">{failed ? 'Couldn\'t load the portfolio.' : 'Loading portfolio…'}</p>;
+  }
+  if (items.length === 0) {
     return <p className="text-sm text-app-secondary">No portfolio highlights yet.</p>;
   }
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-      {profile.portfolio.slice(0, 6).map((item: PortfolioItem, i: number) => (
-        <div key={i} className="aspect-[4/3] rounded-lg overflow-hidden bg-surface-muted border border-app">
+      {items.slice(0, 6).map((item, i) => (
+        <div key={item.id} className="aspect-[4/3] rounded-lg overflow-hidden bg-surface-muted border border-app">
           {item.image_url ? (
             <Image src={item.image_url} alt={item.title || `Portfolio ${i + 1}`} width={400} height={300} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" quality={80} className="w-full h-full object-cover" />
           ) : (
@@ -73,24 +61,25 @@ interface GigData {
 
 interface OverviewTabProps {
   profile: ProfileData;
-  services: NormalizedService[];
+  /** The public portfolio; null while it loads. */
+  portfolio: PortfolioEntry[] | null;
+  portfolioFailed: boolean;
   skills: string[];
   reviews: ReviewData[];
   userGigs: GigData[];
   gigsLoading: boolean;
-  onRequest: () => void;
   onSkillRequest: () => void;
   onViewPortfolio: () => void;
 }
 
 export default function OverviewTab({
   profile,
-  services,
+  portfolio,
+  portfolioFailed,
   skills,
   reviews,
   userGigs,
   gigsLoading,
-  onRequest,
   onSkillRequest,
   onViewPortfolio,
 }: OverviewTabProps) {
@@ -99,32 +88,6 @@ export default function OverviewTab({
 
   return (
     <div className="space-y-5">
-      <section className="bg-surface rounded-xl border border-app p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-app">Featured Services</h3>
-        </div>
-        {services.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-app-strong p-4 text-sm text-app-secondary">
-            <p className="mb-3">No services listed yet. Visitors can still request help directly.</p>
-            <button onClick={onRequest} className="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium">Request help</button>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-3 gap-3">
-            {services.map((service) => (
-              <div key={service.id} className="rounded-lg border border-app p-4 bg-surface-muted">
-                <p className="font-semibold text-app">{service.name}</p>
-                <p className="text-sm text-app-secondary mt-1 line-clamp-2">{service.promise}</p>
-                <p className="text-sm text-app-strong mt-2 font-medium">
-                  {service.price ? `From $${service.price}` : 'Pricing on request'}
-                </p>
-                <p className="text-xs text-app-secondary mt-1 line-clamp-1">{service.availability}</p>
-                <button onClick={onRequest} className="mt-3 w-full px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium">Request this</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       <section className="bg-surface rounded-xl border border-app p-5">
         <h3 className="text-lg font-semibold text-app mb-3">Skills</h3>
         <div className="flex flex-wrap gap-2">
@@ -147,7 +110,7 @@ export default function OverviewTab({
           <h3 className="text-lg font-semibold text-app">Portfolio highlights</h3>
           <button onClick={onViewPortfolio} className="text-sm text-primary-600">View all</button>
         </div>
-        <PortfolioPreview profile={profile} />
+        <PortfolioPreview items={portfolio} failed={portfolioFailed} />
       </section>
 
       <section className="bg-surface rounded-xl border border-app p-5">
