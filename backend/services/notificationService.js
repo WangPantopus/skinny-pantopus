@@ -1382,6 +1382,7 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
 module.exports = {
   init,
   createNotification,
+  isPushEnabled,
   deliverStoredGigNotification,
   deliverStoredHomeTaskNotification,
   createBulkNotifications,
