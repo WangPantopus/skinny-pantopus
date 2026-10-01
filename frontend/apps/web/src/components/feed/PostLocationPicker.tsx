@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { MapPin, Search } from 'lucide-react';
 import * as api from '@pantopus/api';
 
@@ -19,9 +19,16 @@ interface PostLocationPickerProps {
   value: PostLocation | null;
   onChange: (loc: PostLocation | null) => void;
   accentColor?: string;
+  /** The chip's text in light mode (defaults to `accentColor`). */
+  textColor?: string;
+  /** The chip's text in dark mode (defaults to `textColor`). */
+  darkTextColor?: string;
 }
 
 type PickerMode = 'closed' | 'options' | 'search' | 'gps';
+
+// The chip's text follows the theme, like the post-type labels on PostCard (inline colors can't reach `dark:`).
+const CHIP_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[color:var(--post-type-text-dark)]';
 
 // Simple debounce hook
 function useDebounced(value: string, ms: number) {
@@ -33,7 +40,9 @@ function useDebounced(value: string, ms: number) {
   return v;
 }
 
-export default function PostLocationPicker({ value, onChange, accentColor = '#0284c7' }: PostLocationPickerProps) {
+export default function PostLocationPicker({
+  value, onChange, accentColor = '#0284c7', textColor, darkTextColor,
+}: PostLocationPickerProps) {
   const [mode, setMode] = useState<PickerMode>('closed');
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Record<string, any>[]>([]);
@@ -214,8 +223,13 @@ export default function PostLocationPicker({ value, onChange, accentColor = '#02
     return (
       <div ref={containerRef} className="flex items-center gap-1.5">
         <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium max-w-[260px]"
-          style={{ background: `${accentColor}10`, color: accentColor, border: `1px solid ${accentColor}20` }}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium max-w-[260px] ${CHIP_THEMED_TEXT}`}
+          style={{
+            background: `${accentColor}10`,
+            border: `1px solid ${accentColor}20`,
+            '--post-type-text': textColor ?? accentColor,
+            '--post-type-text-dark': darkTextColor ?? textColor ?? accentColor,
+          } as CSSProperties}
         >
           <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
