@@ -29,7 +29,7 @@ const {
   buildCursorPagination,
 } = require('../../services/feedService');
 
-const { canPostToAudience } = require('../../utils/trustState');
+const { canPostToAudience, canPostToPlace } = require('../../utils/trustState');
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -161,24 +161,22 @@ describe('Feed Canonical Contract', () => {
       expect(normalized.post_type).toBe('general');
     });
 
-    it('trust helpers use canonical ask_local for incoming_resident', () => {
-      // ask_local should be allowed
-      const result1 = canPostToAudience({
-        postAs: 'personal',
-        audience: 'nearby',
-        postType: 'ask_local',
-        trustLevel: 'incoming_resident',
-      });
-      expect(result1.allowed).toBe(true);
+    it('trust helpers leave incoming residents to the Place gate: read-only without a fresh GPS fix', () => {
+      // No Nearby rule of their own: any canonical Place type passes the audience check.
+      for (const postType of ['ask_local', 'local_update']) {
+        expect(canPostToAudience({
+          postAs: 'personal',
+          audience: 'nearby',
+          postType,
+          trustLevel: 'incoming_resident',
+        }).allowed).toBe(true);
+      }
 
-      // Legacy 'question' should be rejected (not in allowed list)
-      const result2 = canPostToAudience({
-        postAs: 'personal',
-        audience: 'nearby',
-        postType: 'question',
-        trustLevel: 'incoming_resident',
-      });
-      expect(result2.allowed).toBe(false);
+      // Without a fresh GPS fix the Place gate keeps them read-only, with their own message.
+      const gate = canPostToPlace({ trustLevel: 'incoming_resident', targetLatitude: 45.6387, targetLongitude: -122.6615 });
+      expect(gate.eligible).toBe(false);
+      expect(gate.readOnly).toBe(true);
+      expect(gate.reason).toMatch(/incoming resident/);
     });
 
     it('trust helpers use canonical types for business target_area', () => {
@@ -508,17 +506,23 @@ describe('Feed Canonical Contract', () => {
       }
     });
 
-    it('trust helpers reject legacy types for incoming_resident nearby audience', () => {
-      // incoming_resident can only post ask_local and recommendation
-      for (const legacyType of LEGACY_TYPES) {
-        const result = canPostToAudience({
-          postAs: 'personal',
-          audience: 'nearby',
-          postType: legacyType,
-          trustLevel: 'incoming_resident',
-        });
-        expect(result.allowed).toBe(false);
-      }
+    it('trust helpers let an incoming resident with a fresh GPS fix post like any visitor', () => {
+      // Physically there, a claimant keeps a visitor's rights: no narrower type list.
+      const gate = canPostToPlace({
+        trustLevel: 'incoming_resident',
+        gpsTimestamp: new Date().toISOString(),
+        gpsLatitude: 45.6387,
+        gpsLongitude: -122.6615,
+        targetLatitude: 45.6387,
+        targetLongitude: -122.6615,
+      });
+      expect(gate).toEqual({ eligible: true, readOnly: false });
+      expect(canPostToAudience({
+        postAs: 'personal',
+        audience: 'nearby',
+        postType: 'local_update',
+        trustLevel: 'incoming_resident',
+      }).allowed).toBe(true);
     });
 
     it('trust helpers reject legacy types for business target_area audience', () => {
