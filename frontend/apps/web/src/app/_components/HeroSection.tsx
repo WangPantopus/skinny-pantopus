@@ -14,7 +14,7 @@ export default function HeroSection() {
       style={{ minHeight: '100vh', padding: '140px 0 80px' }}
     >
       <div className="w-full max-w-[1440px] mx-auto px-6 sm:px-10">
-        <div className="grid gap-12 lg:gap-16 items-center" style={{ gridTemplateColumns: 'minmax(0, 1.05fr) minmax(0, 0.95fr)' }}>
+        <div className="grid gap-12 lg:gap-16 items-center lg:[grid-template-columns:minmax(0,1.05fr)_minmax(0,0.95fr)]">
           {/* Text */}
           <div className="max-w-[720px]">
             <p
@@ -59,11 +59,11 @@ export default function HeroSection() {
                 aria-label="Type your address to see your free preview"
               >
                 <span aria-hidden="true" style={{ color: 'var(--color-primary-700)', fontSize: '20px' }}>⌖</span>
-                <span className="flex-1" style={{ color: 'var(--ink-3)', fontSize: '16px' }}>
+                <span className="flex-1 line-clamp-2" style={{ color: 'var(--ink-3)', fontSize: '16px' }}>
                   Type your address…
                 </span>
                 <span
-                  className="inline-flex items-center justify-center h-11 px-5 rounded-[12px] text-white font-semibold text-[15px]"
+                  className="inline-flex items-center justify-center h-11 px-5 rounded-[12px] text-white font-semibold text-[15px] whitespace-nowrap"
                   style={{
                     background: 'var(--color-primary-700)',
                     boxShadow: '0 1px 0 rgba(255,255,255,0.2) inset, var(--shadow-primary)',
