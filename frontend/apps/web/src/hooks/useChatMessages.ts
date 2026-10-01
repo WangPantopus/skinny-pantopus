@@ -200,7 +200,8 @@ export interface UseChatMessagesReturn {
   retryMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
-  reactToMessage: (messageId: string, emoji: string) => Promise<void>;
+  /** `reacted`: the state asked for; by default the opposite of the message's current state. */
+  reactToMessage: (messageId: string, emoji: string, reacted?: boolean) => Promise<void>;
 }
 
 /** A send refused by the server (403): resending cannot succeed. */
@@ -749,12 +750,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   // ── React to message (useMutation — swallows errors per original) ──
   type ReactResult = { reactions?: Array<{ reaction: string; count: number; users: Array<{ id: string; name: string }>; reacted_by_me: boolean }> };
-  const reactMutation = useMutation<ReactResult, Error, { messageId: string; emoji: string }>({
-    mutationFn: async ({ messageId, emoji }) => {
+  const reactMutation = useMutation<ReactResult, Error, { messageId: string; emoji: string; reacted?: boolean }>({
+    mutationFn: async ({ messageId, emoji, reacted }) => {
       if (socket?.connected) {
         return new Promise<ReactResult>((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Reaction request timed out')), 5000);
-          socket.emit('message:react', { messageId, reaction: emoji }, (response: { error?: string; reactions?: ReactResult['reactions'] }) => {
+          socket.emit('message:react', { messageId, reaction: emoji, reacted }, (response: { error?: string; reactions?: ReactResult['reactions'] }) => {
             clearTimeout(timeout);
             if (response?.error) {
               reject(new Error(String(response.error)));
@@ -764,7 +765,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           });
         });
       }
-      return api.chat.reactToMessage(messageId, emoji);
+      return api.chat.reactToMessage(messageId, emoji, reacted);
     },
     onSuccess: (result, vars) => {
       const reactions = (result?.reactions || []).map((reaction) => ({
@@ -780,9 +781,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     // onError: swallow (original behavior)
   });
 
-  const reactToMessage = useCallback(async (messageId: string, emoji: string): Promise<void> => {
+  const reactToMessage = useCallback(async (messageId: string, emoji: string, reacted?: boolean): Promise<void> => {
+    // Send the state this tap asks for, so a retry after a lost reply keeps the reaction instead of undoing it.
+    const message = messagesRef.current.find((m) => String(m.id) === String(messageId));
+    const wanted = reacted ?? (message ? !(message.reactions || []).some((r) => r.reaction === emoji && r.reacted_by_me) : undefined);
     try {
-      await reactMutation.mutateAsync({ messageId, emoji });
+      await reactMutation.mutateAsync({ messageId, emoji, reacted: wanted });
     } catch {
       // Swallow errors to preserve original behavior
     }

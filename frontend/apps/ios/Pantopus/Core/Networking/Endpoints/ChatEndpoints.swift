@@ -96,13 +96,15 @@ public enum ChatEndpoints {
         Endpoint(method: .delete, path: "/api/chat/messages/\(id)")
     }
 
-    /// `POST /api/chat/messages/:id/react` — toggle a single-character
-    /// reaction on a message. Route `backend/routes/chats.js:2558`.
-    public static func reactToMessage(id: String, reaction: String) -> Endpoint {
+    /// `POST /api/chat/messages/:id/react` — add (`reacted: true`) or
+    /// remove (`reacted: false`) a single-character reaction on a message,
+    /// so a retry keeps the asked-for state; without `reacted` the server
+    /// toggles it. Route `backend/routes/chats.js:2558`.
+    public static func reactToMessage(id: String, reaction: String, reacted: Bool? = nil) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/chat/messages/\(id)/react",
-            body: ReactToChatMessageBody(reaction: reaction)
+            body: ReactToChatMessageBody(reaction: reaction, reacted: reacted)
         )
     }
 
@@ -189,12 +191,15 @@ public struct FindOrCreateTopicBody: Encodable, Sendable {
     }
 }
 
-/// `POST /api/chat/messages/:id/react` body.
+/// `POST /api/chat/messages/:id/react` body. A nil `reacted` is left out
+/// of the JSON.
 public struct ReactToChatMessageBody: Encodable, Sendable {
     public let reaction: String
+    public let reacted: Bool?
 
-    public init(reaction: String) {
+    public init(reaction: String, reacted: Bool? = nil) {
         self.reaction = reaction
+        self.reacted = reacted
     }
 }
 
