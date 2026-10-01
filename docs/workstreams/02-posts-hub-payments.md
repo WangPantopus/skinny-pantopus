@@ -7,7 +7,18 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z (successor: start here)
+## CURRENT RESUME — SUCCESSOR 2026-10-01T20:54:27Z
+
+- **Active:** Stream 2: Posts, Hub and payments (Codex chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`), app checkout `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. No subagents used. Stream 1 remains sole merger.
+- **Verified live:** master `f88f74641f019e35bcdba24d71ccec38ce5b0d8e`; #1412 `7b9ad6b372afae1e5f69784766692d96592675b6` open, applicable CI passed; #1413 `8a98dc8946eeffc435b73a862747b9c5ceff5b1b` open, completed checks green and iOS build still running at takeover. Recheck before integration.
+- **Host discrepancy:** all previous private runtime/evidence/memory paths and containers were absent. Historical acceptance and reported seals remain historical, not locally reverified. The old living inventory and named memory files could not be read; this status's existing backlog remains authoritative. Do not reconstruct missing historical evidence bytes or claim matching old seals.
+- **Fresh runtime recovered:** `/Users/yingpengwang/.config/pantopus/stream2-posts-runtime-20261001`; seven owned `*_pantopus-stream2-posts-20261001` containers, API64581/SQL64582, real backend18160 and pass-through18168 (both health200), Next18169 serving this app checkout. CLI2.116.0 and pnpm9.15.4; fresh replay through migration20261001137000. Jobs off, unusable Stripe TEST placeholder, loopback-only egress. Private pids/keys/fixture/session files remain private. No native build or device used. Stream 1 restored canonical coordination and shared slots.
+- **Ready for coordinator review:** [#1414](https://github.com/WangPantopus/skinny-pantopus/pull/1414), `claude/stream2-tasks-mobile-overflow`, exact head `304360226af4236dd473ec2786c2f6388cd00e1c`. New bundle [RESULT.md](/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/20261001-stream2-tasks-mobile-overflow-r1/RESULT.md), seal/MANIFEST SHA256 `033472352e5030e8753590c7e4e9eb9c1289d7c2cfed86f26964bd0dada53628`.
+- **Decision and evidence:** add existing `grid-cols-1` (gigs-v2 precedent) and give existing timeline steps intrinsic minimum widths. Grid-only repair revealed compressed labels, so `min-w-max` keeps unchanged steps inside their existing scrolling card. Two sizing classes; no new app/test/schema files, palette or navigation change. Real Chrome + local API + persisted assigned synthetic task: 390/438 before,390/390 after; real wheel timeline68px/window0; reload390;768/1280 rectangles identical. 122 web Jest suites/2343 tests pass; scoped lint0 errors/6 existing warnings. Both exact task ids cleaned;351/353 complete table fingerprints match, including User/counters; only owned sign-in bookkeeping retained for final teardown. New scan/seal tools bind exact scanned paths/hashes and reject scan-to-seal mutations; reconstructed-v1 explicitly does not validate old bundles.
+- **Next (Stream 1 priority at takeover):** reconstruct smallest real-browser #1412 evidence at390/768/1280 and real-API #1413 evidence on their exact heads; send paths to Stream 1 for its native cells. Then resume ordered backlog with the unnamed Pulse Preferences switch, followed by bounded in-scope sweep. #1414 awaits coordinator review/merge; no acceptance-row count changes.
+- **Limits:** new evidence is local browser/API/SQL only, seeded assigned state; no cut posting/bidding journey, provider, money capture, hosted, native, physical-device or launch-ready claim. Initial cold dev-login hydration timed out; warm retry succeeded without app changes (documented in result).
+
+## PREVIOUS RESUME — HANDOFF 2026-10-01T18:09:59Z (successor: start here)
 
 The session "Stream 2: Posts, Hub and payments" (the 2026-09-30 evening successor) handed over at the user's request.
 
@@ -326,7 +337,9 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T18:09:59Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T20:54:27Z (Stream 2 successor)
+
+- **Latest:** fresh-host runtime recovered; #1414 ready for review. See CURRENT RESUME above for exact source, new seal, decisions, cleanup and next action. Previous entries below retain their original evidence limits.
 
 - **Latest (2026-10-01T18:09:59Z): HANDED OFF** at the user's request. See "CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z" above and [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md).
   - Since 17:32Z:
