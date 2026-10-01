@@ -9,6 +9,22 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T16:25Z (Stream 1), batches 307–308.**
+  - **Merged:**
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 307 | #1385 | 16:19:05Z | Stream 2's **#1379** (a repeated wallet credit returns the first row; migration **20261001135000**; the inner function stays owner-only) and **#1383** (Android "Delete this reply?" survives a theme or font change) |
+    | 308 | #1386 | 16:23:59Z | Stream 5's **#1382** (chat socket hardening) and **#1371** (one chat per crew inquiry opened twice at once) |
+
+    Master is **`7b41c8b04`**; the next batch is **309**.
+  - **Deploy note:** #1382 should reach production promptly. Migration 135000 goes with this release.
+  - **Queued:**
+    - **Candidate 31** (`7dfeb5d27` = `e8b23cc52` + Stream 5's #1380 + #1381 + Stream 2's iOS composer live-text fix `f238536a7`) for the seat-invite and composer device cells. #1380 (sealed `34eed941`) merges with #1381 after them.
+    - **Stream 5, after seals:** #1338, #1356, #1357, #1367; then #1366 after #1357.
+  - **Approved:**
+    - **Stream 2:** the web video upload uses a content-addressed key scoped per owner and post.
+    - **Stream 5:** the chat reaction retry sends the desired state (`reacted`), the same pattern as #1365.
 - **Update 2026-10-01T16:11Z (Stream 1), batches 304–306.**
   - **Merged:**
 
