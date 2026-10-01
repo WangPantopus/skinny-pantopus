@@ -176,8 +176,9 @@ function DiscoverPageContent() {
     if (!canRunSearch) return 'Type at least 2 characters to search.';
     if (loading) return 'Searching...';
     if (failedForCurrent) return 'Couldn\u2019t search right now.';
+    if (!searchedCurrent) return 'Press Search to see results.';
     return `${totalCount} result${totalCount === 1 ? '' : 's'}`;
-  }, [canRunSearch, loading, totalCount, failedForCurrent]);
+  }, [canRunSearch, loading, totalCount, failedForCurrent, searchedCurrent]);
 
   return (
     <div className="bg-app min-h-screen">
