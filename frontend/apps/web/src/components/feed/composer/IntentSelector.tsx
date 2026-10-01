@@ -41,9 +41,11 @@ interface IntentSelectorProps {
   onSelect: (key: PostType) => void;
   user?: { name?: string; first_name?: string; username?: string; profile_picture_url?: string } | null;
   activeSurface?: FeedSurface;
+  /** When set, only these post types are offered (the Place feed refuses the others). */
+  allowedTypes?: readonly string[];
 }
 
-export default function IntentSelector({ onSelect, user, activeSurface }: IntentSelectorProps) {
+export default function IntentSelector({ onSelect, user, activeSurface, allowedTypes }: IntentSelectorProps) {
   const isNetworkSurface = activeSurface === 'connections';
   const sharePrompt = activeSurface === 'connections'
     ? 'Share something with your connections…'
@@ -73,7 +75,7 @@ export default function IntentSelector({ onSelect, user, activeSurface }: Intent
       </div>
       {!isNetworkSurface && (
         <div className="flex flex-wrap gap-2">
-          {INTENTS.filter((i) => i.key !== 'general').map((intent) => (
+          {INTENTS.filter((i) => i.key !== 'general' && (!allowedTypes || allowedTypes.includes(i.key))).map((intent) => (
             <button
               key={intent.key}
               onClick={() => onSelect(intent.key)}
