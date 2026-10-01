@@ -6351,6 +6351,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Package unboxing", navController)
                     // A17.14 — the capture flow loads the real `MailPackage` row for
                     // the routed mail id and every action writes to the p2 package
                     // routes. Without a mail id there is nothing to persist, and the
@@ -6386,6 +6387,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.EARN) {
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Earn", navController)
                     EarnScreen(
                         onBack = { navController.popBackStack() },
                         onHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
@@ -6869,6 +6871,8 @@ private fun launchCutLabel(destination: DeepLinkRouter.Destination): String =
         DeepLinkRouter.Destination.DiscoverHub -> "Discover"
         is DeepLinkRouter.Destination.BookingDetail, DeepLinkRouter.Destination.MyBookings -> "Bookings"
         is DeepLinkRouter.Destination.MailTranslation -> "Mail translation"
+        DeepLinkRouter.Destination.Earn -> "Earn"
+        is DeepLinkRouter.Destination.Unboxing -> "Package unboxing"
         DeepLinkRouter.Destination.ViewAs -> "View as"
         else -> "Beacons"
     }

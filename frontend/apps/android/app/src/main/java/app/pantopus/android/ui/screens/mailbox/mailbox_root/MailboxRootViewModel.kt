@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -134,7 +135,8 @@ class MailboxRootViewModel
          */
         val pendingRoutingCount: StateFlow<Int> = _pendingRoutingCount.asStateFlow()
 
-        val drawers: List<MailboxDrawer> = MailboxDrawer.entries
+        /** Launch cut #8 (Mail extras): Earn (offers and ad earnings that never reach the withdrawable wallet) is hidden. */
+        val drawers: List<MailboxDrawer> = MailboxDrawer.entries.filter { it != MailboxDrawer.Earn || LaunchFeatures.mailExtras }
         val mailTabs: List<MailboxTab> = MailboxTab.entries
 
         private var onOpenMail: (String) -> Unit = {}

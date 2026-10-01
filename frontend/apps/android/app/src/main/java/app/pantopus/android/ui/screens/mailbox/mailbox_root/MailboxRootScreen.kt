@@ -195,14 +195,17 @@ private fun MailboxRootSettingsMenu(
             },
             modifier = Modifier.testTag("mailboxRootSettings.map"),
         )
-        DropdownMenuItem(
-            text = { Text("Scan an item", color = PantopusColors.appText) },
-            onClick = {
-                expanded = false
-                onOpenUnboxing()
-            },
-            modifier = Modifier.testTag("mailboxRootSettings.scanUnboxing"),
-        )
+        // Launch cut #7 (Household extras): this opens package unboxing.
+        if (LaunchFeatures.householdExtras) {
+            DropdownMenuItem(
+                text = { Text("Scan an item", color = PantopusColors.appText) },
+                onClick = {
+                    expanded = false
+                    onOpenUnboxing()
+                },
+                modifier = Modifier.testTag("mailboxRootSettings.scanUnboxing"),
+            )
+        }
         DropdownMenuItem(
             text = { Text("Mail tasks", color = PantopusColors.appText) },
             onClick = {

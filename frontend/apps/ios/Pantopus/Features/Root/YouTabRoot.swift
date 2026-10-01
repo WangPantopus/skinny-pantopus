@@ -3014,10 +3014,11 @@ extension YouRoute {
         // Launch cut #7 (Household extras): bills, pets, calendar, packages, polls.
         case .homeBills, .billDetail, .addBill, .homePets, .homeCalendar, .addCalendarEvent,
              .calendarEventDetail, .homePackages, .packageDetail, .logPackage, .homePolls,
-             .pollDetail, .startPoll:
+             .pollDetail, .startPoll, .unboxing:
             LaunchFeatures.householdExtras
-        // Launch cut #8 (Mail extras): letters, Mail Party, community mail, translations.
-        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation:
+        // Launch cut #8 (Mail extras): letters, Mail Party, community mail,
+        // translations, and Earn (offers and ad earnings).
+        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation, .earn:
             LaunchFeatures.mailExtras
         default:
             true

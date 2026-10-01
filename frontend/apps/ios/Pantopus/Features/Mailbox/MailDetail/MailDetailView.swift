@@ -176,9 +176,11 @@ public struct MailDetailView: View {
         // Launch cut #8 (Mail extras): certified mail (e-signing), community
         // mail, ceremonial keepsakes and party invitations read as plain
         // mail. Launch cut #4 (Open gigs): a bid by mail has no Accept.
+        // Launch cut #7 (Household extras): package tracking (timeline, Share
+        // ETA, Report issue, virtual unboxing) reads as plain mail, as on web.
         case .certified where !LaunchFeatures.mailExtras, .community where !LaunchFeatures.mailExtras,
              .memory where !LaunchFeatures.mailExtras, .party where !LaunchFeatures.mailExtras,
-             .gig where !LaunchFeatures.openGigs:
+             .gig where !LaunchFeatures.openGigs, .package where !LaunchFeatures.householdExtras:
             generic(content)
         case .booklet:
             booklet(content)

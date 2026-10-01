@@ -9,10 +9,14 @@ import {
   useCreateVaultFolder,
 } from '@/lib/mailbox-queries';
 import { VaultFolderCard } from '@/components/mailbox';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Helpers ──────────────────────────────────────────────────
 
-const DRAWER_ORDER = ['personal', 'home', 'business', 'earn'] as const;
+// Launch cut #8 (Mail extras): Earn (offers and ad earnings) is hidden.
+const DRAWER_ORDER = (['personal', 'home', 'business', 'earn'] as const).filter(
+  (d) => d !== 'earn' || launchFeatures.mailExtras,
+);
 const DRAWER_LABELS: Record<string, string> = {
   personal: 'Personal',
   home: 'Home',
