@@ -4890,6 +4890,107 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
 
 // ─── Parameterized /:businessId/invoices routes (must come AFTER literal /invoices/* routes) ───
 
+const INVOICE_RECIPIENT_SOURCE_LIMIT = 200;
+const INVOICE_RECIPIENT_RESULT_LIMIT = 20;
+
+/**
+ * GET /:businessId/invoice-recipients?q= — the people this crew can pick when sending an
+ * invoice: those it already knows (invoiced before, booked with it, hired it for a task,
+ * messaged it) and the sender's own connections, matched by name or username. Never an open
+ * member search. Without q, the most recent ones. Editors and up, like sending an invoice.
+ */
+router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const userId = req.user.id;
+
+    const access = await checkBusinessPermission(businessId, userId, 'profile.edit');
+    if (!access.hasAccess) {
+      return res.status(403).json({ error: 'Editor role or above required to create invoices' });
+    }
+
+    const query = String(req.query.q || '').trim().slice(0, 80).toLowerCase();
+
+    const { data: crewRooms } = await supabaseAdmin
+      .from('ChatParticipant')
+      .select('room_id')
+      .eq('user_id', businessId)
+      .limit(INVOICE_RECIPIENT_SOURCE_LIMIT);
+    const crewRoomIds = (crewRooms || []).map((r) => r.room_id);
+
+    const [invoiced, booked, hired, messaged, connections] = await Promise.all([
+      supabaseAdmin.from('BusinessInvoice').select('recipient_user_id, created_at')
+        .eq('business_user_id', businessId)
+        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Booking').select('invitee_user_id, created_at')
+        .eq('owner_type', 'business').eq('owner_id', businessId).not('invitee_user_id', 'is', null)
+        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Gig').select('user_id, accepted_at')
+        .eq('accepted_by', businessId)
+        .order('accepted_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      crewRoomIds.length === 0 ? { data: [] } : supabaseAdmin.from('ChatParticipant')
+        .select('user_id, joined_at, room:room_id!inner(type)')
+        .in('room_id', crewRoomIds).eq('room.type', 'direct').neq('user_id', businessId)
+        .order('joined_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, accepted_at')
+        .eq('status', 'accepted').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
+        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+    ]);
+
+    // The first source to name someone gives their label; within a source, most recent first.
+    const relationById = new Map();
+    const add = (id, relation) => {
+      if (id && !relationById.has(id)) relationById.set(id, relation);
+    };
+    (invoiced.data || []).forEach((r) => add(r.recipient_user_id, 'invoiced'));
+    (booked.data || []).forEach((r) => add(r.invitee_user_id, 'booked'));
+    (hired.data || []).forEach((r) => add(r.user_id, 'hired'));
+    (messaged.data || []).forEach((r) => add(r.user_id, 'messaged'));
+    (connections.data || []).forEach((r) => add(r.requester_id === userId ? r.addressee_id : r.requester_id, 'connection'));
+
+    const { blockedUserIds } = require('../services/blockService');
+    const [crewBlocks, senderBlocks] = await Promise.all([blockedUserIds(businessId), blockedUserIds(userId)]);
+    for (const id of [businessId, userId, ...crewBlocks, ...senderBlocks]) relationById.delete(id);
+
+    const order = [...relationById.keys()];
+    if (order.length === 0) return res.json({ people: [] });
+
+    // Looked up in chunks so a crew that knows many people doesn't send one huge id list.
+    const chunks = [];
+    for (let i = 0; i < order.length; i += 100) chunks.push(order.slice(i, i + 100));
+    const lookups = await Promise.all(chunks.map((ids) => supabaseAdmin
+      .from('User')
+      .select('id, name, username, profile_picture_url, account_type')
+      .in('id', ids)));
+    const failed = lookups.find((r) => r.error);
+    if (failed) throw failed.error;
+
+    const byId = new Map(lookups.flatMap((r) => r.data || []).map((u) => [u.id, u]));
+    const people = order
+      .map((id) => byId.get(id))
+      .filter((u) => u && u.account_type !== 'business')
+      .filter((u) => !query
+        || (u.name || '').toLowerCase().includes(query)
+        || (u.username || '').toLowerCase().includes(query))
+      .slice(0, INVOICE_RECIPIENT_RESULT_LIMIT)
+      .map((u) => ({
+        id: u.id,
+        name: u.name || u.username,
+        username: u.username,
+        profile_picture_url: u.profile_picture_url || null,
+        relation: relationById.get(u.id),
+      }));
+
+    res.json({ people });
+  } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: "Couldn't load people right now. Please try again.", code: err.code });
+    }
+    logger.error('Invoice recipients error', { error: err.message });
+    res.status(500).json({ error: 'Failed to load people', code: 'INTERNAL_ERROR' });
+  }
+});
+
 /**
  * POST /:businessId/invoices — Create and send an invoice
  */
