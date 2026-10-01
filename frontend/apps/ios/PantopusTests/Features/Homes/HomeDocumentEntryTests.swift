@@ -2,6 +2,17 @@ import XCTest
 @testable import Pantopus
 
 final class HomeDocumentEntryTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // The Bills and Packages tiles and tab: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     func testDocumentsEntryRequiresConfirmedReadAccess() {
         let cases: [(HomeAccessDTO?, Bool)] = [
             (nil, false),

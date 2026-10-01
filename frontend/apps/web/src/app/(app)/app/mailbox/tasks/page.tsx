@@ -11,6 +11,7 @@ import {
 import { TaskCard } from '@/components/mailbox';
 // The user's Home; each page used a hard-coded 'home_1' stub.
 import useHomeProfile from '../_components/useMailboxHome';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Priority sort weight (high > medium > low) ──────────────
 const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -182,7 +183,8 @@ function TaskCreationPanel({
         </div>
 
         {/* Gig alternative */}
-        <div className="relative pt-4">
+        {/* Launch cut #4 (Open Gigs): no "Post as Gig" (open task post). */}
+        {launchFeatures.openGigs && <div className="relative pt-4">
           <div className="absolute inset-x-0 top-4 flex items-center">
             <div className="flex-1 h-px bg-app-surface-sunken" />
             <span className="px-3 text-xs text-app-text-muted">or</span>
@@ -195,7 +197,7 @@ function TaskCreationPanel({
           >
             Post as Gig instead →
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );
@@ -361,7 +363,8 @@ function TaskDetailPanel({
           )}
 
           {/* Gig status or post as gig */}
-          <div className="pt-4 border-t border-app-border-subtle">
+          {/* Launch cut #4 (Open Gigs): no "Post as Gig"; a posted Gig keeps its status. */}
+          {(launchFeatures.openGigs || task.converted_to_gig_id) && <div className="pt-4 border-t border-app-border-subtle">
             {task.converted_to_gig_id ? (
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
@@ -371,7 +374,7 @@ function TaskDetailPanel({
                   Active
                 </span>
               </div>
-            ) : !isCompleted ? (
+            ) : !isCompleted && launchFeatures.openGigs ? (
               <button
                 type="button"
                 onClick={handlePostAsGig}
@@ -380,7 +383,7 @@ function TaskDetailPanel({
                 Post as Gig
               </button>
             ) : null}
-          </div>
+          </div>}
         </div>
       </div>
     </div>

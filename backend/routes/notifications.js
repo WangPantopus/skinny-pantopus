@@ -17,6 +17,7 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { NOTIFICATION_LIST } = require('../utils/columns');
 const pushService = require('../services/pushService');
+const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
 const CONTEXT_INPUT = ['all', ...FIREWALL_VALUES];
@@ -118,6 +119,8 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     query = applyNotificationFilters(query, { contextType, contextId, contexts });
+    // Launch cuts: notifications that only a hidden feature produces are left out.
+    query = excludeHiddenLaunchNotifications(query);
 
     const { data: notifications, error } = await query;
 
@@ -134,6 +137,7 @@ router.get('/', verifyToken, async (req, res) => {
       .eq('is_read', false);
 
     countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
+    countQuery = excludeHiddenLaunchNotifications(countQuery);
 
     const { count: unreadCount, error: countErr } = await countQuery;
 
@@ -164,11 +168,12 @@ router.get('/unread-count', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const baseFilter = (q) => q
+    // Launch cuts: hidden notification types stay out of the badge counts.
+    const baseFilter = (q) => excludeHiddenLaunchNotifications(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false);
+      .eq('is_read', false));
 
     const [totalRes, personalRes, audienceRes, platformRes] = await Promise.all([
       baseFilter(supabaseAdmin),
@@ -207,6 +212,8 @@ router.get('/unread-count', verifyToken, async (req, res) => {
  */
 router.get('/no-bid-nudge-check', verifyToken, async (req, res) => {
   try {
+    // Launch cut #4 (Open Gigs): the no-bid modal is hidden for the first launch.
+    if (!isLaunchFeatureEnabled('open_gigs')) return res.json({ eligible: false });
     const userId = req.user.id;
 
     const { count, error } = await supabaseAdmin

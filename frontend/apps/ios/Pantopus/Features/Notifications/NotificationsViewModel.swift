@@ -510,6 +510,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     public func handleIncoming(_ dto: NotificationDTO) {
         // Dedupe — sockets and the GET can race.
         if notifications.contains(where: { $0.id == dto.id }) { return }
+        // First-launch scope: a cut feature's notification never lands.
+        guard Self.isAvailableAtLaunch(dto) else { return }
         // Zone firewall: an audience notification must not land in the
         // personal stream (RN `src/app/notifications.tsx:180`).
         if useScopedZones, !zone.matches(context: dto.context) { return }
@@ -574,6 +576,10 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             }
             guard generation == loadGeneration else { return }
             offsets = nextOffsets
+            // First-launch scope: rows whose type or link opens a feature
+            // hidden for the first launch are skipped (the offsets above
+            // still count them, so paging stays aligned with the server).
+            incoming = incoming.filter(Self.isAvailableAtLaunch)
             notifications = reset
                 ? Self.sortedByRecency(incoming)
                 : Self.merged(existing: notifications, incoming: incoming)
@@ -600,7 +606,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     /// flag, no fabricated zone — the strip only appears when the
     /// backend has handed us audience-context data.
     private func revealZoneStripIfAudienceSeen() {
-        guard !showsZoneStrip else { return }
+        // Launch cuts #1 + #2: the Audience (Beacon) zone is hidden.
+        guard !showsZoneStrip, LaunchFeatures.beacon && LaunchFeatures.personas else { return }
         showsZoneStrip = notifications.contains {
             $0.context == NotificationContext.audience.rawValue
         }
@@ -693,6 +700,15 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
                     : "When something needs your attention, it'll show up here."
             )
         }
+    }
+
+    /// First-launch scope: false for a notification whose type or link
+    /// belongs to a feature hidden for the first launch (task metadata links
+    /// first, as `handleTap` routes them).
+    static func isAvailableAtLaunch(_ dto: NotificationDTO) -> Bool {
+        let link = HomeTaskNotificationRoute.path(type: dto.type, homeId: dto.metadata?.homeId, taskId: dto.metadata?.taskId)
+            ?? dto.link
+        return DeepLinkRouter.shared.isLaunchAvailable(notificationType: dto.type, link: link)
     }
 
     private func mayOpenTaskNotification(_ dto: NotificationDTO) -> Bool {

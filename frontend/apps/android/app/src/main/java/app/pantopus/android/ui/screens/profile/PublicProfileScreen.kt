@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.GhostButton
@@ -69,6 +70,7 @@ import kotlinx.coroutines.delay
  * profile's user as counterparty. The Report flow is presented as a
  * [ReportUserSheet] hosted locally here, not via the nav graph (per P6.2).
  */
+@Suppress("CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PublicProfileScreen(
@@ -187,7 +189,10 @@ fun PublicProfileScreen(
                         onOpenGig = onOpenGig,
                         onOpenProfile = onOpenProfile,
                         receivedReviews = {
-                            ReceivedTransactionReviewsSection(userId = content.profile.id)
+                            // Launch cut #3 (Marketplace): no "Marketplace reviews" section.
+                            if (LaunchFeatures.marketplace) {
+                                ReceivedTransactionReviewsSection(userId = content.profile.id)
+                            }
                         },
                     )
                 }
@@ -391,7 +396,8 @@ internal fun PublicProfileLoadedFrame(
                         stats = content.stats.stats,
                     ) {
                         if (persona) {
-                            if (content.isOwner) {
+                            // Launch cut #1/#2 (Beacon + Personas): no Beacon insights or persona editor.
+                            if (content.isOwner && LaunchFeatures.beacon && LaunchFeatures.personas) {
                                 BeaconHeaderGhostButton(
                                     icon = PantopusIcon.BarChart3,
                                     actionLabel = "Insights",
@@ -403,7 +409,7 @@ internal fun PublicProfileLoadedFrame(
                                     actionLabel = "Edit Persona",
                                     onClick = onEditPersona,
                                 )
-                            } else {
+                            } else if (!content.isOwner) {
                                 BeaconHeaderGhostButton(
                                     icon = PantopusIcon.Share,
                                     actionLabel = "Share profile",
@@ -460,17 +466,20 @@ internal fun PublicProfileLoadedFrame(
                     onOpenReviewer = onOpenProfile,
                 )
                 receivedReviews()
-                PublicProfilePostsFeed(
-                    kind = content.kind,
-                    posts = content.posts,
-                    onUnlock = onUnlock,
-                    onEmptyCta =
-                        when {
-                            !persona -> onMessage
-                            content.isOwner -> onComposeBroadcast
-                            else -> onFollow
-                        },
-                )
+                // Launch cut #1/#2 (Beacon + Personas): no Beacon broadcasts feed.
+                if (!persona || (LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                    PublicProfilePostsFeed(
+                        kind = content.kind,
+                        posts = content.posts,
+                        onUnlock = onUnlock,
+                        onEmptyCta =
+                            when {
+                                !persona -> onMessage
+                                content.isOwner -> onComposeBroadcast
+                                else -> onFollow
+                            },
+                    )
+                }
             }
         },
     )

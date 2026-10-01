@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // See docs/01-authentication-authorization.md §1.5 (web session recovery).
 import { SESSION_REFRESH_PATH } from './lib/session-refresh';
 import { readAuthRedirectQuery, safeRedirectPath } from '@pantopus/ui-utils';
+import { isLaunchCutPath, launchFeatures } from './lib/featureFlags';
 
 // Backend sets these via same-origin proxy (no separate Next.js session route needed).
 const ACCESS_COOKIE = 'pantopus_access';
@@ -22,10 +23,18 @@ const PUBLIC_ALIASES: Array<[RegExp, (id: string) => string]> = [
   [/^\/app\/feed\/post\/([^/]+)$/, (id) => `/posts/${id}`],
 ];
 
+// Launch cuts #3/#4: the public listing and task pages are hidden. The task
+// detail itself stays, so signed-out visitors sign in to reach it.
+function isHiddenPublicTwin(path: string): boolean {
+  return isLaunchCutPath(path) || (!launchFeatures.openGigs && /^\/gigs\/[^/]+$/.test(path));
+}
+
 function publicAliasFor(pathname: string): string | null {
   for (const [pattern, buildPath] of PUBLIC_ALIASES) {
     const match = pathname.match(pattern);
-    if (match) return buildPath(match[1]);
+    if (!match) continue;
+    const alias = buildPath(match[1]);
+    return isHiddenPublicTwin(alias) ? null : alias;
   }
   return null;
 }
@@ -39,6 +48,20 @@ function buildRefreshRedirect(req: NextRequest, redirectTo: string, onFail?: str
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+
+  // Launch cut (src/lib/featureFlags.ts): public pages of a hidden feature
+  // (persona pages and /@handle, listings, task browse, booking pages) land
+  // on the home page.
+  if (!pathname.startsWith('/app') && isLaunchCutPath(pathname)) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
+  // Launch cut #4: the public task page is hidden; its link opens the task
+  // detail in the app (signed-out visitors sign in first).
+  if (!launchFeatures.openGigs && /^\/gigs\/[^/]+$/.test(pathname)) {
+    const taskUrl = new URL(`/app${pathname}`, req.url);
+    taskUrl.search = search || '';
+    return NextResponse.redirect(taskUrl);
+  }
 
   const personaMatch = pathname.match(/^\/(?:@|%40)([^/]+)$/i);
   if (personaMatch) {
@@ -125,6 +148,11 @@ export function middleware(req: NextRequest) {
     const redirectTo = `${pathname}${search || ''}`;
     loginUrl.searchParams.set('redirectTo', redirectTo);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Launch cut: app pages of a hidden feature send signed-in users to Place.
+  if (pathname.startsWith('/app') && isLaunchCutPath(pathname)) {
+    return NextResponse.redirect(new URL('/app/place', req.url));
   }
 
   return NextResponse.next();

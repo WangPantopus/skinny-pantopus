@@ -13,6 +13,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { ListArchetype } from '@/components/archetypes';
 import { ProBadge } from '@/components/ProBadge';
 import { useGigListSession } from '@/hooks/useGigListSession';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type DashboardTab = 'all' | 'active' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -93,12 +94,16 @@ function getEmptyState(tab: DashboardTab): {
   actionLabel?: string;
   actionHref?: string;
 } {
+  // Launch cut #4 (Open Gigs): no posting for bids or bidder copy.
   if (tab === 'active') {
-    return {
+    return launchFeatures.openGigs ? {
       title: 'No active tasks',
       description: 'Post one to start collecting bids.',
       actionLabel: 'Post a Task',
       actionHref: '/app/gigs-v2/new',
+    } : {
+      title: 'No active tasks',
+      description: 'Open tasks will show up here.',
     };
   }
 
@@ -119,15 +124,20 @@ function getEmptyState(tab: DashboardTab): {
   if (tab === 'in_progress') {
     return {
       title: 'Nothing in progress yet',
-      description: 'Accepted and assigned work will show up here once you choose a bidder.',
+      description: launchFeatures.openGigs
+        ? 'Accepted and assigned work will show up here once you choose a bidder.'
+        : 'Accepted and assigned work will show up here.',
     };
   }
 
-  return {
+  return launchFeatures.openGigs ? {
     title: 'No tasks posted yet',
     description: 'Post your first task to start getting bids from nearby workers.',
     actionLabel: 'Post a Task',
     actionHref: '/app/gigs-v2/new',
+  } : {
+    title: 'No tasks posted yet',
+    description: 'Tasks you post will show up here.',
   };
 }
 
@@ -209,14 +219,15 @@ function TaskDashboardCard({
               ) : null}
             </div>
 
-            <div className="shrink-0 rounded-2xl bg-primary-50 px-3 py-2 text-right dark:bg-primary-950/30">
+            {/* Launch cut #4 (Open Gigs): bids are hidden. */}
+            {launchFeatures.openGigs && <div className="shrink-0 rounded-2xl bg-primary-50 px-3 py-2 text-right dark:bg-primary-950/30">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-700 dark:text-primary-200">
                 Bids
               </p>
               <p className="mt-1 text-2xl font-semibold text-primary-700 dark:text-primary-100">
                 {bidCount}
               </p>
-            </div>
+            </div>}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-app-text-secondary">
@@ -225,7 +236,7 @@ function TaskDashboardCard({
             {gig.category ? <span>{gig.category}</span> : null}
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {launchFeatures.openGigs && <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-app-border-subtle bg-app-surface-raised px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-app-text-muted">
                 Bid activity
@@ -243,9 +254,9 @@ function TaskDashboardCard({
                 {highestBid ? highestBid : 'No bids yet'}
               </p>
             </div>
-          </div>
+          </div>}
 
-          {bidCount === 0 ? (
+          {launchFeatures.openGigs && bidCount === 0 ? (
             <p className="mt-4 text-sm text-app-text-secondary">
               No bids yet. Share this task to get responses.
             </p>
@@ -256,7 +267,7 @@ function TaskDashboardCard({
               onClick={() => onViewBids(gig.id)}
               className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700"
             >
-              View Bids
+              {launchFeatures.openGigs ? 'View Bids' : 'View task'}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -336,18 +347,19 @@ export default function MyGigsPage() {
         <ListArchetype<GigListItem>
           overline="Poster dashboard"
           title={<span className="inline-flex items-center gap-2">My tasks{session.active && <ProBadge />}</span>}
-          subtitle="Track bids, deadlines, and progress across the tasks you've posted."
-          primaryAction={{
+          // Launch cut #4 (Open Gigs): no posting, browsing or bids.
+          subtitle={launchFeatures.openGigs ? "Track bids, deadlines, and progress across the tasks you've posted." : "Track deadlines and progress across the tasks you've posted."}
+          primaryAction={launchFeatures.openGigs ? {
             label: 'Post a task',
             onClick: () => navigate('/app/gigs-v2/new'),
-          }}
-          secondaryActions={[
+          } : undefined}
+          secondaryActions={launchFeatures.openGigs ? [
             {
               label: 'Browse tasks',
               onClick: () => navigate('/app/gigs'),
               icon: ArrowRight,
             },
-          ]}
+          ] : undefined}
           tabs={DASHBOARD_TABS.map((t) => ({
             key: t.key,
             label: t.label,

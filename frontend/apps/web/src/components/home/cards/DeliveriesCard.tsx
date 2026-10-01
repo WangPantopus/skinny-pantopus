@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Package, Truck, Mailbox, CheckCircle, HandHelping, XCircle, Undo2, ChevronLeft, Hammer } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const STATUS_CONFIG: Record<string, { icon: ReactNode; label: string; color: string }> = {
   expected: { icon: <Package className="w-5 h-5" />, label: 'Expected', color: 'bg-app-surface-sunken text-app-text-secondary' },
@@ -205,7 +206,8 @@ export default function DeliveriesCard({
       </div>
 
       {/* Need assembly help hint */}
-      {packages.filter((p) => p.status === 'delivered').length > 0 && (
+      {/* Launch cut #4 (Open Gigs): no open task post for assembly. */}
+      {launchFeatures.openGigs && packages.filter((p) => p.status === 'delivered').length > 0 && (
         <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 flex items-center gap-3">
           <Hammer className="w-5 h-5 text-emerald-700" />
           <div className="flex-1 min-w-0">

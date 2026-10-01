@@ -17,6 +17,12 @@ import ListingPickerModal from './ListingPickerModal';
 import ImageLightbox from './ImageLightbox';
 import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import { launchFeatures } from '@/lib/featureFlags';
+
+// Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
+const PRE_BID_LIMIT_MESSAGE = launchFeatures.openGigs
+  ? 'Message limit reached. Place a bid to continue chatting.'
+  : 'Message limit reached.';
 
 export default function ChatRoomView({
   roomId,
@@ -148,7 +154,7 @@ export default function ChatRoomView({
   const handleSend = useCallback(
     async (text: string, files?: File[]) => {
       if (preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0) {
-        chat.setError('Message limit reached. Place a bid to continue chatting.');
+        chat.setError(PRE_BID_LIMIT_MESSAGE);
         return;
       }
       try {
@@ -157,7 +163,7 @@ export default function ChatRoomView({
       } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
         const errMsg = err?.code === 'PRE_BID_LIMIT'
-          ? 'Message limit reached. Place a bid to continue chatting.'
+          ? PRE_BID_LIMIT_MESSAGE
           : (err?.message || 'Failed to send');
         chat.setError(errMsg);
       }
@@ -425,7 +431,7 @@ export default function ChatRoomView({
             {(preBidStatus.messages_remaining || 0) > 0 ? (
               <div className="flex items-center justify-between">
                 <p className="text-xs text-amber-800">
-                  <span className="font-semibold">{preBidStatus.messages_remaining}</span> pre-bid
+                  <span className="font-semibold">{preBidStatus.messages_remaining}</span>{launchFeatures.openGigs ? ' pre-bid' : ''}
                   {preBidStatus.messages_remaining === 1 ? ' message' : ' messages'} remaining
                 </p>
                 <div className="flex gap-1">
@@ -436,8 +442,8 @@ export default function ChatRoomView({
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <p className="text-xs text-amber-800 font-medium">Message limit reached. Place a bid to continue chatting.</p>
-                {preBidStatus.gig_id && (
+                <p className="text-xs text-amber-800 font-medium">{PRE_BID_LIMIT_MESSAGE}</p>
+                {launchFeatures.openGigs && preBidStatus.gig_id && (
                   <button onClick={() => router.push(`/app/gigs/${preBidStatus.gig_id}`)}
                     className="text-xs bg-primary-600 text-white px-3 py-1 rounded-full hover:bg-primary-700 font-medium">
                     Place a Bid
@@ -454,7 +460,7 @@ export default function ChatRoomView({
         onSend={handleSend}
         sending={chat.sending}
         disabled={inputDisabled}
-        placeholder={inputDisabled ? 'Place a bid to continue chatting…' : 'Type a message…'}
+        placeholder={inputDisabled ? (launchFeatures.openGigs ? 'Place a bid to continue chatting…' : 'Message limit reached') : 'Type a message…'}
         onAttachAction={handleAttachAction}
       />
       </>

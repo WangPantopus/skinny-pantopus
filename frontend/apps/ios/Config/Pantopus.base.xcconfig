@@ -12,3 +12,8 @@
 
 // Crash-reporting DSN — empty disables Sentry. Overlaid by Secrets.xcconfig.
 SENTRY_DSN =
+
+// First-launch scope (2026-09-27): LaunchFeature keys switched back on, comma-
+// separated (e.g. `marketplace,open_gigs`, or `all`). Empty keeps every cut
+// feature hidden. Read through Info.plist `PantopusLaunchFeatures`.
+PANTOPUS_LAUNCH_FEATURES =

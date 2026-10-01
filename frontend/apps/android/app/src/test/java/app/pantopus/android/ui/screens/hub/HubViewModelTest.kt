@@ -1,6 +1,8 @@
 package app.pantopus.android.ui.screens.hub
 
 import android.content.SharedPreferences
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.RebookableGigsResponse
 import app.pantopus.android.data.api.models.hub.DiscoveryItem
 import app.pantopus.android.data.api.models.hub.HubAvailability
@@ -53,6 +55,8 @@ class HubViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides pillars, chips and rails; these tests pin the full Hub.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         coEvery { notificationsRepo.unreadCount() } returns
             NetworkResult.Success(NotificationUnreadCountResponse(count = 0, byContext = null))
         coEvery { gigExtrasRepo.rebookable() } returns
@@ -61,6 +65,7 @@ class HubViewModelTest {
 
     @After fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeHub(

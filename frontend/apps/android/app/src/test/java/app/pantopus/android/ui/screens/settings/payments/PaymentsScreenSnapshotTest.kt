@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import kotlinx.coroutines.Dispatchers
@@ -44,11 +46,14 @@ class PaymentsScreenSnapshotTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut rewords the empty-methods copy; the baselines pin the full copy.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     @Test

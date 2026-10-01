@@ -13,6 +13,7 @@ import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { queryKeys } from '@/lib/query-keys';
 import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import { isLaunchCutNotification, launchFeatures } from '@/lib/featureFlags';
 import type { Notification } from '@pantopus/types';
 import NotificationRow from './NotificationRow';
 import { toast } from '@/components/ui/toast-store';
@@ -57,9 +58,11 @@ export default function NotificationsPage() {
   const audienceFlag = useFeatureFlagState('audience_profile');
 
   const [filter, setFilter] = useState<Filter>('all');
-  const requestedContext = searchParams?.get('context') ?? null;
+  const rawContext = searchParams?.get('context') ?? null;
+  // Launch cut #1 (Beacon): the Audience stream is hidden; its links open Personal.
+  const requestedContext = !launchFeatures.beacon && rawContext === 'audience' ? 'personal' : rawContext;
   const hasExplicitZone = isZoneTab(requestedContext);
-  const showAudienceZone = audienceFlag.enabled || requestedContext === 'audience';
+  const showAudienceZone = (audienceFlag.enabled && launchFeatures.beacon) || requestedContext === 'audience';
   const useScopedZones = showAudienceZone || hasExplicitZone;
   const initialZone: ZoneTab = hasExplicitZone ? (requestedContext as ZoneTab) : 'personal';
   const [zone, setZone] = useState<ZoneTab>(initialZone);
@@ -210,6 +213,8 @@ export default function NotificationsPage() {
     for (const page of pages) {
       for (const n of page?.notifications || []) {
         if (seen.has(n.id)) continue;
+        // Launch cut: rows of a hidden feature are left out.
+        if (isLaunchCutNotification(n, resolveWebNotificationPath(n.link, n))) continue;
         seen.add(n.id);
         out.push(n);
       }

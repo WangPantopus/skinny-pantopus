@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.explore
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterControl
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -66,6 +67,19 @@ enum class ExploreKind(
 
     /** Items render as a rounded square; the others as discs. */
     val isSquarePin: Boolean get() = this == Item
+
+    /**
+     * Launch cut (2026-09-27): tasks (#4 Open Gigs), items (#3 Marketplace)
+     * and spots (#6, the map's business layer) are hidden for the first launch.
+     */
+    val isLaunchAvailable: Boolean
+        get() =
+            when (this) {
+                Task -> LaunchFeatures.openGigs
+                Item -> LaunchFeatures.marketplace
+                Spot -> LaunchFeatures.businessDirectory
+                Post, Home -> true
+            }
 
     companion object {
         fun fromKey(key: String?): ExploreKind? = entries.firstOrNull { it.key == key }
@@ -199,7 +213,8 @@ data class ExploreFilterCriteria(
 
     val isDistanceActive: Boolean get() = distanceUpper < DISTANCE_STOPS[DISTANCE_DEFAULT_INDEX]
 
-    val isKindActive: Boolean get() = kinds.isNotEmpty() && kinds.size < ExploreKind.entries.size
+    // Launch cut: "every kind" counts only the kinds the first launch shows.
+    val isKindActive: Boolean get() = kinds.isNotEmpty() && kinds.size < ExploreKind.entries.count { it.isLaunchAvailable }
 
     /** Number of active dimensions — drives the pill badge + header suffix. */
     val activeCount: Int
@@ -225,7 +240,7 @@ data class ExploreFilterCriteria(
                 title = "Content type",
                 control =
                     FilterControl.ChipGroup(
-                        options = ExploreKind.entries.map { FilterOption(it.key, it.pluralLabel) },
+                        options = ExploreKind.entries.filter { it.isLaunchAvailable }.map { FilterOption(it.key, it.pluralLabel) },
                         selectedIds = kinds.map { it.key }.toSet(),
                     ),
             ),
@@ -245,9 +260,10 @@ data class ExploreFilterCriteria(
                 control =
                     FilterControl.Toggle(
                         options =
-                            listOf(
+                            listOfNotNull(
                                 FilterOption("verified", "Verified only"),
-                                FilterOption("openNow", "Open now"),
+                                // Launch cut #6 (Business directory): "Open now" only filters business spots.
+                                FilterOption("openNow", "Open now").takeIf { ExploreKind.Spot.isLaunchAvailable },
                             ),
                         selectedIds =
                             buildSet {

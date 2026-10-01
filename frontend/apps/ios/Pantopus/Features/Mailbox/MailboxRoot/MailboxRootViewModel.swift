@@ -138,7 +138,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// now lives in the top-bar overflow menu ("Find a mailbox") so the
     /// map surface stays reachable.
     public var fab: FABAction? {
-        FABAction(
+        // Launch cut #8 (Mail extras): writing letters is hidden for the first launch.
+        guard LaunchFeatures.mailExtras else { return nil }
+        return FABAction(
             icon: .pencil,
             accessibilityLabel: "Write a letter",
             variant: .canonicalCreate

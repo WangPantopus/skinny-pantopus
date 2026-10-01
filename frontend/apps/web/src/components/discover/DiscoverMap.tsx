@@ -9,6 +9,7 @@ import type { MapBusinessMarker, MapMarker } from '@pantopus/api';
 import { BaseMap, LocateMeButton, MapProgressBar, clusterMarkers, makeClusterIcon, ZoomGateOverlay, NearestActivityPrompt } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { NearestActivityCenter } from '@/components/map';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -568,14 +569,14 @@ export default function DiscoverMap({
       )}
 
       {/* Zoom gate overlay */}
-      <ZoomGateOverlay visible={belowZoomGate} contentLabel="businesses" />
+      <ZoomGateOverlay visible={belowZoomGate} contentLabel={launchFeatures.businessDirectory ? 'businesses' : 'posts'} />
 
       {/* Nearest activity prompt (when all layers are empty) */}
       {!postsError && !bizError && !gigsError && !isLoading && !belowZoomGate && allEmpty && bounds && (
         <NearestActivityPrompt
           viewCenter={viewCenter}
           nearest={nearestActivity}
-          contentLabel="businesses"
+          contentLabel={launchFeatures.businessDirectory ? 'businesses' : 'posts'}
           onFlyTo={handleFlyToNearest}
         />
       )}

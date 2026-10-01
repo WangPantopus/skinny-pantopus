@@ -75,6 +75,18 @@ extension HubViewModel {
         )))
     }
 
+    /// Launch cut #7 (Household extras): bill-due and package pills are
+    /// hidden for the first launch (the bill and package screens are).
+    static func isStatusItemAvailableAtLaunch(_ raw: HubResponse.HubStatusItem) -> Bool {
+        LaunchFeatures.householdExtras || !["bill_due", "package_update"].contains(raw.type)
+    }
+
+    /// First-launch scope: an activity row whose type or route opens a
+    /// feature hidden for the first launch is skipped.
+    static func isActivityAvailableAtLaunch(_ item: HubResponse.HubActivityItem) -> Bool {
+        DeepLinkRouter.shared.isLaunchAvailable(notificationType: item.notificationType, link: item.route)
+    }
+
     /// Project one `GET /api/hub` `statusItems[]` row onto the strip
     /// model. The icon table mirrors RN's `ACTION_TYPE_ICONS`
     /// (`src/components/hub/hubTheme.ts:255-264`).
@@ -107,6 +119,10 @@ extension HubViewModel {
         hub: HubResponse,
         rebookable: [RebookableGigDTO]
     ) -> [JumpBackItem] {
+        // Launch cut #4 (Open gigs): "Rebook" opens the open-task composer
+        // (`/gigs/new`), so these cards are hidden; so are server tiles into
+        // the composer or the Gigs feed.
+        let rebookable = LaunchFeatures.openGigs ? rebookable : []
         let rebookItems: [JumpBackItem] = rebookable.prefix(2).compactMap { gig in
             guard let worker = gig.worker else { return nil }
             let category = gig.category ?? "another task"
@@ -122,7 +138,7 @@ extension HubViewModel {
                 progressFraction: nil
             )
         }
-        let serverItems = hub.jumpBackIn.map { raw in
+        let serverItems = hub.jumpBackIn.filter { LaunchFeatures.openGigs || !$0.route.hasPrefix("/gigs") }.map { raw in
             JumpBackItem(
                 id: raw.title,
                 title: raw.title,

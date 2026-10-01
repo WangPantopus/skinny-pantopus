@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Badge from './atoms/Badge';
 import TrustChip from './atoms/TrustChip';
 import ResidencyHomeBlock, { type ResidencyPayload } from './ResidencyHomeBlock';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
 
@@ -168,7 +169,8 @@ export default function ProfileHeader({
               ) : (
                 <>
                   <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
-                  <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>
+                  {/* Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer. */}
+                  {launchFeatures.openGigs && <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>}
                   {canConnect && onConnect && (
                     <button
                       onClick={onConnect}

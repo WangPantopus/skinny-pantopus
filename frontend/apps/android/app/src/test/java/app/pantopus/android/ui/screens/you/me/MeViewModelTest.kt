@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.you.me
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
@@ -41,11 +43,14 @@ class MeViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides several tiles and rows; these tests pin the full set.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         coEvery { businessesRepo.myBusinesses() } returns NetworkResult.Success(MyBusinessesResponse(emptyList()))
     }
 
     @After fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun profile(): UserProfile =

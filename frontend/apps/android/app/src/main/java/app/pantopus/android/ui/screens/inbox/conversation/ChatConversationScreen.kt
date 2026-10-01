@@ -119,6 +119,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
@@ -627,7 +628,8 @@ fun ChatConversationScreen(
         if (showDetailsSheet) {
             ConversationDetailsSheet(
                 counterpartyName = activeCounterparty.displayName,
-                topics = topics,
+                // Launch cut #3 (Marketplace): listing topics are hidden.
+                topics = topics.filter { isTopicLaunchAvailable(it.topicType) },
                 isBlocking = isBlocking,
                 onDismiss = { showDetailsSheet = false },
                 onReport = { showReportSheet = true },
@@ -2246,8 +2248,9 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.size(6.dp))
+        // Launch cuts #3 (Marketplace) / #4 (Open Gigs): it names only what can still be drafted.
         Text(
-            text = "I can draft tasks, listings, and posts, and I use your saved places to fit answers to your area.",
+            text = "I can draft ${aiDraftables()}, and I use your saved places to fit answers to your area.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = PantopusColors.appTextSecondary,
@@ -2260,7 +2263,8 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            AI_PROMPT_CARDS.chunked(2).forEach { rowCards ->
+            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
+            launchPromptCards().chunked(2).forEach { rowCards ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -2305,6 +2309,33 @@ private val AI_PROMPT_CARDS =
         AiPromptCardFixture("marketplace", "Marketplace", "Price my mid-century sofa for a quick sale.", PantopusIcon.ShoppingBag),
     )
 
+/**
+ * Launch cut #3 (Marketplace): the Marketplace prompt gives way to a Home one
+ * (the seasonal checklist stays), keeping the 2×2 grid whole. Mirrors iOS
+ * `launchPromptCards`.
+ */
+private fun launchPromptCards(): List<AiPromptCardFixture> =
+    AI_PROMPT_CARDS.map { card ->
+        if (card.id != "marketplace" || LaunchFeatures.marketplace) {
+            card
+        } else {
+            AiPromptCardFixture("home", "Home", "What should I check around my home before winter?", PantopusIcon.Home)
+        }
+    }
+
+/**
+ * First-launch scope: what the assistant can draft (launch cut #4 hides open
+ * tasks and #3 listings; the backend drops those draft tools too). Mirrors
+ * iOS `aiDraftables`.
+ */
+private fun aiDraftables(): String =
+    when {
+        LaunchFeatures.openGigs && LaunchFeatures.marketplace -> "tasks, listings, and posts"
+        LaunchFeatures.openGigs -> "tasks and posts"
+        LaunchFeatures.marketplace -> "listings and posts"
+        else -> "posts"
+    }
+
 /** A15.3 `.prompt-grid .pc` — white prompt card with a colored icon square. */
 @Composable
 private fun AiPromptCard(
@@ -2318,7 +2349,8 @@ private fun AiPromptCard(
             "tasks" -> PantopusColors.warning
             "pulse" -> PantopusColors.primary600
             "mailbox" -> PantopusColors.home
-            "marketplace" -> PantopusColors.success
+            // Launch cut #3 (Marketplace): the Home card in its place keeps the success tint.
+            "marketplace", "home" -> PantopusColors.success
             else -> PantopusColors.primary600
         }
     Column(
@@ -2395,8 +2427,9 @@ private fun AiWelcomeCard(
                     fontWeight = FontWeight.Bold,
                     color = PantopusColors.appText,
                 )
+                // Launch cuts #3 (Marketplace) / #4 (Open Gigs): it names only what can still be drafted.
                 Text(
-                    text = "I can draft tasks, listings, and posts, and use your saved places to help.",
+                    text = "I can draft ${aiDraftables()}, and use your saved places to help.",
                     fontSize = 11.sp,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -3655,7 +3688,13 @@ private fun ConversationDetailsSheet(
             )
             if (topics.isEmpty()) {
                 Text(
-                    text = "Topics appear when you chat about a task or listing.",
+                    // Launch cuts #4 (Open Gigs) / #3 (Marketplace): task and listing shares are hidden.
+                    text =
+                        if (LaunchFeatures.openGigs && LaunchFeatures.marketplace) {
+                            "Topics appear when you chat about a task or listing."
+                        } else {
+                            "No topics yet."
+                        },
                     fontSize = 14.sp,
                     color = PantopusColors.appTextMuted,
                 )
@@ -4378,7 +4417,9 @@ private fun AiDraftCard(
         draft.priceLabel?.let {
             Text(text = it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
         }
-        if (draft.type != "mail_summary") {
+        // Launch cuts #4 (Open Gigs) / #3 (Marketplace): a task or listing draft stays
+        // readable but can't open the hidden composers.
+        if (draft.type != "mail_summary" && draft.isLaunchAvailable) {
             Row(
                 modifier =
                     Modifier

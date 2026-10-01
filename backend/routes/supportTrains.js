@@ -993,14 +993,37 @@ router.post(
       return res.json({ slots: [], count: 0 });
     }
 
-    const { data, error } = await supabaseAdmin.from('SupportTrainSlot').insert(slots).select('*');
+    // A re-sent request (Android re-sends a POST after a dropped connection) or an overlapping
+    // range must not add a second identical slot to a day: keep the slot that is there, add only
+    // the missing ones, and answer with every slot of the schedule.
+    const slotKey = (s) =>
+      [s.slot_date, s.slot_label, s.support_mode, String(s.start_time).slice(0, 5), String(s.end_time).slice(0, 5)].join('|');
+    const { data: existingSlots, error: existingErr } = await supabaseAdmin
+      .from('SupportTrainSlot')
+      .select('*')
+      .eq('support_train_id', st.id)
+      .in('slot_date', slots.map((s) => s.slot_date))
+      .neq('status', 'canceled');
 
-    if (error) {
-      logger.error('Generate slots failed', { supportTrainId: st.id, error: error.message });
+    if (existingErr) {
+      logger.error('Generate slots read failed', { supportTrainId: st.id, error: existingErr.message });
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to generate slots.' });
     }
 
-    res.json({ slots: data, count: data.length });
+    const kept = new Map((existingSlots || []).map((s) => [slotKey(s), s]));
+    const missing = slots.filter((s) => !kept.has(slotKey(s)));
+    if (missing.length > 0) {
+      const { data, error } = await supabaseAdmin.from('SupportTrainSlot').insert(missing).select('*');
+
+      if (error) {
+        logger.error('Generate slots failed', { supportTrainId: st.id, error: error.message });
+        return res.status(500).json({ error: 'INTERNAL', message: 'Failed to generate slots.' });
+      }
+      for (const s of data || []) kept.set(slotKey(s), s);
+    }
+
+    const scheduled = slots.map((s) => kept.get(slotKey(s))).filter(Boolean);
+    res.json({ slots: scheduled, count: scheduled.length });
   })
 );
 
@@ -1407,6 +1430,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
 
+    // A publish whose reply was lost can come again (Android re-sends a POST after a dropped
+    // connection). Answer it with the train as it is, without publishing or notifying twice.
+    if (st.status === 'published' || st.status === 'active') {
+      return res.json(await readPublishedTrain(st.id));
+    }
+
     if (st.status !== 'draft') {
       return res.status(409).json({
         error: 'INVALID_TRANSITION',
@@ -1553,17 +1582,21 @@ router.post(
       payload: {},
     });
 
-    // Re-fetch
-    const { data: updated } = await supabaseAdmin
-      .from('SupportTrain')
-      .select('*, Activity!inner ( * )')
-      .eq('id', st.id)
-      .single();
-
-    const { Activity: activity, ...train } = updated || {};
-    res.json({ ...train, activity });
+    res.json(await readPublishedTrain(st.id));
   })
 );
+
+// The publish reply: the train with its Activity.
+async function readPublishedTrain(supportTrainId) {
+  const { data: updated } = await supabaseAdmin
+    .from('SupportTrain')
+    .select('*, Activity!inner ( * )')
+    .eq('id', supportTrainId)
+    .single();
+
+  const { Activity: activity, ...train } = updated || {};
+  return { ...train, activity };
+}
 
 // Unpublish (back to draft)
 router.post(
@@ -1932,14 +1965,7 @@ router.post(
       }
     };
 
-    // Check if fund already exists
-    const { data: existing } = await supabaseAdmin
-      .from('SupportTrainFund')
-      .select('*')
-      .eq('support_train_id', st.id)
-      .single();
-
-    if (existing) {
+    const answerWithExisting = async (existing) => {
       let current = existing;
       // If disabled, re-enable; if already enabled, update goal if provided
       if (existing.status === 'disabled' || goalAmount !== null) {
@@ -1957,12 +1983,28 @@ router.post(
       }
       if (current.status === 'enabled') await showGiftFunds();
       return res.json(current);
-    }
+    };
 
-    // Create new fund
+    // Check if fund already exists
+    const { data: existingFunds } = await supabaseAdmin
+      .from('SupportTrainFund')
+      .select('*')
+      .eq('support_train_id', st.id)
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (existingFunds?.[0]) return answerWithExisting(existingFunds[0]);
+
+    // Create new fund. Its id comes from the train, so two enables at once (a double tap or a
+    // re-sent request) can't make two funds: the second insert collides and answers with the first.
+    const fundId = createHash('sha256')
+      .update(`pantopus:train-fund:v1:${st.id.toLowerCase()}`)
+      .digest('hex')
+      .slice(0, 32);
     const { data: fund, error } = await supabaseAdmin
       .from('SupportTrainFund')
       .insert({
+        id: fundId,
         support_train_id: st.id,
         currency: 'USD',
         goal_amount: goalAmount,
@@ -1970,6 +2012,15 @@ router.post(
       })
       .select('*')
       .single();
+
+    if (error?.code === '23505') {
+      const { data: winner } = await supabaseAdmin
+        .from('SupportTrainFund')
+        .select('*')
+        .eq('id', fundId)
+        .maybeSingle();
+      if (winner) return answerWithExisting(winner);
+    }
 
     if (error || !fund) {
       logger.error('Enable fund failed', { supportTrainId: st.id, error: error?.message });
@@ -2150,7 +2201,8 @@ router.post(
       actorUserId: is_anonymous ? null : userId,
       payload: {
         amount,
-        donor_name: is_anonymous ? 'Anonymous' : req.user.name || req.user.username,
+        // The notification names a donor who isn't anonymous from their profile.
+        donor_name: is_anonymous ? 'Anonymous' : null,
       },
     });
 
@@ -2366,6 +2418,8 @@ router.get(
 const nudgeSendSchema = Joi.object({
   message: Joi.string().min(1).max(1000).required(),
 });
+// The same reminder text within this window is a repeat of one send, not a new reminder.
+const NUDGE_REPEAT_WINDOW_MS = 10 * 60 * 1000;
 
 // Draft a nudge message via AI
 router.post(
@@ -2442,6 +2496,27 @@ router.post(
         message: 'This Support Train does not have a chat thread yet. Publish it first.',
       });
     }
+
+    // The same reminder from the same organizer within a few minutes is a repeat of this send (a
+    // re-sent request or a second tap): answer with the message already posted instead of posting
+    // it to the helpers' chat again.
+    const { data: recentNudges, error: recentErr } = await supabaseAdmin
+      .from('ChatMessage')
+      .select('id, room_id, message, created_at')
+      .eq('room_id', chatThreadId)
+      .eq('user_id', req.user.id)
+      .eq('message', req.body.message)
+      .contains('metadata', { source: 'support_train_nudge' })
+      .not('deleted', 'is', true)
+      .gte('created_at', new Date(Date.now() - NUDGE_REPEAT_WINDOW_MS).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (recentErr) {
+      logger.error('Send nudge repeat check failed', { supportTrainId: st.id, error: recentErr.message });
+      return res.status(500).json({ error: 'INTERNAL', message: 'Failed to send nudge.' });
+    }
+    if (recentNudges?.[0]) return res.status(201).json(recentNudges[0]);
 
     const { data: msg, error } = await supabaseAdmin
       .from('ChatMessage')
@@ -2649,7 +2724,6 @@ router.post(
         slot_id: slotId,
         slot_label: slot.slot_label,
         slot_date: slot.slot_date,
-        helper_name: req.user.name || req.user.username,
       },
     });
 
@@ -3007,6 +3081,9 @@ router.post(
   })
 );
 
+// A guest's address email repeated within this window is one share, not a resend.
+const GUEST_ADDRESS_REPEAT_WINDOW_MS = 60 * 1000;
+
 // Manually reveal the exact address to a specific helper reservation
 router.post(
   '/:id/reservations/:reservationId/reveal-address',
@@ -3066,6 +3143,21 @@ router.post(
     }
 
     if (!reservation.user_id) {
+      // A share emailed moments ago is this same share (a re-sent request or a second tap):
+      // answer as it did without emailing the guest again. A later Resend still emails.
+      const sharedAgoMs = reservation.guest_address_shared_at
+        ? Date.now() - new Date(reservation.guest_address_shared_at).getTime()
+        : Infinity;
+      if (sharedAgoMs < GUEST_ADDRESS_REPEAT_WINDOW_MS) {
+        return res.json({
+          shared: true,
+          already_shared: true,
+          guest_email: reservation.guest_email,
+          guest_address_shared_at: reservation.guest_address_shared_at,
+          reservation_id: reservation.id,
+        });
+      }
+
       const { data: slot } = await supabaseAdmin
         .from('SupportTrainSlot')
         .select('slot_date, slot_label, start_time, end_time')
@@ -3316,7 +3408,6 @@ router.post(
         payload: {
           slot_id: reservation.slot_id,
           slot_label: slot?.slot_label,
-          helper_name: req.user.name || req.user.username,
           helper_reason: helperReason || null,
         },
       });
@@ -3529,7 +3620,8 @@ router.post(
       actorUserId: userId,
       payload: {
         reservation_id: reservationId,
-        helper_name: reservation.guest_name || req.user.name || req.user.username,
+        // A guest's delivery is named by the guest; otherwise the notification names whoever marked it.
+        helper_name: reservation.guest_name || null,
       },
     });
 
@@ -4245,6 +4337,16 @@ router.delete(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
     const userId = req.user.id;
+
+    // The Start wizards discard a half-built train with ?draft_only=true. One that went live
+    // meanwhile (its publish reply was lost) is not half-built, so it is kept.
+    if (req.query.draft_only === 'true' && st.status !== 'draft') {
+      return res.status(409).json({
+        error: 'NOT_A_DRAFT',
+        message: 'This Support Train is already published, so it was kept.',
+        status: st.status,
+      });
+    }
 
     const [
       { count: activeReservationCount, error: activeReservationError },

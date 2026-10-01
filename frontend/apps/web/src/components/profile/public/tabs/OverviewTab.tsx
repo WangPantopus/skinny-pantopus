@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { PortfolioEntry } from './PortfolioTab';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface ProfileData {
   skills?: string[];
@@ -117,7 +118,8 @@ export default function OverviewTab({
         <h3 className="text-lg font-semibold text-app mb-3">Reviews preview</h3>
         {previewReviews.length === 0 ? (
           <div className="rounded-lg border border-dashed border-app-strong p-4 text-sm text-app-secondary">
-            No reviews yet. Hire to be the first to review.
+            {/* Launch cut #4 (Open Gigs): "Request / Hire" is hidden, so the copy does not suggest it. */}
+            {launchFeatures.openGigs ? 'No reviews yet. Hire to be the first to review.' : 'No reviews yet.'}
           </div>
         ) : (
           <div className="space-y-3">
@@ -140,7 +142,8 @@ export default function OverviewTab({
         )}
       </section>
 
-      <section className="bg-surface rounded-xl border border-app p-5">
+      {/* Launch cut #4 (Open Gigs): the preview lists only open tasks. */}
+      {launchFeatures.openGigs && <section className="bg-surface rounded-xl border border-app p-5">
         <h3 className="text-lg font-semibold text-app mb-3">Activity preview</h3>
         {gigsLoading ? (
           <p className="text-sm text-app-secondary">Loading recent activity...</p>
@@ -159,7 +162,7 @@ export default function OverviewTab({
             ))}
           </div>
         )}
-      </section>
+      </section>}
     </div>
   );
 }

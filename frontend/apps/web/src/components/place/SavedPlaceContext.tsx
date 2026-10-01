@@ -8,6 +8,7 @@ import PendingPlaceSaver from './PendingPlaceSaver';
 import { PreviewBody } from './StartFunnel';
 import ErrorState from '@/components/ui/ErrorState';
 import { extractApiError } from '@/lib/auth-utils';
+import { launchFeatures } from '@/lib/featureFlags';
 
 /** SavedPlace is a private bookmark, never a Home or an access credential. */
 export default function SavedPlaceContext({ previewId, savedPlaceId }: { previewId?: string; savedPlaceId?: string }) {
@@ -46,10 +47,13 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
   if (!active) return (
     <section className="rounded-2xl border border-app-border bg-app-surface p-5">
       <h1 className="text-xl font-semibold">{savedPlaceId ? 'This saved place is unavailable' : 'Start with a place that matters to you'}</h1>
-      <p className="mt-2 text-app-text-secondary">Preview an address and choose whether to save it privately. You can also browse Pulse and Beacons without adding a home.</p>
+      {/* Launch cut #1 (Beacon): no Beacons to browse; the copy names Pulse only. */}
+      <p className="mt-2 text-app-text-secondary">{launchFeatures.beacon
+        ? 'Preview an address and choose whether to save it privately. You can also browse Pulse and Beacons without adding a home.'
+        : 'Preview an address and choose whether to save it privately. You can also browse Pulse without adding a home.'}</p>
       <div className="mt-4 flex flex-wrap gap-4">
         <button className="text-primary-700 dark:text-primary-300" onClick={() => router.push('/start')}>Preview an address</button>
-        <button className="text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/feed?surface=personas')}>Browse Beacons</button>
+        {launchFeatures.beacon && <button className="text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/feed?surface=personas')}>Browse Beacons</button>}
         <button className="text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/homes')}>Manage homes</button>
       </div>
     </section>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type AttachAction = 'photos' | 'documents' | 'gig' | 'listing';
 
@@ -32,12 +33,13 @@ export default function ChatAttachmentMenu({ onAction, disabled = false }: ChatA
     onAction(action);
   };
 
-  const items: { action: AttachAction; icon: string; label: string; color: string }[] = [
+  const items: { action: AttachAction; icon: string; label: string; color: string }[] = ([
     { action: 'photos', icon: '📷', label: 'Photos & Videos', color: 'bg-green-50 text-green-700' },
     { action: 'documents', icon: '📄', label: 'Documents', color: 'bg-blue-50 text-blue-700' },
     { action: 'gig', icon: '💼', label: 'Share a Task', color: 'bg-purple-50 text-purple-700' },
     { action: 'listing', icon: '🏷️', label: 'Share a Listing', color: 'bg-emerald-50 text-emerald-700' },
-  ];
+  // Launch cut #3 (Marketplace): no "Share a Listing".
+  ] satisfies { action: AttachAction; icon: string; label: string; color: string }[]).filter((item) => item.action !== 'listing' || launchFeatures.marketplace);
 
   return (
     <div className="relative" ref={menuRef}>

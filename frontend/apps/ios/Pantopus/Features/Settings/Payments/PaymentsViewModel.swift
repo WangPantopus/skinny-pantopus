@@ -682,7 +682,10 @@ public final class PaymentsViewModel {
             subtext: "W-9 collected during setup",
             trailing: .gatedDash
         ),
-        helper: "Required before you can post paid tasks or sell on Marketplace."
+        // Launch cuts #4 / #3: posting open tasks and selling are hidden.
+        helper: LaunchFeatures.openGigs && LaunchFeatures.marketplace
+            ? "Required before you can post paid tasks or sell on Marketplace."
+            : "Required before you can get paid on Pantopus."
     )
 
     static func uiMethod(from dto: PaymentMethodDTO) -> PaymentMethod {

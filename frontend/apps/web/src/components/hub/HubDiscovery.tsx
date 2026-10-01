@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation';
 import { Hammer, User, Store, Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { DiscoveryItem, DiscoveryFilter } from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // No "People" tab: `filter=people` never returns anyone today, so the tab
 // could only ever be empty. Whether and how to list people is a product call.
-const FILTER_TABS: { key: DiscoveryFilter; label: string }[] = [
+const FILTER_TABS: { key: DiscoveryFilter; label: string }[] = ([
   { key: 'gigs', label: 'Tasks' },
   { key: 'businesses', label: 'Businesses' },
   { key: 'posts', label: 'Posts' },
-];
+// Launch cuts #4 (Tasks) and #6 (Businesses): their tabs are hidden; Posts stays.
+] satisfies { key: DiscoveryFilter; label: string }[]).filter(({ key }) => (key !== 'gigs' || launchFeatures.openGigs) && (key !== 'businesses' || launchFeatures.businessDirectory));
 
 const TYPE_ICONS: Record<string, typeof Hammer> = {
   gig: Hammer, person: User, business: Store, post: Megaphone,
@@ -31,7 +33,7 @@ interface HubDiscoveryProps {
 
 export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
   const router = useRouter();
-  const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>('gigs');
+  const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>(FILTER_TABS[0]?.key ?? 'posts');
   const [items, setItems] = useState<DiscoveryItem[]>([]);
   const [loading, setLoading] = useState(true);
   // A failed request must not read as "Nothing nearby yet".
@@ -85,9 +87,10 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
           <h2 className="text-base font-extrabold text-app-text">Discover</h2>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/app/discover')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+          {/* Launch cut #6 (Business directory): no business search. */}
+          {launchFeatures.businessDirectory && <button onClick={() => router.push('/app/discover')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
             Find Businesses
-          </button>
+          </button>}
           <button onClick={() => router.push('/app/map')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
             Explore Map
           </button>

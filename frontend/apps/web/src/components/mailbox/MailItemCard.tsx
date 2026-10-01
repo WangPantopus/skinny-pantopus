@@ -6,6 +6,7 @@ import TrustBadge from './TrustBadge';
 import UrgencyIndicator from './UrgencyIndicator';
 import DrawerBadge from './DrawerBadge';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type MailItemCardProps = {
   item: MailItemV2;
@@ -54,7 +55,8 @@ export default function MailItemCard({
   const urgencyClass = item.urgency === 'overdue' ? 'bg-red-50 dark:bg-red-950/20' : '';
   const isBundle = item.mail_object_type === 'bundle';
   const isBooklet = item.mail_object_type === 'booklet';
-  const certified = isCertified(item);
+  // Launch cut #8 (Mail extras): no certified-mail lock.
+  const certified = launchFeatures.mailExtras && isCertified(item);
   const offerPayout = item.drawer === 'earn' ? getOfferPayout(item) : null;
 
   const selectedBorder = drawerBorderColor[item.drawer] ?? 'border-l-primary-500';

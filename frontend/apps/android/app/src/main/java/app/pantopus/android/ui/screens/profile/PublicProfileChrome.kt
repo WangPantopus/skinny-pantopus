@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconBanner
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
@@ -602,7 +603,8 @@ fun LocalProfileTabStrip(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
         ) {
-            LocalProfileTab.entries.forEach { tab ->
+            // Launch cut #4 (Open Gigs): no Gigs tab.
+            LocalProfileTab.entries.filter { it != LocalProfileTab.Gigs || LaunchFeatures.openGigs }.forEach { tab ->
                 val active = tab == selected
                 Column(
                     modifier =

@@ -55,7 +55,8 @@ struct HubView: View {
                     content: content.topBar,
                     onAvatarTap: { onNavigate(.openProfile) },
                     onBellTap: { onNavigate(.openNotifications) },
-                    onAudienceTap: content.topBar.audienceUnreadCount > 0
+                    // Launch cuts #1 + #2: no Audience (Beacon) notification shortcut.
+                    onAudienceTap: content.topBar.audienceUnreadCount > 0 && LaunchFeatures.beacon && LaunchFeatures.personas
                         ? { onNavigate(.openAudienceNotifications) }
                         : nil
                 ) { onNavigate(.openMenu) }

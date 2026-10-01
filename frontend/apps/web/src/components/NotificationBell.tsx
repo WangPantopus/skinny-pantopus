@@ -11,6 +11,7 @@ import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { toast } from '@/components/ui/toast-store';
 import { queryKeys } from '@/lib/query-keys';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import { isLaunchCutNotification, launchFeatures } from '@/lib/featureFlags';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { Notification } from '@pantopus/types';
 
@@ -59,7 +60,8 @@ export default function NotificationBell({
       ? notificationsByContext.audience
       : mode === 'personal'
       ? notificationsByContext.personal + notificationsByContext.platform
-      : totalUnread;
+      // Launch cut #1 (Beacon): the combined bell leaves out the Audience stream.
+      : launchFeatures.beacon ? totalUnread : Math.max(0, totalUnread - notificationsByContext.audience);
 
   // Audience zone gets a megaphone + teal accent; personal/all keeps the bell.
   const isAudience = mode === 'audience';
@@ -78,6 +80,8 @@ export default function NotificationBell({
   const accentTextHover = isAudience ? 'hover:text-teal-800' : 'hover:text-blue-800';
   const unreadDot = isAudience ? 'bg-teal-500' : 'bg-blue-500';
   const notificationMatchesScope = useCallback((notif: Notification) => {
+    // Launch cut: rows of a hidden feature are left out.
+    if (isLaunchCutNotification(notif, resolveWebNotificationPath(notif.link, notif))) return false;
     const firewallContext = notif.context || 'personal';
     if (mode === 'audience') return firewallContext === 'audience';
     if (mode === 'personal') return firewallContext === 'personal' || firewallContext === 'platform';
@@ -126,6 +130,8 @@ export default function NotificationBell({
           return previous.filter(n => (n.context || 'personal') === context);
         });
         return [...new Map(rows.map(n => [n.id, n])).values()]
+          // Launch cut: rows of a hidden feature are left out.
+          .filter(n => !isLaunchCutNotification(n, resolveWebNotificationPath(n.link, n)))
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       });
     } catch {

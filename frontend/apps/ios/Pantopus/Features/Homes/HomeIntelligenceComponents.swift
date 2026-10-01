@@ -202,7 +202,8 @@ struct HealthScoreRingCard: View {
         let path = route.split(separator: "/").last.map(String.init) ?? ""
         switch path {
         case "maintenance": return "view_issues"
-        case "bills": return "view_bills"
+        // Launch cut #7 (Household extras): no chip into the hidden Bills section.
+        case "bills": return LaunchFeatures.householdExtras ? "view_bills" : nil
         case "emergency": return "view_emergency"
         case "members": return "add_member"
         case "documents", "docs": return "view_docs"
@@ -418,7 +419,9 @@ struct SeasonalChecklistCard: View {
                 .accessibilityIdentifier("homeDashboard_seasonalItemSkip_\(item.id)")
                 .accessibilityLabel("Skip \(item.title)")
 
-                if item.gigCategory != nil {
+                // Launch cut #4 (Open gigs): the checklist's "Hire" path posts an
+                // open task; Skip stays.
+                if item.gigCategory != nil, LaunchFeatures.openGigs {
                     Button { onHireHelp(item) } label: {
                         Text("Hire")
                             .pantopusTextStyle(.caption)

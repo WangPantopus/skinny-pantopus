@@ -2,6 +2,8 @@ package app.pantopus.android.ui.screens.homes
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homedashboard.HomeAuditLogEntryDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAccessDto
@@ -71,6 +73,8 @@ class HomeDashboardViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides bills, packages and calendar rows; these tests pin the full dashboard.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         every { accessFactory.create(any(), any()) } returns authority
         every { authority.isCurrent } returns true
         every { authority.invalidated } returns MutableStateFlow(false)
@@ -87,6 +91,7 @@ class HomeDashboardViewModelTest {
     @After fun tearDown() {
         store.clear()
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeVm(homeId: String = fixtureHomeId) =

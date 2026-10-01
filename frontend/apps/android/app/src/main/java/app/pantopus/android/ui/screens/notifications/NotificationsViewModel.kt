@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.data.api.models.notifications.NotificationDto
@@ -325,7 +326,11 @@ class NotificationsViewModel
         val tabs: StateFlow<List<ListOfRowsTab>> = _tabs.asStateFlow()
 
         init {
-            val requested = NotificationsZone.fromRaw(savedStateHandle.get<String>(CONTEXT_KEY))
+            val requested =
+                NotificationsZone
+                    .fromRaw(savedStateHandle.get<String>(CONTEXT_KEY))
+                    // Launch cuts #1/#2 (Beacon + Personas): the Audience stream is hidden; its route opens the plain list.
+                    ?.takeIf { it != NotificationsZone.Audience || isAudienceLaunchAvailable() }
             hasExplicitZone = requested != null
             if (requested != null) {
                 _zone.value = requested
@@ -520,6 +525,7 @@ class NotificationsViewModel
          */
         fun handleIncoming(dto: NotificationDto) {
             if (notifications.any { it.id == dto.id }) return
+            if (!isLaunchVisible(dto)) return
             // Zone firewall: an audience notification must not land in the
             // personal stream (RN `src/app/notifications.tsx:180`).
             if (useScopedZones() && !_zone.value.matches(dto.context)) return
@@ -573,11 +579,15 @@ class NotificationsViewModel
                     when (result) {
                         is NetworkResult.Success -> {
                             val body = result.data
-                            incoming.addAll(body.notifications)
+                            // Launch cut: rows of features hidden for the first launch never
+                            // enter the list, nor count as unread; paging keeps server offsets.
+                            val visible = body.notifications.filter(::isLaunchVisible)
+                            incoming.addAll(visible)
                             offsets[context] = (offsets[context] ?: 0) + body.notifications.size
                             anyMore = anyMore || (body.hasMore ?: (body.notifications.size >= pageSize))
                             body.unreadCount?.let {
-                                scopedUnread += it
+                                val hiddenUnread = (body.notifications - visible.toSet()).count { row -> row.isRead != true }
+                                scopedUnread += (it - hiddenUnread).coerceAtLeast(0)
                                 sawUnreadCount = true
                             }
                         }
@@ -620,9 +630,21 @@ class NotificationsViewModel
          * backend has handed us audience-context data.
          */
         private fun revealZoneStripIfAudienceSeen() {
-            if (_showsZoneStrip.value) return
+            // Launch cuts #1/#2 (Beacon + Personas): no Audience zone, so no Personal / Audience strip.
+            if (_showsZoneStrip.value || !isAudienceLaunchAvailable()) return
             _showsZoneStrip.value = notifications.any { it.context == NotificationContext.AUDIENCE }
         }
+
+        /**
+         * Launch cut (2026-09-27): false for a Beacon (Audience) row while #1/#2 are
+         * hidden, and for a row whose type or link opens another hidden feature.
+         */
+        private fun isLaunchVisible(dto: NotificationDto): Boolean =
+            (isAudienceLaunchAvailable() || dto.context != NotificationContext.AUDIENCE) &&
+                DeepLinkRouter.isLaunchAvailable(dto.type, HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata) ?: dto.link)
+
+        /** The Audience (Beacon) stream serves Beacon (#1) and personas (#2); both must be on, as on the backend. */
+        private fun isAudienceLaunchAvailable(): Boolean = LaunchFeatures.beacon && LaunchFeatures.personas
 
         /**
          * Rows for the active tab. `read` has no backend filter — the

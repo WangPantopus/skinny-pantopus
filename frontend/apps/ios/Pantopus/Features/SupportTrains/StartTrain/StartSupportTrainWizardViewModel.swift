@@ -12,7 +12,7 @@
 import Foundation
 import Observation
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 @Observable
 @MainActor
@@ -420,9 +420,12 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         isSubmittingFlag = true
         launchError = nil
         defer { isSubmittingFlag = false }
-        if let leftover = leftoverTrainId,
-           await deleteDraft(leftover) {
-            leftoverTrainId = nil
+        if let leftover = leftoverTrainId {
+            switch await discardDraft(leftover) {
+            case .deleted: leftoverTrainId = nil
+            case .live: return showLaunched(leftover) // the last launch went live; only its reply was lost
+            case .failed: break
+            }
         }
         let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestId = createRequestId ?? UUID().uuidString
@@ -468,18 +471,39 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
             // half-built draft so trying again makes exactly one train.
             if let id = createdTrainId {
                 publishedTrainId = nil
-                let deleted = await deleteDraft(id)
-                if !deleted { leftoverTrainId = id }
+                switch await discardDraft(id) {
+                case .deleted: break
+                case .live: return showLaunched(id) // publish went through; only its reply was lost
+                case .failed: leftoverTrainId = id
+                }
             }
             launchError = (error as? APIError)?.errorDescription
                 ?? "Couldn't launch the train. Try again."
         }
     }
 
-    /// Deletes a draft this wizard created; false when the delete didn't go through.
-    private func deleteDraft(_ trainId: String) async -> Bool {
-        let endpoint = SupportTrainActionsEndpoints.deleteTrain(supportTrainId: trainId)
-        return await (try? api.request(endpoint, as: EmptyResponse.self)) != nil
+    private enum DraftDiscard { case deleted, live, failed }
+
+    /// Deletes a draft this wizard created. The server keeps a train that is
+    /// no longer a draft (`draftOnly`), so a launch that went live is never undone.
+    private func discardDraft(_ trainId: String) async -> DraftDiscard {
+        let endpoint = SupportTrainActionsEndpoints.deleteTrain(supportTrainId: trainId, draftOnly: true)
+        do {
+            _ = try await api.request(endpoint, as: EmptyResponse.self)
+            return .deleted
+        } catch let APIError.clientError(status: 409, message: body) where body?.contains("NOT_A_DRAFT") == true {
+            return .live
+        } catch {
+            return .failed
+        }
+    }
+
+    /// The train is live after all: finish the way a launch does.
+    private func showLaunched(_ trainId: String) {
+        leftoverTrainId = nil
+        publishedTrainId = trainId
+        launchError = nil
+        step = .success
     }
 
     // MARK: - Helpers

@@ -87,7 +87,8 @@ struct PlaceLaunchView: View {
 
     private func browseBeacons() {
         PlacePendingStore.clear()
-        if let url = URL(string: "pantopus://beacons") { DeepLinkRouter.shared.handle(url: url) }
+        // Launch cut #1 (Beacon): no Beacons link to land on after sign-up.
+        if LaunchFeatures.beacon, let url = URL(string: "pantopus://beacons") { DeepLinkRouter.shared.handle(url: url) }
         onCreateAccount()
     }
 
@@ -146,13 +147,16 @@ struct PlaceLaunchView: View {
                 privacyProof
                 exampleCard
                     .padding(.top, Spacing.s2)
-                Button(action: browseBeacons) {
-                    Text("Explore Beacon without an address")
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundStyle(Theme.Color.appTextMuted)
+                // Launch cut #1 (Beacon): hidden for the first launch.
+                if LaunchFeatures.beacon {
+                    Button(action: browseBeacons) {
+                        Text("Explore Beacon without an address")
+                            .font(.system(size: 13.5, weight: .medium))
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
             }
         }
     }

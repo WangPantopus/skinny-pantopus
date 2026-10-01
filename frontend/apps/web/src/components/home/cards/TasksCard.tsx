@@ -4,6 +4,7 @@ import { useState, useMemo, type ReactNode } from 'react';
 import { ClipboardList, ChevronLeft, Paintbrush, ShoppingCart, Hammer, Bell, Wrench, Pin, PartyPopper, Check } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: 'bg-red-500',
@@ -298,7 +299,8 @@ export default function TasksCard({
       </div>
 
       {/* Request outside help hint */}
-      {tasks.filter((t) => t.status === 'open' && !t.assigned_to && !t.converted_to_gig_id).length > 0 && (
+      {/* Launch cut #4 (Open Gigs): posting a task for outside help is hidden. */}
+      {launchFeatures.openGigs && tasks.filter((t) => t.status === 'open' && !t.assigned_to && !t.converted_to_gig_id).length > 0 && (
         <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 flex items-center gap-3">
           <Hammer className="w-5 h-5 text-emerald-700" />
           <div className="flex-1 min-w-0">

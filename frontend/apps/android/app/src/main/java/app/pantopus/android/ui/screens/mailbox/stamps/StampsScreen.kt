@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.EmptyState
@@ -540,7 +541,10 @@ private fun StampsDock(onBuyMore: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 ActionChip(icon = PantopusIcon.ArrowsRepeat, label = "Auto-refill", modifier = Modifier.weight(1f))
                 ActionChip(icon = PantopusIcon.Gift, label = "Gift", modifier = Modifier.weight(1f))
-                ActionChip(icon = PantopusIcon.Send, label = "Send mail", modifier = Modifier.weight(1f))
+                // Launch cut #8 (Mail extras): sending letters is hidden.
+                if (LaunchFeatures.mailExtras) {
+                    ActionChip(icon = PantopusIcon.Send, label = "Send mail", modifier = Modifier.weight(1f))
+                }
                 ActionChip(icon = PantopusIcon.Archive, label = "Archive", modifier = Modifier.weight(1f))
             }
         }

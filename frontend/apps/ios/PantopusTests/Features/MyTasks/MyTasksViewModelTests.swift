@@ -1,13 +1,21 @@
 import XCTest
 @testable import Pantopus
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 @MainActor
 final class MyTasksViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // Bids, the Magic Task CTA and the open-task footers: every
+        // first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private static let fixedNow: Date = {

@@ -192,11 +192,14 @@ public struct MonthlyReceiptCard: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-            detailSection("Marketplace", rows: [
-                ("Listings sold", "\(receipt.marketplace.listingsSold)"),
-                ("Listings bought", "\(receipt.marketplace.listingsBought)"),
-                ("Free items claimed", "\(receipt.marketplace.freeItemsClaimed)")
-            ])
+            // Launch cut #3 (Marketplace): no listing stats.
+            if LaunchFeatures.marketplace {
+                detailSection("Marketplace", rows: [
+                    ("Listings sold", "\(receipt.marketplace.listingsSold)"),
+                    ("Listings bought", "\(receipt.marketplace.listingsBought)"),
+                    ("Free items claimed", "\(receipt.marketplace.freeItemsClaimed)")
+                ])
+            }
             detailSection("Earnings breakdown", rows: [
                 ("Gigs completed (as worker)", "\(receipt.earnings.gigCount)"),
                 ("Top category", receipt.earnings.topCategory ?? "N/A")

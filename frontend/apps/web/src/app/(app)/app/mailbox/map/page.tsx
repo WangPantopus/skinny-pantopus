@@ -10,6 +10,7 @@ import { TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
 // The user's Home; the page used a hard-coded 'home_1' stub. A Home without a
 // stored location keeps the Camas fallback centre.
 import useHomeProfile from '../_components/useMailboxHome';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Leaflet must be loaded client-side only ──────────────────
 const MapContainer = dynamic(
@@ -29,14 +30,22 @@ const Marker = dynamic(
 
 type PinFilter = MapPinType | 'all';
 
-const PIN_FILTERS: { value: PinFilter; label: string }[] = [
+const PIN_FILTERS: { value: PinFilter; label: string }[] = ([
   { value: 'all', label: 'All' },
   { value: 'permit', label: 'Permits' },
   { value: 'utility_work', label: 'Utility' },
   { value: 'civic', label: 'Civic' },
   { value: 'community', label: 'Community' },
   { value: 'delivery', label: 'Deliveries' },
-];
+] satisfies { value: PinFilter; label: string }[]).filter((f) => isLaunchVisiblePin(f.value));
+
+// Launch cuts: community pins come from the community mail stream (#8) and
+// delivery pins from package tracking (#7); both are hidden.
+function isLaunchVisiblePin(type: PinFilter): boolean {
+  if (type === 'community') return launchFeatures.mailExtras;
+  if (type === 'delivery') return launchFeatures.householdExtras;
+  return true;
+}
 
 const PIN_COLORS: Record<MapPinType, string> = {
   permit: '#f97316',     // orange-500
@@ -75,9 +84,10 @@ export default function MailMapPage() {
   const leafletRef = useRef<typeof import('leaflet') | null>(null);
   const calendarMutation = useAddPinToCalendar();
 
-  const { data: pins, isLoading } = useMapPins(home.homeId, undefined, {
+  const { data: allPins, isLoading } = useMapPins(home.homeId, undefined, {
     enabled: hasLocation && !!home.homeId,
   });
+  const pins = useMemo(() => allPins?.filter((p) => isLaunchVisiblePin(p.pin_type)), [allPins]);
 
   // Load leaflet on client
   useEffect(() => {
@@ -306,7 +316,8 @@ export default function MailMapPage() {
             </div>
 
             {/* Panel actions */}
-            <div className="border-t border-app-border-subtle px-4 py-3 flex flex-col gap-2 flex-shrink-0">
+            {/* Launch cut #7 (Household extras): no "Add to Calendar" (the household calendar). */}
+            {(selectedPin.mail_id || launchFeatures.householdExtras) && <div className="border-t border-app-border-subtle px-4 py-3 flex flex-col gap-2 flex-shrink-0">
               {selectedPin.mail_id && (
                 <a
                   href={`/app/mailbox/home/${selectedPin.mail_id}`}
@@ -315,7 +326,7 @@ export default function MailMapPage() {
                   View full notice
                 </a>
               )}
-              <button
+              {launchFeatures.householdExtras && <button
                 type="button"
                 onClick={() => handleAddToCalendar(selectedPin.id)}
                 disabled={calendarMutation.isPending}
@@ -332,8 +343,8 @@ export default function MailMapPage() {
                   : calendarMutation.isSuccess
                     ? 'Added to Calendar'
                     : 'Add to Calendar'}
-              </button>
-            </div>
+              </button>}
+            </div>}
           </div>
         )}
       </div>

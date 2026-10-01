@@ -352,6 +352,19 @@ public enum HubDiscoveryFilter: String, Sendable, Hashable, CaseIterable, Identi
     /// Tabs the Hub shows. People is left out: `filter=people` never returns
     /// anyone today, so the tab could only ever be empty.
     public static let visibleTabs: [HubDiscoveryFilter] = [.gigs, .businesses, .posts]
+
+    /// First-launch scope: `visibleTabs` minus Tasks (launch cut #4, Open
+    /// gigs) and Businesses (launch cut #6, Business directory). The rail
+    /// starts on the first tab still shown (Posts when both are hidden).
+    public static var launchVisibleTabs: [HubDiscoveryFilter] {
+        visibleTabs.filter { tab in
+            switch tab {
+            case .gigs: LaunchFeatures.openGigs
+            case .businesses: LaunchFeatures.businessDirectory
+            case .people, .posts: true
+            }
+        }
+    }
 }
 
 /// Discovery rail card.
@@ -442,5 +455,30 @@ public struct ActivityEntry: Identifiable, Sendable {
         self.timeAgo = timeAgo
         self.icon = icon
         self.tint = tint
+    }
+}
+
+// MARK: - First-launch scope
+
+extension ActionChipContent {
+    /// Launch cut #4 (Open gigs): "Post task" posts an open task. Launch
+    /// cut #3 (Marketplace): "Snap & sell" creates a listing.
+    var isAvailableAtLaunch: Bool {
+        switch kind {
+        case .postTask: LaunchFeatures.openGigs
+        case .snapAndSell: LaunchFeatures.marketplace
+        case .scanMail, .addHome: true
+        }
+    }
+}
+
+extension PillarTile {
+    /// Launch cuts #3 (Marketplace) / #4 (Open gigs): their pillar tiles are hidden.
+    var isAvailableAtLaunch: Bool {
+        switch pillar {
+        case .marketplace: LaunchFeatures.marketplace
+        case .gigs: LaunchFeatures.openGigs
+        case .pulse, .mail: true
+        }
     }
 }

@@ -103,6 +103,23 @@ public enum ExploreKind: String, CaseIterable, Sendable, Hashable, Identifiable 
     public var isSquarePin: Bool {
         self == .item
     }
+
+    /// First-launch scope: Tasks (launch cut #4, Open gigs), Items (#3,
+    /// Marketplace) and Spots — the business layer (#6, Business directory) —
+    /// are hidden; posts and homes stay.
+    public var isAvailableAtLaunch: Bool {
+        switch self {
+        case .task: LaunchFeatures.openGigs
+        case .item: LaunchFeatures.marketplace
+        case .spot: LaunchFeatures.businessDirectory
+        case .post, .home: true
+        }
+    }
+
+    /// The kinds shown for the first launch.
+    public static var launchCases: [ExploreKind] {
+        allCases.filter(\.isAvailableAtLaunch)
+    }
 }
 
 /// Per-pin lifecycle state. Drives the pin treatment — confirmed gets a

@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.universal_search
 
 import androidx.compose.ui.graphics.Color
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -31,6 +32,11 @@ enum class UniversalSearchTab(
     Beacons("beacons", "Beacons", UniversalSearchKind.Beacon),
     Businesses("businesses", "Businesses", UniversalSearchKind.Business),
     Homes("homes", "Homes", UniversalSearchKind.Home),
+    ;
+
+    /** Launch cut (2026-09-27): false for the tab of a kind hidden for the first launch. */
+    val isLaunchAvailable: Boolean
+        get() = kind?.isLaunchAvailable ?: true
 }
 
 /**
@@ -92,7 +98,34 @@ enum class UniversalSearchKind(
         accentBackground = PantopusColors.homeBg,
         failureNotice = "Homes couldn't be searched.",
     ),
+    ;
+
+    /**
+     * Launch cut (2026-09-27): open tasks (#4), Beacons (#1 + #2) and the
+     * business directory (#6) are hidden for the first launch; people and homes stay.
+     */
+    val isLaunchAvailable: Boolean
+        get() =
+            when (this) {
+                Task -> LaunchFeatures.openGigs
+                Beacon -> LaunchFeatures.beacon && LaunchFeatures.personas
+                Business -> LaunchFeatures.businessDirectory
+                Person, Home -> true
+            }
 }
+
+/**
+ * Launch cut: the searchable kinds the copy names, in the original order
+ * ("tasks, people, Beacons, businesses, and homes").
+ */
+internal fun launchSearchableNouns(): List<String> =
+    listOfNotNull(
+        "tasks".takeIf { UniversalSearchKind.Task.isLaunchAvailable },
+        "people",
+        "Beacons".takeIf { UniversalSearchKind.Beacon.isLaunchAvailable },
+        "businesses".takeIf { UniversalSearchKind.Business.isLaunchAvailable },
+        "homes",
+    )
 
 /**
  * Where a tapped result navigates. The host maps this onto a

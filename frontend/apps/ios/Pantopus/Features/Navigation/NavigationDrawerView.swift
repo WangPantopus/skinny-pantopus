@@ -115,16 +115,20 @@ struct NavigationDrawerView: View {
                 .accessibilityIdentifier("navDrawer.contextPill.profile")
                 .accessibilityLabel(viewModel.headerSubtitle)
                 .accessibilityHint("Opens your profile")
-                Button {
-                    dismiss()
-                    onOpenIdentityCenter()
-                } label: {
-                    switchChip(pillar: pillar)
+                // Launch cut #2 (Personas): the identity Switch into the
+                // Identity Center is hidden for the first launch.
+                if LaunchFeatures.personas {
+                    Button {
+                        dismiss()
+                        onOpenIdentityCenter()
+                    } label: {
+                        switchChip(pillar: pillar)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("navDrawer.contextPill.switch")
+                    .accessibilityLabel("Switch context")
+                    .accessibilityHint("Opens the Identity Center")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("navDrawer.contextPill.switch")
-                .accessibilityLabel("Switch context")
-                .accessibilityHint("Opens the Identity Center")
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
@@ -143,7 +147,10 @@ struct NavigationDrawerView: View {
                 HStack(spacing: Spacing.s3) {
                     pillIdentity(pillar: pillar)
                     Spacer(minLength: Spacing.s2)
-                    switchChip(pillar: pillar)
+                    // Launch cut #2 (Personas): no identity Switch chip.
+                    if LaunchFeatures.personas {
+                        switchChip(pillar: pillar)
+                    }
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)

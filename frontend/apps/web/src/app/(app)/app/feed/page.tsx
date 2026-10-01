@@ -29,14 +29,16 @@ import {
   type SportsComposerMetadata, type SportsMode,
 } from '@/constants/feedTopics';
 import { FEED_POST_CREATED_EVENT } from '@/lib/feedComposerEvents';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
 
-const SURFACE_TABS: { key: FeedSurface; label: string; icon: ReactNode }[] = [
+const SURFACE_TABS: { key: FeedSurface; label: string; icon: ReactNode }[] = ([
   { key: 'place', label: 'Place', icon: <MapPin className="w-4 h-4 inline-block" /> },
   { key: 'personas', label: 'Beacons', icon: <Radio className="w-4 h-4 inline-block" /> },
   { key: 'connections', label: 'Connections', icon: <LinkIcon className="w-4 h-4 inline-block" /> },
-];
+// Launch cut #1 (Beacon): the Beacons (followed publishers) feed is hidden.
+] satisfies { key: FeedSurface; label: string; icon: ReactNode }[]).filter(({ key }) => key !== 'personas' || launchFeatures.beacon);
 
 export default function FeedPage() {
   const router = useRouter();
@@ -61,7 +63,7 @@ export default function FeedPage() {
 
   const surfaceParam = searchParams?.get('surface');
   const feed = useFeedData({
-    initialSurface: surfaceParam === 'personas' || surfaceParam === 'connections' ? surfaceParam : 'place',
+    initialSurface: (surfaceParam === 'personas' && launchFeatures.beacon) || surfaceParam === 'connections' ? surfaceParam : 'place',
     viewingLat: area.viewingLat,
     viewingLng: area.viewingLng,
     userLat: area.userLat,
@@ -370,7 +372,8 @@ export default function FeedPage() {
           <div className="px-4 py-6 space-y-4 max-w-2xl mx-auto">
             {feed.surface === 'place' && <NeighborhoodPulse posts={pulsePosts} />}
 
-            {feed.surface === 'place' && (
+            {/* Launch cut #6 (Business directory): no nearby business suggestions. */}
+            {launchFeatures.businessDirectory && feed.surface === 'place' && (
               <NearbyProvidersCard
                 userLat={area.viewingLat}
                 userLng={area.viewingLng}

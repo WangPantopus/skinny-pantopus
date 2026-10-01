@@ -350,7 +350,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                 GroupedListRow(
                     id: RowID.homeReminders,
                     label: "Home Reminders",
-                    subtext: "Bills, tasks, and calendar events",
+                    // Launch cut #7 (Household extras): bills and the calendar are hidden.
+                    subtext: LaunchFeatures.householdExtras ? "Bills, tasks, and calendar events" : "Household tasks and reminders",
                     control: .toggle(isOn: prefs.homeRemindersEnabled)
                 ),
                 GroupedListRow(
@@ -371,7 +372,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     subtext: "Daily mailbox digest",
                     control: .toggle(isOn: prefs.mailSummaryEnabled)
                 )
-            ]
+                // Launch cut #1 (Beacon): no Beacon push toggle.
+            ].filter { $0.id != RowID.beaconPush || LaunchFeatures.beacon }
         )
     }
 

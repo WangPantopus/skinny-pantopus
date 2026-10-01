@@ -8,6 +8,8 @@
 
 package app.pantopus.android.ui.screens.my_tasks
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
@@ -46,11 +48,14 @@ class MyTasksViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides bids, boosts and Magic Task posting; these tests pin them.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     /** 2026-05-15 12:00:00 UTC — Friday. */

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.hub.today
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.BriefingDeliveryDto
 import app.pantopus.android.data.api.models.hub.HubTodayPayload
 import app.pantopus.android.data.api.models.hub.TodayAlertDto
@@ -42,7 +43,10 @@ object TodayDetailMapper {
         val alerts = payload?.alerts ?: emptyList()
         val hasAlert = alerts.isNotEmpty()
         val storedSignals = briefing?.signalsSnapshot ?: emptyList()
-        val rawSignals = if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals
+        // Launch cut #7 (Household extras): bill-due and home-calendar signals are hidden.
+        val rawSignals =
+            (if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals)
+                .filter { LaunchFeatures.householdExtras || it.kind !in HOUSEHOLD_EXTRAS_SIGNAL_KINDS }
         val signals = rawSignals.map { signal(it) }
         val label = payload?.location?.label ?: "Today"
         val storedSummary = briefing?.summaryText?.takeIf { it.isNotEmpty() }
@@ -236,6 +240,9 @@ object TodayDetailMapper {
      */
     private val SHAREABLE_SIGNAL_KINDS: Set<String?> =
         setOf("alert", "precipitation", "aqi", "temperature", "seasonal", "local_update", "address_calendar")
+
+    /** Launch cut #7 (Household extras): signal kinds of bill management and the home calendar. */
+    private val HOUSEHOLD_EXTRAS_SIGNAL_KINDS: Set<String?> = setOf("bill_due", "calendar")
 
     private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
 

@@ -25,13 +25,24 @@ function supportTrainReference(trainTitle) {
   return `the Support Train "${safeTrainTitle}"`;
 }
 
+// Slot dates are calendar dates ("2026-10-09"); notifications show them as "Fri, Oct 9".
+function formatSlotDate(slotDate) {
+  if (typeof slotDate !== 'string' || !slotDate) return '';
+  return new Date(`${slotDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function buildReminderTitle() {
   return 'Support Train Reminder';
 }
 
 function buildReminderBody(trainTitle, payload, timeLabel) {
   const slotLabel = payload.slot_label || 'your contribution';
-  const dateLabel = payload.slot_date || timeLabel;
+  const dateLabel = formatSlotDate(payload.slot_date) || timeLabel;
   const restrictionsSuffix =
     typeof payload.restrictions === 'string' && payload.restrictions.trim()
       ? ` ${payload.restrictions.trim()}`
@@ -98,9 +109,10 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 
       case 'support_train.slot_filled': {
         const recipients = await _getOrganizersAndRecipient(supportTrainId, st, actorUserId);
-        const helperName = payload.helper_name || 'A helper';
+        const helperName =
+          payload.helper_name || (await _getDisplayName(actorUserId)) || 'A helper';
         const slotLabel = payload.slot_label || 'a slot';
-        const slotDate = payload.slot_date || '';
+        const slotDate = formatSlotDate(payload.slot_date);
 
         if (recipients.length > 0) {
           await createBulkNotifications(
@@ -108,7 +120,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
               userId,
               type: 'support_train_slot_changes',
               title: 'Support Train Slot Filled',
-              body: `${helperName} signed up for ${slotLabel} on ${slotDate} for ${supportTrainReference(title)}.`,
+              body: `${helperName} signed up for ${slotLabel}${slotDate ? ` on ${slotDate}` : ''} for ${supportTrainReference(title)}.`,
               icon: '✅',
               link,
               metadata: { support_train_id: supportTrainId, slot_id: payload.slot_id },
@@ -120,7 +132,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 
       case 'support_train.slot_canceled_by_helper': {
         const recipients = await _getOrganizers(supportTrainId, actorUserId);
-        const helperName = payload.helper_name || 'A helper';
+        const helperName =
+          payload.helper_name || (await _getDisplayName(actorUserId)) || 'A helper';
         const slotLabel = payload.slot_label || 'a slot';
         const reason =
           typeof payload.helper_reason === 'string' && payload.helper_reason.trim()
@@ -147,15 +160,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
         // Notify the helper whose reservation was canceled
         if (payload.helper_user_id) {
           const slotLabel = payload.slot_label || 'your slot';
-          const slotDate =
-            typeof payload.slot_date === 'string' && payload.slot_date
-              ? new Date(`${payload.slot_date}T00:00:00Z`).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })
-              : '';
+          const slotDate = formatSlotDate(payload.slot_date);
           const reason =
             typeof payload.organizer_reason === 'string' && payload.organizer_reason.trim()
               ? ` Reason: ${payload.organizer_reason.trim()}`
@@ -181,15 +186,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
         // An organizer who is also the helper shared it with themselves: nothing to tell them.
         if (payload.helper_user_id && payload.helper_user_id !== actorUserId) {
           const slotLabel = payload.slot_label || 'your delivery';
-          const slotDate =
-            typeof payload.slot_date === 'string' && payload.slot_date
-              ? new Date(`${payload.slot_date}T00:00:00Z`).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })
-              : '';
+          const slotDate = formatSlotDate(payload.slot_date);
           await createNotification({
             userId: payload.helper_user_id,
             type: 'support_train_slot_changes',
@@ -211,7 +208,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
         // Notify organizers + recipient that a delivery was made
         const deliverRecipients = await _getOrganizersAndRecipient(supportTrainId, st, actorUserId);
         if (deliverRecipients.length > 0) {
-          const dHelperName = payload.helper_name || 'A helper';
+          const dHelperName =
+            payload.helper_name || (await _getDisplayName(actorUserId)) || 'A helper';
           await createBulkNotifications(
             deliverRecipients.map((userId) => ({
               userId,
@@ -290,12 +288,14 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 
         if (recipients.length > 0) {
           const amount = payload.amount ? `$${(payload.amount / 100).toFixed(2)}` : 'a donation';
+          const donorName =
+            payload.donor_name || (await _getDisplayName(actorUserId)) || 'Someone';
           await createBulkNotifications(
             recipients.map((userId) => ({
               userId,
               type: 'support_train_donations',
               title: 'Support Train Donation Received',
-              body: `${payload.donor_name || 'Someone'} contributed ${amount} to ${supportTrainReference(title)}.`,
+              body: `${donorName} contributed ${amount} to ${supportTrainReference(title)}.`,
               icon: '💝',
               link,
               metadata: { support_train_id: supportTrainId },
@@ -329,6 +329,18 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+
+// A signed-in request carries no display name (req.user is the id, email and role),
+// so name whoever acted from their profile, as the signups list does.
+async function _getDisplayName(userId) {
+  if (!userId) return null;
+  const { data } = await supabaseAdmin
+    .from('User')
+    .select('name, username')
+    .eq('id', userId)
+    .maybeSingle();
+  return data?.name || data?.username || null;
+}
 
 async function _getOrganizers(supportTrainId, excludeUserId) {
   const { data } = await supabaseAdmin

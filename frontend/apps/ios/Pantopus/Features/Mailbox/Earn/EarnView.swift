@@ -93,14 +93,18 @@ public struct EarnView: View {
                 // balance; with nothing to cash out, the next step is finding work.
                 if earnContent.hasCashableBalance {
                     bottomBar { CashOutCTA(amount: earnContent.available, onTap: onCashOut) }
-                } else {
+                } else if LaunchFeatures.openGigs {
+                    // Launch cut #4 (Open gigs): no "Browse open tasks" CTA.
                     bottomBar { BrowseCTA(onTap: onBrowseTasks) }
                 }
             }
         case let .empty(waysToEarn):
             ZStack(alignment: .bottom) {
                 emptyScroll(waysToEarn)
-                bottomBar { BrowseCTA(onTap: onBrowseTasks) }
+                // Launch cut #4 (Open gigs): no "Browse open tasks" CTA.
+                if LaunchFeatures.openGigs {
+                    bottomBar { BrowseCTA(onTap: onBrowseTasks) }
+                }
             }
         case let .error(message):
             errorShell(message)
@@ -121,9 +125,7 @@ public struct EarnView: View {
                     WeeklyGoalCard(goal: weeklyGoal)
                         .padding(.top, Spacing.s3)
                 }
-                section(overline: "Ways to earn", action: "Find work", onAction: onBrowseTasks) {
-                    EarnWaysToEarnCard(items: content.waysToEarn, onSelect: dispatchWay)
-                }
+                waysToEarnSection(content.waysToEarn)
                 section(overline: "Recent earnings") {
                     if content.earnings.isEmpty {
                         EarnLockedRow(
@@ -195,9 +197,7 @@ public struct EarnView: View {
     private func emptyScroll(_ waysToEarn: [EarnWayToEarn]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.s0) {
-                section(overline: "Ways to earn", action: "Find work", onAction: onBrowseTasks) {
-                    EarnWaysToEarnCard(items: waysToEarn, onSelect: dispatchWay)
-                }
+                waysToEarnSection(waysToEarn)
                 section(overline: "Recent earnings") {
                     EarnLockedRow(
                         title: "No earnings yet",
@@ -222,6 +222,25 @@ public struct EarnView: View {
             .padding(.bottom, Spacing.s2)
         }
         .background(Theme.Color.appBg)
+    }
+
+    /// Launch cuts #4 (Open gigs) / #2 + #4 (the professional profile):
+    /// "Browse open tasks", "Find work" and "Offer a service" are hidden, and
+    /// the section with them when nothing is left.
+    @ViewBuilder
+    private func waysToEarnSection(_ ways: [EarnWayToEarn]) -> some View {
+        let shown = ways.filter { way in
+            switch way.kind {
+            case .browse: LaunchFeatures.openGigs
+            case .offer: LaunchFeatures.personas && LaunchFeatures.openGigs
+            case .refer: true
+            }
+        }
+        if !shown.isEmpty {
+            section(overline: "Ways to earn", action: LaunchFeatures.openGigs ? "Find work" : nil, onAction: onBrowseTasks) {
+                EarnWaysToEarnCard(items: shown, onSelect: dispatchWay)
+            }
+        }
     }
 
     private func dispatchWay(_ kind: EarnWayKind) {

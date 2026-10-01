@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, Wrench, CreditCard, UserCheck, Check, Circle, Home, ShieldCheck } from 'lucide-react';
 import type { SetupStep } from './types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface SetupBannerProps {
   steps: SetupStep[];
@@ -16,7 +17,8 @@ const stepConfig: Record<string, { label: string; route: string; icon: ReactNode
   verify: { label: 'Verify your address', route: '/app/place', icon: <ShieldCheck className="w-4 h-4" /> },
   complete_profile: { label: 'Complete profile', route: '/app/profile/edit', icon: <UserCheck className="w-4 h-4" /> },
   profile_photo: { label: 'Add profile photo', route: '/app/profile/edit', icon: <Camera className="w-4 h-4" /> },
-  skills: { label: 'Add skills', route: '/app/professional', icon: <Wrench className="w-4 h-4" /> },
+  // Launch cuts #2 + #4: Professional mode is hidden; skills are edited on the profile.
+  skills: { label: 'Add skills', route: launchFeatures.personas && launchFeatures.openGigs ? '/app/professional' : '/app/profile/edit', icon: <Wrench className="w-4 h-4" /> },
   payout_method: { label: 'Add payout method', route: '/app/settings/payments', icon: <CreditCard className="w-4 h-4" /> },
 };
 

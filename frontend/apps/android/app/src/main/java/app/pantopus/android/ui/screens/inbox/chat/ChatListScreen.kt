@@ -201,13 +201,14 @@ internal fun FilterTabs(
                 .padding(start = Spacing.s4, top = Spacing.s3),
     ) {
         Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            // Launch cut: only the filter tabs the first launch shows.
             if (skeleton) {
-                repeat(4) {
+                repeat(ChatFilter.launchEntries.size) {
                     Shimmer(width = 48.dp, height = 14.dp, cornerRadius = Radii.xs)
                     Spacer(modifier = Modifier.size(24.dp))
                 }
             } else {
-                ChatFilter.entries.forEach { filter ->
+                ChatFilter.launchEntries.forEach { filter ->
                     FilterTab(
                         filter = filter,
                         active = filter == active,

@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
@@ -61,11 +63,14 @@ class NotificationSettingsSnapshotTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides the Beacon push toggle; the baselines pin it.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     @Test

@@ -6,6 +6,7 @@ import { Hammer, ChevronLeft } from 'lucide-react';
 import { GIG_STATUS_STYLES, statusClasses, statusLabel } from '@pantopus/ui-utils';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type SubTab = 'active' | 'hiring' | 'scheduled' | 'completed';
 
@@ -40,7 +41,8 @@ export function HomeHelpCardPreview({
               </span>
             </div>
           ))}
-          {nearbyGigs.length > 0 && (
+          {/* Launch cut #4 (Open Gigs): nearby open tasks are hidden. */}
+          {launchFeatures.openGigs && nearbyGigs.length > 0 && (
             <p className="text-xs text-app-text-muted">{nearbyGigs.length} nearby task{nearbyGigs.length !== 1 ? 's' : ''} available</p>
           )}
         </div>
@@ -104,12 +106,13 @@ export default function HomeHelpCard({
           <button onClick={onBack} className="text-sm text-app-text-secondary hover:text-app-text-strong transition flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Hammer className="w-5 h-5" /> Home Help</h2>
         </div>
-        <button
+        {/* Launch cut #4 (Open Gigs): open task posting is hidden. */}
+        {launchFeatures.openGigs && <button
           onClick={() => router.push(`/app/gigs/new?home_id=${homeId}`)}
           className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition"
         >
           + Post Home Help Task
-        </button>
+        </button>}
       </div>
 
       <div className="flex gap-1 overflow-x-auto">
@@ -182,7 +185,8 @@ export default function HomeHelpCard({
       </div>
 
       {/* Nearby gigs section */}
-      {nearbyGigs.length > 0 && (
+      {/* Launch cut #4 (Open Gigs): nearby open tasks are hidden. */}
+      {launchFeatures.openGigs && nearbyGigs.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-2">Nearby Tasks</h3>
           <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">

@@ -19,6 +19,7 @@ import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } f
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const LUCIDE_MAP: Record<string, LucideIcon> = {
   MessageCircle, Star, CalendarDays, Search, Megaphone, AlertTriangle,
@@ -465,7 +466,8 @@ export default function PostDetailPanel({
                 )}
                 <div className="min-w-0 flex-1">
                   {publicAuthor?.type === 'persona' ? (
-                  publicAuthor.href ? (
+                  // Launch cuts #1 + #2: no link to the hidden persona page.
+                  publicAuthor.href && launchFeatures.beacon && launchFeatures.personas ? (
                     <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline">
                       {creatorName}
                     </a>

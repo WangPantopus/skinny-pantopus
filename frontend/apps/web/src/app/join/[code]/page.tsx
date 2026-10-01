@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -108,13 +109,14 @@ export default function JoinPage() {
                 <p className="text-xs text-app-text-secondary">Every helper is identity-verified and reviewed</p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
+            {/* Launch cut #4 (Open Gigs): open task posting is not advertised. */}
+            {launchFeatures.openGigs && <div className="flex items-start gap-3">
               <span className="text-lg">⚡</span>
               <div>
                 <p className="text-sm font-medium text-app-text">Fast & affordable</p>
                 <p className="text-xs text-app-text-secondary">Post a task and get help in minutes</p>
               </div>
-            </div>
+            </div>}
             <div className="flex items-start gap-3">
               <span className="text-lg">🔒</span>
               <div>

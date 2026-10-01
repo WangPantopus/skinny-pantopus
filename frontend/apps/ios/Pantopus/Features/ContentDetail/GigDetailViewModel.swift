@@ -244,6 +244,7 @@ public final class GigDetailViewModel {
     /// The state the shell renders. While a tip original is kept and not settled, the tip dock
     /// reads "Check tip status", as on Android and web; everything else is `state` unchanged.
     public var displayState: ContentDetailState {
+        let state = Self.launchScoped(state, gig: rawGig, viewerUserId: currentUserId)
         guard hasTipOriginal, case let .loaded(content) = state,
               content.dock.primary == Self.tipDock.primary else { return state }
         return .loaded(ContentDetailContent(
@@ -2440,6 +2441,35 @@ extension GigDetailViewModel {
         return !isAwarded(gig)
     }
 
+    /// Launch cut #4 (Open gigs): bid lists, the "Be the first to bid"
+    /// callout and the bid count in the Open pill are hidden, and a viewer
+    /// who isn't the poster gets no Place bid / Accept dock on an open task.
+    /// The lifecycle of a task the viewer is part of is unchanged.
+    static func launchScoped(_ state: ContentDetailState, gig: GigDTO?, viewerUserId: String?) -> ContentDetailState {
+        guard !LaunchFeatures.openGigs, case let .loaded(content) = state else { return state }
+        let open = gig?.status?.lowercased() == "open"
+        let stranger = open && (viewerUserId == nil || viewerUserId != gig?.userId)
+        return .loaded(ContentDetailContent(
+            kind: content.kind,
+            cover: content.cover,
+            statusPill: open ? ContentDetailPill(label: "Open", icon: .circle, tone: .warning) : content.statusPill,
+            hero: content.hero,
+            statStrip: content.statStrip,
+            counterparty: content.counterparty,
+            modules: content.modules.filter { module in
+                switch module {
+                case .bids: false
+                case let .callout(callout): callout.identifier != "be-first"
+                default: true
+                }
+            },
+            trustCapsules: content.trustCapsules,
+            dock: stranger
+                ? ContentDetailDock(primary: ContentDetailDockButton(label: "Not available", icon: .lock, enabled: false))
+                : content.dock
+        ))
+    }
+
     /// The dock for the poster on a completed gig — primary becomes "Send a
     /// tip" (Block 3D), keeping "Message" as the secondary.
     static let tipDock = ContentDetailDock(
@@ -2780,7 +2810,8 @@ extension GigDetailViewModel {
         if let archetype = gig.taskArchetype, !archetype.isEmpty {
             out.append(ContentDetailStat(top: archetype.replacingOccurrences(of: "_", with: " ").capitalized, bottom: "type"))
         }
-        if let engagement = gig.engagementMode, !engagement.isEmpty {
+        // Launch cut #4 (Open gigs): the bidding format (instant / offers / quotes) isn't shown.
+        if let engagement = gig.engagementMode, !engagement.isEmpty, LaunchFeatures.openGigs {
             out.append(ContentDetailStat(top: engagement.replacingOccurrences(of: "_", with: " ").capitalized, bottom: "mode"))
         }
         return Array(out.prefix(3))

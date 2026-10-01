@@ -52,8 +52,11 @@ struct NeighborhoodView: View {
                         EmptyState(
                             icon: .home,
                             headline: "Add a home for neighborhood context",
+                            // Launch cut #1 (Beacon): no Beacons to follow.
                             subcopy: "Adding a home gives you neighborhood context and household tools. "
-                                + "You can browse Pulse and follow Beacons before setting it up.",
+                                + (LaunchFeatures.beacon
+                                    ? "You can browse Pulse and follow Beacons before setting it up."
+                                    : "You can browse Pulse before setting it up."),
                             cta: .init(title: "Set up a home") {
                                 await MainActor.run { onClaimPlace() }
                             }
@@ -83,9 +86,12 @@ struct NeighborhoodView: View {
             Text("Nearby")
                 .font(.system(size: 28, weight: .heavy))
                 .foregroundStyle(Theme.Color.appText)
+            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
             Text(
-                "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
+                LaunchFeatures.beacon
+                    ? "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
                     + "Following Beacons needs no home address."
+                    : "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
             )
             .pantopusTextStyle(.small)
             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -99,33 +105,14 @@ struct NeighborhoodView: View {
     private var socialDestinations: some View {
         VStack(spacing: Spacing.s3) {
             socialRow("Pulse", detail: "Browse a chosen area or catch up with your connections", icon: .rss) { onOpenSurface(.pulse) }
-            socialRow("Beacons", detail: "Find public profiles and return to the people you follow", icon: .radio, action: onOpenBeacons)
+            // Launch cut #1 (Beacon): hidden for the first launch.
+            if LaunchFeatures.beacon {
+                socialRow(
+                    "Beacons", detail: "Find public profiles and return to the people you follow", icon: .radio, action: onOpenBeacons
+                )
+            }
             socialRow("Connections", detail: "Keep up with people you know", icon: .users, action: onOpenConnections)
         }
-    }
-
-    private func socialRow(_ title: String, detail: String, icon: PantopusIcon, action: @escaping @MainActor () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.s3) {
-                Icon(icon, size: 20, color: .white)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.Color.primarySolid)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.Color.appText)
-                    Text(detail).pantopusTextStyle(.small).foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: 0)
-                Icon(.chevronRight, size: 18, color: Theme.Color.appTextSecondary)
-            }
-            .padding(Spacing.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-            .overlay(RoundedRectangle(cornerRadius: Radii.lg).stroke(Theme.Color.appBorder))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("nearbySocial.\(title.lowercased())")
     }
 
     private var loadingBody: some View {
@@ -159,15 +146,19 @@ struct NeighborhoodView: View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             // The window (Wedge v2 §4): alive whatever the meter says.
             if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
-            meterCard(meter)
+            // Launch cuts #3/#4: the meter counts toward the local marketplace
+            // and tasks; with both hidden it goes with them.
+            if !Self.launchSurfaces.isEmpty { meterCard(meter) }
             inviteButton
-            Text("Local marketplace and tasks")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-                .padding(.top, Spacing.s2)
-            VStack(spacing: Spacing.s3) {
-                ForEach(Self.surfaces, id: \.title) { surface in
-                    lockedRow(surface)
+            if !Self.launchSurfaces.isEmpty {
+                Text("Local marketplace and tasks")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .padding(.top, Spacing.s2)
+                VStack(spacing: Spacing.s3) {
+                    ForEach(Self.launchSurfaces, id: \.title) { surface in
+                        lockedRow(surface)
+                    }
                 }
             }
         }
@@ -179,11 +170,13 @@ struct NeighborhoodView: View {
         let fraction: Double = isForming
             ? 0.08
             : max(0.08, min(1, Double(meter.verifiedCount ?? 0) / Double(max(meter.threshold, 1))))
+        // Launch cut #1 (Beacon): no Beacons to mention for the first launch.
+        let available = LaunchFeatures.beacon ? "Pulse and Beacons are available now." : "Pulse is available now."
         let copy = isForming
             ? "Your area is just forming — be one of the first \(meter.kAnonMin) verified households "
-            + "here. Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
+            + "here. Local marketplace and tasks open at \(meter.threshold). \(available)"
             : "\(meter.verifiedCount ?? 0) households have verified their address nearby. "
-            + "Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
+            + "Local marketplace and tasks open at \(meter.threshold). \(available)"
 
         return VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack {
@@ -274,16 +267,19 @@ struct NeighborhoodView: View {
     private func unlockedBody(_ meter: NeighborhoodMeterDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
-            HStack(spacing: Spacing.s2) {
-                Icon(.sparkles, size: 16, color: Theme.Color.primaryInk)
-                Text("Local marketplace and tasks are open — "
-                    + "\(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Launch cuts #3/#4: the "open" banner goes with the surfaces it announces.
+            if !Self.launchSurfaces.isEmpty {
+                HStack(spacing: Spacing.s2) {
+                    Icon(.sparkles, size: 16, color: Theme.Color.primaryInk)
+                    Text("Local marketplace and tasks are open — "
+                        + "\(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             VStack(spacing: Spacing.s3) {
-                ForEach(Self.surfaces, id: \.title) { surface in
+                ForEach(Self.launchSurfaces, id: \.title) { surface in
                     Button {
                         onOpenSurface(surface.destination)
                     } label: {
@@ -341,8 +337,42 @@ struct NeighborhoodView: View {
         )
     ]
 
+    /// Launch cuts #3 (Marketplace) / #4 (Open gigs): the surfaces still
+    /// shown for the first launch.
+    private static var launchSurfaces: [SurfaceRow] {
+        surfaces.filter(\.destination.isAvailableAtLaunch)
+    }
+
     private func areaSuffix(_ meter: NeighborhoodMeterDTO) -> String {
         if let city = meter.area?.city, !city.isEmpty { return "near \(city)" }
         return "near you"
+    }
+}
+
+/// The social-row builder lives outside the struct body to keep it inside the
+/// type-body length budget after the first-launch gates (2026-10-01).
+extension NeighborhoodView {
+    private func socialRow(_ title: String, detail: String, icon: PantopusIcon, action: @escaping @MainActor () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.s3) {
+                Icon(icon, size: 20, color: .white)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.Color.primarySolid)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.Color.appText)
+                    Text(detail).pantopusTextStyle(.small).foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                Spacer(minLength: 0)
+                Icon(.chevronRight, size: 18, color: Theme.Color.appTextSecondary)
+            }
+            .padding(Spacing.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+            .overlay(RoundedRectangle(cornerRadius: Radii.lg).stroke(Theme.Color.appBorder))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("nearbySocial.\(title.lowercased())")
     }
 }

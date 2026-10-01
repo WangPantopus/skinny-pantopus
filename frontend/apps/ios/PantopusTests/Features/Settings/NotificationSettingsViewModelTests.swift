@@ -17,10 +17,13 @@ final class NotificationSettingsViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // The Beacon push toggle: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
     }
 
     override func tearDown() {
         SequencedURLProtocol.reset()
+        LaunchFeatures.overrideForTesting = nil
         super.tearDown()
     }
 

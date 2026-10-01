@@ -9,6 +9,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const notify = require('../services/scheduling/bookingNotifyService');
 const notifyPrefs = require('../services/scheduling/schedulingNotifyPrefs');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 const MIN = 60 * 1000;
 const DEFAULT_REMINDER_MINUTES = [1440, 60];
@@ -59,6 +60,9 @@ async function completePastBookings(nowMs) {
 async function runBookingReminders() {
   const now = Date.now();
   await completePastBookings(now);
+  // Launch cut #5 (Public scheduling): booking reminders are off for the first
+  // launch; the engine's completion sweep above keeps running.
+  if (skipForLaunchCut('public_scheduling', 'bookingReminders')) return;
   const fromIso = new Date(now - CATCHUP_MIN * MIN).toISOString();
   const toIso = new Date(now + SCAN_AHEAD_MIN * MIN).toISOString();
 

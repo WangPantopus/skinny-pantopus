@@ -11,6 +11,7 @@ import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.chats.ChatUnreadBadgeMath
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.ui.screens.inbox.conversation.isTopicLaunchAvailable
 import app.pantopus.android.ui.screens.root.badgeUnreadCount
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -332,7 +333,11 @@ class ChatListViewModel
                 topics =
                     dto.topics.orEmpty().mapNotNull { topic ->
                         val title = topic.title?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        ConversationRowTopic(title = title, topicType = topic.topicType ?: "general")
+                        val type = topic.topicType ?: "general"
+                        // Launch cut #3 (Marketplace): no listing topic pills; the
+                        // direct-message thread itself stays.
+                        if (!isTopicLaunchAvailable(type)) return@mapNotNull null
+                        ConversationRowTopic(title = title, topicType = type)
                     },
                 gigId = if (isRoom) dto.gigId else null,
             )

@@ -66,9 +66,15 @@ public final class HomeNotificationsViewModel: GroupedListDataSource {
                     toggleRow(id: "packages", label: "Package arrivals"),
                     toggleRow(id: "maintenance", label: "Maintenance alerts"),
                     toggleRow(id: "polls", label: "New polls")
-                ]
+                ].filter { Self.isAvailableAtLaunch(rowId: $0.id) }
             )
         ]
+    }
+
+    /// Launch cut #7 (Household extras): bill, package and poll toggles are
+    /// hidden for the first launch.
+    private static func isAvailableAtLaunch(rowId: String) -> Bool {
+        ["billDue", "packages", "polls"].contains(rowId) ? LaunchFeatures.householdExtras : true
     }
 
     private func toggleRow(id: String, label: String) -> GroupedListRow {

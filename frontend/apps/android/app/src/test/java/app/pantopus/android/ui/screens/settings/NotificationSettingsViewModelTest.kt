@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.settings
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
@@ -48,6 +50,8 @@ class NotificationSettingsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides the Beacon push toggle; these tests pin it.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         coEvery { repository.preferences() } returns NetworkResult.Success(prefs())
         coEvery { repository.updatePreferences(any()) } returns NetworkResult.Success(prefs())
     }
@@ -55,6 +59,7 @@ class NotificationSettingsViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     /** A long debounce keeps the timer from racing the assertions. */

@@ -16,10 +16,12 @@
 import { useRouter } from 'next/navigation';
 import { BadgeCheck, FileText, Check } from 'lucide-react';
 import { Group, SectionCard } from '@/components/archetypes/place';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export function IdentityGroup() {
   const router = useRouter();
-  const goIdentity = () => router.push('/app/identity');
+  // Launch cut #2 (Personas): the Identity Center is hidden; Place's own Identity section (badge, residency letters) stays.
+  const goIdentity = () => router.push(launchFeatures.personas ? '/app/identity' : '/app/place/identity');
   return (
     <Group label="Identity">
       <SectionCard

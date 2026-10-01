@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
@@ -188,10 +189,11 @@ class ChatConversationViewModel
             )
 
         val emptyChips: List<ChatPromptChip> =
-            listOf(
+            listOfNotNull(
                 ChatPromptChip("intro", "Introduce yourself", PantopusIcon.Hand),
-                ChatPromptChip("gig", "Ask about the gig", PantopusIcon.Briefcase),
-                ChatPromptChip("listing", "Share a listing", PantopusIcon.Tag),
+                // Launch cuts #4 (Open Gigs) / #3 (Marketplace): no gig or listing openers.
+                ChatPromptChip("gig", "Ask about the gig", PantopusIcon.Briefcase).takeIf { LaunchFeatures.openGigs },
+                ChatPromptChip("listing", "Share a listing", PantopusIcon.Tag).takeIf { LaunchFeatures.marketplace },
             )
 
         private var mode: ChatThreadMode = ChatThreadMode.Ai
@@ -883,7 +885,7 @@ class ChatConversationViewModel
                 }
                 is NetworkResult.Failure -> {
                     if (isPreBidLimit(result.error)) {
-                        _sendLimitNotice.value = PRE_BID_LIMIT_NOTICE
+                        _sendLimitNotice.value = preBidLimitNotice()
                     } else if (isSendRefused(result.error)) {
                         markRefused(clientId, result.error)
                     }
@@ -2445,6 +2447,12 @@ private fun JSONObject.optStringValue(key: String): String? = if (isNull(key)) n
 /** Banner copy for the pre-bid gig-room send limit (429 `PRE_BID_LIMIT`). */
 private const val PRE_BID_LIMIT_NOTICE =
     "Message limit reached — place a bid or wait for acceptance to keep chatting."
+
+/** Launch cut #4 (Open Gigs): bidding is hidden, so the limit banner doesn't suggest a bid. */
+private const val PRE_BID_LIMIT_NOTICE_NO_BIDS = "Message limit reached — wait for acceptance to keep chatting."
+
+private fun preBidLimitNotice(): String = if (LaunchFeatures.openGigs) PRE_BID_LIMIT_NOTICE else PRE_BID_LIMIT_NOTICE_NO_BIDS
+
 private const val SEND_REFUSED_NOTICE = "You can't send messages in this conversation."
 
 /**

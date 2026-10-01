@@ -15,7 +15,8 @@ final class HomeTaskGigJourneyUITests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_HOME_GIG_UI"] == "1", "Requires isolated SQL-backed Gig fixture")
         XCTAssertEqual(ProcessInfo.processInfo.environment["HOME_GIG_UI_ORIGIN"], origin)
         app = XCUIApplication()
-        app.launchEnvironment = ["PANTOPUS_API_ENV": "local", "UI_TESTS_DISABLE_NOTIFICATIONS": "1"]
+        // "Review Gig publication" is launch cut #4: every first-launch cut switched on.
+        app.launchEnvironment = ["PANTOPUS_API_ENV": "local", "UI_TESTS_DISABLE_NOTIFICATIONS": "1", "PANTOPUS_LAUNCH_FEATURES": "all"]
         let state = try await fixture("reset", method: "POST")
         home = state.homeId
         taskId = state.taskId

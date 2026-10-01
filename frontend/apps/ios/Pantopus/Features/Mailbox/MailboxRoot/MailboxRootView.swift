@@ -63,18 +63,22 @@ public struct MailboxRootView: View {
                         Label("Mail tasks", systemImage: "checklist")
                     }
                     .accessibilityIdentifier("mailboxRootSettings.mailTasks")
-                    Button {
-                        viewModel.openMailParty()
-                    } label: {
-                        Label("Mail party", systemImage: "party.popper")
+                    // Launch cut #8 (Mail extras): Mail party and the community
+                    // mail stream are hidden for the first launch.
+                    if LaunchFeatures.mailExtras {
+                        Button {
+                            viewModel.openMailParty()
+                        } label: {
+                            Label("Mail party", systemImage: "party.popper")
+                        }
+                        .accessibilityIdentifier("mailboxRootSettings.mailParty")
+                        Button {
+                            viewModel.openCommunity()
+                        } label: {
+                            Label("Community mail", systemImage: "megaphone")
+                        }
+                        .accessibilityIdentifier("mailboxRootSettings.community")
                     }
-                    .accessibilityIdentifier("mailboxRootSettings.mailParty")
-                    Button {
-                        viewModel.openCommunity()
-                    } label: {
-                        Label("Community mail", systemImage: "megaphone")
-                    }
-                    .accessibilityIdentifier("mailboxRootSettings.community")
                     Button {
                         viewModel.openRecords()
                     } label: {

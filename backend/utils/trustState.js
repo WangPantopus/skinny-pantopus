@@ -230,16 +230,18 @@ async function computeTrustState(userId, latitude, longitude) {
 
     if (pendingClaims && pendingClaims.length > 0) {
       const claimHomeIds = pendingClaims.map(c => c.home_id);
+      // Home keeps its point only in `location` (PostGIS), as in step 1.
       const { data: claimHomes } = await supabaseAdmin
         .from('Home')
-        .select('id, latitude, longitude')
+        .select('id, location')
         .in('id', claimHomeIds)
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+        .not('location', 'is', null);
 
       if (claimHomes) {
         for (const home of claimHomes) {
-          const dist = haversineMeters(latitude, longitude, home.latitude, home.longitude);
+          const point = parsePostGISPoint(home.location);
+          if (!point) continue;
+          const dist = haversineMeters(latitude, longitude, point.latitude, point.longitude);
           if (dist <= NEARBY_RADIUS_METERS) {
             result.level = 'incoming_resident';
             result.homeId = home.id;
@@ -307,11 +309,16 @@ async function getPostingIdentities(userId) {
       }
     }
 
-    // 2) Business identities
-    const { data: businesses } = await supabaseAdmin
+    // 2) Business identities. The crew's own account: BusinessProfile is keyed by
+    // business_user_id, and the crew's name and picture are on its User row.
+    const { data: ownBusiness } = await supabaseAdmin
       .from('BusinessProfile')
-      .select('user_id, name, logo_url')
-      .eq('user_id', userId);
+      .select('business_user_id')
+      .eq('business_user_id', userId)
+      .maybeSingle();
+    const businesses = ownBusiness && user
+      ? [{ user_id: userId, name: user.name || user.username, logo_url: user.profile_picture_url }]
+      : null;
 
     // Also check business team membership — seat-based with fallback
     const { getAllSeatsForUser } = require('./seatPermissions');
@@ -352,17 +359,17 @@ async function getPostingIdentities(userId) {
         // Avoid duplicates if user is the business owner
         if (identities.some(i => i.type === 'business' && i.id === tm.business_user_id)) continue;
         const { data: biz } = await supabaseAdmin
-          .from('BusinessProfile')
-          .select('name, logo_url')
-          .eq('user_id', tm.business_user_id)
-          .single();
+          .from('User')
+          .select('name, username, profile_picture_url')
+          .eq('id', tm.business_user_id)
+          .maybeSingle();
         if (biz) {
           identities.push({
             type: 'business',
             id: tm.business_user_id,
-            name: biz.name,
+            name: biz.name || biz.username,
             role: tm.role_base,
-            imageUrl: biz.logo_url || null,
+            imageUrl: biz.profile_picture_url || null,
           });
         }
       }
@@ -448,16 +455,8 @@ function canPostToAudience({ postAs, audience, postType, trustLevel, homeId, rol
     }
   }
 
-  // Incoming residents can only post Questions and Recommendations to Nearby
-  if (trustLevel === 'incoming_resident' && audience === 'nearby') {
-    const allowedTypes = ['ask_local', 'recommendation'];
-    if (!allowedTypes.includes(postType)) {
-      return {
-        allowed: false,
-        reason: 'As an Incoming Resident, you can only post Questions and Recommendations to Nearby.',
-      };
-    }
-  }
+  // Incoming residents have no Nearby rule of their own: canPostToPlace() makes them read-only
+  // without a fresh GPS fix and lets them post like any visitor with one.
 
   // Business target area posts must be structured (no general)
   if (postAs === 'business' && audience === 'target_area') {

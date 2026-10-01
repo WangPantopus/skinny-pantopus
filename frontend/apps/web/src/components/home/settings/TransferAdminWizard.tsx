@@ -4,6 +4,7 @@ import { useState } from 'react';
 import * as api from '@pantopus/api';
 import type { HomeMember } from '@pantopus/types';
 import SlidePanel from '../SlidePanel';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ============================================================
 // TransferAdminWizard — 3-step ownership transfer flow
@@ -213,7 +214,8 @@ export default function TransferAdminWizard({
                   { icon: '💳', label: 'Your bill payments', desc: 'Payment history and split records' },
                   { icon: '📦', label: 'Your packages', desc: 'Package tracking tied to your account' },
                   { icon: '🏷️', label: 'Admin role', desc: 'You keep an admin role in the home' },
-                ].map((item) => (
+                // Launch cut #7 (Household extras): bills and packages are hidden.
+                ].filter((item) => launchFeatures.householdExtras || (item.label !== 'Your bill payments' && item.label !== 'Your packages')).map((item) => (
                   <div key={item.label} className="flex items-start gap-2.5 p-2 bg-green-50 border border-green-100 rounded-lg">
                     <span className="text-sm mt-0.5">{item.icon}</span>
                     <div>

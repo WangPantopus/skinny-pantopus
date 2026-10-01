@@ -137,7 +137,8 @@ internal fun UniversalSearchContent(
                     PromptSection(
                         tag = "universalSearchIdle",
                         headline = "Search Pantopus",
-                        subcopy = "Find tasks, people, Beacons, businesses, and homes nearby.",
+                        // Launch cut: names only the kinds the first launch searches.
+                        subcopy = "Find ${joinedSearchNouns(launchSearchableNouns())} nearby.",
                         showBrowseNearby = activeTab == UniversalSearchTab.Businesses,
                         onBrowseNearbyBusinesses = onBrowseNearbyBusinesses,
                     )
@@ -283,7 +284,8 @@ private fun SearchField(
                 decorationBox = { inner ->
                     if (query.isEmpty()) {
                         Text(
-                            text = "Search tasks, people, Beacons, businesses…",
+                            // Launch cut: names only the kinds the first launch searches.
+                            text = "Search ${launchSearchableNouns().filter { it != "homes" }.joinToString(", ")}…",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                             maxLines = 1,
@@ -332,7 +334,8 @@ private fun TabStrip(
                 .testTag("universalSearchTabs"),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        UniversalSearchTab.entries.forEach { tab ->
+        // Launch cut: no tab for a kind hidden for the first launch.
+        UniversalSearchTab.entries.filter { it.isLaunchAvailable }.forEach { tab ->
             val isActive = tab == activeTab
             Box(
                 modifier =
@@ -694,3 +697,12 @@ private fun BrowseNearbyBusinessesCta(
         )
     }
 }
+
+/** "a and b" / "a, b, and c" — the idle prompt's list of searchable kinds. */
+private fun joinedSearchNouns(nouns: List<String>): String =
+    when (nouns.size) {
+        0 -> ""
+        1 -> nouns.first()
+        2 -> "${nouns[0]} and ${nouns[1]}"
+        else -> nouns.dropLast(1).joinToString(", ") + ", and " + nouns.last()
+    }

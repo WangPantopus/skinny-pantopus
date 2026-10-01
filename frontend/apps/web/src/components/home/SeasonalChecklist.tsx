@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, Circle, X, Check, Hammer, Snowflake, Sun, Leaf, Flower2, Sparkles, ChevronDown, ChevronRight } from 'lucide-react';
 import type { SeasonalChecklist as SeasonalChecklistData, SeasonalChecklistItem } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface SeasonalChecklistProps {
   checklist: SeasonalChecklistData | null;
@@ -122,7 +123,8 @@ function ChecklistItemRow({
           >
             <X className="h-4 w-4" />
           </button>
-          {item.gig_category && (
+          {/* Launch cut #4 (Open Gigs): the "Hire" path (open task post) is hidden. */}
+          {launchFeatures.openGigs && item.gig_category && (
             <button
               type="button"
               disabled={busy}

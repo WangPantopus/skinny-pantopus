@@ -18,6 +18,17 @@ import XCTest
 
 @MainActor
 final class PublicProfileSnapshotTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // The persona archetype's chip and broadcasts: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     // MARK: - Loading / error chrome (kind-agnostic)
 
     func test_publicProfile_loading_renders() {

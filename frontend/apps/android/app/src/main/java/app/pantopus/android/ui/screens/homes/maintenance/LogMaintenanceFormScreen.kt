@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.theme.PantopusColors
@@ -367,8 +368,15 @@ internal fun LogMaintenanceFormContent(
                         onSelect = callbacks.onUpdateRecurrence,
                     )
                     Spacer(modifier = Modifier.height(Spacing.s2))
+                    // Launch cut #7 (Household extras): the home calendar is hidden, so the
+                    // caption doesn't point there; the reminder stays.
                     Text(
-                        text = "We'll add this to the home calendar as a reminder.",
+                        text =
+                            if (LaunchFeatures.householdExtras) {
+                                "We'll add this to the home calendar as a reminder."
+                            } else {
+                                "We'll save the next due date as a reminder."
+                            },
                         style = PantopusTextStyle.caption,
                         color = PantopusColors.appTextSecondary,
                     )

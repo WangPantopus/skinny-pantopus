@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { User, Camera, FileText, Wrench, Check } from 'lucide-react';
 import type { ProfileCompleteness } from './types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface ProfileCompletionCardProps {
   completeness: ProfileCompleteness;
@@ -13,7 +14,10 @@ const FIELD_META: Record<string, { label: string; icon: typeof User; route: stri
   lastName: { label: 'Add your last name', icon: User, route: '/app/profile/edit' },
   photo: { label: 'Upload a profile photo', icon: Camera, route: '/app/profile/edit' },
   bio: { label: 'Write a short bio', icon: FileText, route: '/app/profile/edit' },
-  skills: { label: 'Add your professional skills', icon: Wrench, route: '/app/professional' },
+  // Launch cuts #2 + #4: Professional mode is hidden; skills are edited on the profile.
+  skills: launchFeatures.personas && launchFeatures.openGigs
+    ? { label: 'Add your professional skills', icon: Wrench, route: '/app/professional' }
+    : { label: 'Add your skills', icon: Wrench, route: '/app/profile/edit' },
 };
 
 export default function ProfileCompletionCard({ completeness }: ProfileCompletionCardProps) {

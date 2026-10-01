@@ -24,6 +24,7 @@ import {
   OwnerSettingsTab,
 } from '@/components/profile/public/tabs';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
@@ -332,7 +333,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }, [profileIdentifier, loadProfile, loadCurrentUser, initialProfile]);
 
   useEffect(() => {
-    if (profile && ['overview', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
+    // Launch cut #4 (Open Gigs): a person's open tasks are not shown, so not loaded.
+    if (launchFeatures.openGigs && profile && ['overview', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
       loadUserGigs();
     }
     if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolio === null) {
@@ -507,6 +509,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   };
 
   const handleRequestHire = () => {
+    // Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer.
+    if (!launchFeatures.openGigs) return;
     if (!currentUser) {
       router.push('/login');
       return;
@@ -630,7 +634,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     // No Services tab: no account has services to list (the API sends none), as on iOS and Android.
     { key: 'overview', label: 'Overview' },
     { key: 'portfolio', label: 'Portfolio' },
-    { key: 'missions', label: 'Missions' },
+    // Launch cut #4 (Open Gigs): the Missions (Gigs) tab is hidden.
+    ...(launchFeatures.openGigs ? [{ key: 'missions' as const, label: 'Missions' }] : []),
     { key: 'reviews', label: `Reviews${displayReviewCount > 0 ? ` (${displayReviewCount})` : ''}` },
     { key: 'activity', label: 'Activity' },
     { key: 'insights', label: 'Insights', ownerOnly: true },
@@ -765,9 +770,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
       {!showOwnerOnly && (
         <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
-          <div className="max-w-lg mx-auto grid grid-cols-2 gap-2">
+          {/* Launch cut #4 (Open Gigs): no "Request / Hire"; Message spans the bar. */}
+          <div className={`max-w-lg mx-auto grid ${launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
             <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>
-            <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>
+            {launchFeatures.openGigs && <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>}
           </div>
         </div>
       )}

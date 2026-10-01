@@ -43,11 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidFailure
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetTarget
+import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -226,7 +228,10 @@ fun GigDetailScreen(
                     ),
                 )
             }
-            add(ContentDetailOverflowItem(label = "Share", testTag = "gigDetail.share", onClick = shareGig))
+            // Launch cut #4 (Open Gigs): no public task link to share.
+            if (LaunchFeatures.openGigs) {
+                add(ContentDetailOverflowItem(label = "Share", testTag = "gigDetail.share", onClick = shareGig))
+            }
             add(
                 ContentDetailOverflowItem(
                     label = "Report task",
@@ -234,7 +239,8 @@ fun GigDetailScreen(
                     onClick = { showReportSheet = true },
                 ),
             )
-            if (viewModel.canReplaceWorker()) {
+            // Launch cut #4 (Open Gigs): "Replace worker" reopens bidding.
+            if (viewModel.canReplaceWorker() && LaunchFeatures.openGigs) {
                 add(
                     ContentDetailOverflowItem(
                         label = "Replace worker",
@@ -274,6 +280,13 @@ fun GigDetailScreen(
         }
 
     LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { showToast(it, true) } }
+
+    // Launch cut #4 (Open Gigs): a task the viewer neither posted nor works is open-task
+    // browsing, hidden for the first launch; the detail and lifecycle of their own tasks stay.
+    if (!LaunchFeatures.openGigs && state is ContentDetailUiState.Loaded && !viewModel.viewerIsPartOfTask()) {
+        NotYetAvailableView(tabName = "Open tasks", icon = PantopusIcon.Info, onBack = onBack)
+        return
+    }
 
     // Retained originals keep the existing tip action reachable even if task terms changed.
     val detailState = tipRecoveryDetailState(state, tipState)
@@ -323,24 +336,30 @@ fun GigDetailScreen(
         // P1.C — bookmark toggle in the top bar; optimistic flip with
         // revert + toast on failure.
         topBarAccessory = {
-            GigSaveToggle(
-                saved = saved,
-                onToggle = { viewModel.toggleSave { message -> showToast(message, true) } },
-            )
+            // Launch cut #4 (Open Gigs): no task bookmarks.
+            if (LaunchFeatures.openGigs) {
+                GigSaveToggle(
+                    saved = saved,
+                    onToggle = { viewModel.toggleSave { message -> showToast(message, true) } },
+                )
+            }
         },
         scrollFooter = {
             if (state is ContentDetailUiState.Loaded) {
                 GigLifecycleSections(viewModel)
                 // Bidder side — "Your bid" with Update / Withdraw and,
                 // while a counter-offer is live, Accept / Decline.
-                if (viewModel.showViewerBidPanel()) {
+                // Launch cut #4 (Open Gigs): bids and task Q&A are hidden.
+                if (viewModel.showViewerBidPanel() && LaunchFeatures.openGigs) {
                     val heroTitle = (state as? ContentDetailUiState.Loaded)?.content?.hero?.title
                     GigViewerBidPanel(
                         viewModel = viewModel,
                         onEditBid = { sheetTarget = editBidTarget(viewModel, viewerBid, heroTitle) },
                     )
                 }
-                GigQuestionsSection(viewModel) { message -> showToast(message, true) }
+                if (LaunchFeatures.openGigs) {
+                    GigQuestionsSection(viewModel) { message -> showToast(message, true) }
+                }
             }
         },
     )

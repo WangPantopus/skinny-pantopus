@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.settings.notifications
 
 import androidx.lifecycle.ViewModel
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
@@ -40,12 +41,13 @@ class HomeNotificationsViewModel
                             GroupedListGroup(
                                 id = "prefs",
                                 rows =
-                                    listOf(
+                                    listOfNotNull(
                                         row("taskReminders", "Task reminders"),
-                                        row("billDue", "Bill due dates"),
-                                        row("packages", "Package arrivals"),
+                                        // Launch cut #7 (Household extras): bills, package tracking and polls are hidden.
+                                        row("billDue", "Bill due dates").takeIf { LaunchFeatures.householdExtras },
+                                        row("packages", "Package arrivals").takeIf { LaunchFeatures.householdExtras },
                                         row("maintenance", "Maintenance alerts"),
-                                        row("polls", "New polls"),
+                                        row("polls", "New polls").takeIf { LaunchFeatures.householdExtras },
                                     ),
                             ),
                         ),

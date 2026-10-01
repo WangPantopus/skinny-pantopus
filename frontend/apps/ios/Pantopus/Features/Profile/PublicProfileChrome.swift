@@ -592,7 +592,8 @@ struct LocalProfileTabStrip: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s6) {
-                ForEach(LocalProfileTab.allCases) { tab in
+                // Launch cut #4 (Open gigs): no Gigs tab.
+                ForEach(LocalProfileTab.launchCases) { tab in
                     let isActive = tab == selected
                     Button {
                         onSelect(tab)

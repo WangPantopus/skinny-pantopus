@@ -9,6 +9,7 @@ import {
   useUpdateMailDaySettings,
 } from '@/lib/mailbox-queries';
 import { toast } from '@/components/ui/toast-store';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Timezone list (common US + intl) ─────────────────────────
 
@@ -276,12 +277,13 @@ export default function MailDayPage() {
                 )}
 
                 {/* Extra stats */}
-                {(summary.earn_count > 0 || summary.community_count > 0) && (
+                {/* Launch cut #8 (Mail extras): no community-stream count. */}
+                {(summary.earn_count > 0 || (launchFeatures.mailExtras && summary.community_count > 0)) && (
                   <div className="px-5 py-3 border-b border-app-border-subtle flex items-center gap-4 text-xs text-app-text-secondary">
                     {summary.earn_count > 0 && (
                       <span>{summary.earn_count} earn opportunity{summary.earn_count !== 1 ? 's' : ''}</span>
                     )}
-                    {summary.community_count > 0 && (
+                    {launchFeatures.mailExtras && summary.community_count > 0 && (
                       <span>{summary.community_count} community update{summary.community_count !== 1 ? 's' : ''}</span>
                     )}
                   </div>
@@ -392,11 +394,12 @@ export default function MailDayPage() {
                     checked={draft.include_earn_count ?? true}
                     onChange={(v) => updateDraft('include_earn_count', v)}
                   />
-                  <ToggleRow
+                  {/* Launch cut #8 (Mail extras): the community mail stream is hidden. */}
+                  {launchFeatures.mailExtras && <ToggleRow
                     label="Neighborhood notices"
                     checked={draft.include_community ?? true}
                     onChange={(v) => updateDraft('include_community', v)}
-                  />
+                  />}
                 </div>
               </div>
 
@@ -412,18 +415,19 @@ export default function MailDayPage() {
                     checked={draft.interrupt_time_sensitive ?? true}
                     onChange={(v) => updateDraft('interrupt_time_sensitive', v)}
                   />
-                  <ToggleRow
+                  {/* Launch cuts #7 (package tracking) and #8 (certified mail) are hidden. */}
+                  {launchFeatures.householdExtras && <ToggleRow
                     label="Packages out for delivery"
                     description="Real-time delivery alerts"
                     checked={draft.interrupt_packages_otd ?? true}
                     onChange={(v) => updateDraft('interrupt_packages_otd', v)}
-                  />
-                  <ToggleRow
+                  />}
+                  {launchFeatures.mailExtras && <ToggleRow
                     label="Certified mail"
                     description="Requires acknowledgment"
                     checked={draft.interrupt_certified ?? true}
                     onChange={(v) => updateDraft('interrupt_certified', v)}
-                  />
+                  />}
                 </div>
               </div>
 

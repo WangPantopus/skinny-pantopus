@@ -26,6 +26,7 @@ import {
   readAuthRedirectQuery,
   safeRedirectPath,
 } from '@/lib/auth-utils';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -178,7 +179,8 @@ function RegisterContent() {
         </h2>
 
         <p className="mt-2 text-center text-sm text-app-text-secondary">
-          Keep track of your home, join conversations, and follow Beacons.
+          {/* Launch cut #1 (Beacon): the copy leaves Beacons out. */}
+          {launchFeatures.beacon ? 'Keep track of your home, join conversations, and follow Beacons.' : 'Keep track of your home and join conversations.'}
         </p>
       </div>
 

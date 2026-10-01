@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Search, MapPin } from 'lucide-react';
 import { toast } from '@/components/ui/toast-store';
 import type { SearchScope } from './discoverTypes';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Empty State ──────────────────────────────────────────────
 export function EmptyState({ category, scope, needsLocation = false }: {
@@ -22,11 +23,12 @@ export function EmptyState({ category, scope, needsLocation = false }: {
         {needsLocation ? 'Local businesses show up here' : 'No results found'}
       </h3>
       <p className="text-sm text-app-muted max-w-sm mx-auto mb-6">
+        {/* Launch cut #4 (Open Gigs): no "post a task" suggestion or button. */}
         {needsLocation
-          ? 'Add a location above to see providers near you, or post a task to get quotes.'
-          : isBusinessScope ? 'Post a task to get quotes from local providers.' : 'Try a different search term or category.'}
+          ? (launchFeatures.openGigs ? 'Add a location above to see providers near you, or post a task to get quotes.' : 'Add a location above to see providers near you.')
+          : isBusinessScope && launchFeatures.openGigs ? 'Post a task to get quotes from local providers.' : 'Try a different search term or category.'}
       </p>
-      {isBusinessScope && (
+      {isBusinessScope && launchFeatures.openGigs && (
         <button
           onClick={() => router.push(href)}
           className="px-5 py-2.5 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 transition"

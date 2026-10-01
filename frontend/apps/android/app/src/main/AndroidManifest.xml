@@ -122,9 +122,12 @@
         <!-- P6c — "Tasks near me" home-screen widget. Reads the snapshot
              WidgetSnapshotStore persists after each successful feed
              fetch; row taps deep-link pantopus://gigs/<id> (the Phase 6b
-             ongoing-notification scheme). -->
+             ongoing-notification scheme).
+             Launch cut #4 (Open Gigs): enabled only when `open_gigs` is
+             switched back on (@bool/launch_open_gigs, app/build.gradle.kts). -->
         <receiver
             android:name=".widget.TasksNearMeWidgetProvider"
+            android:enabled="@bool/launch_open_gigs"
             android:exported="true"
             android:label="@string/widget_tasks_near_me_title">
             <intent-filter>

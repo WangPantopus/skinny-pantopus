@@ -16,6 +16,8 @@ import { ScopePills } from './ScopePills';
 import { EmptyState, NoHomeBanner, WorkedNearbyBanner, NoLocationBanner } from './DiscoverBanners';
 import { UnifiedResultCard, UnifiedResultSkeleton } from './UnifiedResultCard';
 import type { SearchScope, UnifiedResult } from './discoverTypes';
+import { searchableKindsLabel } from './discoverTypes';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface DiscoverListViewProps {
   // Search
@@ -112,7 +114,8 @@ export default function DiscoverListView({
       ? 'Search Profiles...'
       : scope === 'public_profiles'
         ? 'Search Beacons...'
-        : 'Search profiles, tasks, listings...';
+        // Launch cuts #3/#4: only the kinds still searchable.
+        : `Search ${['profiles', launchFeatures.openGigs && 'tasks', launchFeatures.marketplace && 'listings'].filter(Boolean).join(', ')}...`;
   const scopeForGroup = (type: UnifiedResult['type']): SearchScope => {
     if (type === 'local_profile') return 'local_profiles';
     if (type === 'public_profile') return 'public_profiles';
@@ -125,7 +128,7 @@ export default function DiscoverListView({
     <div className="max-w-7xl mx-auto px-4 py-6">
       <PageHeader
         title={showBusinessUI ? 'Discover Businesses' : 'Discover'}
-        subtitle={showBusinessUI ? 'Find trusted local providers near you' : 'Search across profiles, businesses, tasks, and listings'}
+        subtitle={showBusinessUI ? 'Find trusted local providers near you' : `Search across ${searchableKindsLabel()}`}
       >
         {/* Search bar + View toggle row */}
         <div className="flex items-center gap-3">
@@ -296,7 +299,7 @@ export default function DiscoverListView({
               <div className="mb-4 flex justify-center"><Search className="w-10 h-10 text-app-muted" /></div>
               <h3 className="text-lg font-semibold text-app-strong mb-1">Search Pantopus</h3>
               <p className="text-sm text-app-muted max-w-sm mx-auto">
-                Type at least 2 characters to search across {scope === 'all' ? 'profiles, businesses, tasks, and listings' : scope.replace('_', ' ')}
+                Type at least 2 characters to search across {scope === 'all' ? searchableKindsLabel() : scope.replace('_', ' ')}
               </p>
             </div>
           )}

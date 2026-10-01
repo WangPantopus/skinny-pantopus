@@ -67,10 +67,14 @@ struct HouseholdTaskDetailView: View {
                     }
                     if task.capabilities?.canEdit == true {
                         Section {
-                            Button("Review Gig publication") {
-                                guard viewModel.isCurrent, isVisible else { return }
-                                gigPresentation = GigPresentation(model: HomeTaskGigViewModel(homeId: homeId, taskId: taskId))
-                            }.disabled(viewModel.acting).accessibilityIdentifier("householdTaskDetail.gig")
+                            // Launch cut #4 (Open gigs): publishing a household task as
+                            // an open Gig is hidden; Edit task stays.
+                            if LaunchFeatures.openGigs {
+                                Button("Review Gig publication") {
+                                    guard viewModel.isCurrent, isVisible else { return }
+                                    gigPresentation = GigPresentation(model: HomeTaskGigViewModel(homeId: homeId, taskId: taskId))
+                                }.disabled(viewModel.acting).accessibilityIdentifier("householdTaskDetail.gig")
+                            }
                             Button("Edit task") { Task { await viewModel.edit(onAllowed: onEdit) } }
                                 .disabled(viewModel.acting)
                         }

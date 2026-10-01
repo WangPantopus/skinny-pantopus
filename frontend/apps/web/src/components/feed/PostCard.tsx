@@ -18,6 +18,7 @@ import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { lostFoundContactLabel } from './composer/LostFoundFields';
 import type { AudienceProfile, Post } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -193,7 +194,10 @@ function PostCard({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            {publicAuthor?.href ? (
+            {/* Launch cuts #1 + #2: a Beacon author's name does not link to the hidden persona page. */}
+            {publicAuthor?.type === 'persona' && !(launchFeatures.beacon && launchFeatures.personas) ? (
+              <span className="text-sm font-semibold text-app truncate">{creatorName}</span>
+            ) : publicAuthor?.href ? (
               <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline truncate">
                 {creatorName}
               </a>
@@ -390,14 +394,15 @@ function PostCard({
       )}
 
       {/* ─── Cross-surface reference links ─────────── */}
-      {post.ref_listing_id && (
+      {/* Launch cuts #3 (listings) and #4 (open tasks): their links are hidden. */}
+      {launchFeatures.marketplace && post.ref_listing_id && (
         <div className="mx-4 mb-2">
           <a href={`/app/marketplace/${post.ref_listing_id}`} className="flex items-center gap-2 px-3 py-2 bg-sky-50 rounded-xl text-xs text-sky-700 font-medium hover:bg-sky-100 transition">
             <Store className="w-3.5 h-3.5 flex-shrink-0" /><span>View linked listing</span><span className="ml-auto">&rarr;</span>
           </a>
         </div>
       )}
-      {post.ref_task_id && (
+      {launchFeatures.openGigs && post.ref_task_id && (
         <div className="mx-4 mb-2">
           <a href={`/app/gigs/${post.ref_task_id}`} className="flex items-center gap-2 px-3 py-2 bg-sky-50 rounded-xl text-xs text-sky-700 font-medium hover:bg-sky-100 transition">
             <Hammer className="w-3.5 h-3.5 flex-shrink-0" /><span>View linked task</span><span className="ml-auto">&rarr;</span>

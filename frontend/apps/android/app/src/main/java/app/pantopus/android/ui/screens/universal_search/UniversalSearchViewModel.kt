@@ -260,6 +260,17 @@ class UniversalSearchViewModel
             trimmed: String,
             limit: Int,
         ): SourceOutcome =
+            when {
+                // Launch cut: a kind hidden for the first launch is never searched.
+                !kind.isLaunchAvailable -> SourceOutcome.Results(emptyList())
+                else -> fetchSource(kind, trimmed, limit)
+            }
+
+        private suspend fun fetchSource(
+            kind: UniversalSearchKind,
+            trimmed: String,
+            limit: Int,
+        ): SourceOutcome =
             when (kind) {
                 UniversalSearchKind.Task ->
                     repo.gigs(trimmed, limit).fold { body -> body.gigs.map { row -> projectTask(row) } }

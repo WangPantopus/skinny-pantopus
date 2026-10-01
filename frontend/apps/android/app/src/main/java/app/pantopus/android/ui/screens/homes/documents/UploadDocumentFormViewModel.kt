@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.documents
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.CreateDocumentRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomePetsRepository
@@ -304,9 +305,10 @@ class UploadDocumentFormViewModel
             }
             _state.update { it.copy(linkOptionsState = UploadDocumentLinkOptionsState.Loading) }
             viewModelScope.launch {
-                val bills = async { fetchBills() }
+                // Launch cut #7 (Household extras): bills and pets are hidden, so only maintenance links.
+                val bills = async { if (LaunchFeatures.householdExtras) fetchBills() else emptyList() }
                 val maintenance = async { fetchMaintenance() }
-                val pets = async { fetchPets() }
+                val pets = async { if (LaunchFeatures.householdExtras) fetchPets() else emptyList() }
                 val combined = bills.await() + maintenance.await() + pets.await()
                 _state.update {
                     it.copy(linkOptionsState = UploadDocumentLinkOptionsState.Loaded(combined))

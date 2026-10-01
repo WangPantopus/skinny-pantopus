@@ -5,6 +5,7 @@ import { useDrawerMeta, useCounterItems } from '@/lib/mailbox-queries';
 import type { DrawerMeta } from '@/types/mailbox';
 import { MailboxIcons, NavIcons } from '@/lib/icons';
 import type { LucideIcon } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type MailboxNavProps = {
   composeSlot?: React.ReactNode;
@@ -41,7 +42,8 @@ const mailboxSection: NavEntry[] = [
 
 const homeSection: NavEntry[] = [
   { icon: MailboxIcons.map, label: 'Map', href: '/app/mailbox/map', matchPrefix: '/app/mailbox/map' },
-  { icon: MailboxIcons.community, label: 'Community', href: '/app/mailbox/community', matchPrefix: '/app/mailbox/community' },
+  // Launch cut #8 (Mail extras): the community mail stream is hidden.
+  ...(launchFeatures.mailExtras ? [{ icon: MailboxIcons.community, label: 'Community', href: '/app/mailbox/community', matchPrefix: '/app/mailbox/community' }] : []),
   { icon: MailboxIcons.tasks, label: 'Tasks', href: '/app/mailbox/tasks', matchPrefix: '/app/mailbox/tasks' },
   { icon: MailboxIcons.records, label: 'Records', href: '/app/mailbox/records', matchPrefix: '/app/mailbox/records' },
 ];

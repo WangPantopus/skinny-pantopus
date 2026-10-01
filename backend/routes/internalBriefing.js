@@ -17,6 +17,7 @@ const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
 const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 // ── Internal API key auth ───────────────────────────────────────────
 
@@ -483,6 +484,10 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
   if (!title || !body) {
     return res.status(400).json({ error: 'title and body required' });
   }
+  // Launch cut #7 (Household extras): bill and family-calendar reminders are off for the first launch.
+  if (['bill_due', 'calendar'].includes(reminderType) && skipForLaunchCut('household_extras', `reminder-push:${reminderType}`)) {
+    return res.json({ status: 'skipped', reason: 'feature_hidden' });
+  }
 
   try {
     // Check preference + quiet hours in a single query
@@ -569,6 +574,10 @@ router.post('/no-bid-nudge', verifyInternalApiKey, async (req, res) => {
   }
   if (!gigTitle) {
     return res.status(400).json({ error: 'gigTitle required' });
+  }
+  // Launch cut #4 (Open Gigs): the no-bid nudge is off for the first launch.
+  if (skipForLaunchCut('open_gigs', 'no-bid-nudge')) {
+    return res.json({ status: 'skipped', reason: 'feature_hidden' });
   }
 
   try {

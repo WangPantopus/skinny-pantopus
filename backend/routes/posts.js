@@ -3670,3 +3670,5 @@ router.post('/seeded/:factId/dismiss', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+// Business posts (businesses.js) derive purpose the same way.
+module.exports.derivePurposeFromPostType = derivePurposeFromPostType;

@@ -274,8 +274,10 @@ final class DeepLinkRouter {
     /// placeholder instead of dropping the tap.
     func canResolve(path: String) -> Bool {
         guard let url = URL(string: Self.normalizeIncoming(path)) else { return false }
-        if case .unknown = resolve(url: url) { return false }
-        return true
+        let destination = resolve(url: url)
+        if case .unknown = destination { return false }
+        // First-launch scope: a link into a hidden feature takes the host's fallback.
+        return destination.isAvailableAtLaunch
     }
 
     func consume() -> Destination? {
@@ -905,5 +907,77 @@ final class DeepLinkRouter {
             }
         }
         return nil
+    }
+}
+
+// MARK: - First-launch scope
+
+extension DeepLinkRouter.Destination {
+    /// False when the destination opens a feature hidden for the first
+    /// launch (`LaunchFeatures`). Resolution above stays unchanged; the
+    /// consumers (`RootTabView`, the tab roots) drop such a link and the
+    /// app stays where it is. A destination serving two cut features needs
+    /// both switched on.
+    var isAvailableAtLaunch: Bool {
+        switch self {
+        // Launch cut #1 (Beacon): Beacon Updates and "Your audience".
+        case .beacons, .creatorAudienceMembers:
+            LaunchFeatures.beacon
+        // Launch cuts #1 + #2 (Personas): Beacon/persona profiles and the
+        // persona DM inboxes.
+        case .beaconProfile, .creatorInbox, .fanInbox:
+            LaunchFeatures.beacon && LaunchFeatures.personas
+        // Launch cut #2 (Personas): "View as".
+        case .viewAs:
+            LaunchFeatures.personas
+        // Launch cut #3 (Marketplace).
+        case .listing:
+            LaunchFeatures.marketplace
+        // Launch cut #4 (Open gigs): `/gigs/new` is the public composer. A
+        // task's own detail stays (the lifecycle of a task you are part of).
+        case let .gig(id):
+            id != "new" || LaunchFeatures.openGigs
+        // Launch cut #5 (Public scheduling).
+        case .bookingDetail, .myBookings:
+            LaunchFeatures.publicScheduling
+        // Launch cuts #6 + #4 + #3: the Discover hub rails businesses, open
+        // tasks and listings, so it needs all three switched on.
+        case .discoverHub:
+            LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
+        // Launch cut #8 (Mail extras): letter translations.
+        case .mailTranslation:
+            LaunchFeatures.mailExtras
+        default:
+            true
+        }
+    }
+}
+
+extension DeepLinkRouter {
+    /// First-launch scope: false when a notification or push of `type`
+    /// linking to `link` belongs to a feature hidden for the first launch —
+    /// its type is a cut family (bids / counters / gig offers, listings,
+    /// personas, bookings) or its link opens a hidden destination. Lists
+    /// skip such rows. Mirrors Android `DeepLinkRouter.isLaunchAvailable(type, link)`.
+    func isLaunchAvailable(notificationType type: String?, link: String?) -> Bool {
+        let key = type?.lowercased() ?? ""
+        let typeAvailable: Bool = if key.hasPrefix("bid_") || key.hasPrefix("counter_") || key.hasPrefix("gig_offer")
+            || key == "first_bid_received" {
+            LaunchFeatures.openGigs
+        } else if key.hasPrefix("listing") {
+            LaunchFeatures.marketplace
+        } else if key == "persona" || key.hasPrefix("persona_") {
+            // Not `personal*`: those are in-scope personal-context notices.
+            LaunchFeatures.beacon && LaunchFeatures.personas
+        } else if key.hasPrefix("booking_") {
+            LaunchFeatures.publicScheduling
+        } else {
+            true
+        }
+        guard typeAvailable else { return false }
+        guard let path = Self.notificationPath(type: type, link: link), !path.isEmpty,
+              let url = URL(string: Self.normalizeIncoming(path)),
+              !AuthManager.isOAuthCallback(url) else { return true }
+        return resolve(url: url).isAvailableAtLaunch
     }
 }

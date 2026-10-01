@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileStatCell
@@ -18,6 +20,8 @@ import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPil
 import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPillarVerificationState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -46,6 +50,17 @@ class PublicProfileSnapshotTest {
                     softButtons = false,
                 ),
         )
+
+    // The launch cut hides persona parts and the Gigs tab; the baselines pin them.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
 
     // MARK: - Chrome-agnostic states
 

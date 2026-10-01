@@ -42,6 +42,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
@@ -2084,6 +2085,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // Fetches nothing until a chat link needs its direct room's other person.
     val deepLinkChatResolver: DeepLinkChatResolverViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
+        // Launch cut (2026-09-27): a link into a feature hidden for the first
+        // launch opens the existing not-yet-available placeholder instead.
+        val cutLink = pendingDeepLink?.takeUnless(DeepLinkRouter::isLaunchAvailable)
+        if (cutLink != null) {
+            navController.navigate(ChildRoutes.placeholder(launchCutLabel(cutLink)))
+            DeepLinkRouter.consume()
+            return@LaunchedEffect
+        }
         when (val pending = pendingDeepLink) {
             null -> Unit
             is DeepLinkRouter.Destination.Invite -> {
@@ -2221,7 +2230,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Gig -> {
-                navController.navigateToRootTab(PantopusRoute.Tasks)
+                // Launch cut #4 (Open Gigs): the task list is hidden, so a gig
+                // link opens its detail over the current tab instead.
+                if (LaunchFeatures.openGigs) navController.navigateToRootTab(PantopusRoute.Tasks)
                 // `/gigs/new` is the web composer's path: open the native composer.
                 if (pending.id == "new") {
                     navController.navigate(ChildRoutes.composeGig(GigsCategory.All.key))
@@ -2691,6 +2702,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Open tasks", navController)
                     GigsFeedScreen(
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onCompose = { category -> navController.navigate(ChildRoutes.composeGig(category.key)) },
@@ -2704,6 +2717,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Marketplace.path) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Marketplace", navController)
                     MarketplaceScreen(
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         onCompose = { navController.navigate(ChildRoutes.COMPOSE_LISTING) },
@@ -2823,6 +2838,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MY_LISTINGS) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("My listings", navController)
                     MyListingsScreen(
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         onCompose = { navController.navigate(ChildRoutes.COMPOSE_LISTING) },
@@ -3046,6 +3063,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.HOME_BILLS,
                     arguments = listOf(navArgument(BILLS_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Bills", navController)
                     val homeId = entry.arguments?.getString(BILLS_HOME_ID_KEY).orEmpty()
                     BillsListScreen(
                         onOpenBill = { billId ->
@@ -3063,6 +3082,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(BILL_DETAIL_BILL_ID_KEY) { type = NavType.StringType },
                         ),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Bills", navController)
                     val homeId = entry.arguments?.getString(BILL_DETAIL_HOME_ID_KEY).orEmpty()
                     val billId = entry.arguments?.getString(BILL_DETAIL_BILL_ID_KEY).orEmpty()
                     BillDetailScreen(
@@ -3076,6 +3097,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.ADD_BILL,
                     arguments = listOf(navArgument(ADD_BILL_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Bills", navController)
                     val homeId = entry.arguments?.getString(ADD_BILL_HOME_ID_KEY).orEmpty()
                     AddBillWizardScreen(
                         onClose = { navController.popBackStack() },
@@ -3095,6 +3118,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(ADD_BILL_BILL_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Bills", navController)
                     AddBillWizardScreen(
                         onClose = { navController.popBackStack() },
                         onCreated = { _ ->
@@ -3113,6 +3138,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.HOME_PETS,
                     arguments = listOf(navArgument(PETS_LIST_HOME_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Pets", navController)
                     PetsListScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
@@ -3120,6 +3147,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(navArgument(HOME_CALENDAR_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cuts #7/#5 (Household extras + Public scheduling): the home calendar carries scheduling tools.
+                    if (!(LaunchFeatures.householdExtras && LaunchFeatures.publicScheduling)) {
+                        return@composable LaunchCutPlaceholder("Home calendar", navController)
+                    }
                     val homeId = entry.arguments?.getString(HOME_CALENDAR_HOME_ID_KEY).orEmpty()
                     HomeCalendarScreen(
                         onAddEvent = {
@@ -3151,6 +3182,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) { entry ->
+                    // Launch cuts #7/#5 (Household extras + Public scheduling): the home calendar carries scheduling tools.
+                    if (!(LaunchFeatures.householdExtras && LaunchFeatures.publicScheduling)) {
+                        return@composable LaunchCutPlaceholder("Home calendar", navController)
+                    }
                     val homeId = entry.arguments?.getString(ADD_EVENT_HOME_ID_KEY).orEmpty()
                     AddEventFormScreen(
                         onClose = { navController.popBackStack() },
@@ -3192,6 +3227,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(EVENT_DETAIL_EVENT_ID_KEY) { type = NavType.StringType },
                         ),
                 ) { entry ->
+                    // Launch cuts #7/#5 (Household extras + Public scheduling): the home calendar carries scheduling tools.
+                    if (!(LaunchFeatures.householdExtras && LaunchFeatures.publicScheduling)) {
+                        return@composable LaunchCutPlaceholder("Home calendar", navController)
+                    }
                     val homeId = entry.arguments?.getString(EVENT_DETAIL_HOME_ID_KEY).orEmpty()
                     EventDetailScreen(
                         onBack = { navController.popBackStack() },
@@ -3208,12 +3247,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 // ── Calendarly scheduling (A0) — pre-stubbed routes; feature streams fill the bodies ──
                 composable(SchedulingRoutes.HUB_WITH_OWNER, arguments = schedulingOwnerNavArgs()) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     SchedulingHubScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.SETUP_WIZARD) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     FirstRunWizardScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3223,6 +3266,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.SETTINGS,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     SchedulingSettingsRootScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3232,6 +3277,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.NOTIFICATIONS,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     NotificationPrefsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3241,6 +3288,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.ONBOARDING,
                     arguments = listOf(optionalStringNavArg(SchedulingRoutes.ARG_FLOW)) + schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     OnboardingHomeBusinessScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3250,6 +3299,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.EVENT_TYPE_LIST,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     EventTypeListScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3259,6 +3310,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.EVENT_TYPE_EDITOR,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_EVENT_TYPE_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     EventTypeEditorScreen(
                         eventTypeId = entry.arguments?.getString(SchedulingRoutes.ARG_EVENT_TYPE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3269,6 +3322,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.INTAKE_QUESTIONS_EDITOR,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_EVENT_TYPE_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     IntakeQuestionsEditorScreen(
                         eventTypeId = entry.arguments?.getString(SchedulingRoutes.ARG_EVENT_TYPE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3276,12 +3331,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.CONNECTED_CALENDARS) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     ConnectedCalendarsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.AVAILABILITY_LIST) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     AvailabilityListScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3291,6 +3350,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.WEEKLY_HOURS_EDITOR,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_SCHEDULE_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     WeeklyHoursEditorScreen(
                         scheduleId = entry.arguments?.getString(SchedulingRoutes.ARG_SCHEDULE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3301,6 +3362,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.DATE_OVERRIDES,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_SCHEDULE_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     DateOverridesScreen(
                         scheduleId = entry.arguments?.getString(SchedulingRoutes.ARG_SCHEDULE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3308,12 +3371,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.BOOKING_LIMITS) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookingLimitsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.BLOCK_OFF_TIME) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BlockOffTimeScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3323,6 +3390,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.BOOKING_PAGE_MANAGE,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookingPageManageScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3332,12 +3401,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.PUBLIC_PAGE_PREVIEW,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     PublicPagePreviewScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.ONE_OFF_LINK_GENERATOR) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     OneOffLinkGeneratorScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3347,6 +3420,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.PUBLIC_BOOKING,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_SLUG) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookerLandingScreen(
                         slug = entry.arguments?.getString(SchedulingRoutes.ARG_SLUG).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3357,6 +3432,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.PUBLIC_BOOKING_ONEOFF,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_ONEOFF_TOKEN) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookerLandingScreen(
                         oneOffToken = entry.arguments?.getString(SchedulingRoutes.ARG_ONEOFF_TOKEN).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3367,6 +3444,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.MANAGE_BOOKING,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_MANAGE_TOKEN) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     ManageBookingScreen(
                         manageToken = entry.arguments?.getString(SchedulingRoutes.ARG_MANAGE_TOKEN).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3374,24 +3453,32 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.MY_BOOKINGS) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     MyBookingsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.OPEN_IN_APP_INTERSTITIAL) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     OpenInAppInterstitialScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.RECURRING_SETUP) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     RecurringSetupScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.BOOKINGS_INBOX) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookingsInboxScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3403,6 +3490,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }) +
                             schedulingOwnerNavArgs(),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookingDetailScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3410,6 +3499,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.BOOKING_SEARCH) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BookingSearchFilterScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3419,6 +3510,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.GROUP_ROSTER,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     GroupRosterScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3429,12 +3522,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.MANUAL_BOOKING,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     ManualBookingScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.WAITLIST) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     WaitlistScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3444,6 +3541,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.POST_MEETING_FOLLOWUP,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     PostMeetingFollowupScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3454,24 +3553,40 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.HOUSEHOLD_AVAILABILITY,
                     arguments = listOf(schedulingHomeNavArg()),
                 ) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     HouseholdAvailabilityScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.PERMISSION_GATED_SCHEDULER) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     PermissionGatedSchedulerScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.FIND_A_TIME) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     FindATimeSetupScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.FIND_A_TIME_SLOTS) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     SuggestedSlotsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3481,6 +3596,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.MEMBER_POLL_RESPONSE,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_POLL_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     MemberPollResponseScreen(
                         pollId = entry.arguments?.getString(SchedulingRoutes.ARG_POLL_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3488,6 +3607,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.WHOS_FREE) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     WhosFreeScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3497,6 +3620,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.RESOURCE_LIST,
                     arguments = listOf(schedulingHomeNavArg()),
                 ) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     ResourceListScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3510,6 +3637,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             schedulingHomeNavArg(),
                         ),
                 ) { entry ->
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     ResourceEditorScreen(
                         resourceId = entry.arguments?.getString(SchedulingRoutes.ARG_RESOURCE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3524,6 +3655,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             schedulingHomeNavArg(),
                         ),
                 ) { entry ->
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     ResourceDetailScreen(
                         resourceId = entry.arguments?.getString(SchedulingRoutes.ARG_RESOURCE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3538,6 +3673,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             schedulingHomeNavArg(),
                         ),
                 ) { entry ->
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     BookResourceScreen(
                         resourceId = entry.arguments?.getString(SchedulingRoutes.ARG_RESOURCE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3548,6 +3687,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.VISIT_SETUP,
                     arguments = listOf(schedulingHomeNavArg()),
                 ) {
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     VisitSetupScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3561,6 +3704,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             schedulingHomeNavArg(),
                         ),
                 ) { entry ->
+                    // Launch cuts #5/#7 (Public scheduling + Household extras): home scheduling tools need both.
+                    if (!(LaunchFeatures.publicScheduling && LaunchFeatures.householdExtras)) {
+                        return@composable LaunchCutPlaceholder("Scheduling", navController)
+                    }
                     VisitDetailScreen(
                         visitId = entry.arguments?.getString(SchedulingRoutes.ARG_VISIT_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3568,12 +3715,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(SchedulingRoutes.BUSINESS_SCHEDULING_SETTINGS) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     BusinessSchedulingSettingsScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.TEAM_BOOKING_AVAILABILITY) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     TeamBookingAvailabilityScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3583,6 +3734,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.COLLECTIVE_EVENT_SETUP,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_EVENT_TYPE_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     CollectiveEventSetupScreen(
                         eventTypeId = entry.arguments?.getString(SchedulingRoutes.ARG_EVENT_TYPE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3593,6 +3746,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = SchedulingRoutes.MEMBER_WORKING_HOURS,
                     arguments = listOf(navArgument(SchedulingRoutes.ARG_MEMBER_ID) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     MemberWorkingHoursScreen(
                         memberId = entry.arguments?.getString(SchedulingRoutes.ARG_MEMBER_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3615,6 +3770,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.CANCELLATION_REFUND_POLICY,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     CancellationRefundPolicyScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3672,6 +3829,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.REMINDERS_QUICK_SETUP,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     RemindersQuickSetupScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3681,6 +3840,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.WORKFLOWS_LIST,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     WorkflowsListScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3692,6 +3853,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(navArgument(SchedulingRoutes.ARG_WORKFLOW_ID) { type = NavType.StringType }) +
                             schedulingOwnerNavArgs(),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     WorkflowEditorScreen(
                         workflowId = entry.arguments?.getString(SchedulingRoutes.ARG_WORKFLOW_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3704,6 +3867,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(navArgument(SchedulingRoutes.ARG_TEMPLATE_ID) { type = NavType.StringType }) +
                             schedulingOwnerNavArgs(),
                 ) { entry ->
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     MessageTemplateEditorScreen(
                         templateId = entry.arguments?.getString(SchedulingRoutes.ARG_TEMPLATE_ID).orEmpty(),
                         onBack = { navController.popBackStack() },
@@ -3714,36 +3879,48 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     SchedulingRoutes.TEMPLATE_LIBRARY,
                     arguments = schedulingOwnerNavArgs(),
                 ) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     TemplateLibraryScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.INSIGHTS_DASHBOARD) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     InsightsDashboardScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.EVENT_TYPE_PERFORMANCE) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     EventTypePerformanceScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.NO_SHOW_REPORT) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     NoShowReportScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.TEAM_PERFORMANCE) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     TeamPerformanceScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
                 composable(SchedulingRoutes.NOTIFICATION_PERMISSION_PROMPT) {
+                    // Launch cut #5 (Public scheduling): hidden for the first launch.
+                    if (!LaunchFeatures.publicScheduling) return@composable LaunchCutPlaceholder("Scheduling", navController)
                     NotificationPermissionPromptScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },
@@ -3804,6 +3981,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.HOME_PACKAGES,
                     arguments = listOf(navArgument(PACKAGES_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Packages", navController)
                     val homeId = entry.arguments?.getString(PACKAGES_HOME_ID_KEY).orEmpty()
                     PackagesListScreen(
                         currentUserId = null,
@@ -3819,6 +3998,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.HOME_POLLS,
                     arguments = listOf(navArgument(POLLS_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Polls", navController)
                     val homeId = entry.arguments?.getString(POLLS_HOME_ID_KEY).orEmpty()
                     PollsListScreen(
                         onOpenPoll = { pollId ->
@@ -3834,6 +4015,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.START_POLL,
                     arguments = listOf(navArgument(START_POLL_HOME_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Polls", navController)
                     StartPollFormScreen(
                         onClose = { navController.popBackStack() },
                     )
@@ -3898,6 +4081,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(POLL_DETAIL_POLL_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Polls", navController)
                     PollDetailScreen(
                         onBack = { navController.popBackStack() },
                     )
@@ -4145,12 +4330,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(PACKAGE_DETAIL_PACKAGE_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Packages", navController)
                     PackageDetailScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.LOG_PACKAGE,
                     arguments = listOf(navArgument(LOG_PACKAGE_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #7 (Household extras): hidden for the first launch.
+                    if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Packages", navController)
                     val homeId = entry.arguments?.getString(LOG_PACKAGE_HOME_ID_KEY).orEmpty()
                     LogPackageScreen(
                         onClose = { navController.popBackStack() },
@@ -4734,6 +4923,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.BEACONS_FEED) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Beacon updates", navController)
                     BeaconsFeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
@@ -4743,6 +4934,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.FOLLOWING) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Following", navController)
                     FollowingScreen(
                         onBack = { navController.popBackStack() },
                         onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
@@ -4751,6 +4944,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MARKETPLACE) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Marketplace", navController)
                     MarketplaceScreen(
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         onCompose = { navController.navigate(ChildRoutes.COMPOSE_LISTING) },
@@ -4761,6 +4956,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.LISTING_DETAIL,
                     arguments = listOf(navArgument(ChildRoutes.LISTING_DETAIL_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Marketplace", navController)
                     ListingDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenMessages = { listing ->
@@ -4808,6 +5005,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) { entry ->
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Listing offers", navController)
                     val listingId = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_ID_KEY).orEmpty()
                     val listingTitle = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_TITLE_KEY).orEmpty()
                     ListingOffersScreen(
@@ -4854,6 +5053,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     InvoiceDetailScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.COMPOSE_LISTING) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Marketplace", navController)
                     ListingComposeWizardScreen(
                         onDismiss = { navController.popBackStack() },
                         onOpenListingDetail = { listingId ->
@@ -4875,6 +5076,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    // Launch cut #3 (Marketplace): hidden for the first launch.
+                    if (!LaunchFeatures.marketplace) return@composable LaunchCutPlaceholder("Marketplace", navController)
                     ListingComposeWizardScreen(
                         onDismiss = { navController.popBackStack() },
                         onOpenListingDetail = { _ -> navController.popBackStack() },
@@ -4886,6 +5089,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.GIGS_FEED) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Open tasks", navController)
                     GigsFeedScreen(
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onCompose = { category -> navController.navigate(ChildRoutes.composeGig(category.key)) },
@@ -4900,12 +5105,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.GIG_SEARCH) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Task search", navController)
                     GigSearchScreen(
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onBack = { navController.popBackStack() },
                     )
                 }
                 composable(ChildRoutes.BEACON_SEARCH) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Beacon search", navController)
                     UniversalSearchScreen(
                         initialTab = app.pantopus.android.ui.screens.universal_search.UniversalSearchTab.Beacons,
                         onOpen = { destination -> navController.navigate(routeForUniversalSearch(destination)) },
@@ -4953,6 +5162,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) { entry ->
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Tasks map", navController)
                     val raw =
                         entry.arguments?.getString(ChildRoutes.NEARBY_MAP_FOR_GIGS_CATEGORY_KEY) ?: GigsCategory.All.key
                     TasksMapScreen(
@@ -4978,6 +5189,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) { entry ->
+                    // Launch cut #4 (Open Gigs): posting and editing an open task are hidden.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Posting tasks", navController)
                     val raw = entry.arguments?.getString(ChildRoutes.QUICK_POST_GIG_CATEGORY_KEY) ?: GigsCategory.All.key
                     PostGigV1Screen(
                         onDismiss = { navController.popBackStack() },
@@ -5009,6 +5222,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) { entry ->
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Posting tasks", navController)
                     val raw = entry.arguments?.getString(ChildRoutes.COMPOSE_GIG_CATEGORY_KEY) ?: GigsCategory.All.key
                     GigComposeWizardScreen(
                         onDismiss = { navController.popBackStack() },
@@ -5138,6 +5353,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.DISCOVER_HUB) {
+                    // Launch cut #6/#4/#3 (Discover hub): hidden for the first launch.
+                    if (!(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace)) {
+                        return@composable LaunchCutPlaceholder("Discover", navController)
+                    }
                     DiscoverHubScreen(
                         onBack = { navController.popBackStack() },
                         onSelect = { target ->
@@ -5168,6 +5387,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.DISCOVER_BUSINESSES) {
+                    // Launch cut #6 (Business directory): hidden for the first launch.
+                    if (!LaunchFeatures.businessDirectory) return@composable LaunchCutPlaceholder("Business directory", navController)
                     DiscoverBusinessesScreen(
                         onBack = { navController.popBackStack() },
                         onSelect = { target ->
@@ -5188,6 +5409,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.OFFERS) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Offers", navController)
                     OffersScreen(
                         onBack = { navController.popBackStack() },
                         onOpenOfferDetail = { dto ->
@@ -5201,6 +5424,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MY_BIDS) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("My bids", navController)
                     MyBidsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenBid = { dto ->
@@ -5238,6 +5463,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.COMPOSE_TASK) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Posting tasks", navController)
                     GigComposeWizardScreen(
                         onDismiss = { navController.popBackStack() },
                         onOpenGigDetail = { gigId ->
@@ -5262,7 +5489,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             when (route) {
                                 SettingsRoute.Notifications -> navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS)
                                 SettingsRoute.Privacy -> navController.navigate(ChildRoutes.SETTINGS_PRIVACY)
-                                SettingsRoute.IdentityCenter -> navController.navigate(ChildRoutes.IDENTITY_CENTER)
+                                // Launch cut #2 (Personas): with the Identity Center hidden,
+                                // "Visibility preferences" opens the privacy settings themselves.
+                                SettingsRoute.IdentityCenter ->
+                                    navController.navigate(
+                                        if (LaunchFeatures.personas) ChildRoutes.IDENTITY_CENTER else ChildRoutes.SETTINGS_PRIVACY,
+                                    )
                                 SettingsRoute.EditProfile -> navController.navigate(ChildRoutes.EDIT_PROFILE)
                                 SettingsRoute.Password -> navController.navigate(ChildRoutes.SETTINGS_PASSWORD)
                                 SettingsRoute.Verification -> navController.navigate(ChildRoutes.SETTINGS_VERIFICATION)
@@ -5391,6 +5623,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Following", navController)
                     PrivacyHandshakeScreen(
                         onDismiss = { navController.popBackStack() },
                     )
@@ -5413,6 +5647,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.CEREMONIAL_MAIL) {
+                    // Launch cut #8 (Mail extras): hidden for the first launch.
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Letters", navController)
                     CeremonialMailWizardScreen(
                         onDismiss = { navController.popBackStack() },
                         onOpenMail = { mailId ->
@@ -5430,6 +5666,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    // Launch cut #8 (Mail extras): hidden for the first launch.
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Letters", navController)
                     CeremonialMailOpenScreen(
                         onBack = { navController.popBackStack() },
                         onWriteBack = {
@@ -5438,6 +5676,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.AUDIENCE_PROFILE) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Your audience", navController)
                     val audienceViewModel: AudienceProfileViewModel = hiltViewModel()
                     AudienceProfileScreen(
                         onBack = { navController.popBackStack() },
@@ -5482,12 +5722,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.CREATOR_AUDIENCE_MEMBERS) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Your audience", navController)
                     YourAudienceScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     ChildRoutes.BROADCAST_DETAIL,
                     arguments = listOf(navArgument(BROADCAST_DETAIL_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Beacon updates", navController)
                     BroadcastDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOverflow = {},
@@ -5497,6 +5741,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.CREATOR_INBOX) {
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Creator inbox", navController)
+                    }
                     CreatorInboxScreen(
                         onBack = { navController.popBackStack() },
                         onOpenThread = { row ->
@@ -5528,6 +5776,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(ChildRoutes.PERSONA_DM_THREAD_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Beacon messages", navController)
+                    }
                     PersonaDmThreadScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
@@ -5535,6 +5787,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(navArgument(ChildRoutes.FAN_INBOX_PERSONA_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Beacon messages", navController)
+                    }
                     val personaId = entry.arguments?.getString(ChildRoutes.FAN_INBOX_PERSONA_ID_KEY).orEmpty()
                     FanInboxScreen(
                         onBack = { navController.popBackStack() },
@@ -5549,6 +5805,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.IDENTITY_CENTER) {
+                    // Launch cut #2 (Personas): hidden for the first launch.
+                    if (!LaunchFeatures.personas) return@composable LaunchCutPlaceholder("Identity Center", navController)
                     IdentityCenterScreen(
                         onBack = { navController.popBackStack() },
                         onOpenIdentity = { card ->
@@ -5883,6 +6141,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Tasks map", navController)
                     TasksMapScreen(
                         onOpenTask = { taskId -> navController.navigate(ChildRoutes.gigDetail(taskId)) },
                         onCompose = { category -> navController.navigate(ChildRoutes.composeGig(category.key)) },
@@ -5981,6 +6241,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_PARTY) {
+                    // Launch cut #8 (Mail extras): hidden for the first launch.
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Mail party", navController)
                     MailPartyScreen(
                         onBack = { navController.popBackStack() },
                         // Declining a party opens the item solo — the same
@@ -5991,6 +6253,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_COMMUNITY) {
+                    // Launch cut #8 (Mail extras): hidden for the first launch.
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Community mail", navController)
                     CommunityMailScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.MAILBOX_HOME_RECORDS) {
@@ -6073,6 +6337,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.TRANSLATION,
                     arguments = listOf(navArgument(ChildRoutes.TRANSLATION_MAIL_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #8 (Mail extras): hidden for the first launch.
+                    if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Mail translation", navController)
                     MailTranslationScreen(
                         onBack = { navController.popBackStack() },
                         onReply = { navController.navigate(ChildRoutes.placeholder("Reply in English")) },
@@ -6112,6 +6378,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    // Launch cut #4 (Open Gigs): hidden for the first launch.
+                    if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Ask a neighbor", navController)
                     // A17.8 → "Ask a Neighbor" — posts the package-help gig via
                     // `POST api/mailbox/v2/p2/package/:mailId/gig` and deep-links
                     // into the created gig, matching RN `mailbox/gig.tsx`.
@@ -6198,6 +6466,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     BusinessLocationsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.VIEW_AS) {
+                    // Launch cut #2 (Personas): hidden for the first launch.
+                    if (!LaunchFeatures.personas) return@composable LaunchCutPlaceholder("View as", navController)
                     ViewAsScreen(
                         onBack = { navController.popBackStack() },
                         onManagePrivacy = { navController.navigate(ChildRoutes.SETTINGS_PRIVACY) },
@@ -6245,6 +6515,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(navArgument(ChildRoutes.MEMBERSHIP_DETAIL_PERSONA_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Memberships", navController)
                     MembershipDetailScreen(
                         onBack = { navController.popBackStack() },
                         onShare = {
@@ -6271,6 +6543,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.PROFESSIONAL_PROFILE) {
+                    // Launch cut #2/#4 (Personas + Open Gigs): hidden for the first launch.
+                    if (!(LaunchFeatures.personas && LaunchFeatures.openGigs)) {
+                        return@composable LaunchCutPlaceholder("Professional profile", navController)
+                    }
                     ProfessionalProfileScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
@@ -6278,6 +6554,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(navArgument(ChildRoutes.EDIT_PERSONA_PERSONA_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Beacons", navController)
+                    }
                     EditPersonaScreen(
                         onClose = { navController.popBackStack() },
                         onViewBeacon = { handle -> navController.navigate(ChildRoutes.beaconProfile(handle)) },
@@ -6288,12 +6568,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(navArgument(ChildRoutes.COMPOSE_BROADCAST_PERSONA_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #1 (Beacon): hidden for the first launch.
+                    if (!LaunchFeatures.beacon) return@composable LaunchCutPlaceholder("Broadcasts", navController)
                     ComposeBroadcastScreen(
                         onClose = { navController.popBackStack() },
                         onSent = { navController.popBackStack() },
                     )
                 }
                 composable(ChildRoutes.MY_BEACON) {
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Beacons", navController)
+                    }
                     BeaconProfileScreen(
                         onBack = { navController.popBackStack() },
                         onEditPersona = { personaId -> navController.navigate(ChildRoutes.editPersona(personaId)) },
@@ -6306,6 +6592,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.BEACON_PROFILE,
                     arguments = listOf(navArgument(BEACON_HANDLE_KEY) { type = NavType.StringType }),
                 ) {
+                    // Launch cut #1/#2 (Beacon + Personas): hidden for the first launch.
+                    if (!(LaunchFeatures.beacon && LaunchFeatures.personas)) {
+                        return@composable LaunchCutPlaceholder("Beacons", navController)
+                    }
                     BeaconProfileScreen(
                         onBack = { navController.popBackStack() },
                         onEditPersona = { personaId -> navController.navigate(ChildRoutes.editPersona(personaId)) },
@@ -6560,6 +6850,31 @@ private fun Modifier.observeHubDebugTaps(onFifthTap: () -> Unit): Modifier =
 
 private const val DEBUG_GALLERY_TAP_COUNT = 5
 private const val FIVE_TAP_WINDOW_MS: Long = 1_500L
+
+/**
+ * Launch cut (2026-09-27): what a route into a feature hidden for the first
+ * launch renders in place of its screen — the existing not-yet-available
+ * placeholder with Back. Entry points are hidden; this catches any other path.
+ */
+@Composable
+private fun LaunchCutPlaceholder(
+    label: String,
+    navController: NavHostController,
+) {
+    NotYetAvailableView(tabName = label, icon = PantopusIcon.Info, onBack = { navController.popBackStack() })
+}
+
+/** The placeholder title for a link [DeepLinkRouter.isLaunchAvailable] turned away. */
+private fun launchCutLabel(destination: DeepLinkRouter.Destination): String =
+    when (destination) {
+        is DeepLinkRouter.Destination.Listing -> "Marketplace"
+        is DeepLinkRouter.Destination.Gig -> "Posting tasks"
+        DeepLinkRouter.Destination.DiscoverHub -> "Discover"
+        is DeepLinkRouter.Destination.BookingDetail, DeepLinkRouter.Destination.MyBookings -> "Bookings"
+        is DeepLinkRouter.Destination.MailTranslation -> "Mail translation"
+        DeepLinkRouter.Destination.ViewAs -> "View as"
+        else -> "Beacons"
+    }
 
 /**
  * Dispatch a Hub discovery-card tap to the matching detail route. Items

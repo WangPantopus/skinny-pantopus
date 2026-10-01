@@ -25,7 +25,9 @@ struct TasksNearMeWidget: Widget {
         }
         .configurationDisplayName("Tasks near me")
         .description("Open tasks posted near you, straight from the Gigs feed.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        // Launch cut #4 (Open gigs): no families keeps the widget out of the
+        // widget gallery for the first launch.
+        .supportedFamilies(LaunchFeatures.openGigs ? [.systemSmall, .systemMedium] : [])
     }
 }
 

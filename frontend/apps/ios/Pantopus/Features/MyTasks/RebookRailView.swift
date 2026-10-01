@@ -170,7 +170,9 @@ public struct RebookRailView: View {
 
     public var body: some View {
         Group {
-            if viewModel.isVisible {
+            // Launch cut #4 (Open gigs): "Rebook" opens the open-task composer,
+            // the rail's only action, so the rail is hidden for the first launch.
+            if LaunchFeatures.openGigs, viewModel.isVisible {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     header
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -187,7 +189,10 @@ public struct RebookRailView: View {
                 .accessibilityIdentifier("rebookRail")
             }
         }
-        .task { await viewModel.load() }
+        .task {
+            guard LaunchFeatures.openGigs else { return }
+            await viewModel.load()
+        }
         .onDisappear { viewModel.retire() }
         .onChange(of: viewModel.isCurrentAccount) { _, current in
             if !current { viewModel.retire() }

@@ -341,6 +341,18 @@ public final class ChatConversationViewModel {
         ChatPromptChip(id: "listing", label: "Share a listing", icon: .tag)
     ]
 
+    /// First-launch scope: "Ask about the gig" (launch cut #4, Open gigs) and
+    /// "Share a listing" (launch cut #3, Marketplace) are hidden.
+    static var launchEmptyChips: [ChatPromptChip] {
+        defaultEmptyChips.filter { chip in
+            switch chip.id {
+            case "gig": LaunchFeatures.openGigs
+            case "listing": LaunchFeatures.marketplace
+            default: true
+            }
+        }
+    }
+
     /// Whether the composer's send disc is enabled (text present + not
     /// in flight). Bound by the view.
     public var canSend: Bool {
@@ -475,7 +487,7 @@ public final class ChatConversationViewModel {
         self.locationProvider = locationProvider
         self.activeThreadTracker = activeThreadTracker
         aiPrompts = Self.defaultAICapabilities
-        emptyChips = Self.defaultEmptyChips
+        emptyChips = Self.launchEmptyChips
         // Continue the user's existing AI conversation across thread
         // opens within this app session.
         if case .ai = mode {
@@ -509,7 +521,7 @@ public final class ChatConversationViewModel {
         locationProvider = DeviceLocationProvider.shared
         activeThreadTracker = .shared
         aiPrompts = Self.defaultAICapabilities
-        emptyChips = Self.defaultEmptyChips
+        emptyChips = Self.launchEmptyChips
         self.fanEntitlement = fanEntitlement
         state = previewState
         self.composerText = composerText
@@ -752,7 +764,10 @@ public final class ChatConversationViewModel {
             return true
         } catch {
             if Self.isPreBidLimit(error) {
-                sendLimitNotice = "Message limit reached — place a bid or wait for acceptance to keep chatting."
+                // Launch cut #4 (Open gigs): bidding is hidden.
+                sendLimitNotice = LaunchFeatures.openGigs
+                    ? "Message limit reached — place a bid or wait for acceptance to keep chatting."
+                    : "Message limit reached — wait for acceptance to keep chatting."
             } else if Self.isSendRefused(error) {
                 // 403: the server refuses this pairing (blocked, not a
                 // participant, or the account can't message). Retrying

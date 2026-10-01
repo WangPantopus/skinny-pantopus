@@ -10,6 +10,7 @@ import MailListItem from './_components/MailListItem';
 import MailDetail from './_components/MailDetail';
 import ComposeMailModal from './_components/ComposeMailModal';
 import { MAIL_TYPES } from './_components/mailbox-constants';
+import { launchFeatures } from '@/lib/featureFlags';
 
 function MailboxPageContent() {
   const data = useMailboxData();
@@ -42,12 +43,13 @@ function MailboxPageContent() {
       <PageHeader title={mailboxTitle} subtitle={mailboxSubtitle}>
         <div className="flex items-center gap-3 flex-wrap">
           <SearchInput value={search} onChange={setSearch} placeholder="Search mail…" className="max-w-xs" />
-          <button
+          {/* Launch cut #8 (Mail extras): sending letters (Compose) is hidden. */}
+          {launchFeatures.mailExtras && <button
             onClick={() => setComposeOpen(true)}
             className="px-3 py-2 text-sm font-medium rounded-lg bg-gray-900 text-white hover:bg-black transition"
           >
             Compose
-          </button>
+          </button>}
           {isDev && (
             <button
               onClick={handleSeedInbox}

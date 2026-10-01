@@ -11,7 +11,7 @@ import Link from "next/link";
 import { CreditCard, ScrollText, WalletCards } from "lucide-react";
 import clsx from "clsx";
 import BusinessOwnerBoundary from "@/components/scheduling/business/BusinessOwnerBoundary";
-import { webFeatureFlags } from "@/lib/featureFlags";
+import { launchFeatures, webFeatureFlags } from "@/lib/featureFlags";
 import {
   PayoutsEarnings,
   SchedulingConnectPanel,
@@ -95,7 +95,8 @@ function PaymentsContent() {
       </BusinessOwnerBoundary>
 
       {/* Policy editor handoff (G14). */}
-      <Link
+      {/* Launch cut #5 (Public scheduling): the booking cancellation policy editor is hidden. */}
+      {launchFeatures.publicScheduling && <Link
         href="/app/scheduling/payments/policy"
         className="mt-5 flex items-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3 shadow-sm transition hover:bg-app-hover"
       >
@@ -111,7 +112,7 @@ function PaymentsContent() {
           </div>
         </div>
         <CreditCard className="h-4 w-4 text-app-text-muted" aria-hidden />
-      </Link>
+      </Link>}
     </div>
   );
 }

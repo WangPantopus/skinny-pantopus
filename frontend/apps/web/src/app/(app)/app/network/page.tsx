@@ -9,6 +9,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { UserProfile, BusinessUser, Home } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type Tab = 'all' | 'people' | 'businesses' | 'homes';
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
@@ -49,7 +50,8 @@ function DiscoverPageContent() {
     try {
       const [peopleRes, businessRes, homesRes] = await Promise.all([
         api.users.searchUsers(q, { type: 'people', limit: 20 }),
-        api.businesses.discoverBusinesses({ q, limit: 20 }),
+        // Launch cut #6 (Business directory): businesses are not searched.
+        launchFeatures.businessDirectory ? api.businesses.discoverBusinesses({ q, limit: 20 }) : Promise.resolve({ businesses: [] }),
         api.homes.discoverHomes({ q, limit: 20 }),
       ]);
 
@@ -157,7 +159,7 @@ function DiscoverPageContent() {
   };
 
   const visiblePeople = tab === 'all' || tab === 'people';
-  const visibleBusinesses = tab === 'all' || tab === 'businesses';
+  const visibleBusinesses = launchFeatures.businessDirectory && (tab === 'all' || tab === 'businesses');
   const visibleHomes = tab === 'all' || tab === 'homes';
 
   const connectionLabel = (r: RelationshipState) => {
@@ -185,7 +187,8 @@ function DiscoverPageContent() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-app">Discover</h1>
-          <p className="text-sm text-app-secondary mt-1">Find people, businesses, and homes. Connect, follow, or claim residency.</p>
+          {/* Launch cut #6 (Business directory): the copy leaves businesses out. */}
+          <p className="text-sm text-app-secondary mt-1">{launchFeatures.businessDirectory ? 'Find people, businesses, and homes. Connect, follow, or claim residency.' : 'Find people and homes. Connect or claim residency.'}</p>
         </div>
 
         <div className="rounded-xl border border-app bg-surface p-4 mb-5">
@@ -196,7 +199,7 @@ function DiscoverPageContent() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') runSearch();
               }}
-              placeholder="Search people, business names, or addresses"
+              placeholder={launchFeatures.businessDirectory ? 'Search people, business names, or addresses' : 'Search people or addresses'}
               className="flex-1 rounded-lg border border-app-strong px-3 py-2 text-sm text-app bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             <button
@@ -218,7 +221,7 @@ function DiscoverPageContent() {
             ['people', 'People'],
             ['businesses', 'Businesses'],
             ['homes', 'Homes'],
-          ].map(([key, label]) => (
+          ].filter(([key]) => key !== 'businesses' || launchFeatures.businessDirectory).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key as Tab)}

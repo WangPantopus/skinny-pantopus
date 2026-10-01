@@ -12,7 +12,7 @@
 
 import SwiftUI
 
-// swiftlint:disable line_length multiline_function_chains
+// swiftlint:disable multiline_function_chains
 
 struct PlacePreviewBody: View {
     let preview: PlacePreview
@@ -371,8 +371,12 @@ struct PlaceComingRegionBody: View {
                     .font(.system(size: 24, weight: .bold))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.Color.appText)
+                // Launch cut #1 (Beacon): no Beacon fan memberships to mention.
                 Text(message +
-                    " Today, home intelligence reads off U.S. sources — county records, FEMA, the Census. Following, fanning, and messaging work in your region right now.")
+                    " Today, home intelligence reads off U.S. sources — county records, FEMA, the Census. "
+                    + (LaunchFeatures.beacon
+                        ? "Following, fanning, and messaging work in your region right now."
+                        : "Following and messaging work in your region right now."))
                     .pantopusTextStyle(.small)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)

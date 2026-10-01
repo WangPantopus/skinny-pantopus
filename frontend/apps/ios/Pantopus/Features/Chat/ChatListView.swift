@@ -283,14 +283,15 @@ private struct ChatListFilterTabs: View {
 
     var body: some View {
         HStack(spacing: Spacing.s0) {
+            // Launch cuts #4 / #3: the Gigs and Market filters are hidden.
             if skeleton {
-                ForEach(0..<4, id: \.self) { _ in
+                ForEach(0..<ChatFilter.launchCases.count, id: \.self) { _ in
                     Shimmer(width: 48, height: 14, cornerRadius: Radii.xs)
                         .padding(.trailing, Spacing.s6)
                         .padding(.bottom, Spacing.s3)
                 }
             } else {
-                ForEach(ChatFilter.allCases, id: \.rawValue) { filter in
+                ForEach(ChatFilter.launchCases, id: \.rawValue) { filter in
                     tabButton(filter: filter)
                         .padding(.trailing, Spacing.s6)
                 }

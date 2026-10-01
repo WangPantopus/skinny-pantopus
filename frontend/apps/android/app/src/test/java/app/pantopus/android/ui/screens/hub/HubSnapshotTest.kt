@@ -6,12 +6,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.screens.hub.sections.HubFirstRunHero
 import app.pantopus.android.ui.screens.hub.sections.HubPillarGrid
 import app.pantopus.android.ui.screens.hub.sections.HubSkeleton
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,6 +34,17 @@ class HubSnapshotTest {
                     softButtons = false,
                 ),
         )
+
+    // The launch cut rewords the first-run hero; the baselines pin the full copy.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
 
     @Test
     fun hub_skeleton() {

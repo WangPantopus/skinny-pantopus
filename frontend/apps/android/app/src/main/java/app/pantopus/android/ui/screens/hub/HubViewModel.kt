@@ -5,6 +5,8 @@ package app.pantopus.android.ui.screens.hub
 import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.gigs.RebookableGigDto
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubStatusItem
@@ -33,6 +35,9 @@ private const val BANNER_DISMISSED_KEY = "hub.setupBanner.dismissed"
 
 /** Setup steps the "Verify your address" banner stands for (the claim and verify steps). */
 private val ADDRESS_SETUP_STEPS = setOf("home", "verify")
+
+/** Launch cut #7 (Household extras): "Needs attention" pills for bills and packages. */
+private val HOUSEHOLD_EXTRAS_STATUS_TYPES = setOf("bill_due", "package_update")
 
 /**
  * A greeting by the viewer's own clock. The server can't greet: its clock isn't the viewer's, and a Home has no time
@@ -85,7 +90,8 @@ class HubViewModel
         /** Observed hub state. */
         val state: StateFlow<HubUiState> = _state.asStateFlow()
 
-        private val _discoveryFilter = MutableStateFlow(HubDiscoveryFilter.Gigs)
+        // Launch cut: starts on the first tab the launch shows (Tasks unless #4 is hidden).
+        private val _discoveryFilter = MutableStateFlow(HubDiscoveryFilter.visibleTabs.firstOrNull() ?: HubDiscoveryFilter.Posts)
         private var discoveryGeneration = 0
 
         /**
@@ -238,7 +244,7 @@ class HubViewModel
             // after the companions so a stubbed test sequence stays
             // predictable; a failure just hides the shortcut.
             val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data
-            val audienceUnread = unread?.byContext?.audience ?: 0
+            val audienceUnread = audienceUnread(unread)
 
             // Rebookable helpers feed the "Jump back in" rail. Optional —
             // an empty / failing gigs call never blanks the hub.
@@ -267,7 +273,7 @@ class HubViewModel
                                     topBar =
                                         current.content.topBar.copy(
                                             unreadCount = personalUnread(unread),
-                                            audienceUnreadCount = unread.byContext?.audience ?: 0,
+                                            audienceUnreadCount = audienceUnread(unread),
                                         ),
                                 ),
                             )
@@ -335,15 +341,21 @@ class HubViewModel
                                 audienceUnreadCount = audienceUnread,
                             ),
                         actionChips =
-                            listOf(
-                                ActionChipContent(ActionChipContent.Kind.PostTask, "Post task", PantopusIcon.PlusCircle, active = true),
-                                ActionChipContent(ActionChipContent.Kind.SnapAndSell, "Snap & sell", PantopusIcon.Camera, active = false),
+                            listOfNotNull(
+                                // Launch cut #4 (Open Gigs): no open task posting.
+                                ActionChipContent(ActionChipContent.Kind.PostTask, "Post task", PantopusIcon.PlusCircle, active = true)
+                                    .takeIf { LaunchFeatures.openGigs },
+                                // Launch cut #3 (Marketplace): no Snap & sell.
+                                ActionChipContent(ActionChipContent.Kind.SnapAndSell, "Snap & sell", PantopusIcon.Camera, active = false)
+                                    .takeIf { LaunchFeatures.marketplace },
                                 ActionChipContent(ActionChipContent.Kind.ScanMail, "Scan mail", PantopusIcon.ScanLine, active = false),
                                 ActionChipContent(ActionChipContent.Kind.AddHome, "Add home", PantopusIcon.Home, active = false),
                             ),
                         statusItems =
                             hub.statusItems
                                 .filterNot { dismissedStatusIds.contains(it.id) }
+                                // Launch cut #7 (Household extras): no bill or package pills.
+                                .filter { it.type !in HOUSEHOLD_EXTRAS_STATUS_TYPES || LaunchFeatures.householdExtras }
                                 .map(::projectStatusItem),
                         neighborDensity = density,
                         setupBanner = setupBanner,
@@ -351,8 +363,9 @@ class HubViewModel
                         pillars = pillars(hub, setupMode = false),
                         discovery = discoveryCards,
                         jumpBackIn = jumpBackItems(hub, rebookable),
+                        // Launch cut: activity from features hidden for the first launch is left out.
                         activity =
-                            hub.activity.take(3).map {
+                            hub.activity.filter { DeepLinkRouter.isLaunchAvailable(it.notificationType, it.route) }.take(3).map {
                                 ActivityEntry(
                                     id = it.id,
                                     title = it.title,
@@ -399,8 +412,9 @@ class HubViewModel
             hub: HubResponse,
             rebookable: List<RebookableGigDto>,
         ): List<JumpBackItem> {
+            // Launch cut #4 (Open Gigs): "Rebook" opens the open-task composer, so its cards go.
             val rebookItems =
-                rebookable.take(2).mapNotNull { gig ->
+                rebookable.take(2).filter { LaunchFeatures.openGigs }.mapNotNull { gig ->
                     val worker = gig.worker ?: return@mapNotNull null
                     JumpBackItem(
                         id = "rebook-${gig.id}",
@@ -413,18 +427,23 @@ class HubViewModel
                     )
                 }
             val serverItems =
-                hub.jumpBackIn.map { raw ->
-                    JumpBackItem(
-                        id = raw.title,
-                        title = raw.title,
-                        icon = iconFromRaw(raw.icon),
-                        route = raw.route,
-                        tint = tintForRoute(raw.route),
-                        // The backend carries no status for these tiles, so
-                        // they get no kicker (a label by position was untrue).
-                        kicker = "",
-                    )
-                }
+                // Launch cut: no tile into a feature hidden for the first launch (a `/gigs…` tile opens the
+                // composer or the open-task feed).
+                hub.jumpBackIn
+                    .filter { DeepLinkRouter.isLaunchAvailable(null, it.route) }
+                    .filter { LaunchFeatures.openGigs || !it.route.startsWith("/gigs") }
+                    .map { raw ->
+                        JumpBackItem(
+                            id = raw.title,
+                            title = raw.title,
+                            icon = iconFromRaw(raw.icon),
+                            route = raw.route,
+                            tint = tintForRoute(raw.route),
+                            // The backend carries no status for these tiles, so
+                            // they get no kicker (a label by position was untrue).
+                            kicker = "",
+                        )
+                    }
             return (rebookItems + serverItems).take(2)
         }
 
@@ -570,8 +589,20 @@ class HubViewModel
                     if (home != null) "${home.newMail} need pickup" else "Scan & forward",
                     "Scan & forward",
                 ),
-            )
+            ).filter { tile -> isLaunchAvailablePillar(tile.pillar) }
         }
+
+        /** Launch cuts #3 (Marketplace) and #4 (Open Gigs): their doors are hidden. */
+        private fun isLaunchAvailablePillar(pillar: PillarTile.Pillar): Boolean =
+            when (pillar) {
+                PillarTile.Pillar.Marketplace -> LaunchFeatures.marketplace
+                PillarTile.Pillar.Gigs -> LaunchFeatures.openGigs
+                else -> true
+            }
+
+        /** Launch cuts #1/#2 (Beacon + Personas): no Audience zone, so no megaphone count. */
+        private fun audienceUnread(unread: NotificationUnreadCountResponse?): Int =
+            if (LaunchFeatures.beacon && LaunchFeatures.personas) unread?.byContext?.audience ?: 0 else 0
 
         /**
          * The bell's dot counts unread personal notifications (personal +

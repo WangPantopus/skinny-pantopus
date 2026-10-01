@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.settings.blocks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
@@ -297,10 +298,17 @@ class BlockedUsersViewModel
                             RowSection(
                                 id = "blocked",
                                 header = "Blocked · ${visible.size}",
+                                // Launch cut #4 (Open Gigs): no bidding to block.
                                 footer =
                                     (if (complete) "" else "We couldn't load the complete list. Pull to refresh. ") +
-                                        "Blocked people can't message you, see your profile, or bid on " +
-                                        "your tasks. Unblocking doesn't notify them.",
+                                        (
+                                            if (LaunchFeatures.openGigs) {
+                                                "Blocked people can't message you, see your profile, or bid on your tasks. "
+                                            } else {
+                                                "Blocked people can't message you or see your profile. "
+                                            }
+                                        ) +
+                                        "Unblocking doesn't notify them.",
                                 rows = rows,
                                 style = SectionStyle.Card,
                             ),

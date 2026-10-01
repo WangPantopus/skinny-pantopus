@@ -195,7 +195,10 @@ public struct UploadDocumentFormView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("uploadDocumentLinkButton")
-                .accessibilityLabel("Add link to bill, maintenance task, or pet")
+                // Launch cut #7 (Household extras): bills and pets aren't linkable.
+                .accessibilityLabel(
+                    LaunchFeatures.householdExtras ? "Add link to bill, maintenance task, or pet" : "Add link to a maintenance task"
+                )
             }
         }
     }
@@ -573,12 +576,17 @@ private struct LinkedEntityPickerSheet: View {
                 }
             }
             .padding(Spacing.s4)
-        case let .loaded(options):
+        case let .loaded(allOptions):
+            // Launch cut #7 (Household extras): bills and pets aren't linkable;
+            // maintenance tasks stay.
+            let options = allOptions.filter { $0.kind == .maintenance || LaunchFeatures.householdExtras }
             if options.isEmpty {
                 EmptyState(
                     icon: .link,
                     headline: "Nothing to link yet",
-                    subcopy: "Add a bill, maintenance task, or pet to this home first."
+                    subcopy: LaunchFeatures.householdExtras
+                        ? "Add a bill, maintenance task, or pet to this home first."
+                        : "Add a maintenance task to this home first."
                 )
             } else {
                 ScrollView {

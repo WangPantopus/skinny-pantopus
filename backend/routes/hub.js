@@ -21,6 +21,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
+const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 /**
  * GET /api/hub
@@ -236,12 +237,13 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('user_id', userId)
           .gt('unread_count', 0)
       ).catch(() => ({ data: null })),
+      // Launch cuts: hidden notification types are not counted or listed.
       notifCount: Promise.resolve(
-        supabaseAdmin
+        excludeHiddenLaunchNotifications(supabaseAdmin
           .from('Notification')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .eq('is_read', false)
+          .eq('is_read', false))
       ).catch(() => ({ count: 0 })),
       // Unread personal mail, as the mailbox counts it (Mail has no status or
       // is_read column; those names made this read fail and show nothing).
@@ -254,7 +256,8 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('archived', false)
           .is('deleted_at', null)
       ).catch(() => ({ data: null })),
-      gigsNearby: Promise.resolve(
+      // Launch cut #4 (Open Gigs): the open-tasks-nearby count is hidden for the first launch.
+      gigsNearby: !isLaunchFeatureEnabled('open_gigs') ? Promise.resolve({ count: 0 }) : Promise.resolve(
         supabaseAdmin
           .from('Gig')
           .select('id', { count: 'exact', head: true })
@@ -262,10 +265,10 @@ router.get('/', verifyToken, async (req, res) => {
           .neq('user_id', userId)
       ).catch(() => ({ count: 0 })),
       recentNotifs: Promise.resolve(
-        supabaseAdmin
+        excludeHiddenLaunchNotifications(supabaseAdmin
           .from('Notification')
           .select('id, type, title, body, link, metadata, created_at, is_read')
-          .eq('user_id', userId)
+          .eq('user_id', userId))
           .order('created_at', { ascending: false })
           .limit(8)
       ).catch(() => ({ data: null })),
@@ -293,7 +296,8 @@ router.get('/', verifyToken, async (req, res) => {
         batch2.homeMail = Promise.resolve(unreadMailQuery(primaryHome.id, userId, now.toISOString()))
           .catch(() => ({ count: 0 }));
       }
-      if (homeCan('finance.view')) batch2.dueBills = Promise.resolve(
+      // Launch cut #7 (Household extras): bill management is hidden for the first launch.
+      if (homeCan('finance.view') && isLaunchFeatureEnabled('household_extras')) batch2.dueBills = Promise.resolve(
         supabaseAdmin
           .from('HomeBill')
           .select('id, bill_type, provider_name, amount, due_date, status')
@@ -505,7 +509,8 @@ router.get('/', verifyToken, async (req, res) => {
 
     // ── 7. Jump Back In (static for v1) ──────────────────────
     const jumpBackIn = [];
-    jumpBackIn.push({ title: 'Post a Task', route: '/gigs/new', icon: 'hammer' });
+    // Launch cut #4 (Open Gigs): public task posting is hidden for the first launch.
+    if (isLaunchFeatureEnabled('open_gigs')) jumpBackIn.push({ title: 'Post a Task', route: '/gigs/new', icon: 'hammer' });
     jumpBackIn.push({ title: 'Messages', route: '/app/chat', icon: 'chatbubbles' });
 
     if (primaryHome) {
@@ -851,6 +856,11 @@ router.get('/discovery', verifyToken, async (req, res) => {
 
   try {
     let items = [];
+
+    // Launch cuts #3 (Marketplace), #4 (Open Gigs), #6 (Business directory):
+    // these discovery rails are hidden for the first launch, so they come back empty.
+    const hiddenFilter = { gigs: 'open_gigs', businesses: 'business_directory', listings: 'marketplace' }[filter];
+    if (hiddenFilter && !isLaunchFeatureEnabled(hiddenFilter)) return res.json({ filter, items });
 
     switch (filter) {
       case 'gigs': {

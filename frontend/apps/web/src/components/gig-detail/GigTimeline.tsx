@@ -10,6 +10,7 @@ import {
   Star,
   Ban,
 } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ─── Types ───
 
@@ -53,13 +54,14 @@ export default function GigTimeline({
     timestamp: gig?.created_at,
   });
 
-  // 2. Bidding
+  // 2. Bidding. Launch cut #4 (Open Gigs): bids are hidden, so the step reads
+  // "Open" and offers no "Compare Bids"; the next one reads "Assigned".
   steps.push({
     key: 'bidding',
-    label: 'Bidding',
+    label: launchFeatures.openGigs ? 'Bidding' : 'Open',
     icon: <Tag className="w-4 h-4" />,
     status: status === 'open' ? 'current' : 'done',
-    action: status === 'open' && isMyGig
+    action: status === 'open' && isMyGig && launchFeatures.openGigs
       ? { label: 'Compare Bids', actionKey: 'compare_bids', variant: 'primary' }
       : null,
   });
@@ -67,7 +69,7 @@ export default function GigTimeline({
   // 3. Bid Selected
   steps.push({
     key: 'selected',
-    label: 'Bid Selected',
+    label: launchFeatures.openGigs ? 'Bid Selected' : 'Assigned',
     icon: <Handshake className="w-4 h-4" />,
     status: status === 'open' ? 'upcoming'
       : status === 'assigned' ? 'current'

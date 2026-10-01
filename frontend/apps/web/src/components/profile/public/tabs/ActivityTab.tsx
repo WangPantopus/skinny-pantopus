@@ -1,3 +1,5 @@
+import { launchFeatures } from '@/lib/featureFlags';
+
 interface ActivityTabProps {
   gigs: Record<string, unknown>[];
   posts: Record<string, unknown>[];
@@ -51,7 +53,8 @@ export default function ActivityTab({ gigs, posts, reviews, loading }: ActivityT
       <div className="text-center py-12 bg-surface rounded-xl border border-app">
         <div className="text-6xl mb-4">🕰️</div>
         <h3 className="text-lg font-semibold text-app mb-2">No activity yet</h3>
-        <p className="text-app-secondary">Recent posts, mission updates, and reviews will appear here.</p>
+        {/* Launch cut #4 (Open Gigs): missions are not shown. */}
+        <p className="text-app-secondary">{launchFeatures.openGigs ? 'Recent posts, mission updates, and reviews will appear here.' : 'Recent posts and reviews will appear here.'}</p>
       </div>
     );
   }

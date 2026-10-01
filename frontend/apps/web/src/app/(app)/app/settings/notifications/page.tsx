@@ -9,6 +9,7 @@ import {
   Moon, Navigation, Smartphone, Check, Megaphone,
 } from 'lucide-react';
 import type { UserNotificationPreferences } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type Prefs = UserNotificationPreferences;
 
@@ -161,7 +162,8 @@ export default function NotificationPreferencesPage() {
             title="Air Quality Alerts" subtitle="Unhealthy AQI notifications"
             value={prefs.aqi_alerts_enabled} onChange={(v) => update({ aqi_alerts_enabled: v })} />
           <ToggleRow icon={<Home className="w-5 h-5" />}
-            title="Home Reminders" subtitle="Bills, tasks, and calendar events"
+            // Launch cut #7 (Household extras): bills and the calendar are hidden.
+            title="Home Reminders" subtitle={launchFeatures.householdExtras ? 'Bills, tasks, and calendar events' : 'Home tasks and reminders'}
             value={prefs.home_reminders_enabled} onChange={(v) => update({ home_reminders_enabled: v })} />
           <ToggleRow icon={<Briefcase className="w-5 h-5" />}
             title="Gig Updates" subtitle="Active gig status changes"
@@ -171,13 +173,14 @@ export default function NotificationPreferencesPage() {
             value={prefs.mail_summary_enabled} onChange={(v) => update({ mail_summary_enabled: v })} last />
         </Section>
 
-        <Section title="Beacon Notifications">
+        {/* Launch cut #1 (Beacon): Beacon notifications are hidden. */}
+        {launchFeatures.beacon && <Section title="Beacon Notifications">
           <ToggleRow icon={<Megaphone className="w-5 h-5" />}
             title="Beacon Push Notifications"
             subtitle="Device alerts for Beacon updates. Updates stay in the app when off."
             value={prefs.beacon_push_enabled ?? true}
             onChange={(v) => update({ beacon_push_enabled: v })} last />
-        </Section>
+        </Section>}
 
         {/* 3. Quiet Hours */}
         <Section title="Quiet Hours">

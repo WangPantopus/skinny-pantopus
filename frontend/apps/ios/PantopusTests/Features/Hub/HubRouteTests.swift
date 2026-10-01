@@ -12,6 +12,17 @@ import XCTest
 
 @MainActor
 final class HubRouteTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // Link ownership with every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     func testPlaceAndMailStacksCannotStealNearbyDestinations() {
         let destinations: [DeepLinkRouter.Destination] = [.feed, .post(id: "post"), .gig(id: "gig"), .listing(id: "listing")]
         for destination in destinations {

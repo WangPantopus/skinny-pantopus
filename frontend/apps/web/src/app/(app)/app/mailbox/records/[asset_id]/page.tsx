@@ -11,6 +11,7 @@ import {
   useDrawerItems,
 } from '@/lib/mailbox-queries';
 import { useHomeAccess } from '@/hooks/useHomeAccess';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
@@ -224,7 +225,8 @@ export default function AssetDetailPage() {
         </div>
 
         {/* ── Action buttons ─────────────────────────────────── */}
-        <div className="flex items-center gap-2 mb-6">
+        {/* Launch cut #4 (Open Gigs): no "Post Gig"; an empty row is left out. */}
+        {(canAddPhoto || launchFeatures.openGigs) && <div className="flex items-center gap-2 mb-6">
           {canAddPhoto && (
             <button
               type="button"
@@ -236,7 +238,7 @@ export default function AssetDetailPage() {
               {addPhoto.isPending ? 'Uploading...' : 'Add photo'}
             </button>
           )}
-          <button
+          {launchFeatures.openGigs && <button
             type="button"
             onClick={() => {
               // The real task form, prefilled; the modal here only pretended to post.
@@ -251,7 +253,7 @@ export default function AssetDetailPage() {
           >
             <span>🤝</span>
             Post Gig
-          </button>
+          </button>}
           {canAddPhoto && (
             <input
               ref={fileInputRef}
@@ -261,7 +263,7 @@ export default function AssetDetailPage() {
               className="hidden"
             />
           )}
-        </div>
+        </div>}
         {addPhoto.isError && (
           <p role="alert" className="-mt-4 mb-6 text-xs text-red-600">
             {addPhoto.error?.message || "Couldn't add this photo. Try again."}

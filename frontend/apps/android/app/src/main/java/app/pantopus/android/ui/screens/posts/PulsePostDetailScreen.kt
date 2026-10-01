@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
@@ -432,8 +433,9 @@ fun PulsePostDetailLoadedContent(
                 onCommentReply = onCommentReply,
                 onCommentLike = onCommentLike,
                 onCommentDelete = onCommentDelete,
+                // Launch cuts #6/#4: "Nearby providers" is business discovery and broad provider search.
                 belowReactions =
-                    if (nearbyProviders.isEmpty()) {
+                    if (nearbyProviders.isEmpty() || !(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs)) {
                         null
                     } else {
                         {

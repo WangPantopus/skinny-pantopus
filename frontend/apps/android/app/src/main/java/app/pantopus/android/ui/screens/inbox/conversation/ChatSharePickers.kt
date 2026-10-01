@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -65,7 +66,7 @@ internal fun ChatAttachSheet(
         containerColor = PantopusColors.appSurface,
     ) {
         val options =
-            listOf(
+            listOfNotNull(
                 AttachGridItem("Camera", PantopusIcon.Camera, PantopusColors.warningBg, PantopusColors.warning) {
                     onDismiss()
                     onCamera()
@@ -82,14 +83,16 @@ internal fun ChatAttachSheet(
                     onDismiss()
                     onDocument()
                 },
+                // Launch cut #4 (Open Gigs): no task offers into a chat.
                 AttachGridItem("Task", PantopusIcon.Briefcase, PantopusColors.businessBg, PantopusColors.business) {
                     onDismiss()
                     onGig()
-                },
+                }.takeIf { LaunchFeatures.openGigs },
+                // Launch cut #3 (Marketplace): no listing offers into a chat.
                 AttachGridItem("Marketplace", PantopusIcon.ShoppingBag, PantopusColors.successBg, PantopusColors.success) {
                     onDismiss()
                     onListing()
-                },
+                }.takeIf { LaunchFeatures.marketplace },
             )
         Column(
             modifier =

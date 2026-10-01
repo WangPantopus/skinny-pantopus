@@ -11,9 +11,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTheme
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -33,6 +37,17 @@ class ChatConversationSnapshotTest {
                     softButtons = false,
                 ),
         )
+
+    // The launch cut trims the AI welcome copy and prompt grid; the baselines pin them.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
 
     private val personCounterparty =
         ChatCounterparty.Person(

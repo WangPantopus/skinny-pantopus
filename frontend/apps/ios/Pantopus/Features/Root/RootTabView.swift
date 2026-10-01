@@ -182,6 +182,12 @@ public struct RootTabView: View {
     // swiftlint:disable:next cyclomatic_complexity
     private func consumeInviteDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
         guard let pending, pending == router.pending else { return }
+        // First-launch scope: a link (URL, push tap, in-app) into a feature
+        // hidden for the first launch is dropped; the app stays where it is.
+        guard pending.isAvailableAtLaunch else {
+            _ = router.consume()
+            return
+        }
         // The profile cover sits above every tab: close it for a link that
         // lands in a tab (or presents its own cover), or the destination
         // opens hidden underneath.
@@ -203,8 +209,14 @@ public struct RootTabView: View {
             model.selected = .nearby
             NeighborhoodDoorStore.shared.pendingSurface = .pulse
         case .gig:
-            model.selected = .nearby
-            NeighborhoodDoorStore.shared.pendingSurface = .tasks
+            if LaunchFeatures.openGigs {
+                model.selected = .nearby
+                NeighborhoodDoorStore.shared.pendingSurface = .tasks
+            } else {
+                // Launch cut #4 (Open gigs): no Tasks door, so the task's
+                // detail opens in the Place stack (`HubTabRoot`).
+                model.selected = .place
+            }
         case .listing:
             model.selected = .nearby
             NeighborhoodDoorStore.shared.pendingSurface = .marketplace

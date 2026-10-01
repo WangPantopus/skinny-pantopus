@@ -25,7 +25,9 @@ final class BeaconStagingJourneyUITests: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment = [
             "PANTOPUS_API_ENV": "staging",
-            "UI_TESTS_DISABLE_NOTIFICATIONS": "1"
+            "UI_TESTS_DISABLE_NOTIFICATIONS": "1",
+            // Beacon and persona screens: every first-launch cut switched on.
+            "PANTOPUS_LAUNCH_FEATURES": "all"
         ]
     }
 

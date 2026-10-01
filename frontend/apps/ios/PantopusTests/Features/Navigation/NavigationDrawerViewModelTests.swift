@@ -12,6 +12,17 @@ import XCTest
 
 @MainActor
 final class NavigationDrawerViewModelTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // The full drawer: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
+    }
+
     // MARK: Slug contract (drives `navDrawer.item.<slug>`)
 
     func testSlugKebabCasesLabels() {

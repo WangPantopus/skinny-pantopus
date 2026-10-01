@@ -161,7 +161,8 @@ struct HubSetupBanner: View {
                 Text(content.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("Unlock gigs + mail receiving.")
+                // Launch cut #4 (Open gigs): verification doesn't advertise gigs.
+                Text(LaunchFeatures.openGigs ? "Unlock gigs + mail receiving." : "Unlock mail receiving.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -251,10 +252,15 @@ struct HubFirstRunHero: View {
                     .frame(maxWidth: 220, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("Takes 4 minutes. Gets you mail, gigs, and neighbor features.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.82))
-                    .frame(maxWidth: 240, alignment: .leading)
+                // Launch cut #4 (Open gigs): no gigs to advertise.
+                Text(
+                    LaunchFeatures.openGigs
+                        ? "Takes 4 minutes. Gets you mail, gigs, and neighbor features."
+                        : "Takes 4 minutes. Gets you mail and neighbor features."
+                )
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.82))
+                .frame(maxWidth: 240, alignment: .leading)
 
                 Button(action: onStart) {
                     HStack(spacing: Spacing.s1) {
@@ -488,7 +494,8 @@ struct HubDiscoveryRail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             header
-            if onFilterChange != nil {
+            // Launch cuts #4 / #6: a lone remaining tab (Posts) needs no filter row.
+            if onFilterChange != nil, HubDiscoveryFilter.launchVisibleTabs.count > 1 {
                 filterTabs
             }
             if activeFilter == .posts, let onBrowsePulse {
@@ -520,7 +527,8 @@ struct HubDiscoveryRail: View {
         HStack(spacing: Spacing.s2) {
             SectionHeader("Discover nearby")
             Spacer(minLength: Spacing.s2)
-            if let onFindBusinesses {
+            // Launch cut #6 (Business directory): no "Find Businesses" link.
+            if let onFindBusinesses, LaunchFeatures.businessDirectory {
                 headerLink(
                     "Find Businesses",
                     tint: Theme.Color.home,
@@ -536,7 +544,9 @@ struct HubDiscoveryRail: View {
                     action: onExploreMap
                 )
             }
-            if let onSeeAll {
+            // Launch cuts #6 + #4 + #3: "See all" opens the Discover hub
+            // (business, open-task and listing rails), so it needs all three.
+            if let onSeeAll, LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace {
                 Button(action: onSeeAll) {
                     HStack(spacing: 2) {
                         Text("See all")
@@ -571,11 +581,11 @@ struct HubDiscoveryRail: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// Tasks / Businesses / Posts (`HubDiscoveryFilter.visibleTabs`).
+    /// Tasks / Businesses / Posts (`HubDiscoveryFilter.launchVisibleTabs`).
     private var filterTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(HubDiscoveryFilter.visibleTabs) { tab in
+                ForEach(HubDiscoveryFilter.launchVisibleTabs) { tab in
                     let active = tab == activeFilter
                     Button {
                         onFilterChange?(tab)

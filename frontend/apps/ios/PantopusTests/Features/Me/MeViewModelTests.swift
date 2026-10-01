@@ -15,6 +15,13 @@ final class MeViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         URLProtocolStub.reset()
+        // The full tile and row set: every first-launch cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private func makeAPI() -> APIClient {

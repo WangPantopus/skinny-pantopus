@@ -208,7 +208,7 @@ public final class UniversalSearchViewModel {
         async let businessesOutcome = fetch(kind: .business, query: text, limit: limit)
         async let homesOutcome = fetch(kind: .home, query: text, limit: limit)
 
-        let outcomes: [(UniversalSearchKind, SourceOutcome)] = await [
+        let allOutcomes: [(UniversalSearchKind, SourceOutcome)] = await [
             (.task, tasksOutcome),
             (.person, peopleOutcome),
             (.beacon, beaconsOutcome),
@@ -216,6 +216,8 @@ public final class UniversalSearchViewModel {
             (.home, homesOutcome)
         ]
         guard !Task.isCancelled else { return }
+        // First-launch scope: sources hidden for the first launch never count.
+        let outcomes = allOutcomes.filter(\.0.isAvailableAtLaunch)
 
         var sections: [UniversalSearchSection] = []
         var failed: [UniversalSearchKind] = []
@@ -254,6 +256,8 @@ public final class UniversalSearchViewModel {
         query text: String,
         limit: Int
     ) async -> SourceOutcome {
+        // First-launch scope: a hidden source (tasks, Beacons, businesses) is never queried.
+        guard kind.isAvailableAtLaunch else { return .results([]) }
         do {
             let rows: [UniversalSearchResult] = switch kind {
             case .task: try await fetchTasks(query: text, limit: limit)

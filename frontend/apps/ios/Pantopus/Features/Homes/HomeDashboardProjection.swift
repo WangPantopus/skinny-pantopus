@@ -30,8 +30,9 @@ public enum HomeDashboardProjection {
             switch tab.id {
             case "overview": true
             case "tasks": access?.can("tasks.view") == true
-            case "bills": access?.can("finance.view") == true
-            case "packages": access?.can("packages.view") == true
+            // Launch cut #7 (Household extras): Bills and Packages are hidden.
+            case "bills": LaunchFeatures.householdExtras && access?.can("finance.view") == true
+            case "packages": LaunchFeatures.householdExtras && access?.can("packages.view") == true
             case "members": access?.can("members.view") == true
             case "ownership": access?.can("ownership.view") == true
             default: false
@@ -78,7 +79,8 @@ extension HomeDashboardProjection {
                 )
             )
         }
-        if allowed("finance.view") {
+        // Launch cut #7 (Household extras): the Bills and Packages tiles are hidden.
+        if LaunchFeatures.householdExtras, allowed("finance.view") {
             out.append(
                 tile(
                     id: "view_bills",
@@ -89,7 +91,7 @@ extension HomeDashboardProjection {
                 )
             )
         }
-        if allowed("packages.view") {
+        if LaunchFeatures.householdExtras, allowed("packages.view") {
             out.append(
                 tile(
                     id: "view_packages",
@@ -158,8 +160,11 @@ extension HomeDashboardProjection {
     static func upcoming(dashboard: HomeDashboardResponse?) -> [HomeDashboardTimelineItem] {
         guard let today = dashboard?.today else { return [] }
         var items: [HomeDashboardTimelineItem] = []
+        // Launch cut #7 (Household extras): bills, calendar events and
+        // deliveries leave Upcoming; household tasks stay.
+        let extras = LaunchFeatures.householdExtras
 
-        if let bill = today.nextBill {
+        if extras, let bill = today.nextBill {
             items.append(
                 HomeDashboardTimelineItem(
                     id: "bill-\(bill.id)",
@@ -172,7 +177,7 @@ extension HomeDashboardProjection {
             )
         }
 
-        for event in today.nextEvents {
+        for event in today.nextEvents where extras {
             items.append(
                 HomeDashboardTimelineItem(
                     id: "event-\(event.id)",
@@ -203,7 +208,7 @@ extension HomeDashboardProjection {
             )
         }
 
-        if today.deliveriesArriving > 0 {
+        if extras, today.deliveriesArriving > 0 {
             let count = today.deliveriesArriving
             items.append(
                 HomeDashboardTimelineItem(

@@ -3,6 +3,8 @@
 package app.pantopus.android.ui.screens.homes.documents
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.BillDto
 import app.pantopus.android.data.api.models.homes.CreateDocumentRequest
 import app.pantopus.android.data.api.models.homes.CreateDocumentResponse
@@ -55,10 +57,13 @@ class UploadDocumentFormViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The launch cut hides bill and pet links; these tests pin every link kind.
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
     }
 
     @After fun tearDown() {
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun makeVm(): UploadDocumentFormViewModel =

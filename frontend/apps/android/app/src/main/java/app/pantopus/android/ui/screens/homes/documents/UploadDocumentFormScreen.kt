@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
@@ -610,7 +611,15 @@ private fun LinkedSection(
                         .background(PantopusColors.appSurfaceSunken)
                         .clickable(onClick = onOpenPicker)
                         .testTag("uploadDocumentLinkButton")
-                        .semantics { contentDescription = "Add link to bill, maintenance task, or pet" }
+                        .semantics {
+                            // Launch cut #7 (Household extras): bills and pets are hidden.
+                            contentDescription =
+                                if (LaunchFeatures.householdExtras) {
+                                    "Add link to bill, maintenance task, or pet"
+                                } else {
+                                    "Add link to maintenance task"
+                                }
+                        }
                         .padding(Spacing.s3)
                         .heightIn(min = 44.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -846,7 +855,13 @@ private fun EmptyLinkOptions() {
             color = PantopusColors.appText,
         )
         Text(
-            text = "Add a bill, maintenance task, or pet to this home first.",
+            // Launch cut #7 (Household extras): bills and pets are hidden.
+            text =
+                if (LaunchFeatures.householdExtras) {
+                    "Add a bill, maintenance task, or pet to this home first."
+                } else {
+                    "Add a maintenance task to this home first."
+                },
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )

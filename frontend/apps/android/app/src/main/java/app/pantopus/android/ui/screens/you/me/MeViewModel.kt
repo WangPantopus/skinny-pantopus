@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.you.me
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.users.InviteProgressDto
@@ -137,9 +138,9 @@ class MeViewModel
 
                     _state.value =
                         MeUiState.Loaded(
-                            personal = buildPersonal(profile, stats),
-                            home = buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed),
-                            business = buildBusiness(businesses?.firstOrNull(), businesses == null),
+                            personal = launchScoped(buildPersonal(profile, stats)),
+                            home = launchScoped(buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed)),
+                            business = launchScoped(buildBusiness(businesses?.firstOrNull(), businesses == null)),
                             showBusiness = showBusiness,
                         )
                     fetchInsights()
@@ -177,6 +178,45 @@ class MeViewModel
                 return previous.year to previous.monthValue
             }
         }
+
+        /**
+         * Launch cut (2026-09-27): false when a tile or row opens a feature hidden
+         * for the first launch; one serving two cut features needs both on.
+         */
+        private fun isAvailableAtLaunch(routeKey: String): Boolean =
+            when (routeKey) {
+                // Launch cut #1 (Beacon); persona DMs and the persona handshake are #2 (Personas) too.
+                "me.audience" -> LaunchFeatures.beacon
+                "me.creatorInbox", "me.debug.openHandshake" -> LaunchFeatures.beacon && LaunchFeatures.personas
+                // Launch cut #2 (Personas): privacy and blocking stay under Privacy and Settings.
+                "me.identityCenter" -> LaunchFeatures.personas
+                // Launch cut #3 (Marketplace).
+                "me.listings" -> LaunchFeatures.marketplace
+                // Launch cut #4 (Open Gigs): bids and gig offers.
+                "me.bids", "me.offers" -> LaunchFeatures.openGigs
+                // Launch cut #5 (Public scheduling).
+                "me.scheduling.hub", "me.home.scheduling", "me.business.scheduling" -> LaunchFeatures.publicScheduling
+                // Launch cut #7 (Household extras).
+                "me.bills", "me.pets", "me.polls", "me.calendar", "me.packages" -> LaunchFeatures.householdExtras
+                // Launch cut #8 (Mail extras).
+                "me.debug.openCeremonialMail", "me.debug.openCeremonialMailOpen" -> LaunchFeatures.mailExtras
+                else -> true
+            }
+
+        /** Launch cut: drops the tiles, rows and counts of hidden features, and any section left without rows. */
+        private fun launchScoped(content: MeIdentityContent): MeIdentityContent =
+            content.copy(
+                // Launch cut #7 (Household extras): the "Bills due" count.
+                stats = content.stats.filter { it.id != "bills" || LaunchFeatures.householdExtras },
+                actionTiles = content.actionTiles.filter { isAvailableAtLaunch(it.routeKey) },
+                sections =
+                    content.sections.mapNotNull { section ->
+                        section.rows
+                            .filter { isAvailableAtLaunch(it.routeKey) }
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { rows -> section.copy(rows = rows) }
+                    },
+            )
 
         private fun buildPersonal(
             profile: UserProfile,

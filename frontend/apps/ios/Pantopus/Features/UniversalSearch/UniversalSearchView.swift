@@ -82,7 +82,7 @@ public struct UniversalSearchView: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
             TextField(
-                "Search tasks, people, Beacons, businesses…",
+                Self.searchPrompt,
                 text: Binding(
                     get: { viewModel.query },
                     set: { newValue in
@@ -123,7 +123,8 @@ public struct UniversalSearchView: View {
     private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
-                ForEach(UniversalSearchTab.allCases, id: \.self) { tab in
+                // Launch cuts #4 / #1 / #6: no Tasks, Beacons or Businesses chips.
+                ForEach(UniversalSearchTab.launchCases, id: \.self) { tab in
                     tabChip(tab)
                 }
             }
@@ -155,6 +156,34 @@ public struct UniversalSearchView: View {
         .accessibilityIdentifier("universalSearchTab_\(tab.rawValue)")
     }
 
+    /// Launch cuts #4 / #1 / #6: the field prompt names only the sources
+    /// still searched ("Search people…" with all three hidden).
+    private static var searchPrompt: String {
+        let names = [
+            LaunchFeatures.openGigs ? "tasks" : nil,
+            "people",
+            LaunchFeatures.beacon ? "Beacons" : nil,
+            LaunchFeatures.businessDirectory ? "businesses" : nil
+        ].compactMap { $0 }
+        return "Search \(names.joined(separator: ", "))…"
+    }
+
+    /// Launch cuts #4 / #1 / #6: the idle copy names only the sources still
+    /// searched ("Find people and homes nearby." with all three hidden).
+    private static var idleSubcopy: String {
+        let names = [
+            LaunchFeatures.openGigs ? "tasks" : nil,
+            "people",
+            LaunchFeatures.beacon ? "Beacons" : nil,
+            LaunchFeatures.businessDirectory ? "businesses" : nil,
+            "homes"
+        ].compactMap { $0 }
+        let list = names.count > 2
+            ? names.dropLast().joined(separator: ", ") + ", and " + names[names.count - 1]
+            : names.joined(separator: " and ")
+        return "Find \(list) nearby."
+    }
+
     // MARK: - Phase body
 
     @ViewBuilder private var phaseBody: some View {
@@ -163,7 +192,7 @@ public struct UniversalSearchView: View {
             promptSection(
                 identifier: "universalSearchIdle",
                 headline: "Search Pantopus",
-                subcopy: "Find tasks, people, Beacons, businesses, and homes nearby."
+                subcopy: Self.idleSubcopy
             )
         case .loading:
             shimmerSection

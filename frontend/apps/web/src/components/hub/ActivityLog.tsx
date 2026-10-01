@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import type { ActivityItem } from './types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface ActivityLogProps {
   items: ActivityItem[];
@@ -25,9 +26,10 @@ export default function ActivityLog({ items }: ActivityLogProps) {
         </h2>
         <div className="bg-app-surface border border-app-border rounded-xl p-6 text-center">
           <p className="text-sm text-app-text-secondary dark:text-app-text-muted mb-2">No recent activity</p>
-          <button onClick={() => router.push('/app/gigs-v2/new')} className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline">
+          {/* Launch cut #4 (Open Gigs): no open task post. */}
+          {launchFeatures.openGigs && <button onClick={() => router.push('/app/gigs-v2/new')} className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline">
             Post your first task →
-          </button>
+          </button>}
         </div>
       </div>
     );

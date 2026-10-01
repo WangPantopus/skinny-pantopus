@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
@@ -193,9 +194,10 @@ private fun PopulatedLayout(
                 activeFilter = discoveryFilter,
                 onFilterChange = onDiscoveryFilterChange,
                 isLoading = discoveryLoading,
-                onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) },
+                // Launch cuts #6/#4/#3: no Discover hub or business directory links.
+                onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) }.takeIf { isDiscoverHubLaunchAvailable },
                 onExploreMap = { onIntent(HubNavigationIntent.OpenExploreMap) },
-                onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
+                onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) }.takeIf { LaunchFeatures.businessDirectory },
                 loadFailed = discoveryFailed,
                 onRetry = onRetryDiscovery,
                 onBrowsePulse = { onIntent(HubNavigationIntent.PillarTapped(PillarTile.Pillar.Pulse)) },
@@ -255,9 +257,10 @@ private fun FirstRunLayout(
                 activeFilter = discoveryFilter,
                 onFilterChange = onDiscoveryFilterChange,
                 isLoading = discoveryLoading,
-                onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) },
+                // Launch cuts #6/#4/#3: no Discover hub or business directory links.
+                onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) }.takeIf { isDiscoverHubLaunchAvailable },
                 onExploreMap = { onIntent(HubNavigationIntent.OpenExploreMap) },
-                onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
+                onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) }.takeIf { LaunchFeatures.businessDirectory },
                 loadFailed = discoveryFailed,
                 onRetry = onRetryDiscovery,
                 onBrowsePulse = { onIntent(HubNavigationIntent.PillarTapped(PillarTile.Pillar.Pulse)) },
@@ -277,6 +280,10 @@ private fun FirstRunLayout(
         }
     }
 }
+
+/** Launch cuts #6/#4/#3: the Discover hub browses businesses, open tasks and listings. */
+private val isDiscoverHubLaunchAvailable: Boolean
+    get() = LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
 
 @Composable
 private fun ErrorLayout(

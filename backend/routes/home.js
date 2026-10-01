@@ -38,6 +38,7 @@ const propertySuggestionsService = require('../services/ai/propertySuggestionsSe
 const { shouldBlockCoordinateOverwrite, stripCoordinateFields } = require('../utils/verifiedCoordinateGuard');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
+const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
 const {
   pipelineService,
   AddressVerdictStatus,
@@ -5140,20 +5141,21 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
 
+    // Launch cut #7 (household extras): activity about cut records is left out.
     const [dataRes, countRes] = await Promise.allSettled([
-      supabaseAdmin
+      excludeHiddenHomeActivity(supabaseAdmin
         .from('HomeAuditLog')
         .select('id, action, actor_user_id, metadata, created_at, actor:actor_user_id(id, username, name, first_name, middle_name, last_name)')
-        .eq('home_id', homeId)
+        .eq('home_id', homeId))
         // Rows written in one transaction share created_at; id breaks the tie
         // so offset pages neither repeat nor skip a row.
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .range(offset, offset + limit - 1),
-      supabaseAdmin
+      excludeHiddenHomeActivity(supabaseAdmin
         .from('HomeAuditLog')
         .select('id', { count: 'exact', head: true })
-        .eq('home_id', homeId),
+        .eq('home_id', homeId)),
     ]);
 
     if ([dataRes, countRes].some(result => result.status !== 'fulfilled' || !result.value || result.value.error)) {

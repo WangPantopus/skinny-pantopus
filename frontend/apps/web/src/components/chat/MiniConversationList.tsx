@@ -5,6 +5,7 @@ import * as api from '@pantopus/api';
 import type { UnifiedConversationItem, ConversationTopic } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
 import { useSocketEvent } from '../../hooks/useSocket';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -131,7 +132,8 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
         const lastMessageAt = conv.last_message_at || null;
         const unread = conv.total_unread || 0;
         const isUnread = unread > 0;
-        const topics: ConversationTopic[] = conv.topics || [];
+        // Launch cut #3 (Marketplace): listing topic chips are not shown.
+        const topics: ConversationTopic[] = (conv.topics || []).filter((t: ConversationTopic) => launchFeatures.marketplace || t.topic_type !== 'listing');
         const key = isRoom ? String(conv.id) : String(conv.other_participant_id);
 
         return (

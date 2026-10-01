@@ -136,7 +136,9 @@ public final class MailDetailViewModel {
             // straight to the open experience and hold the loading frame
             // so the plain layout never flashes (RN does the same by
             // short-circuiting before `setLoading(false)`).
-            if response.mail.stationeryTheme != nil {
+            // Launch cut #8 (Mail extras): the ceremonial reader is hidden for
+            // the first launch, so a ceremonial letter reads as plain mail.
+            if response.mail.stationeryTheme != nil, LaunchFeatures.mailExtras {
                 ceremonialRedirectMailId = mailId
                 return
             }

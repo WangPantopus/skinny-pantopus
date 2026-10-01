@@ -14,6 +14,7 @@
 
 const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const SMTP_FROM = process.env.SMTP_FROM || 'Pantopus <hello@pantopus.com>';
@@ -450,6 +451,8 @@ async function sendMonthlyReceipt(toEmail, receipt) {
   const unsubUrl = `${APP_URL}/app/profile/settings`;
 
   const subject = `Your ${period.label} Pantopus Summary`;
+  // Launch cut #3 (Marketplace): the Marketplace section is left out for the first launch.
+  const showMarketplace = isLaunchFeatureEnabled('marketplace');
 
   const section = (icon, title, lines) => {
     const lineHtml = lines
@@ -501,11 +504,11 @@ async function sendMonthlyReceipt(toEmail, receipt) {
         ['Total spent', `$${spendingDollars}`],
       ])}
 
-      ${section('🏪', 'Marketplace', [
+      ${showMarketplace ? section('🏪', 'Marketplace', [
         ['Listings sold', marketplace.listings_sold],
         ['Listings bought', marketplace.listings_bought],
         ['Free items claimed', marketplace.free_items_claimed],
-      ])}
+      ]) : ''}
 
       ${section('🤝', 'Community', [
         ['Posts created', community.posts_created],
@@ -553,12 +556,12 @@ SPENDING
   Gigs posted (completed): ${spending.gig_count}
   Total spent: $${spendingDollars}
 
-MARKETPLACE
+${showMarketplace ? `MARKETPLACE
   Listings sold: ${marketplace.listings_sold}
   Listings bought: ${marketplace.listings_bought}
   Free items claimed: ${marketplace.free_items_claimed}
 
-COMMUNITY
+` : ''}COMMUNITY
   Posts created: ${community.posts_created}
   Connections made: ${community.connections_made}
   Neighbors helped: ${community.neighbors_helped}

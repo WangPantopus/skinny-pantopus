@@ -349,7 +349,8 @@ public struct PublicProfileView: View {
             },
             body: {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    if payload.isOwner {
+                    // Launch cuts #1 + #2: no Beacon analytics strip.
+                    if payload.isOwner, Self.showsPersonaParts {
                         BeaconOwnerAnalyticsStrip(followerStat: payload.stats.stats.first?.value ?? "—") {
                             onOpenInsights()
                         }
@@ -371,12 +372,16 @@ public struct PublicProfileView: View {
                         onOpenReviewer: onOpenProfile
                     )
                     ReceivedReviewsSection(userId: payload.profile.id)
-                    PublicProfilePostsFeed(
-                        kind: payload.kind,
-                        posts: payload.posts,
-                        onUnlock: { post in viewModel.unlockBroadcast(tierRank: post.targetTierRank) },
-                        onEmptyCTA: { emptyCTAAction(for: payload) }
-                    )
+                    // Launch cuts #1 + #2: the persona broadcasts feed ("No broadcasts
+                    // yet … Follow") is hidden; the rest of the profile stays.
+                    if payload.kind != .persona || Self.showsPersonaParts {
+                        PublicProfilePostsFeed(
+                            kind: payload.kind,
+                            posts: payload.posts,
+                            onUnlock: { post in viewModel.unlockBroadcast(tierRank: post.targetTierRank) },
+                            onEmptyCTA: { emptyCTAAction(for: payload) }
+                        )
+                    }
                 }
             }
         )
@@ -433,11 +438,14 @@ public struct PublicProfileView: View {
         switch payload.kind {
         case .persona:
             if payload.isOwner {
-                BeaconHeaderGhostButton(icon: .barChart3, accessibilityLabel: "Insights") {
-                    onOpenInsights()
-                }
-                BeaconHeaderGhostButton(title: "Edit", icon: .pencil, accessibilityLabel: "Edit Persona") {
-                    onEditPersona()
+                // Launch cuts #1 + #2: no Beacon insights or persona editor.
+                if Self.showsPersonaParts {
+                    BeaconHeaderGhostButton(icon: .barChart3, accessibilityLabel: "Insights") {
+                        onOpenInsights()
+                    }
+                    BeaconHeaderGhostButton(title: "Edit", icon: .pencil, accessibilityLabel: "Edit Persona") {
+                        onEditPersona()
+                    }
                 }
             } else {
                 BeaconHeaderGhostButton(icon: .share, accessibilityLabel: "Share profile") {
@@ -484,6 +492,12 @@ public struct PublicProfileView: View {
                 onOpenMessages(payload.profile)
             }
         }
+    }
+
+    /// Launch cuts #1 (Beacon) + #2 (Personas): the creator parts of the
+    /// persona archetype (broadcasts, insights, persona editor).
+    private static var showsPersonaParts: Bool {
+        LaunchFeatures.beacon && LaunchFeatures.personas
     }
 
     /// Try again on a feed that couldn't load: reloads the profile, its posts

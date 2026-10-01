@@ -9,6 +9,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const homeRecordService = require('../homeRecordService');
 const logger = require('../../utils/logger');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 
 /**
  * @typedef {Object} InternalContext
@@ -63,10 +64,13 @@ async function collectInternalContext(userId, homeId = null) {
 
   const homeIds = await resolveHomeIds(userId, homeId);
   const hasHomes = homeIds.length > 0;
+  // Launch cut #7 (Household extras): bills and the family calendar stay out of
+  // the Hub Today card and the briefings for the first launch.
+  const householdExtras = isLaunchFeatureEnabled('household_extras');
 
   // ── Build all queries, run with Promise.allSettled ──
   const queries = {
-    bills: hasHomes
+    bills: hasHomes && householdExtras
       ? supabaseAdmin
           .from('HomeBill')
           .select('id, provider_name, amount, currency, due_date, status')
@@ -86,7 +90,7 @@ async function collectInternalContext(userId, homeId = null) {
             .map(({ id, title, due_at, priority, status }) => ({ id, title, due_at, priority, status })) }))
       : Promise.resolve({ data: [] }),
 
-    calendarEvents: hasHomes
+    calendarEvents: hasHomes && householdExtras
       ? Promise.all(homeIds.map(id => homeRecordService.visibleRecords({ homeId: id, actorId: userId, kind: 'event',
           startAfter: startOfToday.toISOString(), startBefore: endOfTomorrow.toISOString() })))
           .then(groups => ({ data: groups.flat().filter(e => Date.parse(e.start_at) < endOfTomorrow.getTime())
@@ -115,7 +119,8 @@ async function collectInternalContext(userId, homeId = null) {
       .from('Gig')
       .select('id, title, status, scheduled_start')
       .or(`user_id.eq.${userId},accepted_by.eq.${userId}`)
-      .in('status', ['open', 'assigned', 'in_progress'])
+      // Launch cut #4 (Open Gigs): open (unassigned) tasks are hidden for the first launch.
+      .in('status', isLaunchFeatureEnabled('open_gigs') ? ['open', 'assigned', 'in_progress'] : ['assigned', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(5),
 

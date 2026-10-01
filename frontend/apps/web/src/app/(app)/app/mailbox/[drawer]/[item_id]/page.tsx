@@ -20,6 +20,7 @@ import PackageUnboxing from '@/components/mailbox/PackageUnboxing';
 import GigCreationModal from '@/components/mailbox/GigCreationModal';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
+import { launchFeatures } from '@/lib/featureFlags';
 
 /**
  * Mail item detail page — right pane on desktop, full page on mobile.
@@ -401,7 +402,8 @@ export default function ItemDetailPage() {
         )}
 
         {/* Family Mail Party banner — home drawer + presence detected */}
-        {isSharedHome && currentUserId && !isDeleted && (
+        {/* Launch cut #8 (Mail extras): the Family Mail Party and certified mail are hidden. */}
+        {launchFeatures.mailExtras && isSharedHome && currentUserId && !isDeleted && (
           <FamilyMailParty
             itemId={itemId}
             currentUserId={currentUserId}
@@ -415,7 +417,7 @@ export default function ItemDetailPage() {
         )}
 
         {/* Certified Mail Detail — replaces old CertifiedBanner */}
-        {isCertified && certifiedItem && (
+        {launchFeatures.mailExtras && isCertified && certifiedItem && (
           <CertifiedMailDetail
             item={certifiedItem}
             currentUserId={currentUserId}
@@ -449,7 +451,8 @@ export default function ItemDetailPage() {
             />
 
             {/* Package Unboxing — shown when package is delivered */}
-            {isDelivered && (
+            {/* Launch cut #7 (Household extras): package tracking and media are hidden. */}
+            {launchFeatures.householdExtras && isDelivered && (
               <PackageUnboxing
                 itemId={itemId}
                 deliveryPhoto={wrapperAny?.delivery_photo_url}

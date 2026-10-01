@@ -242,8 +242,13 @@ public struct ChatConversationView: View {
             Button("Photos") { photosPickerPresented = true }
             Button("Document") { documentImporterPresented = true }
             Button("Location") { Task { await viewModel.sendCurrentLocation() } }
-            Button("Task") { gigPickerPresented = true }
-            Button("Marketplace") { listingPickerPresented = true }
+            // Launch cuts #4 (Open gigs) / #3 (Marketplace): no task or listing shares.
+            if LaunchFeatures.openGigs {
+                Button("Task") { gigPickerPresented = true }
+            }
+            if LaunchFeatures.marketplace {
+                Button("Marketplace") { listingPickerPresented = true }
+            }
             Button("Cancel", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $cameraPresented) {
@@ -759,7 +764,8 @@ extension ChatConversationView {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.top, 16)
-                Text("I can draft tasks, listings, and posts, and I use your saved places to fit answers to your area.")
+                // Launch cuts #3 / #4: it names only what can still be drafted.
+                Text("I can draft \(Self.aiDraftables), and I use your saved places to fit answers to your area.")
                     .font(.system(size: 13))
                     .lineSpacing(5)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -785,7 +791,8 @@ extension ChatConversationView {
             columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)],
             spacing: Spacing.s2
         ) {
-            ForEach(Self.aiPromptCards) { card in
+            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
+            ForEach(Self.launchPromptCards) { card in
                 Button {
                     Task {
                         await viewModel.sendCapabilityPrompt(
@@ -851,6 +858,30 @@ extension ChatConversationView {
         )
     ]
 
+    /// First-launch scope: what the assistant can draft (launch cut #4 hides
+    /// open tasks and #3 listings; the backend drops those draft tools too).
+    private static var aiDraftables: String {
+        switch (LaunchFeatures.openGigs, LaunchFeatures.marketplace) {
+        case (true, true): "tasks, listings, and posts"
+        case (true, false): "tasks and posts"
+        case (false, true): "listings and posts"
+        case (false, false): "posts"
+        }
+    }
+
+    /// Launch cut #3 (Marketplace): the Marketplace prompt gives way to a Home
+    /// one (the seasonal checklist stays), keeping the 2×2 grid whole.
+    private static var launchPromptCards: [AIPromptCard] {
+        aiPromptCards.map { card in
+            guard card.id == "marketplace", !LaunchFeatures.marketplace else { return card }
+            return AIPromptCard(
+                id: "home", category: "Home", icon: .home,
+                tint: Theme.Color.success,
+                question: "What should I check around my home before winter?"
+            )
+        }
+    }
+
     /// A15.3 `.ai-welcome` — capability card pinned at the top of a
     /// populated AI thread. The design's info-bg→white gradient is
     /// approximated with a flat `primary50` fill + `primary200` border.
@@ -862,7 +893,8 @@ extension ChatConversationView {
                     Text("Hi — I'm Pantopus AI")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
-                    Text("I can draft tasks, listings, and posts, and use your saved places to help.")
+                    // Launch cuts #3 / #4: it names only what can still be drafted.
+                    Text("I can draft \(Self.aiDraftables), and use your saved places to help.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -3076,7 +3108,10 @@ private struct ChatBubbleRow: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(accent)
                 }
-                if draft.type != "mail_summary" {
+                // Launch cuts #4 (Open gigs) / #3 (Marketplace): a task or listing
+                // draft stays readable but can't open the hidden composers.
+                if draft.type != "mail_summary", draft.type != "gig" || LaunchFeatures.openGigs,
+                   draft.type != "listing" || LaunchFeatures.marketplace {
                     Button { onUse(draft) } label: {
                         HStack(spacing: 5) {
                             Text(actionTitle)

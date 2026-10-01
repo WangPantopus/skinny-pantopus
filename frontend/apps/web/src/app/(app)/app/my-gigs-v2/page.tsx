@@ -18,6 +18,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import type { GigListItem, GigBidWithUser } from '@pantopus/types';
 import { ListArchetype } from '@/components/archetypes';
 import { useGigListSession } from '@/hooks/useGigListSession';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type FilterStatus = 'all' | 'open' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -213,10 +214,11 @@ export default function MyGigsV2Page() {
         <ListArchetype<GigListItem>
           title="My tasks"
           subtitle={`${gigs.length} total · ${stats.open} open`}
-          primaryAction={{
+          // Launch cut #4 (Open Gigs): no open task posting.
+          primaryAction={launchFeatures.openGigs ? {
             label: 'Quick post',
             onClick: () => navigate('/app/gigs-v2/new'),
-          }}
+          } : undefined}
           headerFilters={
             <SearchInput
               value={search}
@@ -260,10 +262,10 @@ export default function MyGigsV2Page() {
           emptyState={{
             icon: Inbox,
             headline: filter === 'all' ? 'No tasks posted yet' : `No ${filter.replace('_', ' ')} tasks`,
-            subcopy: filter === 'all' ? 'Post your first task to get started.' : 'Try changing your filter.',
+            subcopy: filter === 'all' ? (launchFeatures.openGigs ? 'Post your first task to get started.' : 'Tasks you post will show up here.') : 'Try changing your filter.',
             tone: 'personal',
-            ctaLabel: 'Quick post',
-            onCtaClick: () => navigate('/app/gigs-v2/new'),
+            ctaLabel: launchFeatures.openGigs ? 'Quick post' : undefined,
+            onCtaClick: launchFeatures.openGigs ? () => navigate('/app/gigs-v2/new') : undefined,
           }}
         />
       </main>
@@ -322,7 +324,8 @@ function GigCardV2({
   onComplete: () => void;
 }) {
   const engMode = (gig as any).engagement_mode as string | undefined;
-  const ec = engMode ? ENGAGEMENT_CONFIG[engMode] : null;
+  // Launch cut #4 (Open Gigs): the bidding format (Instant / Offers / Quotes) isn't shown.
+  const ec = engMode && launchFeatures.openGigs ? ENGAGEMENT_CONFIG[engMode] : null;
   const isAssignedInstant = engMode === 'instant_accept' && gig.status === 'assigned';
 
   return (
@@ -348,7 +351,8 @@ function GigCardV2({
             <span>·</span>
             <span>{gig.category || 'General'}</span>
           </div>
-          {gig.bid_count > 0 && (
+          {/* Launch cut #4 (Open Gigs): bids are hidden. */}
+          {launchFeatures.openGigs && gig.bid_count > 0 && (
             <span className="text-sm text-primary-600 font-medium mt-1 inline-block">
               {gig.bid_count} bid{gig.bid_count !== 1 ? 's' : ''}
             </span>
@@ -369,12 +373,12 @@ function GigCardV2({
         >
           View Details
         </button>
-        <button
+        {launchFeatures.openGigs && <button
           onClick={onViewBids}
           className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
         >
           View Bids {gig.bid_count ? `(${gig.bid_count})` : ''}
-        </button>
+        </button>}
         {gig.status === 'open' && (
           <button
             onClick={onClose}

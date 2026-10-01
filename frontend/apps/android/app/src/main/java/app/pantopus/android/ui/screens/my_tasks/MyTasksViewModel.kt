@@ -14,6 +14,7 @@ package app.pantopus.android.ui.screens.my_tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -406,7 +407,9 @@ class MyTasksViewModel
             identity: GigCheckoutIdentity,
         ): Boolean = scopeIsCurrent(generation) && identities.paymentIdentity() == identity && scopeIsCurrent(generation)
 
-        private fun createFab(): FabAction {
+        private fun createFab(): FabAction? {
+            // Launch cut #4 (Open Gigs): no open task posting, so no Magic Task FAB.
+            if (!LaunchFeatures.openGigs) return null
             val generation = screenGeneration
             return FabAction(
                 icon = PantopusIcon.Plus,
@@ -572,20 +575,31 @@ class MyTasksViewModel
         ): ListOfRowsUiState.Empty =
             when (tab) {
                 MyTasksTab.OPEN ->
-                    // T6.0b — Magic Task primary CTA. The shell's
-                    // EmptyState renders the headline + body + single
-                    // primary button; the FAB stays visible below for
-                    // the manual-post fallback.
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.ClipboardList,
-                        headline = "No tasks posted yet — try Magic Task",
-                        subcopy =
-                            "Describe what you need in a sentence. Magic Task " +
-                                "drafts the title, budget, and schedule — you just " +
-                                "confirm and post.",
-                        ctaTitle = "Try Magic Task",
-                        onCta = { if (scopeIsCurrent(generation)) postTaskHandler() },
-                    )
+                    if (!LaunchFeatures.openGigs) {
+                        // Launch cut #4 (Open Gigs): no Magic Task posting for the first launch.
+                        ListOfRowsUiState.Empty(
+                            icon = PantopusIcon.ClipboardList,
+                            headline = "No open tasks",
+                            subcopy = "Tasks you've posted that are waiting for a helper will show up here.",
+                            ctaTitle = null,
+                            onCta = null,
+                        )
+                    } else {
+                        // T6.0b — Magic Task primary CTA. The shell's
+                        // EmptyState renders the headline + body + single
+                        // primary button; the FAB stays visible below for
+                        // the manual-post fallback.
+                        ListOfRowsUiState.Empty(
+                            icon = PantopusIcon.ClipboardList,
+                            headline = "No tasks posted yet — try Magic Task",
+                            subcopy =
+                                "Describe what you need in a sentence. Magic Task " +
+                                    "drafts the title, budget, and schedule — you just " +
+                                    "confirm and post.",
+                            ctaTitle = "Try Magic Task",
+                            onCta = { if (scopeIsCurrent(generation)) postTaskHandler() },
+                        )
+                    }
                 MyTasksTab.ACTIVE ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Play,
@@ -703,7 +717,7 @@ class MyTasksViewModel
 
             val statusChip =
                 RowChip(
-                    text = projection.status.label,
+                    text = launchStatusLabel(projection.status),
                     icon = projection.status.icon,
                     tint = RowChip.Tint.Status(projection.status.chipVariant),
                 )
@@ -741,7 +755,8 @@ class MyTasksViewModel
                 chips = chips,
                 highlight = highlight(projection.status),
                 footer = footer(projection.footer, dto),
-                bidderStack = bidderStack(dto),
+                // Launch cut #4 (Open Gigs): no bidder avatars.
+                bidderStack = bidderStack(dto).takeIf { LaunchFeatures.openGigs },
                 archetypeOverline = overline,
             )
         }
@@ -884,11 +899,20 @@ class MyTasksViewModel
                     )
             }
 
+        /** Launch cut #4 (Open Gigs): an open task reads "Open", not by its bids. */
+        private fun launchStatusLabel(status: MyTasksStatus): String =
+            if (!LaunchFeatures.openGigs && (status is MyTasksStatus.Reviewing || status is MyTasksStatus.NoBids)) {
+                "Open"
+            } else {
+                status.label
+            }
+
         private fun bannerFor(
             tab: String,
             counts: TabCounts,
         ): BannerConfig? {
-            if (tab != MyTasksTab.OPEN) return null
+            // Launch cut #4 (Open Gigs): the open-tab banner summarises bids.
+            if (tab != MyTasksTab.OPEN || !LaunchFeatures.openGigs) return null
             if (counts.openTotal == 0) return null
             val title =
                 if (counts.newBidsToday > 0) {
@@ -977,6 +1001,18 @@ class MyTasksViewModel
             }
 
             fun footerFor(
+                status: MyTasksStatus,
+                bidCount: Int,
+            ): MyTasksFooter =
+                when (val footer = designFooter(status, bidCount)) {
+                    // Launch cut #4 (Open Gigs): reviewing bids, editing / extending /
+                    // boosting an open task and reposting it are hidden; lifecycle stays.
+                    is MyTasksFooter.Open, is MyTasksFooter.Urgent, MyTasksFooter.Boost, MyTasksFooter.Repost ->
+                        if (LaunchFeatures.openGigs) footer else MyTasksFooter.None
+                    else -> footer
+                }
+
+            private fun designFooter(
                 status: MyTasksStatus,
                 bidCount: Int,
             ): MyTasksFooter =
@@ -1079,7 +1115,8 @@ class MyTasksViewModel
                 val parts = mutableListOf<String>()
                 formatRelativeTime(dto.createdAt, now)?.let { parts.add("Posted $it") }
                 val bidCount = dto.bidCount ?: 0
-                if (bidCount > 0) {
+                // Launch cut #4 (Open Gigs): no bid counts.
+                if (bidCount > 0 && LaunchFeatures.openGigs) {
                     parts.add("$bidCount ${if (bidCount == 1) "bid" else "bids"}")
                     formatBidRange(dto.topBidAmount, dto.price)?.let { parts.add(it) }
                 }

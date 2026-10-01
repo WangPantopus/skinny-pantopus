@@ -17,7 +17,9 @@ final class EntryContinuityUITests: XCTestCase {
         app.launchEnvironment = [
             "UI_TESTS_ENTRY": "1",
             "UI_TESTS_STUB_API": "1",
-            "UI_TESTS_DISABLE_NOTIFICATIONS": "1"
+            "UI_TESTS_DISABLE_NOTIFICATIONS": "1",
+            // Beacon links and the Nearby Beacons row: every first-launch cut switched on.
+            "PANTOPUS_LAUNCH_FEATURES": "all"
         ]
     }
 

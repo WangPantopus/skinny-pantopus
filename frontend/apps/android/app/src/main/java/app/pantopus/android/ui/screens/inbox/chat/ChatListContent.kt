@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.inbox.chat
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.core.LaunchFeatures
 
 /** Filter-tab key. */
 enum class ChatFilter(val key: String, val label: String) {
@@ -12,8 +13,21 @@ enum class ChatFilter(val key: String, val label: String) {
     Market("market", "Market"),
     ;
 
+    /** Launch cut (2026-09-27): the Gigs (#4) and Market (#3) filters are hidden for the first launch. */
+    val isLaunchAvailable: Boolean
+        get() =
+            when (this) {
+                Gigs -> LaunchFeatures.openGigs
+                Market -> LaunchFeatures.marketplace
+                All, Unread -> true
+            }
+
     companion object {
         fun fromKey(key: String): ChatFilter = entries.firstOrNull { it.key == key } ?: All
+
+        /** The filter tabs the first launch shows. */
+        val launchEntries: List<ChatFilter>
+            get() = entries.filter { it.isLaunchAvailable }
     }
 }
 

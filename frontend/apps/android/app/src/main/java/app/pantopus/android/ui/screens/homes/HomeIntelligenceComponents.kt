@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homedashboard.HomeBillBenchmarkDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendSeriesDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
@@ -319,7 +320,8 @@ private fun healthTint(score: Int): Color =
 fun healthActionId(route: String): String? =
     when (route.substringAfterLast('/')) {
         "maintenance" -> "view_issues"
-        "bills" -> "view_bills"
+        // Launch cut #7 (Household extras): bill management is hidden, so no chip into it.
+        "bills" -> "view_bills".takeIf { LaunchFeatures.householdExtras }
         "emergency" -> "view_emergency"
         "members" -> "add_member"
         "documents", "docs" -> "view_docs"
@@ -628,7 +630,8 @@ private fun SeasonalRow(
                     tint = PantopusColors.appTextSecondary,
                 )
             }
-            if (item.gigCategory != null) {
+            // Launch cut #4 (Open Gigs): "Hire" posts an open task, so it is hidden; Skip stays.
+            if (item.gigCategory != null && LaunchFeatures.openGigs) {
                 Box(
                     modifier =
                         Modifier

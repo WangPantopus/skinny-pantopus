@@ -10,6 +10,9 @@
 //  Business identity binds to the first managed business from My businesses.
 //
 
+// The first-launch scope helpers (`launchScoped`) pushed this past 500 lines.
+// swiftlint:disable file_length
+
 import Foundation
 import Logging
 import Observation
@@ -135,7 +138,11 @@ public final class MeViewModel {
         showBusiness = businesses == nil || !(businesses?.businesses.isEmpty ?? true)
         if !showBusiness, activeIdentity == .business { activeIdentity = .personal }
         let business = Self.buildBusiness(membership: businesses?.businesses.first, failed: businesses == nil)
-        state = .loaded(personal: personal, home: home, business: business)
+        state = .loaded(
+            personal: Self.launchScoped(personal),
+            home: Self.launchScoped(home),
+            business: Self.launchScoped(business)
+        )
         await fetchInsights()
     }
 
@@ -218,6 +225,53 @@ private extension MeViewModel {
     private static func withDebug(_ sections: [MeSection]) -> [MeSection] {
         guard let debugSection else { return sections }
         return sections + [debugSection]
+    }
+
+    /// First-launch scope: false when a tile or row opens a feature hidden
+    /// for the first launch. One serving two cut features needs both on.
+    static func isAvailableAtLaunch(routeKey: String) -> Bool {
+        switch routeKey {
+        // Launch cut #1 (Beacon): the audience profile; the creator inbox
+        // (persona DMs) is launch cut #2 (Personas) too.
+        case "me.audience": LaunchFeatures.beacon
+        case "me.creatorInbox", "me.debug.openHandshake": LaunchFeatures.beacon && LaunchFeatures.personas
+        // Launch cut #2 (Personas): Identity Center. Privacy and blocking
+        // stay reachable from the Privacy row and Settings.
+        case "me.identityCenter": LaunchFeatures.personas
+        // Launch cut #3 (Marketplace).
+        case "me.listings": LaunchFeatures.marketplace
+        // Launch cut #4 (Open gigs): bids and gig offers.
+        case "me.bids", "me.offers": LaunchFeatures.openGigs
+        // Launch cut #5 (Public scheduling).
+        case "me.scheduling", "me.home.scheduling", "me.business.scheduling": LaunchFeatures.publicScheduling
+        // Launch cut #7 (Household extras).
+        case "me.bills", "me.pets", "me.polls", "me.calendar", "me.packages": LaunchFeatures.householdExtras
+        // Launch cut #8 (Mail extras).
+        case "me.debug.openCeremonialMail", "me.debug.openCeremonialMailOpen": LaunchFeatures.mailExtras
+        default: true
+        }
+    }
+
+    /// First-launch scope: drops the tiles, rows and counts of features
+    /// hidden for the first launch, and any section left without rows.
+    static func launchScoped(_ content: MeIdentityContent) -> MeIdentityContent {
+        MeIdentityContent(
+            identity: content.identity,
+            displayName: content.displayName,
+            initials: content.initials,
+            handle: content.handle,
+            locality: content.locality,
+            tagline: content.tagline,
+            verified: content.verified,
+            // Launch cut #7 (Household extras): the "Bills due" count.
+            stats: content.stats.filter { $0.id != "bills" || LaunchFeatures.householdExtras },
+            actionTiles: content.actionTiles.filter { isAvailableAtLaunch(routeKey: $0.routeKey) },
+            sections: content.sections.compactMap { section in
+                let rows = section.rows.filter { isAvailableAtLaunch(routeKey: $0.routeKey) }
+                return rows.isEmpty ? nil : MeSection(id: section.id, header: section.header, rows: rows)
+            },
+            isUnbound: content.isUnbound
+        )
     }
 
     private static func buildPersonal(profile: UserProfile, stats: UserStatsDTO?) -> MeIdentityContent {

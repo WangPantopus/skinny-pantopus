@@ -1,8 +1,12 @@
 package app.pantopus.android.ui.components
 
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -11,6 +15,17 @@ import org.junit.Test
  * structure per context, and the `BackToHub` visibility rule.
  */
 class NavigationDrawerProjectionTest {
+    // The launch cut hides several rows; these tests pin the full design.
+    @Before
+    fun setUp() {
+        LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+    }
+
+    @After
+    fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
+    }
+
     // Slug contract (drives `navDrawer.item.<slug>`)
 
     @Test

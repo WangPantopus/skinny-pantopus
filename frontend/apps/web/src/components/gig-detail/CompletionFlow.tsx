@@ -18,6 +18,7 @@ import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthoriza
 import { toast } from '@/components/ui/toast-store';
 import GigStopDialog from './GigStopDialog';
 import type { GigStopAction } from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 
 /** Shape of gig data used by CompletionFlow */
 interface CompletionGigData {
@@ -386,13 +387,14 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
           <p className="text-sm text-blue-900 font-medium mb-3">This is your gig</p>
           <div className="space-y-2">
-            <button
+            {/* Launch cut #4 (Open Gigs): editing opens the open-post composer and reopening restarts bidding; Close stays. */}
+            {launchFeatures.openGigs && <button
               onClick={() => router.push(`/app/gigs/${gigId}/edit`)}
               className="w-full bg-app-surface text-app-text-strong py-2 rounded-lg hover:bg-app-hover font-medium"
             >
               Edit Gig
-            </button>
-            {isAssigned && (
+            </button>}
+            {launchFeatures.openGigs && isAssigned && (
               <button
                 onClick={handleReopenBidding}
                 className="w-full bg-app-surface text-amber-700 py-2 rounded-lg hover:bg-amber-50 font-medium border border-amber-200"

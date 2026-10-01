@@ -17,6 +17,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { closedGigRoomIds } = require('./chatGigRoomAccess');
 const logger = require('../utils/logger');
+const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 // References set once during init
 let _io = null;
@@ -53,6 +54,8 @@ async function computeBadgeCounts(userId) {
 
     // 2) Pending offers: find gigs owned by user, then count pending bids
     (async () => {
+      // Launch cut #4 (Open Gigs): bids are hidden for the first launch.
+      if (!isLaunchFeatureEnabled('open_gigs')) return { count: 0 };
       const { data: myGigs } = await supabaseAdmin
         .from('Gig')
         .select('id')
@@ -68,12 +71,12 @@ async function computeBadgeCounts(userId) {
       return { count: count ?? 0 };
     })(),
 
-    // 3) Unread notifications
-    supabaseAdmin
+    // 3) Unread notifications (launch cuts: hidden types are not counted)
+    excludeHiddenLaunchNotifications(supabaseAdmin
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false),
+      .eq('is_read', false)),
   ]);
 
   let unreadMessages = 0;

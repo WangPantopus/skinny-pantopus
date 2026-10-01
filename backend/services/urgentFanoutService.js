@@ -12,6 +12,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const pushService = require('./pushService');
 const notificationService = require('./notificationService');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 const DEFAULT_RADIUS_MILES = 10;
 const METERS_PER_MILE = 1609.34;
@@ -27,6 +28,9 @@ const ACTIVE_WITHIN_DAYS = 7;
  * @param {Object} [locationCoords] - { latitude, longitude } of the task
  */
 async function fanoutUrgentTask(gigId, gigData, posterUserId, locationCoords) {
+  // Launch cut #4 (Open Gigs): no "urgent task nearby" push for the first
+  // launch. It pushes directly, so the notification-type filter can't catch it.
+  if (skipForLaunchCut('open_gigs', 'urgentFanout')) return 0;
   try {
     if (!locationCoords || !locationCoords.latitude || !locationCoords.longitude) {
       logger.info('Urgent fanout skipped — no location coordinates', { gigId });

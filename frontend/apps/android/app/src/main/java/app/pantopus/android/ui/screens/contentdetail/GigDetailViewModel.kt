@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.contentdetail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
@@ -595,6 +596,9 @@ class GigDetailViewModel
 
         /** True when the signed-in viewer owns this gig. */
         fun viewerIsOwner(): Boolean = viewerIsOwner
+
+        /** Launch cut #4 (Open Gigs): true when the viewer posted or works this task. */
+        fun viewerIsPartOfTask(): Boolean = viewerIsOwner || viewerIsWorker
 
         fun canAskQuestion(): Boolean = currentUserId() != null && !viewerIsOwner
 
@@ -2407,7 +2411,8 @@ class GigDetailViewModel
                         projectGigV1(gig, bids, canTip, viewerUserId, suppressBidsModule, viewerCanUpdateBid)
                     }
                 val current = currentGigDetail(content, gig, viewerUserId, canMarkDelivered, canTip)
-                return if (ownerBidsUnavailable && gig.status?.lowercase() == "open") {
+                // Launch cut #4 (Open Gigs): no bids to call unavailable.
+                return if (ownerBidsUnavailable && gig.status?.lowercase() == "open" && LaunchFeatures.openGigs) {
                     current.copy(statusPill = current.statusPill?.copy(label = "Open · Bids unavailable"))
                 } else {
                     current
@@ -2946,7 +2951,8 @@ class GigDetailViewModel
                         ),
                     )
                 }
-                gig.engagementMode?.takeIf { it.isNotEmpty() }?.let { engagement ->
+                // Launch cut #4 (Open Gigs): the bidding format (instant accept / offers / quotes) isn't shown.
+                gig.engagementMode?.takeIf { it.isNotEmpty() && LaunchFeatures.openGigs }?.let { engagement ->
                     out.add(
                         ContentDetailStat(
                             engagement.replace('_', ' ').replaceFirstChar { it.uppercase() },

@@ -1,3 +1,8 @@
+// The first-launch cut (utils/featureFlags.js) hides eight features unless
+// LAUNCH_FEATURES lists them. Their code and tests stay, so the suite runs
+// with every feature on; a test can still set LAUNCH_FEATURES itself.
+process.env.LAUNCH_FEATURES = process.env.LAUNCH_FEATURES || 'all';
+
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',

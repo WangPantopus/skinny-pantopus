@@ -37,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.scheduling.PackageCreditDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
@@ -114,8 +115,9 @@ internal fun MyPackagesContent(
                 icon = PantopusIcon.Ticket,
                 headline = "No packages yet",
                 subcopy = "When you buy a package, your credits show up here.",
-                ctaTitle = "Browse services",
-                onCta = onBrowse,
+                // Launch cut #5 (Public scheduling): "Browse services" opens My bookings, which is hidden.
+                ctaTitle = "Browse services".takeIf { LaunchFeatures.publicScheduling },
+                onCta = onBrowse.takeIf { LaunchFeatures.publicScheduling },
                 tint = PantopusColors.personalBg,
                 accent = PantopusColors.personal,
                 modifier = Modifier.fillMaxSize().padding(top = Spacing.s10),
@@ -130,12 +132,15 @@ internal fun MyPackagesContent(
                         .padding(top = Spacing.s3),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
-                Text(
-                    text = "Tap a credit to book your next session.",
-                    color = PantopusColors.appTextSecondary,
-                    fontSize = 11.5.sp,
-                    modifier = Modifier.padding(horizontal = Spacing.s1),
-                )
+                // Launch cut #5 (Public scheduling): booking with a credit is hidden.
+                if (LaunchFeatures.publicScheduling) {
+                    Text(
+                        text = "Tap a credit to book your next session.",
+                        color = PantopusColors.appTextSecondary,
+                        fontSize = 11.5.sp,
+                        modifier = Modifier.padding(horizontal = Spacing.s1),
+                    )
+                }
                 state.credits.forEach { credit ->
                     CreditCard(
                         credit = credit,
@@ -271,7 +276,8 @@ private fun CreditCard(
                     fontWeight = FontWeight.Bold,
                 )
             }
-        } else {
+        } else if (LaunchFeatures.publicScheduling) {
+            // Launch cut #5 (Public scheduling): applying a credit to a booking is hidden; "Buy again" stays.
             Row(
                 modifier =
                     Modifier

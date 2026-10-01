@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.core.security.SensitiveScreenGuard
 import app.pantopus.android.ui.components.BalanceHero
@@ -539,7 +540,13 @@ private fun MethodsCard(
             InlineEmpty(
                 icon = PantopusIcon.CreditCard,
                 title = "No payment methods yet",
-                body = "Add a card or bank account to hire neighbors and pay for marketplace listings.",
+                // Launch cut #3 (Marketplace): no listings to pay for.
+                body =
+                    if (LaunchFeatures.marketplace) {
+                        "Add a card or bank account to hire neighbors and pay for marketplace listings."
+                    } else {
+                        "Add a card or bank account to hire neighbors."
+                    },
             )
             Divider()
         } else {

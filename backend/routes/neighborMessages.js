@@ -48,6 +48,8 @@ const {
 // messages a week"). The burst limiter stops abuse; the weekly cap is the
 // human-facing promise and is enforced against the DB.
 const WEEKLY_SEND_CAP = Math.max(parseInt(process.env.NEIGHBOR_MSG_WEEKLY_CAP || '5', 10) || 5, 1);
+// The same note to the same home within this window is a repeat of one send, not a new note.
+const REPEAT_SEND_WINDOW_MS = 10 * 60 * 1000;
 
 const sendBurstLimiter = rateLimit({
   windowMs: 60_000,
@@ -141,6 +143,22 @@ router.post('/', verifyToken, sendBurstLimiter, validate(sendSchema), async (req
     if (!senderGeo || !recipientGeo || senderGeo !== recipientGeo) {
       return res.status(400).json({ error: "That address isn't on your block." });
     }
+
+    // 2b) The same note to the same home within a few minutes is a repeat of this send (a re-sent
+    //     request or a second tap): answer with the note already sent, without a second note,
+    //     notification or use of the weekly cap.
+    const { data: justSent, error: justSentErr } = await supabaseAdmin
+      .from('NeighborMessage')
+      .select('*')
+      .eq('sender_user_id', userId)
+      .eq('sender_home_id', senderHomeId)
+      .eq('recipient_home_id', recipientHomeId)
+      .eq('template_id', templateId)
+      .gte('created_at', new Date(Date.now() - REPEAT_SEND_WINDOW_MS).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (justSentErr) throw new Error(justSentErr.message);
+    if (justSent?.[0]) return res.status(201).json(serializeSent(justSent[0]));
 
     // 3) Gentle weekly cap — keeps the channel calm.
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -370,16 +388,22 @@ router.post('/:id/report', verifyToken, validate(reportSchema), async (req, res)
     const row = await loadOwnedMessage(req.params.id, userId);
     if (!row) return res.status(404).json({ error: 'Message not found.' });
 
-    const { error } = await supabaseAdmin
+    // Only the first report stamps the message and alerts the trust team; a repeat (a re-sent
+    // request or a second tap) keeps the original time and reason and alerts no one again.
+    const { data: stamped, error } = await supabaseAdmin
       .from('NeighborMessage')
       .update({
         reported_at: new Date().toISOString(),
         report_reason: (req.body && req.body.reason) || null,
       })
-      .eq('id', row.id);
+      .eq('id', row.id)
+      .is('reported_at', null)
+      .select('id');
     if (error) throw new Error(error.message);
     // The reason here is free text, so the alert carries only the kind and the message id.
-    require('../services/adminAlerts').notifyReportToReview({ kind: 'message', reportId: row.id }).catch(() => {});
+    if ((stamped || []).length > 0) {
+      require('../services/adminAlerts').notifyReportToReview({ kind: 'message', reportId: row.id }).catch(() => {});
+    }
     return res.json({ success: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });

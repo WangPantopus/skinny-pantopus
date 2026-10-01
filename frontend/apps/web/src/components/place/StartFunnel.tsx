@@ -55,6 +55,7 @@ import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { getStoreDownloadCta } from '@/lib/publicShare';
 import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
+import { launchFeatures } from '@/lib/featureFlags';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
 
@@ -695,7 +696,8 @@ export default function StartFunnel() {
   const [continuationError, setContinuationError] = useState('');
   const goBrowse = () => {
     clearPendingPlaces();
-    router.push(authPageHref('/register', '/app/feed?surface=personas'));
+    // Launch cut #1 (Beacon): browsing lands on Pulse, not the Beacons feed.
+    router.push(authPageHref('/register', launchFeatures.beacon ? '/app/feed?surface=personas' : '/app/feed'));
   };
 
   const continueWithPreview = (page: '/login' | '/register') => {

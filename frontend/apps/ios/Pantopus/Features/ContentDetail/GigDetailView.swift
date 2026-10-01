@@ -281,7 +281,9 @@ public struct GigDetailView: View {
     /// card → review CTA → Q&A.
     @ViewBuilder private var lifecycleFooter: some View {
         if case .loaded = viewModel.state {
-            if viewModel.showOwnerBidsPanel {
+            // Launch cut #4 (Open gigs): the bids panels and task Q&A are
+            // hidden; the lifecycle panels below stay.
+            if viewModel.showOwnerBidsPanel, LaunchFeatures.openGigs {
                 GigOwnerBidsPanel(
                     bids: viewModel.ownerBids,
                     inFlightBidId: viewModel.bidActionInFlight,
@@ -313,7 +315,7 @@ public struct GigDetailView: View {
             }
             // Bidder side — "Your bid" with Update / Withdraw and, while a
             // counter-offer is live, Accept / Decline.
-            if viewModel.showViewerBidPanel {
+            if viewModel.showViewerBidPanel, LaunchFeatures.openGigs {
                 GigViewerBidPanel(
                     viewModel: viewModel,
                     onEditBid: { presentUpdateBidSheet() },
@@ -385,8 +387,10 @@ public struct GigDetailView: View {
                     onLeaveReview: presentReviewSheet
                 )
             }
-            GigQuestionsSection(viewModel: viewModel) { message in
-                toast = ToastMessage(text: message, kind: .error)
+            if LaunchFeatures.openGigs {
+                GigQuestionsSection(viewModel: viewModel) { message in
+                    toast = ToastMessage(text: message, kind: .error)
+                }
             }
         }
     }
@@ -484,7 +488,8 @@ public struct GigDetailView: View {
 
     /// Share (universal link) + bookmark toggle. Hidden until loaded.
     private var topBarAccessories: AnyView? {
-        guard case .loaded = viewModel.state else { return nil }
+        // Launch cut #4 (Open gigs): task share links and bookmarks are hidden.
+        guard case .loaded = viewModel.state, LaunchFeatures.openGigs else { return nil }
         return AnyView(
             HStack(spacing: Spacing.s1) {
                 ShareLink(item: viewModel.shareURL) {
@@ -534,6 +539,8 @@ public struct GigDetailView: View {
                 showReportSheet = true
             }
         ]
+        // Launch cut #4 (Open gigs): advertising a task in the feed is hidden.
+        if !LaunchFeatures.openGigs { items.removeAll { $0.identifier == "gigDetail.shareToFeed" } }
         if viewModel.canShareLiveStatus {
             items.insert(
                 ContentDetailOverflowItem(
@@ -546,7 +553,8 @@ public struct GigDetailView: View {
                 at: 0
             )
         }
-        if viewModel.canReplaceWorker {
+        // Launch cut #4 (Open gigs): "Replace worker" reopens bidding.
+        if viewModel.canReplaceWorker, LaunchFeatures.openGigs {
             items.append(
                 ContentDetailOverflowItem(
                     label: "Replace worker",
