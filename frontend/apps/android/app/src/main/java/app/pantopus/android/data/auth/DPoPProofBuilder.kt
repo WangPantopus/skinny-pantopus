@@ -25,7 +25,8 @@ import javax.inject.Singleton
  * request when that env is unset), so we build it from the same base URL
  * Retrofit uses ([htu]). `iat` is accepted within +/-300 s; `jti` is
  * single-use for 10 min — every proof is minted fresh, never reused across
- * retries (see `TokenAuthenticator`, which re-mints on replay).
+ * retries (see `TokenAuthenticator`, which re-mints on replay, and
+ * [DPoPReplayGuard], which re-mints OkHttp's own silent re-sends).
  *
  * Pure JVM (no `android.util.Base64`, no `org.json`) so it is unit-testable
  * with a software EC key.
@@ -70,6 +71,52 @@ class DPoPProofBuilder
                     "iat" to nowSeconds,
                 )
             if (refreshToken != null) payload["rth"] = refreshTokenHash(refreshToken)
+            return sign(key, header, payload)
+        }
+
+        /**
+         * A fresh proof with [proof]'s `htm`, `htu` and `rth` and a new `jti` and `iat`, signed by
+         * [key]. OkHttp can send a request again on its own when a connection fails after the
+         * request went out, with the same headers; the server keeps `jti` single-use, so that
+         * re-send needs a proof of its own ([DPoPReplayGuard]). Null when [proof] can't be read or
+         * wasn't signed by [key], so the caller leaves it as it is.
+         */
+        fun remint(
+            key: DeviceSigningKey,
+            proof: String,
+            nowSeconds: Long = System.currentTimeMillis() / MILLIS_PER_SECOND,
+            jti: String = UUID.randomUUID().toString(),
+        ): String? {
+            val segments = proof.split('.')
+            val header =
+                segments
+                    .takeIf { it.size == JWS_SEGMENTS }
+                    ?.let { decodeSegment(it[0]) }
+                    ?.takeIf { it["jwk"] == key.jwk }
+            val claims =
+                header
+                    ?.let { decodeSegment(segments[1]) }
+                    ?.takeIf { it["htm"] is String && it["htu"] is String }
+            if (header == null || claims == null) return null
+            val payload =
+                linkedMapOf<String, Any>(
+                    "jti" to jti,
+                    "htm" to claims.getValue("htm"),
+                    "htu" to claims.getValue("htu"),
+                    "iat" to nowSeconds,
+                )
+            (claims["rth"] as? String)?.let { payload["rth"] = it }
+            return sign(key, header, payload)
+        }
+
+        private fun decodeSegment(segment: String): Map<String, Any>? =
+            runCatching { jsonAdapter.fromJson(String(EcKeyCodec.base64UrlDecode(segment), Charsets.UTF_8)) }.getOrNull()
+
+        private fun sign(
+            key: DeviceSigningKey,
+            header: Map<String, Any>,
+            payload: Map<String, Any>,
+        ): String {
             val signingInput =
                 EcKeyCodec.base64Url(jsonAdapter.toJson(header).toByteArray(Charsets.UTF_8)) +
                     "." +
@@ -82,6 +129,7 @@ class DPoPProofBuilder
             const val TYP = "dpop+jwt"
             const val ALG = "ES256"
             private const val MILLIS_PER_SECOND = 1000L
+            private const val JWS_SEGMENTS = 3
 
             /** `base64url(sha256(refreshToken))` — the `rth` claim. */
             fun refreshTokenHash(refreshToken: String): String =
