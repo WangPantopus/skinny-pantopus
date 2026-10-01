@@ -942,12 +942,14 @@ export default function PostDetailPage() {
         entityType="post"
       />
 
-      {/* ─── Toast ─────────────────────────────────────────── */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl">
-          {toast}
-        </div>
-      )}
+      {/* ─── Toast (the live region stays mounted so screen readers announce each message) ─── */}
+      <div role="status" aria-live="polite">
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl">
+            {toast}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
