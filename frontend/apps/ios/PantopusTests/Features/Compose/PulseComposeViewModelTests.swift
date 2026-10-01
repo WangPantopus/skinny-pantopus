@@ -651,7 +651,8 @@ final class PulseComposeViewModelTests: XCTestCase {
         XCTAssertEqual(request.title, "New title")
         XCTAssertEqual(request.content, "Updated body.")
         XCTAssertEqual(request.serviceCategory, "advice")
-        XCTAssertEqual(request.visibility, "neighborhood")
+        // The audience is fixed after posting: an edit never sends visibility.
+        XCTAssertNil(request.visibility)
     }
 
     func testEditSubmitSendsPATCH() async {

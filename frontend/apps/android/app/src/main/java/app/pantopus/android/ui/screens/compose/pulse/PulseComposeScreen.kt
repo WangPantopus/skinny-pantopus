@@ -486,7 +486,8 @@ private fun PulseComposeBodySections(
             onClear = actions.onClearLocation,
         )
     }
-    if (!state.isFlowMode || state.visibility != PulseComposeVisibility.Connections) {
+    // The audience is fixed after posting (edits don't send it), so edit mode shows no selector, like web.
+    if (!state.isIntentLocked && (!state.isFlowMode || state.visibility != PulseComposeVisibility.Connections)) {
         VisibilitySection(active = state.visibility, onSelect = actions.selection.onSelectVisibility)
     }
 }
@@ -844,7 +845,7 @@ private fun IntentSpecificSection(
                         fields = state.fields,
                         audience = state.announceAudience,
                         safetyKind = state.safetyAlertKind,
-                        isFlowMode = state.isFlowMode,
+                        showAudience = !state.isFlowMode && !state.isIntentLocked,
                         onUpdateField = onUpdateField,
                         onSelectAudience = onSelectAnnounceAudience,
                         onSelectSafetyKind = onSelectSafetyAlertKind,
@@ -861,7 +862,7 @@ private fun IntentSpecificSection(
                         fields = state.fields,
                         audience = state.announceAudience,
                         purpose = state.composePurpose,
-                        isFlowMode = state.isFlowMode,
+                        showAudience = !state.isFlowMode && !state.isIntentLocked,
                         onUpdateField = onUpdateField,
                         onSelectAudience = onSelectAnnounceAudience,
                     )
@@ -1122,7 +1123,7 @@ private fun HeadsUpSection(
     fields: Map<PulseComposeField, FormFieldState>,
     audience: PulseAnnounceAudience,
     safetyKind: PulseSafetyAlertKind,
-    isFlowMode: Boolean,
+    showAudience: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectAudience: (PulseAnnounceAudience) -> Unit,
     onSelectSafetyKind: (PulseSafetyAlertKind) -> Unit,
@@ -1144,7 +1145,7 @@ private fun HeadsUpSection(
             fields = fields,
             onUpdate = onUpdateField,
         )
-        if (!isFlowMode) {
+        if (showAudience) {
             ChipRow(
                 label = "Audience",
                 options = PulseAnnounceAudience.entries.map { it.key to it.label },
@@ -1167,7 +1168,7 @@ private fun AnnounceSection(
     fields: Map<PulseComposeField, FormFieldState>,
     audience: PulseAnnounceAudience,
     purpose: PulseComposePurpose?,
-    isFlowMode: Boolean,
+    showAudience: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectAudience: (PulseAnnounceAudience) -> Unit,
 ) {
@@ -1179,7 +1180,7 @@ private fun AnnounceSection(
             fields = fields,
             onUpdate = onUpdateField,
         )
-        if (!isFlowMode) {
+        if (showAudience) {
             ChipRow(
                 label = "Audience",
                 options = PulseAnnounceAudience.entries.map { it.key to it.label },

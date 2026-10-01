@@ -1143,22 +1143,20 @@ class PulseComposeViewModel
             val bodyValue = trimmedValue(PulseComposeField.Body)
             val titleValue = trimmedValue(PulseComposeField.Title)
             val intent = _activeIntent.value
-            // Preserve the saved scope unless the visible audience selector was changed.
-            val editedVisibility =
-                if (isFlowMode && _visibility.value == baselineVisibility) null else _visibility.value.key
+            // The audience is fixed after posting, like identity: an edit never sends visibility
+            // (updatePostSchema refuses "connections" and can't move a post's audience).
             return when (intent) {
                 PulseComposeIntent.Ask ->
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
-                        visibility = editedVisibility,
-                        serviceCategory = _askCategory.value.key,
+                        // Only a category the author picked: a post without one isn't given the default.
+                        serviceCategory = _askCategory.value.takeIf { it != baselineAskCategory }?.key,
                     )
                 PulseComposeIntent.Recommend -> {
                     val business = trimmedValue(PulseComposeField.RecommendBusiness)
                     PostUpdateRequest(
                         content = composeRecommendBody(_recommendRating.value, bodyValue),
-                        visibility = editedVisibility,
                         dealBusinessName = business.ifEmpty { null },
                     )
                 }
@@ -1168,7 +1166,6 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
-                        visibility = editedVisibility,
                         eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
                         eventVenue = venue.ifEmpty { null },
                     )
@@ -1177,7 +1174,6 @@ class PulseComposeViewModel
                     val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                     PostUpdateRequest(
                         content = prefixLastSeen(bodyValue, lastSeen),
-                        visibility = editedVisibility,
                         lostFoundType = _lostFoundKind.value.key,
                     )
                 }
@@ -1185,7 +1181,6 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
-                        visibility = if (isFlowMode) editedVisibility else _announceAudience.value.backendVisibility,
                     )
             }
         }
