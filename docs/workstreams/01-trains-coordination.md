@@ -9,6 +9,32 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T06:55Z (Stream 1).**
+  - **Merged:** each seal verified, each PR's failed CI jobs read, verify-batch RESULT OK.
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 270 | #1255 | 06:03:56Z | **#1254 first** (re-records the edit-form golden; master's Android unit tests green again), #1237 (iOS: one pop after a save; my cells `e516402f`), #1238 (Android View as "Not shown"; my device run `a7d17231`), #1241 + #1242 (Android ListOfRows paging and top rows; my My trains run `a7d17231`) |
+    | 271 | #1258 | 06:16:58Z | #1253 (web profile Connect, parity), #1257 (web post page save/like reaches the feed card) |
+    | 272 | #1263 | 06:39:05Z | #1256 (crew Stripe return URLs, backend; URLs only), #1260 (dead claim link), **my #1262** |
+    | 273 | #1264 | 06:47:20Z | #1248 (no category preselected in edit), #1250 (iOS row labels); my iOS cells `342ba49e` |
+
+    Master is **`f247a3e69`**; the next batch is **274**.
+  - **Mine, merged — #1262: the Android sign-up sheet keeps its draft** (bundle `20261001-stream1-android-signup-draft-r1`, 99 files, `96676bc0…d9a6ae76`).
+    - Before (master's sheet): a rotation lost the choices and "Soup".
+    - After: the details step and "Soup" survive landscape, portrait after the reload, and dark mode on and off. Reopening starts a new draft.
+    - The draft is a saveable holder in the detail screen, outside the sheet's window and the loaded check.
+  - **Mine, verification only:** `20261001-stream1-android-u03-lists-r1` (`f439d4b5`).
+    - R1: an injected 500 shows "Couldn't load your support trains. Try again.", and Try again recovers.
+    - R2: Invitations shows its empty state, and Nearby asks for location.
+  - **In flight:** candidate `96bc366d3` (master `f247a3e69` + #1249 + #1259) is queued in the heavy slot. It covers #1249's Android compile with #1241/#1242, a Paparazzi verify of ListOfRows, and the #1259 iOS cell.
+    - verify-batch couldn't prove `ListOfRowsScreen.kt`: #1249's context changed under #1241's new comment.
+    - A manual proof (`cand19-manual-proof.txt`) shows master→tip's changed lines equal #1249's exactly (sha `88334de0…`).
+  - **Decisions:** web "My posts" will be a sidebar footer button above Settings, on desktop and in the mobile drawer. It's parity with native, keeps the wedge's primary nav, and the saved list needs an entry point. Stream 2 is implementing it.
+  - **Lessons:**
+    - Under heavy host load, uiautomator `dump` stalls until the UI is idle, and the emulator can hit System UI or GPU ANRs. Use retry loops, and reboot the emulator if needed.
+    - After an emulator reboot, auto-rotate comes back on, so set `accelerometer_rotation 0` before `user_rotation`.
+    - Deleting caches doesn't free space while Time Machine local snapshots hold the blocks. macOS thins them under pressure.
 - **Update 2026-10-01T05:58Z (Stream 1).**
   - **Merged:** each seal verified, each PR's CI checked for failed jobs, verify-batch RESULT OK.
 
@@ -566,7 +592,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T05:00Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T06:55Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -578,7 +604,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Workflow | iOS | Android | Web |
 |---|---|---|---|
 | **Support Trains** | | | |
-| Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
+| Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>⬜ R1 R2 | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (f439d4b5) | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
 | Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 failed step deletes its draft; E2 lost create reply reuses it; E3 double tap makes one train (#841, f98672ab) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 publish 503 retry, E2 lost create reply, E3 double tap: each ends with one train (#841, f98672ab) | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836) |
 | Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>⬜ R1 | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
 | Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
@@ -604,7 +630,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | **Support Trains** | | | |
 | My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>⬜ A4 shared ListOfRows repeats its tab, FAB and Nearby button labels (app-wide) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>🔷 A3 brand-blue token |
 | Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ✅ A1 A2 A3 A4: field named, results read once (#1211, ac43ecdb) | – No Train search on web |
-| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>⬜ Sign-up sheet starts over when the activity is recreated (rotation, dark mode, font): keep its draft in the view model | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
+| Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>✅ Sign-up sheet keeps its draft through rotation, dark mode and font changes: held outside the sheet, one per opening (#1262, 96676bc0) | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>🔷 A3 brand-blue token |
 | Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>🔷 A3 brand-blue token |
 | Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ✅ A1 stat labels whole (default-size clipping fixed), pills grow; A2; A3; A4 Back, tiles, field, switch and chips named with state (#1211, ac43ecdb) | ✅ A1 A2 A4 A5; share-link label added (#814)<br>🔷 A3 brand-blue token |
 | Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | ⬜ A1 A2 A3 A4 | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>🔷 Signups tab A3 brand-blue token |
@@ -614,9 +640,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 57, confirm from existing evidence 0, to do 15, your call 0, boundary 6, not offered 9
+- U03 items: done 58, confirm from existing evidence 0, to do 14, your call 0, boundary 6, not offered 9
 - U04 items: done 5, confirm from existing evidence 0, to do 6, your call 0, boundary 0, not offered 0
-- U02 items: done 21, confirm from existing evidence 0, to do 4, your call 6, boundary 0, not offered 4
+- U02 items: done 22, confirm from existing evidence 0, to do 3, your call 6, boundary 0, not offered 4
 
 ## History
 
