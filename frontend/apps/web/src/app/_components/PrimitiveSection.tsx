@@ -15,7 +15,7 @@ export default function PrimitiveSection() {
       }}
     >
       <div className="relative z-[1] w-full max-w-[1280px] mx-auto px-6 sm:px-10 lg:px-16">
-        <div className="grid gap-16 lg:gap-24 items-center" style={{ gridTemplateColumns: '0.85fr 1.15fr' }}>
+        <div className="grid gap-16 lg:gap-24 items-center lg:[grid-template-columns:0.85fr_1.15fr]">
           <div>
             <p className="mh-overline mh-reveal mb-6">The foundation</p>
             <h2 className="mh-h2 mh-reveal mh-reveal-d1 mb-8">What a verified address means.</h2>
