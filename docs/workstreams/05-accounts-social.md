@@ -9,6 +9,18 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1308 merged (b285, with migration 20261001100000); #1310 (P0.2 email retired) and #1313 (personal block hides you in app search and local profiles) sealed; #1314 (dead "Default profile visibility") in CI, 2026-10-01T10:46:10Z
+
+- **Merged: #1308** (batch 285): Neighborhood "Only me" and city changes now reach the public locality, plus the hide-only migration `20261001100000`. It reaches production only through the founder's migration process (Stream 1's batch note).
+- **Sealed and with Stream 1:**
+  - **#1310** (seal `9e5bb7ac…`): retires the one-off P0.2 display-name email. Migration 146 had made its claim untrue, and its link was a 404. It has no re-enable flag (Stream 1's decision).
+    - **Flagged to the user:** was it ever sent in production? If so, should a correction go out?
+  - **#1313** (seal `b46186e3…`): someone you blocked (UserBlock) no longer finds you in the iOS/Android universal search or loads your local profile and activity. Directional and fail-closed; the blocker, third persons and signed-out readers are unchanged.
+- **In CI: #1314** (web): removes the web Privacy page's "Default profile visibility". It saved `profile_default_visibility`, which nothing reads, so "Only me" changed nothing. Same call as native S3-29.
+- **Product question raised with the user (not changed):** "Home affiliation" isn't read either (`canViewProfileField` is test-only). Its default is "Only me", while signed-in viewers see the residency summary (city, state and verified badge). Wiring it hides every badge by default; removing it is the other option. Gig history is a launch cut.
+- **Correction to the previous block:** the API was running `0643df7a9` (#1308's pre-rebase head) then, not `9da6a7604`.
+- **Runtime:** API on master `6b528c74f` (10:39:18Z); web tree on #1314's head `fa2bcfe4d`, the same tree as `87d408d87`. No fixtures remain. The P0.2, block and privacy-page audit rows were removed by exact id.
+
 ## LIVE — three privacy fixes: #1302 (b282), #1304 (b283) and #1306 (b284) merged; #1308 (Neighborhood copy + hide-only migration 20261001100000) in CI, 2026-10-01T10:23:21Z
 
 - **Merged:**
