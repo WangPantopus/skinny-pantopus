@@ -173,9 +173,36 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T03:43:42Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T04:45:22Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T03:43:42Z):** master is `61d710fed` (batch 259).
+- **Latest (2026-10-01T04:45:22Z):** master is `ea52073b9` (batch 265).
+  - **Merged:**
+    - #1221 web Saved paging (b262);
+    - #1209 native edit keeps the audience (b264; Android seal `830ff876…`, Stream 1 iOS `4898d3ff…`);
+    - [#1229](https://github.com/WangPantopus/skinny-pantopus/pull/1229) My pulse cards in step with likes and the post panel (b264; seal `b94d7468…`);
+    - #1210 native Saved tab (b265; Android seal `a599b9de…`).
+    - **The saved-posts plan is done on all three clients.**
+  - **#1229 fixed three My pulse defects** (all reproduced in the real app):
+    - the like handler wrote `liked_by_user`, so hearts never filled;
+    - Saved-card likes changed nothing on screen;
+    - My pulse had no `onPostChange`, so unsaving in the post panel left a stale card whose click re-saved the post.
+  - **Sent:** [#1237](https://github.com/WangPantopus/skinny-pantopus/pull/1237), iOS goes back one screen after a save, not two (Stream 1's finding; head `13d174638`). Stream 1 runs the iOS cells.
+  - **Building** (Android candidate `2954c1e65`): two shared-shell fixes in `ListOfRowsScreen.LoadedList`, as separate PRs. Stream 1 approved both.
+    - **Paging** (`claude/stream2-lists-android-paging`, `e2cde080a`): `shouldLoadMore` remembered the first `state`. A list first shown with no more pages that later gains some never pages. Reproduced: Saved 1 → 50 rows, and scrolling to the end never requested offset=50.
+    - **Top rows** (`claude/stream2-lists-android-top-rows`, `90b7e5b73`): after a re-read, new rows above the first one were out of sight. Reproduced on Saved (tab switch) and Active (pull-to-refresh, "Active, 11" while M8 sat above). Fix: `requestScrollToItem(0)`, only when the list was at index 0 with offset 0. Stream 1 verifies My trains during review.
+  - **Next, in order:**
+    - an Ask with no category shows "Handyman" selected in edit (both apps; optional category);
+    - the FAB covering the last row's trailing CTA (iOS shell; check Android);
+    - rows' leading empty accessibility segment from `title: ""`.
+  - **Decisions (standing direction):**
+    - My pulse takes panel changes the way the feed does; an unsaved post leaves Saved on panel close.
+    - Shell fixes ship as their own PRs, not inside #1210.
+    - On success the composer never calls `onCancel` after `onPosted`.
+  - **Noted, no change:**
+    - `GET /api/users/me/invite-code` mints a `post_transaction` referral row on first view (deleted as incidental in my cleanup);
+    - the Android RetryInterceptor retries GET 502/503/504 (fault tests use 500);
+    - `post_liked` notifications stay after an unlike or delete.
+- **Earlier (2026-10-01T03:43:42Z):** master is `61d710fed` (batch 259).
   - **Sent:** [#1221](https://github.com/WangPantopus/skinny-pantopus/pull/1221) **web Saved tab paging tells the truth**, head `86e7a49eb`, seal `e357a586cda7b9c6be72f7b197899389ba08d19c4eebbce797406f33d8d86bea` (`20261001-stream2-posts-web-saved-remove-offset-r1`). Both defects were reproduced in the real app on #1198's page:
     - **Remove skipped a save.** Alice had 53 saves. Removing one on page 1 and then Load more ended at 51, "51 saved", with B49 missing; the API listed 52. Now 52, with B49 shown.
     - **A page hidden by a block** (the author of the 50 posts on page 1 blocked the viewer) showed "0+ saved / Nothing saved yet" while A2 sat on page 2. Now the tab reads on. A failed read-on shows the load error with Try Again (injected in the browser to verify).
