@@ -41,6 +41,7 @@ function ShareContent() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [creating, setCreating] = useState(false);
+  const createRequestId = useRef<string | null>(null);
   // A superseded list read must never replace a newer one.
   const generation = useRef(0);
 
@@ -86,11 +87,16 @@ function ShareContent() {
   const handleCreatePass = useCallback(async () => {
     if (!selectedTemplate || !guestName.trim()) return;
     setCreating(true);
+    // A retry after an error reuses this create's request id, so the server updates its pass instead of
+    // minting a second live link; a successful create starts the next one fresh.
+    createRequestId.current ??= crypto.randomUUID();
     try {
       const res = await api.homeIam.createGuestPass(homeId!, {
         label: `${guestName.trim()} (${selectedTemplate})`,
         kind: selectedTemplate as GuestPass['kind'],
+        request_id: createRequestId.current,
       });
+      createRequestId.current = null;
       setGuestName(''); setSelectedTemplate(null); setShowCreate(false);
       toast.success('Guest pass created');
       await fetchPasses();

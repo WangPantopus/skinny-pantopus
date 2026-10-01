@@ -45,6 +45,10 @@ public final class AddGuestFormViewModel {
     public private(set) var customEnd: Date?
 
     public private(set) var isSaving = false
+    /// Set once this form has created its pass. Create stays off afterwards:
+    /// a repeat with this form's `requestId` would rotate the pass's token
+    /// and break the link being shared.
+    public private(set) var didCreate = false
     public var toast: ToastMessage?
     public private(set) var shouldDismiss = false
 
@@ -65,6 +69,9 @@ public final class AddGuestFormViewModel {
 
     private let onSent: (String) -> Void
     private let api: APIClient
+    /// One create intent per form: a retry after an error reuses it, so the
+    /// server updates that intent's pass instead of minting a second link.
+    private let requestId = UUID().uuidString.lowercased()
 
     init(
         homeId: String,
@@ -91,6 +98,9 @@ public final class AddGuestFormViewModel {
             && duration != nil
             && !selectedSections.isEmpty
     }
+
+    /// Create is offered until this form's pass exists.
+    public var canSubmit: Bool { isValid && !didCreate }
 
     /// Any input touched — drives the dirty-close confirm in `FormShell`.
     public var isDirty: Bool {
@@ -183,7 +193,7 @@ public final class AddGuestFormViewModel {
     // MARK: - Submit
 
     public func submit() async {
-        guard isValid, !isSaving else { return }
+        guard isValid, !isSaving, !didCreate else { return }
         isSaving = true
         // `label` carries the guest's name; the time window comes from the
         // selected duration chip; the chosen sections go as
@@ -197,7 +207,8 @@ public final class AddGuestFormViewModel {
             durationHours: window.durationHours,
             startAt: window.startAt,
             endAt: window.endAt,
-            includedSections: sectionOptions.map(\.id).filter { selectedSections.contains($0) }
+            includedSections: sectionOptions.map(\.id).filter { selectedSections.contains($0) },
+            requestId: requestId
         )
         let response: CreateGuestPassResponse
         do {
@@ -214,6 +225,7 @@ public final class AddGuestFormViewModel {
             )
             return
         }
+        didCreate = true
         isSaving = false
         let name = firstName ?? "your guest"
         toast = ToastMessage(text: "Pass created for \(name)", kind: .success)

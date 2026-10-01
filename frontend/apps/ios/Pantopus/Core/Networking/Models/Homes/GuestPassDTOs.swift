@@ -68,6 +68,10 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
     /// Guest page sections the pass shows; nil lets the server use its
     /// default for the kind.
     public var includedSections: [String]?
+    /// One lowercase UUID per create intent, reused when that create is
+    /// retried: the server then updates the intent's pass instead of
+    /// minting a second live link (migration 20261001131000).
+    public var requestId: String?
 
     public init(
         label: String,
@@ -75,7 +79,8 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         durationHours: Int? = nil,
         startAt: String? = nil,
         endAt: String? = nil,
-        includedSections: [String]? = nil
+        includedSections: [String]? = nil,
+        requestId: String? = nil
     ) {
         self.label = label
         self.kind = kind
@@ -83,6 +88,7 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         self.startAt = startAt
         self.endAt = endAt
         self.includedSections = includedSections
+        self.requestId = requestId
     }
 
     /// Omit nil optionals from the wire body.
@@ -94,6 +100,7 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         try c.encodeIfPresent(startAt, forKey: .startAt)
         try c.encodeIfPresent(endAt, forKey: .endAt)
         try c.encodeIfPresent(includedSections, forKey: .includedSections)
+        try c.encodeIfPresent(requestId, forKey: .requestId)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -103,6 +110,7 @@ public struct CreateGuestPassRequest: Encodable, Sendable, Hashable {
         case startAt = "start_at"
         case endAt = "end_at"
         case includedSections = "included_sections"
+        case requestId = "request_id"
     }
 }
 

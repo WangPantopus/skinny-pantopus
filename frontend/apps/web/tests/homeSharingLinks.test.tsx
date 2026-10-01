@@ -314,7 +314,7 @@ test('the Settings entry copies the public guest route, never the bare token', a
   fireEvent.click(screen.getByRole('button', { name: /Create & Share/ }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledWith(`${window.location.origin}/guest/${token}`));
   expect(clipboard).not.toHaveBeenCalledWith(token);
-  expect(api.homeIam.createGuestPass).toHaveBeenCalledWith('home', { label: 'Ana (guest)', kind: 'guest' });
+  expect(api.homeIam.createGuestPass).toHaveBeenCalledWith('home', { label: 'Ana (guest)', kind: 'guest', request_id: expect.any(String) });
 });
 
 test('the Settings entry lists scheduled links as current and revocable, and dead links as past', async () => {

@@ -36,7 +36,7 @@ public struct AddGuestFormView: View {
             rightActionLabel: nil,
             bottomActionLabel: "Send pass",
             bottomActionIcon: .keyRound,
-            isValid: viewModel.isValid,
+            isValid: viewModel.canSubmit,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSaving,
             onClose: { dismiss() },
