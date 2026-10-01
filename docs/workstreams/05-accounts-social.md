@@ -9,6 +9,35 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1230 #1234 #1236 merged (batch 266); #1243 (name card) sealed, #1244 (Discover connect) in CI, #1238 (Android) waits for devices; master Android unit test broken by #1209 (Stream 2 re-recording), 2026-10-01T05:24:30Z
+
+- **Merged in batch 266** (PR #1240, master `2abd0edd4`): #1230 (chat Report under the drawer), #1234 (ModalShell semantics), #1236 (five Stream 5 dialogs).
+- **Sealed and with Stream 1: #1243** (seal `83b9ddaf…`): the name card (`UserIdentityLink`: chat senders, post authors, crew reviews).
+  - **Before, on master:**
+    - Message went to `/app/chat?room=<id>`, which the chat page ignores, so it landed on the Messages list;
+    - one click on "Connected" removed the connection with no confirmation;
+    - rejected Message, Follow and Connect showed nothing.
+  - **After:**
+    - Message opens `/app/chat/conversation/<id>`;
+    - "Connected" asks Connections' own "Remove this connection?";
+    - failures toast the server's reason.
+- **In CI: #1244** (`/app/network` people results): the same one-click disconnect and silent failures, with the same fix. Its business Follow is cut #6 and was left alone.
+- **Waiting for devices: #1238** (Android View-as "Not shown"). Its red unit-test job is master's own (next item); its instrumented job passed.
+- **Master's Android unit tests have failed since batch 264:**
+  - `PulseComposeSnapshotTest.pulse_compose_edit_prefilled` fails. Stream 2's #1209 changed the Pulse edit rendering without re-recording the golden; its own PR run 36810090384 already failed it.
+  - Reported to Stream 1 and Stream 2. Stream 2 is re-recording the golden, and Stream 1 batches that first.
+- **Scans with no new defect** (scratchpad AST scans over 115 Stream 5 web files on master):
+  - `try/finally` with no `catch` around api calls: only the name card's two handlers (#1243).
+  - Destructive api calls with no confirmation: only the name card's disconnect. The others are by design: declining a request, unblocking, dismissing a notification and unfollowing are one-tap; account deletion is confirmed upstream by its modal and the step-up.
+  - The native Connections and profile screens already confirm a disconnect on iOS and Android, so the web was the odd one out.
+- **Candidates:**
+  - **(design call)** the name card opens only on mouse hover, so keyboard and touch users can't reach its Connect/Follow/Message.
+  - **(design call)** the web public profile has no Connect button: it never had one, while the Android profile does. Connecting on web is only possible from the hover card or Discover.
+- **Decisions:**
+  - A removal is confirmed with Connections' own wording on every web entry point.
+  - Failures show the server's reason, the EndorsementButton and profile pattern.
+- **Runtime:** API 18134 on `2abd0edd4` (receipt 04:58:53Z); web 18131 on `7453a617b` (#1244's head). No fixtures remain.
+
 ## LIVE — #1226 + #1228 merged (batch 264); #1230, #1234, #1236 sealed and with Stream 1; #1238 (Android) waits for its device check; page-health scan clean, 2026-10-01T04:55:02Z
 
 - **Merged in batch 264** (PR #1233, master `51634ec30`):
