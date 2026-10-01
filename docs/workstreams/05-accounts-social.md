@@ -9,6 +9,23 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1320 #1322 merged (b290); #1326 (icon buttons get names) sealed; native POST idempotency audit under way (Stream 1's first priority), 2026-10-01T11:34:29Z
+
+- **Merged in batch 290** (#1323, master `e5b43df97`): #1320 (profile reviews) and #1322 (notifications and connections) break `created_at` ties by id.
+- **Sealed and with Stream 1: #1326** (seal `dd676344…`, bundle `20261001-stream5-icon-button-names-r1`). Three icon-only web buttons that a screen reader announced only as "button" now have names: New message's back and clear-search, and the post composer's AI Draft close.
+  - Shown through accessibility snapshots on the real pages; the screenshots have 0 differing pixels.
+  - The clarifying-questions X is named too; it appears only after a live AI reply, so it's covered by source only.
+  - The other 8 unnamed buttons in Stream 5's web code need nothing. Two are named by their image's alt text, four are in the cut chat pickers, and two never render.
+- **The `businesses.js` paging question is settled** by Stream 1's rule: left alone (cut #6, and invoices are money with a pending decision).
+- **Under way: the native POST idempotency audit** (Stream 1's cross-stream assignment; bundle `20261001-stream5-native-post-idempotency-r1`).
+  - **Why it matters:** Android's OkHttp silently re-sends a POST when the connection fails after the request was sent, and iOS users tap again after an error.
+  - **Inventory on master `55d5df3c0`:** 637 native POST calls reach 346 Express routes. 114 are launch-cut, leaving 232 in scope: Stream 1 20, Stream 2 47, Stream 3 54, Stream 4 31, Stream 5 80.
+  - **Steps:** classify each handler's protection (client key, unique key, state guard, or none). Then reproduce every unprotected one through the real API by sending the identical request twice.
+  - **Reporting:** per owning stream via Stream 1. Stream 5 fixes only its own.
+- **Next:** `earnRiskReview.js` end to end (Stream 1's assignment, with Stream 2's OK). It's money-adjacent: synthetic fixtures, no provider calls, and the shape goes to Stream 1 before any change in who gets suspended.
+- **Open user questions:** unchanged; the four below.
+- **Runtime:** API on master `55d5df3c0` since 11:33:15Z; web on master `55d5df3c0` since 11:25:06Z. No fixtures.
+
 ## LIVE — #1310 #1313 (b286), #1314 (b288), #1318 (b289) merged; #1320 (review pages) sealed; #1322 (notification and connection pages) in CI; real-name search question for the user, 2026-10-01T11:11:00Z
 
 - **Merged:**
