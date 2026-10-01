@@ -733,11 +733,14 @@ export default function FeedPage() {
         entityType="post"
       />
 
-      {/* Toast — the live region stays mounted so screen readers announce each message */}
+      {/* Toast — the live region stays mounted so screen readers announce each message. The wrapper
+          centres it: slideUp animates `transform`, which would replace a translate-based centring. */}
       <div role="status" aria-live="polite">
         {toast && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl animate-[slideUp_0.3s_ease-out]">
-            {toast}
+          <div className="fixed inset-x-0 bottom-6 z-[100] flex justify-center pointer-events-none">
+            <div className="max-w-[50vw] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl animate-[slideUp_0.3s_ease-out]">
+              {toast}
+            </div>
           </div>
         )}
       </div>
