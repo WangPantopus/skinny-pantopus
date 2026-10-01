@@ -264,7 +264,9 @@ class ProfileTabsViewModelTest {
             for (content in listOf("same", "same", "same", "same", "changed")) {
                 vm.upload(
                     PickedPortfolioFile("project.txt", "text/plain", content.toByteArray()),
-                    "Project", "", PortfolioItemKind.Photo,
+                    "Project",
+                    "",
+                    PortfolioItemKind.Photo,
                 )
             }
             assertEquals(5, keys.size)
