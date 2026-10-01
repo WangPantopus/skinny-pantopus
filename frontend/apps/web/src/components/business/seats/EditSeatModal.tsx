@@ -87,8 +87,9 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
             />
 
             <div>
-              <label className="block text-sm font-medium text-app-strong mb-1">Role</label>
+              <label htmlFor="seat-edit-role" className="block text-sm font-medium text-app-strong mb-1">Role</label>
               <select
+                id="seat-edit-role"
                 value={form.role_base}
                 onChange={(e) => setForm({ ...form, role_base: e.target.value })}
                 className="w-full rounded-lg border border-app-strong px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"

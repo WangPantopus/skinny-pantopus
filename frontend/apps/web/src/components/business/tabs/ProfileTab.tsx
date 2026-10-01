@@ -102,8 +102,9 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
             <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <Field label="Tagline" value={form.tagline} onChange={(v) => setForm({ ...form, tagline: v })} />
             <div>
-              <label className="block text-sm font-medium text-app-strong mb-1">Description</label>
+              <label htmlFor="crew-profile-description" className="block text-sm font-medium text-app-strong mb-1">Description</label>
               <textarea
+                id="crew-profile-description"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}

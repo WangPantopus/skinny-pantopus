@@ -163,8 +163,9 @@ function BlockTypeFields({
         <>
           <EditorField label="Heading" value={d.heading || ''} onChange={(v) => updateData({ heading: v })} />
           <div>
-            <label className="block text-xs font-medium text-app-text-secondary mb-1">Filter by type</label>
+            <label htmlFor="block-catalog-filter" className="block text-xs font-medium text-app-text-secondary mb-1">Filter by type</label>
             <select
+              id="block-catalog-filter"
               value={d.filter_kind || ''}
               onChange={(e) => updateData({ filter_kind: e.target.value })}
               className="w-full rounded-lg border border-app-border px-3 py-1.5 text-sm"
@@ -281,10 +282,12 @@ function EditorField({
   placeholder?: string;
   type?: string;
 }) {
+  const id = React.useId();
   return (
     <div>
-      <label className="block text-xs font-medium text-app-text-secondary mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-app-text-secondary mb-1">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -308,10 +311,12 @@ function EditorTextarea({
   rows?: number;
   placeholder?: string;
 }) {
+  const id = React.useId();
   return (
     <div>
-      <label className="block text-xs font-medium text-app-text-secondary mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-app-text-secondary mb-1">{label}</label>
       <textarea
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
@@ -366,6 +371,7 @@ function CtaListEditor({
                 <select
                   value={c.action || ''}
                   onChange={(e) => update(i, 'action', e.target.value)}
+                  aria-label="Button action"
                   className="w-24 rounded border border-app-border px-1 py-1 text-xs"
                 >
                   <option value="">Action</option>

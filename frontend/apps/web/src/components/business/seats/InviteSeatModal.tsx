@@ -104,8 +104,9 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
             />
 
             <div>
-              <label className="block text-sm font-medium text-app-strong mb-1">Role</label>
+              <label htmlFor="seat-invite-role" className="block text-sm font-medium text-app-strong mb-1">Role</label>
               <select
+                id="seat-invite-role"
                 value={form.role_base}
                 onChange={(e) => setForm({ ...form, role_base: e.target.value })}
                 className="w-full rounded-lg border border-app-strong px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
