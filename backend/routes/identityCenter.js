@@ -528,11 +528,16 @@ router.get('/view-as', verifyToken, async (req, res) => {
     if (surface === 'persona' || surface === 'audience') {
       let persona = handle ? await getPersonaByHandle(handle) : await getActivePersonaForUser(req.user.id);
       if (!persona) return res.status(404).json({ error: 'Beacon not found' });
+      // As for the local surface below: member and insider previews carry tier-only posts and broadcasts.
+      if (persona.user_id !== req.user.id) return res.status(403).json({ error: 'You can only preview your own profile' });
       return res.json(await getPersonaPreview({ persona, viewer }));
     }
 
     const local = handle ? await getLocalProfileByHandle(handle) : await ensureLocalProfile(req.user.id);
     if (!local) return res.status(404).json({ error: 'Profile not found' });
+    // The preview shows a profile as a chosen viewer sees it, connection-only posts included, so it is for the
+    // owner's own profile only. The apps send no handle, or their own.
+    if (local.user_id !== req.user.id) return res.status(403).json({ error: 'You can only preview your own profile' });
     return res.json(await getLocalPreview({ profile: local, viewer }));
   } catch (err) {
     logger.error('identityCenter.viewAs.error', { error: err.message, userId: req.user?.id });
