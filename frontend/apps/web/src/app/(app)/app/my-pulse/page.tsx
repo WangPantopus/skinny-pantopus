@@ -175,13 +175,10 @@ export default function MyPulsePage() {
       setLikingIds((prev) => new Set(prev).add(postId));
     },
     onSuccess: (res, postId) => {
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? { ...p, liked_by_user: res.liked, like_count: res.likeCount }
-            : p,
-        ),
-      );
+      // Either tab's card can be liked, so both lists take the result.
+      const liked = (p: Post) => (p.id === postId ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p);
+      setPosts((prev) => prev.map(liked));
+      setSaved((prev) => prev.map(liked));
     },
     onError: () => {
       toast.error('Failed to like post');
@@ -355,7 +352,16 @@ export default function MyPulsePage() {
       <PostDetailPanel
         postId={detailPostId}
         open={!!detailPostId}
-        onClose={() => setDetailPostId(null)}
+        onClose={() => {
+          // A post unsaved in the panel leaves the Saved list once the panel closes.
+          if (detailPostId && saved.some((p) => p.id === detailPostId && !p.userHasSaved)) dropFromSaved(detailPostId);
+          setDetailPostId(null);
+        }}
+        // Likes, saves, comments and shares made in the panel show on the cards too.
+        onPostChange={(postId, patch) => {
+          setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...patch } : p)));
+          setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, ...patch } : p)));
+        }}
         currentUserId={userId || undefined}
       />
 
