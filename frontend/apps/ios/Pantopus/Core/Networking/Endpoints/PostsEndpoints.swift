@@ -124,6 +124,12 @@ public enum PostsEndpoints {
         return Endpoint(method: .get, path: "/api/posts/user/\(userId)", query: query)
     }
 
+    /// `GET /api/posts/saved` — the viewer's saved posts they can still
+    /// open, newest save first; offset paging over saves.
+    public static func savedPosts(limit: Int = 50, offset: Int = 0) -> Endpoint {
+        Endpoint(method: .get, path: "/api/posts/saved", query: ["limit": String(limit), "offset": String(offset)])
+    }
+
     /// `DELETE /api/posts/:id` — author-only delete. Route
     /// `backend/routes/posts.js:2483`.
     public static func deletePost(id: String) -> Endpoint {

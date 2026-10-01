@@ -44,6 +44,8 @@ import SwiftUI
 public enum MyPostsTab {
     public static let active = "active"
     public static let archived = "archived"
+    /// Saved posts; its list lives in `SavedPostsModel`.
+    public static let saved = "saved"
 }
 
 // MARK: - Intent palette
@@ -108,16 +110,30 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             // while older posts are unpaged (the loaded count would
             // under-report).
             ListOfRowsTab(id: MyPostsTab.active, label: "Active", count: loadedAtLeastOnce && nextPage == nil ? counts.active : nil),
-            ListOfRowsTab(id: MyPostsTab.archived, label: "Archived", count: loadedAtLeastOnce ? counts.archived : nil)
+            ListOfRowsTab(id: MyPostsTab.archived, label: "Archived", count: loadedAtLeastOnce ? counts.archived : nil),
+            ListOfRowsTab(id: MyPostsTab.saved, label: "Saved")
         ]
     }
 
     public var selectedTab: String = MyPostsTab.active {
         didSet {
+            guard oldValue != selectedTab else { return }
+            // Every visit to the Saved tab re-reads it, so posts saved elsewhere since show up.
+            if selectedTab == MyPostsTab.saved {
+                Task { [weak self] in await self?.saved.load() }
+                return
+            }
             // Before a successful load there is no list to show; keep the error.
-            guard oldValue != selectedTab, loadedAtLeastOnce else { return }
+            guard loadedAtLeastOnce else { return }
             rebuild()
         }
+    }
+
+    /// The Saved tab's list (other people's posts, paged by save offset).
+    public let saved: SavedPostsModel
+
+    private var onSavedTab: Bool {
+        selectedTab == MyPostsTab.saved
     }
 
     public var fab: FABAction? {
@@ -132,7 +148,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     }
 
     public var topBarAction: TopBarAction? {
-        TopBarAction(
+        // The type/date filter applies to your own posts only.
+        guard !onSavedTab else { return nil }
+        return TopBarAction(
             icon: .filter,
             accessibilityLabel: "Filter posts"
         ) { [weak self] in
@@ -172,7 +190,20 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         if loadedAtLeastOnce { rebuild() }
     }
 
-    public private(set) var state: ListOfRowsState = .loading
+    /// The list shell's state: your posts, or the Saved tab's list.
+    public var state: ListOfRowsState {
+        onSavedTab ? saved.state : ownState
+    }
+
+    private var ownState: ListOfRowsState = .loading
+
+    public var loadMoreError: String? {
+        onSavedTab ? saved.loadMoreError : nil
+    }
+
+    public func retryLoadMore() async {
+        if onSavedTab { await saved.loadMoreIfNeeded() }
+    }
 
     /// Bound to the view's `.confirmationDialog(item:)` so the row's
     /// kebab pops Archive/Restore + Delete options without owning the
@@ -256,6 +287,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         self.onCompose = onCompose
         self.onEditPost = onEditPost
         self.now = now
+        saved = SavedPostsModel(api: api, onOpenPost: onOpenPost, now: now)
     }
 
     /// Read the signed-in user's id from `AuthManager` for the default
@@ -271,11 +303,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     // MARK: - ListOfRowsDataSource
 
     public func load() async {
-        if !loadedAtLeastOnce { state = .loading }
+        if onSavedTab { return await saved.load() }
+        if !loadedAtLeastOnce { ownState = .loading }
         await fetch()
     }
 
     public func refresh() async {
+        if onSavedTab { return await saved.load() }
         // Refresh re-queries the wire, which today returns only active
         // posts. Drop the local archive overrides so the user doesn't
         // see stale optimistic state if they've been gone for a while.
@@ -287,6 +321,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     /// the rows and the cursor, so the footer asks again when it scrolls
     /// back into view (as Notifications does).
     public func loadMoreIfNeeded() async {
+        if onSavedTab { return await saved.loadMoreIfNeeded() }
         guard !loadingMore, nextPage != nil else { return }
         let generation = fetchGeneration
         loadingMore = true
@@ -336,7 +371,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 rebuild()
             } else {
                 let message = (error as? APIError)?.errorDescription ?? "Couldn't load your posts."
-                state = .error(message: message)
+                ownState = .error(message: message)
             }
         }
     }
@@ -380,7 +415,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         guard generation == fetchGeneration else { return }
         loadingMore = false
         if let failure, awaitingPages {
-            state = .error(message: (failure as? APIError)?.errorDescription ?? "Couldn't load your posts.")
+            ownState = .error(message: (failure as? APIError)?.errorDescription ?? "Couldn't load your posts.")
         }
     }
 
@@ -422,13 +457,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         awaitingPages = selectedTab == MyPostsTab.active && nextPage != nil
             && (activityFilter.isActive || visible.isEmpty)
         if awaitingPages {
-            state = .loading
+            ownState = .loading
             if !loadingMore { Task { [weak self] in await self?.pageThroughIfNeeded() } }
             return
         }
         if visible.isEmpty {
             let isFiltered = activityFilter.isActive && !tabItems.isEmpty
-            state = .empty(isFiltered ? filteredEmptyContent() : emptyContent(for: selectedTab))
+            ownState = .empty(isFiltered ? filteredEmptyContent() : emptyContent(for: selectedTab))
             return
         }
         let rows = visible.map { proj in
@@ -438,7 +473,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 callbacks: callbacks(for: proj.dto)
             )
         }
-        state = .loaded(
+        ownState = .loaded(
             sections: [RowSection(id: selectedTab, rows: rows)],
             hasMore: selectedTab == MyPostsTab.active && nextPage != nil
         )
@@ -714,7 +749,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     /// Resolve the body text for a row. Falls back to the title when
     /// the post has no body (e.g. event with only a title field).
-    private static func postBody(for dto: MyPostDTO) -> String {
+    static func postBody(for dto: MyPostDTO) -> String {
         if !dto.content.isEmpty { return dto.content }
         if let title = dto.title, !title.isEmpty { return title }
         return ""

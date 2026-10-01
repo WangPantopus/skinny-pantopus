@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.posts.PostShareRequest
 import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -117,6 +118,13 @@ interface PostsApi {
         @Query("cursorId") cursorId: String? = null,
         @Query("include_archived") includeArchived: Boolean? = null,
     ): MyPostsResponse
+
+    /** `GET /api/posts/saved` — the viewer's saved posts they can still open (offset paging over saves). */
+    @GET("api/posts/saved")
+    suspend fun savedPosts(
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0,
+    ): SavedPostsResponse
 
     /** `DELETE /api/posts/:id` — author-only. Route `backend/routes/posts.js:2483`. */
     @DELETE("api/posts/{id}")
