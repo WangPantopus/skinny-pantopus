@@ -173,9 +173,30 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T08:32:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T09:34:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T08:32:28Z):** master is `5e5bf32d3` (batch 279).
+- **Latest (2026-10-01T09:34:28Z):** master is `e333507a9` (batch 281).
+  - **Merged:**
+    - batch 280: #1284 (feed delete/hide clear every filter list) and #1287 (feed confirmed changes reach every list);
+    - batch 281: #1293, native My posts Delete/Archive/Restore refresh a live Pulse. Android was verified, including Restore. Stream 1's iOS cell is `e379c329`; on iOS it's defensive parity.
+  - **With Stream 1:**
+    - [#1296](https://github.com/WangPantopus/skinny-pantopus/pull/1296), batch 282: a new post is prepended only to a feed list it belongs to. Before, a Connections post made from Place showed at the top of the public Place feed (seal `6b3ba040`).
+    - [#1298](https://github.com/WangPantopus/skinny-pantopus/pull/1298): the web composer's "Post visibility:" (really the profile scope) now reads "Shown on your profile to:". It's a Stream 1-approved copy change and web only (seal `146ab581`).
+      - Before: "Post visibility: Connections" with the audience left on Neighborhood published the post to the public feed, and a non-connection read it.
+    - [#1299](https://github.com/WangPantopus/skinny-pantopus/pull/1299): the iOS Pulse card's controls are named VoiceOver actions (`.ignore` plus explicit actions, Stream 1's suggested shape; seal `c2e3b5fb`). Device VoiceOver is a named boundary.
+  - **In progress:** the "Posted to your connections" toast (Stream 1's decision) on all three clients, branch `claude/stream2-posts-posted-to-connections` `09216e1d1`, stacked on #1296.
+    - Web before ("Posted!") and after ("Posted to your connections") are done.
+    - A native candidate plus a master APK for the Android before are queued in the heavy slot. Then the Android before/after and Stream 1's iOS cell.
+  - **Decisions:**
+    - A new post shows only in a list it belongs to.
+    - A connections-only post's success message says where it went.
+    - The profile-scope label is clarified.
+    - VoiceOver actions are explicit, never left to SwiftUI's merge.
+  - **Runtime:**
+    - Backend 18160 runs `008613b81` code; master's backend has no changes since.
+    - Next 18169 serves worktree 29bc9a on the toast branch.
+    - The emulator is stopped. Live fixtures: the toast bundle's web posts T1b/T1a (Alice, connections-only), cleaned at that bundle's end.
+- **Earlier (2026-10-01T08:32:28Z):** master is `5e5bf32d3` (batch 279).
   - **Merged:** #1275 (native Saved Remove refresh). Stream 1's iOS cell is `137f8d82`; on iOS it's defensive parity, because the Nearby Pulse sheet closes on a tab switch.
   - **Queued by Stream 1:** [#1284](https://github.com/WangPantopus/skinny-pantopus/pull/1284), a post deleted or hidden on the web feed leaves every filter's cached list (seal `a626489b`).
     - Before: delete or hide under All, then switch to Ask Local within 30 s, and the post was still listed.
