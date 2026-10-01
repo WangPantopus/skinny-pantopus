@@ -83,7 +83,7 @@
 **Next, in order.**
 1. **Done: #1102–#1111 merged in batch 223.** Fix any regression forward on a new branch from master, with the same steps:
    reproduce, smallest repair, device before/after, seal, PR, then hand it to the Stream 1 queue owner.
-2. **Two Document detail candidates. Reproduce first; both are low reach.**
+2. **Done: Document detail C and D, reproduced on master and fixed: [#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131) (`e8f27d9cb`, `20260930-stream4-docdetail-a3-r1` (`638a41c3…`)), with the coordinator.** The original notes:
    - **C, Android image decode failure:** "Open externally" is a no-op, because the `ImagePreview` error slot passes `{}`.
      - Reproduce: `tools/s4-doc-fixture.py <stage> <label> badjpeg` uploads non-image bytes as image/jpeg through the real route.
        Delete it through the product route, which also removes the stored object.
@@ -92,16 +92,16 @@
      - Android's footer Open/Share and both apps' preview pill are silent no-ops. iOS already disables its footer Open/Share.
      - Reproduce with a metadata-only document (the U02 seed's `POST /documents`), then make the smallest repair: Android
        parity, and hide the pill.
-3. **After Stream 1's #1061 merges, re-measure iOS dark tint.**
+3. **Done: iOS dark tint re-measured on master `a211e1f48`; clean (same bundle).** The original notes:
    - iOS dark sweep of place-risk, place-today, pickup-editor, maintenance, issues, document-detail and home-dashboard, then
      `tools/s4-u02-contrast.py`.
    - Send anything under 4.5:1 to Stream 1 with file:line. That includes the fridge "Revoke" (system `.bordered`, 4.49 light /
      3.13 dark).
-4. **Web A3 live re-measure.** The source already passes on master; this closes the two ⬜ web A3 cells.
+4. **Done: web A3 live on master `763969f07`, 0 findings over 14 screens (same bundle).** The original notes:
    - Under the lease, apply current master's `tailwind.config.js`, `globals.css`, `HealthScoreRing.tsx`, `HomeHeader.tsx` and
      `maintenance/page.tsx` to the shared web worktree.
    - Measure the Home dashboard (light and dark) and Issues, then revert.
-5. **Native Pulse hero with nothing known** still says "All clear on your block today.", and there's no neutral variant.
+5. **Next: the Place hero and Today's Pulse tell the truth about alerts** (drafted; reproduce on master builds kept in `/private/tmp/pantopus-stream4-builds/{ios,android}-master`). Seen live: the hero reads "All clear on your block today." while Weather, Air quality and Alerts all say "Not available" (iOS frame and API in the bundle's `item5-early/`). Also: the AI Pulse composer calls an unchecked NWS "Your home area is quiet"; web's Pulse card claims "No active alerts"; the native Pulse pages tier signals by 80/50/25 on the backend's 0–10 scale, so a critical alert files under "When you have a minute". The original note: the native Pulse hero with nothing known still says "All clear on your block today.", and there's no neutral variant.
    Decide the honest state (standing instruction: at least drop the green "All clear" chip when neither air nor alerts is
    known), implement it on iOS and Android, and verify on devices.
 6. **U03 native ⬜ cells** (U03 table):
@@ -282,7 +282,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 | Emergency info (add, delete) | ✅ R1 (#698)<br>✅ add E2: the retry after a lost reply returns the same entry, one row; master's retry duplicated it (0930 emergency-server-writes; #939, merged in batch 168)<br>✅ add E6 blank title: Save disabled with "Title is required." (same bundle, `cap/02`)<br>⬜ add E1 E3 E4; delete E cases (only a successful delete is captured) | ✅ E1 E3 E4 (PR189, PR191, PR192)<br>✅ R1 (#698)<br>✅ E2: the retry returns the same entry, one row (0930 emergency-server-writes; #939) | ✅ R1 (#698, #703)<br>✅ R2 (#755)<br>✅ E2 (#871)<br>✅ E1 E3, no change (0930 emergency-access-denied)<br>✅ E4: a permission sentence, no Retry or Add (#904) |
 | Fridge card (issue, revoke; public page on web) | ✅ E1 (0928 fridge-lifecycle, #713)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ E6<br>✅ R1 by reopening (#707)<br>⬜ E3 (checked 09-30: 0928 fridge-lifecycle says duplicate clicks were not exercised)<br>⬜ E2 revoke | ✅ E1 (#713, #715)<br>✅ E2 issue (#717)<br>✅ E5 (#711)<br>✅ R1 by reopening (#707)<br>⬜ E3 E6 (checked 09-30: no capture; only iOS has the empty-card state)<br>⬜ E2 revoke | ✅ E1 (#715)<br>✅ E2 issue and revoke (#717, #711)<br>✅ E5 public page after revoke<br>✅ E6<br>✅ R1 with Retry (#707)<br>✅ E3, no change (0930 fridge-e3: a sub-frame double click sends two requests, but issue dedupes by client id and revoke answers its receipt: one card, one revocation, no error) |
 | Maintenance history (manual logs: create, edit, delete) | ✅ E1 (#673, #677, #683, 0928 maintenance-delete)<br>✅ E2 (#673, #743, maintenance-delete)<br>✅ E3 (#673)<br>✅ E5 (#677)<br>✅ R1 by reopening (#687)<br>✅ R2: an empty Completed list agrees with SQL 0 (0927 maintenance-edit-read; again in 0928 maintenance-delete)<br>✅ false empty fixed: an empty Scheduled tab now says "Nothing scheduled. Your logged maintenance is under Completed." ([#1105](https://github.com/WangPantopus/skinny-pantopus/pull/1105), merged in batch 223; 0930 fixes §4)<br>⛔ E4 E6 API only | ✅ E1 E2 E5 R1 (same PRs)<br>✅ R2: a cold read shows the empty list, SQL 0 (0928 maintenance-delete)<br>⬜ E3 (the only repeated-tap capture is iOS)<br>✅ false empty fixed (#1105; 0930 fixes §4)<br>⛔ E4 E6 API only | – no manual-log screen on web |
-| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>✅ R2: after Retry, the real API's empty list shows "No documents yet" (0927 malformed-home-lists; again in 0927 home-list-null-members)<br>⬜ delete | ✅ R1 (#680, #701)<br>✅ R2 (same bundles: "All 0", "No documents yet")<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
+| Documents reader (list, delete) | ✅ R1 (#680, #701)<br>✅ R2: after Retry, the real API's empty list shows "No documents yet" (0927 malformed-home-lists; again in 0927 home-list-null-members)<br>✅ detail open/share: a document with no file says so, with no dead control ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131), with the coordinator)<br>⬜ delete | ✅ R1 (#680, #701)<br>✅ R2 (same bundles: "All 0", "No documents yet")<br>✅ detail open/share: the image fallback's "Open externally" opens; a document with no file says so, Open/Share disabled ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131))<br>⬜ delete | ✅ R1 (#680, sweep r2)<br>✅ R2 (#541, #529)<br>✅ E4 (#529, #835)<br>✅ delete E1 E2 E3, no change (0930 docs-delete: E1 honest error + retry; E2 idempotent retry, 2 requests; E3 one request) |
 | Home activity | – no timeline screen. The dashboard's Recent activity card showed audit codes ("HOME INVITE CREATED") over raw table names ("HomeInvite"): ✅ sentences over "Home activity" on both apps (0930 native-activity-r1 and -r2; [#1062](https://github.com/WangPantopus/skinny-pantopus/pull/1062), merged in batch 223) | – (same) | ✅ R1 (0928 home-timeline-pagination)<br>✅ labels and actor (#854)<br>✅ malformed rows (#863)<br>✅ concurrent insert (#854 bundle)<br>✅ follows on-page saves (#860)<br>✅ live updates from other devices: decided, re-read on focus/visibility/reload for launch ("Decided by Stream 4" item 4) |
 | Mail: printed postcards, welcome cards, street digest (M01) | 🔷 not built (decision 2) | 🔷 | 🔷 (compose routes are live: security repairs #867/#872 through the API; the compose UI is cut, #8) |
 
@@ -298,9 +298,9 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 | Screen | iOS | Android | Web |
 |---|---|---|---|
-| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ✅ A1: fixed type ramp (the user's 09-29 decision), nothing clips (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>⬜ A3 dark: the blue tint on dark surfaces (4.2:1); re-measure after Stream 1's #1061<br>✅ A4 | ✅ A1: quick actions, stat labels and the property map placeholder no longer break ([#1108](https://github.com/WangPantopus/skinny-pantopus/pull/1108), merged in batch 223; before/after in 0930 fixes)<br>✅ A2: light-only by design (#1013), light and readable in night mode<br>✅ A3<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>⬜ A3 live re-measure. Earlier, with Stream 1 (0930 a3-remeasure): the health chip's inline amber (1.87:1) and the dark-mode "Owner" chip (1.34:1). Master `20e7b4768`'s source now passes: the chip uses the warning, success and error tokens (6.03, 5.24 and 6.79:1 light; 9.74, 7.91 and 6.23:1 dark), and the Owner chip's emerald tint and text flip together (6.78:1 light, 8.8:1 dark) |
-| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>⬜ A3 dark tint (#1061); fridge "Revoke" (system `.bordered`) 4.49:1 light, borderline<br>✅ A4 | ✅ A1: inline readings no longer break mid-word (#1108)<br>✅ A2 (light-only)<br>✅ A3<br>✅ A4: the avatar reads the place monogram ([#1107](https://github.com/WangPantopus/skinny-pantopus/pull/1107)) | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>✅ A3 on master's tokens (0930 a3-remeasure: the overview and all six sections are clean; "Turn it on" failed only on the runtime's pre-#979 `bg-primary-500`, and master's is `bg-primary-600`) |
-| Records pages: Issues (Maintenance), Emergency Info, Documents | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3: the Warranties chip was 4.42:1; now 6.15:1 ([#1109](https://github.com/WangPantopus/skinny-pantopus/pull/1109)); the rest clean; dark tint is #1061<br>✅ A4 | ✅ A1: Document detail's "Open externally" is no longer cut (#1108)<br>✅ A2 (light-only)<br>✅ A3: Warranties chip (#1109)<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>✅ A3 on master's tokens for Emergency, Documents and Property Details<br>⬜ A3 Issues live re-measure. The earlier inline-hex badge (2.01:1) is gone: on master `20e7b4768` the status badges use semantic tokens (4.83 to 7.09:1 light, 5.98 to 9.74:1 dark; source) |
+| Home dashboard: health, checklist, property, bill trends, Home activity, Today and record cards | ✅ A1: fixed type ramp (the user's 09-29 decision), nothing clips (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>✅ A3 dark: re-measured on master `a211e1f48` (#1061, #1097): the blue tint (4.2:1) is gone; what's left is decorative "·" separators and a disabled button (`20260930-stream4-docdetail-a3-r1` (`638a41c3…`))<br>✅ A4 | ✅ A1: quick actions, stat labels and the property map placeholder no longer break ([#1108](https://github.com/WangPantopus/skinny-pantopus/pull/1108), merged in batch 223; before/after in 0930 fixes)<br>✅ A2: light-only by design (#1013), light and readable in night mode<br>✅ A3<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y; first screen)<br>✅ A5 expanded Maintenance card: issue rows now keyboard-reachable (#907, merged in batch 159; before, mouse-only)<br>✅ A2 health ring "/100" (#809)<br>✅ A3 live on master `763969f07`: 0 axe findings, light and dark (`20260930-stream4-docdetail-a3-r1` (`638a41c3…`)). Earlier, with Stream 1 (0930 a3-remeasure): the health chip's inline amber (1.87:1) and the dark-mode "Owner" chip (1.34:1). Master `20e7b4768`'s source now passes: the chip uses the warning, success and error tokens (6.03, 5.24 and 6.79:1 light; 9.74, 7.91 and 6.23:1 dark), and the Owner chip's emerald tint and text flip together (6.78:1 light, 8.8:1 dark) |
+| Place dashboard and section details (incl. Money, civic, address-calendar editor) | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3 light<br>✅ A3 dark: tint gone on master; the fridge "Revoke" (`.bordered`) passes in dark (was 3.13:1) and is borderline-passing in light, 4.54:1 computed (4.48 pixel estimate); sent to Stream 1 as an FYI (`20260930-stream4-docdetail-a3-r1` (`638a41c3…`))<br>✅ A4 | ✅ A1: inline readings no longer break mid-word (#1108)<br>✅ A2 (light-only)<br>✅ A3<br>✅ A4: the avatar reads the place monogram ([#1107](https://github.com/WangPantopus/skinny-pantopus/pull/1107)) | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A2 Place text action and calendar Cancel (#809)<br>✅ A3 on master's tokens (0930 a3-remeasure: the overview and all six sections are clean; "Turn it on" failed only on the runtime's pre-#979 `bg-primary-500`, and master's is `bg-primary-600`) |
+| Records pages: Issues (Maintenance), Emergency Info, Documents | ✅ A1 (0930 u02-native)<br>✅ A2<br>✅ A3: the Warranties chip was 4.42:1; now 6.15:1 ([#1109](https://github.com/WangPantopus/skinny-pantopus/pull/1109)); the rest clean; dark re-measured clean after #1061 (`20260930-stream4-docdetail-a3-r1` (`638a41c3…`))<br>✅ A4 | ✅ A1: Document detail's "Open externally" is no longer cut (#1108)<br>✅ A2 (light-only)<br>✅ A3: Warranties chip (#1109)<br>✅ A4 | ✅ A1 A4 A5 (0930 web-a11y)<br>✅ A4 Documents delete button named ([#984](https://github.com/WangPantopus/skinny-pantopus/pull/984); the sweep's seed had no document)<br>✅ A2 partial (#809)<br>✅ A3 on master's tokens for Emergency, Documents and Property Details<br>✅ A3 Issues live on master `763969f07`: 0 axe findings (`20260930-stream4-docdetail-a3-r1` (`638a41c3…`)). The earlier inline-hex badge (2.01:1) is gone: on master `20e7b4768` the status badges use semantic tokens (4.83 to 7.09:1 light, 5.98 to 9.74:1 dark; source) |
 | Fridge card and its public page | ✅ A1 A2 A3 (0930 u02-native; "Revoke" borderline as above)<br>✅ A4: the remove-row control is named with a 28 pt target ([#1106](https://github.com/WangPantopus/skinny-pantopus/pull/1106)) | ✅ A1 A2 A3<br>✅ A4: "Remove <item>" in a 32 dp button, replacing "✕" (#1106) | ✅ A1 A2 A4 A5 (0930 fridge-a11y: leaf with a card, and the public page active and revoked)<br>✅ A3 on master's tokens (0930 a3-remeasure: 0 contrast findings on the leaf and the public page) |
 | Maintenance history (app only) | ✅ A1 A2 A3 A4 (0930 u02-native) | ✅ A1 A2 A3 A4 (0930 u02-native; Maintenance detail captured after the driver fix) | – |
 | Mail postcards, welcome cards, digest | – not built (🔷) | – | – |
@@ -354,6 +354,45 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-10-01T00:22:34Z — Window done (lease 23:39:44Z–00:19:11Z, slots 3/4): Document detail C/D fixed ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131), with the queue owner); iOS dark and web A3 re-measures are clean. Stream 3 has the lease now.**
+  - **[#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131)** `e8f27d9cb` (base `a211e1f48`), bundle
+    `20260930-stream4-docdetail-a3-r1`: 240 files, MANIFEST `638a41c39eb3ab5c09a083de85130b53c5a58fdcdf12b29e652a813aa5f467ee`.
+    The secret scan passed (240 files, 0 hits).
+    - **Before, master builds:**
+      - Android C: the image fallback's "Open externally" kept focus and sent 0 requests.
+      - D on both apps: the no-file pill only re-read the list (304); on Android, Open and Share did the same.
+      - Android drew the disabled Replace like an enabled button.
+    - **After:**
+      - Android's pill opens the file (`GET …/content` 200 → Photos).
+      - A no-file document says "No file attached · This document has details only, so there's nothing to open." with no
+        pill, and Android's Open/Share/Replace are disabled and dimmed (0.5 alpha, as `Buttons.kt`).
+      - iOS gets no opacity change: the U02 frame shows it already dims disabled plain buttons.
+    - **Checks:** iOS build, SwiftLint `--strict`, SwiftFormat; Android assembleDebug, ktlint, detekt and documents unit
+      tests (64, 0 failures).
+  - **Item 3, iOS dark on master `a211e1f48`:** 13 flags, down from 53 on the same 10 screens. The blue tint (34) and the
+    dark "Revoke" are gone; what's left is decorative "·" separators and a disabled "Start watching". The fridge "Revoke" in
+    light is 4.54:1 computed (4.48 estimate): borderline-passing, sent to Stream 1 as an FYI with
+    `PlaceFridgeCardSection.swift:354–357`.
+  - **Item 4, web A3 on master `763969f07`:** 0 axe findings on 14 screens, light and dark. This closes the dashboard and
+    Issues ⬜ cells.
+  - **Window:**
+    - The shared worktree and backend ran master `763969f07` (restart 23:40:31Z) and were restored to `00bf2d6ff` (restart
+      00:18:47Z, PID 20230); HEAD, status and launch.json are equal.
+    - Fixture Home `265d037b`: uploads deleted through the product route (objects 2 → 0), then the exact cleanup at
+      00:18:14Z, 349/353 plus 4 auth. That included a lazy `UserReferral`, 2 pickup rules and the owner's `FileQuota`.
+    - The S34 pair is reset and shut down, with the #1131 builds installed.
+    - DerivedData and the Android `app/build` were deleted after the builds (Stream 1's disk rule).
+  - **Decisions (standing instruction):**
+    1. An action that can't run must look unavailable; Android uses the design system's disabled alpha.
+    2. A document with no file says so plainly rather than promising another app.
+    3. The detail's repeated uploader ("Uploaded Sep 30 · by …", from #1104's shared formatter) is cosmetic and kept out of
+       #1131; it's recorded as a candidate.
+  - **New candidates:**
+    - Web Documents never shows "View" or the size: it reads `file_url`/`file_size`, which the API doesn't send; the API
+      sends `content_url` (an authorized `attachment` download) and `size_bytes`. That's a D09 web reader.
+    - The repeated uploader above.
+  - **Next:** item 5 (Pulse honesty), drafted in my scratchpad; befores on the kept master builds.
 
 - **2026-09-30T23:45:29Z — New Stream 4 session (resumed 23:12Z). #1116 is with the queue owner; Document detail C/D is being reproduced; the lease is held from 23:39:44Z.**
   - **#1116, lint only** ([#1116](https://github.com/WangPantopus/skinny-pantopus/pull/1116), head `9b3347813`, on master `763969f07`).
