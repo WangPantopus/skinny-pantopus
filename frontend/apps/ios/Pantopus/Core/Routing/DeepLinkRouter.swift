@@ -133,6 +133,11 @@ final class DeepLinkRouter {
         /// Consumed by the active tab's deep-link router which pushes
         /// `.menu` then forwards into the Payments stack route.
         case paymentsSettings
+        /// `pantopus://settings/security` — Settings → Devices & sessions,
+        /// where security notices ("New sign-in on …") send people. Also
+        /// reached from `https://pantopus.com/app/settings/security`, the
+        /// link those notices carry.
+        case securityDevices
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -656,11 +661,15 @@ final class DeepLinkRouter {
         case "verify-email", "verify_email":
             return verifyEmailDestination(url: url, token: tokenQuery, email: emailQuery)
         case "settings":
-            // `pantopus://settings/payments` — A14.6. Other settings
-            // sub-routes aren't deep-linkable yet; the bare host
+            // `pantopus://settings/payments` — A14.6, and
+            // `pantopus://settings/security` — Devices & sessions. Other
+            // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
                 return .paymentsSettings
+            }
+            if segments.dropFirst().first == "security" {
+                return .securityDevices
             }
             return .unknown(url)
         default:

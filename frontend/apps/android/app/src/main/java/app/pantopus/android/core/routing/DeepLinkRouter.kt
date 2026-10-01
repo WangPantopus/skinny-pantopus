@@ -220,6 +220,14 @@ object DeepLinkRouter {
         data object PaymentsSettings : Destination
 
         /**
+         * `pantopus://settings/security` — Settings → Devices & sessions,
+         * where security notices ("New sign-in on …") send people. Also
+         * reached from `https://pantopus.com/app/settings/security`, the
+         * link those notices carry.
+         */
+        data object SecurityDevices : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -901,13 +909,14 @@ object DeepLinkRouter {
                     Destination.VerifyEmail(token = tokenQuery, email = emailQuery)
                 }
             "settings" ->
-                // `pantopus://settings/payments` — A14.6. Other settings
-                // sub-routes aren't deep-linkable yet; the bare host
+                // `pantopus://settings/payments` — A14.6, and
+                // `pantopus://settings/security` — Devices & sessions. Other
+                // settings sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
-                if (segments.getOrNull(1) == "payments") {
-                    Destination.PaymentsSettings
-                } else {
-                    Destination.Unknown(raw)
+                when (segments.getOrNull(1)) {
+                    "payments" -> Destination.PaymentsSettings
+                    "security" -> Destination.SecurityDevices
+                    else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)
         }

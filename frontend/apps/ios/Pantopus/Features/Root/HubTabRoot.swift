@@ -334,6 +334,8 @@ public enum HubRoute: Hashable {
     case professionalProfile
     /// A14.6 — Settings → Payments deep-link target.
     case paymentsSettings
+    /// Settings → Devices & sessions deep-link target (security notices).
+    case securityDevices
     /// A14.7 — Privacy preferences. Pushed from the A18.5 "View as"
     /// preview's "Manage privacy" link when it lands in the Hub stack
     /// (via the `pantopus://identity/preview` deep link).
@@ -803,7 +805,7 @@ public struct HubTabRoot: View {
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
              .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .editProfile, .menu,
-             .paymentsSettings, .mailItemDetail,
+             .paymentsSettings, .securityDevices, .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
              .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,
@@ -1059,6 +1061,9 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case .paymentsSettings:
             path.append(.paymentsSettings)
+            _ = router.consume()
+        case .securityDevices:
+            path.append(.securityDevices)
             _ = router.consume()
         case .createBusiness:
             path.append(.createBusiness)
@@ -2927,6 +2932,27 @@ public struct HubTabRoot: View {
         case .paymentsSettings:
             SettingsView(
                 initialRoute: .payments,
+                onClose: { Task { @MainActor in pop() } },
+                onEditProfile: { Task { @MainActor in push(.editProfile) } },
+                onOpenReviewClaims: {
+                    Task { @MainActor in
+                        if !path.isEmpty { path.removeLast() }
+                        push(.reviewClaims)
+                    }
+                },
+                onOpenWallet: {
+                    Task { @MainActor in
+                        if !path.isEmpty { path.removeLast() }
+                        push(.wallet)
+                    }
+                },
+                onOpenAudienceProfile: { onOpenProfileScreen(.audienceProfile) },
+                onSignedOut: { Task { @MainActor in pop() } }
+            )
+        case .securityDevices:
+            // Opens Settings on Devices & sessions; its Back closes Settings.
+            SettingsView(
+                initialRoute: .securityDevices,
                 onClose: { Task { @MainActor in pop() } },
                 onEditProfile: { Task { @MainActor in push(.editProfile) } },
                 onOpenReviewClaims: {
