@@ -22,8 +22,6 @@ export default function PrivacySettingsPage() {
 
   // Form state
   const [searchVisibility, setSearchVisibility] = useState<SearchVisibilityLevel>('everyone');
-  const [findableByEmail, setFindableByEmail] = useState(true);
-  const [findableByPhone, setFindableByPhone] = useState(true);
   const [showGigHistory, setShowGigHistory] = useState<ProfileVisibilityLevel>('public');
   const [showNeighborhood, setShowNeighborhood] = useState<ProfileVisibilityLevel>('followers');
   const [showHomeAffiliation, setShowHomeAffiliation] = useState<ProfileVisibilityLevel>('followers');
@@ -39,8 +37,6 @@ export default function PrivacySettingsPage() {
       const s = res.settings;
       setSettings(s);
       setSearchVisibility(s.search_visibility);
-      setFindableByEmail(s.findable_by_email);
-      setFindableByPhone(s.findable_by_phone);
       setShowGigHistory(s.show_gig_history);
       setShowNeighborhood(s.show_neighborhood);
       setShowHomeAffiliation(s.show_home_affiliation);
@@ -62,8 +58,6 @@ export default function PrivacySettingsPage() {
     try {
       const res = await api.privacy.updatePrivacySettings({
         search_visibility: searchVisibility,
-        findable_by_email: findableByEmail,
-        findable_by_phone: findableByPhone,
         show_gig_history: showGigHistory,
         show_neighborhood: showNeighborhood,
         show_home_affiliation: showHomeAffiliation,
@@ -155,18 +149,6 @@ export default function PrivacySettingsPage() {
                   <option value="nobody">Nobody</option>
                 </select>
               </div>
-              <ToggleSetting
-                label="Findable by email"
-                description="Allow others to find you using your email address"
-                checked={findableByEmail}
-                onChange={setFindableByEmail}
-              />
-              <ToggleSetting
-                label="Findable by phone"
-                description="Allow others to find you using your phone number"
-                checked={findableByPhone}
-                onChange={setFindableByPhone}
-              />
             </div>
           </div>
 
@@ -247,43 +229,6 @@ const VISIBILITY_OPTIONS = [
 
 
 // ─── Helper Components ────────────────────────────────────────
-
-function ToggleSetting({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-app last:border-0">
-      <div className="flex-1">
-        <p className="font-medium text-app">{label}</p>
-        <p className="text-sm text-app-secondary">{description}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-          checked ? 'bg-primary-600' : 'bg-surface-muted'
-        }`}
-      >
-        <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-app-surface shadow ring-0 transition duration-200 ease-in-out ${
-            checked ? 'translate-x-5' : 'translate-x-0'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
 
 function SelectSetting({
   label,
