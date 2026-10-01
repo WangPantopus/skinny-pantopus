@@ -71,7 +71,8 @@ struct PlacePulseView: View {
     }
 
     private var subtitle: String {
-        if case let .loaded(pulse) = viewModel.state { return pulse.greeting }
+        // The pulse's greeting follows the server's clock, not the viewer's; greet by the device clock, as the Hub does.
+        if case .loaded = viewModel.state { return HubViewModel.greeting() }
         return ""
     }
 
