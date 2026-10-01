@@ -86,6 +86,16 @@ data class PackageCreditDto(
 )
 
 /**
+ * Body for `POST /packages/:id/buy`. [clientRequestId], kept across retries of
+ * one purchase, makes a retry answer with the credit the first attempt granted
+ * instead of granting another pack.
+ */
+@JsonClass(generateAdapter = true)
+data class BuyPackageRequest(
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
+)
+
+/**
  * `POST /packages/:id/buy` — `{ credit, clientSecret }`. `clientSecret` is the
  * Stripe payment-intent secret for priced packages (null when free).
  */

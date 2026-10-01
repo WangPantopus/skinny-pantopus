@@ -113,6 +113,8 @@ data class CreateBusinessInvoiceRequest(
     /** ISO date (`YYYY-MM-DD`), omitted when the owner leaves it blank. */
     @Json(name = "due_date") val dueDate: String? = null,
     val memo: String? = null,
+    /** Kept across retries of one draft: a retry answers with the invoice already sent. */
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 )
 
 /**

@@ -651,9 +651,14 @@ public enum SchedulingEndpoints {
     }
 
     /// `POST /packages/:id/buy` — customer purchase. `{ credit, clientSecret }`.
-    /// Not owner-gated.
-    public static func buyPackage(id: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/scheduling/packages/\(id)/buy")
+    /// Not owner-gated. A retry with the same `clientRequestId` answers with
+    /// the first attempt's credit.
+    public static func buyPackage(id: String, clientRequestId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/scheduling/packages/\(id)/buy",
+            body: clientRequestId.map { BuyPackageRequest(clientRequestId: $0) }
+        )
     }
 
     /// `GET /my-packages` — credits owned by the signed-in user. Not

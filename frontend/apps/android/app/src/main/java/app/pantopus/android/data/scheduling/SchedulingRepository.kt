@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.scheduling.BookingPageResponse
 import app.pantopus.android.data.api.models.scheduling.BookingReasonRequest
 import app.pantopus.android.data.api.models.scheduling.BookingResponse
 import app.pantopus.android.data.api.models.scheduling.BookingSummaryResponse
+import app.pantopus.android.data.api.models.scheduling.BuyPackageRequest
 import app.pantopus.android.data.api.models.scheduling.BuyPackageResponse
 import app.pantopus.android.data.api.models.scheduling.CheckSlugResponse
 import app.pantopus.android.data.api.models.scheduling.CreateBlockRequest
@@ -462,7 +463,9 @@ open class SchedulingRepository
         open suspend fun buyPackage(
             owner: SchedulingOwner,
             packageId: String,
-        ): NetworkResult<BuyPackageResponse> = safeApiCall { api.buyPackage(owner.basePath, packageId) }
+            clientRequestId: String? = null,
+        ): NetworkResult<BuyPackageResponse> =
+            safeApiCall { api.buyPackage(owner.basePath, packageId, BuyPackageRequest(clientRequestId)) }
 
         open suspend fun getMyPackages(): NetworkResult<MyPackagesResponse> = safeApiCall { api.getMyPackages() }
 

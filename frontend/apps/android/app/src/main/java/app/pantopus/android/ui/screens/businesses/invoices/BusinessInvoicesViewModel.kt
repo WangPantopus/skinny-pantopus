@@ -21,6 +21,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -152,6 +153,12 @@ class BusinessInvoicesViewModel
         private var rows = mutableListOf<BusinessInvoiceRow>()
         private var isLoadingPage = false
         private var nextLineItemKey = 1L
+
+        /**
+         * A retry of the same draft (a lost reply, a second tap) keeps its
+         * request id, so the server answers with the invoice it already sent.
+         */
+        private var pendingCreate: Pair<CreateBusinessInvoiceRequest, String>? = null
 
         fun load() {
             viewModelScope.launch {
@@ -332,19 +339,23 @@ class BusinessInvoicesViewModel
                 _isCreating.value = true
                 val due = _dueDate.value.trim()
                 val note = _memo.value.trim()
+                val draft =
+                    CreateBusinessInvoiceRequest(
+                        recipientUserId = recipient,
+                        lineItems = parsed,
+                        dueDate = due.ifEmpty { null },
+                        memo = note.ifEmpty { null },
+                    )
+                if (pendingCreate?.first != draft) pendingCreate = draft to UUID.randomUUID().toString()
                 val result =
                     repository.createInvoice(
                         businessId,
-                        CreateBusinessInvoiceRequest(
-                            recipientUserId = recipient,
-                            lineItems = parsed,
-                            dueDate = due.ifEmpty { null },
-                            memo = note.ifEmpty { null },
-                        ),
+                        draft.copy(clientRequestId = pendingCreate?.second),
                     )
                 _isCreating.value = false
                 when (result) {
                     is NetworkResult.Success -> {
+                        pendingCreate = null
                         resetDraft()
                         _action.value = BusinessInvoicesAction.Succeeded("Invoice sent.")
                         onSent()

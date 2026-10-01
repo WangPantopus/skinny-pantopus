@@ -144,6 +144,9 @@ public struct CreateBusinessInvoiceRequest: Encodable, Sendable, Hashable {
     /// ISO-8601 date (`YYYY-MM-DD`); omitted when the owner leaves it blank.
     public let dueDate: String?
     public let memo: String?
+    /// Kept across retries of one draft: a retry answers with the invoice
+    /// already sent instead of sending another.
+    public let clientRequestId: String?
 
     private enum CodingKeys: String, CodingKey {
         case recipientUserId = "recipient_user_id"
@@ -151,6 +154,7 @@ public struct CreateBusinessInvoiceRequest: Encodable, Sendable, Hashable {
         case lineItems = "line_items"
         case dueDate = "due_date"
         case memo
+        case clientRequestId = "client_request_id"
     }
 
     public init(
@@ -158,13 +162,15 @@ public struct CreateBusinessInvoiceRequest: Encodable, Sendable, Hashable {
         gigId: String? = nil,
         lineItems: [CreateBusinessInvoiceLineItem],
         dueDate: String? = nil,
-        memo: String? = nil
+        memo: String? = nil,
+        clientRequestId: String? = nil
     ) {
         self.recipientUserId = recipientUserId
         self.gigId = gigId
         self.lineItems = lineItems
         self.dueDate = dueDate
         self.memo = memo
+        self.clientRequestId = clientRequestId
     }
 }
 

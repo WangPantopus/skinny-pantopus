@@ -100,6 +100,21 @@ public struct BuyPackageResponse: Decodable, Sendable, Hashable {
     public let clientSecret: String?
 }
 
+/// Body for `POST /packages/:id/buy`. `clientRequestId`, kept across retries
+/// of one purchase, makes a retry answer with the credit the first attempt
+/// granted instead of granting another pack.
+public struct BuyPackageRequest: Encodable, Sendable {
+    public let clientRequestId: String
+
+    enum CodingKeys: String, CodingKey {
+        case clientRequestId = "client_request_id"
+    }
+
+    public init(clientRequestId: String) {
+        self.clientRequestId = clientRequestId
+    }
+}
+
 /// Body for `POST /packages`. Owner fields spliced in by the builder.
 public struct SchedulingCreatePackageRequest: Encodable, Sendable {
     public let name: String

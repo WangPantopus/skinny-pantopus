@@ -156,6 +156,9 @@ public final class BusinessInvoicesViewModel {
     private let businessId: String
     private let api: APIClient
     private var page = 1
+    /// A retry of the same draft (a lost reply, a second tap) keeps its request
+    /// id, so the server answers with the invoice it already sent.
+    private var pendingCreate: (draft: CreateBusinessInvoiceRequest, id: String)?
     private var rows: [BusinessInvoiceRow] = []
     private var isLoadingPage = false
     private let seededRows: [BusinessInvoiceRow]?
@@ -316,19 +319,28 @@ public final class BusinessInvoicesViewModel {
         defer { isCreating = false }
         let due = dueDate.trimmingCharacters(in: .whitespacesAndNewlines)
         let note = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draft = CreateBusinessInvoiceRequest(
+            recipientUserId: recipient,
+            lineItems: parsed,
+            dueDate: due.isEmpty ? nil : due,
+            memo: note.isEmpty ? nil : note
+        )
+        if pendingCreate?.draft != draft { pendingCreate = (draft, UUID().uuidString) }
         do {
             _ = try await api.request(
                 BusinessFinanceEndpoints.createInvoice(
                     businessId: businessId,
                     body: CreateBusinessInvoiceRequest(
-                        recipientUserId: recipient,
-                        lineItems: parsed,
-                        dueDate: due.isEmpty ? nil : due,
-                        memo: note.isEmpty ? nil : note
+                        recipientUserId: draft.recipientUserId,
+                        lineItems: draft.lineItems,
+                        dueDate: draft.dueDate,
+                        memo: draft.memo,
+                        clientRequestId: pendingCreate?.id
                     )
                 ),
                 as: BusinessInvoiceResponse.self
             )
+            pendingCreate = nil
             resetDraft()
             action = .succeeded(message: "Invoice sent.")
             await refresh()
