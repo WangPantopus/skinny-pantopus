@@ -18,8 +18,8 @@ feature on.
 | `open_gigs` | 4. Open Gigs marketplace | Posting tasks for bids (every composer, Hire help, Post task, checklist Hire, Ask a neighbor), browse/search/map, bids, offers and counters, task Q&A, My bids, Tasks widgets, the rebook rail. **Kept:** task detail and lifecycle for tasks you are part of, My tasks, payments, tips |
 | `public_scheduling` | 5. Public scheduling | Every Scheduling entry, booking pages, event types, availability, team scheduling, My bookings, booking reminders. **Kept:** invoices, packages and payouts screens; the scheduling engine |
 | `business_directory` | 6. General business directory | Discover businesses, business search results and filters, the business map layer and the map's business filters, the Discover hub (needs #3 and #4 too). **Kept:** business pages by link, creating and running a business, the Explore Map with its Posts layer |
-| `household_extras` | 7. Household extras | Home bills, packages, pets, polls and the family calendar (tiles, tabs, cards, "+" actions, reminders, Today/Hub rows, activity rows, notification toggles). **Kept:** Place bill benchmark and its opt-in, the address calendar, health score, tasks, issues, documents, emergency, access, guests, members |
-| `mail_extras` | 8. Mail extras | Writing letters (Compose / Write a letter / Send mail), ceremonial letters, certified mail and e-signing, Family Mail Party, community mail, mail event invitations, translations. **Kept:** the mailbox with postcards, welcome cards and the digest, vacation hold, Mail Day |
+| `household_extras` | 7. Household extras | Home bills, packages, pets, polls and the family calendar (tiles, tabs, cards, "+" actions, reminders, Today/Hub rows, activity rows, notification toggles); package tracking in the mailbox (native package mail reads as plain mail: no tracking, Share ETA, Report issue or virtual unboxing; the unboxing screen and the mailbox menu's "Scan an item", which opens it). **Kept:** Place bill benchmark and its opt-in, the address calendar, health score, tasks, issues, documents, emergency, access, guests, members |
+| `mail_extras` | 8. Mail extras | Writing letters (Compose / Write a letter / Send mail), ceremonial letters, certified mail and e-signing, Family Mail Party, community mail, mail event invitations, translations; the Stamps postage wallet and its header actions (call 9); Earn, the mailbox's offer and ad earnings (call 12). **Kept:** the mailbox for received mail, vacation hold, My Mail Day, the vault and the Stamps gallery |
 
 A surface that belongs to two cut features shows only when **both** are on.
 
@@ -62,7 +62,8 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    it comes back with `open_gigs`, or with a direct-rebook action once one exists.
 2. **Mail of a cut kind reads as plain mail** (certified, ceremonial, community, party invitation): it is mail the user
    received, so only the cut controls (sign, RSVP, translate, Mail Party) are hidden; iOS no longer sends a ceremonial
-   letter to its hidden reader.
+   letter to its hidden reader. Package mail reads as plain mail too while `household_extras` is off (package
+   tracking is cut #7), as the web already did.
 3. **Discover hub** needs `business_directory`, `open_gigs` and `marketplace`: it is rails of businesses, open tasks
    and listings. People/profile search stays.
 4. **Task stepper** reads "Open → Assigned" instead of "Bidding → Bid Selected" and drops "Compare Bids".
@@ -72,15 +73,22 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    records; the Members & Security audit log keeps every row.
 8. **Marketing and legal pages** (landing, about, terms, privacy) are unchanged.
 9. **The mailbox itself stays**, with My Mail Day, the vault and the Stamps gallery: they cover all received mail
-   (stamps are earned from any mail, packages, the vault and mail tasks), not only letters. Only their letter
-   controls go (Write a letter, the Stamps dock's "Send mail"). The 2026-09-27 verification map counted Mail Day and
-   Stamps as letter-only; switching them off is a small follow-up if wanted.
+   (stamps are earned from any mail, packages and the vault), not only letters. Only their letter controls go (Write
+   a letter, the Stamps dock's "Send mail"), and so does the Stamps **postage wallet** with its header actions ("Gift
+   a stamp", "More actions"): it was sample data with no backend and only served sending letters (#1374 and
+   `claude/stream4-mail-flag-gaps`). Stream 4, the mail owner, confirmed on 2026-10-01 that Mail Day and the gallery
+   stay; the 2026-09-27 verification map had counted them as letter-only.
 10. **Bill trends on the Home dashboard stays** (read-only, with the neighborhood benchmark and its opt-in): bills
    stay as the input to bill explanation. Adding, editing and tracking bills is hidden.
 11. **The Explore Map stays on every platform** with the layers in scope: Posts on the web (it now opens on Posts),
    posts and homes on iOS and Android. Its business and task layers, the web map's business filters (categories, Open
    Now, Trust lens) and a toggle with a single layer are hidden. Rejected: hiding the whole web map, which also took
    away the in-scope Posts map that the native apps keep.
+12. **Earn is hidden with `mail_extras`** (the mailbox's Earn drawer, Earn Wallet, the vault's Earn group, the earn
+   routes and links). This goes beyond the literal #8 list: Earn's offer and ad earnings never reach the withdrawable
+   wallet, so people would "earn" money they cannot cash out, and its unaudited routes (the risk-review job, a repeated
+   open counted twice) would be live at launch. Stream 4 decided it on 2026-10-01 (01:09:54Z) and Stream 1 approved
+   it; it comes back with `mail_extras` and needs a cash-out path before then.
 
 ## Known limits
 
