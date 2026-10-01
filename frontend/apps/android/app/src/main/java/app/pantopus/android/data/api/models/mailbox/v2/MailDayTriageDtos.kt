@@ -77,6 +77,12 @@ data class MailDayActionResponse(
     val item: MailDayReviewedDto,
 )
 
+/** `POST /api/mailbox/v2/mailday/items/:itemId/route` body: file the piece's letter in a drawer, not with the suggested member. */
+@JsonClass(generateAdapter = true)
+data class MailDayRouteBody(
+    val drawer: String,
+)
+
 /** `POST /api/mailbox/v2/mailday/finish`. */
 @JsonClass(generateAdapter = true)
 data class MailDayFinishResponse(

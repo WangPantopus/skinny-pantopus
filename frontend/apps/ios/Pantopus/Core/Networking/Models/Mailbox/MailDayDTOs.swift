@@ -101,6 +101,12 @@ public struct MailDayActionResponse: Decodable, Sendable, Hashable {
     public let item: MailDayReviewedDTO
 }
 
+/// `POST /api/mailbox/v2/mailday/items/:itemId/route` body that files the
+/// piece's letter in a drawer instead of with the suggested member.
+public struct MailDayRouteBody: Encodable, Sendable {
+    public let drawer: String
+}
+
 /// `POST /api/mailbox/v2/mailday/finish`.
 public struct MailDayFinishResponse: Decodable, Sendable, Hashable {
     public let streakDays: Int
