@@ -241,7 +241,8 @@ fun ListOfRowsScreen(
             Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
                 when (state) {
                     ListOfRowsUiState.Loading -> LoadingRows()
-                    is ListOfRowsUiState.Loaded -> LoadedList(state, banner, listingContext, monoFooter, onEndReached)
+                    is ListOfRowsUiState.Loaded ->
+                        LoadedList(state, banner, listingContext, monoFooter, onEndReached, reservesFabSpace = fab != null)
                     is ListOfRowsUiState.Empty ->
                         RefreshableFill { minHeight ->
                             EmptyState(
@@ -875,6 +876,7 @@ private fun LoadedList(
     listingContext: ListingContextConfig?,
     monoFooter: String?,
     onEndReached: () -> Unit,
+    reservesFabSpace: Boolean = false,
 ) {
     val listState = rememberLazyListState()
     val shouldLoadMore by remember {
@@ -891,7 +893,14 @@ private fun LoadedList(
 
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(Spacing.s4),
+        // With a FAB, the end of the list scrolls clear of it instead of sitting under it.
+        contentPadding =
+            PaddingValues(
+                start = Spacing.s4,
+                top = Spacing.s4,
+                end = Spacing.s4,
+                bottom = if (reservesFabSpace) Spacing.s16 + Spacing.s4 else Spacing.s4,
+            ),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         modifier = Modifier.fillMaxSize(),
     ) {

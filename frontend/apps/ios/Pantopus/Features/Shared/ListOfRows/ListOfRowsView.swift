@@ -138,7 +138,8 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                 loadMoreError: dataSource.loadMoreError,
                 onEndReached: { Task { await dataSource.loadMoreIfNeeded() } },
                 onRetryLoadMore: { Task { await dataSource.retryLoadMore() } },
-                onRefresh: { await dataSource.refresh() }
+                onRefresh: { await dataSource.refresh() },
+                reservesFABSpace: dataSource.fab != nil
             )
         case let .empty(content):
             EmptyState(
@@ -369,6 +370,7 @@ private struct LoadedList: View {
     let onEndReached: () -> Void
     let onRetryLoadMore: () -> Void
     let onRefresh: () async -> Void
+    var reservesFABSpace = false
 
     var body: some View {
         List {
@@ -439,6 +441,10 @@ private struct LoadedList: View {
             }
         }
         .listStyle(.plain)
+        // With a FAB, the end of the list scrolls clear of it instead of sitting under it.
+        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
+            if reservesFABSpace { Color.clear.frame(height: Spacing.s16 + Spacing.s5) }
+        }
         .refreshable { await onRefresh() }
         .scrollContentBackground(.hidden)
         .background(Theme.Color.appBg)
