@@ -193,7 +193,8 @@ class TokenAcceptViewModel
 
         private fun isCurrent(revision: Long): Boolean = visible && generation == revision && session?.isCurrent == true
 
-        private fun missing(result: NetworkResult<*>): Boolean = result is NetworkResult.Failure && result.error.code == 404
+        // A 400 means the link's token is malformed for this kind of invitation; like a 404, retrying can't change it.
+        private fun missing(result: NetworkResult<*>): Boolean = result is NetworkResult.Failure && result.error.code in setOf(400, 404)
 
         fun accept() {
             val ready = _state.value as? TokenAcceptUiState.Ready ?: return

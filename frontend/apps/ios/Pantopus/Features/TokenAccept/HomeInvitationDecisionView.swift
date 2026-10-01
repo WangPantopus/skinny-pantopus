@@ -135,6 +135,8 @@ struct HomeInvitationDecisionView: View {
     }
 
     private func confirm(_ action: HomeInvitationAction, _ context: HomeInvitationDecisionContext) {
+        // A double tap's second tap must not replace the confirmation it just opened: the replaced one's button does nothing.
+        guard confirmation == nil else { return }
         confirmation = Confirmation(action: action, reviewedToken: context.decisionToken, requestId: "", lifetime: model.generation)
     }
 
@@ -181,6 +183,7 @@ struct HomeInvitationDecisionView: View {
                 )
                 }
                 Button("Cancel original attempt") {
+                    guard confirmation == nil else { return }
                     confirmation = Confirmation(action: nil, reviewedToken: "", requestId: draft.requestId, lifetime: model.generation)
                 }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationCancel")
             }
