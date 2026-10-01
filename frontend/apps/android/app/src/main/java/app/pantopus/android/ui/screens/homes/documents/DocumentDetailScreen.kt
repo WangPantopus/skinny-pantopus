@@ -173,6 +173,7 @@ fun DocumentDetailScreen(
                     )
                 is DocumentDetailUiState.Error ->
                     ErrorShell(
+                        headline = current.headline,
                         message = current.message,
                         onBack = onBack,
                         onRetry = { viewModel.load() },
@@ -298,6 +299,7 @@ private fun LoadingShell(onBack: () -> Unit) {
 
 @Composable
 private fun ErrorShell(
+    headline: String,
     message: String,
     onBack: () -> Unit,
     onRetry: () -> Unit,
@@ -322,7 +324,7 @@ private fun ErrorShell(
                     tint = PantopusColors.appTextMuted,
                 )
                 Text(
-                    text = "Couldn't load this document",
+                    text = headline,
                     style = PantopusTextStyle.body,
                     color = PantopusColors.appText,
                 )
