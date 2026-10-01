@@ -411,10 +411,10 @@ private fun WizardPrimaryCta(
                 .clickable(enabled = clickable, onClick = onClick)
                 .padding(horizontal = Spacing.s4)
                 // One announcement: the visible title below would otherwise be read again ("Continue. Continue."). The
-                // node keeps the title as its text, as the merged child gave it before.
+                // node keeps the title as its text while it shows, as the merged child gave it before.
                 .clearAndSetSemantics {
                     contentDescription = title
-                    text = AnnotatedString(title)
+                    if (!isLoading) text = AnnotatedString(title)
                     role = Role.Button
                 },
         contentAlignment = Alignment.Center,
