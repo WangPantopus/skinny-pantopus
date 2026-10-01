@@ -312,10 +312,13 @@ class WalletViewModel
         }
     }
 
+private const val HTTP_REQUEST_TIMEOUT = 408
+private const val HTTP_TOO_MANY_REQUESTS = 429
+
 /** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown, so a retry keeps its key. */
 private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
     when (this) {
         is NetworkError.Server, is NetworkError.Transport, is NetworkError.Decoding, NetworkError.RetriesExhausted -> true
-        is NetworkError.ClientError -> code == 408 || code == 429
+        is NetworkError.ClientError -> code == HTTP_REQUEST_TIMEOUT || code == HTTP_TOO_MANY_REQUESTS
         else -> false
     }
