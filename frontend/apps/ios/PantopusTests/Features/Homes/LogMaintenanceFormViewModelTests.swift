@@ -19,6 +19,12 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         super.setUp()
         SequencedURLProtocol.reset()
         MaintenanceDraftStore.shared.clear()
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private static let fixedNow: Date = {
