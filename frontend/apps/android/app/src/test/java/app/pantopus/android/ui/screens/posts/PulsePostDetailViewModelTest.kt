@@ -157,7 +157,13 @@ class PulsePostDetailViewModelTest {
 
     @Test fun reaction_optimistic_then_reconcile() =
         runTest {
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
+            // A like tells lists showing the post to refetch, this screen included: the refetch then
+            // returns the liked post.
+            coEvery { repo.detail("p1") } returnsMany
+                listOf(
+                    NetworkResult.Success(sampleResponse()),
+                    NetworkResult.Success(PostDetailResponse(post = samplePost(likeCount = 4, userHasLiked = true))),
+                )
             coEvery { repo.toggleLike("p1") } returns
                 NetworkResult.Success(PostLikeResponse(liked = true, likeCount = 4))
             val vm = makeVm()
