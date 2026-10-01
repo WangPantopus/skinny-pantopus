@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
@@ -26,6 +26,18 @@ export default function SlidePanel({
   const closeRef = useRef(onClose); closeRef.current = onClose;
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // The second click of the double-click that opened the panel lands on whatever the panel now puts under the pointer:
+  // its backdrop (closing it at once) or one of its controls. A click that continues a double-click right after the
+  // panel opens is ignored; every later click, and Enter or Space, works as before.
+  const openedAt = useRef(0);
+  useLayoutEffect(() => { if (open && mounted) openedAt.current = performance.now(); }, [open, mounted]);
+  const ignoreOpeningDoubleClick = (event: MouseEvent) => {
+    if (event.detail > 1 && performance.now() - openedAt.current < 500) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
 
   // Keep keyboard navigation inside the visible modal and return focus on close.
   useEffect(() => {
@@ -67,6 +79,7 @@ export default function SlidePanel({
         className={`fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 ${
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
+        onClickCapture={ignoreOpeningDoubleClick}
         onClick={onClose}
       />
 
@@ -76,6 +89,7 @@ export default function SlidePanel({
         aria-modal="true"
         aria-label={title}
         ref={panelRef}
+        onClickCapture={ignoreOpeningDoubleClick}
         className={`fixed top-0 right-0 bottom-0 z-[61] w-full ${width} bg-app-surface shadow-2xl transform transition-transform duration-250 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}

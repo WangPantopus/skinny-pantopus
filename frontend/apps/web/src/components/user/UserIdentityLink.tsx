@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import * as api from '@pantopus/api';
+import { confirmStore } from '@/components/ui/confirm-store';
+import { toast } from '@/components/ui/toast-store';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 
@@ -145,6 +147,8 @@ export default function UserIdentityLink({
         await api.users.followUser(String(userId));
         setFollowing(true);
       }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error && err.message ? err.message : following ? 'Couldn\u2019t unfollow.' : 'Couldn\u2019t follow.');
     } finally {
       setActionLoading(false);
     }
@@ -153,6 +157,11 @@ export default function UserIdentityLink({
   const handleConnect = async (e: React.MouseEvent) => {
     withMaybeStop(e);
     if (!userId) return;
+    // "Connected" removes the connection: ask first, with Connections' own Remove confirmation.
+    if (relationship === 'connected') {
+      const yes = await confirmStore.open({ title: 'Remove this connection?', description: 'You can reconnect by sending a new request.', confirmLabel: 'Remove', variant: 'destructive' });
+      if (!yes) return;
+    }
     setActionLoading(true);
     try {
       if (relationship === 'none') {
@@ -171,6 +180,8 @@ export default function UserIdentityLink({
           setRelationship('none');
         }
       }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
     } finally {
       setActionLoading(false);
     }
@@ -261,13 +272,17 @@ export default function UserIdentityLink({
                 <button
                   onClick={(e) => {
                     withMaybeStop(e);
+                    // The conversation page, as the profile's Message opens it (the chat list has no ?room=).
                     api.chat
                       .createDirectChat(String(userId))
                       .then((res: { roomId?: string; room?: { id?: string } }) => {
                         const roomId = res?.roomId || res?.room?.id;
-                        if (roomId) router.push(`/app/chat?room=${roomId}`);
+                        if (roomId) router.push(`/app/chat/conversation/${userId}`);
+                        else toast.error('Couldn\u2019t start a conversation. Try again.');
                       })
-                      .catch(() => {});
+                      .catch((err: unknown) => {
+                        toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t start a conversation. Try again.');
+                      });
                   }}
                   className="mt-2 w-full rounded-lg bg-gray-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-black"
                 >
