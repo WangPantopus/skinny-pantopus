@@ -365,7 +365,10 @@ final class LogMaintenanceFormViewModel {
 
             // Best-effort calendar reminder. A failure here doesn't
             // block the maintenance log — the row is already saved.
-            if nextDueEnabled {
+            // Launch cut #7 (Household extras): while the home calendar is
+            // hidden, the event would show nowhere yet still mark the home
+            // busy for scheduling, so only the next-due date on the row is kept.
+            if nextDueEnabled, LaunchFeatures.householdExtras {
                 await postCalendarReminder(taskTitle: trimmedTitle, due: nextDueDate)
             }
 
