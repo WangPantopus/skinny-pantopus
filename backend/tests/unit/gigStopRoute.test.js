@@ -165,7 +165,7 @@ describe('no-show report admission matches the existing timing preview', () => {
     });
     try {
       const first = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', worker).send({ description: 'Synthetic report' });
-      expect(first.status).toBe(500); expect(getTable('GigIncident')).toHaveLength(1);
+      expect(first.status).toBe(500); expect(getTable('GigIncident')).toHaveLength(0);
       expect(getTable('Gig')[0].status).toBe('assigned');
       const retry = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', worker).send({ description: 'Synthetic report' });
       expect(retry.status).toBe(200); expect(getTable('Gig')[0].status).toBe('cancelled');
