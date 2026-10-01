@@ -475,7 +475,8 @@ export function useFeedData({
   const handleDelete = useCallback(async (postId: string) => {
     try {
       await api.posts.deletePost(postId);
-      removePostsFromCache((p) => p.id === postId);
+      // Every cached list, not just this filter's: another filter shown within 30 s would still list it.
+      removePostsFromCache((p) => p.id === postId, true);
       showToast('Post deleted');
     } catch {
       showToast('Failed to delete post');
@@ -485,7 +486,8 @@ export function useFeedData({
   const handleHide = useCallback(async (postId: string) => {
     try {
       await api.posts.hidePost(postId);
-      removePostsFromCache((p) => p.id === postId);
+      // A hide applies to every feed (the server filters it everywhere), so every cached list drops it.
+      removePostsFromCache((p) => p.id === postId, true);
       showToast('Post hidden');
     } catch {
       showToast('Failed to hide post');
@@ -552,7 +554,7 @@ export function useFeedData({
 
   /** Drops a post that no longer exists (deleted elsewhere) from the loaded feed, without an API call. */
   const forgetPost = useCallback((id: string) => {
-    removePostsFromCache((p) => p.id === id);
+    removePostsFromCache((p) => p.id === id, true);
   }, [removePostsFromCache]);
 
   return {
