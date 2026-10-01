@@ -20,6 +20,10 @@
 -- sequential repeat already returns the open row (#1390). Only a simultaneous duplicate insert now fails with a unique
 -- violation, which the deployed routes answer with their existing errors until this branch's routes re-read and
 -- return the row.
+--
+-- One narrow case fails safely until this branch's backend is live. A transfer to a buyer who already holds an open
+-- co-owner invitation claim answers 503 and changes nothing; that backend would have opened a second claim. This
+-- branch's backend reuses the open claim instead.
 
 SET LOCAL lock_timeout = '5s';
 
