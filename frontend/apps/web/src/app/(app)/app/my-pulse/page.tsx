@@ -7,7 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
-import { patchPostInFeedCaches } from '@/hooks/useFeedData';
+import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -212,6 +212,7 @@ export default function MyPulsePage() {
       await api.posts.deletePost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       dropFromSaved(postId);
+      removePostFromFeedCaches(queryClient, postId);
       toast.success('Post deleted');
     } catch {
       toast.error('Failed to delete post');
@@ -379,12 +380,14 @@ export default function MyPulsePage() {
           onSaved={(postId, changes) => {
             setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
             setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
+            patchPostInFeedCaches(queryClient, postId, changes);
             setEditingPost(null);
             toast.success('Post updated');
           }}
           onGone={(postId) => {
             setPosts((prev) => prev.filter((p) => p.id !== postId));
             dropFromSaved(postId);
+            removePostFromFeedCaches(queryClient, postId);
             setEditingPost(null);
             toast.info('This post was deleted, so it can’t be edited.');
           }}

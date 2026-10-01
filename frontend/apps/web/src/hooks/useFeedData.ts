@@ -71,6 +71,20 @@ export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, 
   });
 }
 
+/** Take one post out of every cached feed list, so a post deleted on its own page or in My pulse isn't listed when you come back. */
+export function removePostFromFeedCaches(queryClient: QueryClient, postId: string) {
+  queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        posts: (page.posts || []).filter((post) => post.id !== postId),
+      })),
+    };
+  });
+}
+
 export function useFeedData({
   initialSurface = 'place',
   viewingLat,
