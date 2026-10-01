@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -35,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,6 +51,9 @@ import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.list_of_rows.GradientPair
 import app.pantopus.android.ui.theme.PantopusColors
@@ -56,6 +62,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.delay
 
 /** Test tag on the Business Team list root container. */
 const val BUSINESS_TEAM_TAG = "businessTeam.screen"
@@ -88,6 +95,16 @@ fun BusinessTeamScreen(
     var sheet by remember { mutableStateOf<TeamSheet?>(null) }
     var removeTarget by remember { mutableStateOf<BusinessTeamMemberRow?>(null) }
     var cancelTarget by remember { mutableStateOf<BusinessTeamPendingRow?>(null) }
+    var toast by remember { mutableStateOf<String?>(null) }
+    var linkToShare by remember { mutableStateOf<String?>(null) }
+    val clipboard = LocalClipboardManager.current
+
+    LaunchedEffect(toast) {
+        if (toast != null) {
+            delay(3_000)
+            toast = null
+        }
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -142,6 +159,18 @@ fun BusinessTeamScreen(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(Spacing.s4),
             )
         }
+
+        toast?.let { message ->
+            Toast(
+                message = ToastMessage(text = message, kind = ToastKind.Success),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 96.dp)
+                        .testTag("businessTeam.toast"),
+            )
+        }
     }
 
     // ─── Sheets ───────────────────────────────────────────────────
@@ -150,9 +179,22 @@ fun BusinessTeamScreen(
         TeamSheet.Invite ->
             InviteTeammateWizardSheet(
                 businessId = viewModel.businessId,
-                onClose = { seat ->
+                onClose = { seat, inviteLink ->
                     sheet = null
                     seat?.let(viewModel::handleInvited)
+                    // The invitee joins only through this link: copy it, or show it to copy by hand.
+                    if (seat != null && inviteLink != null) {
+                        val copied = runCatching { clipboard.setText(AnnotatedString(inviteLink)) }.isSuccess
+                        if (copied) {
+                            val name =
+                                listOfNotNull(seat.displayName, seat.inviteEmail)
+                                    .map { it.trim() }
+                                    .firstOrNull { it.isNotEmpty() } ?: "them"
+                            toast = "Invite link copied — share it with $name"
+                        } else {
+                            linkToShare = inviteLink
+                        }
+                    }
                 },
             )
         is TeamSheet.ChangeRole ->
@@ -173,6 +215,15 @@ fun BusinessTeamScreen(
     }
 
     // ─── Confirms ─────────────────────────────────────────────────
+    linkToShare?.let { link ->
+        AlertDialog(
+            onDismissRequest = { linkToShare = null },
+            title = { Text("Share this invite link") },
+            text = { SelectionContainer { Text(link, modifier = Modifier.testTag("businessTeam.inviteLink")) } },
+            confirmButton = { TextButton(onClick = { linkToShare = null }) { Text("Done") } },
+        )
+    }
+
     removeTarget?.let { row ->
         AlertDialog(
             onDismissRequest = { removeTarget = null },

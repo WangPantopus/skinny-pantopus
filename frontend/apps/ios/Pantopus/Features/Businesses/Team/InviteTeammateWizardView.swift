@@ -10,14 +10,14 @@
 import SwiftUI
 
 /// Presented as a sheet from `BusinessTeamView`. Calls `onClose` with the
-/// newly-created seat (or nil on dismiss without submit).
+/// newly-created seat and its invite link (or nil, nil on dismiss without submit).
 public struct InviteTeammateWizardView: View {
     @State private var viewModel: InviteTeammateWizardViewModel
-    private let onClose: (BusinessSeatDTO?) -> Void
+    private let onClose: (BusinessSeatDTO?, String?) -> Void
 
     public init(
         businessId: String,
-        onClose: @escaping (BusinessSeatDTO?) -> Void
+        onClose: @escaping (BusinessSeatDTO?, String?) -> Void
     ) {
         _viewModel = State(initialValue: InviteTeammateWizardViewModel(businessId: businessId))
         self.onClose = onClose
@@ -52,9 +52,9 @@ public struct InviteTeammateWizardView: View {
         guard let event else { return }
         switch event {
         case .dismiss:
-            onClose(nil)
+            onClose(nil, nil)
         case let .submitted(seat):
-            onClose(seat)
+            onClose(seat, viewModel.inviteLink)
         }
         viewModel.pendingEvent = nil
     }

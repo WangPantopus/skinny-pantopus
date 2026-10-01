@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.data.api.models.businesses.BusinessSeatInviteRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
@@ -33,7 +34,7 @@ enum class InviteTeammateStep(
     Identify(
         number = 2,
         title = "Who are you inviting?",
-        subcopy = "We'll create a seat and send a link they can use to join your business.",
+        subcopy = "We'll create a seat and give you a link to share with them.",
     ),
     Review(
         number = 3,
@@ -65,7 +66,11 @@ data class InviteTeammateState(
 
 /** Outbound events the host screen reacts to. */
 sealed interface InviteTeammateEvent {
-    data class Submitted(val seat: BusinessSeatDto) : InviteTeammateEvent
+    data class Submitted(
+        val seat: BusinessSeatDto,
+        /** The new seat's invite link: the invitee can join only through it, and the server returns it only here. */
+        val inviteLink: String? = null,
+    ) : InviteTeammateEvent
 
     data object Dismiss : InviteTeammateEvent
 }
@@ -193,7 +198,11 @@ class InviteTeammateWizardViewModel(
             when (val result = repo.inviteSeat(businessId, request)) {
                 is NetworkResult.Success -> {
                     _state.update { it.copy(isSubmitting = false) }
-                    _pendingEvent.value = InviteTeammateEvent.Submitted(result.data.seat)
+                    _pendingEvent.value =
+                        InviteTeammateEvent.Submitted(
+                            seat = result.data.seat,
+                            inviteLink = result.data.inviteToken?.let { InviteLinks.publicPageUrl("/invite/seat?token=$it") },
+                        )
                 }
                 is NetworkResult.Failure -> {
                     _state.update { it.copy(isSubmitting = false, errorMessage = result.error.message) }
