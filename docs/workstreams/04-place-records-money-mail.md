@@ -355,6 +355,36 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T00:38:41Z — Security (routed by the coordinator, found by Stream 5): the public Home file listing sent whole File rows to any signed-in account. Fixed: [#1140](https://github.com/WangPantopus/skinny-pantopus/pull/1140), with the queue owner for its own batch. Also [#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131) merged in batch 229 (00:23:16Z) and #1116 in batch 231 (00:34:21Z).**
+  - **The problem:** `GET /api/files/home/:homeId?visibility=public` (public is the default) returned all 27 File columns to an
+    account with no relation to the Home, including:
+    - `user_id`;
+    - `filename` and `original_filename`;
+    - `file_path`;
+    - `file_context` (e.g. `wifi_info`);
+    - processing fields.
+    It was reproduced through the real API on master `9b3af1fad`.
+  - **The fix:** `e9ead5bbd`, `backend/routes/files.js` only, the same pattern as Stream 5's #1135.
+    - The public path sends `id, file_url, file_type, mime_type, created_at`, with metadata trimmed to
+      title/description/width/height/thumbnails.
+    - The household's private listing is unchanged; the non-member still gets 403 there.
+    - No web, iOS or Android code calls the endpoint.
+    - Tests: homeFileAccess + paidGigLifecycleRoute, 273 passed.
+  - **Seal:** `20261001-stream4-home-files-public-r1`, 20 files, MANIFEST `ce4d9b73c0fb074d6e57054663a49fffb380136b0dee9da2b5ba77f7f37ef375`.
+    - API-only lease window 00:34:46Z–00:36:14Z, handed over by Stream 3 between its cases.
+    - The backend ran on master, then the fix, then was restored to `00bf2d6ff`.
+    - Exact cleanup: 351/353, the other 2 auth.
+  - **Correction (process):** my first seal of this bundle (`a96e0f18…`) was withdrawn before use, into
+    `runtime/withdrawn-seals/`.
+    - The scan flagged the local Supabase URL inside the synthetic `file_url` values, but my chain used `;` and sealed anyway.
+    - Redacted and resealed after a passing scan. From now on, scan and seal are chained with `&&` only.
+    - It's the second time this stream has made this slip (see the 2026-09-30 web-a11y correction).
+  - **New item, recorded and not started:** a public `file_url` embeds the generated stored name
+    (`<uploader id>_<ms>_<hex>`), so it carries the uploader's user id. Removing it means renaming stored objects, a data
+    change to plan with the coordinator first.
+  - **Also in flight:** item 5 (Pulse honesty, `claude/stream4-pulse-alerts-honesty` `87ccd59cc`) is in the heavy slot. The
+    web Documents download/size fix (D09) is drafted.
+
 - **2026-10-01T00:22:34Z — Window done (lease 23:39:44Z–00:19:11Z, slots 3/4): Document detail C/D fixed ([#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131), with the queue owner); iOS dark and web A3 re-measures are clean. Stream 3 has the lease now.**
   - **[#1131](https://github.com/WangPantopus/skinny-pantopus/pull/1131)** `e8f27d9cb` (base `a211e1f48`), bundle
     `20260930-stream4-docdetail-a3-r1`: 240 files, MANIFEST `638a41c39eb3ab5c09a083de85130b53c5a58fdcdf12b29e652a813aa5f467ee`.
