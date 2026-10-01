@@ -193,7 +193,8 @@ async function pushOthers(userId, exceptDeviceId, message) {
   }
 }
 
-const SECURITY_PUSH_DATA = { type: 'security', url: SECURITY_URL };
+// Both apps route a push tap from `link` (iOS AppDelegate, Android NotificationDispatcher); `url` alone opened nothing.
+const SECURITY_PUSH_DATA = { type: 'security', url: SECURITY_URL, link: '/app/settings/security' };
 
 // ---------------------------------------------------------------------------
 // Public API
