@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FileText, Plus, X, Trash2 } from 'lucide-react';
+import Image from 'next/image';
 import * as api from '@pantopus/api';
-import type { BusinessInvoice, InvoiceLineItem } from '@pantopus/api';
+import type { BusinessInvoice, InvoiceLineItem, InvoiceRecipient } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
@@ -18,6 +19,25 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+const RELATION_LABELS: Record<InvoiceRecipient['relation'], string> = {
+  invoiced: 'Invoiced before',
+  booked: 'Booked with you',
+  hired: 'Hired you',
+  messaged: 'Messaged you',
+  connection: 'Your connection',
+};
+
+function RecipientAvatar({ person }: { person: InvoiceRecipient }) {
+  if (person.profile_picture_url) {
+    return <Image src={person.profile_picture_url} alt="" width={32} height={32} sizes="32px" quality={75} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />;
+  }
+  return (
+    <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0" aria-hidden>
+      <span className="text-xs font-bold text-violet-700">{(person.name || person.username || '?').charAt(0).toUpperCase()}</span>
+    </div>
+  );
 }
 
 const FILTER_OPTIONS: { key: string | undefined; label: string }[] = [
@@ -40,7 +60,11 @@ export default function InvoicesTab({ businessId }: Props) {
   const [showCreate, setShowCreate] = useState(false);
 
   // Create form
-  const [recipientId, setRecipientId] = useState('');
+  // The recipient is picked from people the crew already knows; their id is what's sent.
+  const [recipient, setRecipient] = useState<InvoiceRecipient | null>(null);
+  const [recipientQuery, setRecipientQuery] = useState('');
+  const [recipientOptions, setRecipientOptions] = useState<InvoiceRecipient[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
   const [memo, setMemo] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [lineItems, setLineItems] = useState([{ description: '', amount: '', quantity: '1' }]);
@@ -67,6 +91,20 @@ export default function InvoicesTab({ businessId }: Props) {
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
 
+  // Matches as the owner types; with nothing typed, the most recent people the crew knows.
+  useEffect(() => {
+    if (!showCreate || recipient) return;
+    let current = true;
+    setRecipientsLoading(true);
+    const timer = setTimeout(() => {
+      api.businesses.getInvoiceRecipients(businessId, recipientQuery.trim() || undefined)
+        .then((res) => { if (current) setRecipientOptions(res.people || []); })
+        .catch(() => { if (current) setRecipientOptions([]); })
+        .finally(() => { if (current) setRecipientsLoading(false); });
+    }, recipientQuery ? 250 : 0);
+    return () => { current = false; clearTimeout(timer); };
+  }, [businessId, showCreate, recipient, recipientQuery]);
+
   const handleVoid = async (invoiceId: string) => {
     const ok = await confirmStore.open({
       title: 'Void Invoice',
@@ -85,7 +123,7 @@ export default function InvoicesTab({ businessId }: Props) {
   };
 
   const handleCreate = async () => {
-    if (!recipientId.trim()) { toast.error('Recipient user ID is required'); return; }
+    if (!recipient) { toast.error('Choose who to invoice'); return; }
     const parsedItems: InvoiceLineItem[] = [];
     for (const item of lineItems) {
       if (!item.description.trim() || !item.amount.trim()) continue;
@@ -98,7 +136,7 @@ export default function InvoicesTab({ businessId }: Props) {
     setCreating(true);
     try {
       const payload = {
-        recipient_user_id: recipientId.trim(),
+        recipient_user_id: recipient.id,
         line_items: parsedItems,
         due_date: dueDate.trim() || null,
         memo: memo.trim() || null,
@@ -108,7 +146,7 @@ export default function InvoicesTab({ businessId }: Props) {
       await api.businesses.createBusinessInvoice(businessId, { ...payload, client_request_id: pendingCreate.current.id });
       pendingCreate.current = null;
       setShowCreate(false);
-      setRecipientId(''); setMemo(''); setDueDate('');
+      setRecipient(null); setRecipientQuery(''); setMemo(''); setDueDate('');
       setLineItems([{ description: '', amount: '', quantity: '1' }]);
       loadInvoices();
       toast.success('Invoice created');
@@ -217,9 +255,42 @@ export default function InvoicesTab({ businessId }: Props) {
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               <div>
-                <label className="text-xs text-app-text-secondary mb-1 block">Recipient User ID</label>
-                <input type="text" value={recipientId} onChange={e => setRecipientId(e.target.value)} placeholder="Paste user ID"
-                  className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                <label htmlFor="invoice-recipient-search" className="text-xs text-app-text-secondary mb-1 block">Recipient</label>
+                {recipient ? (
+                  <div className="flex items-center gap-2 px-3 py-2 border border-app-border rounded-lg bg-app-surface">
+                    <RecipientAvatar person={recipient} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-app-text truncate">{recipient.name}</p>
+                      <p className="text-xs text-app-text-muted truncate">@{recipient.username}</p>
+                    </div>
+                    <button type="button" onClick={() => setRecipient(null)} aria-label={`Change recipient (${recipient.name})`}
+                      className="p-1 text-app-text-muted hover:text-app-text-secondary"><X className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <>
+                    <input id="invoice-recipient-search" type="text" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} placeholder="Search people you know"
+                      autoComplete="off"
+                      className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                    <div className="mt-1 max-h-48 overflow-y-auto border border-app-border-subtle rounded-lg divide-y divide-app-border-subtle">
+                      {recipientOptions.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-app-text-muted">
+                          {recipientsLoading
+                            ? 'Searching…'
+                            : 'No one found. You can invoice people you’ve invoiced, booked or worked for, people who messaged your business, and your connections.'}
+                        </p>
+                      ) : recipientOptions.map((person) => (
+                        <button key={person.id} type="button" onClick={() => setRecipient(person)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-app-hover transition">
+                          <RecipientAvatar person={person} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-app-text truncate">{person.name}</p>
+                            <p className="text-xs text-app-text-muted truncate">@{person.username} · {RELATION_LABELS[person.relation]}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div>
