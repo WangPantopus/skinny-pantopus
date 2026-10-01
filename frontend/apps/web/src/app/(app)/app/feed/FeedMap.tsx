@@ -369,6 +369,8 @@ export default function FeedMap({
             className="feed-map-popup"
             closeButton={false}
             autoPan
+            // Open below the floating filter chips and the "Search this area" pill (about 90px down the map).
+            autoPanPaddingTopLeft={[12, 100]}
             offset={[0, -16]}
             eventHandlers={{
               remove: () => setSelectedPin((current) => (current?.id === selectedPin.id ? null : current)),
